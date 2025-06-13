@@ -1,22 +1,31 @@
 
 import { Button } from "@/components/ui/button";
-import { User, AttentionPoint } from '../../types';
+import { Menu } from "lucide-react";
+import { User, PuntoAtencion } from '../../types';
 
 interface HeaderProps {
   user: User;
-  selectedPoint: AttentionPoint | null;
+  selectedPoint: PuntoAtencion | null;
   onLogout: () => void;
   onToggleSidebar: () => void;
 }
 
-const Header = ({ user, selectedPoint, onLogout }: HeaderProps) => {
+const Header = ({ user, selectedPoint, onLogout, onToggleSidebar }: HeaderProps) => {
   return (
     <header className="bg-white border-b border-gray-200 px-6 py-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleSidebar}
+            className="lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
           <div>
             <h2 className="text-lg font-semibold text-gray-800">
-              {selectedPoint ? selectedPoint.name : 'Panel Administrativo'}
+              {selectedPoint ? selectedPoint.nombre : 'Panel Administrativo'}
             </h2>
             <p className="text-sm text-gray-500">
               {new Date().toLocaleDateString('es-ES', {
@@ -31,8 +40,8 @@ const Header = ({ user, selectedPoint, onLogout }: HeaderProps) => {
 
         <div className="flex items-center space-x-4">
           <div className="text-right">
-            <p className="text-sm font-medium text-gray-700">{user.name}</p>
-            <p className="text-xs text-gray-500 capitalize">{user.role.replace('_', ' ')}</p>
+            <p className="text-sm font-medium text-gray-700">{user.nombre}</p>
+            <p className="text-xs text-gray-500 capitalize">{user.rol.replace('_', ' ')}</p>
           </div>
           <Button 
             variant="outline"

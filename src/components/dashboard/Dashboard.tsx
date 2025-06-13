@@ -1,6 +1,5 @@
 
 import { useState } from 'react';
-import { Button } from "@/components/ui/button";
 import Sidebar from './Sidebar';
 import Header from './Header';
 import ExchangeManagement from '../exchange/ExchangeManagement';
@@ -10,17 +9,21 @@ import PointManagement from '../admin/PointManagement';
 import CurrencyManagement from '../admin/CurrencyManagement';
 import Reports from '../reports/Reports';
 import DailyClose from '../close/DailyClose';
-import { User, AttentionPoint } from '../../types';
+import { User, PuntoAtencion } from '../../types';
 
 interface DashboardProps {
   user: User;
-  selectedPoint: AttentionPoint | null;
+  selectedPoint: PuntoAtencion | null;
   onLogout: () => void;
 }
 
 const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   const [activeView, setActiveView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
 
   const renderContent = () => {
     switch (activeView) {
@@ -48,14 +51,14 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h3 className="font-semibold text-blue-700 mb-2">Usuario Activo</h3>
-                  <p className="text-blue-600">{user.name}</p>
-                  <p className="text-sm text-gray-600 capitalize">{user.role.replace('_', ' ')}</p>
+                  <p className="text-blue-600">{user.nombre}</p>
+                  <p className="text-sm text-gray-600 capitalize">{user.rol.replace('_', ' ')}</p>
                 </div>
                 {selectedPoint && (
                   <div className="bg-green-50 p-4 rounded-lg">
                     <h3 className="font-semibold text-green-700 mb-2">Punto de Atención</h3>
-                    <p className="text-green-600">{selectedPoint.name}</p>
-                    <p className="text-sm text-gray-600">{selectedPoint.address}</p>
+                    <p className="text-green-600">{selectedPoint.nombre}</p>
+                    <p className="text-sm text-gray-600">{selectedPoint.direccion}</p>
                   </div>
                 )}
                 <div className="bg-yellow-50 p-4 rounded-lg">
@@ -71,22 +74,24 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex relative">
       <Sidebar
         user={user}
         selectedPoint={selectedPoint}
         activeView={activeView}
         onViewChange={setActiveView}
         isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen(!sidebarOpen)}
+        onToggle={toggleSidebar}
       />
       
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${sidebarOpen ? 'ml-64' : 'ml-16'}`}>
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${
+        sidebarOpen ? 'lg:ml-64' : 'lg:ml-16'
+      }`}>
         <Header
           user={user}
           selectedPoint={selectedPoint}
           onLogout={onLogout}
-          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          onToggleSidebar={toggleSidebar}
         />
         
         <main className="flex-1">

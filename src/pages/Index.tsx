@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import LoginForm from '../components/auth/LoginForm';
 import Dashboard from '../components/dashboard/Dashboard';
@@ -34,8 +33,8 @@ const Index = () => {
     setUser(userData);
     localStorage.setItem('punto_cambio_user', JSON.stringify(userData));
     
-    if (userData.role === 'administrador') {
-      // Admin goes directly to dashboard
+    if (userData.rol === 'ADMIN' || userData.rol === 'SUPER_USUARIO') {
+      // Admin and super user go directly to dashboard
       setShowPointSelection(false);
     } else {
       // Operator and concession need to select point
@@ -61,7 +60,7 @@ const Index = () => {
     return <LoginForm onLogin={handleLogin} />;
   }
 
-  if (showPointSelection && user.role !== 'administrador') {
+  if (showPointSelection && user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
     return (
       <PointSelection
         user={user}

@@ -12,11 +12,11 @@ import {
   Menu,
   X
 } from "lucide-react";
-import { User as UserType, AttentionPoint } from '../../types';
+import { User as UserType, PuntoAtencion } from '../../types';
 
 interface SidebarProps {
   user: UserType;
-  selectedPoint: AttentionPoint | null;
+  selectedPoint: PuntoAtencion | null;
   activeView: string;
   onViewChange: (view: string) => void;
   isOpen: boolean;
@@ -29,54 +29,54 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
       id: 'dashboard',
       label: 'Dashboard',
       icon: BarChart3,
-      roles: ['super_usuario', 'administrador', 'operador', 'concesion']
+      roles: ['SUPER_USUARIO', 'ADMIN', 'OPERADOR', 'CONCESION']
     },
     {
       id: 'exchanges',
       label: 'Cambio de Divisas',
       icon: ArrowUpDown,
-      roles: ['operador', 'concesion']
+      roles: ['OPERADOR', 'CONCESION']
     },
     {
       id: 'transfers',
       label: 'Transferencias',
       icon: DollarSign,
-      roles: ['super_usuario', 'administrador', 'operador', 'concesion']
+      roles: ['SUPER_USUARIO', 'ADMIN', 'OPERADOR', 'CONCESION']
     },
     {
       id: 'daily-close',
       label: 'Cierre Diario',
       icon: Calendar,
-      roles: ['operador', 'concesion']
+      roles: ['OPERADOR', 'CONCESION']
     },
     {
       id: 'reports',
       label: 'Informes',
       icon: FileText,
-      roles: ['super_usuario', 'administrador', 'operador', 'concesion']
+      roles: ['SUPER_USUARIO', 'ADMIN', 'OPERADOR', 'CONCESION']
     },
     {
       id: 'users',
       label: 'Gestión de Usuarios',
       icon: Users,
-      roles: ['super_usuario', 'administrador']
+      roles: ['SUPER_USUARIO', 'ADMIN']
     },
     {
       id: 'points',
       label: 'Puntos de Atención',
       icon: Settings,
-      roles: ['super_usuario', 'administrador']
+      roles: ['SUPER_USUARIO', 'ADMIN']
     },
     {
       id: 'currencies',
       label: 'Gestión de Monedas',
       icon: DollarSign,
-      roles: ['super_usuario', 'administrador']
+      roles: ['SUPER_USUARIO', 'ADMIN']
     }
   ];
 
   const filteredMenuItems = menuItems.filter(item => 
-    item.roles.includes(user.role)
+    item.roles.includes(user.rol)
   );
 
   return (
@@ -106,7 +106,7 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
               variant="ghost"
               size="sm"
               onClick={onToggle}
-              className="p-2"
+              className="p-2 hover:bg-gray-100"
             >
               {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </Button>
@@ -116,11 +116,11 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
         {isOpen && selectedPoint && (
           <div className="p-4 bg-blue-50 border-b border-gray-200">
             <p className="text-sm font-medium text-blue-700">Punto Activo:</p>
-            <p className="text-xs text-blue-600">{selectedPoint.name}</p>
+            <p className="text-xs text-blue-600">{selectedPoint.nombre}</p>
           </div>
         )}
 
-        <nav className="p-2">
+        <nav className="p-2 flex-1">
           {filteredMenuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
@@ -135,19 +135,20 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
                   ${!isOpen ? 'px-3' : ''}
                 `}
                 onClick={() => onViewChange(item.id)}
+                title={!isOpen ? item.label : ''}
               >
                 <Icon className={`h-5 w-5 ${isOpen ? 'mr-3' : ''}`} />
-                {isOpen && <span>{item.label}</span>}
+                {isOpen && <span className="truncate">{item.label}</span>}
               </Button>
             );
           })}
         </nav>
 
         {isOpen && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200">
+          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
             <div className="text-xs text-gray-500">
-              <p className="font-medium">{user.name}</p>
-              <p className="capitalize">{user.role.replace('_', ' ')}</p>
+              <p className="font-medium truncate">{user.nombre}</p>
+              <p className="capitalize">{user.rol.replace('_', ' ')}</p>
             </div>
           </div>
         )}

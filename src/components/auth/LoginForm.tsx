@@ -21,29 +21,42 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
     {
       id: '1',
       username: 'admin',
-      email: 'admin@puntocambio.com',
-      role: 'administrador',
-      name: 'Administrador Principal',
+      nombre: 'Administrador Principal',
+      correo: 'admin@puntocambio.com',
+      rol: 'ADMIN',
+      activo: true,
       created_at: new Date().toISOString(),
-      is_active: true
+      updated_at: new Date().toISOString()
     },
     {
       id: '2',
       username: 'operador1',
-      email: 'operador1@puntocambio.com',
-      role: 'operador',
-      name: 'Operador Punto 1',
+      nombre: 'Operador Punto 1',
+      correo: 'operador1@puntocambio.com',
+      rol: 'OPERADOR',
+      activo: true,
       created_at: new Date().toISOString(),
-      is_active: true
+      updated_at: new Date().toISOString()
     },
     {
       id: '3',
       username: 'concesion1',
-      email: 'concesion1@puntocambio.com',
-      role: 'concesion',
-      name: 'Concesión Principal',
+      nombre: 'Concesión Principal',
+      correo: 'concesion1@puntocambio.com',
+      rol: 'CONCESION',
+      activo: true,
       created_at: new Date().toISOString(),
-      is_active: true
+      updated_at: new Date().toISOString()
+    },
+    {
+      id: '4',
+      username: 'super',
+      nombre: 'Super Usuario',
+      correo: 'super@puntocambio.com',
+      rol: 'SUPER_USUARIO',
+      activo: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     }
   ];
 
@@ -143,7 +156,7 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
           </form>
           <div className="mt-4 text-xs text-gray-500 text-center">
             <p>Usuarios de prueba:</p>
-            <p>admin / operador1 / concesion1</p>
+            <p>super / admin / operador1 / concesion1</p>
             <p>Contraseña: admin123</p>
           </div>
         </CardContent>

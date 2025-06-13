@@ -1,0 +1,273 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id                 String         @id @default(uuid())
+  username           String         @unique
+  password           String
+  rol                RolUsuario
+  nombre             String
+  activo             Boolean        @default(true)
+  punto_atencion_id  String?
+  correo             String?        @unique
+  telefono           String?
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+  puntoAtencion      PuntoAtencion? @relation(fields: [punto_atencion_id], references: [id])
+
+  jornadas           Jornada[]
+  cambios            CambioDivisa[]
+  movimientos        Movimiento[]
+  solicitudes        SolicitudSaldo[]
+  cuadresCaja        CuadreCaja[]
+  historialSaldos    HistorialSaldo[]
+  transferenciasAprobadas Transferencia[] @relation("UsuarioAprobador")
+}
+
+model PuntoAtencion {
+  id           String         @id @default(uuid())
+  nombre       String
+  direccion    String
+  ciudad       String
+  provincia    String
+  codigoPostal String?
+  telefono     String?
+  activo       Boolean        @default(true)
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @updatedAt
+
+  usuarios       Usuario[]
+  saldos         Saldo[]
+  jornadas       Jornada[]
+  cambios        CambioDivisa[]
+  movimientos    Movimiento[]
+  solicitudes    SolicitudSaldo[]
+  origenTransf   Transferencia[] @relation("TransferenciasOrigen")
+  destinoTransf  Transferencia[] @relation("TransferenciasDestino")
+  cuadresCaja    CuadreCaja[]
+  historialSaldos HistorialSaldo[]
+}
+
+model Moneda {
+  id              String           @id @default(uuid())
+  nombre          String
+  simbolo         String
+  codigo          String           @unique
+  activo          Boolean          @default(true)
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+
+  saldos          Saldo[]
+  cambiosOrigen   CambioDivisa[]   @relation("MonedaOrigen")
+  cambiosDestino  CambioDivisa[]   @relation("MonedaDestino")
+  movimientos     Movimiento[]
+  solicitudes     SolicitudSaldo[]
+  transferencias  Transferencia[]
+  historialSaldos HistorialSaldo[]
+}
+
+model Saldo {
+  id              String        @id @default(uuid())
+  puntoAtencionId String
+  monedaId        String
+  cantidad        Float         @default(0)
+  billetes        Int           @default(0)
+  monedas         Int           @default(0)
+  updated_at      DateTime      @updatedAt
+
+  puntoAtencion   PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
+  moneda          Moneda        @relation(fields: [monedaId], references: [id])
+
+  @@unique([puntoAtencionId, monedaId])
+}
+
+model HistorialSaldo {
+  id                     String        @id @default(uuid())
+  puntoAtencionId        String
+  monedaId               String
+  usuarioId              String
+  cantidadAnterior       Float
+  cantidadIncrementada   Float
+  cantidadNueva          Float
+  tipo_movimiento        TipoMovimiento
+  fecha                  DateTime      @default(now())
+  descripcion            String?
+
+  puntoAtencion          PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
+  moneda                 Moneda        @relation(fields: [monedaId], references: [id])
+  usuario                Usuario       @relation(fields: [usuarioId], references: [id])
+}
+
+model CambioDivisa {
+  id                String         @id @default(uuid())
+  fecha             DateTime       @default(now())
+  hora              String
+  montoOrigen       Float
+  montoDestino      Float
+  tasaCambio        Float
+  tipoOperacion     TipoOperacion
+  monedaOrigenId    String
+  monedaDestinoId   String
+  usuarioId         String
+  puntoAtencionId   String
+  observacion       String?
+  numeroRecibo      String?
+  estado            EstadoTransaccion @default(COMPLETADO)
+
+  monedaOrigen      Moneda         @relation("MonedaOrigen", fields: [monedaOrigenId], references: [id])
+  monedaDestino     Moneda         @relation("MonedaDestino", fields: [monedaDestinoId], references: [id])
+  usuario           Usuario        @relation(fields: [usuarioId], references: [id])
+  puntoAtencion     PuntoAtencion  @relation(fields: [puntoAtencionId], references: [id])
+}
+
+model Movimiento {
+  id              String        @id @default(uuid())
+  tipo            TipoMovimiento
+  monto           Float
+  monedaId        String
+  usuarioId       String
+  puntoAtencionId String
+  fecha           DateTime      @default(now())
+  hora            String
+  descripcion     String?
+  numeroRecibo    String?
+
+  moneda          Moneda        @relation(fields: [monedaId], references: [id])
+  usuario         Usuario       @relation(fields: [usuarioId], references: [id])
+  puntoAtencion   PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
+}
+
+model SolicitudSaldo {
+  id              String        @id @default(uuid())
+  puntoAtencionId String
+  usuarioId       String
+  monedaId        String
+  montoSolicitado Float
+  aprobado        Boolean       @default(false)
+  fechaSolicitud  DateTime      @default(now())
+  fechaRespuesta  DateTime?
+  observaciones   String?
+
+  puntoAtencion   PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
+  usuario         Usuario       @relation(fields: [usuarioId], references: [id])
+  moneda          Moneda        @relation(fields: [monedaId], references: [id])
+}
+
+model Jornada {
+  id              String        @id @default(uuid())
+  usuarioId       String
+  puntoAtencionId String
+  fechaInicio     DateTime      @default(now())
+  fechaAlmuerzo   DateTime?
+  fechaRegreso    DateTime?
+  fechaSalida     DateTime?
+
+  usuario         Usuario       @relation(fields: [usuarioId], references: [id])
+  puntoAtencion   PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
+}
+
+model CuadreCaja {
+  id              String        @id @default(uuid())
+  usuarioId       String
+  puntoAtencionId String
+  fecha           DateTime      @default(now())
+  estado          EstadoCierre  @default(ABIERTO)
+  totalCambios    Int           @default(0)
+  totalTransferenciasEntrada  Int @default(0)
+  totalTransferenciasSalida   Int @default(0)
+  fechaCierre     DateTime?
+  observaciones   String?
+
+  usuario         Usuario       @relation(fields: [usuarioId], references: [id])
+  puntoAtencion   PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
+  detalles        DetalleCuadreCaja[]
+}
+
+model DetalleCuadreCaja {
+  id              String        @id @default(uuid())
+  cuadreId        String
+  monedaId        String
+  saldoApertura   Float
+  saldoCierre     Float
+  conteoFisico    Float
+  billetes        Int           @default(0)
+  monedas         Int           @default(0)
+  diferencia      Float         @default(0)
+
+  cuadre          CuadreCaja    @relation(fields: [cuadreId], references: [id])
+  moneda          Moneda        @relation(fields: [monedaId], references: [id])
+
+  @@unique([cuadreId, monedaId])
+}
+
+model Transferencia {
+  id                  String            @id @default(uuid())
+  origenId            String?
+  destinoId           String
+  monedaId            String
+  monto               Float
+  tipoTransferencia   TipoTransferencia
+  estado              EstadoTransferencia @default(PENDIENTE)
+  solicitadoPor       String
+  aprobadoPor         String?
+  fecha               DateTime          @default(now())
+  fechaAprobacion     DateTime?
+  descripcion         String?
+  numeroRecibo        String?
+
+  origen              PuntoAtencion?    @relation("TransferenciasOrigen", fields: [origenId], references: [id])
+  destino             PuntoAtencion     @relation("TransferenciasDestino", fields: [destinoId], references: [id])
+  moneda              Moneda            @relation(fields: [monedaId], references: [id])
+  usuarioAprobador    Usuario?          @relation("UsuarioAprobador", fields: [aprobadoPor], references: [id])
+}
+
+enum RolUsuario {
+  SUPER_USUARIO
+  ADMIN
+  OPERADOR
+  CONCESION
+}
+
+enum TipoMovimiento {
+  INGRESO
+  EGRESO
+  TRANSFERENCIA_ENTRANTE
+  TRANSFERENCIA_SALIENTE
+  CAMBIO_DIVISA
+}
+
+enum TipoOperacion {
+  COMPRA
+  VENTA
+}
+
+enum TipoTransferencia {
+  ENTRE_PUNTOS
+  DEPOSITO_MATRIZ
+  RETIRO_GERENCIA
+  DEPOSITO_GERENCIA
+}
+
+enum EstadoTransferencia {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
+enum EstadoTransaccion {
+  COMPLETADO
+  PENDIENTE
+  CANCELADO
+}
+
+enum EstadoCierre {
+  ABIERTO
+  CERRADO
+}

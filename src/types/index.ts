@@ -2,90 +2,133 @@
 export interface User {
   id: string;
   username: string;
-  email: string;
-  role: 'super_usuario' | 'administrador' | 'operador' | 'concesion';
-  name: string;
+  nombre: string;
+  correo?: string;
+  telefono?: string;
+  rol: 'SUPER_USUARIO' | 'ADMIN' | 'OPERADOR' | 'CONCESION';
+  activo: boolean;
+  punto_atencion_id?: string;
   created_at: string;
-  is_active: boolean;
+  updated_at: string;
 }
 
-export interface AttentionPoint {
+export interface PuntoAtencion {
   id: string;
-  name: string;
-  address: string;
-  phone?: string;
-  is_active: boolean;
+  nombre: string;
+  direccion: string;
+  ciudad: string;
+  provincia: string;
+  codigoPostal?: string;
+  telefono?: string;
+  activo: boolean;
   created_at: string;
-  balances: CurrencyBalance[];
+  updated_at: string;
+  saldos?: Saldo[];
 }
 
-export interface Currency {
+export interface Moneda {
   id: string;
-  code: string;
-  name: string;
-  symbol: string;
-  is_active: boolean;
+  nombre: string;
+  simbolo: string;
+  codigo: string;
+  activo: boolean;
   created_at: string;
+  updated_at: string;
 }
 
-export interface CurrencyBalance {
+export interface Saldo {
   id: string;
-  point_id: string;
-  currency_id: string;
-  balance: number;
-  currency: Currency;
+  puntoAtencionId: string;
+  monedaId: string;
+  cantidad: number;
+  billetes: number;
+  monedas: number;
+  updated_at: string;
+  moneda?: Moneda;
 }
 
-export interface CurrencyExchange {
+export interface CambioDivisa {
   id: string;
-  point_id: string;
-  user_id: string;
-  from_currency_id: string;
-  to_currency_id: string;
-  from_amount: number;
-  to_amount: number;
-  exchange_rate: number;
-  transaction_type: 'compra' | 'venta';
-  date: string;
-  time: string;
-  status: 'completado' | 'pendiente' | 'cancelado';
+  fecha: string;
+  hora: string;
+  montoOrigen: number;
+  montoDestino: number;
+  tasaCambio: number;
+  tipoOperacion: 'COMPRA' | 'VENTA';
+  monedaOrigenId: string;
+  monedaDestinoId: string;
+  usuarioId: string;
+  puntoAtencionId: string;
+  observacion?: string;
+  numeroRecibo?: string;
+  estado: 'COMPLETADO' | 'PENDIENTE' | 'CANCELADO';
+  monedaOrigen?: Moneda;
+  monedaDestino?: Moneda;
+  usuario?: User;
+  puntoAtencion?: PuntoAtencion;
 }
 
-export interface Transfer {
+export interface Transferencia {
   id: string;
-  from_point_id?: string;
-  to_point_id: string;
-  currency_id: string;
-  amount: number;
-  transfer_type: 'entre_puntos' | 'deposito_matriz' | 'retiro_gerencia' | 'deposito_gerencia';
-  status: 'pendiente' | 'aprobado' | 'rechazado';
-  requested_by: string;
-  approved_by?: string;
-  date: string;
-  notes?: string;
-  receipt_number?: string;
+  origenId?: string;
+  destinoId: string;
+  monedaId: string;
+  monto: number;
+  tipoTransferencia: 'ENTRE_PUNTOS' | 'DEPOSITO_MATRIZ' | 'RETIRO_GERENCIA' | 'DEPOSITO_GERENCIA';
+  estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+  solicitadoPor: string;
+  aprobadoPor?: string;
+  fecha: string;
+  fechaAprobacion?: string;
+  descripcion?: string;
+  numeroRecibo?: string;
+  origen?: PuntoAtencion;
+  destino?: PuntoAtencion;
+  moneda?: Moneda;
+  usuarioAprobador?: User;
 }
 
-export interface DailyClose {
+export interface CuadreCaja {
   id: string;
-  point_id: string;
-  date: string;
-  user_id: string;
-  currency_balances: DailyCurrencyBalance[];
-  total_exchanges: number;
-  total_transfers_in: number;
-  total_transfers_out: number;
-  status: 'abierto' | 'cerrado';
-  closed_at?: string;
+  usuarioId: string;
+  puntoAtencionId: string;
+  fecha: string;
+  estado: 'ABIERTO' | 'CERRADO';
+  totalCambios: number;
+  totalTransferenciasEntrada: number;
+  totalTransferenciasSalida: number;
+  fechaCierre?: string;
+  observaciones?: string;
+  usuario?: User;
+  puntoAtencion?: PuntoAtencion;
+  detalles?: DetalleCuadreCaja[];
 }
 
-export interface DailyCurrencyBalance {
-  currency_id: string;
-  currency: Currency;
-  opening_balance: number;
-  closing_balance: number;
-  bills_count: number;
-  coins_count: number;
-  calculated_balance: number;
-  difference: number;
+export interface DetalleCuadreCaja {
+  id: string;
+  cuadreId: string;
+  monedaId: string;
+  saldoApertura: number;
+  saldoCierre: number;
+  conteoFisico: number;
+  billetes: number;
+  monedas: number;
+  diferencia: number;
+  moneda?: Moneda;
+}
+
+export interface HistorialSaldo {
+  id: string;
+  puntoAtencionId: string;
+  monedaId: string;
+  usuarioId: string;
+  cantidadAnterior: number;
+  cantidadIncrementada: number;
+  cantidadNueva: number;
+  tipo_movimiento: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA_ENTRANTE' | 'TRANSFERENCIA_SALIENTE' | 'CAMBIO_DIVISA';
+  fecha: string;
+  descripcion?: string;
+  puntoAtencion?: PuntoAtencion;
+  moneda?: Moneda;
+  usuario?: User;
 }
