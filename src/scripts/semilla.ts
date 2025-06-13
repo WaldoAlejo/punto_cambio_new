@@ -1,6 +1,6 @@
+
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
-import { Prisma } from "@prisma/client";
 
 async function main() {
   // 1. Crear Punto de Atención "Matriz"
@@ -64,7 +64,6 @@ async function main() {
 
   // 4. Crear saldos e historial
   const monedasEnBD = await prisma.moneda.findMany();
-  const detallesCuadre: Prisma.DetalleCuadreCajaCreateWithoutCuadreInput[] = [];
 
   for (const moneda of monedasEnBD) {
     const yaExiste = await prisma.saldo.findUnique({
@@ -101,16 +100,6 @@ async function main() {
         },
       });
     }
-
-    detallesCuadre.push({
-      moneda: { connect: { id: moneda.id } },
-      saldo_apertura: 10000,
-      saldo_cierre: 10000,
-      conteo_fisico: 10000,
-      billetes: 10000,
-      monedas_fisicas: 0,
-      diferencia: 0,
-    });
   }
 
   // 5. Crear Cuadre de Caja inicial si no existe
@@ -122,18 +111,31 @@ async function main() {
   });
 
   if (!existeCuadre) {
-    await prisma.cuadreCaja.create({
+    const cuadre = await prisma.cuadreCaja.create({
       data: {
         usuario_id: admin.id,
         punto_atencion_id: matriz.id,
         estado: "ABIERTO",
         fecha: new Date(),
-        detalles: {
-          create: detallesCuadre,
-        },
         observaciones: "Cuadre inicial generado por semilla",
       },
     });
+
+    // Crear detalles del cuadre por separado
+    for (const moneda of monedasEnBD) {
+      await prisma.detalleCuadreCaja.create({
+        data: {
+          cuadre_id: cuadre.id,
+          moneda_id: moneda.id,
+          saldo_apertura: 10000,
+          saldo_cierre: 10000,
+          conteo_fisico: 10000,
+          billetes: 10000,
+          monedas_fisicas: 0,
+          diferencia: 0,
+        },
+      });
+    }
   }
 
   console.log("✅ Semilla ejecutada correctamente.");
