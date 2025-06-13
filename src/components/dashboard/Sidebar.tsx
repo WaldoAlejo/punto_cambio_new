@@ -15,7 +15,7 @@ interface SidebarProps {
 const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onToggle }: SidebarProps) => {
   const menuItems = [
     { key: 'dashboard', label: 'Dashboard', icon: HomeIcon },
-    { key: 'exchanges', label: 'Cambios de Divisas', icon: CoinsIcon },
+    { key: 'exchanges', label: 'Cambios de Divisas', icon: CoinsIcon, operatorOnly: true },
     { key: 'transfers', label: 'Transferencias', icon: ArrowRightLeftIcon },
     { key: 'users', label: 'Usuarios', icon: UsersIcon, adminOnly: true },
     { key: 'points', label: 'Puntos de Atención', icon: StoreIcon, adminOnly: true },
@@ -26,7 +26,12 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
   ];
 
   const filteredMenuItems = menuItems.filter(item => {
+    // Si es solo para admin y el usuario no es admin/super usuario, no mostrar
     if (item.adminOnly && user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
+      return false;
+    }
+    // Si es solo para operador y el usuario es admin/super usuario, no mostrar
+    if (item.operatorOnly && (user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO')) {
       return false;
     }
     return true;
