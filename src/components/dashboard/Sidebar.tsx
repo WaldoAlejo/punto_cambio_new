@@ -44,6 +44,7 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
 
   return (
     <>
+      {/* Mobile menu */}
       <Sheet open={isOpen} onOpenChange={onToggle}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="sm" className="lg:hidden">
@@ -74,6 +75,8 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Desktop sidebar */}
       <aside className={`fixed left-0 top-0 z-20 h-full w-64 flex-col bg-white border-r overflow-y-auto transition-transform transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:border-r lg:flex`}>
         <div className="flex items-center justify-center h-16 border-b">
           <span className="text-lg font-semibold">Punto Cambio</span>
