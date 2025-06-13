@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, Moneda, CambioDivisa } from '../../types';
 import { ReceiptService } from '../../services/receiptService';
@@ -16,121 +14,122 @@ interface ExchangeManagementProps {
 }
 
 const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) => {
+  const [operationType, setOperationType] = useState<'COMPRA' | 'VENTA'>('COMPRA');
+  const [rate, setRate] = useState(0);
+  const [fromCurrency, setFromCurrency] = useState('');
+  const [toCurrency, setToCurrency] = useState('');
+  const [amount, setAmount] = useState('');
+  const [destinationAmount, setDestinationAmount] = useState(0);
+  const [observation, setObservation] = useState('');
   const [exchanges, setExchanges] = useState<CambioDivisa[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
-  const [formData, setFormData] = useState({
-    fromCurrencyId: '',
-    toCurrencyId: '',
-    fromAmount: '',
-    exchangeRate: '',
-    type: 'COMPRA' as 'COMPRA' | 'VENTA',
-    notes: ''
-  });
 
-  // Mock data
+  // Mock currencies
   const mockCurrencies: Moneda[] = [
     { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
     { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '4', codigo: 'COP', nombre: 'Peso Colombiano', simbolo: '$', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
   ];
 
   useEffect(() => {
     setCurrencies(mockCurrencies);
-    setExchanges([]);
   }, []);
 
-  const calculateToAmount = () => {
-    const fromAmount = parseFloat(formData.fromAmount);
-    const rate = parseFloat(formData.exchangeRate);
-    if (fromAmount && rate) {
-      return fromAmount * rate;
-    }
-    return 0;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.fromCurrencyId || !formData.toCurrencyId || !formData.fromAmount || !formData.exchangeRate) {
-      toast({
-        title: "Error",
-        description: "Todos los campos son obligatorios",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (formData.fromCurrencyId === formData.toCurrencyId) {
-      toast({
-        title: "Error", 
-        description: "Las monedas de origen y destino deben ser diferentes",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const numeroRecibo = ReceiptService.generateReceiptNumber('CAMBIO_DIVISA');
-
-    const newExchange: CambioDivisa = {
-      id: Date.now().toString(),
-      fecha: new Date().toISOString(),
-      monto_origen: parseFloat(formData.fromAmount),
-      monto_destino: calculateToAmount(),
-      tasa_cambio: parseFloat(formData.exchangeRate),
-      tipo_operacion: formData.type,
-      moneda_origen_id: formData.fromCurrencyId,
-      moneda_destino_id: formData.toCurrencyId,
-      usuario_id: user.id,
-      punto_atencion_id: selectedPoint?.id || '',
-      observacion: formData.notes,
-      numero_recibo: numeroRecibo,
-      estado: 'COMPLETADO',
-      // Agregamos las referencias a las monedas para el recibo
-      monedaOrigen: currencies.find(c => c.id === formData.fromCurrencyId),
-      monedaDestino: currencies.find(c => c.id === formData.toCurrencyId)
-    };
-
-    setExchanges(prev => [newExchange, ...prev]);
-
-    // Generar e imprimir recibo
-    const receiptData = ReceiptService.generateCurrencyExchangeReceipt(
-      newExchange,
-      selectedPoint?.nombre || 'Sistema',
-      user.nombre
-    );
-    ReceiptService.printReceipt(receiptData, 2);
-    
-    // Reset form
-    setFormData({
-      fromCurrencyId: '',
-      toCurrencyId: '',
-      fromAmount: '',
-      exchangeRate: '',
-      type: 'COMPRA',
-      notes: ''
-    });
-
-    toast({
-      title: "Cambio registrado",
-      description: "El cambio de divisa ha sido registrado exitosamente y se ha generado el recibo",
-    });
-  };
+  useEffect(() => {
+    // Calculate destination amount when amount or rate changes
+    setDestinationAmount(parseFloat(amount) * rate);
+  }, [amount, rate]);
 
   const getCurrencyName = (currencyId: string) => {
     const currency = currencies.find(c => c.id === currencyId);
     return currency ? currency.codigo : '';
   };
 
-  const getPointName = () => {
-    return selectedPoint ? selectedPoint.nombre : '';
+  const generateReceiptAndPrint = (exchange: CambioDivisa) => {
+    const receiptData = ReceiptService.generateCurrencyExchangeReceipt(
+      exchange,
+      selectedPoint?.nombre || 'N/A',
+      user.nombre
+    );
+    
+    ReceiptService.printReceipt(receiptData, 2);
+  };
+
+  const performExchange = () => {
+    if (!selectedPoint) {
+      toast({
+        title: "Error",
+        description: "Debe seleccionar un punto de atención",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!fromCurrency || !toCurrency) {
+      toast({
+        title: "Error",
+        description: "Debe seleccionar las monedas",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!amount) {
+      toast({
+        title: "Error",
+        description: "Debe ingresar el monto a cambiar",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (rate === 0) {
+      toast({
+        title: "Error",
+        description: "La tasa de cambio debe ser mayor a cero",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const newExchange: CambioDivisa = {
+      id: Date.now().toString(),
+      fecha: new Date().toISOString(),
+      monto_origen: parseFloat(amount),
+      monto_destino: destinationAmount,
+      tasa_cambio: rate,
+      tipo_operacion: operationType,
+      moneda_origen_id: fromCurrency,
+      moneda_destino_id: toCurrency,
+      usuario_id: user.id,
+      punto_atencion_id: selectedPoint.id,
+      observacion: observation,
+      numero_recibo: ReceiptService.generateReceiptNumber('CAMBIO_DIVISA'),
+      estado: 'COMPLETADO',
+      monedaOrigen: currencies.find(c => c.id === fromCurrency),
+      monedaDestino: currencies.find(c => c.id === toCurrency)
+    };
+
+    setExchanges([newExchange, ...exchanges]);
+
+    // Generate and print receipt
+    generateReceiptAndPrint(newExchange);
+
+    // Reset form
+    setAmount('');
+    setObservation('');
+
+    toast({
+      title: "Cambio realizado",
+      description: `Cambio de ${newExchange.monto_origen} ${getCurrencyName(newExchange.moneda_origen_id)} a ${newExchange.monto_destino.toFixed(2)} ${getCurrencyName(newExchange.moneda_destino_id)} completado`,
+    });
   };
 
   if (!selectedPoint) {
     return (
       <div className="p-6">
         <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">Debe seleccionar un punto de atención para realizar cambios</p>
+          <p className="text-gray-500 text-lg">Debe seleccionar un punto de atención</p>
         </div>
       </div>
     );
@@ -141,44 +140,49 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Cambio de Divisas</h1>
         <div className="text-sm text-gray-500">
-          {selectedPoint ? `Punto: ${selectedPoint.nombre}` : 'Panel Administrativo'}
+          Punto: {selectedPoint.nombre}
         </div>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Form */}
         <Card>
           <CardHeader>
-            <CardTitle>Nuevo Cambio</CardTitle>
-            <CardDescription>Registrar una nueva operación de cambio</CardDescription>
+            <CardTitle>Nueva Operación</CardTitle>
+            <CardDescription>Registre el cambio de divisa</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Tipo de Operación</Label>
-                <Select 
-                  value={formData.type} 
-                  onValueChange={(value: 'COMPRA' | 'VENTA') => setFormData(prev => ({ ...prev, type: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="COMPRA">Compra</SelectItem>
-                    <SelectItem value="VENTA">Venta</SelectItem>
-                  </SelectContent>
-                </Select>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Tipo de Operación</Label>
+                  <Select value={operationType} onValueChange={setOperationType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="COMPRA">Compra</SelectItem>
+                      <SelectItem value="VENTA">Venta</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Tasa de Cambio</Label>
+                  <Input
+                    type="number"
+                    step="0.0001"
+                    value={rate}
+                    onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
+                    placeholder="0.0000"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Moneda Origen</Label>
-                  <Select 
-                    value={formData.fromCurrencyId} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, fromCurrencyId: value }))}
-                  >
+                  <Select value={fromCurrency} onValueChange={setFromCurrency}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar" />
+                      <SelectValue placeholder="Seleccionar moneda" />
                     </SelectTrigger>
                     <SelectContent>
                       {currencies.map(currency => (
@@ -189,15 +193,11 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Moneda Destino</Label>
-                  <Select 
-                    value={formData.toCurrencyId} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, toCurrencyId: value }))}
-                  >
+                  <Select value={toCurrency} onValueChange={setToCurrency}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar" />
+                      <SelectValue placeholder="Seleccionar moneda" />
                     </SelectTrigger>
                     <SelectContent>
                       {currencies.map(currency => (
@@ -212,54 +212,43 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Monto Origen</Label>
+                  <Label>Monto a Cambiar</Label>
                   <Input
                     type="number"
                     step="0.01"
-                    value={formData.fromAmount}
-                    onChange={(e) => setFormData(prev => ({ ...prev, fromAmount: e.target.value }))}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
                     placeholder="0.00"
                   />
                 </div>
-
                 <div className="space-y-2">
-                  <Label>Tasa de Cambio</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.exchangeRate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, exchangeRate: e.target.value }))}
-                    placeholder="0.00"
-                  />
+                  <Label>Monto Resultante</Label>
+                  <div className="h-10 px-3 py-2 border rounded-md bg-gray-50 flex items-center">
+                    {destinationAmount.toFixed(2)}
+                  </div>
                 </div>
               </div>
-
-              {formData.fromAmount && formData.exchangeRate && (
-                <div className="bg-blue-50 p-3 rounded">
-                  <p className="text-sm text-blue-800">
-                    Monto a recibir: <span className="font-bold">{calculateToAmount().toFixed(2)}</span>
-                  </p>
-                </div>
-              )}
 
               <div className="space-y-2">
                 <Label>Observaciones (Opcional)</Label>
-                <Textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Comentarios adicionales..."
-                  rows={3}
+                <Input
+                  value={observation}
+                  onChange={(e) => setObservation(e.target.value)}
+                  placeholder="Observaciones adicionales"
                 />
               </div>
 
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
-                Registrar Cambio
+              <Button 
+                onClick={performExchange} 
+                className="w-full"
+                disabled={!fromCurrency || !toCurrency || !amount || rate === 0}
+              >
+                Realizar Cambio
               </Button>
-            </form>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Exchanges List */}
         <Card>
           <CardHeader>
             <CardTitle>Cambios Recientes</CardTitle>
@@ -277,18 +266,19 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                     <div className="flex justify-between items-start mb-2">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
                         exchange.tipo_operacion === 'COMPRA' 
-                          ? 'bg-green-100 text-green-800'
+                          ? 'bg-green-100 text-green-800' 
                           : 'bg-blue-100 text-blue-800'
                       }`}>
                         {exchange.tipo_operacion}
                       </span>
                       <span className="text-xs text-gray-500">
-                        {new Date(exchange.fecha).toLocaleDateString()} {exchange.hora}
+                        {new Date(exchange.fecha).toLocaleString()}
                       </span>
                     </div>
                     <div className="text-sm space-y-1">
                       <p className="font-medium">
-                        {exchange.monto_origen} {getCurrencyName(exchange.moneda_origen_id)} → {exchange.monto_destino} {getCurrencyName(exchange.moneda_destino_id)}
+                        {exchange.monto_origen} {getCurrencyName(exchange.moneda_origen_id)} → {' '}
+                        {exchange.monto_destino.toFixed(2)} {getCurrencyName(exchange.moneda_destino_id)}
                       </p>
                       <p className="text-gray-600">
                         Tasa: {exchange.tasa_cambio}
@@ -296,6 +286,11 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                       {exchange.observacion && (
                         <p className="text-gray-600 text-xs">
                           Obs: {exchange.observacion}
+                        </p>
+                      )}
+                      {exchange.numero_recibo && (
+                        <p className="text-gray-600 text-xs">
+                          Recibo: {exchange.numero_recibo}
                         </p>
                       )}
                     </div>

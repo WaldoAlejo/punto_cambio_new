@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, Moneda, CuadreCaja } from '../../types';
 
@@ -82,14 +81,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     // Create daily close
     const newClose: CuadreCaja = {
       id: Date.now().toString(),
-      usuarioId: user.id,
-      puntoAtencionId: selectedPoint.id,
+      usuario_id: user.id,
+      punto_atencion_id: selectedPoint.id,
       fecha: new Date().toISOString().split('T')[0],
       estado: 'CERRADO',
-      totalCambios: 15, // Mock data
-      totalTransferenciasEntrada: 2,
-      totalTransferenciasSalida: 1,
-      fechaCierre: new Date().toISOString(),
+      total_cambios: 15, // Mock data
+      total_transferencias_entrada: 2,
+      total_transferencias_salida: 1,
+      fecha_cierre: new Date().toISOString(),
       observaciones: ''
     };
 
@@ -199,7 +198,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           <CardHeader>
             <CardTitle>Cierre Completado</CardTitle>
             <CardDescription>
-              Cierre diario realizado el {new Date(todayClose.fechaCierre!).toLocaleString()}
+              Cierre diario realizado el {new Date(todayClose.fecha_cierre!).toLocaleString()}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -207,15 +206,15 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-blue-700">Total Cambios</h4>
-                  <p className="text-2xl font-bold text-blue-600">{todayClose.totalCambios}</p>
+                  <p className="text-2xl font-bold text-blue-600">{todayClose.total_cambios}</p>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-green-700">Transferencias Entrada</h4>
-                  <p className="text-2xl font-bold text-green-600">{todayClose.totalTransferenciasEntrada}</p>
+                  <p className="text-2xl font-bold text-green-600">{todayClose.total_transferencias_entrada}</p>
                 </div>
                 <div className="bg-orange-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-orange-700">Transferencias Salida</h4>
-                  <p className="text-2xl font-bold text-orange-600">{todayClose.totalTransferenciasSalida}</p>
+                  <p className="text-2xl font-bold text-orange-600">{todayClose.total_transferencias_salida}</p>
                 </div>
               </div>
 
