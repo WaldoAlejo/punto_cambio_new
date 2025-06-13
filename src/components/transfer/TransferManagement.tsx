@@ -5,20 +5,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { User, AttentionPoint, Currency, Transfer } from '../../types';
+import { User, PuntoAtencion, Moneda, Transferencia } from '../../types';
 
 interface TransferManagementProps {
   user: User;
-  selectedPoint: AttentionPoint | null;
+  selectedPoint: PuntoAtencion | null;
 }
 
 const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) => {
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
-  const [points, setPoints] = useState<AttentionPoint[]>([]);
+  const [transfers, setTransfers] = useState<Transferencia[]>([]);
+  const [currencies, setCurrencies] = useState<Moneda[]>([]);
+  const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [formData, setFormData] = useState({
     type: '',
     toPointId: '',
@@ -28,16 +27,16 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
   });
 
   // Mock data
-  const mockCurrencies: Currency[] = [
-    { id: '1', code: 'USD', name: 'Dólar Estadounidense', symbol: '$', is_active: true, created_at: new Date().toISOString() },
-    { id: '2', code: 'EUR', name: 'Euro', symbol: '€', is_active: true, created_at: new Date().toISOString() },
-    { id: '3', code: 'VES', name: 'Bolívar Venezolano', symbol: 'Bs', is_active: true, created_at: new Date().toISOString() }
+  const mockCurrencies: Moneda[] = [
+    { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
   ];
 
-  const mockPoints: AttentionPoint[] = [
-    { id: '1', name: 'Punto Centro', address: 'Centro', phone: '', is_active: true, created_at: '', balances: [] },
-    { id: '2', name: 'Punto Norte', address: 'Norte', phone: '', is_active: true, created_at: '', balances: [] },
-    { id: '3', name: 'Punto Sur', address: 'Sur', phone: '', is_active: true, created_at: '', balances: [] }
+  const mockPoints: PuntoAtencion[] = [
+    { id: '1', nombre: 'Punto Centro', direccion: 'Centro', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '', saldos: [] },
+    { id: '2', nombre: 'Punto Norte', direccion: 'Norte', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '', saldos: [] },
+    { id: '3', nombre: 'Punto Sur', direccion: 'Sur', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '', saldos: [] }
   ];
 
   useEffect(() => {
@@ -58,7 +57,7 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
       return;
     }
 
-    if ((formData.type === 'entre_puntos') && !formData.toPointId) {
+    if ((formData.type === 'ENTRE_PUNTOS') && !formData.toPointId) {
       toast({
         title: "Error", 
         description: "Debe seleccionar el punto de destino",
@@ -67,18 +66,18 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
       return;
     }
 
-    const newTransfer: Transfer = {
+    const newTransfer: Transferencia = {
       id: Date.now().toString(),
-      from_point_id: formData.type === 'entre_puntos' ? selectedPoint?.id : undefined,
-      to_point_id: formData.type === 'entre_puntos' ? formData.toPointId : selectedPoint?.id || '',
-      currency_id: formData.currencyId,
-      amount: parseFloat(formData.amount),
-      transfer_type: formData.type as any,
-      status: 'pendiente',
-      requested_by: user.id,
-      date: new Date().toISOString(),
-      notes: formData.notes,
-      receipt_number: `TR-${Date.now()}`
+      origenId: formData.type === 'ENTRE_PUNTOS' ? selectedPoint?.id : undefined,
+      destinoId: formData.type === 'ENTRE_PUNTOS' ? formData.toPointId : selectedPoint?.id || '',
+      monedaId: formData.currencyId,
+      monto: parseFloat(formData.amount),
+      tipoTransferencia: formData.type as any,
+      estado: 'PENDIENTE',
+      solicitadoPor: user.id,
+      fecha: new Date().toISOString(),
+      descripcion: formData.notes,
+      numeroRecibo: `TR-${Date.now()}`
     };
 
     setTransfers(prev => [newTransfer, ...prev]);
@@ -99,7 +98,7 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
   };
 
   const approveTransfer = (transferId: string) => {
-    if (user.role !== 'administrador' && user.role !== 'super_usuario') {
+    if (user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
       toast({
         title: "Sin permisos",
         description: "Solo los administradores pueden aprobar transferencias",
@@ -110,7 +109,7 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
 
     setTransfers(prev => prev.map(t => 
       t.id === transferId 
-        ? { ...t, status: 'aprobado', approved_by: user.id }
+        ? { ...t, estado: 'APROBADO', aprobadoPor: user.id }
         : t
     ));
 
@@ -122,20 +121,20 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
 
   const getCurrencyName = (currencyId: string) => {
     const currency = currencies.find(c => c.id === currencyId);
-    return currency ? currency.code : '';
+    return currency ? currency.codigo : '';
   };
 
   const getPointName = (pointId: string) => {
     const point = [...points, selectedPoint].find(p => p?.id === pointId);
-    return point ? point.name : '';
+    return point ? point.nombre : '';
   };
 
   const getTransferTypeLabel = (type: string) => {
     const types = {
-      'entre_puntos': 'Entre Puntos',
-      'deposito_matriz': 'Depósito Matriz',
-      'retiro_gerencia': 'Retiro Gerencia',
-      'deposito_gerencia': 'Depósito Gerencia'
+      'ENTRE_PUNTOS': 'Entre Puntos',
+      'DEPOSITO_MATRIZ': 'Depósito Matriz',
+      'RETIRO_GERENCIA': 'Retiro Gerencia',
+      'DEPOSITO_GERENCIA': 'Depósito Gerencia'
     };
     return types[type as keyof typeof types] || type;
   };
@@ -145,7 +144,7 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Gestión de Transferencias</h1>
         <div className="text-sm text-gray-500">
-          {selectedPoint ? `Punto: ${selectedPoint.name}` : 'Panel Administrativo'}
+          {selectedPoint ? `Punto: ${selectedPoint.nombre}` : 'Panel Administrativo'}
         </div>
       </div>
 
@@ -168,25 +167,25 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
                     <SelectValue placeholder="Seleccionar tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(user.role === 'operador' || user.role === 'concesion') && (
+                    {(user.rol === 'OPERADOR' || user.rol === 'CONCESION') && (
                       <>
-                        <SelectItem value="entre_puntos">Transferencia entre Puntos</SelectItem>
-                        <SelectItem value="deposito_matriz">Solicitar Depósito de Matriz</SelectItem>
-                        <SelectItem value="retiro_gerencia">Retiro de Gerencia</SelectItem>
-                        <SelectItem value="deposito_gerencia">Depósito de Gerencia</SelectItem>
+                        <SelectItem value="ENTRE_PUNTOS">Transferencia entre Puntos</SelectItem>
+                        <SelectItem value="DEPOSITO_MATRIZ">Solicitar Depósito de Matriz</SelectItem>
+                        <SelectItem value="RETIRO_GERENCIA">Retiro de Gerencia</SelectItem>
+                        <SelectItem value="DEPOSITO_GERENCIA">Depósito de Gerencia</SelectItem>
                       </>
                     )}
-                    {(user.role === 'administrador' || user.role === 'super_usuario') && (
+                    {(user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO') && (
                       <>
-                        <SelectItem value="deposito_matriz">Depósito de Matriz</SelectItem>
-                        <SelectItem value="entre_puntos">Transferencia entre Puntos</SelectItem>
+                        <SelectItem value="DEPOSITO_MATRIZ">Depósito de Matriz</SelectItem>
+                        <SelectItem value="ENTRE_PUNTOS">Transferencia entre Puntos</SelectItem>
                       </>
                     )}
                   </SelectContent>
                 </Select>
               </div>
 
-              {formData.type === 'entre_puntos' && (
+              {formData.type === 'ENTRE_PUNTOS' && (
                 <div className="space-y-2">
                   <Label>Punto de Destino</Label>
                   <Select 
@@ -199,7 +198,7 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
                     <SelectContent>
                       {points.map(point => (
                         <SelectItem key={point.id} value={point.id}>
-                          {point.name}
+                          {point.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -220,7 +219,7 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
                     <SelectContent>
                       {currencies.map(currency => (
                         <SelectItem key={currency.id} value={currency.id}>
-                          {currency.code} - {currency.name}
+                          {currency.codigo} - {currency.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -273,37 +272,37 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
                   <div key={transfer.id} className="border rounded-lg p-4">
                     <div className="flex justify-between items-start mb-2">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        transfer.status === 'pendiente' 
+                        transfer.estado === 'PENDIENTE' 
                           ? 'bg-yellow-100 text-yellow-800'
-                          : transfer.status === 'aprobado'
+                          : transfer.estado === 'APROBADO'
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {transfer.status.toUpperCase()}
+                        {transfer.estado}
                       </span>
                       <span className="text-xs text-gray-500">
-                        {new Date(transfer.date).toLocaleDateString()}
+                        {new Date(transfer.fecha).toLocaleDateString()}
                       </span>
                     </div>
                     <div className="text-sm space-y-1">
                       <p className="font-medium">
-                        {getTransferTypeLabel(transfer.transfer_type)}
+                        {getTransferTypeLabel(transfer.tipoTransferencia)}
                       </p>
                       <p className="text-gray-600">
-                        Monto: {transfer.amount} {getCurrencyName(transfer.currency_id)}
+                        Monto: {transfer.monto} {getCurrencyName(transfer.monedaId)}
                       </p>
-                      {transfer.transfer_type === 'entre_puntos' && (
+                      {transfer.tipoTransferencia === 'ENTRE_PUNTOS' && (
                         <p className="text-gray-600">
-                          De: {getPointName(transfer.from_point_id || '')} → A: {getPointName(transfer.to_point_id)}
+                          De: {getPointName(transfer.origenId || '')} → A: {getPointName(transfer.destinoId)}
                         </p>
                       )}
-                      {transfer.notes && (
+                      {transfer.descripcion && (
                         <p className="text-gray-600 text-xs">
-                          Notas: {transfer.notes}
+                          Notas: {transfer.descripcion}
                         </p>
                       )}
                     </div>
-                    {transfer.status === 'pendiente' && (user.role === 'administrador' || user.role === 'super_usuario') && (
+                    {transfer.estado === 'PENDIENTE' && (user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO') && (
                       <Button
                         size="sm"
                         onClick={() => approveTransfer(transfer.id)}

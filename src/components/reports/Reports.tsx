@@ -1,202 +1,130 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { toast } from "@/hooks/use-toast";
-import { User, AttentionPoint } from '../../types';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { User, PuntoAtencion } from '../../types';
 
 interface ReportsProps {
   user: User;
-  selectedPoint: AttentionPoint | null;
+  selectedPoint: PuntoAtencion | null;
 }
 
 const Reports = ({ user, selectedPoint }: ReportsProps) => {
-  const [reportType, setReportType] = useState('');
+  const [reportType, setReportType] = useState('exchanges');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [reportData, setReportData] = useState<any[]>([]);
 
-  const reportTypes = [
-    { value: 'balances', label: 'Saldos por Punto' },
-    { value: 'exchanges', label: 'Cambios de Divisas' },
-    { value: 'transfers', label: 'Transferencias' },
-    { value: 'daily_close', label: 'Cierres Diarios' }
+  // Mock data
+  const mockPoints: PuntoAtencion[] = [
+    {
+      id: '1',
+      nombre: 'Punto Centro',
+      direccion: 'Av. Principal 123',
+      ciudad: 'Caracas',
+      provincia: 'Distrito Capital',
+      telefono: '+58 212-555-0001',
+      activo: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      saldos: []
+    },
+    {
+      id: '2', 
+      nombre: 'Punto Norte',
+      direccion: 'CC El Recreo',
+      ciudad: 'Caracas',
+      provincia: 'Distrito Capital',
+      telefono: '+58 212-555-0002',
+      activo: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      saldos: []
+    }
   ];
 
+  const mockUsers: User[] = [
+    {
+      id: '1',
+      username: 'operador1',
+      nombre: 'Juan Pérez',
+      correo: 'juan@example.com',
+      rol: 'OPERADOR',
+      activo: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    },
+    {
+      id: '2',
+      username: 'operador2', 
+      nombre: 'María García',
+      correo: 'maria@example.com',
+      rol: 'OPERADOR',
+      activo: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+  ];
+
+  const generateMockData = () => {
+    if (reportType === 'exchanges') {
+      return [
+        { point: mockPoints[0].nombre, user: mockUsers[0].nombre, exchanges: 15, amount: 45000 },
+        { point: mockPoints[1].nombre, user: mockUsers[1].nombre, exchanges: 12, amount: 38000 },
+      ];
+    }
+    return [];
+  };
+
+  useEffect(() => {
+    setReportData(generateMockData());
+  }, [reportType]);
+
   const generateReport = () => {
-    if (!reportType) {
-      toast({
-        title: "Error",
-        description: "Seleccione un tipo de reporte",
-        variant: "destructive"
-      });
+    if (!dateFrom || !dateTo) {
       return;
     }
-
-    // Mock report data based on type
-    let mockData = [];
-    
-    switch (reportType) {
-      case 'balances':
-        mockData = [
-          {
-            punto: selectedPoint?.name || 'Punto Centro',
-            moneda: 'USD',
-            saldo: 15000.00,
-            fecha: new Date().toISOString().split('T')[0]
-          },
-          {
-            punto: selectedPoint?.name || 'Punto Centro',
-            moneda: 'EUR',
-            saldo: 8500.00,
-            fecha: new Date().toISOString().split('T')[0]
-          }
-        ];
-        break;
-      case 'exchanges':
-        mockData = [
-          {
-            fecha: new Date().toISOString().split('T')[0],
-            hora: '10:30:00',
-            usuario: user.name,
-            tipo: 'Venta',
-            moneda_origen: 'EUR',
-            moneda_destino: 'USD',
-            monto_origen: 100,
-            monto_destino: 110,
-            tasa: 1.10
-          },
-          {
-            fecha: new Date().toISOString().split('T')[0],
-            hora: '14:15:00',
-            usuario: user.name,
-            tipo: 'Compra',
-            moneda_origen: 'USD',
-            moneda_destino: 'VES',
-            monto_origen: 50,
-            monto_destino: 1825000,
-            tasa: 36500
-          }
-        ];
-        break;
-      case 'transfers':
-        mockData = [
-          {
-            fecha: new Date().toISOString().split('T')[0],
-            tipo: 'Entre Puntos',
-            origen: 'Punto Centro',
-            destino: 'Punto Norte',
-            moneda: 'USD',
-            monto: 2000,
-            estado: 'Aprobado'
-          }
-        ];
-        break;
-      case 'daily_close':
-        mockData = [
-          {
-            fecha: new Date().toISOString().split('T')[0],
-            punto: selectedPoint?.name || 'Punto Centro',
-            usuario: user.name,
-            total_cambios: 15,
-            total_transferencias: 3,
-            estado: 'Cerrado'
-          }
-        ];
-        break;
-    }
-
-    setReportData(mockData);
-    
-    toast({
-      title: "Reporte generado",
-      description: "El reporte se ha generado exitosamente",
-    });
+    setReportData(generateMockData());
   };
 
-  const exportReport = () => {
-    if (reportData.length === 0) {
-      toast({
-        title: "Error",
-        description: "No hay datos para exportar",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // In a real application, this would generate and download a file
-    toast({
-      title: "Exportación exitosa",
-      description: "El reporte se ha exportado a Excel",
-    });
-  };
-
-  const renderReportTable = () => {
-    if (reportData.length === 0) return null;
-
-    const columns = Object.keys(reportData[0]);
-
-    return (
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {columns.map(column => (
-              <TableHead key={column} className="capitalize">
-                {column.replace('_', ' ')}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {reportData.map((row, index) => (
-            <TableRow key={index}>
-              {columns.map(column => (
-                <TableCell key={column}>
-                  {typeof row[column] === 'number' && column.includes('monto') 
-                    ? row[column].toLocaleString() 
-                    : row[column]
-                  }
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    );
-  };
+  const chartData = reportData.map(item => ({
+    name: item.point,
+    valor: item.amount || item.transfers || item.balance
+  }));
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Informes y Reportes</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Reportes</h1>
         <div className="text-sm text-gray-500">
-          {selectedPoint ? `Punto: ${selectedPoint.name}` : 'Todos los puntos'}
+          {selectedPoint ? `Punto: ${selectedPoint.nombre}` : 'Panel Administrativo'}
         </div>
       </div>
 
+      {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Generar Reporte</CardTitle>
-          <CardDescription>Seleccione los parámetros para generar un reporte</CardDescription>
+          <CardTitle>Filtros de Reporte</CardTitle>
+          <CardDescription>Configura los parámetros del reporte</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label>Tipo de Reporte</Label>
               <Select value={reportType} onValueChange={setReportType}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {reportTypes.map(type => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="exchanges">Cambios de Divisa</SelectItem>
+                  <SelectItem value="transfers">Transferencias</SelectItem>
+                  <SelectItem value="balances">Saldos</SelectItem>
+                  <SelectItem value="users">Actividad de Usuarios</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -219,46 +147,75 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>&nbsp;</Label>
-              <Button 
-                onClick={generateReport}
-                className="w-full bg-blue-600 hover:bg-blue-700"
-              >
-                Generar
+            <div className="flex items-end">
+              <Button onClick={generateReport} className="w-full">
+                Generar Reporte
               </Button>
             </div>
           </div>
-
-          {reportData.length > 0 && (
-            <div className="flex justify-end mb-4">
-              <Button 
-                onClick={exportReport}
-                variant="outline"
-                className="border-green-600 text-green-600 hover:bg-green-50"
-              >
-                Exportar a Excel
-              </Button>
-            </div>
-          )}
         </CardContent>
       </Card>
 
-      {reportData.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Resultados del Reporte</CardTitle>
-            <CardDescription>
-              {reportTypes.find(t => t.value === reportType)?.label} - {reportData.length} registros
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              {renderReportTable()}
+      {/* Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Gráfico</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="valor" fill="#3b82f6" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Data Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Datos del Reporte</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {reportData.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No hay datos para mostrar. Configura los filtros y genera el reporte.
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Punto</TableHead>
+                  <TableHead>Usuario</TableHead>
+                  {reportType === 'exchanges' && (
+                    <>
+                      <TableHead>Cambios</TableHead>
+                      <TableHead>Monto Total</TableHead>
+                    </>
+                  )}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {reportData.map((item, index) => (
+                  <TableRow key={index}>
+                    <TableCell>{item.point}</TableCell>
+                    <TableCell>{item.user}</TableCell>
+                    {reportType === 'exchanges' && (
+                      <>
+                        <TableCell>{item.exchanges}</TableCell>
+                        <TableCell>${item.amount?.toLocaleString()}</TableCell>
+                      </>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,52 +5,53 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { User, AttentionPoint, Currency, CurrencyExchange } from '../../types';
+import { User, PuntoAtencion, Moneda, CambioDivisa } from '../../types';
 
 interface ExchangeManagementProps {
   user: User;
-  selectedPoint: AttentionPoint | null;
+  selectedPoint: PuntoAtencion | null;
 }
 
 const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) => {
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
-  const [exchanges, setExchanges] = useState<CurrencyExchange[]>([]);
+  const [exchanges, setExchanges] = useState<CambioDivisa[]>([]);
+  const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [formData, setFormData] = useState({
-    fromCurrency: '',
-    toCurrency: '',
-    amount: '',
-    rate: '',
-    transactionType: 'venta' as 'compra' | 'venta'
+    fromCurrencyId: '',
+    toCurrencyId: '',
+    fromAmount: '',
+    exchangeRate: '',
+    type: 'COMPRA' as 'COMPRA' | 'VENTA',
+    notes: ''
   });
 
-  // Mock currencies
-  const mockCurrencies: Currency[] = [
-    { id: '1', code: 'USD', name: 'Dólar Estadounidense', symbol: '$', is_active: true, created_at: new Date().toISOString() },
-    { id: '2', code: 'EUR', name: 'Euro', symbol: '€', is_active: true, created_at: new Date().toISOString() },
-    { id: '3', code: 'VES', name: 'Bolívar Venezolano', symbol: 'Bs', is_active: true, created_at: new Date().toISOString() },
-    { id: '4', code: 'COP', name: 'Peso Colombiano', symbol: '$', is_active: true, created_at: new Date().toISOString() }
+  // Mock data
+  const mockCurrencies: Moneda[] = [
+    { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: '4', codigo: 'COP', nombre: 'Peso Colombiano', simbolo: '$', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
   ];
 
   useEffect(() => {
     setCurrencies(mockCurrencies);
-    // Load recent exchanges
     setExchanges([]);
   }, []);
+
+  const calculateToAmount = () => {
+    const fromAmount = parseFloat(formData.fromAmount);
+    const rate = parseFloat(formData.exchangeRate);
+    if (fromAmount && rate) {
+      return fromAmount * rate;
+    }
+    return 0;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedPoint) {
-      toast({
-        title: "Error",
-        description: "Debe seleccionar un punto de atención",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!formData.fromCurrency || !formData.toCurrency || !formData.amount || !formData.rate) {
+    if (!formData.fromCurrencyId || !formData.toCurrencyId || !formData.fromAmount || !formData.exchangeRate) {
       toast({
         title: "Error",
         description: "Todos los campos son obligatorios",
@@ -60,61 +60,57 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       return;
     }
 
-    if (formData.fromCurrency === formData.toCurrency) {
+    if (formData.fromCurrencyId === formData.toCurrencyId) {
       toast({
-        title: "Error",
+        title: "Error", 
         description: "Las monedas de origen y destino deben ser diferentes",
         variant: "destructive"
       });
       return;
     }
 
-    const amount = parseFloat(formData.amount);
-    const rate = parseFloat(formData.rate);
-    const toAmount = amount * rate;
-
-    const newExchange: CurrencyExchange = {
+    const newExchange: CambioDivisa = {
       id: Date.now().toString(),
-      point_id: selectedPoint.id,
-      user_id: user.id,
-      from_currency_id: formData.fromCurrency,
-      to_currency_id: formData.toCurrency,
-      from_amount: amount,
-      to_amount: toAmount,
-      exchange_rate: rate,
-      transaction_type: formData.transactionType,
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toTimeString().split(' ')[0],
-      status: 'completado'
+      fecha: new Date().toISOString(),
+      hora: new Date().toLocaleTimeString(),
+      montoOrigen: parseFloat(formData.fromAmount),
+      montoDestino: calculateToAmount(),
+      tasaCambio: parseFloat(formData.exchangeRate),
+      tipoOperacion: formData.type,
+      monedaOrigenId: formData.fromCurrencyId,
+      monedaDestinoId: formData.toCurrencyId,
+      usuarioId: user.id,
+      puntoAtencionId: selectedPoint?.id || '',
+      observacion: formData.notes,
+      numeroRecibo: `EX-${Date.now()}`,
+      estado: 'COMPLETADO'
     };
 
     setExchanges(prev => [newExchange, ...prev]);
     
     // Reset form
     setFormData({
-      fromCurrency: '',
-      toCurrency: '',
-      amount: '',
-      rate: '',
-      transactionType: 'venta'
+      fromCurrencyId: '',
+      toCurrencyId: '',
+      fromAmount: '',
+      exchangeRate: '',
+      type: 'COMPRA',
+      notes: ''
     });
 
     toast({
       title: "Cambio registrado",
-      description: `Cambio de ${amount} ${getCurrencyName(formData.fromCurrency)} por ${toAmount.toFixed(2)} ${getCurrencyName(formData.toCurrency)} completado`,
+      description: "El cambio de divisa ha sido registrado exitosamente",
     });
   };
 
   const getCurrencyName = (currencyId: string) => {
     const currency = currencies.find(c => c.id === currencyId);
-    return currency ? currency.code : '';
+    return currency ? currency.codigo : '';
   };
 
-  const calculateToAmount = () => {
-    if (formData.amount && formData.rate) {
-      return (parseFloat(formData.amount) * parseFloat(formData.rate)).toFixed(2);
-    }
-    return '0.00';
+  const getPointName = () => {
+    return selectedPoint ? selectedPoint.nombre : '';
   };
 
   if (!selectedPoint) {
@@ -132,7 +128,7 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Cambio de Divisas</h1>
         <div className="text-sm text-gray-500">
-          Punto: {selectedPoint.name}
+          {selectedPoint ? `Punto: ${selectedPoint.nombre}` : 'Panel Administrativo'}
         </div>
       </div>
 
@@ -141,34 +137,32 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
         <Card>
           <CardHeader>
             <CardTitle>Nuevo Cambio</CardTitle>
-            <CardDescription>Registre un nuevo cambio de divisas</CardDescription>
+            <CardDescription>Registrar una nueva operación de cambio</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Tipo de Transacción</Label>
-                  <Select 
-                    value={formData.transactionType} 
-                    onValueChange={(value: 'compra' | 'venta') => setFormData(prev => ({ ...prev, transactionType: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="compra">Compra</SelectItem>
-                      <SelectItem value="venta">Venta</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label>Tipo de Operación</Label>
+                <Select 
+                  value={formData.type} 
+                  onValueChange={(value: 'COMPRA' | 'VENTA') => setFormData(prev => ({ ...prev, type: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="COMPRA">Compra</SelectItem>
+                    <SelectItem value="VENTA">Venta</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Moneda Origen</Label>
                   <Select 
-                    value={formData.fromCurrency} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, fromCurrency: value }))}
+                    value={formData.fromCurrencyId} 
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, fromCurrencyId: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar" />
@@ -176,7 +170,7 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                     <SelectContent>
                       {currencies.map(currency => (
                         <SelectItem key={currency.id} value={currency.id}>
-                          {currency.code} - {currency.name}
+                          {currency.codigo} - {currency.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -186,8 +180,8 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                 <div className="space-y-2">
                   <Label>Moneda Destino</Label>
                   <Select 
-                    value={formData.toCurrency} 
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, toCurrency: value }))}
+                    value={formData.toCurrencyId} 
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, toCurrencyId: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar" />
@@ -195,7 +189,7 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                     <SelectContent>
                       {currencies.map(currency => (
                         <SelectItem key={currency.id} value={currency.id}>
-                          {currency.code} - {currency.name}
+                          {currency.codigo} - {currency.nombre}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -205,12 +199,12 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Monto</Label>
+                  <Label>Monto Origen</Label>
                   <Input
                     type="number"
                     step="0.01"
-                    value={formData.amount}
-                    onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                    value={formData.fromAmount}
+                    onChange={(e) => setFormData(prev => ({ ...prev, fromAmount: e.target.value }))}
                     placeholder="0.00"
                   />
                 </div>
@@ -219,21 +213,31 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                   <Label>Tasa de Cambio</Label>
                   <Input
                     type="number"
-                    step="0.0001"
-                    value={formData.rate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, rate: e.target.value }))}
-                    placeholder="0.0000"
+                    step="0.01"
+                    value={formData.exchangeRate}
+                    onChange={(e) => setFormData(prev => ({ ...prev, exchangeRate: e.target.value }))}
+                    placeholder="0.00"
                   />
                 </div>
               </div>
 
-              {formData.amount && formData.rate && (
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-blue-700">
-                    <span className="font-medium">Monto final:</span> {calculateToAmount()} {getCurrencyName(formData.toCurrency)}
+              {formData.fromAmount && formData.exchangeRate && (
+                <div className="bg-blue-50 p-3 rounded">
+                  <p className="text-sm text-blue-800">
+                    Monto a recibir: <span className="font-bold">{calculateToAmount().toFixed(2)}</span>
                   </p>
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label>Observaciones (Opcional)</Label>
+                <Textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Comentarios adicionales..."
+                  rows={3}
+                />
+              </div>
 
               <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
                 Registrar Cambio
@@ -242,16 +246,16 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
           </CardContent>
         </Card>
 
-        {/* Recent Exchanges */}
+        {/* Exchanges List */}
         <Card>
           <CardHeader>
             <CardTitle>Cambios Recientes</CardTitle>
-            <CardDescription>Últimos cambios realizados hoy</CardDescription>
+            <CardDescription>Últimas operaciones realizadas</CardDescription>
           </CardHeader>
           <CardContent>
             {exchanges.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                No hay cambios registrados hoy
+                No hay cambios registrados
               </div>
             ) : (
               <div className="space-y-4 max-h-96 overflow-y-auto">
@@ -259,19 +263,28 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                   <div key={exchange.id} className="border rounded-lg p-4">
                     <div className="flex justify-between items-start mb-2">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        exchange.transaction_type === 'compra' 
-                          ? 'bg-green-100 text-green-800' 
+                        exchange.tipoOperacion === 'COMPRA' 
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-blue-100 text-blue-800'
                       }`}>
-                        {exchange.transaction_type.toUpperCase()}
+                        {exchange.tipoOperacion}
                       </span>
-                      <span className="text-xs text-gray-500">{exchange.time}</span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(exchange.fecha).toLocaleDateString()} {exchange.hora}
+                      </span>
                     </div>
-                    <div className="text-sm">
+                    <div className="text-sm space-y-1">
                       <p className="font-medium">
-                        {exchange.from_amount} {getCurrencyName(exchange.from_currency_id)} → {exchange.to_amount.toFixed(2)} {getCurrencyName(exchange.to_currency_id)}
+                        {exchange.montoOrigen} {getCurrencyName(exchange.monedaOrigenId)} → {exchange.montoDestino} {getCurrencyName(exchange.monedaDestinoId)}
                       </p>
-                      <p className="text-gray-600">Tasa: {exchange.exchange_rate}</p>
+                      <p className="text-gray-600">
+                        Tasa: {exchange.tasaCambio}
+                      </p>
+                      {exchange.observacion && (
+                        <p className="text-gray-600 text-xs">
+                          Obs: {exchange.observacion}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
