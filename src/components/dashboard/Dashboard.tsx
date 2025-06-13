@@ -1,8 +1,11 @@
+
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import ExchangeManagement from '../exchange/ExchangeManagement';
 import TransferManagement from '../transfer/TransferManagement';
+import TimeTracker from '../timeTracking/TimeTracker';
+import TimeManagement from '../timeTracking/TimeManagement';
 import UserManagement from '../admin/UserManagement';
 import PointManagement from '../admin/PointManagement';
 import CurrencyManagement from '../admin/CurrencyManagement';
@@ -31,6 +34,10 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         return <ExchangeManagement user={user} selectedPoint={selectedPoint} />;
       case 'transfers':
         return <TransferManagement user={user} selectedPoint={selectedPoint} />;
+      case 'time-tracker':
+        return <TimeTracker user={user} selectedPoint={selectedPoint} />;
+      case 'time-management':
+        return <TimeManagement user={user} />;
       case 'transfer-approvals':
         return <TransferApprovals user={user} />;
       case 'users':

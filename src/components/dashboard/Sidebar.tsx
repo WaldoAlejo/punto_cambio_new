@@ -1,6 +1,6 @@
 
 import { Button } from "@/components/ui/button";
-import { HomeIcon, UsersIcon, StoreIcon, CoinsIcon, FileTextIcon, CheckIcon, ArrowRightLeftIcon } from "lucide-react";
+import { HomeIcon, UsersIcon, StoreIcon, CoinsIcon, FileTextIcon, CheckIcon, ArrowRightLeftIcon, Clock, ClockIcon } from "lucide-react";
 import { User, PuntoAtencion } from '../../types';
 
 interface SidebarProps {
@@ -17,9 +17,11 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
     { key: 'dashboard', label: 'Dashboard', icon: HomeIcon },
     { key: 'exchanges', label: 'Cambios de Divisas', icon: CoinsIcon, operatorOnly: true },
     { key: 'transfers', label: 'Transferencias', icon: ArrowRightLeftIcon },
+    { key: 'time-tracker', label: 'Control de Horarios', icon: Clock, operatorOnly: true },
     { key: 'users', label: 'Usuarios', icon: UsersIcon, adminOnly: true },
     { key: 'points', label: 'Puntos de Atención', icon: StoreIcon, adminOnly: true },
     { key: 'currencies', label: 'Monedas', icon: CoinsIcon, adminOnly: true },
+    { key: 'time-management', label: 'Gestión de Horarios', icon: ClockIcon, adminOnly: true },
     { key: 'reports', label: 'Reportes', icon: FileTextIcon, adminOnly: true },
     { key: 'daily-close', label: 'Cierre Diario', icon: FileTextIcon, operatorOnly: true },
     { key: 'transfer-approvals', label: 'Aprobar Transferencias', icon: CheckIcon, adminOnly: true }
