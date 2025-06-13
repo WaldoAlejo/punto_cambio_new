@@ -1,16 +1,6 @@
 
-import { useState } from 'react';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
-import { Menu } from "lucide-react"
-import { HomeIcon, UsersIcon, StoreIcon, CoinsIcon, FileTextIcon, CheckIcon, ArrowRightLeftIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { HomeIcon, UsersIcon, StoreIcon, CoinsIcon, FileTextIcon, CheckIcon, ArrowRightLeftIcon } from "lucide-react";
 import { User, PuntoAtencion } from '../../types';
 
 interface SidebarProps {
@@ -42,56 +32,27 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
     return true;
   });
 
-  const MenuContent = () => (
-    <div className="space-y-2">
-      {filteredMenuItems.map(item => (
-        <Button
-          key={item.key}
-          variant={activeView === item.key ? "secondary" : "ghost"}
-          onClick={() => onViewChange(item.key)}
-          className="w-full justify-start"
-        >
-          <item.icon className="mr-2 h-4 w-4" />
-          <span>{item.label}</span>
-        </Button>
-      ))}
-    </div>
-  );
-
   return (
-    <>
-      {/* Mobile menu - Solo visible en pantallas pequeñas */}
-      <div className="lg:hidden">
-        <Sheet open={isOpen} onOpenChange={onToggle}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="sm">
-              <Menu />
-            </Button>
-          </SheetTrigger>
-          <SheetContent className="w-64">
-            <SheetHeader className="space-y-2">
-              <SheetTitle>Punto Cambio</SheetTitle>
-              <SheetDescription>
-                Navegación
-              </SheetDescription>
-            </SheetHeader>
-            <div className="py-4">
-              <MenuContent />
-            </div>
-          </SheetContent>
-        </Sheet>
+    <aside className="fixed left-0 top-0 z-20 h-full w-64 flex-col bg-white border-r overflow-y-auto flex">
+      <div className="flex items-center justify-center h-16 border-b">
+        <span className="text-lg font-semibold">Punto Cambio</span>
       </div>
-
-      {/* Desktop sidebar - Solo visible en pantallas grandes */}
-      <aside className="hidden lg:flex fixed left-0 top-0 z-20 h-full w-64 flex-col bg-white border-r overflow-y-auto">
-        <div className="flex items-center justify-center h-16 border-b">
-          <span className="text-lg font-semibold">Punto Cambio</span>
+      <div className="py-4 px-2">
+        <div className="space-y-2">
+          {filteredMenuItems.map(item => (
+            <Button
+              key={item.key}
+              variant={activeView === item.key ? "secondary" : "ghost"}
+              onClick={() => onViewChange(item.key)}
+              className="w-full justify-start"
+            >
+              <item.icon className="mr-2 h-4 w-4" />
+              <span>{item.label}</span>
+            </Button>
+          ))}
         </div>
-        <div className="py-4 px-2">
-          <MenuContent />
-        </div>
-      </aside>
-    </>
+      </div>
+    </aside>
   );
 };
 
