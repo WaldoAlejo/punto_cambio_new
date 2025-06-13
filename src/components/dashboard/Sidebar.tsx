@@ -42,59 +42,53 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
     return true;
   });
 
+  const MenuContent = () => (
+    <div className="space-y-2">
+      {filteredMenuItems.map(item => (
+        <Button
+          key={item.key}
+          variant={activeView === item.key ? "secondary" : "ghost"}
+          onClick={() => onViewChange(item.key)}
+          className="w-full justify-start"
+        >
+          <item.icon className="mr-2 h-4 w-4" />
+          <span>{item.label}</span>
+        </Button>
+      ))}
+    </div>
+  );
+
   return (
     <>
-      {/* Mobile menu */}
-      <Sheet open={isOpen} onOpenChange={onToggle}>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="sm" className="lg:hidden">
-            <Menu />
-          </Button>
-        </SheetTrigger>
-        <SheetContent className="w-64">
-          <SheetHeader className="space-y-2">
-            <SheetTitle>Punto Cambio</SheetTitle>
-            <SheetDescription>
-              Navegación
-            </SheetDescription>
-          </SheetHeader>
-          <div className="py-4">
-            <div className="space-y-2">
-              {filteredMenuItems.map(item => (
-                <Button
-                  key={item.key}
-                  variant={activeView === item.key ? "secondary" : "ghost"}
-                  onClick={() => onViewChange(item.key)}
-                  className="w-full justify-start"
-                >
-                  <item.icon className="mr-2 h-4 w-4" />
-                  <span>{item.label}</span>
-                </Button>
-              ))}
+      {/* Mobile menu - Solo visible en pantallas pequeñas */}
+      <div className="lg:hidden">
+        <Sheet open={isOpen} onOpenChange={onToggle}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="sm">
+              <Menu />
+            </Button>
+          </SheetTrigger>
+          <SheetContent className="w-64">
+            <SheetHeader className="space-y-2">
+              <SheetTitle>Punto Cambio</SheetTitle>
+              <SheetDescription>
+                Navegación
+              </SheetDescription>
+            </SheetHeader>
+            <div className="py-4">
+              <MenuContent />
             </div>
-          </div>
-        </SheetContent>
-      </Sheet>
+          </SheetContent>
+        </Sheet>
+      </div>
 
-      {/* Desktop sidebar */}
-      <aside className={`fixed left-0 top-0 z-20 h-full w-64 flex-col bg-white border-r overflow-y-auto transition-transform transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:border-r lg:flex`}>
+      {/* Desktop sidebar - Solo visible en pantallas grandes */}
+      <aside className="hidden lg:flex fixed left-0 top-0 z-20 h-full w-64 flex-col bg-white border-r overflow-y-auto">
         <div className="flex items-center justify-center h-16 border-b">
           <span className="text-lg font-semibold">Punto Cambio</span>
         </div>
         <div className="py-4 px-2">
-          <div className="space-y-2">
-            {filteredMenuItems.map(item => (
-              <Button
-                key={item.key}
-                variant={activeView === item.key ? "secondary" : "ghost"}
-                onClick={() => onViewChange(item.key)}
-                className="w-full justify-start"
-              >
-                <item.icon className="mr-2 h-4 w-4" />
-                <span>{item.label}</span>
-              </Button>
-            ))}
-          </div>
+          <MenuContent />
         </div>
       </aside>
     </>
