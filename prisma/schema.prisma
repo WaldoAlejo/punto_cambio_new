@@ -8,20 +8,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Modelos principales
 model Usuario {
   id                 String         @id @default(uuid())
   username           String         @unique
   password           String
   rol                RolUsuario
   nombre             String
-  activo             Boolean        @default(true)
-  punto_atencion_id  String?
   correo             String?        @unique
   telefono           String?
+  activo             Boolean        @default(true)
+  punto_atencion_id  String?
   created_at         DateTime       @default(now())
   updated_at         DateTime       @updatedAt
-  puntoAtencion      PuntoAtencion? @relation(fields: [punto_atencion_id], references: [id])
 
+  // Relaciones
+  puntoAtencion      PuntoAtencion? @relation(fields: [punto_atencion_id], references: [id], onDelete: SetNull)
   jornadas           Jornada[]
   cambios            CambioDivisa[]
   movimientos        Movimiento[]
@@ -29,6 +31,10 @@ model Usuario {
   cuadresCaja        CuadreCaja[]
   historialSaldos    HistorialSaldo[]
   transferenciasAprobadas Transferencia[] @relation("UsuarioAprobador")
+  transferenciasSolicitadas Transferencia[] @relation("UsuarioSolicitante")
+
+  @@index([username])
+  @@index([punto_atencion_id])
 }
 
 model PuntoAtencion {
@@ -37,22 +43,26 @@ model PuntoAtencion {
   direccion    String
   ciudad       String
   provincia    String
-  codigoPostal String?
+  codigo_postal String?
   telefono     String?
   activo       Boolean        @default(true)
   created_at   DateTime       @default(now())
   updated_at   DateTime       @updatedAt
 
+  // Relaciones
   usuarios       Usuario[]
   saldos         Saldo[]
   jornadas       Jornada[]
   cambios        CambioDivisa[]
   movimientos    Movimiento[]
   solicitudes    SolicitudSaldo[]
-  origenTransf   Transferencia[] @relation("TransferenciasOrigen")
-  destinoTransf  Transferencia[] @relation("TransferenciasDestino")
+  transferenciasOrigen   Transferencia[] @relation("TransferenciasOrigen")
+  transferenciasDestino  Transferencia[] @relation("TransferenciasDestino")
   cuadresCaja    CuadreCaja[]
   historialSaldos HistorialSaldo[]
+
+  @@index([ciudad])
+  @@index([activo])
 }
 
 model Moneda {
@@ -61,9 +71,11 @@ model Moneda {
   simbolo         String
   codigo          String           @unique
   activo          Boolean          @default(true)
+  orden_display   Int              @default(0)
   created_at      DateTime         @default(now())
   updated_at      DateTime         @updatedAt
 
+  // Relaciones
   saldos          Saldo[]
   cambiosOrigen   CambioDivisa[]   @relation("MonedaOrigen")
   cambiosDestino  CambioDivisa[]   @relation("MonedaDestino")
@@ -71,163 +83,205 @@ model Moneda {
   solicitudes     SolicitudSaldo[]
   transferencias  Transferencia[]
   historialSaldos HistorialSaldo[]
+
+  @@index([codigo])
+  @@index([activo])
 }
 
+// Modelos de saldos y movimientos
 model Saldo {
   id              String        @id @default(uuid())
-  puntoAtencionId String
-  monedaId        String
-  cantidad        Float         @default(0)
+  punto_atencion_id String
+  moneda_id       String
+  cantidad        Decimal       @default(0) @db.Decimal(15,2)
   billetes        Int           @default(0)
-  monedas         Int           @default(0)
+  monedas_fisicas Int           @default(0)
   updated_at      DateTime      @updatedAt
 
-  puntoAtencion   PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
-  moneda          Moneda        @relation(fields: [monedaId], references: [id])
+  // Relaciones
+  puntoAtencion   PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  moneda          Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
 
-  @@unique([puntoAtencionId, monedaId])
+  @@unique([punto_atencion_id, moneda_id])
+  @@index([punto_atencion_id])
+  @@index([moneda_id])
 }
 
 model HistorialSaldo {
   id                     String        @id @default(uuid())
-  puntoAtencionId        String
-  monedaId               String
-  usuarioId              String
-  cantidadAnterior       Float
-  cantidadIncrementada   Float
-  cantidadNueva          Float
+  punto_atencion_id      String
+  moneda_id              String
+  usuario_id             String
+  cantidad_anterior      Decimal       @db.Decimal(15,2)
+  cantidad_incrementada  Decimal       @db.Decimal(15,2)
+  cantidad_nueva         Decimal       @db.Decimal(15,2)
   tipo_movimiento        TipoMovimiento
   fecha                  DateTime      @default(now())
   descripcion            String?
+  numero_referencia      String?
 
-  puntoAtencion          PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
-  moneda                 Moneda        @relation(fields: [monedaId], references: [id])
-  usuario                Usuario       @relation(fields: [usuarioId], references: [id])
+  // Relaciones
+  puntoAtencion          PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  moneda                 Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
+  usuario                Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([punto_atencion_id])
+  @@index([fecha])
+  @@index([tipo_movimiento])
 }
 
+// Modelos de operaciones
 model CambioDivisa {
   id                String         @id @default(uuid())
   fecha             DateTime       @default(now())
-  hora              String
-  montoOrigen       Float
-  montoDestino      Float
-  tasaCambio        Float
-  tipoOperacion     TipoOperacion
-  monedaOrigenId    String
-  monedaDestinoId   String
-  usuarioId         String
-  puntoAtencionId   String
+  monto_origen      Decimal        @db.Decimal(15,2)
+  monto_destino     Decimal        @db.Decimal(15,2)
+  tasa_cambio       Decimal        @db.Decimal(10,6)
+  tipo_operacion    TipoOperacion
+  moneda_origen_id  String
+  moneda_destino_id String
+  usuario_id        String
+  punto_atencion_id String
   observacion       String?
-  numeroRecibo      String?
+  numero_recibo     String?        @unique
   estado            EstadoTransaccion @default(COMPLETADO)
 
-  monedaOrigen      Moneda         @relation("MonedaOrigen", fields: [monedaOrigenId], references: [id])
-  monedaDestino     Moneda         @relation("MonedaDestino", fields: [monedaDestinoId], references: [id])
-  usuario           Usuario        @relation(fields: [usuarioId], references: [id])
-  puntoAtencion     PuntoAtencion  @relation(fields: [puntoAtencionId], references: [id])
+  // Relaciones
+  monedaOrigen      Moneda         @relation("MonedaOrigen", fields: [moneda_origen_id], references: [id], onDelete: Restrict)
+  monedaDestino     Moneda         @relation("MonedaDestino", fields: [moneda_destino_id], references: [id], onDelete: Restrict)
+  usuario           Usuario        @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  puntoAtencion     PuntoAtencion  @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
+
+  @@index([fecha])
+  @@index([punto_atencion_id])
+  @@index([usuario_id])
+}
+
+model Transferencia {
+  id                  String            @id @default(uuid())
+  origen_id           String?
+  destino_id          String
+  moneda_id           String
+  monto               Decimal           @db.Decimal(15,2)
+  tipo_transferencia  TipoTransferencia
+  estado              EstadoTransferencia @default(PENDIENTE)
+  solicitado_por      String
+  aprobado_por        String?
+  fecha               DateTime          @default(now())
+  fecha_aprobacion    DateTime?
+  descripcion         String?
+  numero_recibo       String?           @unique
+
+  // Relaciones
+  origen              PuntoAtencion?    @relation("TransferenciasOrigen", fields: [origen_id], references: [id], onDelete: SetNull)
+  destino             PuntoAtencion     @relation("TransferenciasDestino", fields: [destino_id], references: [id], onDelete: Restrict)
+  moneda              Moneda            @relation(fields: [moneda_id], references: [id], onDelete: Restrict)
+  usuarioSolicitante  Usuario           @relation("UsuarioSolicitante", fields: [solicitado_por], references: [id], onDelete: Restrict)
+  usuarioAprobador    Usuario?          @relation("UsuarioAprobador", fields: [aprobado_por], references: [id], onDelete: SetNull)
+
+  @@index([fecha])
+  @@index([estado])
+  @@index([destino_id])
 }
 
 model Movimiento {
   id              String        @id @default(uuid())
   tipo            TipoMovimiento
-  monto           Float
-  monedaId        String
-  usuarioId       String
-  puntoAtencionId String
+  monto           Decimal       @db.Decimal(15,2)
+  moneda_id       String
+  usuario_id      String
+  punto_atencion_id String
   fecha           DateTime      @default(now())
-  hora            String
   descripcion     String?
-  numeroRecibo    String?
+  numero_recibo   String?       @unique
 
-  moneda          Moneda        @relation(fields: [monedaId], references: [id])
-  usuario         Usuario       @relation(fields: [usuarioId], references: [id])
-  puntoAtencion   PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
+  // Relaciones
+  moneda          Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Restrict)
+  usuario         Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  puntoAtencion   PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
+
+  @@index([fecha])
+  @@index([punto_atencion_id])
 }
 
+// Modelos de gestión
 model SolicitudSaldo {
   id              String        @id @default(uuid())
-  puntoAtencionId String
-  usuarioId       String
-  monedaId        String
-  montoSolicitado Float
+  punto_atencion_id String
+  usuario_id      String
+  moneda_id       String
+  monto_solicitado Decimal      @db.Decimal(15,2)
   aprobado        Boolean       @default(false)
-  fechaSolicitud  DateTime      @default(now())
-  fechaRespuesta  DateTime?
+  fecha_solicitud DateTime      @default(now())
+  fecha_respuesta DateTime?
   observaciones   String?
 
-  puntoAtencion   PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
-  usuario         Usuario       @relation(fields: [usuarioId], references: [id])
-  moneda          Moneda        @relation(fields: [monedaId], references: [id])
+  // Relaciones
+  puntoAtencion   PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  usuario         Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  moneda          Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
+
+  @@index([fecha_solicitud])
+  @@index([aprobado])
 }
 
 model Jornada {
   id              String        @id @default(uuid())
-  usuarioId       String
-  puntoAtencionId String
-  fechaInicio     DateTime      @default(now())
-  fechaAlmuerzo   DateTime?
-  fechaRegreso    DateTime?
-  fechaSalida     DateTime?
+  usuario_id      String
+  punto_atencion_id String
+  fecha_inicio    DateTime      @default(now())
+  fecha_almuerzo  DateTime?
+  fecha_regreso   DateTime?
+  fecha_salida    DateTime?
 
-  usuario         Usuario       @relation(fields: [usuarioId], references: [id])
-  puntoAtencion   PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
+  // Relaciones
+  usuario         Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  puntoAtencion   PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id])
+  @@index([fecha_inicio])
 }
 
 model CuadreCaja {
   id              String        @id @default(uuid())
-  usuarioId       String
-  puntoAtencionId String
+  usuario_id      String
+  punto_atencion_id String
   fecha           DateTime      @default(now())
   estado          EstadoCierre  @default(ABIERTO)
-  totalCambios    Int           @default(0)
-  totalTransferenciasEntrada  Int @default(0)
-  totalTransferenciasSalida   Int @default(0)
-  fechaCierre     DateTime?
+  total_cambios   Int           @default(0)
+  total_transferencias_entrada  Int @default(0)
+  total_transferencias_salida   Int @default(0)
+  fecha_cierre    DateTime?
   observaciones   String?
 
-  usuario         Usuario       @relation(fields: [usuarioId], references: [id])
-  puntoAtencion   PuntoAtencion @relation(fields: [puntoAtencionId], references: [id])
+  // Relaciones
+  usuario         Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  puntoAtencion   PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
   detalles        DetalleCuadreCaja[]
+
+  @@index([fecha])
+  @@index([punto_atencion_id])
 }
 
 model DetalleCuadreCaja {
   id              String        @id @default(uuid())
-  cuadreId        String
-  monedaId        String
-  saldoApertura   Float
-  saldoCierre     Float
-  conteoFisico    Float
+  cuadre_id       String
+  moneda_id       String
+  saldo_apertura  Decimal       @db.Decimal(15,2)
+  saldo_cierre    Decimal       @db.Decimal(15,2)
+  conteo_fisico   Decimal       @db.Decimal(15,2)
   billetes        Int           @default(0)
-  monedas         Int           @default(0)
-  diferencia      Float         @default(0)
+  monedas_fisicas Int           @default(0)
+  diferencia      Decimal       @default(0) @db.Decimal(15,2)
 
-  cuadre          CuadreCaja    @relation(fields: [cuadreId], references: [id])
-  moneda          Moneda        @relation(fields: [monedaId], references: [id])
+  // Relaciones
+  cuadre          CuadreCaja    @relation(fields: [cuadre_id], references: [id], onDelete: Cascade)
+  moneda          Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Restrict)
 
-  @@unique([cuadreId, monedaId])
+  @@unique([cuadre_id, moneda_id])
 }
 
-model Transferencia {
-  id                  String            @id @default(uuid())
-  origenId            String?
-  destinoId           String
-  monedaId            String
-  monto               Float
-  tipoTransferencia   TipoTransferencia
-  estado              EstadoTransferencia @default(PENDIENTE)
-  solicitadoPor       String
-  aprobadoPor         String?
-  fecha               DateTime          @default(now())
-  fechaAprobacion     DateTime?
-  descripcion         String?
-  numeroRecibo        String?
-
-  origen              PuntoAtencion?    @relation("TransferenciasOrigen", fields: [origenId], references: [id])
-  destino             PuntoAtencion     @relation("TransferenciasDestino", fields: [destinoId], references: [id])
-  moneda              Moneda            @relation(fields: [monedaId], references: [id])
-  usuarioAprobador    Usuario?          @relation("UsuarioAprobador", fields: [aprobadoPor], references: [id])
-}
-
+// Enums
 enum RolUsuario {
   SUPER_USUARIO
   ADMIN
