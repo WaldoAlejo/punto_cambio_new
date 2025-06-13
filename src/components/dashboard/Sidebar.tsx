@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import {
   Sheet,
@@ -7,12 +8,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
 import { Menu } from "lucide-react"
 import { HomeIcon, UsersIcon, StoreIcon, CoinsIcon, FileTextIcon, CheckIcon, ArrowRightLeftIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,31 +58,19 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
             </SheetDescription>
           </SheetHeader>
           <div className="py-4">
-            <Accordion type="single" collapsible className="w-full">
+            <div className="space-y-2">
               {filteredMenuItems.map(item => (
-                <AccordionItem key={item.key} value={item.key}>
-                  <AccordionTrigger
-                    onClick={() => onViewChange(item.key)}
-                    className={`data-[state=open]:bg-secondary hover:bg-secondary rounded-md px-2 py-1.5 ${activeView === item.key ? 'font-semibold' : ''}`}
-                  >
-                    <item.icon className="mr-2 h-4 w-4" />
-                    <span>{item.label}</span>
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    {item.key === 'admin' && (
-                      <div className="pl-6">
-                        <Button variant="link" size="sm">
-                          Manage Users
-                        </Button>
-                        <Button variant="link" size="sm">
-                          Manage Roles
-                        </Button>
-                      </div>
-                    )}
-                  </AccordionContent>
-                </AccordionItem>
+                <Button
+                  key={item.key}
+                  variant={activeView === item.key ? "secondary" : "ghost"}
+                  onClick={() => onViewChange(item.key)}
+                  className="w-full justify-start"
+                >
+                  <item.icon className="mr-2 h-4 w-4" />
+                  <span>{item.label}</span>
+                </Button>
               ))}
-            </Accordion>
+            </div>
           </div>
         </SheetContent>
       </Sheet>
@@ -95,32 +78,20 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
         <div className="flex items-center justify-center h-16 border-b">
           <span className="text-lg font-semibold">Punto Cambio</span>
         </div>
-        <div className="py-4">
-          <Accordion type="single" collapsible className="w-full">
+        <div className="py-4 px-2">
+          <div className="space-y-2">
             {filteredMenuItems.map(item => (
-              <AccordionItem key={item.key} value={item.key}>
-                <AccordionTrigger
-                  onClick={() => onViewChange(item.key)}
-                  className={`data-[state=open]:bg-secondary hover:bg-secondary rounded-md px-2 py-1.5 ${activeView === item.key ? 'font-semibold' : ''}`}
-                >
-                  <item.icon className="mr-2 h-4 w-4" />
-                  <span>{item.label}</span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  {item.key === 'admin' && (
-                    <div className="pl-6">
-                      <Button variant="link" size="sm">
-                        Manage Users
-                      </Button>
-                      <Button variant="link" size="sm">
-                        Manage Roles
-                      </Button>
-                    </div>
-                  )}
-                </AccordionContent>
-              </AccordionItem>
+              <Button
+                key={item.key}
+                variant={activeView === item.key ? "secondary" : "ghost"}
+                onClick={() => onViewChange(item.key)}
+                className="w-full justify-start"
+              >
+                <item.icon className="mr-2 h-4 w-4" />
+                <span>{item.label}</span>
+              </Button>
             ))}
-          </Accordion>
+          </div>
         </div>
       </aside>
     </>
