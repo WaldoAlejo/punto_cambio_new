@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, Moneda, CambioDivisa } from '../../types';
 import { ReceiptService } from '../../services/receiptService';
+import CurrencySearchSelect from '../ui/currency-search-select';
 
 interface ExchangeManagementProps {
   user: User;
@@ -125,6 +127,19 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
     });
   };
 
+  // Solo operadores y concesiones pueden realizar cambios de divisas
+  if (user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO') {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <p className="text-gray-500 text-lg">
+            Los cambios de divisas solo pueden ser realizados por operadores y concesiones
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!selectedPoint) {
     return (
       <div className="p-6">
@@ -178,36 +193,20 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Moneda Origen</Label>
-                  <Select value={fromCurrency} onValueChange={setFromCurrency}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar moneda" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {currencies.map(currency => (
-                        <SelectItem key={currency.id} value={currency.id}>
-                          {currency.codigo} - {currency.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Moneda Destino</Label>
-                  <Select value={toCurrency} onValueChange={setToCurrency}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar moneda" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {currencies.map(currency => (
-                        <SelectItem key={currency.id} value={currency.id}>
-                          {currency.codigo} - {currency.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <CurrencySearchSelect
+                  currencies={currencies}
+                  value={fromCurrency}
+                  onValueChange={setFromCurrency}
+                  placeholder="Seleccionar moneda origen"
+                  label="Moneda Origen"
+                />
+                <CurrencySearchSelect
+                  currencies={currencies}
+                  value={toCurrency}
+                  onValueChange={setToCurrency}
+                  placeholder="Seleccionar moneda destino"
+                  label="Moneda Destino"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">

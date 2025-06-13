@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, Moneda, Transferencia } from '../../types';
 import { ReceiptService } from '../../services/receiptService';
+import CurrencySearchSelect from '../ui/currency-search-select';
 
 interface TransferFormProps {
   user: User;
@@ -156,11 +157,40 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
     return ['ENTRE_PUNTOS', 'DEPOSITO_MATRIZ', 'RETIRO_GERENCIA', 'DEPOSITO_GERENCIA'].includes(formData.type);
   };
 
+  const getTransferOptions = () => {
+    // Operadores y Concesiones pueden solicitar transferencias
+    if (user.rol === 'OPERADOR' || user.rol === 'CONCESION') {
+      return [
+        { value: 'ENTRE_PUNTOS', label: 'Transferencia entre Puntos' },
+        { value: 'DEPOSITO_MATRIZ', label: 'Solicitar Depósito de Matriz' },
+        { value: 'RETIRO_GERENCIA', label: 'Retiro de Gerencia' },
+        { value: 'DEPOSITO_GERENCIA', label: 'Depósito de Gerencia' }
+      ];
+    }
+    
+    // Administradores pueden aprobar/realizar depósitos de matriz y transferencias
+    if (user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO') {
+      return [
+        { value: 'DEPOSITO_MATRIZ', label: 'Depósito de Matriz' },
+        { value: 'ENTRE_PUNTOS', label: 'Transferencia entre Puntos' },
+        { value: 'RETIRO_GERENCIA', label: 'Retiro de Gerencia' },
+        { value: 'DEPOSITO_GERENCIA', label: 'Depósito de Gerencia' }
+      ];
+    }
+
+    return [];
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Nueva Transferencia</CardTitle>
-        <CardDescription>Solicitar una nueva transferencia</CardDescription>
+        <CardDescription>
+          {user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO' 
+            ? 'Realizar una nueva transferencia' 
+            : 'Solicitar una nueva transferencia'
+          }
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -174,22 +204,11 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
                 <SelectValue placeholder="Seleccionar tipo" />
               </SelectTrigger>
               <SelectContent>
-                {(user.rol === 'OPERADOR' || user.rol === 'CONCESION') && (
-                  <>
-                    <SelectItem value="ENTRE_PUNTOS">Transferencia entre Puntos</SelectItem>
-                    <SelectItem value="DEPOSITO_MATRIZ">Solicitar Depósito de Matriz</SelectItem>
-                    <SelectItem value="RETIRO_GERENCIA">Retiro de Gerencia</SelectItem>
-                    <SelectItem value="DEPOSITO_GERENCIA">Depósito de Gerencia</SelectItem>
-                  </>
-                )}
-                {(user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO') && (
-                  <>
-                    <SelectItem value="DEPOSITO_MATRIZ">Depósito de Matriz</SelectItem>
-                    <SelectItem value="ENTRE_PUNTOS">Transferencia entre Puntos</SelectItem>
-                    <SelectItem value="RETIRO_GERENCIA">Retiro de Gerencia</SelectItem>
-                    <SelectItem value="DEPOSITO_GERENCIA">Depósito de Gerencia</SelectItem>
-                  </>
-                )}
+                {getTransferOptions().map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -216,24 +235,13 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
           )}
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Moneda</Label>
-              <Select 
-                value={formData.currencyId} 
-                onValueChange={(value) => setFormData(prev => ({ ...prev, currencyId: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  {currencies.map(currency => (
-                    <SelectItem key={currency.id} value={currency.id}>
-                      {currency.codigo} - {currency.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <CurrencySearchSelect
+              currencies={currencies}
+              value={formData.currencyId}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, currencyId: value }))}
+              placeholder="Seleccionar moneda"
+              label="Moneda"
+            />
 
             <div className="space-y-2">
               <Label>Monto</Label>
@@ -258,7 +266,10 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
           </div>
 
           <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
-            Solicitar Transferencia
+            {user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO' 
+              ? 'Realizar Transferencia' 
+              : 'Solicitar Transferencia'
+            }
           </Button>
         </form>
       </CardContent>
