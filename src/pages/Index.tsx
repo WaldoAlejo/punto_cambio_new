@@ -1,13 +1,82 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import { useState, useEffect } from 'react';
+import LoginForm from '../components/auth/LoginForm';
+import Dashboard from '../components/dashboard/Dashboard';
+import PointSelection from '../components/auth/PointSelection';
+import { User, AttentionPoint } from '../types';
 
 const Index = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<AttentionPoint | null>(null);
+  const [showPointSelection, setShowPointSelection] = useState(false);
+
+  useEffect(() => {
+    // Check if user is already logged in
+    const savedUser = localStorage.getItem('punto_cambio_user');
+    const savedPoint = localStorage.getItem('punto_cambio_point');
+    
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      setUser(parsedUser);
+      
+      if (parsedUser.role === 'administrador') {
+        // Admin doesn't need point selection
+        setSelectedPoint(null);
+      } else if (savedPoint) {
+        setSelectedPoint(JSON.parse(savedPoint));
+      } else {
+        setShowPointSelection(true);
+      }
+    }
+  }, []);
+
+  const handleLogin = (userData: User) => {
+    setUser(userData);
+    localStorage.setItem('punto_cambio_user', JSON.stringify(userData));
+    
+    if (userData.role === 'administrador') {
+      // Admin goes directly to dashboard
+      setShowPointSelection(false);
+    } else {
+      // Operator and concession need to select point
+      setShowPointSelection(true);
+    }
+  };
+
+  const handlePointSelection = (point: AttentionPoint) => {
+    setSelectedPoint(point);
+    setShowPointSelection(false);
+    localStorage.setItem('punto_cambio_point', JSON.stringify(point));
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setSelectedPoint(null);
+    setShowPointSelection(false);
+    localStorage.removeItem('punto_cambio_user');
+    localStorage.removeItem('punto_cambio_point');
+  };
+
+  if (!user) {
+    return <LoginForm onLogin={handleLogin} />;
+  }
+
+  if (showPointSelection && user.role !== 'administrador') {
+    return (
+      <PointSelection
+        user={user}
+        onPointSelect={handlePointSelection}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <Dashboard
+      user={user}
+      selectedPoint={selectedPoint}
+      onLogout={handleLogout}
+    />
   );
 };
 
