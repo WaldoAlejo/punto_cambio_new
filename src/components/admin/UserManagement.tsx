@@ -18,9 +18,9 @@ const UserManagement = ({ user }: UserManagementProps) => {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
-    email: '',
-    name: '',
-    role: 'operador' as User['role'],
+    correo: '',
+    nombre: '',
+    rol: 'OPERADOR' as User['rol'],
     password: ''
   });
 
@@ -30,20 +30,22 @@ const UserManagement = ({ user }: UserManagementProps) => {
       {
         id: '1',
         username: 'admin',
-        email: 'admin@puntocambio.com',
-        role: 'administrador',
-        name: 'Administrador Principal',
+        correo: 'admin@puntocambio.com',
+        rol: 'ADMIN',
+        nombre: 'Administrador Principal',
         created_at: new Date().toISOString(),
-        is_active: true
+        updated_at: new Date().toISOString(),
+        activo: true
       },
       {
         id: '2',
         username: 'operador1',
-        email: 'operador1@puntocambio.com',
-        role: 'operador',
-        name: 'Operador Punto 1',
+        correo: 'operador1@puntocambio.com',
+        rol: 'OPERADOR',
+        nombre: 'Operador Punto 1',
         created_at: new Date().toISOString(),
-        is_active: true
+        updated_at: new Date().toISOString(),
+        activo: true
       }
     ];
     setUsers(mockUsers);
@@ -52,7 +54,7 @@ const UserManagement = ({ user }: UserManagementProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.username || !formData.email || !formData.name || !formData.password) {
+    if (!formData.username || !formData.correo || !formData.nombre || !formData.password) {
       toast({
         title: "Error",
         description: "Todos los campos son obligatorios",
@@ -74,11 +76,12 @@ const UserManagement = ({ user }: UserManagementProps) => {
     const newUser: User = {
       id: Date.now().toString(),
       username: formData.username,
-      email: formData.email,
-      role: formData.role,
-      name: formData.name,
+      correo: formData.correo,
+      rol: formData.rol,
+      nombre: formData.nombre,
       created_at: new Date().toISOString(),
-      is_active: true
+      updated_at: new Date().toISOString(),
+      activo: true
     };
 
     setUsers(prev => [...prev, newUser]);
@@ -86,42 +89,42 @@ const UserManagement = ({ user }: UserManagementProps) => {
     // Reset form
     setFormData({
       username: '',
-      email: '',
-      name: '',
-      role: 'operador',
+      correo: '',
+      nombre: '',
+      rol: 'OPERADOR',
       password: ''
     });
     setShowForm(false);
 
     toast({
       title: "Usuario creado",
-      description: `Usuario ${newUser.name} creado exitosamente`,
+      description: `Usuario ${newUser.nombre} creado exitosamente`,
     });
   };
 
   const toggleUserStatus = (userId: string) => {
     setUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, is_active: !u.is_active } : u
+      u.id === userId ? { ...u, activo: !u.activo } : u
     ));
     
     const targetUser = users.find(u => u.id === userId);
     toast({
       title: "Estado actualizado",
-      description: `Usuario ${targetUser?.name} ${targetUser?.is_active ? 'desactivado' : 'activado'}`,
+      description: `Usuario ${targetUser?.nombre} ${targetUser?.activo ? 'desactivado' : 'activado'}`,
     });
   };
 
-  const getRoleLabel = (role: string) => {
+  const getRoleLabel = (rol: string) => {
     const roles = {
-      'super_usuario': 'Super Usuario',
-      'administrador': 'Administrador',
-      'operador': 'Operador',
-      'concesion': 'Concesión'
+      'SUPER_USUARIO': 'Super Usuario',
+      'ADMIN': 'Administrador',
+      'OPERADOR': 'Operador',
+      'CONCESION': 'Concesión'
     };
-    return roles[role as keyof typeof roles] || role;
+    return roles[rol as keyof typeof roles] || rol;
   };
 
-  if (user.role !== 'administrador' && user.role !== 'super_usuario') {
+  if (user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
     return (
       <div className="p-6">
         <div className="text-center py-12">
@@ -155,26 +158,26 @@ const UserManagement = ({ user }: UserManagementProps) => {
                 <div className="space-y-2">
                   <Label>Nombre Completo</Label>
                   <Input
-                    value={formData.name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    value={formData.nombre}
+                    onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
                     placeholder="Nombre completo"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Rol</Label>
                   <Select 
-                    value={formData.role} 
-                    onValueChange={(value: User['role']) => setFormData(prev => ({ ...prev, role: value }))}
+                    value={formData.rol} 
+                    onValueChange={(value: User['rol']) => setFormData(prev => ({ ...prev, rol: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="operador">Operador</SelectItem>
-                      <SelectItem value="concesion">Concesión</SelectItem>
-                      <SelectItem value="administrador">Administrador</SelectItem>
-                      {user.role === 'super_usuario' && (
-                        <SelectItem value="super_usuario">Super Usuario</SelectItem>
+                      <SelectItem value="OPERADOR">Operador</SelectItem>
+                      <SelectItem value="CONCESION">Concesión</SelectItem>
+                      <SelectItem value="ADMIN">Administrador</SelectItem>
+                      {user.rol === 'SUPER_USUARIO' && (
+                        <SelectItem value="SUPER_USUARIO">Super Usuario</SelectItem>
                       )}
                     </SelectContent>
                   </Select>
@@ -194,8 +197,8 @@ const UserManagement = ({ user }: UserManagementProps) => {
                   <Label>Email</Label>
                   <Input
                     type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    value={formData.correo}
+                    onChange={(e) => setFormData(prev => ({ ...prev, correo: e.target.value }))}
                     placeholder="email@ejemplo.com"
                   />
                 </div>
@@ -249,17 +252,17 @@ const UserManagement = ({ user }: UserManagementProps) => {
             <TableBody>
               {users.map((userItem) => (
                 <TableRow key={userItem.id}>
-                  <TableCell className="font-medium">{userItem.name}</TableCell>
+                  <TableCell className="font-medium">{userItem.nombre}</TableCell>
                   <TableCell>{userItem.username}</TableCell>
-                  <TableCell>{userItem.email}</TableCell>
-                  <TableCell>{getRoleLabel(userItem.role)}</TableCell>
+                  <TableCell>{userItem.correo}</TableCell>
+                  <TableCell>{getRoleLabel(userItem.rol)}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      userItem.is_active 
+                      userItem.activo 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-red-100 text-red-800'
                     }`}>
-                      {userItem.is_active ? 'Activo' : 'Inactivo'}
+                      {userItem.activo ? 'Activo' : 'Inactivo'}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -268,10 +271,10 @@ const UserManagement = ({ user }: UserManagementProps) => {
                   <TableCell>
                     <Button
                       size="sm"
-                      variant={userItem.is_active ? "destructive" : "default"}
+                      variant={userItem.activo ? "destructive" : "default"}
                       onClick={() => toggleUserStatus(userItem.id)}
                     >
-                      {userItem.is_active ? 'Desactivar' : 'Activar'}
+                      {userItem.activo ? 'Desactivar' : 'Activar'}
                     </Button>
                   </TableCell>
                 </TableRow>

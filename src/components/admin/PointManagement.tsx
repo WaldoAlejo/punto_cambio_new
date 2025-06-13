@@ -6,41 +6,47 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { User, AttentionPoint } from '../../types';
+import { User, PuntoAtencion } from '../../types';
 
 interface PointManagementProps {
   user: User;
 }
 
 const PointManagement = ({ user }: PointManagementProps) => {
-  const [points, setPoints] = useState<AttentionPoint[]>([]);
+  const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
-    address: '',
-    phone: ''
+    nombre: '',
+    direccion: '',
+    telefono: ''
   });
 
   useEffect(() => {
     // Load mock points
-    const mockPoints: AttentionPoint[] = [
+    const mockPoints: PuntoAtencion[] = [
       {
         id: '1',
-        name: 'Punto Centro',
-        address: 'Av. Principal 123, Centro',
-        phone: '+58 212-555-0001',
-        is_active: true,
+        nombre: 'Punto Centro',
+        direccion: 'Av. Principal 123, Centro',
+        ciudad: 'Caracas',
+        provincia: 'Distrito Capital',
+        telefono: '+58 212-555-0001',
+        activo: true,
         created_at: new Date().toISOString(),
-        balances: []
+        updated_at: new Date().toISOString(),
+        saldos: []
       },
       {
         id: '2',
-        name: 'Punto Norte',
-        address: 'CC El Recreo, Nivel 1, Local 45',
-        phone: '+58 212-555-0002',
-        is_active: true,
+        nombre: 'Punto Norte',
+        direccion: 'CC El Recreo, Nivel 1, Local 45',
+        ciudad: 'Caracas',
+        provincia: 'Distrito Capital',
+        telefono: '+58 212-555-0002',
+        activo: true,
         created_at: new Date().toISOString(),
-        balances: []
+        updated_at: new Date().toISOString(),
+        saldos: []
       }
     ];
     setPoints(mockPoints);
@@ -49,7 +55,7 @@ const PointManagement = ({ user }: PointManagementProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.address) {
+    if (!formData.nombre || !formData.direccion) {
       toast({
         title: "Error",
         description: "Nombre y dirección son obligatorios",
@@ -58,45 +64,48 @@ const PointManagement = ({ user }: PointManagementProps) => {
       return;
     }
 
-    const newPoint: AttentionPoint = {
+    const newPoint: PuntoAtencion = {
       id: Date.now().toString(),
-      name: formData.name,
-      address: formData.address,
-      phone: formData.phone,
-      is_active: true,
+      nombre: formData.nombre,
+      direccion: formData.direccion,
+      ciudad: 'Caracas',
+      provincia: 'Distrito Capital',
+      telefono: formData.telefono,
+      activo: true,
       created_at: new Date().toISOString(),
-      balances: []
+      updated_at: new Date().toISOString(),
+      saldos: []
     };
 
     setPoints(prev => [...prev, newPoint]);
     
     // Reset form
     setFormData({
-      name: '',
-      address: '',
-      phone: ''
+      nombre: '',
+      direccion: '',
+      telefono: ''
     });
     setShowForm(false);
 
     toast({
       title: "Punto creado",
-      description: `Punto ${newPoint.name} creado exitosamente`,
+      description: `Punto ${newPoint.nombre} creado exitosamente`,
     });
   };
 
   const togglePointStatus = (pointId: string) => {
     setPoints(prev => prev.map(p => 
-      p.id === pointId ? { ...p, is_active: !p.is_active } : p
+      p.id === pointId ? { ...p, activo: !p.activo } : p
     ));
     
     const targetPoint = points.find(p => p.id === pointId);
     toast({
       title: "Estado actualizado",
-      description: `Punto ${targetPoint?.name} ${targetPoint?.is_active ? 'desactivado' : 'activado'}`,
+      description: `Punto ${targetPoint?.nombre} ${targetPoint?.activo ? 'desactivado' : 'activado'}`,
     });
   };
 
-  if (user.role !== 'administrador' && user.role !== 'super_usuario') {
+  if (user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
     return (
       <div className="p-6">
         <div className="text-center py-12">
@@ -129,8 +138,8 @@ const PointManagement = ({ user }: PointManagementProps) => {
               <div className="space-y-2">
                 <Label>Nombre del Punto</Label>
                 <Input
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  value={formData.nombre}
+                  onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
                   placeholder="Ej: Punto Centro"
                 />
               </div>
@@ -138,8 +147,8 @@ const PointManagement = ({ user }: PointManagementProps) => {
               <div className="space-y-2">
                 <Label>Dirección</Label>
                 <Input
-                  value={formData.address}
-                  onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                  value={formData.direccion}
+                  onChange={(e) => setFormData(prev => ({ ...prev, direccion: e.target.value }))}
                   placeholder="Dirección completa del punto"
                 />
               </div>
@@ -147,8 +156,8 @@ const PointManagement = ({ user }: PointManagementProps) => {
               <div className="space-y-2">
                 <Label>Teléfono (Opcional)</Label>
                 <Input
-                  value={formData.phone}
-                  onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                  value={formData.telefono}
+                  onChange={(e) => setFormData(prev => ({ ...prev, telefono: e.target.value }))}
                   placeholder="Número de teléfono"
                 />
               </div>
@@ -190,16 +199,16 @@ const PointManagement = ({ user }: PointManagementProps) => {
             <TableBody>
               {points.map((point) => (
                 <TableRow key={point.id}>
-                  <TableCell className="font-medium">{point.name}</TableCell>
-                  <TableCell>{point.address}</TableCell>
-                  <TableCell>{point.phone || 'N/A'}</TableCell>
+                  <TableCell className="font-medium">{point.nombre}</TableCell>
+                  <TableCell>{point.direccion}</TableCell>
+                  <TableCell>{point.telefono || 'N/A'}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      point.is_active 
+                      point.activo 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-red-100 text-red-800'
                     }`}>
-                      {point.is_active ? 'Activo' : 'Inactivo'}
+                      {point.activo ? 'Activo' : 'Inactivo'}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -208,10 +217,10 @@ const PointManagement = ({ user }: PointManagementProps) => {
                   <TableCell>
                     <Button
                       size="sm"
-                      variant={point.is_active ? "destructive" : "default"}
+                      variant={point.activo ? "destructive" : "default"}
                       onClick={() => togglePointStatus(point.id)}
                     >
-                      {point.is_active ? 'Desactivar' : 'Activar'}
+                      {point.activo ? 'Desactivar' : 'Activar'}
                     </Button>
                   </TableCell>
                 </TableRow>

@@ -3,46 +3,55 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { User, AttentionPoint } from '../../types';
+import { User, PuntoAtencion } from '../../types';
 
 interface PointSelectionProps {
   user: User;
-  onPointSelect: (point: AttentionPoint) => void;
+  onPointSelect: (point: PuntoAtencion) => void;
   onLogout: () => void;
 }
 
 const PointSelection = ({ user, onPointSelect, onLogout }: PointSelectionProps) => {
-  const [points, setPoints] = useState<AttentionPoint[]>([]);
+  const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Mock attention points - In production this would come from your backend
-  const mockPoints: AttentionPoint[] = [
+  const mockPoints: PuntoAtencion[] = [
     {
       id: '1',
-      name: 'Punto Centro',
-      address: 'Av. Principal 123, Centro',
-      phone: '+58 212-555-0001',
-      is_active: true,
+      nombre: 'Punto Centro',
+      direccion: 'Av. Principal 123, Centro',
+      ciudad: 'Caracas',
+      provincia: 'Distrito Capital',
+      telefono: '+58 212-555-0001',
+      activo: true,
       created_at: new Date().toISOString(),
-      balances: []
+      updated_at: new Date().toISOString(),
+      saldos: []
     },
     {
       id: '2', 
-      name: 'Punto Norte',
-      address: 'CC El Recreo, Nivel 1, Local 45',
-      phone: '+58 212-555-0002',
-      is_active: true,
+      nombre: 'Punto Norte',
+      direccion: 'CC El Recreo, Nivel 1, Local 45',
+      ciudad: 'Caracas',
+      provincia: 'Distrito Capital',
+      telefono: '+58 212-555-0002',
+      activo: true,
       created_at: new Date().toISOString(),
-      balances: []
+      updated_at: new Date().toISOString(),
+      saldos: []
     },
     {
       id: '3',
-      name: 'Punto Sur',
-      address: 'Av. Francisco de Miranda, Torre Sur',
-      phone: '+58 212-555-0003',
-      is_active: true,
+      nombre: 'Punto Sur',
+      direccion: 'Av. Francisco de Miranda, Torre Sur',
+      ciudad: 'Caracas',
+      provincia: 'Distrito Capital',
+      telefono: '+58 212-555-0003',
+      activo: true,
       created_at: new Date().toISOString(),
-      balances: []
+      updated_at: new Date().toISOString(),
+      saldos: []
     }
   ];
 
@@ -51,7 +60,7 @@ const PointSelection = ({ user, onPointSelect, onLogout }: PointSelectionProps) 
       try {
         // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 500));
-        setPoints(mockPoints.filter(p => p.is_active));
+        setPoints(mockPoints.filter(p => p.activo));
       } catch (error) {
         toast({
           title: "Error",
@@ -66,10 +75,10 @@ const PointSelection = ({ user, onPointSelect, onLogout }: PointSelectionProps) 
     loadPoints();
   }, []);
 
-  const handlePointSelect = (point: AttentionPoint) => {
+  const handlePointSelect = (point: PuntoAtencion) => {
     toast({
       title: "Punto seleccionado",
-      description: `Trabajando en: ${point.name}`,
+      description: `Trabajando en: ${point.nombre}`,
     });
     onPointSelect(point);
   };
@@ -91,7 +100,7 @@ const PointSelection = ({ user, onPointSelect, onLogout }: PointSelectionProps) 
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-blue-800">Seleccionar Punto de Atención</h1>
-            <p className="text-gray-600 mt-2">Bienvenido {user.name}</p>
+            <p className="text-gray-600 mt-2">Bienvenido {user.nombre}</p>
           </div>
           <Button 
             variant="outline" 
@@ -110,14 +119,14 @@ const PointSelection = ({ user, onPointSelect, onLogout }: PointSelectionProps) 
               onClick={() => handlePointSelect(point)}
             >
               <CardHeader>
-                <CardTitle className="text-lg text-blue-700">{point.name}</CardTitle>
-                <CardDescription>{point.address}</CardDescription>
+                <CardTitle className="text-lg text-blue-700">{point.nombre}</CardTitle>
+                <CardDescription>{point.direccion}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {point.phone && (
+                  {point.telefono && (
                     <p className="text-sm text-gray-600">
-                      <span className="font-medium">Teléfono:</span> {point.phone}
+                      <span className="font-medium">Teléfono:</span> {point.telefono}
                     </p>
                   )}
                   <div className="flex items-center">

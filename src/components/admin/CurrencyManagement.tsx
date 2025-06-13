@@ -6,28 +6,28 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { User, Currency } from '../../types';
+import { User, Moneda } from '../../types';
 
 interface CurrencyManagementProps {
   user: User;
 }
 
 const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
-  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    code: '',
-    name: '',
-    symbol: ''
+    codigo: '',
+    nombre: '',
+    simbolo: ''
   });
 
   useEffect(() => {
     // Load mock currencies
-    const mockCurrencies: Currency[] = [
-      { id: '1', code: 'USD', name: 'Dólar Estadounidense', symbol: '$', is_active: true, created_at: new Date().toISOString() },
-      { id: '2', code: 'EUR', name: 'Euro', symbol: '€', is_active: true, created_at: new Date().toISOString() },
-      { id: '3', code: 'VES', name: 'Bolívar Venezolano', symbol: 'Bs', is_active: true, created_at: new Date().toISOString() },
-      { id: '4', code: 'COP', name: 'Peso Colombiano', symbol: '$', is_active: true, created_at: new Date().toISOString() }
+    const mockCurrencies: Moneda[] = [
+      { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { id: '4', codigo: 'COP', nombre: 'Peso Colombiano', simbolo: '$', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
     ];
     setCurrencies(mockCurrencies);
   }, []);
@@ -35,7 +35,7 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.code || !formData.name || !formData.symbol) {
+    if (!formData.codigo || !formData.nombre || !formData.simbolo) {
       toast({
         title: "Error",
         description: "Todos los campos son obligatorios",
@@ -45,7 +45,7 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
     }
 
     // Check if currency code exists
-    if (currencies.some(c => c.code.toLowerCase() === formData.code.toLowerCase())) {
+    if (currencies.some(c => c.codigo.toLowerCase() === formData.codigo.toLowerCase())) {
       toast({
         title: "Error",
         description: "El código de moneda ya existe",
@@ -54,44 +54,45 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
       return;
     }
 
-    const newCurrency: Currency = {
+    const newCurrency: Moneda = {
       id: Date.now().toString(),
-      code: formData.code.toUpperCase(),
-      name: formData.name,
-      symbol: formData.symbol,
-      is_active: true,
-      created_at: new Date().toISOString()
+      codigo: formData.codigo.toUpperCase(),
+      nombre: formData.nombre,
+      simbolo: formData.simbolo,
+      activo: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
 
     setCurrencies(prev => [...prev, newCurrency]);
     
     // Reset form
     setFormData({
-      code: '',
-      name: '',
-      symbol: ''
+      codigo: '',
+      nombre: '',
+      simbolo: ''
     });
     setShowForm(false);
 
     toast({
       title: "Moneda creada",
-      description: `Moneda ${newCurrency.name} creada exitosamente`,
+      description: `Moneda ${newCurrency.nombre} creada exitosamente`,
     });
   };
 
   const toggleCurrencyStatus = (currencyId: string) => {
     setCurrencies(prev => prev.map(c => 
-      c.id === currencyId ? { ...c, is_active: !c.is_active } : c
+      c.id === currencyId ? { ...c, activo: !c.activo } : c
     ));
     
     const targetCurrency = currencies.find(c => c.id === currencyId);
     toast({
       title: "Estado actualizado",
-      description: `Moneda ${targetCurrency?.name} ${targetCurrency?.is_active ? 'desactivada' : 'activada'}`,
+      description: `Moneda ${targetCurrency?.nombre} ${targetCurrency?.activo ? 'desactivada' : 'activada'}`,
     });
   };
 
-  if (user.role !== 'administrador' && user.role !== 'super_usuario') {
+  if (user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
     return (
       <div className="p-6">
         <div className="text-center py-12">
@@ -125,8 +126,8 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
                 <div className="space-y-2">
                   <Label>Código</Label>
                   <Input
-                    value={formData.code}
-                    onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                    value={formData.codigo}
+                    onChange={(e) => setFormData(prev => ({ ...prev, codigo: e.target.value.toUpperCase() }))}
                     placeholder="USD"
                     maxLength={3}
                   />
@@ -134,8 +135,8 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
                 <div className="space-y-2">
                   <Label>Símbolo</Label>
                   <Input
-                    value={formData.symbol}
-                    onChange={(e) => setFormData(prev => ({ ...prev, symbol: e.target.value }))}
+                    value={formData.simbolo}
+                    onChange={(e) => setFormData(prev => ({ ...prev, simbolo: e.target.value }))}
                     placeholder="$"
                     maxLength={5}
                   />
@@ -145,8 +146,8 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
               <div className="space-y-2">
                 <Label>Nombre Completo</Label>
                 <Input
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  value={formData.nombre}
+                  onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
                   placeholder="Dólar Estadounidense"
                 />
               </div>
@@ -188,16 +189,16 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
             <TableBody>
               {currencies.map((currency) => (
                 <TableRow key={currency.id}>
-                  <TableCell className="font-medium">{currency.code}</TableCell>
-                  <TableCell>{currency.name}</TableCell>
-                  <TableCell>{currency.symbol}</TableCell>
+                  <TableCell className="font-medium">{currency.codigo}</TableCell>
+                  <TableCell>{currency.nombre}</TableCell>
+                  <TableCell>{currency.simbolo}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      currency.is_active 
+                      currency.activo 
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-red-100 text-red-800'
                     }`}>
-                      {currency.is_active ? 'Activa' : 'Inactiva'}
+                      {currency.activo ? 'Activa' : 'Inactiva'}
                     </span>
                   </TableCell>
                   <TableCell>
@@ -206,10 +207,10 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
                   <TableCell>
                     <Button
                       size="sm"
-                      variant={currency.is_active ? "destructive" : "default"}
+                      variant={currency.activo ? "destructive" : "default"}
                       onClick={() => toggleCurrencyStatus(currency.id)}
                     >
-                      {currency.is_active ? 'Desactivar' : 'Activar'}
+                      {currency.activo ? 'Desactivar' : 'Activar'}
                     </Button>
                   </TableCell>
                 </TableRow>
