@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,7 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================
 // Modelos principales
+// ============================
+
 model Usuario {
   id                 String         @id @default(uuid())
   username           String         @unique
@@ -83,12 +85,16 @@ model Moneda {
   solicitudes     SolicitudSaldo[]
   transferencias  Transferencia[]
   historialSaldos HistorialSaldo[]
+  detallesCuadre  DetalleCuadreCaja[]
 
   @@index([codigo])
   @@index([activo])
 }
 
+// ============================
 // Modelos de saldos y movimientos
+// ============================
+
 model Saldo {
   id              String        @id @default(uuid())
   punto_atencion_id String
@@ -130,7 +136,10 @@ model HistorialSaldo {
   @@index([tipo_movimiento])
 }
 
+// ============================
 // Modelos de operaciones
+// ============================
+
 model CambioDivisa {
   id                String         @id @default(uuid())
   fecha             DateTime       @default(now())
@@ -204,7 +213,10 @@ model Movimiento {
   @@index([punto_atencion_id])
 }
 
+// ============================
 // Modelos de gestión
+// ============================
+
 model SolicitudSaldo {
   id              String        @id @default(uuid())
   punto_atencion_id String
@@ -281,7 +293,10 @@ model DetalleCuadreCaja {
   @@unique([cuadre_id, moneda_id])
 }
 
+// ============================
 // Enums
+// ============================
+
 enum RolUsuario {
   SUPER_USUARIO
   ADMIN
