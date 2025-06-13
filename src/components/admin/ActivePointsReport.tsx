@@ -1,0 +1,221 @@
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Users, Printer, Download } from "lucide-react";
+import { User, PuntoAtencion } from '../../types';
+
+interface ActivePointsReportProps {
+  user: User;
+}
+
+interface PuntoConUsuario extends PuntoAtencion {
+  usuario_activo?: User;
+  estado_jornada?: string;
+  hora_inicio?: string;
+}
+
+const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
+  const [puntosActivos, setPuntosActivos] = useState<PuntoConUsuario[]>([]);
+
+  // Mock data - en producción vendría de la API
+  const mockPuntosActivos: PuntoConUsuario[] = [
+    {
+      id: '1',
+      nombre: 'Punto Centro',
+      direccion: 'Av. Principal #123',
+      ciudad: 'Caracas',
+      provincia: 'Distrito Capital',
+      activo: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      usuario_activo: {
+        id: '1',
+        username: 'juan.operador',
+        nombre: 'Juan Pérez',
+        rol: 'OPERADOR',
+        activo: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      estado_jornada: 'TRABAJANDO',
+      hora_inicio: '08:15'
+    },
+    {
+      id: '2',
+      nombre: 'Punto Norte',
+      direccion: 'Centro Comercial Norte',
+      ciudad: 'Caracas',
+      provincia: 'Distrito Capital',
+      activo: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      usuario_activo: {
+        id: '2',
+        username: 'maria.cajera',
+        nombre: 'María González',
+        rol: 'OPERADOR',
+        activo: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      estado_jornada: 'ALMUERZO',
+      hora_inicio: '09:00'
+    },
+    {
+      id: '3',
+      nombre: 'Punto Sur',
+      direccion: 'Mall del Sur',
+      ciudad: 'Caracas',
+      provincia: 'Distrito Capital',
+      activo: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+  ];
+
+  useEffect(() => {
+    cargarPuntosActivos();
+  }, []);
+
+  const cargarPuntosActivos = () => {
+    setPuntosActivos(mockPuntosActivos);
+  };
+
+  const getEstadoBadge = (estado?: string) => {
+    switch (estado) {
+      case 'TRABAJANDO':
+        return <Badge variant="default" className="bg-green-500">Trabajando</Badge>;
+      case 'ALMUERZO':
+        return <Badge variant="destructive">En almuerzo</Badge>;
+      default:
+        return <Badge variant="outline">Sin usuario</Badge>;
+    }
+  };
+
+  const imprimirReporte = () => {
+    const contenido = `
+      REPORTE DE PUNTOS DE ATENCIÓN ACTIVOS
+      =====================================
+      Fecha: ${new Date().toLocaleDateString()}
+      Hora: ${new Date().toLocaleTimeString()}
+      
+      ${puntosActivos.map(punto => `
+      Punto: ${punto.nombre}
+      Dirección: ${punto.direccion}
+      Usuario: ${punto.usuario_activo?.nombre || 'Sin usuario'}
+      Estado: ${punto.estado_jornada || 'Inactivo'}
+      Inicio: ${punto.hora_inicio || 'N/A'}
+      ----------------------------------------
+      `).join('')}
+    `;
+
+    const ventanaImpresion = window.open('', '_blank');
+    if (ventanaImpresion) {
+      ventanaImpresion.document.write(`
+        <html>
+          <head>
+            <title>Reporte Puntos Activos</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              .header { text-align: center; margin-bottom: 30px; }
+              .content { white-space: pre-line; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h2>REPORTE DE PUNTOS DE ATENCIÓN ACTIVOS</h2>
+              <p>${new Date().toLocaleDateString()} - ${new Date().toLocaleTimeString()}</p>
+            </div>
+            <div class="content">${contenido}</div>
+          </body>
+        </html>
+      `);
+      ventanaImpresion.document.close();
+      ventanaImpresion.print();
+    }
+  };
+
+  const exportarExcel = () => {
+    const datos = puntosActivos.map(punto => ({
+      'Punto de Atención': punto.nombre,
+      'Dirección': punto.direccion,
+      'Usuario Activo': punto.usuario_activo?.nombre || 'Sin usuario',
+      'Estado': punto.estado_jornada || 'Inactivo',
+      'Hora Inicio': punto.hora_inicio || 'N/A',
+      'Ciudad': punto.ciudad
+    }));
+
+    console.log('Exportando a Excel:', datos);
+    // Aquí se implementaría la exportación real a Excel
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Users className="h-5 w-5" />
+          Puntos de Atención Activos
+        </CardTitle>
+        <CardDescription>
+          Estado actual de todos los puntos de atención y usuarios logueados
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          <div className="flex justify-end gap-2">
+            <Button onClick={imprimirReporte} variant="outline" size="sm">
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir A4
+            </Button>
+            <Button onClick={exportarExcel} variant="outline" size="sm">
+              <Download className="mr-2 h-4 w-4" />
+              Exportar Excel
+            </Button>
+          </div>
+
+          <div className="border rounded-lg">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Punto de Atención</TableHead>
+                  <TableHead>Dirección</TableHead>
+                  <TableHead>Usuario Activo</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Hora Inicio</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {puntosActivos.map(punto => (
+                  <TableRow key={punto.id}>
+                    <TableCell className="font-medium">{punto.nombre}</TableCell>
+                    <TableCell>{punto.direccion}</TableCell>
+                    <TableCell>
+                      {punto.usuario_activo?.nombre || (
+                        <span className="text-gray-500 italic">Sin usuario logueado</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{getEstadoBadge(punto.estado_jornada)}</TableCell>
+                    <TableCell className="font-mono">
+                      {punto.hora_inicio || '--:--'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="text-sm text-gray-600">
+            <p>Total de puntos: {puntosActivos.length}</p>
+            <p>Puntos con usuarios activos: {puntosActivos.filter(p => p.usuario_activo).length}</p>
+            <p>Última actualización: {new Date().toLocaleString()}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default ActivePointsReport;

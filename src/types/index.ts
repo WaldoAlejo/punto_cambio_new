@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   username: string;
@@ -21,6 +20,7 @@ export interface PuntoAtencion {
   codigo_postal?: string;
   telefono?: string;
   activo: boolean;
+  usuario_logueado?: User;
   created_at: string;
   updated_at: string;
   saldos?: Saldo[];
@@ -48,6 +48,19 @@ export interface Saldo {
   moneda?: Moneda;
 }
 
+export interface DatosCliente {
+  nombre: string;
+  apellido: string;
+  cedula: string;
+  telefono: string;
+}
+
+export interface DetalleDivisas {
+  billetes: number;
+  monedas: number;
+  total: number;
+}
+
 export interface CambioDivisa {
   id: string;
   fecha: string;
@@ -62,10 +75,20 @@ export interface CambioDivisa {
   observacion?: string;
   numero_recibo?: string;
   estado: 'COMPLETADO' | 'PENDIENTE' | 'CANCELADO';
+  // Nuevos campos
+  datos_cliente: DatosCliente;
+  divisas_entregadas: DetalleDivisas;
+  divisas_recibidas: DetalleDivisas;
   monedaOrigen?: Moneda;
   monedaDestino?: Moneda;
   usuario?: User;
   puntoAtencion?: PuntoAtencion;
+}
+
+export interface ResponsableMovilizacion {
+  nombre: string;
+  cedula: string;
+  telefono: string;
 }
 
 export interface Transferencia {
@@ -75,13 +98,22 @@ export interface Transferencia {
   moneda_id: string;
   monto: number;
   tipo_transferencia: 'ENTRE_PUNTOS' | 'DEPOSITO_MATRIZ' | 'RETIRO_GERENCIA' | 'DEPOSITO_GERENCIA';
-  estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+  estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO' | 'EN_TRANSITO' | 'RECIBIDO';
   solicitado_por: string;
   aprobado_por?: string;
   fecha: string;
   fecha_aprobacion?: string;
   descripcion?: string;
   numero_recibo?: string;
+  // Nuevos campos
+  detalle_divisas: DetalleDivisas;
+  responsable_movilizacion?: ResponsableMovilizacion;
+  validacion_recepcion?: {
+    fecha: string;
+    usuario_receptor: string;
+    divisas_recibidas: DetalleDivisas;
+    observaciones?: string;
+  };
   origen?: PuntoAtencion;
   destino?: PuntoAtencion;
   moneda?: Moneda;
@@ -89,17 +121,44 @@ export interface Transferencia {
   usuarioAprobador?: User;
 }
 
-export interface Recibo {
+export interface SalidaEspontanea {
   id: string;
-  numero_recibo: string;
-  tipo_operacion: 'CAMBIO_DIVISA' | 'TRANSFERENCIA' | 'MOVIMIENTO' | 'DEPOSITO' | 'RETIRO';
-  referencia_id: string;
   usuario_id: string;
   punto_atencion_id: string;
-  fecha: string;
-  datos_operacion: any;
-  impreso: boolean;
-  numero_copias: number;
+  fecha_salida: string;
+  fecha_regreso?: string;
+  motivo: 'DEPOSITO' | 'RETIRO' | 'MOVILIZACION_DIVISAS' | 'OTROS';
+  descripcion?: string;
+  ubicacion_salida?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  };
+  ubicacion_regreso?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  };
+  duracion_minutos?: number;
+  usuario?: User;
+  puntoAtencion?: PuntoAtencion;
+}
+
+export interface JornadaLaboral {
+  id: string;
+  usuario_id: string;
+  punto_atencion_id: string;
+  fecha_inicio: string;
+  fecha_almuerzo?: string;
+  fecha_regreso?: string;
+  fecha_salida?: string;
+  estado: 'TRABAJANDO' | 'ALMUERZO' | 'FINALIZADO';
+  ubicacion_inicio?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  };
+  salidas_espontaneas?: SalidaEspontanea[];
   usuario?: User;
   puntoAtencion?: PuntoAtencion;
 }
@@ -109,6 +168,7 @@ export interface CuadreCaja {
   usuario_id: string;
   punto_atencion_id: string;
   fecha: string;
+  tipo_cierre: 'PARCIAL' | 'TOTAL';
   estado: 'ABIERTO' | 'CERRADO';
   total_cambios: number;
   total_transferencias_entrada: number;
@@ -124,12 +184,12 @@ export interface DetalleCuadreCaja {
   id: string;
   cuadre_id: string;
   moneda_id: string;
-  saldo_apertura: number;
-  saldo_cierre: number;
-  conteo_fisico: number;
-  billetes: number;
-  monedas_fisicas: number;
+  saldo_sistema: number;
+  saldo_fisico_billetes: number;
+  saldo_fisico_monedas: number;
+  saldo_fisico_total: number;
   diferencia: number;
+  cuadra_automaticamente: boolean;
   moneda?: Moneda;
 }
 
