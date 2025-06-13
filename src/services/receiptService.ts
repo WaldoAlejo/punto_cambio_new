@@ -1,5 +1,4 @@
-
-import { CambioDivisa, Transferencia, Recibo } from '../types';
+import { CambioDivisa, Transferencia } from '../types';
 
 export interface ReceiptData {
   numeroRecibo: string;

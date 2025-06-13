@@ -84,6 +84,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       usuario_id: user.id,
       punto_atencion_id: selectedPoint.id,
       fecha: new Date().toISOString().split('T')[0],
+      tipo_cierre: 'TOTAL',
       estado: 'CERRADO',
       total_cambios: 15, // Mock data
       total_transferencias_entrada: 2,

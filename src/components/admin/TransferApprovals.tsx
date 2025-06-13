@@ -40,7 +40,12 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
       solicitado_por: 'user1',
       fecha: new Date().toISOString(),
       descripcion: 'Transferencia de operación diaria',
-      numero_recibo: 'TR-001'
+      numero_recibo: 'TR-001',
+      detalle_divisas: {
+        billetes: 800,
+        monedas: 200,
+        total: 1000
+      }
     },
     {
       id: '2',
@@ -52,7 +57,12 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
       solicitado_por: 'user2',
       fecha: new Date().toISOString(),
       descripcion: 'Solicitud de euros para operaciones',
-      numero_recibo: 'TR-002'
+      numero_recibo: 'TR-002',
+      detalle_divisas: {
+        billetes: 400,
+        monedas: 100,
+        total: 500
+      }
     }
   ];
 

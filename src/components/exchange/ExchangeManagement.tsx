@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +16,7 @@ interface ExchangeManagementProps {
 
 const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) => {
   const [operationType, setOperationType] = useState<'COMPRA' | 'VENTA'>('COMPRA');
-  const [rate, setRate] = useState(0);
+  const [rate, setRate] = useState('');
   const [fromCurrency, setFromCurrency] = useState('');
   const [toCurrency, setToCurrency] = useState('');
   const [amount, setAmount] = useState('');
@@ -39,7 +38,8 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
 
   useEffect(() => {
     // Calculate destination amount when amount or rate changes
-    setDestinationAmount(parseFloat(amount) * rate);
+    const rateValue = parseFloat(rate) || 0;
+    setDestinationAmount(parseFloat(amount) * rateValue);
   }, [amount, rate]);
 
   const getCurrencyName = (currencyId: string) => {
@@ -85,7 +85,7 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       return;
     }
 
-    if (rate === 0) {
+    if (rate === '') {
       toast({
         title: "Error",
         description: "La tasa de cambio debe ser mayor a cero",
@@ -94,12 +94,14 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       return;
     }
 
+    const rateValue = parseFloat(rate) || 0;
+
     const newExchange: CambioDivisa = {
       id: Date.now().toString(),
       fecha: new Date().toISOString(),
       monto_origen: parseFloat(amount),
       monto_destino: destinationAmount,
-      tasa_cambio: rate,
+      tasa_cambio: rateValue,
       tipo_operacion: operationType,
       moneda_origen_id: fromCurrency,
       moneda_destino_id: toCurrency,
@@ -108,6 +110,22 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       observacion: observation,
       numero_recibo: ReceiptService.generateReceiptNumber('CAMBIO_DIVISA'),
       estado: 'COMPLETADO',
+      datos_cliente: {
+        nombre: '',
+        apellido: '',
+        cedula: '',
+        telefono: ''
+      },
+      divisas_entregadas: {
+        billetes: 0,
+        monedas: 0,
+        total: 0
+      },
+      divisas_recibidas: {
+        billetes: 0,
+        monedas: 0,
+        total: 0
+      },
       monedaOrigen: currencies.find(c => c.id === fromCurrency),
       monedaDestino: currencies.find(c => c.id === toCurrency)
     };
@@ -119,6 +137,7 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
 
     // Reset form
     setAmount('');
+    setRate('');
     setObservation('');
 
     toast({
@@ -186,7 +205,7 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                     type="number"
                     step="0.0001"
                     value={rate}
-                    onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
+                    onChange={(e) => setRate(e.target.value)}
                     placeholder="0.0000"
                   />
                 </div>
@@ -240,7 +259,7 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
               <Button 
                 onClick={performExchange} 
                 className="w-full"
-                disabled={!fromCurrency || !toCurrency || !amount || rate === 0}
+                disabled={!fromCurrency || !toCurrency || !amount || rate === ''}
               >
                 Realizar Cambio
               </Button>

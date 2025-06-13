@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,7 +92,12 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
       solicitado_por: user.id,
       fecha: new Date().toISOString(),
       descripcion: formData.notes,
-      numero_recibo: numeroRecibo
+      numero_recibo: numeroRecibo,
+      detalle_divisas: {
+        billetes: 0,
+        monedas: 0,
+        total: parseFloat(formData.amount)
+      }
     };
 
     onTransferCreated(newTransfer);
