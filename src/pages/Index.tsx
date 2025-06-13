@@ -1,12 +1,13 @@
+
 import { useState, useEffect } from 'react';
 import LoginForm from '../components/auth/LoginForm';
 import Dashboard from '../components/dashboard/Dashboard';
 import PointSelection from '../components/auth/PointSelection';
-import { User, AttentionPoint } from '../types';
+import { User, PuntoAtencion } from '../types';
 
 const Index = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [selectedPoint, setSelectedPoint] = useState<AttentionPoint | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<PuntoAtencion | null>(null);
   const [showPointSelection, setShowPointSelection] = useState(false);
 
   useEffect(() => {
@@ -18,7 +19,7 @@ const Index = () => {
       const parsedUser = JSON.parse(savedUser);
       setUser(parsedUser);
       
-      if (parsedUser.role === 'administrador') {
+      if (parsedUser.rol === 'ADMIN' || parsedUser.rol === 'SUPER_USUARIO') {
         // Admin doesn't need point selection
         setSelectedPoint(null);
       } else if (savedPoint) {
@@ -42,7 +43,7 @@ const Index = () => {
     }
   };
 
-  const handlePointSelection = (point: AttentionPoint) => {
+  const handlePointSelection = (point: PuntoAtencion) => {
     setSelectedPoint(point);
     setShowPointSelection(false);
     localStorage.setItem('punto_cambio_point', JSON.stringify(point));

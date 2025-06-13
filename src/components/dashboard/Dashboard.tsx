@@ -52,7 +52,9 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h3 className="font-semibold text-blue-700 mb-2">Usuario Activo</h3>
                   <p className="text-blue-600">{user.nombre}</p>
-                  <p className="text-sm text-gray-600 capitalize">{user.rol.replace('_', ' ')}</p>
+                  <p className="text-sm text-gray-600 capitalize">
+                    {user.rol ? user.rol.replace('_', ' ').toLowerCase() : 'Sin rol'}
+                  </p>
                 </div>
                 {selectedPoint && (
                   <div className="bg-green-50 p-4 rounded-lg">

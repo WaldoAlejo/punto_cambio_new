@@ -26,6 +26,9 @@ export interface PuntoAtencion {
   saldos?: Saldo[];
 }
 
+// Alias for compatibility
+export type AttentionPoint = PuntoAtencion;
+
 export interface Moneda {
   id: string;
   nombre: string;
@@ -35,6 +38,9 @@ export interface Moneda {
   created_at: string;
   updated_at: string;
 }
+
+// Alias for compatibility
+export type Currency = Moneda;
 
 export interface Saldo {
   id: string;
@@ -68,6 +74,9 @@ export interface CambioDivisa {
   puntoAtencion?: PuntoAtencion;
 }
 
+// Alias for compatibility
+export type CurrencyExchange = CambioDivisa;
+
 export interface Transferencia {
   id: string;
   origenId?: string;
@@ -88,6 +97,9 @@ export interface Transferencia {
   usuarioAprobador?: User;
 }
 
+// Alias for compatibility
+export type Transfer = Transferencia;
+
 export interface CuadreCaja {
   id: string;
   usuarioId: string;
@@ -103,6 +115,9 @@ export interface CuadreCaja {
   puntoAtencion?: PuntoAtencion;
   detalles?: DetalleCuadreCaja[];
 }
+
+// Alias for compatibility
+export type DailyClose = CuadreCaja;
 
 export interface DetalleCuadreCaja {
   id: string;

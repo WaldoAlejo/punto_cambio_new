@@ -89,7 +89,7 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
         return;
       }
 
-      if (!user.is_active) {
+      if (!user.activo) {
         toast({
           title: "Error de autenticación",
           description: "Usuario inactivo",
@@ -100,7 +100,7 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
 
       toast({
         title: "Bienvenido",
-        description: `Hola ${user.name}`,
+        description: `Hola ${user.nombre}`,
       });
 
       onLogin(user);

@@ -41,7 +41,9 @@ const Header = ({ user, selectedPoint, onLogout, onToggleSidebar }: HeaderProps)
         <div className="flex items-center space-x-4">
           <div className="text-right">
             <p className="text-sm font-medium text-gray-700">{user.nombre}</p>
-            <p className="text-xs text-gray-500 capitalize">{user.rol.replace('_', ' ')}</p>
+            <p className="text-xs text-gray-500 capitalize">
+              {user.rol ? user.rol.replace('_', ' ').toLowerCase() : 'Sin rol'}
+            </p>
           </div>
           <Button 
             variant="outline"
