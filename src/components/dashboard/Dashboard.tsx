@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -9,6 +8,7 @@ import PointManagement from '../admin/PointManagement';
 import CurrencyManagement from '../admin/CurrencyManagement';
 import Reports from '../reports/Reports';
 import DailyClose from '../close/DailyClose';
+import TransferApprovals from '../admin/TransferApprovals';
 import { User, PuntoAtencion } from '../../types';
 
 interface DashboardProps {
@@ -31,6 +31,8 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         return <ExchangeManagement user={user} selectedPoint={selectedPoint} />;
       case 'transfers':
         return <TransferManagement user={user} selectedPoint={selectedPoint} />;
+      case 'transfer-approvals':
+        return <TransferApprovals user={user} />;
       case 'users':
         return <UserManagement user={user} />;
       case 'points':

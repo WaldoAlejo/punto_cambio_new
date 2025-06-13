@@ -1,4 +1,3 @@
-
 export interface User {
   id: string;
   username: string;
@@ -85,7 +84,23 @@ export interface Transferencia {
   origen?: PuntoAtencion;
   destino?: PuntoAtencion;
   moneda?: Moneda;
+  usuarioSolicitante?: User;
   usuarioAprobador?: User;
+}
+
+export interface Recibo {
+  id: string;
+  numero_recibo: string;
+  tipo_operacion: 'CAMBIO_DIVISA' | 'TRANSFERENCIA' | 'MOVIMIENTO' | 'DEPOSITO' | 'RETIRO';
+  referencia_id: string;
+  usuario_id: string;
+  punto_atencion_id: string;
+  fecha: string;
+  datos_operacion: any;
+  impreso: boolean;
+  numero_copias: number;
+  usuario?: User;
+  puntoAtencion?: PuntoAtencion;
 }
 
 export interface CuadreCaja {

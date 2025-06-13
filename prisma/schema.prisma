@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -34,6 +35,7 @@ model Usuario {
   historialSaldos    HistorialSaldo[]
   transferenciasAprobadas Transferencia[] @relation("UsuarioAprobador")
   transferenciasSolicitadas Transferencia[] @relation("UsuarioSolicitante")
+  recibos            Recibo[]
 
   @@index([username])
   @@index([punto_atencion_id])
@@ -62,6 +64,7 @@ model PuntoAtencion {
   transferenciasDestino  Transferencia[] @relation("TransferenciasDestino")
   cuadresCaja    CuadreCaja[]
   historialSaldos HistorialSaldo[]
+  recibos        Recibo[]
 
   @@index([ciudad])
   @@index([activo])
@@ -214,6 +217,31 @@ model Movimiento {
 }
 
 // ============================
+// Modelo para recibos
+// ============================
+
+model Recibo {
+  id                String         @id @default(uuid())
+  numero_recibo     String         @unique
+  tipo_operacion    TipoRecibo
+  referencia_id     String         // ID de la operación relacionada
+  usuario_id        String
+  punto_atencion_id String
+  fecha             DateTime       @default(now())
+  datos_operacion   Json           // Datos específicos de la operación
+  impreso           Boolean        @default(false)
+  numero_copias     Int            @default(2)
+
+  // Relaciones
+  usuario           Usuario        @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  puntoAtencion     PuntoAtencion  @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
+
+  @@index([fecha])
+  @@index([numero_recibo])
+  @@index([tipo_operacion])
+}
+
+// ============================
 // Modelos de gestión
 // ============================
 
@@ -339,4 +367,12 @@ enum EstadoTransaccion {
 enum EstadoCierre {
   ABIERTO
   CERRADO
+}
+
+enum TipoRecibo {
+  CAMBIO_DIVISA
+  TRANSFERENCIA
+  MOVIMIENTO
+  DEPOSITO
+  RETIRO
 }

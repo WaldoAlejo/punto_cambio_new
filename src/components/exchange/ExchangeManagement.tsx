@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, Moneda, CambioDivisa } from '../../types';
+import { ReceiptService } from '../../services/receiptService';
 
 interface ExchangeManagementProps {
   user: User;
@@ -69,24 +70,36 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       return;
     }
 
+    const numeroRecibo = ReceiptService.generateReceiptNumber('CAMBIO_DIVISA');
+
     const newExchange: CambioDivisa = {
       id: Date.now().toString(),
       fecha: new Date().toISOString(),
-      hora: new Date().toLocaleTimeString(),
-      montoOrigen: parseFloat(formData.fromAmount),
-      montoDestino: calculateToAmount(),
-      tasaCambio: parseFloat(formData.exchangeRate),
-      tipoOperacion: formData.type,
-      monedaOrigenId: formData.fromCurrencyId,
-      monedaDestinoId: formData.toCurrencyId,
-      usuarioId: user.id,
-      puntoAtencionId: selectedPoint?.id || '',
+      monto_origen: parseFloat(formData.fromAmount),
+      monto_destino: calculateToAmount(),
+      tasa_cambio: parseFloat(formData.exchangeRate),
+      tipo_operacion: formData.type,
+      moneda_origen_id: formData.fromCurrencyId,
+      moneda_destino_id: formData.toCurrencyId,
+      usuario_id: user.id,
+      punto_atencion_id: selectedPoint?.id || '',
       observacion: formData.notes,
-      numeroRecibo: `EX-${Date.now()}`,
-      estado: 'COMPLETADO'
+      numero_recibo: numeroRecibo,
+      estado: 'COMPLETADO',
+      // Agregamos las referencias a las monedas para el recibo
+      monedaOrigen: currencies.find(c => c.id === formData.fromCurrencyId),
+      monedaDestino: currencies.find(c => c.id === formData.toCurrencyId)
     };
 
     setExchanges(prev => [newExchange, ...prev]);
+
+    // Generar e imprimir recibo
+    const receiptData = ReceiptService.generateCurrencyExchangeReceipt(
+      newExchange,
+      selectedPoint?.nombre || 'Sistema',
+      user.nombre
+    );
+    ReceiptService.printReceipt(receiptData, 2);
     
     // Reset form
     setFormData({
@@ -100,7 +113,7 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
 
     toast({
       title: "Cambio registrado",
-      description: "El cambio de divisa ha sido registrado exitosamente",
+      description: "El cambio de divisa ha sido registrado exitosamente y se ha generado el recibo",
     });
   };
 
@@ -263,11 +276,11 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                   <div key={exchange.id} className="border rounded-lg p-4">
                     <div className="flex justify-between items-start mb-2">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        exchange.tipoOperacion === 'COMPRA' 
+                        exchange.tipo_operacion === 'COMPRA' 
                           ? 'bg-green-100 text-green-800'
                           : 'bg-blue-100 text-blue-800'
                       }`}>
-                        {exchange.tipoOperacion}
+                        {exchange.tipo_operacion}
                       </span>
                       <span className="text-xs text-gray-500">
                         {new Date(exchange.fecha).toLocaleDateString()} {exchange.hora}
@@ -275,10 +288,10 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                     </div>
                     <div className="text-sm space-y-1">
                       <p className="font-medium">
-                        {exchange.montoOrigen} {getCurrencyName(exchange.monedaOrigenId)} → {exchange.montoDestino} {getCurrencyName(exchange.monedaDestinoId)}
+                        {exchange.monto_origen} {getCurrencyName(exchange.moneda_origen_id)} → {exchange.monto_destino} {getCurrencyName(exchange.moneda_destino_id)}
                       </p>
                       <p className="text-gray-600">
-                        Tasa: {exchange.tasaCambio}
+                        Tasa: {exchange.tasa_cambio}
                       </p>
                       {exchange.observacion && (
                         <p className="text-gray-600 text-xs">

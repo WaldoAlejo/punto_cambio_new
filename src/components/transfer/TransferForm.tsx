@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, Moneda, Transferencia } from '../../types';
+import { ReceiptService } from '../../services/receiptService';
 
 interface TransferFormProps {
   user: User;
@@ -38,7 +39,8 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
       return;
     }
 
-    if ((formData.type === 'ENTRE_PUNTOS') && !formData.toPointId) {
+    // Validar selección de destino según el tipo de transferencia
+    if (formData.type === 'ENTRE_PUNTOS' && !formData.toPointId) {
       toast({
         title: "Error", 
         description: "Debe seleccionar el punto de destino",
@@ -47,10 +49,42 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
       return;
     }
 
+    if (['DEPOSITO_MATRIZ', 'RETIRO_GERENCIA', 'DEPOSITO_GERENCIA'].includes(formData.type) && !formData.toPointId) {
+      toast({
+        title: "Error", 
+        description: "Debe seleccionar el punto de destino",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    let destinoId = '';
+    let origenId: string | undefined = undefined;
+
+    switch (formData.type) {
+      case 'ENTRE_PUNTOS':
+        origenId = selectedPoint?.id;
+        destinoId = formData.toPointId;
+        break;
+      case 'DEPOSITO_MATRIZ':
+        // La matriz deposita al punto seleccionado
+        destinoId = formData.toPointId;
+        break;
+      case 'RETIRO_GERENCIA':
+      case 'DEPOSITO_GERENCIA':
+        origenId = selectedPoint?.id;
+        destinoId = formData.toPointId;
+        break;
+      default:
+        destinoId = selectedPoint?.id || '';
+    }
+
+    const numeroRecibo = ReceiptService.generateReceiptNumber('TRANSFERENCIA');
+
     const newTransfer: Transferencia = {
       id: Date.now().toString(),
-      origen_id: formData.type === 'ENTRE_PUNTOS' ? selectedPoint?.id : undefined,
-      destino_id: formData.type === 'ENTRE_PUNTOS' ? formData.toPointId : selectedPoint?.id || '',
+      origen_id: origenId,
+      destino_id: destinoId,
       moneda_id: formData.currencyId,
       monto: parseFloat(formData.amount),
       tipo_transferencia: formData.type as any,
@@ -58,10 +92,18 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
       solicitado_por: user.id,
       fecha: new Date().toISOString(),
       descripcion: formData.notes,
-      numero_recibo: `TR-${Date.now()}`
+      numero_recibo: numeroRecibo
     };
 
     onTransferCreated(newTransfer);
+
+    // Generar e imprimir recibo
+    const receiptData = ReceiptService.generateTransferReceipt(
+      newTransfer,
+      selectedPoint?.nombre || 'Sistema',
+      user.nombre
+    );
+    ReceiptService.printReceipt(receiptData, 2);
     
     // Reset form
     setFormData({
@@ -74,8 +116,44 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
 
     toast({
       title: "Transferencia solicitada",
-      description: "La transferencia ha sido enviada para aprobación",
+      description: "La transferencia ha sido enviada para aprobación y se ha generado el recibo",
     });
+  };
+
+  const getAvailablePoints = () => {
+    switch (formData.type) {
+      case 'ENTRE_PUNTOS':
+        // Para transferencias entre puntos, mostrar todos excepto el actual
+        return points.filter(p => p.id !== selectedPoint?.id);
+      case 'DEPOSITO_MATRIZ':
+        // Para depósitos de matriz, mostrar todos los puntos (incluyendo el actual)
+        return [...points, ...(selectedPoint ? [selectedPoint] : [])];
+      case 'RETIRO_GERENCIA':
+      case 'DEPOSITO_GERENCIA':
+        // Para operaciones de gerencia, mostrar puntos de destino
+        return points;
+      default:
+        return points;
+    }
+  };
+
+  const getDestinationLabel = () => {
+    switch (formData.type) {
+      case 'ENTRE_PUNTOS':
+        return 'Punto de Destino';
+      case 'DEPOSITO_MATRIZ':
+        return 'Punto que Recibe el Depósito';
+      case 'RETIRO_GERENCIA':
+        return 'Punto de Destino del Retiro';
+      case 'DEPOSITO_GERENCIA':
+        return 'Punto de Destino del Depósito';
+      default:
+        return 'Punto de Destino';
+    }
+  };
+
+  const shouldShowDestinationSelect = () => {
+    return ['ENTRE_PUNTOS', 'DEPOSITO_MATRIZ', 'RETIRO_GERENCIA', 'DEPOSITO_GERENCIA'].includes(formData.type);
   };
 
   return (
@@ -90,7 +168,7 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
             <Label>Tipo de Transferencia</Label>
             <Select 
               value={formData.type} 
-              onValueChange={(value) => setFormData(prev => ({ ...prev, type: value }))}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, type: value, toPointId: '' }))}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar tipo" />
@@ -108,15 +186,17 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
                   <>
                     <SelectItem value="DEPOSITO_MATRIZ">Depósito de Matriz</SelectItem>
                     <SelectItem value="ENTRE_PUNTOS">Transferencia entre Puntos</SelectItem>
+                    <SelectItem value="RETIRO_GERENCIA">Retiro de Gerencia</SelectItem>
+                    <SelectItem value="DEPOSITO_GERENCIA">Depósito de Gerencia</SelectItem>
                   </>
                 )}
               </SelectContent>
             </Select>
           </div>
 
-          {formData.type === 'ENTRE_PUNTOS' && (
+          {shouldShowDestinationSelect() && (
             <div className="space-y-2">
-              <Label>Punto de Destino</Label>
+              <Label>{getDestinationLabel()}</Label>
               <Select 
                 value={formData.toPointId} 
                 onValueChange={(value) => setFormData(prev => ({ ...prev, toPointId: value }))}
@@ -125,7 +205,7 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
                   <SelectValue placeholder="Seleccionar punto" />
                 </SelectTrigger>
                 <SelectContent>
-                  {points.map(point => (
+                  {getAvailablePoints().map(point => (
                     <SelectItem key={point.id} value={point.id}>
                       {point.nombre}
                     </SelectItem>
