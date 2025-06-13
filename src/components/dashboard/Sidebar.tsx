@@ -21,7 +21,7 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
     { key: 'points', label: 'Puntos de Atención', icon: StoreIcon, adminOnly: true },
     { key: 'currencies', label: 'Monedas', icon: CoinsIcon, adminOnly: true },
     { key: 'reports', label: 'Reportes', icon: FileTextIcon, adminOnly: true },
-    { key: 'daily-close', label: 'Cierre Diario', icon: FileTextIcon },
+    { key: 'daily-close', label: 'Cierre Diario', icon: FileTextIcon, operatorOnly: true },
     { key: 'transfer-approvals', label: 'Aprobar Transferencias', icon: CheckIcon, adminOnly: true }
   ];
 

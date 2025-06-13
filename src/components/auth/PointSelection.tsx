@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion } from '../../types';
 
 interface PointSelectionProps {
@@ -13,151 +12,111 @@ interface PointSelectionProps {
 
 const PointSelection = ({ user, onPointSelect, onLogout }: PointSelectionProps) => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [occupiedPoints, setOccupiedPoints] = useState<string[]>([]);
 
-  // Mock attention points - In production this would come from your backend
+  // Mock data - puntos de atención
   const mockPoints: PuntoAtencion[] = [
     {
       id: '1',
       nombre: 'Punto Centro',
-      direccion: 'Av. Principal 123, Centro',
-      ciudad: 'Caracas',
-      provincia: 'Distrito Capital',
-      telefono: '+58 212-555-0001',
+      direccion: 'Av. Principal #123',
+      telefono: '+58 212-1234567',
       activo: true,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      saldos: []
+      updated_at: new Date().toISOString()
     },
     {
-      id: '2', 
+      id: '2',
       nombre: 'Punto Norte',
-      direccion: 'CC El Recreo, Nivel 1, Local 45',
-      ciudad: 'Caracas',
-      provincia: 'Distrito Capital',
-      telefono: '+58 212-555-0002',
+      direccion: 'Centro Comercial Norte, Local 45',
+      telefono: '+58 212-7654321',
       activo: true,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      saldos: []
+      updated_at: new Date().toISOString()
     },
     {
       id: '3',
       nombre: 'Punto Sur',
-      direccion: 'Av. Francisco de Miranda, Torre Sur',
-      ciudad: 'Caracas',
-      provincia: 'Distrito Capital',
-      telefono: '+58 212-555-0003',
+      direccion: 'Mall del Sur, Piso 2, Local 201',
+      telefono: '+58 212-9876543',
       activo: true,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      saldos: []
+      updated_at: new Date().toISOString()
     }
   ];
 
-  useEffect(() => {
-    const loadPoints = async () => {
-      try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 500));
-        setPoints(mockPoints.filter(p => p.activo));
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar los puntos de atención",
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Mock data - puntos ocupados (simulando usuarios conectados)
+  const mockOccupiedPoints = ['2']; // Punto Norte está ocupado
 
-    loadPoints();
+  useEffect(() => {
+    setPoints(mockPoints);
+    setOccupiedPoints(mockOccupiedPoints);
   }, []);
 
   const handlePointSelect = (point: PuntoAtencion) => {
-    toast({
-      title: "Punto seleccionado",
-      description: `Trabajando en: ${point.nombre}`,
-    });
+    if (occupiedPoints.includes(point.id)) {
+      return; // No permitir seleccionar puntos ocupados
+    }
     onPointSelect(point);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Cargando puntos de atención...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-blue-800">Seleccionar Punto de Atención</h1>
-            <p className="text-gray-600 mt-2">Bienvenido {user.nombre}</p>
-          </div>
-          <Button 
-            variant="outline" 
-            onClick={onLogout}
-            className="text-red-600 border-red-600 hover:bg-red-50"
-          >
-            Cerrar Sesión
-          </Button>
-        </div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {points.map((point) => (
-            <Card 
-              key={point.id} 
-              className="hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => handlePointSelect(point)}
-            >
-              <CardHeader>
-                <CardTitle className="text-lg text-blue-700">{point.nombre}</CardTitle>
-                <CardDescription>{point.direccion}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {point.telefono && (
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Teléfono:</span> {point.telefono}
-                    </p>
-                  )}
-                  <div className="flex items-center">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                    <span className="text-sm text-green-600">Activo</span>
-                  </div>
-                </div>
-                <Button 
-                  className="w-full mt-4 bg-blue-600 hover:bg-blue-700"
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl">
+        <CardHeader>
+          <CardTitle className="text-center">Seleccionar Punto de Atención</CardTitle>
+          <CardDescription className="text-center">
+            Hola {user.nombre}, selecciona el punto de atención donde trabajarás hoy
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {points.map(point => {
+              const isOccupied = occupiedPoints.includes(point.id);
+              return (
+                <div
+                  key={point.id}
+                  className={`p-4 border rounded-lg transition-colors ${
+                    isOccupied 
+                      ? 'bg-gray-100 border-gray-300 cursor-not-allowed' 
+                      : 'hover:bg-blue-50 cursor-pointer border-gray-200'
+                  }`}
                   onClick={() => handlePointSelect(point)}
                 >
-                  Seleccionar
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {points.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No hay puntos de atención disponibles</p>
+                  <div className="flex items-center justify-between">
+                    <div className={isOccupied ? 'text-gray-500' : ''}>
+                      <h3 className="font-semibold text-lg">{point.nombre}</h3>
+                      <p className="text-sm text-gray-600">{point.direccion}</p>
+                      <p className="text-sm text-gray-600">{point.telefono}</p>
+                    </div>
+                    <div className="text-right">
+                      {isOccupied ? (
+                        <span className="text-sm text-red-600 font-medium">
+                          Ocupado por otro usuario
+                        </span>
+                      ) : (
+                        <Button size="sm">
+                          Seleccionar
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          
+          <div className="mt-6 pt-4 border-t flex justify-center">
             <Button 
               variant="outline" 
               onClick={onLogout}
-              className="mt-4"
+              className="text-red-600 border-red-600 hover:bg-red-50"
             >
-              Volver al login
+              Cerrar Sesión
             </Button>
           </div>
-        )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
