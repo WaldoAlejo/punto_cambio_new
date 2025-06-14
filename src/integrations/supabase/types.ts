@@ -9,7 +9,718 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      CambioDivisa: {
+        Row: {
+          estado: Database["public"]["Enums"]["EstadoTransaccion"]
+          fecha: string
+          id: string
+          moneda_destino_id: string
+          moneda_origen_id: string
+          monto_destino: number
+          monto_origen: number
+          numero_recibo: string | null
+          observacion: string | null
+          punto_atencion_id: string
+          tasa_cambio: number
+          tipo_operacion: Database["public"]["Enums"]["TipoOperacion"]
+          usuario_id: string
+        }
+        Insert: {
+          estado?: Database["public"]["Enums"]["EstadoTransaccion"]
+          fecha?: string
+          id?: string
+          moneda_destino_id: string
+          moneda_origen_id: string
+          monto_destino: number
+          monto_origen: number
+          numero_recibo?: string | null
+          observacion?: string | null
+          punto_atencion_id: string
+          tasa_cambio: number
+          tipo_operacion: Database["public"]["Enums"]["TipoOperacion"]
+          usuario_id: string
+        }
+        Update: {
+          estado?: Database["public"]["Enums"]["EstadoTransaccion"]
+          fecha?: string
+          id?: string
+          moneda_destino_id?: string
+          moneda_origen_id?: string
+          monto_destino?: number
+          monto_origen?: number
+          numero_recibo?: string | null
+          observacion?: string | null
+          punto_atencion_id?: string
+          tasa_cambio?: number
+          tipo_operacion?: Database["public"]["Enums"]["TipoOperacion"]
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "CambioDivisa_moneda_destino_id_fkey"
+            columns: ["moneda_destino_id"]
+            isOneToOne: false
+            referencedRelation: "Moneda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "CambioDivisa_moneda_origen_id_fkey"
+            columns: ["moneda_origen_id"]
+            isOneToOne: false
+            referencedRelation: "Moneda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "CambioDivisa_punto_atencion_id_fkey"
+            columns: ["punto_atencion_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "CambioDivisa_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "Usuario"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      CuadreCaja: {
+        Row: {
+          estado: Database["public"]["Enums"]["EstadoCierre"]
+          fecha: string
+          fecha_cierre: string | null
+          id: string
+          observaciones: string | null
+          punto_atencion_id: string
+          total_cambios: number
+          total_transferencias_entrada: number
+          total_transferencias_salida: number
+          usuario_id: string
+        }
+        Insert: {
+          estado?: Database["public"]["Enums"]["EstadoCierre"]
+          fecha?: string
+          fecha_cierre?: string | null
+          id?: string
+          observaciones?: string | null
+          punto_atencion_id: string
+          total_cambios?: number
+          total_transferencias_entrada?: number
+          total_transferencias_salida?: number
+          usuario_id: string
+        }
+        Update: {
+          estado?: Database["public"]["Enums"]["EstadoCierre"]
+          fecha?: string
+          fecha_cierre?: string | null
+          id?: string
+          observaciones?: string | null
+          punto_atencion_id?: string
+          total_cambios?: number
+          total_transferencias_entrada?: number
+          total_transferencias_salida?: number
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "CuadreCaja_punto_atencion_id_fkey"
+            columns: ["punto_atencion_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "CuadreCaja_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "Usuario"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      DetalleCuadreCaja: {
+        Row: {
+          billetes: number
+          conteo_fisico: number
+          cuadre_id: string
+          diferencia: number
+          id: string
+          moneda_id: string
+          monedas_fisicas: number
+          saldo_apertura: number
+          saldo_cierre: number
+        }
+        Insert: {
+          billetes?: number
+          conteo_fisico: number
+          cuadre_id: string
+          diferencia?: number
+          id?: string
+          moneda_id: string
+          monedas_fisicas?: number
+          saldo_apertura: number
+          saldo_cierre: number
+        }
+        Update: {
+          billetes?: number
+          conteo_fisico?: number
+          cuadre_id?: string
+          diferencia?: number
+          id?: string
+          moneda_id?: string
+          monedas_fisicas?: number
+          saldo_apertura?: number
+          saldo_cierre?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "DetalleCuadreCaja_cuadre_id_fkey"
+            columns: ["cuadre_id"]
+            isOneToOne: false
+            referencedRelation: "CuadreCaja"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "DetalleCuadreCaja_moneda_id_fkey"
+            columns: ["moneda_id"]
+            isOneToOne: false
+            referencedRelation: "Moneda"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      HistorialSaldo: {
+        Row: {
+          cantidad_anterior: number
+          cantidad_incrementada: number
+          cantidad_nueva: number
+          descripcion: string | null
+          fecha: string
+          id: string
+          moneda_id: string
+          numero_referencia: string | null
+          punto_atencion_id: string
+          tipo_movimiento: Database["public"]["Enums"]["TipoMovimiento"]
+          usuario_id: string
+        }
+        Insert: {
+          cantidad_anterior: number
+          cantidad_incrementada: number
+          cantidad_nueva: number
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          moneda_id: string
+          numero_referencia?: string | null
+          punto_atencion_id: string
+          tipo_movimiento: Database["public"]["Enums"]["TipoMovimiento"]
+          usuario_id: string
+        }
+        Update: {
+          cantidad_anterior?: number
+          cantidad_incrementada?: number
+          cantidad_nueva?: number
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          moneda_id?: string
+          numero_referencia?: string | null
+          punto_atencion_id?: string
+          tipo_movimiento?: Database["public"]["Enums"]["TipoMovimiento"]
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "HistorialSaldo_moneda_id_fkey"
+            columns: ["moneda_id"]
+            isOneToOne: false
+            referencedRelation: "Moneda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "HistorialSaldo_punto_atencion_id_fkey"
+            columns: ["punto_atencion_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "HistorialSaldo_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "Usuario"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      Jornada: {
+        Row: {
+          fecha_almuerzo: string | null
+          fecha_inicio: string
+          fecha_regreso: string | null
+          fecha_salida: string | null
+          id: string
+          punto_atencion_id: string
+          usuario_id: string
+        }
+        Insert: {
+          fecha_almuerzo?: string | null
+          fecha_inicio?: string
+          fecha_regreso?: string | null
+          fecha_salida?: string | null
+          id?: string
+          punto_atencion_id: string
+          usuario_id: string
+        }
+        Update: {
+          fecha_almuerzo?: string | null
+          fecha_inicio?: string
+          fecha_regreso?: string | null
+          fecha_salida?: string | null
+          id?: string
+          punto_atencion_id?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Jornada_punto_atencion_id_fkey"
+            columns: ["punto_atencion_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "Jornada_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "Usuario"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      Moneda: {
+        Row: {
+          activo: boolean
+          codigo: string
+          created_at: string
+          id: string
+          nombre: string
+          orden_display: number
+          simbolo: string
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean
+          codigo: string
+          created_at?: string
+          id?: string
+          nombre: string
+          orden_display?: number
+          simbolo: string
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean
+          codigo?: string
+          created_at?: string
+          id?: string
+          nombre?: string
+          orden_display?: number
+          simbolo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      Movimiento: {
+        Row: {
+          descripcion: string | null
+          fecha: string
+          id: string
+          moneda_id: string
+          monto: number
+          numero_recibo: string | null
+          punto_atencion_id: string
+          tipo: Database["public"]["Enums"]["TipoMovimiento"]
+          usuario_id: string
+        }
+        Insert: {
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          moneda_id: string
+          monto: number
+          numero_recibo?: string | null
+          punto_atencion_id: string
+          tipo: Database["public"]["Enums"]["TipoMovimiento"]
+          usuario_id: string
+        }
+        Update: {
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          moneda_id?: string
+          monto?: number
+          numero_recibo?: string | null
+          punto_atencion_id?: string
+          tipo?: Database["public"]["Enums"]["TipoMovimiento"]
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Movimiento_moneda_id_fkey"
+            columns: ["moneda_id"]
+            isOneToOne: false
+            referencedRelation: "Moneda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "Movimiento_punto_atencion_id_fkey"
+            columns: ["punto_atencion_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "Movimiento_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "Usuario"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      PuntoAtencion: {
+        Row: {
+          activo: boolean
+          ciudad: string
+          codigo_postal: string | null
+          created_at: string
+          direccion: string
+          id: string
+          nombre: string
+          provincia: string
+          telefono: string | null
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean
+          ciudad: string
+          codigo_postal?: string | null
+          created_at?: string
+          direccion: string
+          id?: string
+          nombre: string
+          provincia: string
+          telefono?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean
+          ciudad?: string
+          codigo_postal?: string | null
+          created_at?: string
+          direccion?: string
+          id?: string
+          nombre?: string
+          provincia?: string
+          telefono?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      Recibo: {
+        Row: {
+          datos_operacion: Json
+          fecha: string
+          id: string
+          impreso: boolean
+          numero_copias: number
+          numero_recibo: string
+          punto_atencion_id: string
+          referencia_id: string
+          tipo_operacion: Database["public"]["Enums"]["TipoRecibo"]
+          usuario_id: string
+        }
+        Insert: {
+          datos_operacion: Json
+          fecha?: string
+          id?: string
+          impreso?: boolean
+          numero_copias?: number
+          numero_recibo: string
+          punto_atencion_id: string
+          referencia_id: string
+          tipo_operacion: Database["public"]["Enums"]["TipoRecibo"]
+          usuario_id: string
+        }
+        Update: {
+          datos_operacion?: Json
+          fecha?: string
+          id?: string
+          impreso?: boolean
+          numero_copias?: number
+          numero_recibo?: string
+          punto_atencion_id?: string
+          referencia_id?: string
+          tipo_operacion?: Database["public"]["Enums"]["TipoRecibo"]
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Recibo_punto_atencion_id_fkey"
+            columns: ["punto_atencion_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "Recibo_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "Usuario"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      Saldo: {
+        Row: {
+          billetes: number
+          cantidad: number
+          id: string
+          moneda_id: string
+          monedas_fisicas: number
+          punto_atencion_id: string
+          updated_at: string
+        }
+        Insert: {
+          billetes?: number
+          cantidad?: number
+          id?: string
+          moneda_id: string
+          monedas_fisicas?: number
+          punto_atencion_id: string
+          updated_at?: string
+        }
+        Update: {
+          billetes?: number
+          cantidad?: number
+          id?: string
+          moneda_id?: string
+          monedas_fisicas?: number
+          punto_atencion_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Saldo_moneda_id_fkey"
+            columns: ["moneda_id"]
+            isOneToOne: false
+            referencedRelation: "Moneda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "Saldo_punto_atencion_id_fkey"
+            columns: ["punto_atencion_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      SolicitudSaldo: {
+        Row: {
+          aprobado: boolean
+          fecha_respuesta: string | null
+          fecha_solicitud: string
+          id: string
+          moneda_id: string
+          monto_solicitado: number
+          observaciones: string | null
+          punto_atencion_id: string
+          usuario_id: string
+        }
+        Insert: {
+          aprobado?: boolean
+          fecha_respuesta?: string | null
+          fecha_solicitud?: string
+          id?: string
+          moneda_id: string
+          monto_solicitado: number
+          observaciones?: string | null
+          punto_atencion_id: string
+          usuario_id: string
+        }
+        Update: {
+          aprobado?: boolean
+          fecha_respuesta?: string | null
+          fecha_solicitud?: string
+          id?: string
+          moneda_id?: string
+          monto_solicitado?: number
+          observaciones?: string | null
+          punto_atencion_id?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "SolicitudSaldo_moneda_id_fkey"
+            columns: ["moneda_id"]
+            isOneToOne: false
+            referencedRelation: "Moneda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "SolicitudSaldo_punto_atencion_id_fkey"
+            columns: ["punto_atencion_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "SolicitudSaldo_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "Usuario"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      Transferencia: {
+        Row: {
+          aprobado_por: string | null
+          descripcion: string | null
+          destino_id: string
+          estado: Database["public"]["Enums"]["EstadoTransferencia"]
+          fecha: string
+          fecha_aprobacion: string | null
+          id: string
+          moneda_id: string
+          monto: number
+          numero_recibo: string | null
+          origen_id: string | null
+          solicitado_por: string
+          tipo_transferencia: Database["public"]["Enums"]["TipoTransferencia"]
+        }
+        Insert: {
+          aprobado_por?: string | null
+          descripcion?: string | null
+          destino_id: string
+          estado?: Database["public"]["Enums"]["EstadoTransferencia"]
+          fecha?: string
+          fecha_aprobacion?: string | null
+          id?: string
+          moneda_id: string
+          monto: number
+          numero_recibo?: string | null
+          origen_id?: string | null
+          solicitado_por: string
+          tipo_transferencia: Database["public"]["Enums"]["TipoTransferencia"]
+        }
+        Update: {
+          aprobado_por?: string | null
+          descripcion?: string | null
+          destino_id?: string
+          estado?: Database["public"]["Enums"]["EstadoTransferencia"]
+          fecha?: string
+          fecha_aprobacion?: string | null
+          id?: string
+          moneda_id?: string
+          monto?: number
+          numero_recibo?: string | null
+          origen_id?: string | null
+          solicitado_por?: string
+          tipo_transferencia?: Database["public"]["Enums"]["TipoTransferencia"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Transferencia_aprobado_por_fkey"
+            columns: ["aprobado_por"]
+            isOneToOne: false
+            referencedRelation: "Usuario"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "Transferencia_destino_id_fkey"
+            columns: ["destino_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "Transferencia_moneda_id_fkey"
+            columns: ["moneda_id"]
+            isOneToOne: false
+            referencedRelation: "Moneda"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "Transferencia_origen_id_fkey"
+            columns: ["origen_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "Transferencia_solicitado_por_fkey"
+            columns: ["solicitado_por"]
+            isOneToOne: false
+            referencedRelation: "Usuario"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      Usuario: {
+        Row: {
+          activo: boolean
+          correo: string | null
+          created_at: string
+          id: string
+          nombre: string
+          password: string
+          punto_atencion_id: string | null
+          rol: Database["public"]["Enums"]["RolUsuario"]
+          telefono: string | null
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          activo?: boolean
+          correo?: string | null
+          created_at?: string
+          id?: string
+          nombre: string
+          password: string
+          punto_atencion_id?: string | null
+          rol: Database["public"]["Enums"]["RolUsuario"]
+          telefono?: string | null
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          activo?: boolean
+          correo?: string | null
+          created_at?: string
+          id?: string
+          nombre?: string
+          password?: string
+          punto_atencion_id?: string | null
+          rol?: Database["public"]["Enums"]["RolUsuario"]
+          telefono?: string | null
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "Usuario_punto_atencion_id_fkey"
+            columns: ["punto_atencion_id"]
+            isOneToOne: false
+            referencedRelation: "PuntoAtencion"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -18,7 +729,28 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      EstadoCierre: "ABIERTO" | "CERRADO"
+      EstadoTransaccion: "COMPLETADO" | "PENDIENTE" | "CANCELADO"
+      EstadoTransferencia: "PENDIENTE" | "APROBADO" | "RECHAZADO"
+      RolUsuario: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION"
+      TipoMovimiento:
+        | "INGRESO"
+        | "EGRESO"
+        | "TRANSFERENCIA_ENTRANTE"
+        | "TRANSFERENCIA_SALIENTE"
+        | "CAMBIO_DIVISA"
+      TipoOperacion: "COMPRA" | "VENTA"
+      TipoRecibo:
+        | "CAMBIO_DIVISA"
+        | "TRANSFERENCIA"
+        | "MOVIMIENTO"
+        | "DEPOSITO"
+        | "RETIRO"
+      TipoTransferencia:
+        | "ENTRE_PUNTOS"
+        | "DEPOSITO_MATRIZ"
+        | "RETIRO_GERENCIA"
+        | "DEPOSITO_GERENCIA"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -133,6 +865,32 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      EstadoCierre: ["ABIERTO", "CERRADO"],
+      EstadoTransaccion: ["COMPLETADO", "PENDIENTE", "CANCELADO"],
+      EstadoTransferencia: ["PENDIENTE", "APROBADO", "RECHAZADO"],
+      RolUsuario: ["SUPER_USUARIO", "ADMIN", "OPERADOR", "CONCESION"],
+      TipoMovimiento: [
+        "INGRESO",
+        "EGRESO",
+        "TRANSFERENCIA_ENTRANTE",
+        "TRANSFERENCIA_SALIENTE",
+        "CAMBIO_DIVISA",
+      ],
+      TipoOperacion: ["COMPRA", "VENTA"],
+      TipoRecibo: [
+        "CAMBIO_DIVISA",
+        "TRANSFERENCIA",
+        "MOVIMIENTO",
+        "DEPOSITO",
+        "RETIRO",
+      ],
+      TipoTransferencia: [
+        "ENTRE_PUNTOS",
+        "DEPOSITO_MATRIZ",
+        "RETIRO_GERENCIA",
+        "DEPOSITO_GERENCIA",
+      ],
+    },
   },
 } as const

@@ -1,74 +1,99 @@
 
-import { useState, useEffect } from 'react';
-import LoginForm from '../components/auth/LoginForm';
+import { useEffect, useState } from "react";
+import { useAuth } from '../hooks/useAuth';
 import Dashboard from '../components/dashboard/Dashboard';
 import PointSelection from '../components/auth/PointSelection';
-import { User, PuntoAtencion } from '../types';
+import { PuntoAtencion } from '../types';
+import { pointService } from '../services/pointService';
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const { user, logout } = useAuth();
   const [selectedPoint, setSelectedPoint] = useState<PuntoAtencion | null>(null);
   const [showPointSelection, setShowPointSelection] = useState(false);
+  const [availablePoints, setAvailablePoints] = useState<PuntoAtencion[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
-    // Check if user is already logged in
-    const savedUser = localStorage.getItem('punto_cambio_user');
-    const savedPoint = localStorage.getItem('punto_cambio_point');
-    
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
-      
-      if (parsedUser.rol === 'ADMIN' || parsedUser.rol === 'SUPER_USUARIO') {
-        // Admin doesn't need point selection
-        setSelectedPoint(null);
-      } else if (savedPoint) {
-        setSelectedPoint(JSON.parse(savedPoint));
-      } else {
-        setShowPointSelection(true);
+    const loadPoints = async () => {
+      if (!user) return;
+
+      try {
+        const { points, error } = await pointService.getAllPoints();
+        
+        if (error) {
+          toast({
+            title: "Error",
+            description: "Error al cargar puntos de atención",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        setAvailablePoints(points);
+
+        // Si el usuario tiene un punto asignado, usarlo por defecto
+        if (user.punto_atencion_id) {
+          const userPoint = points.find(p => p.id === user.punto_atencion_id);
+          if (userPoint) {
+            setSelectedPoint(userPoint);
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // Si es admin o super usuario, mostrar selección de punto
+        if (user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO') {
+          setShowPointSelection(true);
+        } else if (points.length > 0) {
+          // Para otros roles, usar el primer punto disponible
+          setSelectedPoint(points[0]);
+        }
+      } catch (error) {
+        console.error('Error loading points:', error);
+        toast({
+          title: "Error",
+          description: "Error al cargar puntos de atención",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
       }
-    }
-  }, []);
+    };
 
-  const handleLogin = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('punto_cambio_user', JSON.stringify(userData));
-    
-    if (userData.rol === 'ADMIN' || userData.rol === 'SUPER_USUARIO') {
-      // Admin and super user go directly to dashboard
-      setShowPointSelection(false);
-    } else {
-      // Operator and concession need to select point
-      setShowPointSelection(true);
-    }
-  };
+    loadPoints();
+  }, [user, toast]);
 
-  const handlePointSelection = (point: PuntoAtencion) => {
+  const handlePointSelect = (point: PuntoAtencion) => {
     setSelectedPoint(point);
     setShowPointSelection(false);
-    localStorage.setItem('punto_cambio_point', JSON.stringify(point));
   };
 
   const handleLogout = () => {
-    setUser(null);
-    setSelectedPoint(null);
-    setShowPointSelection(false);
-    localStorage.removeItem('punto_cambio_user');
-    localStorage.removeItem('punto_cambio_point');
+    logout();
   };
 
-  if (!user) {
-    return <LoginForm onLogin={handleLogin} />;
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    );
   }
 
-  if (showPointSelection && user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
+  if (showPointSelection) {
     return (
       <PointSelection
-        user={user}
-        onPointSelect={handlePointSelection}
-        onLogout={handleLogout}
+        points={availablePoints}
+        onPointSelect={handlePointSelect}
+        user={user!}
       />
     );
+  }
+
+  if (!user) {
+    return null;
   }
 
   return (
