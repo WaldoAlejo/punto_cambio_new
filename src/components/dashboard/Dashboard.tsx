@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -12,7 +11,7 @@ import CurrencyManagement from '../admin/CurrencyManagement';
 import Reports from '../reports/Reports';
 import DailyClose from '../close/DailyClose';
 import TransferApprovals from '../admin/TransferApprovals';
-import { User, PuntoAtencion } from '../../types';
+import { User, PuntoAtencion, SalidaEspontanea } from '../../types';
 
 interface DashboardProps {
   user: User;
@@ -23,6 +22,7 @@ interface DashboardProps {
 const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   const [activeView, setActiveView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [spontaneousExits, setSpontaneousExits] = useState<SalidaEspontanea[]>([]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -35,9 +35,9 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
       case 'transfers':
         return <TransferManagement user={user} selectedPoint={selectedPoint} />;
       case 'time-tracker':
-        return <TimeTracker user={user} selectedPoint={selectedPoint} />;
+        return <TimeTracker user={user} selectedPoint={selectedPoint} spontaneousExits={spontaneousExits} />;
       case 'time-management':
-        return <TimeManagement user={user} />;
+        return <TimeManagement user={user} selectedPoint={selectedPoint} />;
       case 'transfer-approvals':
         return <TransferApprovals user={user} />;
       case 'users':
