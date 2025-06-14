@@ -7,10 +7,17 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Iniciando semilla limpia de la base de datos...');
 
-  // Limpiar datos existentes
+  // Limpiar datos existentes en el orden correcto para evitar violaciones de clave foránea
   console.log('🧹 Limpiando datos existentes...');
+  await prisma.detalleCuadreCaja.deleteMany();
+  await prisma.cuadreCaja.deleteMany();
+  await prisma.recibo.deleteMany();
   await prisma.transferencia.deleteMany();
   await prisma.cambioDivisa.deleteMany();
+  await prisma.movimiento.deleteMany();
+  await prisma.jornada.deleteMany();
+  await prisma.solicitudSaldo.deleteMany();
+  await prisma.historialSaldo.deleteMany();
   await prisma.saldo.deleteMany();
   await prisma.usuario.deleteMany();
   await prisma.puntoAtencion.deleteMany();
