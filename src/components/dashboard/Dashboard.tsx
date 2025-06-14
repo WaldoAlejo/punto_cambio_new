@@ -5,7 +5,8 @@ import Header from './Header';
 import ExchangeManagement from '../exchange/ExchangeManagement';
 import TransferManagement from '../transfer/TransferManagement';
 import TimeTracker from '../timeTracking/TimeTracker';
-import TimeManagement from '../timeTracking/TimeManagement';
+import OperatorTimeManagement from '../timeTracking/OperatorTimeManagement';
+import AdminTimeManagement from '../timeTracking/AdminTimeManagement';
 import UserManagement from '../admin/UserManagement';
 import PointManagement from '../admin/PointManagement';
 import CurrencyManagement from '../admin/CurrencyManagement';
@@ -54,9 +55,9 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         return <TransferManagement user={user} selectedPoint={selectedPoint} />;
       case 'time-tracker':
         return <TimeTracker user={user} selectedPoint={selectedPoint} spontaneousExits={spontaneousExits} />;
-      case 'time-management':
+      case 'operator-time-management':
         return (
-          <TimeManagement 
+          <OperatorTimeManagement 
             user={user} 
             selectedPoint={selectedPoint}
             spontaneousExits={spontaneousExits}
@@ -64,6 +65,8 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
             onExitReturn={handleExitReturn}
           />
         );
+      case 'admin-time-management':
+        return <AdminTimeManagement user={user} selectedPoint={selectedPoint} />;
       case 'transfer-approvals':
         return <TransferApprovals user={user} />;
       case 'users':
