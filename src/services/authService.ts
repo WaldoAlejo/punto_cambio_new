@@ -1,5 +1,5 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { prisma } from "@/lib/prisma";
 import bcrypt from 'bcryptjs';
 
 export interface LoginCredentials {
@@ -25,37 +25,40 @@ export const authService = {
     try {
       console.log('Intentando login con:', credentials.username);
       
-      // Buscar usuario por username
-      const { data: users, error: queryError } = await supabase
-        .from('Usuario')
-        .select('*')
-        .eq('username', credentials.username)
-        .eq('activo', true)
-        .limit(1);
+      // Buscar usuario por username usando Prisma
+      const user = await prisma.usuario.findFirst({
+        where: {
+          username: credentials.username,
+          activo: true
+        }
+      });
 
-      if (queryError) {
-        console.error('Error en consulta:', queryError);
-        return { user: null, error: 'Error al consultar la base de datos' };
-      }
-
-      if (!users || users.length === 0) {
+      if (!user) {
+        console.log('Usuario no encontrado');
         return { user: null, error: 'Usuario no encontrado' };
       }
 
-      const user = users[0];
+      console.log('Usuario encontrado:', user.username);
       
       // Verificar contraseña
       const passwordMatch = await bcrypt.compare(credentials.password, user.password);
       
       if (!passwordMatch) {
+        console.log('Contraseña incorrecta');
         return { user: null, error: 'Contraseña incorrecta' };
       }
+
+      console.log('Login exitoso para:', user.username);
 
       // Remover la contraseña del objeto usuario antes de retornarlo
       const { password, ...userWithoutPassword } = user;
       
       return { 
-        user: userWithoutPassword as AuthUser, 
+        user: {
+          ...userWithoutPassword,
+          created_at: user.created_at.toISOString(),
+          updated_at: user.updated_at.toISOString()
+        } as AuthUser, 
         error: null 
       };
     } catch (error) {
@@ -68,9 +71,8 @@ export const authService = {
     try {
       const hashedPassword = await bcrypt.hash(userData.password, 10);
       
-      const { data, error } = await supabase
-        .from('Usuario')
-        .insert([{
+      const user = await prisma.usuario.create({
+        data: {
           username: userData.username,
           password: hashedPassword,
           nombre: userData.nombre,
@@ -79,17 +81,19 @@ export const authService = {
           rol: userData.rol,
           activo: userData.activo,
           punto_atencion_id: userData.punto_atencion_id
-        }])
-        .select()
-        .single();
+        }
+      });
 
-      if (error) {
-        console.error('Error creando usuario:', error);
-        return { user: null, error: error.message };
-      }
-
-      const { password, ...userWithoutPassword } = data;
-      return { user: userWithoutPassword as AuthUser, error: null };
+      const { password, ...userWithoutPassword } = user;
+      
+      return { 
+        user: {
+          ...userWithoutPassword,
+          created_at: user.created_at.toISOString(),
+          updated_at: user.updated_at.toISOString()
+        } as AuthUser, 
+        error: null 
+      };
     } catch (error) {
       console.error('Error en createUser:', error);
       return { user: null, error: 'Error al crear usuario' };

@@ -1,24 +1,27 @@
 
-import { supabase } from "@/integrations/supabase/client";
+import { prisma } from "@/lib/prisma";
 import { Saldo } from '../types';
 
 export const balanceService = {
   async getBalancesByPoint(puntoAtencionId: string): Promise<{ balances: Saldo[]; error: string | null }> {
     try {
-      const { data, error } = await supabase
-        .from('Saldo')
-        .select(`
-          *,
-          moneda:Moneda(*)
-        `)
-        .eq('punto_atencion_id', puntoAtencionId);
+      const balances = await prisma.saldo.findMany({
+        where: {
+          punto_atencion_id: puntoAtencionId
+        },
+        include: {
+          moneda: true
+        }
+      });
 
-      if (error) {
-        console.error('Error obteniendo saldos:', error);
-        return { balances: [], error: error.message };
-      }
-
-      return { balances: data || [], error: null };
+      return { 
+        balances: balances.map(balance => ({
+          ...balance,
+          cantidad: parseFloat(balance.cantidad.toString()),
+          updated_at: balance.updated_at.toISOString()
+        })), 
+        error: null 
+      };
     } catch (error) {
       console.error('Error en getBalancesByPoint:', error);
       return { balances: [], error: 'Error al obtener saldos' };
@@ -34,58 +37,53 @@ export const balanceService = {
   ): Promise<{ balance: Saldo | null; error: string | null }> {
     try {
       // Verificar si ya existe un saldo para este punto y moneda
-      const { data: existingBalance, error: checkError } = await supabase
-        .from('Saldo')
-        .select('*')
-        .eq('punto_atencion_id', puntoAtencionId)
-        .eq('moneda_id', monedaId)
-        .maybeSingle();
+      const existingBalance = await prisma.saldo.findFirst({
+        where: {
+          punto_atencion_id: puntoAtencionId,
+          moneda_id: monedaId
+        }
+      });
 
-      if (checkError) {
-        console.error('Error verificando saldo existente:', checkError);
-        return { balance: null, error: checkError.message };
-      }
-
-      let result;
+      let balance;
       if (existingBalance) {
         // Actualizar saldo existente
-        const { data, error } = await supabase
-          .from('Saldo')
-          .update({
+        balance = await prisma.saldo.update({
+          where: {
+            id: existingBalance.id
+          },
+          data: {
             cantidad,
             billetes,
-            monedas_fisicas: monedasFisicas,
-            updated_at: new Date().toISOString()
-          })
-          .eq('punto_atencion_id', puntoAtencionId)
-          .eq('moneda_id', monedaId)
-          .select()
-          .single();
-
-        result = { data, error };
+            monedas_fisicas: monedasFisicas
+          },
+          include: {
+            moneda: true
+          }
+        });
       } else {
         // Crear nuevo saldo
-        const { data, error } = await supabase
-          .from('Saldo')
-          .insert([{
+        balance = await prisma.saldo.create({
+          data: {
             punto_atencion_id: puntoAtencionId,
             moneda_id: monedaId,
             cantidad,
             billetes,
             monedas_fisicas: monedasFisicas
-          }])
-          .select()
-          .single();
-
-        result = { data, error };
+          },
+          include: {
+            moneda: true
+          }
+        });
       }
 
-      if (result.error) {
-        console.error('Error actualizando saldo:', result.error);
-        return { balance: null, error: result.error.message };
-      }
-
-      return { balance: result.data, error: null };
+      return { 
+        balance: {
+          ...balance,
+          cantidad: parseFloat(balance.cantidad.toString()),
+          updated_at: balance.updated_at.toISOString()
+        }, 
+        error: null 
+      };
     } catch (error) {
       console.error('Error en updateBalance:', error);
       return { balance: null, error: 'Error al actualizar saldo' };
