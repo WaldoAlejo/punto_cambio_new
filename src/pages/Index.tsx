@@ -87,6 +87,7 @@ const Index = () => {
       <PointSelection
         points={availablePoints}
         onPointSelect={handlePointSelect}
+        onLogout={handleLogout}
         user={user!}
       />
     );
