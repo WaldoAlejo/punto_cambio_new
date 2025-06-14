@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { User, PuntoAtencion, Moneda, CambioDivisa, DatosCliente, DetalleDivisas } from '../../types';
+import { User, PuntoAtencion, Moneda, CambioDivisa, DatosCliente, DetalleDivisasSimple } from '../../types';
 import { ReceiptService } from '../../services/receiptService';
 import CurrencySearchSelect from '../ui/currency-search-select';
 import CustomerDataForm from './CustomerDataForm';
@@ -36,12 +36,12 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
     cedula: '',
     telefono: ''
   });
-  const [divisasEntregadas, setDivisasEntregadas] = useState<DetalleDivisas>({
+  const [divisasEntregadas, setDivisasEntregadas] = useState<DetalleDivisasSimple>({
     billetes: 0,
     monedas: 0,
     total: 0
   });
-  const [divisasRecibidas, setDivisasRecibidas] = useState<DetalleDivisas>({
+  const [divisasRecibidas, setDivisasRecibidas] = useState<DetalleDivisasSimple>({
     billetes: 0,
     monedas: 0,
     total: 0
@@ -194,7 +194,7 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Cambio de Divisas</h1>
         <div className="text-sm text-gray-500">
-          Punto: {selectedPoint.nombre}
+          Punto: {selectedPoint?.nombre}
         </div>
       </div>
 
@@ -362,7 +362,7 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                     </div>
                     <div className="text-sm space-y-1">
                       <p className="font-medium">
-                        {exchange.datos_cliente.nombre} {exchange.datos_cliente.apellido}
+                        {exchange.datos_cliente?.nombre} {exchange.datos_cliente?.apellido}
                       </p>
                       <p>
                         {exchange.monto_origen} {getCurrencyName(exchange.moneda_origen_id)} → {' '}

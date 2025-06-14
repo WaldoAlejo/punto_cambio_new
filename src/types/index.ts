@@ -62,6 +62,12 @@ export interface CambioDivisa {
   observacion?: string;
   numero_recibo?: string;
   estado: 'COMPLETADO' | 'PENDIENTE' | 'CANCELADO';
+  // Extended properties for frontend use
+  datos_cliente?: DatosCliente;
+  divisas_entregadas?: DetalleDivisasSimple;
+  divisas_recibidas?: DetalleDivisasSimple;
+  monedaOrigen?: Moneda;
+  monedaDestino?: Moneda;
 }
 
 export interface Transferencia {
@@ -78,6 +84,8 @@ export interface Transferencia {
   fecha_aprobacion?: string;
   descripcion?: string;
   numero_recibo?: string;
+  // Extended properties for frontend use
+  detalle_divisas?: DetalleDivisasSimple;
 }
 
 export interface Movimiento {
@@ -159,6 +167,7 @@ export interface SalidaEspontanea {
   };
   duracion_minutos?: number;
   observaciones?: string;
+  descripcion?: string;
 }
 
 export interface DatosCliente {
@@ -169,6 +178,14 @@ export interface DatosCliente {
   direccion?: string;
 }
 
+// Simplified version for form usage
+export interface DetalleDivisasSimple {
+  billetes: number;
+  monedas: number;
+  total: number;
+}
+
+// Full version matching Prisma schema
 export interface DetalleDivisas {
   moneda_id: string;
   cantidad: number;

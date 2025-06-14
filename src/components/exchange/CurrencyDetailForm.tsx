@@ -4,17 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DetalleDivisas, Moneda } from '../../types';
+import { DetalleDivisasSimple, Moneda } from '../../types';
 
 interface CurrencyDetailFormProps {
   currency: Moneda;
   title: string;
-  onDetailData: (data: DetalleDivisas) => void;
-  initialData?: DetalleDivisas;
+  onDetailData: (data: DetalleDivisasSimple) => void;
+  initialData?: DetalleDivisasSimple;
 }
 
 const CurrencyDetailForm = ({ currency, title, onDetailData, initialData }: CurrencyDetailFormProps) => {
-  const [detail, setDetail] = useState<DetalleDivisas>(
+  const [detail, setDetail] = useState<DetalleDivisasSimple>(
     initialData || {
       billetes: 0,
       monedas: 0,

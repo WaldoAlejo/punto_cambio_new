@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,8 +32,7 @@ const PointManagement = ({ user }: PointManagementProps) => {
         telefono: '+58 212-555-0001',
         activo: true,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        saldos: []
+        updated_at: new Date().toISOString()
       },
       {
         id: '2',
@@ -45,8 +43,7 @@ const PointManagement = ({ user }: PointManagementProps) => {
         telefono: '+58 212-555-0002',
         activo: true,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        saldos: []
+        updated_at: new Date().toISOString()
       }
     ];
     setPoints(mockPoints);
@@ -73,8 +70,7 @@ const PointManagement = ({ user }: PointManagementProps) => {
       telefono: formData.telefono,
       activo: true,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      saldos: []
+      updated_at: new Date().toISOString()
     };
 
     setPoints(prev => [...prev, newPoint]);

@@ -17,9 +17,9 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
 
   // Mock data - En producción esto vendría de la API
   const mockCurrencies: Moneda[] = [
-    { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+    { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, orden_display: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, orden_display: 2, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, orden_display: 3, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
   ];
 
   const mockPoints: PuntoAtencion[] = [
