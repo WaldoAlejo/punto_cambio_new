@@ -1,6 +1,5 @@
 
-import { prisma } from "@/lib/prisma";
-import bcrypt from 'bcryptjs';
+const API_BASE_URL = 'http://localhost:3001/api';
 
 export interface LoginCredentials {
   username: string;
@@ -25,78 +24,26 @@ export const authService = {
     try {
       console.log('Intentando login con:', credentials.username);
       
-      // Buscar usuario por username usando Prisma
-      const user = await prisma.usuario.findFirst({
-        where: {
-          username: credentials.username,
-          activo: true
-        }
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials)
       });
 
-      if (!user) {
-        console.log('Usuario no encontrado');
-        return { user: null, error: 'Usuario no encontrado' };
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.log('Error en login:', data.error);
+        return { user: null, error: data.error };
       }
 
-      console.log('Usuario encontrado:', user.username);
-      
-      // Verificar contraseña
-      const passwordMatch = await bcrypt.compare(credentials.password, user.password);
-      
-      if (!passwordMatch) {
-        console.log('Contraseña incorrecta');
-        return { user: null, error: 'Contraseña incorrecta' };
-      }
-
-      console.log('Login exitoso para:', user.username);
-
-      // Remover la contraseña del objeto usuario antes de retornarlo
-      const { password, ...userWithoutPassword } = user;
-      
-      return { 
-        user: {
-          ...userWithoutPassword,
-          created_at: user.created_at.toISOString(),
-          updated_at: user.updated_at.toISOString()
-        } as AuthUser, 
-        error: null 
-      };
+      console.log('Login exitoso para:', data.user.username);
+      return { user: data.user, error: null };
     } catch (error) {
       console.error('Error en login:', error);
-      return { user: null, error: 'Error interno del servidor' };
-    }
-  },
-
-  async createUser(userData: Omit<AuthUser, 'id' | 'created_at' | 'updated_at'> & { password: string }) {
-    try {
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
-      
-      const user = await prisma.usuario.create({
-        data: {
-          username: userData.username,
-          password: hashedPassword,
-          nombre: userData.nombre,
-          correo: userData.correo,
-          telefono: userData.telefono,
-          rol: userData.rol,
-          activo: userData.activo,
-          punto_atencion_id: userData.punto_atencion_id
-        }
-      });
-
-      const { password, ...userWithoutPassword } = user;
-      
-      return { 
-        user: {
-          ...userWithoutPassword,
-          created_at: user.created_at.toISOString(),
-          updated_at: user.updated_at.toISOString()
-        } as AuthUser, 
-        error: null 
-      };
-    } catch (error) {
-      console.error('Error en createUser:', error);
-      return { user: null, error: 'Error al crear usuario' };
+      return { user: null, error: 'Error de conexión con el servidor' };
     }
   }
 };

@@ -1,92 +1,22 @@
 
-import { prisma } from "@/lib/prisma";
 import { Saldo } from '../types';
+
+const API_BASE_URL = 'http://localhost:3001/api';
 
 export const balanceService = {
   async getBalancesByPoint(puntoAtencionId: string): Promise<{ balances: Saldo[]; error: string | null }> {
     try {
-      const balances = await prisma.saldo.findMany({
-        where: {
-          punto_atencion_id: puntoAtencionId
-        },
-        include: {
-          moneda: true
-        }
-      });
+      const response = await fetch(`${API_BASE_URL}/balances/${puntoAtencionId}`);
+      const data = await response.json();
 
-      return { 
-        balances: balances.map(balance => ({
-          ...balance,
-          cantidad: parseFloat(balance.cantidad.toString()),
-          updated_at: balance.updated_at.toISOString()
-        })), 
-        error: null 
-      };
-    } catch (error) {
-      console.error('Error en getBalancesByPoint:', error);
-      return { balances: [], error: 'Error al obtener saldos' };
-    }
-  },
-
-  async updateBalance(
-    puntoAtencionId: string, 
-    monedaId: string, 
-    cantidad: number, 
-    billetes: number = 0, 
-    monedasFisicas: number = 0
-  ): Promise<{ balance: Saldo | null; error: string | null }> {
-    try {
-      // Verificar si ya existe un saldo para este punto y moneda
-      const existingBalance = await prisma.saldo.findFirst({
-        where: {
-          punto_atencion_id: puntoAtencionId,
-          moneda_id: monedaId
-        }
-      });
-
-      let balance;
-      if (existingBalance) {
-        // Actualizar saldo existente
-        balance = await prisma.saldo.update({
-          where: {
-            id: existingBalance.id
-          },
-          data: {
-            cantidad,
-            billetes,
-            monedas_fisicas: monedasFisicas
-          },
-          include: {
-            moneda: true
-          }
-        });
-      } else {
-        // Crear nuevo saldo
-        balance = await prisma.saldo.create({
-          data: {
-            punto_atencion_id: puntoAtencionId,
-            moneda_id: monedaId,
-            cantidad,
-            billetes,
-            monedas_fisicas: monedasFisicas
-          },
-          include: {
-            moneda: true
-          }
-        });
+      if (!response.ok) {
+        return { balances: [], error: data.error || 'Error al obtener saldos' };
       }
 
-      return { 
-        balance: {
-          ...balance,
-          cantidad: parseFloat(balance.cantidad.toString()),
-          updated_at: balance.updated_at.toISOString()
-        }, 
-        error: null 
-      };
+      return { balances: data.balances, error: null };
     } catch (error) {
-      console.error('Error en updateBalance:', error);
-      return { balance: null, error: 'Error al actualizar saldo' };
+      console.error('Error en getBalancesByPoint:', error);
+      return { balances: [], error: 'Error de conexión con el servidor' };
     }
   }
 };
