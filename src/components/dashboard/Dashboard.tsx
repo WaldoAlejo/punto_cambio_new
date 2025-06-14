@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -28,6 +27,10 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
+  };
+
+  const handleNotificationClick = () => {
+    setActiveView('transfer-approvals');
   };
 
   const handleExitRegistered = (exit: SalidaEspontanea) => {
@@ -132,6 +135,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           selectedPoint={selectedPoint}
           onLogout={onLogout}
           onToggleSidebar={toggleSidebar}
+          onNotificationClick={handleNotificationClick}
         />
         
         <main className="flex-1">

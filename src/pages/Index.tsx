@@ -20,6 +20,13 @@ const Index = () => {
       if (!user) return;
 
       try {
+        // Si es administrador, no necesita seleccionar punto
+        if (user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO') {
+          setSelectedPoint(null); // Admin no tiene punto específico
+          setIsLoading(false);
+          return;
+        }
+
         const { points, error } = await pointService.getAllPoints();
         
         if (error) {
@@ -43,13 +50,8 @@ const Index = () => {
           }
         }
 
-        // Si es admin o super usuario, mostrar selección de punto
-        if (user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO') {
-          setShowPointSelection(true);
-        } else if (points.length > 0) {
-          // Para otros roles, usar el primer punto disponible
-          setSelectedPoint(points[0]);
-        }
+        // Para operadores sin punto asignado, mostrar selección
+        setShowPointSelection(true);
       } catch (error) {
         console.error('Error loading points:', error);
         toast({

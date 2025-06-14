@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { User, PuntoAtencion, SalidaEspontanea } from '../../types';
-import TimeTracker from './TimeTracker';
+import AutoTimeTracker from './AutoTimeTracker';
 import SpontaneousExitForm from './SpontaneousExitForm';
 import SpontaneousExitHistory from './SpontaneousExitHistory';
 
@@ -54,7 +54,7 @@ const OperatorTimeManagement = ({
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Control de Horarios</h1>
-        <p className="text-gray-600">Gestiona tu jornada laboral y salidas espontáneas</p>
+        <p className="text-gray-600">Tu jornada se gestiona automáticamente al iniciar sesión</p>
       </div>
 
       <Tabs defaultValue="tracker" className="w-full">
@@ -65,10 +65,9 @@ const OperatorTimeManagement = ({
         </TabsList>
         
         <TabsContent value="tracker">
-          <TimeTracker 
+          <AutoTimeTracker 
             user={user} 
             selectedPoint={selectedPoint}
-            spontaneousExits={currentExits}
           />
         </TabsContent>
         
