@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
     "seed": "npx tsx prisma/seed.ts"
