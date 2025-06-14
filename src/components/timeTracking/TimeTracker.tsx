@@ -1,15 +1,15 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, LogIn, LogOut, UtensilsCrossed, ArrowRight } from "lucide-react";
+import { Clock, LogIn, LogOut, UtensilsCrossed, ArrowRight, MapPin } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { User, PuntoAtencion } from '../../types';
+import { User, PuntoAtencion, SalidaEspontanea } from '../../types';
 
 interface TimeTrackerProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
+  spontaneousExits: SalidaEspontanea[];
 }
 
 interface JornadaEstado {
@@ -19,11 +19,17 @@ interface JornadaEstado {
   fecha_regreso?: string;
   fecha_salida?: string;
   estado: 'NO_INICIADO' | 'TRABAJANDO' | 'ALMUERZO' | 'FINALIZADO';
+  ubicacion_inicio?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  };
 }
 
-const TimeTracker = ({ user, selectedPoint }: TimeTrackerProps) => {
+const TimeTracker = ({ user, selectedPoint, spontaneousExits }: TimeTrackerProps) => {
   const [jornadaActual, setJornadaActual] = useState<JornadaEstado>({ estado: 'NO_INICIADO' });
   const [tiempoActual, setTiempoActual] = useState(new Date());
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
   // Actualizar tiempo cada segundo
   useEffect(() => {
@@ -39,6 +45,32 @@ const TimeTracker = ({ user, selectedPoint }: TimeTrackerProps) => {
     cargarJornadaActual();
   }, [user.id, selectedPoint?.id]);
 
+  const getLocation = (): Promise<{ lat: number; lng: number; direccion?: string }> => {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocalización no soportada'));
+        return;
+      }
+
+      setIsGettingLocation(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setIsGettingLocation(false);
+          resolve({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            direccion: 'Ubicación de trabajo'
+          });
+        },
+        (error) => {
+          setIsGettingLocation(false);
+          reject(error);
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    });
+  };
+
   const cargarJornadaActual = () => {
     // Mock: En producción esto vendría de la base de datos
     const jornadaGuardada = localStorage.getItem(`jornada_${user.id}_${selectedPoint?.id}`);
@@ -53,19 +85,35 @@ const TimeTracker = ({ user, selectedPoint }: TimeTrackerProps) => {
     setJornadaActual(nuevaJornada);
   };
 
-  const iniciarJornada = () => {
-    const ahora = new Date().toISOString();
-    const nuevaJornada: JornadaEstado = {
-      id: `jornada_${Date.now()}`,
-      fecha_inicio: ahora,
-      estado: 'TRABAJANDO'
-    };
-    
-    guardarJornada(nuevaJornada);
-    toast({
-      title: "Jornada iniciada",
-      description: `Inicio de jornada registrado a las ${formatearHora(ahora)}`,
-    });
+  const iniciarJornada = async () => {
+    try {
+      let ubicacion;
+      try {
+        ubicacion = await getLocation();
+      } catch (error) {
+        console.log('No se pudo obtener ubicación:', error);
+      }
+
+      const ahora = new Date().toISOString();
+      const nuevaJornada: JornadaEstado = {
+        id: `jornada_${Date.now()}`,
+        fecha_inicio: ahora,
+        estado: 'TRABAJANDO',
+        ubicacion_inicio: ubicacion
+      };
+      
+      guardarJornada(nuevaJornada);
+      toast({
+        title: "Jornada iniciada",
+        description: `Inicio de jornada registrado a las ${formatearHora(ahora)}${ubicacion ? ' con ubicación' : ''}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al iniciar la jornada",
+        variant: "destructive"
+      });
+    }
   };
 
   const irAlmuerzo = () => {
@@ -144,8 +192,36 @@ const TimeTracker = ({ user, selectedPoint }: TimeTrackerProps) => {
       tiempoTotal -= (new Date().getTime() - almuerzo.getTime());
     }
     
+    // Restar tiempo de salidas espontáneas completadas
+    spontaneousExits.forEach(exit => {
+      if (exit.fecha_regreso) {
+        const salida = new Date(exit.fecha_salida);
+        const regreso = new Date(exit.fecha_regreso);
+        tiempoTotal -= (regreso.getTime() - salida.getTime());
+      }
+    });
+    
     const horas = Math.floor(tiempoTotal / (1000 * 60 * 60));
     const minutos = Math.floor((tiempoTotal % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return `${horas}h ${minutos}m`;
+  };
+
+  const calcularTiempoSalidasEspontaneas = () => {
+    let tiempoTotal = 0;
+    
+    spontaneousExits.forEach(exit => {
+      if (exit.duracion_minutos) {
+        tiempoTotal += exit.duracion_minutos;
+      } else if (!exit.fecha_regreso) {
+        // Salida activa
+        const salida = new Date(exit.fecha_salida);
+        tiempoTotal += Math.round((new Date().getTime() - salida.getTime()) / (1000 * 60));
+      }
+    });
+    
+    const horas = Math.floor(tiempoTotal / 60);
+    const minutos = tiempoTotal % 60;
     
     return `${horas}h ${minutos}m`;
   };
@@ -165,23 +241,21 @@ const TimeTracker = ({ user, selectedPoint }: TimeTrackerProps) => {
 
   if (!selectedPoint) {
     return (
-      <div className="p-6">
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-center text-gray-500">
-              Selecciona un punto de atención para registrar tu jornada
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-center text-gray-500">
+            Selecciona un punto de atención para registrar tu jornada
+          </p>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Control de Horarios</h1>
+          <h2 className="text-xl font-bold">Control de Horarios</h2>
           <p className="text-gray-600">{selectedPoint.nombre}</p>
         </div>
         <div className="text-right">
@@ -208,6 +282,16 @@ const TimeTracker = ({ user, selectedPoint }: TimeTrackerProps) => {
               <span>Tiempo trabajado:</span>
               <span className="font-mono font-bold">{calcularTiempoTrabajado()}</span>
             </div>
+            <div className="flex items-center justify-between">
+              <span>Salidas espontáneas:</span>
+              <span className="font-mono font-bold text-orange-600">{calcularTiempoSalidasEspontaneas()}</span>
+            </div>
+            {jornadaActual.ubicacion_inicio && (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <MapPin className="h-4 w-4" />
+                <span>Ubicación registrada</span>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -219,12 +303,12 @@ const TimeTracker = ({ user, selectedPoint }: TimeTrackerProps) => {
           <CardContent className="space-y-3">
             <Button
               onClick={iniciarJornada}
-              disabled={jornadaActual.estado !== 'NO_INICIADO'}
+              disabled={jornadaActual.estado !== 'NO_INICIADO' || isGettingLocation}
               className="w-full"
               variant={jornadaActual.estado === 'NO_INICIADO' ? 'default' : 'secondary'}
             >
               <LogIn className="mr-2 h-4 w-4" />
-              Iniciar Jornada
+              {isGettingLocation ? 'Obteniendo ubicación...' : 'Iniciar Jornada'}
             </Button>
 
             <Button
@@ -292,6 +376,35 @@ const TimeTracker = ({ user, selectedPoint }: TimeTrackerProps) => {
                   {jornadaActual.fecha_salida ? formatearHora(jornadaActual.fecha_salida) : '--:--'}
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Salidas espontáneas activas */}
+      {spontaneousExits.filter(exit => !exit.fecha_regreso).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-orange-600">Salidas Espontáneas Activas</CardTitle>
+            <CardDescription>
+              Estas salidas están actualmente en curso
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {spontaneousExits.filter(exit => !exit.fecha_regreso).map(exit => (
+                <div key={exit.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
+                  <div>
+                    <span className="font-medium">{exit.motivo.replace('_', ' ')}</span>
+                    <div className="text-sm text-gray-500">
+                      Salida: {formatearHora(exit.fecha_salida)}
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="text-orange-600 border-orange-600">
+                    En curso
+                  </Badge>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
