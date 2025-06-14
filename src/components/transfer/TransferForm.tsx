@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
-import { User, PuntoAtencion, Moneda, Transferencia } from '../../types';
+import { User, PuntoAtencion, Moneda, Transferencia, ResponsableMovilizacion } from '../../types';
 import { ReceiptService } from '../../services/receiptService';
 import CurrencySearchSelect from '../ui/currency-search-select';
 
@@ -24,7 +25,15 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
     toPointId: '',
     currencyId: '',
     amount: '',
-    notes: ''
+    notes: '',
+    billetes: '',
+    monedas: ''
+  });
+
+  const [responsable, setResponsable] = useState<ResponsableMovilizacion>({
+    nombre: '',
+    cedula: '',
+    telefono: ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -58,6 +67,16 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
       return;
     }
 
+    // Validar responsable para transferencias entre puntos
+    if (formData.type === 'ENTRE_PUNTOS' && (!responsable.nombre || !responsable.cedula)) {
+      toast({
+        title: "Error",
+        description: "Debe completar los datos del responsable de movilización",
+        variant: "destructive"
+      });
+      return;
+    }
+
     let destinoId = '';
     let origenId: string | undefined = undefined;
 
@@ -80,6 +99,19 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
     }
 
     const numeroRecibo = ReceiptService.generateReceiptNumber('TRANSFERENCIA');
+    const billetes = parseFloat(formData.billetes) || 0;
+    const monedas = parseFloat(formData.monedas) || 0;
+    const total = billetes + monedas;
+
+    // Validar que el total coincida con el monto
+    if (Math.abs(total - parseFloat(formData.amount)) > 0.01) {
+      toast({
+        title: "Error",
+        description: "El total de billetes y monedas debe coincidir con el monto total",
+        variant: "destructive"
+      });
+      return;
+    }
 
     const newTransfer: Transferencia = {
       id: Date.now().toString(),
@@ -94,10 +126,11 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
       descripcion: formData.notes,
       numero_recibo: numeroRecibo,
       detalle_divisas: {
-        billetes: 0,
-        monedas: 0,
-        total: parseFloat(formData.amount)
-      }
+        billetes: billetes,
+        monedas: monedas,
+        total: total
+      },
+      responsable_movilizacion: formData.type === 'ENTRE_PUNTOS' ? responsable : undefined
     };
 
     onTransferCreated(newTransfer);
@@ -116,8 +149,11 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
       toPointId: '',
       currencyId: '',
       amount: '',
-      notes: ''
+      notes: '',
+      billetes: '',
+      monedas: ''
     });
+    setResponsable({ nombre: '', cedula: '', telefono: '' });
 
     toast({
       title: "Transferencia solicitada",
@@ -131,8 +167,8 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
         // Para transferencias entre puntos, mostrar todos excepto el actual
         return points.filter(p => p.id !== selectedPoint?.id);
       case 'DEPOSITO_MATRIZ':
-        // Para depósitos de matriz, mostrar todos los puntos (incluyendo el actual)
-        return [...points, ...(selectedPoint ? [selectedPoint] : [])];
+        // Para depósitos de matriz, mostrar todos los puntos
+        return points;
       case 'RETIRO_GERENCIA':
       case 'DEPOSITO_GERENCIA':
         // Para operaciones de gerencia, mostrar puntos de destino
@@ -183,6 +219,12 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
     }
 
     return [];
+  };
+
+  const calculateTotal = () => {
+    const billetes = parseFloat(formData.billetes) || 0;
+    const monedas = parseFloat(formData.monedas) || 0;
+    return billetes + monedas;
   };
 
   return (
@@ -238,26 +280,85 @@ const TransferForm = ({ user, selectedPoint, currencies, points, onTransferCreat
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <CurrencySearchSelect
-              currencies={currencies}
-              value={formData.currencyId}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, currencyId: value }))}
-              placeholder="Seleccionar moneda"
-              label="Moneda"
-            />
+          <CurrencySearchSelect
+            currencies={currencies}
+            value={formData.currencyId}
+            onValueChange={(value) => setFormData(prev => ({ ...prev, currencyId: value }))}
+            placeholder="Seleccionar moneda"
+            label="Moneda"
+          />
 
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label>Monto</Label>
+              <Label>Billetes</Label>
               <Input
                 type="number"
                 step="0.01"
-                value={formData.amount}
-                onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                value={formData.billetes}
+                onChange={(e) => setFormData(prev => ({ ...prev, billetes: e.target.value }))}
                 placeholder="0.00"
               />
             </div>
+            <div className="space-y-2">
+              <Label>Monedas</Label>
+              <Input
+                type="number"
+                step="0.01"
+                value={formData.monedas}
+                onChange={(e) => setFormData(prev => ({ ...prev, monedas: e.target.value }))}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Total</Label>
+              <div className="h-10 px-3 py-2 border rounded-md bg-gray-50 flex items-center font-bold">
+                {calculateTotal().toFixed(2)}
+              </div>
+            </div>
           </div>
+
+          <div className="space-y-2">
+            <Label>Monto Total</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={formData.amount}
+              onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+              placeholder="0.00"
+            />
+          </div>
+
+          {formData.type === 'ENTRE_PUNTOS' && (
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-medium text-gray-800">Responsable de Movilización</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nombre Completo</Label>
+                  <Input
+                    value={responsable.nombre}
+                    onChange={(e) => setResponsable(prev => ({ ...prev, nombre: e.target.value }))}
+                    placeholder="Nombre del responsable"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Cédula</Label>
+                  <Input
+                    value={responsable.cedula}
+                    onChange={(e) => setResponsable(prev => ({ ...prev, cedula: e.target.value }))}
+                    placeholder="Número de cédula"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Teléfono</Label>
+                <Input
+                  value={responsable.telefono}
+                  onChange={(e) => setResponsable(prev => ({ ...prev, telefono: e.target.value }))}
+                  placeholder="Número de teléfono"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Notas (Opcional)</Label>

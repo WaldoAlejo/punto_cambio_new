@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,9 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { User, PuntoAtencion, Moneda, CambioDivisa } from '../../types';
+import { User, PuntoAtencion, Moneda, CambioDivisa, DatosCliente, DetalleDivisas } from '../../types';
 import { ReceiptService } from '../../services/receiptService';
 import CurrencySearchSelect from '../ui/currency-search-select';
+import CustomerDataForm from './CustomerDataForm';
+import CurrencyDetailForm from './CurrencyDetailForm';
 
 interface ExchangeManagementProps {
   user: User;
@@ -15,6 +18,7 @@ interface ExchangeManagementProps {
 }
 
 const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) => {
+  const [step, setStep] = useState<'customer' | 'exchange' | 'details'>('customer');
   const [operationType, setOperationType] = useState<'COMPRA' | 'VENTA'>('COMPRA');
   const [rate, setRate] = useState('');
   const [fromCurrency, setFromCurrency] = useState('');
@@ -24,6 +28,24 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
   const [observation, setObservation] = useState('');
   const [exchanges, setExchanges] = useState<CambioDivisa[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
+  
+  // New state for customer and currency details
+  const [customerData, setCustomerData] = useState<DatosCliente>({
+    nombre: '',
+    apellido: '',
+    cedula: '',
+    telefono: ''
+  });
+  const [divisasEntregadas, setDivisasEntregadas] = useState<DetalleDivisas>({
+    billetes: 0,
+    monedas: 0,
+    total: 0
+  });
+  const [divisasRecibidas, setDivisasRecibidas] = useState<DetalleDivisas>({
+    billetes: 0,
+    monedas: 0,
+    total: 0
+  });
 
   // Mock currencies
   const mockCurrencies: Moneda[] = [
@@ -37,14 +59,19 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
   }, []);
 
   useEffect(() => {
-    // Calculate destination amount when amount or rate changes
-    const rateValue = parseFloat(rate) || 0;
-    setDestinationAmount(parseFloat(amount) * rateValue);
+    if (rate && amount) {
+      const rateValue = parseFloat(rate) || 0;
+      setDestinationAmount(parseFloat(amount) * rateValue);
+    }
   }, [amount, rate]);
 
   const getCurrencyName = (currencyId: string) => {
     const currency = currencies.find(c => c.id === currencyId);
     return currency ? currency.codigo : '';
+  };
+
+  const getCurrency = (currencyId: string) => {
+    return currencies.find(c => c.id === currencyId);
   };
 
   const generateReceiptAndPrint = (exchange: CambioDivisa) => {
@@ -57,16 +84,12 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
     ReceiptService.printReceipt(receiptData, 2);
   };
 
-  const performExchange = () => {
-    if (!selectedPoint) {
-      toast({
-        title: "Error",
-        description: "Debe seleccionar un punto de atención",
-        variant: "destructive"
-      });
-      return;
-    }
+  const handleCustomerDataSubmit = (data: DatosCliente) => {
+    setCustomerData(data);
+    setStep('exchange');
+  };
 
+  const handleExchangeFormSubmit = () => {
     if (!fromCurrency || !toCurrency) {
       toast({
         title: "Error",
@@ -76,19 +99,23 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       return;
     }
 
-    if (!amount) {
+    if (!amount || !rate) {
       toast({
         title: "Error",
-        description: "Debe ingresar el monto a cambiar",
+        description: "Debe ingresar el monto y la tasa de cambio",
         variant: "destructive"
       });
       return;
     }
 
-    if (rate === '') {
+    setStep('details');
+  };
+
+  const performExchange = () => {
+    if (!selectedPoint) {
       toast({
         title: "Error",
-        description: "La tasa de cambio debe ser mayor a cero",
+        description: "Debe seleccionar un punto de atención",
         variant: "destructive"
       });
       return;
@@ -110,40 +137,33 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       observacion: observation,
       numero_recibo: ReceiptService.generateReceiptNumber('CAMBIO_DIVISA'),
       estado: 'COMPLETADO',
-      datos_cliente: {
-        nombre: '',
-        apellido: '',
-        cedula: '',
-        telefono: ''
-      },
-      divisas_entregadas: {
-        billetes: 0,
-        monedas: 0,
-        total: 0
-      },
-      divisas_recibidas: {
-        billetes: 0,
-        monedas: 0,
-        total: 0
-      },
-      monedaOrigen: currencies.find(c => c.id === fromCurrency),
-      monedaDestino: currencies.find(c => c.id === toCurrency)
+      datos_cliente: customerData,
+      divisas_entregadas: divisasEntregadas,
+      divisas_recibidas: divisasRecibidas,
+      monedaOrigen: getCurrency(fromCurrency),
+      monedaDestino: getCurrency(toCurrency)
     };
 
     setExchanges([newExchange, ...exchanges]);
-
-    // Generate and print receipt
     generateReceiptAndPrint(newExchange);
-
-    // Reset form
-    setAmount('');
-    setRate('');
-    setObservation('');
+    
+    // Reset form to start
+    resetForm();
 
     toast({
       title: "Cambio realizado",
-      description: `Cambio de ${newExchange.monto_origen} ${getCurrencyName(newExchange.moneda_origen_id)} a ${newExchange.monto_destino.toFixed(2)} ${getCurrencyName(newExchange.moneda_destino_id)} completado`,
+      description: `Cambio completado y recibo generado`,
     });
+  };
+
+  const resetForm = () => {
+    setStep('customer');
+    setAmount('');
+    setRate('');
+    setObservation('');
+    setCustomerData({ nombre: '', apellido: '', cedula: '', telefono: '' });
+    setDivisasEntregadas({ billetes: 0, monedas: 0, total: 0 });
+    setDivisasRecibidas({ billetes: 0, monedas: 0, total: 0 });
   };
 
   // Solo operadores y concesiones pueden realizar cambios de divisas
@@ -179,93 +199,140 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Nueva Operación</CardTitle>
-            <CardDescription>Registre el cambio de divisa</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Tipo de Operación</Label>
-                  <Select value={operationType} onValueChange={(value: 'COMPRA' | 'VENTA') => setOperationType(value)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="COMPRA">Compra</SelectItem>
-                      <SelectItem value="VENTA">Venta</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Tasa de Cambio</Label>
-                  <Input
-                    type="number"
-                    step="0.0001"
-                    value={rate}
-                    onChange={(e) => setRate(e.target.value)}
-                    placeholder="0.0000"
-                  />
-                </div>
-              </div>
+        <div className="space-y-6">
+          {step === 'customer' && (
+            <CustomerDataForm
+              onCustomerData={handleCustomerDataSubmit}
+              initialData={customerData}
+            />
+          )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <CurrencySearchSelect
-                  currencies={currencies}
-                  value={fromCurrency}
-                  onValueChange={setFromCurrency}
-                  placeholder="Seleccionar moneda origen"
-                  label="Moneda Origen"
-                />
-                <CurrencySearchSelect
-                  currencies={currencies}
-                  value={toCurrency}
-                  onValueChange={setToCurrency}
-                  placeholder="Seleccionar moneda destino"
-                  label="Moneda Destino"
-                />
-              </div>
+          {step === 'exchange' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Datos del Cambio</CardTitle>
+                <CardDescription>Configure los detalles de la operación</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Tipo de Operación</Label>
+                      <Select value={operationType} onValueChange={(value: 'COMPRA' | 'VENTA') => setOperationType(value)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="COMPRA">Compra</SelectItem>
+                          <SelectItem value="VENTA">Venta</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tasa de Cambio</Label>
+                      <Input
+                        type="number"
+                        step="0.0001"
+                        value={rate}
+                        onChange={(e) => setRate(e.target.value)}
+                        placeholder="Ingrese tasa"
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Monto a Cambiar</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Monto Resultante</Label>
-                  <div className="h-10 px-3 py-2 border rounded-md bg-gray-50 flex items-center">
-                    {destinationAmount.toFixed(2)}
+                  <div className="grid grid-cols-2 gap-4">
+                    <CurrencySearchSelect
+                      currencies={currencies}
+                      value={fromCurrency}
+                      onValueChange={setFromCurrency}
+                      placeholder="Moneda origen"
+                      label="Moneda Origen"
+                    />
+                    <CurrencySearchSelect
+                      currencies={currencies}
+                      value={toCurrency}
+                      onValueChange={setToCurrency}
+                      placeholder="Moneda destino"
+                      label="Moneda Destino"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Monto a Cambiar</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Monto Resultante</Label>
+                      <div className="h-10 px-3 py-2 border rounded-md bg-gray-50 flex items-center font-bold">
+                        {destinationAmount.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Observaciones (Opcional)</Label>
+                    <Input
+                      value={observation}
+                      onChange={(e) => setObservation(e.target.value)}
+                      placeholder="Observaciones adicionales"
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setStep('customer')}>
+                      Atrás
+                    </Button>
+                    <Button 
+                      onClick={handleExchangeFormSubmit}
+                      disabled={!fromCurrency || !toCurrency || !amount || !rate}
+                      className="flex-1"
+                    >
+                      Continuar
+                    </Button>
                   </div>
                 </div>
-              </div>
+              </CardContent>
+            </Card>
+          )}
 
-              <div className="space-y-2">
-                <Label>Observaciones (Opcional)</Label>
-                <Input
-                  value={observation}
-                  onChange={(e) => setObservation(e.target.value)}
-                  placeholder="Observaciones adicionales"
+          {step === 'details' && (
+            <div className="space-y-4">
+              {fromCurrency && (
+                <CurrencyDetailForm
+                  currency={getCurrency(fromCurrency)!}
+                  title="Divisas Entregadas"
+                  onDetailData={setDivisasEntregadas}
+                  initialData={divisasEntregadas}
                 />
-              </div>
+              )}
+              
+              {toCurrency && (
+                <CurrencyDetailForm
+                  currency={getCurrency(toCurrency)!}
+                  title="Divisas Recibidas"
+                  onDetailData={setDivisasRecibidas}
+                  initialData={divisasRecibidas}
+                />
+              )}
 
-              <Button 
-                onClick={performExchange} 
-                className="w-full"
-                disabled={!fromCurrency || !toCurrency || !amount || rate === ''}
-              >
-                Realizar Cambio
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setStep('exchange')}>
+                  Atrás
+                </Button>
+                <Button onClick={performExchange} className="flex-1">
+                  Completar Cambio
+                </Button>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
 
         <Card>
           <CardHeader>
@@ -295,17 +362,15 @@ const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) =>
                     </div>
                     <div className="text-sm space-y-1">
                       <p className="font-medium">
+                        {exchange.datos_cliente.nombre} {exchange.datos_cliente.apellido}
+                      </p>
+                      <p>
                         {exchange.monto_origen} {getCurrencyName(exchange.moneda_origen_id)} → {' '}
                         {exchange.monto_destino.toFixed(2)} {getCurrencyName(exchange.moneda_destino_id)}
                       </p>
                       <p className="text-gray-600">
                         Tasa: {exchange.tasa_cambio}
                       </p>
-                      {exchange.observacion && (
-                        <p className="text-gray-600 text-xs">
-                          Obs: {exchange.observacion}
-                        </p>
-                      )}
                       {exchange.numero_recibo && (
                         <p className="text-gray-600 text-xs">
                           Recibo: {exchange.numero_recibo}
