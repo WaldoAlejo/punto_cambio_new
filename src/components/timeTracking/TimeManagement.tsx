@@ -9,26 +9,46 @@ import SpontaneousExitHistory from './SpontaneousExitHistory';
 interface TimeManagementProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
+  spontaneousExits?: SalidaEspontanea[];
+  onExitRegistered?: (exit: SalidaEspontanea) => void;
+  onExitReturn?: (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => void;
 }
 
-const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
-  const [spontaneousExits, setSpontaneousExits] = useState<SalidaEspontanea[]>([]);
+const TimeManagement = ({ 
+  user, 
+  selectedPoint, 
+  spontaneousExits = [], 
+  onExitRegistered,
+  onExitReturn 
+}: TimeManagementProps) => {
+  const [localSpontaneousExits, setLocalSpontaneousExits] = useState<SalidaEspontanea[]>([]);
+
+  // Use either the passed exits or local state
+  const currentExits = spontaneousExits.length > 0 ? spontaneousExits : localSpontaneousExits;
 
   const handleExitRegistered = (exit: SalidaEspontanea) => {
-    setSpontaneousExits(prev => [...prev, exit]);
+    if (onExitRegistered) {
+      onExitRegistered(exit);
+    } else {
+      setLocalSpontaneousExits(prev => [...prev, exit]);
+    }
   };
 
   const handleExitReturn = (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => {
-    setSpontaneousExits(prev => prev.map(exit => 
-      exit.id === exitId 
-        ? { 
-            ...exit, 
-            fecha_regreso: new Date().toISOString(),
-            ubicacion_regreso: returnData,
-            duracion_minutos: Math.round((new Date().getTime() - new Date(exit.fecha_salida).getTime()) / (1000 * 60))
-          }
-        : exit
-    ));
+    if (onExitReturn) {
+      onExitReturn(exitId, returnData);
+    } else {
+      setLocalSpontaneousExits(prev => prev.map(exit => 
+        exit.id === exitId 
+          ? { 
+              ...exit, 
+              fecha_regreso: new Date().toISOString(),
+              ubicacion_regreso: returnData,
+              duracion_minutos: Math.round((new Date().getTime() - new Date(exit.fecha_salida).getTime()) / (1000 * 60))
+            }
+          : exit
+      ));
+    }
   };
 
   return (
@@ -44,7 +64,7 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
           <TimeTracker 
             user={user} 
             selectedPoint={selectedPoint}
-            spontaneousExits={spontaneousExits}
+            spontaneousExits={currentExits}
           />
         </TabsContent>
         
@@ -58,7 +78,7 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
         
         <TabsContent value="history">
           <SpontaneousExitHistory
-            exits={spontaneousExits}
+            exits={currentExits}
             onExitReturn={handleExitReturn}
           />
         </TabsContent>

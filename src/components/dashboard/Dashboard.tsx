@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -28,6 +29,23 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
     setSidebarOpen(!sidebarOpen);
   };
 
+  const handleExitRegistered = (exit: SalidaEspontanea) => {
+    setSpontaneousExits(prev => [...prev, exit]);
+  };
+
+  const handleExitReturn = (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => {
+    setSpontaneousExits(prev => prev.map(exit => 
+      exit.id === exitId 
+        ? { 
+            ...exit, 
+            fecha_regreso: new Date().toISOString(),
+            ubicacion_regreso: returnData,
+            duracion_minutos: Math.round((new Date().getTime() - new Date(exit.fecha_salida).getTime()) / (1000 * 60))
+          }
+        : exit
+    ));
+  };
+
   const renderContent = () => {
     switch (activeView) {
       case 'exchanges':
@@ -37,7 +55,15 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
       case 'time-tracker':
         return <TimeTracker user={user} selectedPoint={selectedPoint} spontaneousExits={spontaneousExits} />;
       case 'time-management':
-        return <TimeManagement user={user} selectedPoint={selectedPoint} />;
+        return (
+          <TimeManagement 
+            user={user} 
+            selectedPoint={selectedPoint}
+            spontaneousExits={spontaneousExits}
+            onExitRegistered={handleExitRegistered}
+            onExitReturn={handleExitReturn}
+          />
+        );
       case 'transfer-approvals':
         return <TransferApprovals user={user} />;
       case 'users':
