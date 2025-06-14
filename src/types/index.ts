@@ -1,4 +1,3 @@
-
 // Tipos principales basados en el schema de Prisma
 export interface User {
   id: string;
@@ -86,6 +85,10 @@ export interface Transferencia {
   numero_recibo?: string;
   // Extended properties for frontend use
   detalle_divisas?: DetalleDivisasSimple;
+  responsable_movilizacion?: ResponsableMovilizacion;
+  moneda?: Moneda;
+  origen?: PuntoAtencion;
+  destino?: PuntoAtencion;
 }
 
 export interface Movimiento {

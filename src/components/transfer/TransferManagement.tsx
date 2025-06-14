@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { User, PuntoAtencion, Moneda, Transferencia } from '../../types';
 import TransferForm from './TransferForm';
@@ -16,15 +15,15 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
 
   // Mock data
   const mockCurrencies: Moneda[] = [
-    { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
+    { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, orden_display: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, orden_display: 2, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, orden_display: 3, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
   ];
 
   const mockPoints: PuntoAtencion[] = [
-    { id: '1', nombre: 'Punto Centro', direccion: 'Centro', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '', saldos: [] },
-    { id: '2', nombre: 'Punto Norte', direccion: 'Norte', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '', saldos: [] },
-    { id: '3', nombre: 'Punto Sur', direccion: 'Sur', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '', saldos: [] }
+    { id: '1', nombre: 'Punto Centro', direccion: 'Centro', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '' },
+    { id: '2', nombre: 'Punto Norte', direccion: 'Norte', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '' },
+    { id: '3', nombre: 'Punto Sur', direccion: 'Sur', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '' }
   ];
 
   useEffect(() => {

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { User, PuntoAtencion } from '../../types';
 import ReportFilters from './ReportFilters';
@@ -27,8 +26,7 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
       telefono: '+58 212-555-0001',
       activo: true,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      saldos: []
+      updated_at: new Date().toISOString()
     },
     {
       id: '2', 
@@ -39,8 +37,7 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
       telefono: '+58 212-555-0002',
       activo: true,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      saldos: []
+      updated_at: new Date().toISOString()
     }
   ];
 
