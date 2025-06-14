@@ -113,3 +113,105 @@ export interface SolicitudSaldo {
   fecha_respuesta?: string;
   observaciones?: string;
 }
+
+// Tipos adicionales que se necesitan en los componentes
+export interface CuadreCaja {
+  id: string;
+  usuario_id: string;
+  punto_atencion_id: string;
+  fecha: string;
+  fecha_cierre?: string;
+  estado: 'ABIERTO' | 'CERRADO';
+  total_cambios: number;
+  total_transferencias_entrada: number;
+  total_transferencias_salida: number;
+  observaciones?: string;
+}
+
+export interface DetalleCuadreCaja {
+  id: string;
+  cuadre_id: string;
+  moneda_id: string;
+  saldo_apertura: number;
+  saldo_cierre: number;
+  conteo_fisico: number;
+  billetes: number;
+  monedas_fisicas: number;
+  diferencia: number;
+}
+
+export interface SalidaEspontanea {
+  id: string;
+  usuario_id: string;
+  punto_atencion_id: string;
+  fecha_salida: string;
+  fecha_regreso?: string;
+  motivo: string;
+  ubicacion_salida: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  };
+  ubicacion_regreso?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  };
+  duracion_minutos?: number;
+  observaciones?: string;
+}
+
+export interface DatosCliente {
+  nombre: string;
+  apellido: string;
+  cedula: string;
+  telefono?: string;
+  direccion?: string;
+}
+
+export interface DetalleDivisas {
+  moneda_id: string;
+  cantidad: number;
+  billetes?: {
+    denominacion: number;
+    cantidad: number;
+  }[];
+  monedas?: {
+    denominacion: number;
+    cantidad: number;
+  }[];
+}
+
+export interface ResponsableMovilizacion {
+  nombre: string;
+  cedula: string;
+  telefono: string;
+  empresa?: string;
+}
+
+export interface HistorialSaldo {
+  id: string;
+  punto_atencion_id: string;
+  moneda_id: string;
+  usuario_id: string;
+  cantidad_anterior: number;
+  cantidad_incrementada: number;
+  cantidad_nueva: number;
+  tipo_movimiento: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA_ENTRANTE' | 'TRANSFERENCIA_SALIENTE' | 'CAMBIO_DIVISA';
+  fecha: string;
+  descripcion?: string;
+  numero_referencia?: string;
+}
+
+export interface Recibo {
+  id: string;
+  numero_recibo: string;
+  tipo_operacion: 'CAMBIO_DIVISA' | 'TRANSFERENCIA';
+  referencia_id: string;
+  usuario_id: string;
+  punto_atencion_id: string;
+  fecha: string;
+  datos_operacion: any;
+  impreso: boolean;
+  numero_copias: number;
+}
