@@ -10,7 +10,9 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 8080,
     watch: {
-      usePolling: false,
+      usePolling: true,
+      interval: 1000,
+      binaryInterval: 1000,
       useFsEvents: false,
       ignored: [
         '**/node_modules/**',
@@ -19,7 +21,12 @@ export default defineConfig(({ mode }) => ({
         '**/.git/**',
         '**/coverage/**',
         '**/server/**',
-        '**/prisma/**'
+        '**/prisma/**',
+        '**/public/**',
+        '**/.env*',
+        '**/package-lock.json',
+        '**/bun.lockb',
+        '**/tsconfig*.json'
       ]
     }
   },
