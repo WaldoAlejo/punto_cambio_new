@@ -1,4 +1,3 @@
-
 import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
@@ -10,6 +9,25 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Middleware para logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
+// Test endpoint para verificar conexión
+app.get('/api/test', async (req, res) => {
+  try {
+    console.log('Testing database connection...');
+    const userCount = await prisma.usuario.count();
+    console.log(`Found ${userCount} users in database`);
+    res.json({ message: 'Server running', userCount });
+  } catch (error) {
+    console.error('Database test error:', error);
+    res.status(500).json({ error: 'Database connection failed' });
+  }
+});
 
 // Endpoint para login
 app.post('/api/auth/login', async (req, res) => {
@@ -419,5 +437,7 @@ app.get('/api/schedules', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
+  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`📊 API disponible en http://localhost:${PORT}/api`);
+  console.log(`🔍 Test endpoint: http://localhost:${PORT}/api/test`);
 });

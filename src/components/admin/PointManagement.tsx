@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion } from '../../types';
+import { pointService } from '../../services/pointService';
 
 interface PointManagementProps {
   user: User;
@@ -14,91 +16,104 @@ interface PointManagementProps {
 const PointManagement = ({ user }: PointManagementProps) => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     nombre: '',
     direccion: '',
+    ciudad: '',
+    provincia: '',
+    codigo_postal: '',
     telefono: ''
   });
 
   useEffect(() => {
-    // Load mock points
-    const mockPoints: PuntoAtencion[] = [
-      {
-        id: '1',
-        nombre: 'Punto Centro',
-        direccion: 'Av. Principal 123, Centro',
-        ciudad: 'Caracas',
-        provincia: 'Distrito Capital',
-        telefono: '+58 212-555-0001',
-        activo: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      {
-        id: '2',
-        nombre: 'Punto Norte',
-        direccion: 'CC El Recreo, Nivel 1, Local 45',
-        ciudad: 'Caracas',
-        provincia: 'Distrito Capital',
-        telefono: '+58 212-555-0002',
-        activo: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-    ];
-    setPoints(mockPoints);
+    loadPoints();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.nombre || !formData.direccion) {
+  const loadPoints = async () => {
+    setIsLoading(true);
+    try {
+      const { points: fetchedPoints, error } = await pointService.getAllPoints();
+      
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setPoints(fetchedPoints);
+    } catch (error) {
+      console.error('Error loading points:', error);
       toast({
         title: "Error",
-        description: "Nombre y dirección son obligatorios",
+        description: "Error al cargar puntos de atención",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.nombre || !formData.direccion || !formData.ciudad || !formData.provincia) {
+      toast({
+        title: "Error",
+        description: "Nombre, dirección, ciudad y provincia son obligatorios",
         variant: "destructive"
       });
       return;
     }
 
-    const newPoint: PuntoAtencion = {
-      id: Date.now().toString(),
-      nombre: formData.nombre,
-      direccion: formData.direccion,
-      ciudad: 'Caracas',
-      provincia: 'Distrito Capital',
-      telefono: formData.telefono,
-      activo: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    try {
+      const { point: newPoint, error } = await pointService.createPoint({
+        nombre: formData.nombre,
+        direccion: formData.direccion,
+        ciudad: formData.ciudad,
+        provincia: formData.provincia,
+        codigo_postal: formData.codigo_postal,
+        telefono: formData.telefono
+      });
 
-    setPoints(prev => [...prev, newPoint]);
-    
-    // Reset form
-    setFormData({
-      nombre: '',
-      direccion: '',
-      telefono: ''
-    });
-    setShowForm(false);
+      if (error || !newPoint) {
+        toast({
+          title: "Error",
+          description: error || "Error al crear punto",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    toast({
-      title: "Punto creado",
-      description: `Punto ${newPoint.nombre} creado exitosamente`,
-    });
-  };
+      // Recargar la lista de puntos
+      await loadPoints();
+      
+      // Reset form
+      setFormData({
+        nombre: '',
+        direccion: '',
+        ciudad: '',
+        provincia: '',
+        codigo_postal: '',
+        telefono: ''
+      });
+      setShowForm(false);
 
-  const togglePointStatus = (pointId: string) => {
-    setPoints(prev => prev.map(p => 
-      p.id === pointId ? { ...p, activo: !p.activo } : p
-    ));
-    
-    const targetPoint = points.find(p => p.id === pointId);
-    toast({
-      title: "Estado actualizado",
-      description: `Punto ${targetPoint?.nombre} ${targetPoint?.activo ? 'desactivado' : 'activado'}`,
-    });
+      toast({
+        title: "Punto creado",
+        description: `Punto ${newPoint.nombre} creado exitosamente`,
+      });
+    } catch (error) {
+      console.error('Error creating point:', error);
+      toast({
+        title: "Error",
+        description: "Error interno del servidor",
+        variant: "destructive"
+      });
+    }
   };
 
   if (user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
@@ -106,6 +121,17 @@ const PointManagement = ({ user }: PointManagementProps) => {
       <div className="p-6">
         <div className="text-center py-12">
           <p className="text-red-500 text-lg">No tiene permisos para acceder a esta sección</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando puntos...</p>
         </div>
       </div>
     );
@@ -131,13 +157,42 @@ const PointManagement = ({ user }: PointManagementProps) => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Nombre del Punto</Label>
-                <Input
-                  value={formData.nombre}
-                  onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
-                  placeholder="Ej: Punto Centro"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nombre del Punto</Label>
+                  <Input
+                    value={formData.nombre}
+                    onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
+                    placeholder="Ej: Punto Centro"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ciudad</Label>
+                  <Input
+                    value={formData.ciudad}
+                    onChange={(e) => setFormData(prev => ({ ...prev, ciudad: e.target.value }))}
+                    placeholder="Ciudad"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Provincia</Label>
+                  <Input
+                    value={formData.provincia}
+                    onChange={(e) => setFormData(prev => ({ ...prev, provincia: e.target.value }))}
+                    placeholder="Provincia"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Código Postal (Opcional)</Label>
+                  <Input
+                    value={formData.codigo_postal}
+                    onChange={(e) => setFormData(prev => ({ ...prev, codigo_postal: e.target.value }))}
+                    placeholder="Código postal"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -181,48 +236,49 @@ const PointManagement = ({ user }: PointManagementProps) => {
           <CardDescription>Lista de todos los puntos registrados</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Dirección</TableHead>
-                <TableHead>Teléfono</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Fecha Creación</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {points.map((point) => (
-                <TableRow key={point.id}>
-                  <TableCell className="font-medium">{point.nombre}</TableCell>
-                  <TableCell>{point.direccion}</TableCell>
-                  <TableCell>{point.telefono || 'N/A'}</TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      point.activo 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {point.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(point.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      variant={point.activo ? "destructive" : "default"}
-                      onClick={() => togglePointStatus(point.id)}
-                    >
-                      {point.activo ? 'Desactivar' : 'Activar'}
-                    </Button>
-                  </TableCell>
+          {points.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">No hay puntos de atención registrados</p>
+              <p className="text-gray-400 mt-2">
+                Cree el primer punto de atención haciendo clic en "Nuevo Punto"
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Dirección</TableHead>
+                  <TableHead>Ciudad/Provincia</TableHead>
+                  <TableHead>Teléfono</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Fecha Creación</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {points.map((point) => (
+                  <TableRow key={point.id}>
+                    <TableCell className="font-medium">{point.nombre}</TableCell>
+                    <TableCell>{point.direccion}</TableCell>
+                    <TableCell>{point.ciudad}, {point.provincia}</TableCell>
+                    <TableCell>{point.telefono || 'N/A'}</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        point.activo 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {point.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(point.created_at).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

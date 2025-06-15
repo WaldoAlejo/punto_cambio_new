@@ -6,33 +6,56 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { User, Moneda } from '../../types';
+import { User } from '../../types';
+import { currencyService, Currency } from '../../services/currencyService';
 
 interface CurrencyManagementProps {
   user: User;
 }
 
 const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
-  const [currencies, setCurrencies] = useState<Moneda[]>([]);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     codigo: '',
     nombre: '',
-    simbolo: ''
+    simbolo: '',
+    orden_display: 0
   });
 
   useEffect(() => {
-    // Load mock currencies
-    const mockCurrencies: Moneda[] = [
-      { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, orden_display: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-      { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, orden_display: 2, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-      { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, orden_display: 3, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-      { id: '4', codigo: 'COP', nombre: 'Peso Colombiano', simbolo: '$', activo: true, orden_display: 4, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-    ];
-    setCurrencies(mockCurrencies);
+    loadCurrencies();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const loadCurrencies = async () => {
+    setIsLoading(true);
+    try {
+      const { currencies: fetchedCurrencies, error } = await currencyService.getAllCurrencies();
+      
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setCurrencies(fetchedCurrencies);
+    } catch (error) {
+      console.error('Error loading currencies:', error);
+      toast({
+        title: "Error",
+        description: "Error al cargar monedas",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.codigo || !formData.nombre || !formData.simbolo) {
@@ -44,53 +67,47 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
       return;
     }
 
-    // Check if currency code exists
-    if (currencies.some(c => c.codigo.toLowerCase() === formData.codigo.toLowerCase())) {
+    try {
+      const { currency: newCurrency, error } = await currencyService.createCurrency({
+        codigo: formData.codigo.toUpperCase(),
+        nombre: formData.nombre,
+        simbolo: formData.simbolo,
+        orden_display: formData.orden_display || currencies.length + 1
+      });
+
+      if (error || !newCurrency) {
+        toast({
+          title: "Error",
+          description: error || "Error al crear moneda",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Recargar la lista de monedas
+      await loadCurrencies();
+      
+      // Reset form
+      setFormData({
+        codigo: '',
+        nombre: '',
+        simbolo: '',
+        orden_display: 0
+      });
+      setShowForm(false);
+
+      toast({
+        title: "Moneda creada",
+        description: `Moneda ${newCurrency.nombre} creada exitosamente`,
+      });
+    } catch (error) {
+      console.error('Error creating currency:', error);
       toast({
         title: "Error",
-        description: "El código de moneda ya existe",
+        description: "Error interno del servidor",
         variant: "destructive"
       });
-      return;
     }
-
-    const newCurrency: Moneda = {
-      id: Date.now().toString(),
-      codigo: formData.codigo.toUpperCase(),
-      nombre: formData.nombre,
-      simbolo: formData.simbolo,
-      activo: true,
-      orden_display: currencies.length + 1,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    setCurrencies(prev => [...prev, newCurrency]);
-    
-    // Reset form
-    setFormData({
-      codigo: '',
-      nombre: '',
-      simbolo: ''
-    });
-    setShowForm(false);
-
-    toast({
-      title: "Moneda creada",
-      description: `Moneda ${newCurrency.nombre} creada exitosamente`,
-    });
-  };
-
-  const toggleCurrencyStatus = (currencyId: string) => {
-    setCurrencies(prev => prev.map(c => 
-      c.id === currencyId ? { ...c, activo: !c.activo } : c
-    ));
-    
-    const targetCurrency = currencies.find(c => c.id === currencyId);
-    toast({
-      title: "Estado actualizado",
-      description: `Moneda ${targetCurrency?.nombre} ${targetCurrency?.activo ? 'desactivada' : 'activada'}`,
-    });
   };
 
   if (user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
@@ -98,6 +115,17 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
       <div className="p-6">
         <div className="text-center py-12">
           <p className="text-red-500 text-lg">No tiene permisos para acceder a esta sección</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando monedas...</p>
         </div>
       </div>
     );
@@ -125,7 +153,7 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>Código</Label>
+                  <Label>Código (3 letras)</Label>
                   <Input
                     value={formData.codigo}
                     onChange={(e) => setFormData(prev => ({ ...prev, codigo: e.target.value.toUpperCase() }))}
@@ -140,6 +168,16 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
                     onChange={(e) => setFormData(prev => ({ ...prev, simbolo: e.target.value }))}
                     placeholder="$"
                     maxLength={5}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Orden (Opcional)</Label>
+                  <Input
+                    type="number"
+                    value={formData.orden_display}
+                    onChange={(e) => setFormData(prev => ({ ...prev, orden_display: parseInt(e.target.value) || 0 }))}
+                    placeholder="1"
+                    min="0"
                   />
                 </div>
               </div>
@@ -176,48 +214,49 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
           <CardDescription>Lista de todas las monedas registradas</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Símbolo</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Fecha Creación</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {currencies.map((currency) => (
-                <TableRow key={currency.id}>
-                  <TableCell className="font-medium">{currency.codigo}</TableCell>
-                  <TableCell>{currency.nombre}</TableCell>
-                  <TableCell>{currency.simbolo}</TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      currency.activo 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {currency.activo ? 'Activa' : 'Inactiva'}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(currency.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      variant={currency.activo ? "destructive" : "default"}
-                      onClick={() => toggleCurrencyStatus(currency.id)}
-                    >
-                      {currency.activo ? 'Desactivar' : 'Activar'}
-                    </Button>
-                  </TableCell>
+          {currencies.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">No hay monedas registradas</p>
+              <p className="text-gray-400 mt-2">
+                Las monedas básicas (USD, EUR, VES) fueron creadas por el seed
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Símbolo</TableHead>
+                  <TableHead>Orden</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Fecha Creación</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {currencies.map((currency) => (
+                  <TableRow key={currency.id}>
+                    <TableCell className="font-medium">{currency.codigo}</TableCell>
+                    <TableCell>{currency.nombre}</TableCell>
+                    <TableCell>{currency.simbolo}</TableCell>
+                    <TableCell>{currency.orden_display}</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        currency.activo 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {currency.activo ? 'Activa' : 'Inactiva'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(currency.created_at).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
