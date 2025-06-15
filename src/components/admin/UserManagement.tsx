@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { User } from '../../types';
+import { userService } from '../../services/userService';
 
 interface UserManagementProps {
   user: User;
@@ -16,6 +17,7 @@ interface UserManagementProps {
 const UserManagement = ({ user }: UserManagementProps) => {
   const [users, setUsers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     username: '',
     correo: '',
@@ -25,33 +27,37 @@ const UserManagement = ({ user }: UserManagementProps) => {
   });
 
   useEffect(() => {
-    // Load mock users
-    const mockUsers: User[] = [
-      {
-        id: '1',
-        username: 'admin',
-        correo: 'admin@puntocambio.com',
-        rol: 'ADMIN',
-        nombre: 'Administrador Principal',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        activo: true
-      },
-      {
-        id: '2',
-        username: 'operador1',
-        correo: 'operador1@puntocambio.com',
-        rol: 'OPERADOR',
-        nombre: 'Operador Punto 1',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        activo: true
-      }
-    ];
-    setUsers(mockUsers);
+    loadUsers();
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const loadUsers = async () => {
+    setIsLoading(true);
+    try {
+      const { users: fetchedUsers, error } = await userService.getAllUsers();
+      
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setUsers(fetchedUsers);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      toast({
+        title: "Error",
+        description: "Error al cargar usuarios",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.username || !formData.correo || !formData.nombre || !formData.password) {
@@ -63,55 +69,80 @@ const UserManagement = ({ user }: UserManagementProps) => {
       return;
     }
 
-    // Check if username exists
-    if (users.some(u => u.username === formData.username)) {
+    try {
+      const { user: newUser, error } = await userService.createUser({
+        username: formData.username,
+        password: formData.password,
+        nombre: formData.nombre,
+        correo: formData.correo,
+        rol: formData.rol
+      });
+
+      if (error || !newUser) {
+        toast({
+          title: "Error",
+          description: error || "Error al crear usuario",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Actualizar la lista de usuarios
+      await loadUsers();
+      
+      // Reset form
+      setFormData({
+        username: '',
+        correo: '',
+        nombre: '',
+        rol: 'OPERADOR',
+        password: ''
+      });
+      setShowForm(false);
+
+      toast({
+        title: "Usuario creado",
+        description: `Usuario ${newUser.nombre} creado exitosamente`,
+      });
+    } catch (error) {
+      console.error('Error creating user:', error);
       toast({
         title: "Error",
-        description: "El nombre de usuario ya existe",
+        description: "Error interno del servidor",
         variant: "destructive"
       });
-      return;
     }
-
-    const newUser: User = {
-      id: Date.now().toString(),
-      username: formData.username,
-      correo: formData.correo,
-      rol: formData.rol,
-      nombre: formData.nombre,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      activo: true
-    };
-
-    setUsers(prev => [...prev, newUser]);
-    
-    // Reset form
-    setFormData({
-      username: '',
-      correo: '',
-      nombre: '',
-      rol: 'OPERADOR',
-      password: ''
-    });
-    setShowForm(false);
-
-    toast({
-      title: "Usuario creado",
-      description: `Usuario ${newUser.nombre} creado exitosamente`,
-    });
   };
 
-  const toggleUserStatus = (userId: string) => {
-    setUsers(prev => prev.map(u => 
-      u.id === userId ? { ...u, activo: !u.activo } : u
-    ));
-    
-    const targetUser = users.find(u => u.id === userId);
-    toast({
-      title: "Estado actualizado",
-      description: `Usuario ${targetUser?.nombre} ${targetUser?.activo ? 'desactivado' : 'activado'}`,
-    });
+  const toggleUserStatus = async (userId: string) => {
+    try {
+      const { success, error } = await userService.toggleUserStatus(userId);
+      
+      if (!success) {
+        toast({
+          title: "Error",
+          description: error || "Error al actualizar usuario",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Recargar la lista de usuarios
+      await loadUsers();
+      
+      const targetUser = users.find(u => u.id === userId);
+      toast({
+        title: "Estado actualizado",
+        description: `Usuario ${targetUser?.nombre} ${targetUser?.activo ? 'desactivado' : 'activado'}`,
+      });
+    } catch (error) {
+      console.error('Error toggling user status:', error);
+      toast({
+        title: "Error",
+        description: "Error interno del servidor",
+        variant: "destructive"
+      });
+    }
   };
 
   const getRoleLabel = (rol: string) => {
@@ -129,6 +160,17 @@ const UserManagement = ({ user }: UserManagementProps) => {
       <div className="p-6">
         <div className="text-center py-12">
           <p className="text-red-500 text-lg">No tiene permisos para acceder a esta sección</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando usuarios...</p>
         </div>
       </div>
     );
