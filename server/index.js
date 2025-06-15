@@ -218,6 +218,98 @@ app.get('/api/points', async (req, res) => {
   }
 });
 
+// Endpoint para crear punto de atención
+app.post('/api/points', async (req, res) => {
+  try {
+    const { nombre, direccion, ciudad, provincia, codigo_postal, telefono } = req.body;
+    
+    const newPoint = await prisma.puntoAtencion.create({
+      data: {
+        nombre,
+        direccion,
+        ciudad,
+        provincia,
+        codigo_postal,
+        telefono,
+        activo: true
+      }
+    });
+
+    res.json({ 
+      point: {
+        ...newPoint,
+        created_at: newPoint.created_at.toISOString(),
+        updated_at: newPoint.updated_at.toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error al crear punto:', error);
+    res.status(500).json({ error: 'Error al crear punto de atención' });
+  }
+});
+
+// Endpoint para obtener monedas
+app.get('/api/currencies', async (req, res) => {
+  try {
+    const currencies = await prisma.moneda.findMany({
+      where: {
+        activo: true
+      },
+      orderBy: {
+        orden_display: 'asc'
+      }
+    });
+
+    res.json({ 
+      currencies: currencies.map(currency => ({
+        ...currency,
+        created_at: currency.created_at.toISOString(),
+        updated_at: currency.updated_at.toISOString()
+      }))
+    });
+  } catch (error) {
+    console.error('Error al obtener monedas:', error);
+    res.status(500).json({ error: 'Error al obtener monedas' });
+  }
+});
+
+// Endpoint para crear moneda
+app.post('/api/currencies', async (req, res) => {
+  try {
+    const { nombre, simbolo, codigo, orden_display } = req.body;
+    
+    // Verificar si el código ya existe
+    const existingCurrency = await prisma.moneda.findUnique({
+      where: { codigo }
+    });
+
+    if (existingCurrency) {
+      return res.status(400).json({ error: 'El código de moneda ya existe' });
+    }
+
+    const newCurrency = await prisma.moneda.create({
+      data: {
+        nombre,
+        simbolo,
+        codigo,
+        orden_display: orden_display || 0,
+        activo: true
+      }
+    });
+
+    res.json({ 
+      currency: {
+        ...newCurrency,
+        created_at: newCurrency.created_at.toISOString(),
+        updated_at: newCurrency.updated_at.toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error al crear moneda:', error);
+    res.status(500).json({ error: 'Error al crear moneda' });
+  }
+});
+
 // Endpoint para obtener saldos por punto
 app.get('/api/balances/:pointId', async (req, res) => {
   try {
@@ -242,6 +334,87 @@ app.get('/api/balances/:pointId', async (req, res) => {
   } catch (error) {
     console.error('Error al obtener saldos:', error);
     res.status(500).json({ error: 'Error al obtener saldos' });
+  }
+});
+
+// Endpoint para obtener transferencias
+app.get('/api/transfers', async (req, res) => {
+  try {
+    const transfers = await prisma.transferencia.findMany({
+      include: {
+        origen: true,
+        destino: true,
+        moneda: true,
+        usuarioSolicitante: {
+          select: {
+            id: true,
+            nombre: true,
+            username: true
+          }
+        },
+        usuarioAprobador: {
+          select: {
+            id: true,
+            nombre: true,
+            username: true
+          }
+        }
+      },
+      orderBy: {
+        fecha: 'desc'
+      }
+    });
+
+    res.json({ 
+      transfers: transfers.map(transfer => ({
+        ...transfer,
+        monto: parseFloat(transfer.monto.toString()),
+        fecha: transfer.fecha.toISOString(),
+        fecha_aprobacion: transfer.fecha_aprobacion?.toISOString() || null
+      }))
+    });
+  } catch (error) {
+    console.error('Error al obtener transferencias:', error);
+    res.status(500).json({ error: 'Error al obtener transferencias' });
+  }
+});
+
+// Endpoint para obtener jornadas/horarios
+app.get('/api/schedules', async (req, res) => {
+  try {
+    const schedules = await prisma.jornada.findMany({
+      include: {
+        usuario: {
+          select: {
+            id: true,
+            nombre: true,
+            username: true
+          }
+        },
+        puntoAtencion: {
+          select: {
+            id: true,
+            nombre: true
+          }
+        }
+      },
+      orderBy: {
+        fecha_inicio: 'desc'
+      }
+    });
+
+    res.json({ 
+      schedules: schedules.map(schedule => ({
+        ...schedule,
+        fecha_inicio: schedule.fecha_inicio.toISOString(),
+        fecha_almuerzo: schedule.fecha_almuerzo?.toISOString() || null,
+        fecha_regreso: schedule.fecha_regreso?.toISOString() || null,
+        fecha_salida: schedule.fecha_salida?.toISOString() || null
+      }))
+    });
+  } catch (error) {
+    console.error('Error al obtener horarios:', error);
+    res.status(500).json({ error: 'Error al obtener horarios' });
   }
 });
 

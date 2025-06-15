@@ -1,8 +1,12 @@
+
 import { useState, useEffect } from 'react';
 import { User, PuntoAtencion } from '../../types';
 import ReportFilters from './ReportFilters';
 import ReportChart from './ReportChart';
 import ReportTable from './ReportTable';
+import { userService } from '../../services/userService';
+import { pointService } from '../../services/pointService';
+import { toast } from "@/hooks/use-toast";
 
 interface ReportsProps {
   user: User;
@@ -14,76 +18,80 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [reportData, setReportData] = useState<any[]>([]);
+  const [points, setPoints] = useState<PuntoAtencion[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Mock data
-  const mockPoints: PuntoAtencion[] = [
-    {
-      id: '1',
-      nombre: 'Punto Centro',
-      direccion: 'Av. Principal 123',
-      ciudad: 'Caracas',
-      provincia: 'Distrito Capital',
-      telefono: '+58 212-555-0001',
-      activo: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    {
-      id: '2', 
-      nombre: 'Punto Norte',
-      direccion: 'CC El Recreo',
-      ciudad: 'Caracas',
-      provincia: 'Distrito Capital',
-      telefono: '+58 212-555-0002',
-      activo: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }
-  ];
+  useEffect(() => {
+    loadInitialData();
+  }, []);
 
-  const mockUsers: User[] = [
-    {
-      id: '1',
-      username: 'operador1',
-      nombre: 'Juan Pérez',
-      correo: 'juan@example.com',
-      rol: 'OPERADOR',
-      activo: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    },
-    {
-      id: '2',
-      username: 'operador2', 
-      nombre: 'María García',
-      correo: 'maria@example.com',
-      rol: 'OPERADOR',
-      activo: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+  const loadInitialData = async () => {
+    try {
+      // Cargar puntos de atención
+      const { points: fetchedPoints, error: pointsError } = await pointService.getAllPoints();
+      if (!pointsError) {
+        setPoints(fetchedPoints);
+      }
+
+      // Cargar usuarios
+      const { users: fetchedUsers, error: usersError } = await userService.getAllUsers();
+      if (!usersError) {
+        setUsers(fetchedUsers);
+      }
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+      toast({
+        title: "Error",
+        description: "Error al cargar datos iniciales",
+        variant: "destructive"
+      });
     }
-  ];
+  };
 
   const generateMockData = () => {
+    // Como no hay datos reales aún, mostramos un mensaje indicativo
     if (reportType === 'exchanges') {
-      return [
-        { point: mockPoints[0].nombre, user: mockUsers[0].nombre, exchanges: 15, amount: 45000 },
-        { point: mockPoints[1].nombre, user: mockUsers[1].nombre, exchanges: 12, amount: 38000 },
-      ];
+      return [];
     }
     return [];
   };
 
-  useEffect(() => {
-    setReportData(generateMockData());
-  }, [reportType]);
-
   const generateReport = () => {
     if (!dateFrom || !dateTo) {
+      toast({
+        title: "Error",
+        description: "Debe seleccionar fechas de inicio y fin",
+        variant: "destructive"
+      });
       return;
     }
-    setReportData(generateMockData());
+    
+    setIsLoading(true);
+    // Simulamos carga
+    setTimeout(() => {
+      setReportData(generateMockData());
+      setIsLoading(false);
+      
+      if (generateMockData().length === 0) {
+        toast({
+          title: "Sin datos",
+          description: "No hay operaciones en el rango de fechas seleccionado",
+        });
+      }
+    }, 1000);
   };
+
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Generando reporte...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -104,9 +112,19 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
         onGenerateReport={generateReport}
       />
 
-      <ReportChart data={reportData} />
-
-      <ReportTable data={reportData} reportType={reportType} />
+      {reportData.length === 0 && dateFrom && dateTo ? (
+        <div className="text-center py-12">
+          <p className="text-gray-500 text-lg">No hay datos para mostrar en el rango seleccionado</p>
+          <p className="text-gray-400 mt-2">
+            La base de datos está limpia. Comience creando usuarios, puntos de atención y realizando operaciones.
+          </p>
+        </div>
+      ) : (
+        <>
+          <ReportChart data={reportData} />
+          <ReportTable data={reportData} reportType={reportType} />
+        </>
+      )}
     </div>
   );
 };

@@ -1,45 +1,61 @@
 
-import { supabase } from "@/integrations/supabase/client";
-import { Moneda } from '../types';
+const API_BASE_URL = 'http://localhost:3001/api';
+
+export interface Currency {
+  id: string;
+  nombre: string;
+  simbolo: string;
+  codigo: string;
+  activo: boolean;
+  orden_display: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCurrencyData {
+  nombre: string;
+  simbolo: string;
+  codigo: string;
+  orden_display?: number;
+}
 
 export const currencyService = {
-  async getAllCurrencies(): Promise<{ currencies: Moneda[]; error: string | null }> {
+  async getAllCurrencies(): Promise<{ currencies: Currency[]; error: string | null }> {
     try {
-      const { data, error } = await supabase
-        .from('Moneda')
-        .select('*')
-        .eq('activo', true)
-        .order('orden_display');
+      const response = await fetch(`${API_BASE_URL}/currencies`);
+      const data = await response.json();
 
-      if (error) {
-        console.error('Error obteniendo monedas:', error);
-        return { currencies: [], error: error.message };
+      if (!response.ok) {
+        return { currencies: [], error: data.error || 'Error al obtener monedas' };
       }
 
-      return { currencies: data || [], error: null };
+      return { currencies: data.currencies, error: null };
     } catch (error) {
       console.error('Error en getAllCurrencies:', error);
-      return { currencies: [], error: 'Error al obtener monedas' };
+      return { currencies: [], error: 'Error de conexión con el servidor' };
     }
   },
 
-  async createCurrency(currencyData: Omit<Moneda, 'id' | 'created_at' | 'updated_at'>): Promise<{ currency: Moneda | null; error: string | null }> {
+  async createCurrency(currencyData: CreateCurrencyData): Promise<{ currency: Currency | null; error: string | null }> {
     try {
-      const { data, error } = await supabase
-        .from('Moneda')
-        .insert([currencyData])
-        .select()
-        .single();
+      const response = await fetch(`${API_BASE_URL}/currencies`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(currencyData)
+      });
 
-      if (error) {
-        console.error('Error creando moneda:', error);
-        return { currency: null, error: error.message };
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { currency: null, error: data.error || 'Error al crear moneda' };
       }
 
-      return { currency: data, error: null };
+      return { currency: data.currency, error: null };
     } catch (error) {
       console.error('Error en createCurrency:', error);
-      return { currency: null, error: 'Error al crear moneda' };
+      return { currency: null, error: 'Error de conexión con el servidor' };
     }
   }
 };
