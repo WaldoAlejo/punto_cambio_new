@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from '../hooks/useAuth';
+import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
 
 const Login = () => {
@@ -16,9 +17,42 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validaciones básicas
+    if (!username.trim()) {
+      setError('El usuario es obligatorio');
+      toast({
+        title: "Error de validación",
+        description: "Debe ingresar un usuario",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!password.trim()) {
+      setError('La contraseña es obligatoria');
+      toast({
+        title: "Error de validación",
+        description: "Debe ingresar una contraseña",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (password.length < 3) {
+      setError('La contraseña debe tener al menos 3 caracteres');
+      toast({
+        title: "Error de validación",
+        description: "La contraseña es muy corta",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setError('');
     setIsLoading(true);
 
@@ -26,13 +60,29 @@ const Login = () => {
       const result = await login(username, password);
       
       if (result.success) {
+        toast({
+          title: "Inicio de sesión exitoso",
+          description: `Bienvenido al sistema`,
+        });
         navigate('/dashboard');
       } else {
-        setError(result.error || 'Error al iniciar sesión');
+        const errorMessage = result.error || 'Error al iniciar sesión';
+        setError(errorMessage);
+        toast({
+          title: "Error de autenticación",
+          description: errorMessage,
+          variant: "destructive"
+        });
       }
     } catch (error) {
-      setError('Error interno del servidor');
+      const errorMessage = 'Error de conexión con el servidor';
+      setError(errorMessage);
       console.error('Error en login:', error);
+      toast({
+        title: "Error de conexión",
+        description: "No se pudo conectar con el servidor. Verifique su conexión.",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
@@ -58,9 +108,13 @@ const Login = () => {
                 type="text"
                 placeholder="Ingresa tu usuario"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  if (error) setError(''); // Limpiar error al escribir
+                }}
                 required
                 disabled={isLoading}
+                className={error && !username ? 'border-red-500' : ''}
               />
             </div>
             <div className="space-y-2">
@@ -70,9 +124,13 @@ const Login = () => {
                 type="password"
                 placeholder="Ingresa tu contraseña"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError(''); // Limpiar error al escribir
+                }}
                 required
                 disabled={isLoading}
+                className={error && !password ? 'border-red-500' : ''}
               />
             </div>
             {error && (
@@ -83,7 +141,7 @@ const Login = () => {
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={isLoading}
+              disabled={isLoading || !username.trim() || !password.trim()}
             >
               {isLoading ? (
                 <>

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { User } from '../../types';
 
 interface LoginFormProps {
@@ -15,6 +15,7 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
   // Mock users for demonstration - In production this would come from your backend
   const mockUsers: User[] = [
@@ -62,6 +63,26 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validaciones
+    if (!username.trim()) {
+      toast({
+        title: "Error de validación",
+        description: "El usuario es obligatorio",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!password.trim()) {
+      toast({
+        title: "Error de validación", 
+        description: "La contraseña es obligatoria",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -91,23 +112,24 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
 
       if (!user.activo) {
         toast({
-          title: "Error de autenticación",
-          description: "Usuario inactivo",
+          title: "Usuario inactivo",
+          description: "Su cuenta ha sido desactivada. Contacte al administrador.",
           variant: "destructive"
         });
         return;
       }
 
       toast({
-        title: "Bienvenido",
-        description: `Hola ${user.nombre}`,
+        title: "Inicio de sesión exitoso",
+        description: `Bienvenido ${user.nombre}`,
       });
 
       onLogin(user);
     } catch (error) {
+      console.error('Error in login:', error);
       toast({
-        title: "Error",
-        description: "Error de conexión",
+        title: "Error de conexión",
+        description: "No se pudo conectar con el servidor. Intente nuevamente.",
         variant: "destructive"
       });
     } finally {
@@ -133,6 +155,7 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Ingrese su usuario"
                 required
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -144,12 +167,13 @@ const LoginForm = ({ onLogin }: LoginFormProps) => {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Ingrese su contraseña"
                 required
+                disabled={loading}
               />
             </div>
             <Button 
               type="submit" 
               className="w-full bg-blue-600 hover:bg-blue-700"
-              disabled={loading}
+              disabled={loading || !username.trim() || !password.trim()}
             >
               {loading ? "Verificando..." : "Iniciar Sesión"}
             </Button>
