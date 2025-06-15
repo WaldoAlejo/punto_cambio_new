@@ -19,6 +19,9 @@ CREATE TYPE "EstadoTransaccion" AS ENUM ('COMPLETADO', 'PENDIENTE', 'CANCELADO')
 -- CreateEnum
 CREATE TYPE "EstadoCierre" AS ENUM ('ABIERTO', 'CERRADO');
 
+-- CreateEnum
+CREATE TYPE "TipoRecibo" AS ENUM ('CAMBIO_DIVISA', 'TRANSFERENCIA', 'MOVIMIENTO', 'DEPOSITO', 'RETIRO');
+
 -- CreateTable
 CREATE TABLE "Usuario" (
     "id" TEXT NOT NULL,
@@ -147,6 +150,22 @@ CREATE TABLE "Movimiento" (
     "numero_recibo" TEXT,
 
     CONSTRAINT "Movimiento_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Recibo" (
+    "id" TEXT NOT NULL,
+    "numero_recibo" TEXT NOT NULL,
+    "tipo_operacion" "TipoRecibo" NOT NULL,
+    "referencia_id" TEXT NOT NULL,
+    "usuario_id" TEXT NOT NULL,
+    "punto_atencion_id" TEXT NOT NULL,
+    "fecha" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "datos_operacion" JSONB NOT NULL,
+    "impreso" BOOLEAN NOT NULL DEFAULT false,
+    "numero_copias" INTEGER NOT NULL DEFAULT 2,
+
+    CONSTRAINT "Recibo_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -287,6 +306,18 @@ CREATE INDEX "Movimiento_fecha_idx" ON "Movimiento"("fecha");
 CREATE INDEX "Movimiento_punto_atencion_id_idx" ON "Movimiento"("punto_atencion_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Recibo_numero_recibo_key" ON "Recibo"("numero_recibo");
+
+-- CreateIndex
+CREATE INDEX "Recibo_fecha_idx" ON "Recibo"("fecha");
+
+-- CreateIndex
+CREATE INDEX "Recibo_numero_recibo_idx" ON "Recibo"("numero_recibo");
+
+-- CreateIndex
+CREATE INDEX "Recibo_tipo_operacion_idx" ON "Recibo"("tipo_operacion");
+
+-- CreateIndex
 CREATE INDEX "SolicitudSaldo_fecha_solicitud_idx" ON "SolicitudSaldo"("fecha_solicitud");
 
 -- CreateIndex
@@ -360,6 +391,12 @@ ALTER TABLE "Movimiento" ADD CONSTRAINT "Movimiento_usuario_id_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "Movimiento" ADD CONSTRAINT "Movimiento_punto_atencion_id_fkey" FOREIGN KEY ("punto_atencion_id") REFERENCES "PuntoAtencion"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Recibo" ADD CONSTRAINT "Recibo_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "Usuario"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Recibo" ADD CONSTRAINT "Recibo_punto_atencion_id_fkey" FOREIGN KEY ("punto_atencion_id") REFERENCES "PuntoAtencion"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SolicitudSaldo" ADD CONSTRAINT "SolicitudSaldo_punto_atencion_id_fkey" FOREIGN KEY ("punto_atencion_id") REFERENCES "PuntoAtencion"("id") ON DELETE CASCADE ON UPDATE CASCADE;

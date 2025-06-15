@@ -223,11 +223,11 @@ model Recibo {
   id                String     @id @default(uuid())
   numero_recibo     String     @unique
   tipo_operacion    TipoRecibo
-  referencia_id     String // ID de la operación relacionada
+  referencia_id     String
   usuario_id        String
   punto_atencion_id String
   fecha             DateTime   @default(now())
-  datos_operacion   Json // Datos específicos de la operación
+  datos_operacion   Json
   impreso           Boolean    @default(false)
   numero_copias     Int        @default(2)
 
