@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
+import { apiService } from '../../services/apiService';
 import { User, Transferencia, Moneda, PuntoAtencion } from '../../types';
 
 interface TransferApprovalsProps {
@@ -14,62 +15,47 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
   const [pendingTransfers, setPendingTransfers] = useState<Transferencia[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
-
-  // Mock data - En producción esto vendría de la API
-  const mockCurrencies: Moneda[] = [
-    { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, orden_display: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, orden_display: 2, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, orden_display: 3, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-  ];
-
-  const mockPoints: PuntoAtencion[] = [
-    { id: '1', nombre: 'Punto Centro', direccion: 'Centro', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '' },
-    { id: '2', nombre: 'Punto Norte', direccion: 'Norte', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '' },
-    { id: '3', nombre: 'Matriz', direccion: 'Oficina Principal', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '' }
-  ];
-
-  const mockPendingTransfers: Transferencia[] = [
-    {
-      id: '1',
-      origen_id: '1',
-      destino_id: '2',
-      moneda_id: '1',
-      monto: 1000,
-      tipo_transferencia: 'ENTRE_PUNTOS',
-      estado: 'PENDIENTE',
-      solicitado_por: 'user1',
-      fecha: new Date().toISOString(),
-      descripcion: 'Transferencia de operación diaria',
-      numero_recibo: 'TR-001',
-      detalle_divisas: {
-        billetes: 800,
-        monedas: 200,
-        total: 1000
-      }
-    },
-    {
-      id: '2',
-      destino_id: '1',
-      moneda_id: '2',
-      monto: 500,
-      tipo_transferencia: 'DEPOSITO_MATRIZ',
-      estado: 'PENDIENTE',
-      solicitado_por: 'user2',
-      fecha: new Date().toISOString(),
-      descripcion: 'Solicitud de euros para operaciones',
-      numero_recibo: 'TR-002',
-      detalle_divisas: {
-        billetes: 400,
-        monedas: 100,
-        total: 500
-      }
-    }
-  ];
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setCurrencies(mockCurrencies);
-    setPoints(mockPoints);
-    setPendingTransfers(mockPendingTransfers);
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // Cargar datos reales desde la API
+        const [transfersResponse, currenciesResponse, pointsResponse] = await Promise.all([
+          apiService.get('/transfers'),
+          apiService.get('/currencies'),
+          apiService.get('/points')
+        ]);
+
+        if (transfersResponse?.transfers) {
+          // Filtrar solo las transferencias pendientes
+          const pending = transfersResponse.transfers.filter((t: Transferencia) => t.estado === 'PENDIENTE');
+          setPendingTransfers(pending);
+        }
+
+        if (currenciesResponse?.currencies) {
+          setCurrencies(currenciesResponse.currencies);
+        }
+
+        if (pointsResponse?.points) {
+          setPoints(pointsResponse.points);
+        }
+
+      } catch (error) {
+        console.error('Error loading transfer approvals data:', error);
+        toast({
+          title: "Error",
+          description: "Error al cargar los datos de transferencias",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
   }, []);
 
   const getCurrencyName = (currencyId: string) => {
@@ -92,55 +78,68 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
     return types[type as keyof typeof types] || type;
   };
 
-  const handleApprove = (transferId: string) => {
-    setPendingTransfers(prev => prev.map(t => 
-      t.id === transferId 
-        ? { 
-            ...t, 
-            estado: 'APROBADO', 
-            aprobado_por: user.id,
-            fecha_aprobacion: new Date().toISOString()
-          }
-        : t
-    ));
+  const handleApprove = async (transferId: string) => {
+    try {
+      // Aquí iría la llamada a la API para aprobar la transferencia
+      // Por ahora solo actualizamos el estado local
+      setPendingTransfers(prev => prev.filter(t => t.id !== transferId));
 
-    toast({
-      title: "Transferencia aprobada",
-      description: "La transferencia ha sido aprobada exitosamente",
-    });
+      toast({
+        title: "Transferencia aprobada",
+        description: "La transferencia ha sido aprobada exitosamente",
+      });
+    } catch (error) {
+      console.error('Error approving transfer:', error);
+      toast({
+        title: "Error",
+        description: "Error al aprobar la transferencia",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleReject = (transferId: string) => {
-    setPendingTransfers(prev => prev.map(t => 
-      t.id === transferId 
-        ? { 
-            ...t, 
-            estado: 'RECHAZADO', 
-            aprobado_por: user.id,
-            fecha_aprobacion: new Date().toISOString()
-          }
-        : t
-    ));
+  const handleReject = async (transferId: string) => {
+    try {
+      // Aquí iría la llamada a la API para rechazar la transferencia
+      // Por ahora solo actualizamos el estado local
+      setPendingTransfers(prev => prev.filter(t => t.id !== transferId));
 
-    toast({
-      title: "Transferencia rechazada",
-      description: "La transferencia ha sido rechazada",
-      variant: "destructive"
-    });
+      toast({
+        title: "Transferencia rechazada",
+        description: "La transferencia ha sido rechazada",
+        variant: "destructive"
+      });
+    } catch (error) {
+      console.error('Error rejecting transfer:', error);
+      toast({
+        title: "Error",
+        description: "Error al rechazar la transferencia",
+        variant: "destructive"
+      });
+    }
   };
 
-  const pendingOnly = pendingTransfers.filter(t => t.estado === 'PENDIENTE');
+  if (isLoading) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando transferencias pendientes...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Aprobación de Transferencias</h1>
         <Badge variant="secondary">
-          {pendingOnly.length} transferencias pendientes
+          {pendingTransfers.length} transferencias pendientes
         </Badge>
       </div>
 
-      {pendingOnly.length === 0 ? (
+      {pendingTransfers.length === 0 ? (
         <Card>
           <CardContent className="p-6">
             <div className="text-center py-8 text-gray-500">
@@ -150,7 +149,7 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
         </Card>
       ) : (
         <div className="space-y-4">
-          {pendingOnly.map(transfer => (
+          {pendingTransfers.map(transfer => (
             <Card key={transfer.id}>
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -159,7 +158,7 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
                       {getTransferTypeLabel(transfer.tipo_transferencia)}
                     </CardTitle>
                     <CardDescription>
-                      Recibo: {transfer.numero_recibo}
+                      Recibo: {transfer.numero_recibo || 'Sin número'}
                     </CardDescription>
                   </div>
                   <Badge variant="outline" className="bg-yellow-50 text-yellow-800">
@@ -175,9 +174,9 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
                       <p>
                         <span className="font-medium">Monto:</span> {transfer.monto} {getCurrencyName(transfer.moneda_id)}
                       </p>
-                      {transfer.tipo_transferencia === 'ENTRE_PUNTOS' && (
+                      {transfer.tipo_transferencia === 'ENTRE_PUNTOS' && transfer.origen_id && (
                         <p>
-                          <span className="font-medium">De:</span> {getPointName(transfer.origen_id || '')} 
+                          <span className="font-medium">De:</span> {getPointName(transfer.origen_id)} 
                           <span className="mx-2">→</span>
                           <span className="font-medium">A:</span> {getPointName(transfer.destino_id)}
                         </p>

@@ -20,7 +20,7 @@ export interface AuthUser {
 }
 
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<{ user: AuthUser | null; error: string | null }> {
+  async login(credentials: LoginCredentials): Promise<{ user: AuthUser | null; token: string | null; error: string | null }> {
     try {
       console.log('Intentando login con:', credentials.username);
       
@@ -36,14 +36,28 @@ export const authService = {
 
       if (!response.ok) {
         console.log('Error en login:', data.error);
-        return { user: null, error: data.error };
+        return { user: null, token: null, error: data.error };
       }
 
       console.log('Login exitoso para:', data.user.username);
-      return { user: data.user, error: null };
+      
+      // Guardar token en localStorage
+      if (data.token) {
+        localStorage.setItem('authToken', data.token);
+      }
+      
+      return { user: data.user, token: data.token, error: null };
     } catch (error) {
       console.error('Error en login:', error);
-      return { user: null, error: 'Error de conexión con el servidor' };
+      return { user: null, token: null, error: 'Error de conexión con el servidor' };
     }
+  },
+
+  getStoredToken(): string | null {
+    return localStorage.getItem('authToken');
+  },
+
+  removeStoredToken(): void {
+    localStorage.removeItem('authToken');
   }
 };

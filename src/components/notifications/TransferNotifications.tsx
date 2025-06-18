@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { apiService } from '../../services/apiService';
 import { User, Transferencia } from '../../types';
 
 interface TransferNotificationsProps {
@@ -16,32 +17,26 @@ const TransferNotifications = ({ user, onNotificationClick }: TransferNotificati
   const [pendingTransfers, setPendingTransfers] = useState<Transferencia[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
-  // Mock data - En producción esto vendría de una API o WebSocket
   useEffect(() => {
     if (user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') return;
 
-    // Simular verificación cada 30 segundos
-    const checkPendingTransfers = () => {
-      // Mock data para demostración
-      const mockPending: Transferencia[] = [
-        {
-          id: '1',
-          origen_id: '1',
-          destino_id: '2',
-          moneda_id: '1',
-          monto: 1000,
-          tipo_transferencia: 'ENTRE_PUNTOS',
-          estado: 'PENDIENTE',
-          solicitado_por: 'operador1',
-          fecha: new Date().toISOString(),
-          descripcion: 'Transferencia urgente',
+    const checkPendingTransfers = async () => {
+      try {
+        const response = await apiService.get('/transfers');
+        if (response?.transfers) {
+          const pending = response.transfers.filter((t: Transferencia) => t.estado === 'PENDIENTE');
+          setPendingTransfers(pending);
         }
-      ];
-      
-      setPendingTransfers(mockPending);
+      } catch (error) {
+        console.error('Error loading pending transfers:', error);
+        setPendingTransfers([]);
+      }
     };
 
+    // Verificar al cargar
     checkPendingTransfers();
+    
+    // Verificar cada 30 segundos
     const interval = setInterval(checkPendingTransfers, 30000);
 
     return () => clearInterval(interval);
@@ -90,7 +85,7 @@ const TransferNotifications = ({ user, onNotificationClick }: TransferNotificati
                     {transfer.tipo_transferencia.replace('_', ' ')}
                   </p>
                   <p className="text-xs text-gray-600">
-                    Monto: ${transfer.monto}
+                    Monto: {transfer.monto}
                   </p>
                   <p className="text-xs text-gray-500">
                     {new Date(transfer.fecha).toLocaleString()}

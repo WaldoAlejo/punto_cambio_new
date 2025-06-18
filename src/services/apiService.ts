@@ -1,25 +1,22 @@
 
-import { authService } from '@/services/authService';
+import { authService } from './authService';
 
-// Configuración base para las llamadas a la API
-export const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = 'http://localhost:3001/api';
 
-export const apiClient = {
+class ApiService {
+  private getAuthHeaders() {
+    const token = authService.getStoredToken();
+    return {
+      'Content-Type': 'application/json',
+      ...(token && { 'Authorization': `Bearer ${token}` })
+    };
+  }
+
   async get(endpoint: string) {
     try {
       console.log(`Making GET request to: ${API_BASE_URL}${endpoint}`);
-      
-      const token = authService.getStoredToken();
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers
+        headers: this.getAuthHeaders()
       });
       
       if (response.status === 401) {
@@ -35,24 +32,14 @@ export const apiClient = {
       console.error(`Error in GET ${endpoint}:`, error);
       throw error;
     }
-  },
+  }
 
   async post(endpoint: string, data: any) {
     try {
       console.log(`Making POST request to: ${API_BASE_URL}${endpoint}`, data);
-      
-      const token = authService.getStoredToken();
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
-        headers,
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(data)
       });
       
@@ -70,4 +57,6 @@ export const apiClient = {
       throw error;
     }
   }
-};
+}
+
+export const apiService = new ApiService();

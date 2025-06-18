@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { User, PuntoAtencion, Moneda, Transferencia } from '../../types';
 import { toast } from "@/hooks/use-toast";
+import { apiService } from '../../services/apiService';
 import TransferForm from './TransferForm';
 import TransferList from './TransferList';
 
@@ -16,30 +17,31 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Mock data
-  const mockCurrencies: Moneda[] = [
-    { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, orden_display: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, orden_display: 2, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, orden_display: 3, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-  ];
-
-  const mockPoints: PuntoAtencion[] = [
-    { id: '1', nombre: 'Punto Centro', direccion: 'Centro', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '' },
-    { id: '2', nombre: 'Punto Norte', direccion: 'Norte', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '' },
-    { id: '3', nombre: 'Punto Sur', direccion: 'Sur', ciudad: 'Caracas', provincia: 'DC', telefono: '', activo: true, created_at: '', updated_at: '' }
-  ];
-
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
         
-        // Simulate loading
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        setCurrencies(mockCurrencies);
-        setPoints(mockPoints.filter(p => p.id !== selectedPoint?.id));
-        setTransfers([]);
+        // Cargar datos reales desde la API
+        const [transfersResponse, currenciesResponse, pointsResponse] = await Promise.all([
+          apiService.get('/transfers'),
+          apiService.get('/currencies'),
+          apiService.get('/points')
+        ]);
+
+        if (transfersResponse?.transfers) {
+          setTransfers(transfersResponse.transfers);
+        }
+
+        if (currenciesResponse?.currencies) {
+          setCurrencies(currenciesResponse.currencies);
+        }
+
+        if (pointsResponse?.points) {
+          // Filtrar el punto actual para las transferencias
+          const availablePoints = pointsResponse.points.filter((p: PuntoAtencion) => p.id !== selectedPoint?.id);
+          setPoints(availablePoints);
+        }
         
         toast({
           title: "Datos cargados",
