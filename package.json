@@ -9,8 +9,8 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
-    "seed": "npx tsx prisma/seed.ts",
-    "server": "nodemon server/index.js"
+    "server": "nodemon server/index.js",
+    "seed": "npx tsx prisma/seed.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
