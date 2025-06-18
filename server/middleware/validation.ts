@@ -1,14 +1,17 @@
 
 import { z } from 'zod';
+import { Request, Response, NextFunction, RequestHandler } from 'express';
 import logger from '../utils/logger.js';
 
+type RequestProperty = 'body' | 'params' | 'query';
+
 // Middleware genérico para validar con esquemas Zod
-export const validate = (schema, property = 'body') => {
-  return (req, res, next) => {
+export const validate = (schema: z.ZodSchema, property: RequestProperty = 'body'): RequestHandler => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     try {
       const data = req[property];
       const validatedData = schema.parse(data);
-      req[property] = validatedData;
+      (req as any)[property] = validatedData;
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -23,32 +26,33 @@ export const validate = (schema, property = 'body') => {
           ip: req.ip 
         });
         
-        return res.status(400).json({
+        res.status(400).json({
           error: 'Datos de entrada inválidos',
           details: errors
         });
+        return;
       }
       
       logger.error('Error en validación', { 
-        error: error.message, 
+        error: error instanceof Error ? error.message : 'Unknown error', 
         ip: req.ip 
       });
-      return res.status(500).json({ error: 'Error interno del servidor' });
+      res.status(500).json({ error: 'Error interno del servidor' });
     }
   };
 };
 
 // Sanitizar datos de entrada
-export const sanitizeInput = (req, res, next) => {
-  const sanitizeString = (str) => {
+export const sanitizeInput: RequestHandler = (req: Request, res: Response, next: NextFunction): void => {
+  const sanitizeString = (str: any): any => {
     if (typeof str !== 'string') return str;
     return str.trim().replace(/[<>\"']/g, '');
   };
 
-  const sanitizeObject = (obj) => {
+  const sanitizeObject = (obj: any): any => {
     if (typeof obj !== 'object' || obj === null) return obj;
     
-    const sanitized = {};
+    const sanitized: any = {};
     for (const [key, value] of Object.entries(obj)) {
       if (typeof value === 'string') {
         sanitized[key] = sanitizeString(value);

@@ -1,6 +1,7 @@
 
 import winston from 'winston';
 import path from 'path';
+import { Request, Response, NextFunction } from 'express';
 
 const logDir = 'logs';
 
@@ -43,7 +44,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Función helper para estructurar logs
-export const logRequest = (req, res, next) => {
+export const logRequest = (req: Request, res: Response, next: NextFunction): void => {
   const start = Date.now();
   
   res.on('finish', () => {
@@ -53,7 +54,7 @@ export const logRequest = (req, res, next) => {
       url: req.originalUrl,
       status: res.statusCode,
       duration: `${duration}ms`,
-      ip: req.ip || req.connection.remoteAddress,
+      ip: req.ip || req.socket.remoteAddress,
       userAgent: req.get('User-Agent') || ''
     };
 

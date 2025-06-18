@@ -82,3 +82,9 @@ export const createCurrencySchema = z.object({
 
 // Schema para UUID
 export const uuidSchema = z.string().uuid('ID inválido');
+
+// Tipos derivados de los schemas
+export type LoginRequest = z.infer<typeof loginSchema>;
+export type CreateUserRequest = z.infer<typeof createUserSchema>;
+export type CreatePointRequest = z.infer<typeof createPointSchema>;
+export type CreateCurrencyRequest = z.infer<typeof createCurrencySchema>;

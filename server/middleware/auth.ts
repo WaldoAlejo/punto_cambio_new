@@ -1,23 +1,43 @@
 
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
+import { Request, Response, NextFunction, RequestHandler } from 'express';
 import logger from '../utils/logger.js';
+
+interface AuthenticatedUser {
+  id: string;
+  username: string;
+  nombre: string;
+  rol: string;
+  activo: boolean;
+  punto_atencion_id: string | null;
+}
+
+// Extender la interfaz Request para incluir el usuario autenticado
+declare global {
+  namespace Express {
+    interface Request {
+      user?: AuthenticatedUser;
+    }
+  }
+}
 
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
 
 // Middleware para validar JWT
-export const authenticateToken = async (req, res, next) => {
+export const authenticateToken: RequestHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
       logger.warn('Acceso sin token', { ip: req.ip, url: req.originalUrl });
-      return res.status(401).json({ error: 'Token de acceso requerido' });
+      res.status(401).json({ error: 'Token de acceso requerido' });
+      return;
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
     
     // Verificar que el usuario aún existe y está activo
     const user = await prisma.usuario.findUnique({
@@ -37,25 +57,27 @@ export const authenticateToken = async (req, res, next) => {
         userId: decoded.userId, 
         ip: req.ip 
       });
-      return res.status(401).json({ error: 'Usuario no válido' });
+      res.status(401).json({ error: 'Usuario no válido' });
+      return;
     }
 
-    req.user = user;
+    req.user = user as AuthenticatedUser;
     next();
   } catch (error) {
     logger.error('Error en autenticación', { 
-      error: error.message, 
+      error: error instanceof Error ? error.message : 'Unknown error', 
       ip: req.ip 
     });
-    return res.status(403).json({ error: 'Token inválido' });
+    res.status(403).json({ error: 'Token inválido' });
   }
 };
 
 // Middleware para verificar roles
-export const requireRole = (roles) => {
-  return (req, res, next) => {
+export const requireRole = (roles: string[]): RequestHandler => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      return res.status(401).json({ error: 'Usuario no autenticado' });
+      res.status(401).json({ error: 'Usuario no autenticado' });
+      return;
     }
 
     if (!roles.includes(req.user.rol)) {
@@ -65,7 +87,8 @@ export const requireRole = (roles) => {
         requiredRoles: roles,
         ip: req.ip
       });
-      return res.status(403).json({ error: 'Permisos insuficientes' });
+      res.status(403).json({ error: 'Permisos insuficientes' });
+      return;
     }
 
     next();
@@ -73,6 +96,6 @@ export const requireRole = (roles) => {
 };
 
 // Generar JWT
-export const generateToken = (userId) => {
+export const generateToken = (userId: string): string => {
   return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '24h' });
 };

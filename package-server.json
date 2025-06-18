@@ -3,13 +3,16 @@
   "name": "punto-cambio-server",
   "version": "1.0.0",
   "description": "API server for punto cambio app",
-  "main": "server/index.js",
+  "main": "server/index.ts",
   "type": "module",
   "scripts": {
-    "start": "node server/index.js",
-    "server": "node server/index.js",
-    "server:dev": "nodemon server/index.js",
-    "server:prod": "NODE_ENV=production node server/index.js",
+    "dev:server": "tsx server/index.ts",
+    "build:server": "tsc --project tsconfig.server.json",
+    "start:server": "node dist/index.js",
+    "start": "node dist/index.js",
+    "server": "node dist/index.js",
+    "server:dev": "tsx server/index.ts",
+    "server:prod": "NODE_ENV=production node dist/index.js",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop punto-cambio-api",
     "pm2:restart": "pm2 restart punto-cambio-api",
@@ -20,7 +23,7 @@
     "health": "bash scripts/health-check.sh",
     "db:migrate": "npx prisma migrate deploy",
     "db:generate": "npx prisma generate",
-    "db:seed": "node src/scripts/semilla.ts",
+    "db:seed": "tsx src/scripts/semilla.ts",
     "logs:error": "tail -f logs/error.log",
     "logs:combined": "tail -f logs/combined.log"
   },
@@ -38,7 +41,13 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
-    "@types/jsonwebtoken": "^9.0.5"
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/express": "^4.17.21",
+    "@types/cors": "^2.8.17",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.10.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
   },
   "engines": {
     "node": ">=18.0.0",

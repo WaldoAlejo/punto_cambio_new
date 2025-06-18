@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -12,7 +12,11 @@ import {
   createUserSchema, 
   createPointSchema, 
   createCurrencySchema,
-  uuidSchema 
+  uuidSchema,
+  type LoginRequest,
+  type CreateUserRequest,
+  type CreatePointRequest,
+  type CreateCurrencyRequest
 } from './schemas/validation.js';
 
 const app = express();
@@ -53,7 +57,7 @@ app.use(sanitizeInput);
 app.use(logRequest);
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', (req: Request, res: Response) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -63,7 +67,7 @@ app.get('/health', (req, res) => {
 });
 
 // Test endpoint
-app.get('/api/test', async (req, res) => {
+app.get('/api/test', async (req: Request, res: Response) => {
   try {
     logger.info('Testing database connection');
     const userCount = await prisma.usuario.count();
@@ -73,7 +77,7 @@ app.get('/api/test', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Database test error', { error: error.message });
+    logger.error('Database test error', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({ error: 'Database connection failed' });
   }
 });
@@ -82,7 +86,7 @@ app.get('/api/test', async (req, res) => {
 app.post('/api/auth/login', 
   loginLimiter,
   validate(loginSchema),
-  async (req, res) => {
+  async (req: Request<{}, {}, LoginRequest>, res: Response) => {
     try {
       const { username, password } = req.body;
       
@@ -97,14 +101,16 @@ app.post('/api/auth/login',
 
       if (!user) {
         logger.warn('Usuario no encontrado', { username, ip: req.ip });
-        return res.status(401).json({ error: 'Credenciales inválidas' });
+        res.status(401).json({ error: 'Credenciales inválidas' });
+        return;
       }
 
       const passwordMatch = await bcrypt.compare(password, user.password);
       
       if (!passwordMatch) {
         logger.warn('Contraseña incorrecta', { username, ip: req.ip });
-        return res.status(401).json({ error: 'Credenciales inválidas' });
+        res.status(401).json({ error: 'Credenciales inválidas' });
+        return;
       }
 
       const token = generateToken(user.id);
@@ -121,7 +127,7 @@ app.post('/api/auth/login',
         token
       });
     } catch (error) {
-      logger.error('Error en login', { error: error.message, ip: req.ip });
+      logger.error('Error en login', { error: error instanceof Error ? error.message : 'Unknown error', ip: req.ip });
       res.status(500).json({ error: 'Error interno del servidor' });
     }
   }
@@ -138,7 +144,7 @@ app.use('/api/schedules', authenticateToken);
 // Obtener usuarios (solo admins)
 app.get('/api/users', 
   requireRole(['ADMIN', 'SUPER_USUARIO']),
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     try {
       const users = await prisma.usuario.findMany({
         orderBy: { created_at: 'desc' },
@@ -156,7 +162,7 @@ app.get('/api/users',
         }
       });
 
-      logger.info('Usuarios obtenidos', { count: users.length, requestedBy: req.user.id });
+      logger.info('Usuarios obtenidos', { count: users.length, requestedBy: req.user?.id });
 
       res.json({ 
         users: users.map(user => ({
@@ -166,7 +172,7 @@ app.get('/api/users',
         }))
       });
     } catch (error) {
-      logger.error('Error al obtener usuarios', { error: error.message, requestedBy: req.user.id });
+      logger.error('Error al obtener usuarios', { error: error instanceof Error ? error.message : 'Unknown error', requestedBy: req.user?.id });
       res.status(500).json({ error: 'Error al obtener usuarios' });
     }
   }
@@ -176,7 +182,7 @@ app.get('/api/users',
 app.post('/api/users',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createUserSchema),
-  async (req, res) => {
+  async (req: Request<{}, {}, CreateUserRequest>, res: Response) => {
     try {
       const { username, password, nombre, correo, rol, punto_atencion_id } = req.body;
       
@@ -187,11 +193,13 @@ app.post('/api/users',
       ]);
 
       if (existingUser) {
-        return res.status(400).json({ error: 'El nombre de usuario ya existe' });
+        res.status(400).json({ error: 'El nombre de usuario ya existe' });
+        return;
       }
 
       if (existingEmail) {
-        return res.status(400).json({ error: 'El correo electrónico ya existe' });
+        res.status(400).json({ error: 'El correo electrónico ya existe' });
+        return;
       }
 
       const hashedPassword = await bcrypt.hash(password, 12);
@@ -223,7 +231,7 @@ app.post('/api/users',
       logger.info('Usuario creado', { 
         newUserId: newUser.id, 
         username: newUser.username,
-        createdBy: req.user.id 
+        createdBy: req.user?.id 
       });
 
       res.status(201).json({ 
@@ -234,7 +242,7 @@ app.post('/api/users',
         }
       });
     } catch (error) {
-      logger.error('Error al crear usuario', { error: error.message, requestedBy: req.user.id });
+      logger.error('Error al crear usuario', { error: error instanceof Error ? error.message : 'Unknown error', requestedBy: req.user?.id });
       res.status(500).json({ error: 'Error al crear usuario' });
     }
   }
@@ -244,7 +252,7 @@ app.post('/api/users',
 app.patch('/api/users/:userId/toggle',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(uuidSchema, 'params'),
-  async (req, res) => {
+  async (req: Request, res: Response) => {
     try {
       const { userId } = req.params;
       
@@ -276,7 +284,7 @@ app.patch('/api/users/:userId/toggle',
       logger.info('Usuario actualizado', { 
         userId, 
         newStatus: updatedUser.activo,
-        updatedBy: req.user.id 
+        updatedBy: req.user?.id 
       });
 
       res.json({ 
@@ -287,14 +295,14 @@ app.patch('/api/users/:userId/toggle',
         }
       });
     } catch (error) {
-      logger.error('Error al actualizar usuario', { error: error.message, requestedBy: req.user.id });
+      logger.error('Error al actualizar usuario', { error: error instanceof Error ? error.message : 'Unknown error', requestedBy: req.user?.id });
       res.status(500).json({ error: 'Error al actualizar usuario' });
     }
   }
 );
 
 // Endpoint para obtener todos los usuarios
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', async (req: Request, res: Response) => {
   try {
     const users = await prisma.usuario.findMany({
       orderBy: {
@@ -322,13 +330,13 @@ app.get('/api/users', async (req, res) => {
       }))
     });
   } catch (error) {
-    logger.error('Error al obtener usuarios', { error: error.message });
+    logger.error('Error al obtener usuarios', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({ error: 'Error al obtener usuarios' });
   }
 });
 
 // Endpoint para crear usuario
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', async (req: Request, res: Response) => {
   try {
     const { username, password, nombre, correo, rol, punto_atencion_id } = req.body;
     
@@ -388,20 +396,20 @@ app.post('/api/users', async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('Error al crear usuario', { error: error.message });
+    logger.error('Error al crear usuario', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({ error: 'Error al crear usuario' });
   }
 });
 
 // Endpoint para obtener puntos de atención
-app.get('/api/points', async (req, res) => {
+app.get('/api/points', async (req: Request, res: Response) => {
   try {
     const points = await prisma.puntoAtencion.findMany({
       where: { activo: true },
       orderBy: { nombre: 'asc' }
     });
 
-    logger.info('Puntos obtenidos', { count: points.length, requestedBy: req.user.id });
+    logger.info('Puntos obtenidos', { count: points.length, requestedBy: req.user?.id });
 
     res.json({ 
       points: points.map(point => ({
@@ -411,7 +419,7 @@ app.get('/api/points', async (req, res) => {
       }))
     });
   } catch (error) {
-    logger.error('Error al obtener puntos', { error: error.message, requestedBy: req.user.id });
+    logger.error('Error al obtener puntos', { error: error instanceof Error ? error.message : 'Unknown error', requestedBy: req.user?.id });
     res.status(500).json({ error: 'Error al obtener puntos de atención' });
   }
 });
@@ -420,13 +428,13 @@ app.get('/api/points', async (req, res) => {
 app.post('/api/points',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createPointSchema),
-  async (req, res) => {
+  async (req: Request<{}, {}, CreatePointRequest>, res: Response) => {
     try {
       const newPoint = await prisma.puntoAtencion.create({
         data: { ...req.body, activo: true }
       });
 
-      logger.info('Punto creado', { pointId: newPoint.id, createdBy: req.user.id });
+      logger.info('Punto creado', { pointId: newPoint.id, createdBy: req.user?.id });
 
       res.status(201).json({ 
         point: {
@@ -436,14 +444,14 @@ app.post('/api/points',
         }
       });
     } catch (error) {
-      logger.error('Error al crear punto', { error: error.message, requestedBy: req.user.id });
+      logger.error('Error al crear punto', { error: error instanceof Error ? error.message : 'Unknown error', requestedBy: req.user?.id });
       res.status(500).json({ error: 'Error al crear punto de atención' });
     }
   }
 );
 
 // Endpoint para obtener monedas
-app.get('/api/currencies', async (req, res) => {
+app.get('/api/currencies', async (req: Request, res: Response) => {
   try {
     const currencies = await prisma.moneda.findMany({
       where: {
@@ -462,7 +470,7 @@ app.get('/api/currencies', async (req, res) => {
       }))
     });
   } catch (error) {
-    logger.error('Error al obtener monedas', { error: error.message });
+    logger.error('Error al obtener monedas', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({ error: 'Error al obtener monedas' });
   }
 });
@@ -471,7 +479,7 @@ app.get('/api/currencies', async (req, res) => {
 app.post('/api/currencies',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createCurrencySchema),
-  async (req, res) => {
+  async (req: Request<{}, {}, CreateCurrencyRequest>, res: Response) => {
     try {
       const { nombre, simbolo, codigo, orden_display } = req.body;
       
@@ -497,7 +505,7 @@ app.post('/api/currencies',
       logger.info('Moneda creada', { 
         newCurrencyId: newCurrency.id, 
         nombre: newCurrency.nombre,
-        createdBy: req.user.id 
+        createdBy: req.user?.id 
       });
 
       res.status(201).json({ 
@@ -508,14 +516,14 @@ app.post('/api/currencies',
         }
       });
     } catch (error) {
-      logger.error('Error al crear moneda', { error: error.message, requestedBy: req.user.id });
+      logger.error('Error al crear moneda', { error: error instanceof Error ? error.message : 'Unknown error', requestedBy: req.user?.id });
       res.status(500).json({ error: 'Error al crear moneda' });
     }
   }
 );
 
 // Endpoint para obtener saldos por punto
-app.get('/api/balances/:pointId', async (req, res) => {
+app.get('/api/balances/:pointId', async (req: Request, res: Response) => {
   try {
     const { pointId } = req.params;
     
@@ -536,13 +544,13 @@ app.get('/api/balances/:pointId', async (req, res) => {
       }))
     });
   } catch (error) {
-    logger.error('Error al obtener saldos', { error: error.message });
+    logger.error('Error al obtener saldos', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({ error: 'Error al obtener saldos' });
   }
 });
 
 // Endpoint para obtener transferencias
-app.get('/api/transfers', async (req, res) => {
+app.get('/api/transfers', async (req: Request, res: Response) => {
   try {
     const transfers = await prisma.transferencia.findMany({
       include: {
@@ -578,13 +586,13 @@ app.get('/api/transfers', async (req, res) => {
       }))
     });
   } catch (error) {
-    logger.error('Error al obtener transferencias', { error: error.message });
+    logger.error('Error al obtener transferencias', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({ error: 'Error al obtener transferencias' });
   }
 });
 
 // Endpoint para obtener jornadas/horarios
-app.get('/api/schedules', async (req, res) => {
+app.get('/api/schedules', async (req: Request, res: Response) => {
   try {
     const schedules = await prisma.jornada.findMany({
       include: {
@@ -617,13 +625,13 @@ app.get('/api/schedules', async (req, res) => {
       }))
     });
   } catch (error) {
-    logger.error('Error al obtener horarios', { error: error.message });
+    logger.error('Error al obtener horarios', { error: error instanceof Error ? error.message : 'Unknown error' });
     res.status(500).json({ error: 'Error al obtener horarios' });
   }
 });
 
 // Manejo de errores global
-app.use((error, req, res, next) => {
+app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   logger.error('Error no manejado', { 
     error: error.message, 
     stack: error.stack,
@@ -639,7 +647,7 @@ app.use((error, req, res, next) => {
 });
 
 // Manejo de rutas no encontradas
-app.use('*', (req, res) => {
+app.use('*', (req: Request, res: Response) => {
   logger.warn('Ruta no encontrada', { url: req.originalUrl, ip: req.ip });
   res.status(404).json({ error: 'Endpoint no encontrado' });
 });
