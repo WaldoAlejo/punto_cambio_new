@@ -13,7 +13,6 @@ import {
   createUserSchema, 
   createPointSchema, 
   createCurrencySchema,
-  uuidSchema,
   type LoginRequest,
   type CreateUserRequest,
   type CreatePointRequest,
@@ -87,9 +86,9 @@ app.get('/api/test', async (req: Request, res: Response): Promise<void> => {
 app.post('/api/auth/login', 
   loginLimiter,
   validate(loginSchema),
-  async (req: Request<Record<string, unknown>, Record<string, unknown>, LoginRequest>, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
-      const { username, password } = req.body;
+      const { username, password } = req.body as LoginRequest;
       
       logger.info('Intento de login', { username, ip: req.ip });
       
@@ -183,9 +182,9 @@ app.get('/api/users',
 app.post('/api/users',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createUserSchema),
-  async (req: Request<Record<string, unknown>, Record<string, unknown>, CreateUserRequest>, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
-      const { username, password, nombre, correo, rol, punto_atencion_id } = req.body;
+      const { username, password, nombre, correo, rol, punto_atencion_id } = req.body as CreateUserRequest;
       
       // Verificar duplicados
       const [existingUser, existingEmail] = await Promise.all([
@@ -252,10 +251,16 @@ app.post('/api/users',
 // Activar/desactivar usuario (solo admins)
 app.patch('/api/users/:userId/toggle',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
-  validate(uuidSchema, 'params'),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const { userId } = req.params;
+      
+      // Validar que userId es un UUID válido
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(userId)) {
+        res.status(400).json({ error: 'ID de usuario inválido' });
+        return;
+      }
       
       const currentUser = await prisma.usuario.findUnique({
         where: { id: userId }
@@ -330,10 +335,10 @@ app.get('/api/points', async (req: Request, res: Response): Promise<void> => {
 app.post('/api/points',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createPointSchema),
-  async (req: Request<Record<string, unknown>, Record<string, unknown>, CreatePointRequest>, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
       const newPoint = await prisma.puntoAtencion.create({
-        data: { ...req.body, activo: true }
+        data: { ...req.body as CreatePointRequest, activo: true }
       });
 
       logger.info('Punto creado', { pointId: newPoint.id, createdBy: req.user?.id });
@@ -381,9 +386,9 @@ app.get('/api/currencies', async (req: Request, res: Response): Promise<void> =>
 app.post('/api/currencies',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createCurrencySchema),
-  async (req: Request<Record<string, unknown>, Record<string, unknown>, CreateCurrencyRequest>, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
-      const { nombre, simbolo, codigo, orden_display } = req.body;
+      const { nombre, simbolo, codigo, orden_display } = req.body as CreateCurrencyRequest;
       
       // Verificar si el código ya existe
       const existingCurrency = await prisma.moneda.findUnique({
@@ -429,6 +434,13 @@ app.post('/api/currencies',
 app.get('/api/balances/:pointId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { pointId } = req.params;
+    
+    // Validar que pointId es un UUID válido
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(pointId)) {
+      res.status(400).json({ error: 'ID de punto de atención inválido' });
+      return;
+    }
     
     const balances = await prisma.saldo.findMany({
       where: {
