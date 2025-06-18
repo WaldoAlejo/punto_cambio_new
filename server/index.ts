@@ -1,3 +1,4 @@
+
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -86,7 +87,7 @@ app.get('/api/test', async (req: Request, res: Response) => {
 app.post('/api/auth/login', 
   loginLimiter,
   validate(loginSchema),
-  async (req: Request<{}, {}, LoginRequest>, res: Response) => {
+  async (req: Request<Record<string, unknown>, Record<string, unknown>, LoginRequest>, res: Response): Promise<void> => {
     try {
       const { username, password } = req.body;
       
@@ -144,7 +145,7 @@ app.use('/api/schedules', authenticateToken);
 // Obtener usuarios (solo admins)
 app.get('/api/users', 
   requireRole(['ADMIN', 'SUPER_USUARIO']),
-  async (req: Request, res: Response) => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
       const users = await prisma.usuario.findMany({
         orderBy: { created_at: 'desc' },
@@ -182,7 +183,7 @@ app.get('/api/users',
 app.post('/api/users',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createUserSchema),
-  async (req: Request<{}, {}, CreateUserRequest>, res: Response) => {
+  async (req: Request<Record<string, unknown>, Record<string, unknown>, CreateUserRequest>, res: Response): Promise<void> => {
     try {
       const { username, password, nombre, correo, rol, punto_atencion_id } = req.body;
       
@@ -252,7 +253,7 @@ app.post('/api/users',
 app.patch('/api/users/:userId/toggle',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(uuidSchema, 'params'),
-  async (req: Request, res: Response) => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
       const { userId } = req.params;
       
@@ -261,7 +262,8 @@ app.patch('/api/users/:userId/toggle',
       });
 
       if (!currentUser) {
-        return res.status(404).json({ error: 'Usuario no encontrado' });
+        res.status(404).json({ error: 'Usuario no encontrado' });
+        return;
       }
 
       const updatedUser = await prisma.usuario.update({
@@ -301,108 +303,8 @@ app.patch('/api/users/:userId/toggle',
   }
 );
 
-// Endpoint para obtener todos los usuarios
-app.get('/api/users', async (req: Request, res: Response) => {
-  try {
-    const users = await prisma.usuario.findMany({
-      orderBy: {
-        created_at: 'desc'
-      },
-      select: {
-        id: true,
-        username: true,
-        nombre: true,
-        correo: true,
-        telefono: true,
-        rol: true,
-        activo: true,
-        punto_atencion_id: true,
-        created_at: true,
-        updated_at: true
-      }
-    });
-
-    res.json({ 
-      users: users.map(user => ({
-        ...user,
-        created_at: user.created_at.toISOString(),
-        updated_at: user.updated_at.toISOString()
-      }))
-    });
-  } catch (error) {
-    logger.error('Error al obtener usuarios', { error: error instanceof Error ? error.message : 'Unknown error' });
-    res.status(500).json({ error: 'Error al obtener usuarios' });
-  }
-});
-
-// Endpoint para crear usuario
-app.post('/api/users', async (req: Request, res: Response) => {
-  try {
-    const { username, password, nombre, correo, rol, punto_atencion_id } = req.body;
-    
-    // Verificar si el username ya existe
-    const existingUser = await prisma.usuario.findFirst({
-      where: { username }
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ error: 'El nombre de usuario ya existe' });
-    }
-
-    // Verificar si el correo ya existe (si se proporciona)
-    if (correo) {
-      const existingEmail = await prisma.usuario.findFirst({
-        where: { correo }
-      });
-
-      if (existingEmail) {
-        return res.status(400).json({ error: 'El correo electrónico ya existe' });
-      }
-    }
-
-    // Encriptar contraseña
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Crear usuario
-    const newUser = await prisma.usuario.create({
-      data: {
-        username,
-        password: hashedPassword,
-        nombre,
-        correo,
-        rol,
-        punto_atencion_id,
-        activo: true
-      },
-      select: {
-        id: true,
-        username: true,
-        nombre: true,
-        correo: true,
-        telefono: true,
-        rol: true,
-        activo: true,
-        punto_atencion_id: true,
-        created_at: true,
-        updated_at: true
-      }
-    });
-
-    res.json({ 
-      user: {
-        ...newUser,
-        created_at: newUser.created_at.toISOString(),
-        updated_at: newUser.updated_at.toISOString()
-      }
-    });
-  } catch (error) {
-    logger.error('Error al crear usuario', { error: error instanceof Error ? error.message : 'Unknown error' });
-    res.status(500).json({ error: 'Error al crear usuario' });
-  }
-});
-
 // Endpoint para obtener puntos de atención
-app.get('/api/points', async (req: Request, res: Response) => {
+app.get('/api/points', async (req: Request, res: Response): Promise<void> => {
   try {
     const points = await prisma.puntoAtencion.findMany({
       where: { activo: true },
@@ -428,7 +330,7 @@ app.get('/api/points', async (req: Request, res: Response) => {
 app.post('/api/points',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createPointSchema),
-  async (req: Request<{}, {}, CreatePointRequest>, res: Response) => {
+  async (req: Request<Record<string, unknown>, Record<string, unknown>, CreatePointRequest>, res: Response): Promise<void> => {
     try {
       const newPoint = await prisma.puntoAtencion.create({
         data: { ...req.body, activo: true }
@@ -451,7 +353,7 @@ app.post('/api/points',
 );
 
 // Endpoint para obtener monedas
-app.get('/api/currencies', async (req: Request, res: Response) => {
+app.get('/api/currencies', async (req: Request, res: Response): Promise<void> => {
   try {
     const currencies = await prisma.moneda.findMany({
       where: {
@@ -479,7 +381,7 @@ app.get('/api/currencies', async (req: Request, res: Response) => {
 app.post('/api/currencies',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createCurrencySchema),
-  async (req: Request<{}, {}, CreateCurrencyRequest>, res: Response) => {
+  async (req: Request<Record<string, unknown>, Record<string, unknown>, CreateCurrencyRequest>, res: Response): Promise<void> => {
     try {
       const { nombre, simbolo, codigo, orden_display } = req.body;
       
@@ -489,7 +391,8 @@ app.post('/api/currencies',
       });
 
       if (existingCurrency) {
-        return res.status(400).json({ error: 'El código de moneda ya existe' });
+        res.status(400).json({ error: 'El código de moneda ya existe' });
+        return;
       }
 
       const newCurrency = await prisma.moneda.create({
@@ -523,7 +426,7 @@ app.post('/api/currencies',
 );
 
 // Endpoint para obtener saldos por punto
-app.get('/api/balances/:pointId', async (req: Request, res: Response) => {
+app.get('/api/balances/:pointId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { pointId } = req.params;
     
@@ -550,7 +453,7 @@ app.get('/api/balances/:pointId', async (req: Request, res: Response) => {
 });
 
 // Endpoint para obtener transferencias
-app.get('/api/transfers', async (req: Request, res: Response) => {
+app.get('/api/transfers', async (req: Request, res: Response): Promise<void> => {
   try {
     const transfers = await prisma.transferencia.findMany({
       include: {
@@ -592,7 +495,7 @@ app.get('/api/transfers', async (req: Request, res: Response) => {
 });
 
 // Endpoint para obtener jornadas/horarios
-app.get('/api/schedules', async (req: Request, res: Response) => {
+app.get('/api/schedules', async (req: Request, res: Response): Promise<void> => {
   try {
     const schedules = await prisma.jornada.findMany({
       include: {
