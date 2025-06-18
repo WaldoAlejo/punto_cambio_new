@@ -17,6 +17,7 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     codigo: '',
     nombre: '',
@@ -30,10 +31,12 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
 
   const loadCurrencies = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const { currencies: fetchedCurrencies, error } = await currencyService.getAllCurrencies();
       
       if (error) {
+        setError(error);
         toast({
           title: "Error",
           description: error,
@@ -45,9 +48,11 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
       setCurrencies(fetchedCurrencies);
     } catch (error) {
       console.error('Error loading currencies:', error);
+      const errorMessage = "Error al cargar monedas";
+      setError(errorMessage);
       toast({
         title: "Error",
-        description: "Error al cargar monedas",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -126,6 +131,24 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Cargando monedas...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <p className="text-red-500 text-lg">Error al cargar monedas</p>
+          <p className="text-gray-500 mt-2">{error}</p>
+          <Button 
+            onClick={loadCurrencies} 
+            className="mt-4"
+            variant="outline"
+          >
+            Reintentar
+          </Button>
         </div>
       </div>
     );
@@ -216,9 +239,9 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
         <CardContent>
           {currencies.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">No hay monedas registradas</p>
+              <p className="text-gray-500 text-lg">No hay monedas registradas en la base de datos</p>
               <p className="text-gray-400 mt-2">
-                Las monedas básicas (USD, EUR, VES) fueron creadas por el seed
+                Cree la primera moneda haciendo clic en "Nueva Moneda"
               </p>
             </div>
           ) : (

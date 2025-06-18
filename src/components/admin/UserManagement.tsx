@@ -18,6 +18,7 @@ const UserManagement = ({ user }: UserManagementProps) => {
   const [users, setUsers] = useState<User[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     username: '',
     correo: '',
@@ -32,10 +33,12 @@ const UserManagement = ({ user }: UserManagementProps) => {
 
   const loadUsers = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const { users: fetchedUsers, error } = await userService.getAllUsers();
       
       if (error) {
+        setError(error);
         toast({
           title: "Error",
           description: error,
@@ -47,9 +50,11 @@ const UserManagement = ({ user }: UserManagementProps) => {
       setUsers(fetchedUsers);
     } catch (error) {
       console.error('Error loading users:', error);
+      const errorMessage = "Error al cargar usuarios";
+      setError(errorMessage);
       toast({
         title: "Error",
-        description: "Error al cargar usuarios",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -176,6 +181,24 @@ const UserManagement = ({ user }: UserManagementProps) => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <p className="text-red-500 text-lg">Error al cargar usuarios</p>
+          <p className="text-gray-500 mt-2">{error}</p>
+          <Button 
+            onClick={loadUsers} 
+            className="mt-4"
+            variant="outline"
+          >
+            Reintentar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -279,50 +302,59 @@ const UserManagement = ({ user }: UserManagementProps) => {
           <CardDescription>Lista de todos los usuarios registrados</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Rol</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Fecha Creación</TableHead>
-                <TableHead>Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((userItem) => (
-                <TableRow key={userItem.id}>
-                  <TableCell className="font-medium">{userItem.nombre}</TableCell>
-                  <TableCell>{userItem.username}</TableCell>
-                  <TableCell>{userItem.correo}</TableCell>
-                  <TableCell>{getRoleLabel(userItem.rol)}</TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${
-                      userItem.activo 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {userItem.activo ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(userItem.created_at).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      variant={userItem.activo ? "destructive" : "default"}
-                      onClick={() => toggleUserStatus(userItem.id)}
-                    >
-                      {userItem.activo ? 'Desactivar' : 'Activar'}
-                    </Button>
-                  </TableCell>
+          {users.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">No hay usuarios registrados</p>
+              <p className="text-gray-400 mt-2">
+                Cree el primer usuario haciendo clic en "Nuevo Usuario"
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Rol</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Fecha Creación</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {users.map((userItem) => (
+                  <TableRow key={userItem.id}>
+                    <TableCell className="font-medium">{userItem.nombre}</TableCell>
+                    <TableCell>{userItem.username}</TableCell>
+                    <TableCell>{userItem.correo}</TableCell>
+                    <TableCell>{getRoleLabel(userItem.rol)}</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        userItem.activo 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {userItem.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(userItem.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant={userItem.activo ? "destructive" : "default"}
+                        onClick={() => toggleUserStatus(userItem.id)}
+                      >
+                        {userItem.activo ? 'Desactivar' : 'Activar'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

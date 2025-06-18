@@ -1,4 +1,6 @@
-const API_BASE_URL = "http://localhost:3001/api";
+
+import { apiService } from "./apiService";
+import { User } from "../types";
 
 export interface CreateUserData {
   username: string;
@@ -9,69 +11,98 @@ export interface CreateUserData {
   punto_atencion_id?: string;
 }
 
-export const userService = {
-  async getAllUsers() {
-    try {
-      const response = await fetch(`${API_BASE_URL}/users`, {
-        method: "GET",
-        credentials: "include", // <-- Esto es clave
-      });
-      const data = await response.json();
+interface UsersResponse {
+  users: User[];
+  success: boolean;
+  error?: string;
+}
 
-      if (!response.ok) {
-        return { users: [], error: data.error };
+interface CreateUserResponse {
+  user: User;
+  success: boolean;
+  error?: string;
+}
+
+interface ToggleUserResponse {
+  success: boolean;
+  error?: string;
+}
+
+export const userService = {
+  async getAllUsers(): Promise<{
+    users: User[];
+    error: string | null;
+  }> {
+    try {
+      const response = await apiService.get<UsersResponse>("/users");
+
+      if (!response) {
+        return {
+          users: [],
+          error: "No se pudo obtener la respuesta del servidor",
+        };
       }
 
-      return { users: data.users, error: null };
+      if (response.error || !response.success) {
+        return {
+          users: [],
+          error: response.error || "Error al obtener usuarios",
+        };
+      }
+
+      return { users: response.users || [], error: null };
     } catch (error) {
-      console.error("Error fetching users:", error);
+      console.error("Error en getAllUsers:", error);
       return { users: [], error: "Error de conexión con el servidor" };
     }
   },
 
-  async createUser(userData: CreateUserData) {
+  async createUser(userData: CreateUserData): Promise<{
+    user: User | null;
+    error: string | null;
+  }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/users`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", // <-- Aquí también
-        body: JSON.stringify(userData),
-      });
+      const response = await apiService.post<CreateUserResponse>("/users", userData);
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        return { user: null, error: data.error };
+      if (!response) {
+        return {
+          user: null,
+          error: "No se pudo obtener la respuesta del servidor",
+        };
       }
 
-      return { user: data.user, error: null };
+      if (response.error || !response.success) {
+        return { user: null, error: response.error || "Error al crear usuario" };
+      }
+
+      return { user: response.user || null, error: null };
     } catch (error) {
-      console.error("Error creating user:", error);
+      console.error("Error en createUser:", error);
       return { user: null, error: "Error de conexión con el servidor" };
     }
   },
 
-  async toggleUserStatus(userId: string) {
+  async toggleUserStatus(userId: string): Promise<{
+    success: boolean;
+    error: string | null;
+  }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/${userId}/toggle`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", // <-- También aquí
-      });
+      const response = await apiService.put<ToggleUserResponse>(`/users/${userId}/toggle`, {});
 
-      const data = await response.json();
+      if (!response) {
+        return {
+          success: false,
+          error: "No se pudo obtener la respuesta del servidor",
+        };
+      }
 
-      if (!response.ok) {
-        return { success: false, error: data.error };
+      if (response.error || !response.success) {
+        return { success: false, error: response.error || "Error al actualizar usuario" };
       }
 
       return { success: true, error: null };
     } catch (error) {
-      console.error("Error toggling user status:", error);
+      console.error("Error en toggleUserStatus:", error);
       return { success: false, error: "Error de conexión con el servidor" };
     }
   },

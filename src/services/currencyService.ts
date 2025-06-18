@@ -1,4 +1,5 @@
-const API_BASE_URL = "http://localhost:3001/api";
+
+import { apiService } from "./apiService";
 
 export interface Currency {
   id: string;
@@ -20,11 +21,13 @@ export interface CreateCurrencyData {
 
 interface CurrencyListResponse {
   currencies: Currency[];
+  success: boolean;
   error?: string;
 }
 
 interface CurrencyCreateResponse {
   currency: Currency;
+  success: boolean;
   error?: string;
 }
 
@@ -34,17 +37,23 @@ export const currencyService = {
     error: string | null;
   }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/currencies`);
-      const data: CurrencyListResponse = await response.json();
+      const response = await apiService.get<CurrencyListResponse>("/currencies");
 
-      if (!response.ok) {
+      if (!response) {
         return {
           currencies: [],
-          error: data.error || "Error al obtener monedas",
+          error: "No se pudo obtener la respuesta del servidor",
         };
       }
 
-      return { currencies: data.currencies, error: null };
+      if (response.error || !response.success) {
+        return {
+          currencies: [],
+          error: response.error || "Error al obtener monedas",
+        };
+      }
+
+      return { currencies: response.currencies || [], error: null };
     } catch (error) {
       console.error("Error en getAllCurrencies:", error);
       return { currencies: [], error: "Error de conexión con el servidor" };
@@ -55,21 +64,20 @@ export const currencyService = {
     currencyData: CreateCurrencyData
   ): Promise<{ currency: Currency | null; error: string | null }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/currencies`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(currencyData),
-      });
+      const response = await apiService.post<CurrencyCreateResponse>("/currencies", currencyData);
 
-      const data: CurrencyCreateResponse = await response.json();
-
-      if (!response.ok) {
-        return { currency: null, error: data.error || "Error al crear moneda" };
+      if (!response) {
+        return {
+          currency: null,
+          error: "No se pudo obtener la respuesta del servidor",
+        };
       }
 
-      return { currency: data.currency, error: null };
+      if (response.error || !response.success) {
+        return { currency: null, error: response.error || "Error al crear moneda" };
+      }
+
+      return { currency: response.currency || null, error: null };
     } catch (error) {
       console.error("Error en createCurrency:", error);
       return { currency: null, error: "Error de conexión con el servidor" };
