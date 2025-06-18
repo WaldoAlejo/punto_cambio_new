@@ -40,6 +40,18 @@ const limiter = rateLimit({
 // Apply rate limiting to all API routes
 app.use('/api', limiter);
 
+// Middleware para headers de no-cache en todas las respuestas API
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store',
+    'Content-Type': 'application/json; charset=utf-8'
+  });
+  next();
+});
+
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:8080',
   credentials: true
@@ -50,11 +62,12 @@ app.use(logRequest);
 
 // Health check
 app.get('/health', (req: Request, res: Response): void => {
-  res.json({ 
+  res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    success: true
   });
 });
 
@@ -63,14 +76,22 @@ app.get('/api/test', async (req: Request, res: Response): Promise<void> => {
   try {
     logger.info('Testing database connection');
     const userCount = await prisma.usuario.count();
-    res.json({ 
+    res.status(200).json({ 
       message: 'Server running', 
       userCount,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      success: true
     });
   } catch (error) {
-    logger.error('Database test error', { error: error instanceof Error ? error.message : 'Unknown error' });
-    res.status(500).json({ error: 'Database connection failed' });
+    logger.error('Database test error', { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    res.status(500).json({ 
+      error: 'Database connection failed',
+      success: false,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
@@ -97,6 +118,7 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction): void =>
   
   res.status(500).json({ 
     error: 'Error interno del servidor',
+    success: false,
     timestamp: new Date().toISOString()
   });
 });
@@ -104,7 +126,11 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction): void =>
 // Manejo de rutas no encontradas
 app.use('*', (req: Request, res: Response): void => {
   logger.warn('Ruta no encontrada', { url: req.originalUrl, ip: req.ip });
-  res.status(404).json({ error: 'Endpoint no encontrado' });
+  res.status(404).json({ 
+    error: 'Endpoint no encontrado',
+    success: false,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Manejo graceful de shutdown

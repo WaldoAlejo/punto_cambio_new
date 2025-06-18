@@ -12,6 +12,14 @@ const prisma = new PrismaClient();
 // Endpoint para obtener monedas
 router.get('/', async (req: express.Request, res: express.Response): Promise<void> => {
   try {
+    // Headers para evitar caché
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
+
     const currencies = await prisma.moneda.findMany({
       where: {
         activo: true
@@ -21,16 +29,34 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       }
     });
 
-    res.json({ 
-      currencies: currencies.map(currency => ({
-        ...currency,
-        created_at: currency.created_at.toISOString(),
-        updated_at: currency.updated_at.toISOString()
-      }))
+    const formattedCurrencies = currencies.map(currency => ({
+      ...currency,
+      created_at: currency.created_at.toISOString(),
+      updated_at: currency.updated_at.toISOString()
+    }));
+
+    logger.info('Monedas obtenidas', { 
+      count: formattedCurrencies.length, 
+      requestedBy: req.user?.id 
+    });
+
+    res.status(200).json({ 
+      currencies: formattedCurrencies,
+      success: true,
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error al obtener monedas', { error: error instanceof Error ? error.message : 'Unknown error' });
-    res.status(500).json({ error: 'Error al obtener monedas' });
+    logger.error('Error al obtener monedas', { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      requestedBy: req.user?.id 
+    });
+    
+    res.status(500).json({ 
+      error: 'Error al obtener monedas',
+      success: false,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
@@ -48,7 +74,11 @@ router.post('/',
       });
 
       if (existingCurrency) {
-        res.status(400).json({ error: 'El código de moneda ya existe' });
+        res.status(400).json({ 
+          error: 'El código de moneda ya existe',
+          success: false,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
 
@@ -73,11 +103,22 @@ router.post('/',
           ...newCurrency,
           created_at: newCurrency.created_at.toISOString(),
           updated_at: newCurrency.updated_at.toISOString()
-        }
+        },
+        success: true,
+        timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('Error al crear moneda', { error: error instanceof Error ? error.message : 'Unknown error', requestedBy: req.user?.id });
-      res.status(500).json({ error: 'Error al crear moneda' });
+      logger.error('Error al crear moneda', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id 
+      });
+      
+      res.status(500).json({ 
+        error: 'Error al crear moneda',
+        success: false,
+        timestamp: new Date().toISOString()
+      });
     }
   }
 );
