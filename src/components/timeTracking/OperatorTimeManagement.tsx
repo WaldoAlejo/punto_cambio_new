@@ -75,7 +75,7 @@ const OperatorTimeManagement = ({
           <SpontaneousExitForm
             user={user}
             selectedPoint={selectedPoint}
-            onExit Registered={handleExitRegistered}
+            onExitRegistered={handleExitRegistered}
           />
         </TabsContent>
         

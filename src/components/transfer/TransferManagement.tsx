@@ -11,6 +11,14 @@ interface TransferManagementProps {
   selectedPoint: PuntoAtencion | null;
 }
 
+interface ApiResponse {
+  transfers?: Transferencia[];
+  currencies?: Moneda[];
+  points?: PuntoAtencion[];
+  success?: boolean;
+  error?: string;
+}
+
 const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) => {
   const [transfers, setTransfers] = useState<Transferencia[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
@@ -24,20 +32,20 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
         
         // Cargar datos reales desde la API
         const [transfersResponse, currenciesResponse, pointsResponse] = await Promise.all([
-          apiService.get('/transfers'),
-          apiService.get('/currencies'),
-          apiService.get('/points')
+          apiService.get<ApiResponse>('/transfers'),
+          apiService.get<ApiResponse>('/currencies'),
+          apiService.get<ApiResponse>('/points')
         ]);
 
-        if (transfersResponse?.transfers) {
+        if (transfersResponse && transfersResponse.transfers) {
           setTransfers(transfersResponse.transfers);
         }
 
-        if (currenciesResponse?.currencies) {
+        if (currenciesResponse && currenciesResponse.currencies) {
           setCurrencies(currenciesResponse.currencies);
         }
 
-        if (pointsResponse?.points) {
+        if (pointsResponse && pointsResponse.points) {
           // Filtrar el punto actual para las transferencias
           const availablePoints = pointsResponse.points.filter((p: PuntoAtencion) => p.id !== selectedPoint?.id);
           setPoints(availablePoints);

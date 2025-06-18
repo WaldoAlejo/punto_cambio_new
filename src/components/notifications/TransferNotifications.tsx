@@ -13,6 +13,12 @@ interface TransferNotificationsProps {
   onNotificationClick: () => void;
 }
 
+interface ApiResponse {
+  transfers?: Transferencia[];
+  success?: boolean;
+  error?: string;
+}
+
 const TransferNotifications = ({ user, onNotificationClick }: TransferNotificationsProps) => {
   const [pendingTransfers, setPendingTransfers] = useState<Transferencia[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -22,8 +28,8 @@ const TransferNotifications = ({ user, onNotificationClick }: TransferNotificati
 
     const checkPendingTransfers = async () => {
       try {
-        const response = await apiService.get('/transfers');
-        if (response?.transfers) {
+        const response = await apiService.get<ApiResponse>('/transfers');
+        if (response && response.transfers) {
           const pending = response.transfers.filter((t: Transferencia) => t.estado === 'PENDIENTE');
           setPendingTransfers(pending);
         }

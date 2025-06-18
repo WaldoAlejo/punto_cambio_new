@@ -11,6 +11,14 @@ interface TransferApprovalsProps {
   user: User;
 }
 
+interface ApiResponse {
+  transfers?: Transferencia[];
+  currencies?: Moneda[];
+  points?: PuntoAtencion[];
+  success?: boolean;
+  error?: string;
+}
+
 const TransferApprovals = ({ user }: TransferApprovalsProps) => {
   const [pendingTransfers, setPendingTransfers] = useState<Transferencia[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
@@ -24,22 +32,22 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
         
         // Cargar datos reales desde la API
         const [transfersResponse, currenciesResponse, pointsResponse] = await Promise.all([
-          apiService.get('/transfers'),
-          apiService.get('/currencies'),
-          apiService.get('/points')
+          apiService.get<ApiResponse>('/transfers'),
+          apiService.get<ApiResponse>('/currencies'),
+          apiService.get<ApiResponse>('/points')
         ]);
 
-        if (transfersResponse?.transfers) {
+        if (transfersResponse && transfersResponse.transfers) {
           // Filtrar solo las transferencias pendientes
           const pending = transfersResponse.transfers.filter((t: Transferencia) => t.estado === 'PENDIENTE');
           setPendingTransfers(pending);
         }
 
-        if (currenciesResponse?.currencies) {
+        if (currenciesResponse && currenciesResponse.currencies) {
           setCurrencies(currenciesResponse.currencies);
         }
 
-        if (pointsResponse?.points) {
+        if (pointsResponse && pointsResponse.points) {
           setPoints(pointsResponse.points);
         }
 
