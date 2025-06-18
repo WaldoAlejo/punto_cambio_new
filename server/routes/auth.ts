@@ -1,3 +1,4 @@
+
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
@@ -26,6 +27,14 @@ router.post('/login',
   validate(loginSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
+      // Headers para evitar caché
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
+      });
+
       const { username, password } = req.body as LoginRequest;
       
       logger.info('Intento de login', { username, ip: req.ip });
@@ -39,7 +48,11 @@ router.post('/login',
 
       if (!user) {
         logger.warn('Usuario no encontrado', { username, ip: req.ip });
-        res.status(401).json({ error: 'Credenciales inválidas' });
+        res.status(401).json({ 
+          error: 'Credenciales inválidas',
+          success: false,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
 
@@ -47,7 +60,11 @@ router.post('/login',
       
       if (!passwordMatch) {
         logger.warn('Contraseña incorrecta', { username, ip: req.ip });
-        res.status(401).json({ error: 'Credenciales inválidas' });
+        res.status(401).json({ 
+          error: 'Credenciales inválidas',
+          success: false,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
 
@@ -56,17 +73,28 @@ router.post('/login',
       
       logger.info('Login exitoso', { userId: user.id, username, ip: req.ip });
       
-      res.json({ 
+      res.status(200).json({ 
         user: {
           ...userWithoutPassword,
           created_at: user.created_at.toISOString(),
           updated_at: user.updated_at.toISOString()
         },
-        token
+        token,
+        success: true,
+        timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('Error en login', { error: error instanceof Error ? error.message : 'Unknown error', ip: req.ip });
-      res.status(500).json({ error: 'Error interno del servidor' });
+      logger.error('Error en login', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        ip: req.ip 
+      });
+      
+      res.status(500).json({ 
+        error: 'Error interno del servidor',
+        success: false,
+        timestamp: new Date().toISOString()
+      });
     }
   }
 );

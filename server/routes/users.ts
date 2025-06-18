@@ -15,8 +15,24 @@ router.get('/',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
+      // Headers para evitar caché
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
+      });
+
       const users = await prisma.usuario.findMany({
         orderBy: { created_at: 'desc' },
+        include: {
+          puntoAtencion: {
+            select: {
+              id: true,
+              nombre: true
+            }
+          }
+        },
         select: {
           id: true,
           username: true,
@@ -27,22 +43,39 @@ router.get('/',
           activo: true,
           punto_atencion_id: true,
           created_at: true,
-          updated_at: true
+          updated_at: true,
+          puntoAtencion: true
         }
       });
 
-      logger.info('Usuarios obtenidos', { count: users.length, requestedBy: req.user?.id });
+      const formattedUsers = users.map(user => ({
+        ...user,
+        created_at: user.created_at.toISOString(),
+        updated_at: user.updated_at.toISOString()
+      }));
 
-      res.json({ 
-        users: users.map(user => ({
-          ...user,
-          created_at: user.created_at.toISOString(),
-          updated_at: user.updated_at.toISOString()
-        }))
+      logger.info('Usuarios obtenidos', { 
+        count: formattedUsers.length, 
+        requestedBy: req.user?.id 
+      });
+
+      res.status(200).json({ 
+        users: formattedUsers,
+        success: true,
+        timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('Error al obtener usuarios', { error: error instanceof Error ? error.message : 'Unknown error', requestedBy: req.user?.id });
-      res.status(500).json({ error: 'Error al obtener usuarios' });
+      logger.error('Error al obtener usuarios', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id 
+      });
+      
+      res.status(500).json({ 
+        error: 'Error al obtener usuarios',
+        success: false,
+        timestamp: new Date().toISOString()
+      });
     }
   }
 );
@@ -62,12 +95,20 @@ router.post('/',
       ]);
 
       if (existingUser) {
-        res.status(400).json({ error: 'El nombre de usuario ya existe' });
+        res.status(400).json({ 
+          error: 'El nombre de usuario ya existe',
+          success: false,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
 
       if (existingEmail) {
-        res.status(400).json({ error: 'El correo electrónico ya existe' });
+        res.status(400).json({ 
+          error: 'El correo electrónico ya existe',
+          success: false,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
 
@@ -83,6 +124,14 @@ router.post('/',
           punto_atencion_id,
           activo: true
         },
+        include: {
+          puntoAtencion: {
+            select: {
+              id: true,
+              nombre: true
+            }
+          }
+        },
         select: {
           id: true,
           username: true,
@@ -93,7 +142,8 @@ router.post('/',
           activo: true,
           punto_atencion_id: true,
           created_at: true,
-          updated_at: true
+          updated_at: true,
+          puntoAtencion: true
         }
       });
 
@@ -108,11 +158,22 @@ router.post('/',
           ...newUser,
           created_at: newUser.created_at.toISOString(),
           updated_at: newUser.updated_at.toISOString()
-        }
+        },
+        success: true,
+        timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('Error al crear usuario', { error: error instanceof Error ? error.message : 'Unknown error', requestedBy: req.user?.id });
-      res.status(500).json({ error: 'Error al crear usuario' });
+      logger.error('Error al crear usuario', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id 
+      });
+      
+      res.status(500).json({ 
+        error: 'Error al crear usuario',
+        success: false,
+        timestamp: new Date().toISOString()
+      });
     }
   }
 );
@@ -127,7 +188,11 @@ router.patch('/:userId/toggle',
       // Validar que userId es un UUID válido
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(userId)) {
-        res.status(400).json({ error: 'ID de usuario inválido' });
+        res.status(400).json({ 
+          error: 'ID de usuario inválido',
+          success: false,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
       
@@ -136,13 +201,25 @@ router.patch('/:userId/toggle',
       });
 
       if (!currentUser) {
-        res.status(404).json({ error: 'Usuario no encontrado' });
+        res.status(404).json({ 
+          error: 'Usuario no encontrado',
+          success: false,
+          timestamp: new Date().toISOString()
+        });
         return;
       }
 
       const updatedUser = await prisma.usuario.update({
         where: { id: userId },
         data: { activo: !currentUser.activo },
+        include: {
+          puntoAtencion: {
+            select: {
+              id: true,
+              nombre: true
+            }
+          }
+        },
         select: {
           id: true,
           username: true,
@@ -153,7 +230,8 @@ router.patch('/:userId/toggle',
           activo: true,
           punto_atencion_id: true,
           created_at: true,
-          updated_at: true
+          updated_at: true,
+          puntoAtencion: true
         }
       });
 
@@ -163,16 +241,27 @@ router.patch('/:userId/toggle',
         updatedBy: req.user?.id 
       });
 
-      res.json({ 
+      res.status(200).json({ 
         user: {
           ...updatedUser,
           created_at: updatedUser.created_at.toISOString(),
           updated_at: updatedUser.updated_at.toISOString()
-        }
+        },
+        success: true,
+        timestamp: new Date().toISOString()
       });
     } catch (error) {
-      logger.error('Error al actualizar usuario', { error: error instanceof Error ? error.message : 'Unknown error', requestedBy: req.user?.id });
-      res.status(500).json({ error: 'Error al actualizar usuario' });
+      logger.error('Error al actualizar usuario', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id 
+      });
+      
+      res.status(500).json({ 
+        error: 'Error al actualizar usuario',
+        success: false,
+        timestamp: new Date().toISOString()
+      });
     }
   }
 );
