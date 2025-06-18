@@ -24,6 +24,8 @@ class ApiService {
         cache: "no-store",
       });
 
+      console.log(`Response status: ${response.status}`);
+
       if (response.status === 401) {
         console.warn("Unauthorized request, removing token");
         authService.removeStoredToken();
@@ -32,15 +34,19 @@ class ApiService {
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Error de respuesta del servidor" }));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data: T = await response.json();
-      console.log(`Response for ${endpoint}:`, data);
+      console.log(`Response data for ${endpoint}:`, data);
       return data;
     } catch (error) {
       console.error(`Error in GET ${endpoint}:`, error);
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Error de conexión con el servidor. Verifique que el servidor esté ejecutándose en http://localhost:3001');
+      }
       throw error;
     }
   }
@@ -55,6 +61,8 @@ class ApiService {
         cache: "no-store",
       });
 
+      console.log(`Response status: ${response.status}`);
+
       if (response.status === 401) {
         console.warn("Unauthorized request, removing token");
         authService.removeStoredToken();
@@ -63,15 +71,19 @@ class ApiService {
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Error de respuesta del servidor" }));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const responseData: T = await response.json();
-      console.log(`Response for POST ${endpoint}:`, responseData);
+      console.log(`Response data for POST ${endpoint}:`, responseData);
       return responseData;
     } catch (error) {
       console.error(`Error in POST ${endpoint}:`, error);
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Error de conexión con el servidor. Verifique que el servidor esté ejecutándose en http://localhost:3001');
+      }
       throw error;
     }
   }
@@ -86,6 +98,8 @@ class ApiService {
         cache: "no-store",
       });
 
+      console.log(`Response status: ${response.status}`);
+
       if (response.status === 401) {
         console.warn("Unauthorized request, removing token");
         authService.removeStoredToken();
@@ -94,15 +108,19 @@ class ApiService {
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Error de respuesta del servidor" }));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const responseData: T = await response.json();
-      console.log(`Response for PUT ${endpoint}:`, responseData);
+      console.log(`Response data for PUT ${endpoint}:`, responseData);
       return responseData;
     } catch (error) {
       console.error(`Error in PUT ${endpoint}:`, error);
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Error de conexión con el servidor. Verifique que el servidor esté ejecutándose en http://localhost:3001');
+      }
       throw error;
     }
   }
@@ -116,6 +134,8 @@ class ApiService {
         cache: "no-store",
       });
 
+      console.log(`Response status: ${response.status}`);
+
       if (response.status === 401) {
         console.warn("Unauthorized request, removing token");
         authService.removeStoredToken();
@@ -124,15 +144,19 @@ class ApiService {
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Error de respuesta del servidor" }));
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`HTTP ${response.status}: ${errorText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const responseData: T = await response.json();
-      console.log(`Response for DELETE ${endpoint}:`, responseData);
+      console.log(`Response data for DELETE ${endpoint}:`, responseData);
       return responseData;
     } catch (error) {
       console.error(`Error in DELETE ${endpoint}:`, error);
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Error de conexión con el servidor. Verifique que el servidor esté ejecutándose en http://localhost:3001');
+      }
       throw error;
     }
   }

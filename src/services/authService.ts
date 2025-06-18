@@ -1,3 +1,4 @@
+
 const API_BASE_URL = "http://localhost:3001/api";
 
 export interface LoginCredentials {
@@ -21,6 +22,7 @@ export interface AuthUser {
 interface LoginResponse {
   user: AuthUser;
   token: string;
+  success: boolean;
   error?: string;
 }
 
@@ -34,6 +36,7 @@ export const authService = {
   }> {
     try {
       console.log("Intentando login con:", credentials.username);
+      console.log("Making request to:", `${API_BASE_URL}/auth/login`);
 
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
@@ -43,9 +46,31 @@ export const authService = {
         body: JSON.stringify(credentials),
       });
 
-      const data: Partial<LoginResponse> = await response.json();
+      console.log("Login response status:", response.status);
 
-      if (!response.ok || !data.user || !data.token) {
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Login HTTP error:", response.status, errorText);
+        
+        if (response.status >= 500) {
+          return {
+            user: null,
+            token: null,
+            error: "Error interno del servidor. Verifique que el servidor esté ejecutándose.",
+          };
+        }
+        
+        return {
+          user: null,
+          token: null,
+          error: "Error de conexión o credenciales incorrectas",
+        };
+      }
+
+      const data: Partial<LoginResponse> = await response.json();
+      console.log("Login response data:", data);
+
+      if (!data.success || !data.user || !data.token) {
         console.log("Error en login:", data.error);
         return {
           user: null,
@@ -62,6 +87,15 @@ export const authService = {
       return { user: data.user, token: data.token, error: null };
     } catch (error) {
       console.error("Error en login:", error);
+      
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return {
+          user: null,
+          token: null,
+          error: "Error de conexión con el servidor. Verifique que el servidor esté ejecutándose en http://localhost:3001",
+        };
+      }
+      
       return {
         user: null,
         token: null,

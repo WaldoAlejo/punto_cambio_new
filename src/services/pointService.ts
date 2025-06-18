@@ -1,8 +1,10 @@
+
 import { apiService } from "./apiService";
 import { PuntoAtencion } from "../types";
 
 export interface PointsResponse {
   points: PuntoAtencion[];
+  success: boolean;
   error?: string;
 }
 
@@ -17,6 +19,7 @@ export interface CreatePointData {
 
 interface CreatePointResponse {
   point: PuntoAtencion;
+  success: boolean;
   error?: string;
 }
 
@@ -26,25 +29,33 @@ export const pointService = {
     error: string | null;
   }> {
     try {
-      const response = (await apiService.get(
-        "/points"
-      )) as PointsResponse | null;
+      console.log('Fetching points from API...');
+      const response = await apiService.get<PointsResponse>("/points");
 
       if (!response) {
+        console.warn('No response received from points API');
         return {
           points: [],
           error: "No se pudo obtener la respuesta del servidor",
         };
       }
 
-      if (response.error) {
-        return { points: [], error: response.error };
+      console.log('Points API response:', response);
+
+      if (response.error || !response.success) {
+        console.warn('Points API returned error:', response.error);
+        return {
+          points: [],
+          error: response.error || "Error al obtener puntos de atención",
+        };
       }
 
+      console.log('Points fetched successfully:', response.points?.length || 0);
       return { points: response.points || [], error: null };
     } catch (error) {
       console.error("Error getting points:", error);
-      return { points: [], error: "Error de conexión con el servidor" };
+      const errorMessage = error instanceof Error ? error.message : "Error de conexión con el servidor";
+      return { points: [], error: errorMessage };
     }
   },
 
@@ -52,26 +63,30 @@ export const pointService = {
     pointData: CreatePointData
   ): Promise<{ point: PuntoAtencion | null; error: string | null }> {
     try {
-      const response = (await apiService.post(
-        "/points",
-        pointData
-      )) as CreatePointResponse | null;
+      console.log('Creating point via API...', pointData);
+      const response = await apiService.post<CreatePointResponse>("/points", pointData);
 
       if (!response) {
+        console.warn('No response received from create point API');
         return {
           point: null,
           error: "No se pudo obtener la respuesta del servidor",
         };
       }
 
-      if (response.error) {
-        return { point: null, error: response.error };
+      console.log('Create point API response:', response);
+
+      if (response.error || !response.success) {
+        console.warn('Create point API returned error:', response.error);
+        return { point: null, error: response.error || "Error al crear punto de atención" };
       }
 
+      console.log('Point created successfully:', response.point);
       return { point: response.point || null, error: null };
     } catch (error) {
       console.error("Error creating point:", error);
-      return { point: null, error: "Error de conexión con el servidor" };
+      const errorMessage = error instanceof Error ? error.message : "Error de conexión con el servidor";
+      return { point: null, error: errorMessage };
     }
   },
 };

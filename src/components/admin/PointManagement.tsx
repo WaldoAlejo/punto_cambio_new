@@ -17,6 +17,7 @@ const PointManagement = ({ user }: PointManagementProps) => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     nombre: '',
     direccion: '',
@@ -32,10 +33,14 @@ const PointManagement = ({ user }: PointManagementProps) => {
 
   const loadPoints = async () => {
     setIsLoading(true);
+    setError(null);
     try {
+      console.log('Loading points...');
       const { points: fetchedPoints, error } = await pointService.getAllPoints();
       
       if (error) {
+        console.error('Error loading points:', error);
+        setError(error);
         toast({
           title: "Error",
           description: error,
@@ -44,12 +49,15 @@ const PointManagement = ({ user }: PointManagementProps) => {
         return;
       }
 
+      console.log('Points loaded:', fetchedPoints);
       setPoints(fetchedPoints);
     } catch (error) {
-      console.error('Error loading points:', error);
+      console.error('Unexpected error loading points:', error);
+      const errorMessage = "Error al cargar puntos de atención";
+      setError(errorMessage);
       toast({
         title: "Error",
-        description: "Error al cargar puntos de atención",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
@@ -63,31 +71,28 @@ const PointManagement = ({ user }: PointManagementProps) => {
     if (!formData.nombre || !formData.direccion || !formData.ciudad || !formData.provincia) {
       toast({
         title: "Error",
-        description: "Nombre, dirección, ciudad y provincia son obligatorios",
+        description: "Los campos nombre, dirección, ciudad y provincia son obligatorios",
         variant: "destructive"
       });
       return;
     }
 
     try {
-      const { point: newPoint, error } = await pointService.createPoint({
-        nombre: formData.nombre,
-        direccion: formData.direccion,
-        ciudad: formData.ciudad,
-        provincia: formData.provincia,
-        codigo_postal: formData.codigo_postal,
-        telefono: formData.telefono
-      });
+      console.log('Creating point with data:', formData);
+      const { point: newPoint, error } = await pointService.createPoint(formData);
 
       if (error || !newPoint) {
+        console.error('Error creating point:', error);
         toast({
           title: "Error",
-          description: error || "Error al crear punto",
+          description: error || "Error al crear punto de atención",
           variant: "destructive"
         });
         return;
       }
 
+      console.log('Point created successfully:', newPoint);
+      
       // Recargar la lista de puntos
       await loadPoints();
       
@@ -104,10 +109,10 @@ const PointManagement = ({ user }: PointManagementProps) => {
 
       toast({
         title: "Punto creado",
-        description: `Punto ${newPoint.nombre} creado exitosamente`,
+        description: `Punto de atención ${newPoint.nombre} creado exitosamente`,
       });
     } catch (error) {
-      console.error('Error creating point:', error);
+      console.error('Unexpected error creating point:', error);
       toast({
         title: "Error",
         description: "Error interno del servidor",
@@ -131,7 +136,25 @@ const PointManagement = ({ user }: PointManagementProps) => {
       <div className="p-6">
         <div className="text-center py-12">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando puntos...</p>
+          <p className="mt-4 text-gray-600">Cargando puntos de atención...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <p className="text-red-500 text-lg">Error al cargar puntos de atención</p>
+          <p className="text-gray-500 mt-2">{error}</p>
+          <Button 
+            onClick={loadPoints} 
+            className="mt-4"
+            variant="outline"
+          >
+            Reintentar
+          </Button>
         </div>
       </div>
     );
@@ -153,64 +176,63 @@ const PointManagement = ({ user }: PointManagementProps) => {
         <Card>
           <CardHeader>
             <CardTitle>Crear Nuevo Punto de Atención</CardTitle>
-            <CardDescription>Complete la información del nuevo punto</CardDescription>
+            <CardDescription>Complete la información del nuevo punto de atención</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Nombre del Punto</Label>
+                  <Label>Nombre *</Label>
                   <Input
                     value={formData.nombre}
                     onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
-                    placeholder="Ej: Punto Centro"
+                    placeholder="Casa de Cambio Centro"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Ciudad</Label>
+                  <Label>Ciudad *</Label>
                   <Input
                     value={formData.ciudad}
                     onChange={(e) => setFormData(prev => ({ ...prev, ciudad: e.target.value }))}
-                    placeholder="Ciudad"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Provincia</Label>
-                  <Input
-                    value={formData.provincia}
-                    onChange={(e) => setFormData(prev => ({ ...prev, provincia: e.target.value }))}
-                    placeholder="Provincia"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Código Postal (Opcional)</Label>
-                  <Input
-                    value={formData.codigo_postal}
-                    onChange={(e) => setFormData(prev => ({ ...prev, codigo_postal: e.target.value }))}
-                    placeholder="Código postal"
+                    placeholder="Buenos Aires"
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Dirección</Label>
+                <Label>Dirección *</Label>
                 <Input
                   value={formData.direccion}
                   onChange={(e) => setFormData(prev => ({ ...prev, direccion: e.target.value }))}
-                  placeholder="Dirección completa del punto"
+                  placeholder="Av. Corrientes 1234"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label>Teléfono (Opcional)</Label>
-                <Input
-                  value={formData.telefono}
-                  onChange={(e) => setFormData(prev => ({ ...prev, telefono: e.target.value }))}
-                  placeholder="Número de teléfono"
-                />
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Provincia *</Label>
+                  <Input
+                    value={formData.provincia}
+                    onChange={(e) => setFormData(prev => ({ ...prev, provincia: e.target.value }))}
+                    placeholder="Buenos Aires"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Código Postal</Label>
+                  <Input
+                    value={formData.codigo_postal}
+                    onChange={(e) => setFormData(prev => ({ ...prev, codigo_postal: e.target.value }))}
+                    placeholder="C1043"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Teléfono</Label>
+                  <Input
+                    value={formData.telefono}
+                    onChange={(e) => setFormData(prev => ({ ...prev, telefono: e.target.value }))}
+                    placeholder="+54 11 1234-5678"
+                  />
+                </div>
               </div>
 
               <div className="flex gap-2">
@@ -232,13 +254,13 @@ const PointManagement = ({ user }: PointManagementProps) => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Puntos de Atención</CardTitle>
-          <CardDescription>Lista de todos los puntos registrados</CardDescription>
+          <CardTitle>Puntos de Atención del Sistema</CardTitle>
+          <CardDescription>Lista de todos los puntos de atención registrados</CardDescription>
         </CardHeader>
         <CardContent>
           {points.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">No hay puntos de atención registrados</p>
+              <p className="text-gray-500 text-lg">No hay puntos de atención registrados en la base de datos</p>
               <p className="text-gray-400 mt-2">
                 Cree el primer punto de atención haciendo clic en "Nuevo Punto"
               </p>
@@ -249,7 +271,8 @@ const PointManagement = ({ user }: PointManagementProps) => {
                 <TableRow>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Dirección</TableHead>
-                  <TableHead>Ciudad/Provincia</TableHead>
+                  <TableHead>Ciudad</TableHead>
+                  <TableHead>Provincia</TableHead>
                   <TableHead>Teléfono</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Fecha Creación</TableHead>
@@ -260,7 +283,8 @@ const PointManagement = ({ user }: PointManagementProps) => {
                   <TableRow key={point.id}>
                     <TableCell className="font-medium">{point.nombre}</TableCell>
                     <TableCell>{point.direccion}</TableCell>
-                    <TableCell>{point.ciudad}, {point.provincia}</TableCell>
+                    <TableCell>{point.ciudad}</TableCell>
+                    <TableCell>{point.provincia}</TableCell>
                     <TableCell>{point.telefono || 'N/A'}</TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
