@@ -1,4 +1,5 @@
-const API_BASE_URL = "http://localhost:3001/api";
+
+import { apiService } from "./apiService";
 
 export interface Usuario {
   id: string;
@@ -23,26 +24,35 @@ export interface Schedule {
   puntoAtencion?: PuntoAtencion;
 }
 
+interface SchedulesResponse {
+  schedules: Schedule[];
+  success: boolean;
+  error?: string;
+}
+
 export const scheduleService = {
   async getAllSchedules(): Promise<{
     schedules: Schedule[];
     error: string | null;
   }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/schedules`, {
-        method: "GET",
-        credentials: "include", // importante para incluir cookies (token)
-      });
-      const data = await response.json();
+      const response = await apiService.get<SchedulesResponse>("/schedules");
 
-      if (!response.ok) {
+      if (!response) {
         return {
           schedules: [],
-          error: data.error || "Error al obtener horarios",
+          error: "No se pudo obtener la respuesta del servidor",
         };
       }
 
-      return { schedules: data.schedules, error: null };
+      if (response.error || !response.success) {
+        return {
+          schedules: [],
+          error: response.error || "Error al obtener horarios",
+        };
+      }
+
+      return { schedules: response.schedules || [], error: null };
     } catch (error) {
       console.error("Error en getAllSchedules:", error);
       return { schedules: [], error: "Error de conexión con el servidor" };

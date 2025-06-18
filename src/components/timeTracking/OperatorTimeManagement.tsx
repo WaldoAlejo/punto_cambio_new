@@ -54,7 +54,7 @@ const OperatorTimeManagement = ({
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Control de Horarios</h1>
-        <p className="text-gray-600">Tu jornada se gestiona automáticamente al iniciar sesión</p>
+        <p className="text-gray-600">Gestiona tu jornada laboral y salidas espontáneas</p>
       </div>
 
       <Tabs defaultValue="tracker" className="w-full">
@@ -75,7 +75,7 @@ const OperatorTimeManagement = ({
           <SpontaneousExitForm
             user={user}
             selectedPoint={selectedPoint}
-            onExitRegistered={handleExitRegistered}
+            onExit Registered={handleExitRegistered}
           />
         </TabsContent>
         

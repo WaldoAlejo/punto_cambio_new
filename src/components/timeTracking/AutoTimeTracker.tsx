@@ -3,19 +3,30 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Coffee, LogOut as LogOutIcon, MapPin } from 'lucide-react';
+import { Clock, Coffee, LogOut as LogOutIcon, MapPin, AlertCircle } from 'lucide-react';
 import { User, PuntoAtencion, Jornada } from '../../types';
 import { toast } from "@/hooks/use-toast";
+import { apiService } from '../../services/apiService';
 
 interface AutoTimeTrackerProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
 }
 
+interface JornadaRequest {
+  usuario_id: string;
+  punto_atencion_id: string;
+  fecha_inicio?: string;
+  fecha_almuerzo?: string;
+  fecha_regreso?: string;
+  fecha_salida?: string;
+}
+
 const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
   const [currentSession, setCurrentSession] = useState<Jornada | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -38,29 +49,71 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
       );
     }
 
-    // Auto-iniciar jornada si es operador y seleccionó punto
-    if (user.rol === 'OPERADOR' && selectedPoint && !currentSession) {
-      handleStartShift();
-    }
+    // Cargar jornada activa si existe
+    loadActiveSession();
   }, [user, selectedPoint]);
 
-  const handleStartShift = () => {
+  const loadActiveSession = async () => {
+    // En una implementación real, aquí cargarías la jornada activa desde el servidor
+    // Por ahora, mantenemos el estado local
+  };
+
+  const saveJornada = async (jornadaData: JornadaRequest) => {
+    try {
+      setLoading(true);
+      const response = await apiService.post('/schedules', jornadaData);
+      
+      if (!response) {
+        throw new Error('No se recibió respuesta del servidor');
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Error guardando jornada:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo guardar la jornada. Continuando en modo local.",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStartShift = async () => {
+    if (!selectedPoint) {
+      toast({
+        title: "Error",
+        description: "Debe seleccionar un punto de atención",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const newSession: Jornada = {
       id: Date.now().toString(),
       usuario_id: user.id,
-      punto_atencion_id: selectedPoint?.id || '',
+      punto_atencion_id: selectedPoint.id,
       fecha_inicio: new Date().toISOString(),
     };
 
     setCurrentSession(newSession);
+
+    // Intentar guardar en el servidor
+    await saveJornada({
+      usuario_id: user.id,
+      punto_atencion_id: selectedPoint.id,
+      fecha_inicio: newSession.fecha_inicio
+    });
     
     toast({
       title: "Jornada iniciada",
-      description: `Bienvenido ${user.nombre}. Tu jornada ha comenzado automáticamente.`,
+      description: `Bienvenido ${user.nombre}. Tu jornada ha comenzado.`,
     });
   };
 
-  const handleLunchBreak = () => {
+  const handleLunchBreak = async () => {
     if (!currentSession) return;
 
     const updatedSession = {
@@ -69,6 +122,13 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
     };
 
     setCurrentSession(updatedSession);
+
+    // Intentar actualizar en el servidor
+    await saveJornada({
+      usuario_id: currentSession.usuario_id,
+      punto_atencion_id: currentSession.punto_atencion_id,
+      fecha_almuerzo: updatedSession.fecha_almuerzo
+    });
     
     toast({
       title: "Hora de almuerzo",
@@ -76,7 +136,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
     });
   };
 
-  const handleLunchReturn = () => {
+  const handleLunchReturn = async () => {
     if (!currentSession) return;
 
     const updatedSession = {
@@ -85,6 +145,13 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
     };
 
     setCurrentSession(updatedSession);
+
+    // Intentar actualizar en el servidor
+    await saveJornada({
+      usuario_id: currentSession.usuario_id,
+      punto_atencion_id: currentSession.punto_atencion_id,
+      fecha_regreso: updatedSession.fecha_regreso
+    });
     
     toast({
       title: "Regreso de almuerzo",
@@ -92,7 +159,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
     });
   };
 
-  const handleEndShift = () => {
+  const handleEndShift = async () => {
     if (!currentSession) return;
 
     const updatedSession = {
@@ -101,6 +168,13 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
     };
 
     setCurrentSession(updatedSession);
+
+    // Intentar actualizar en el servidor
+    await saveJornada({
+      usuario_id: currentSession.usuario_id,
+      punto_atencion_id: currentSession.punto_atencion_id,
+      fecha_salida: updatedSession.fecha_salida
+    });
     
     toast({
       title: "Jornada finalizada",
@@ -156,6 +230,20 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
     );
   }
 
+  if (!selectedPoint) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center py-8 text-gray-500">
+            <AlertCircle className="h-12 w-12 mx-auto mb-4 text-yellow-500" />
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Punto de Atención Requerido</h3>
+            <p>Debe seleccionar un punto de atención para iniciar su jornada</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -165,7 +253,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
             Control Automático de Jornada
           </CardTitle>
           <CardDescription>
-            Tu jornada se inicia automáticamente al seleccionar un punto de atención
+            Punto seleccionado: {selectedPoint.nombre}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -195,30 +283,48 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
 
             <div className="space-y-3">
               {!currentSession && (
-                <Button onClick={handleStartShift} className="w-full">
+                <Button 
+                  onClick={handleStartShift} 
+                  className="w-full"
+                  disabled={loading}
+                >
                   <Clock className="h-4 w-4 mr-2" />
-                  Iniciar Jornada
+                  {loading ? 'Iniciando...' : 'Iniciar Jornada'}
                 </Button>
               )}
 
               {currentSession && !currentSession.fecha_almuerzo && (
-                <Button onClick={handleLunchBreak} variant="outline" className="w-full">
+                <Button 
+                  onClick={handleLunchBreak} 
+                  variant="outline" 
+                  className="w-full"
+                  disabled={loading}
+                >
                   <Coffee className="h-4 w-4 mr-2" />
-                  Ir a Almorzar
+                  {loading ? 'Registrando...' : 'Ir a Almorzar'}
                 </Button>
               )}
 
               {currentSession?.fecha_almuerzo && !currentSession.fecha_regreso && (
-                <Button onClick={handleLunchReturn} className="w-full">
+                <Button 
+                  onClick={handleLunchReturn} 
+                  className="w-full"
+                  disabled={loading}
+                >
                   <Clock className="h-4 w-4 mr-2" />
-                  Regresar de Almuerzo
+                  {loading ? 'Registrando...' : 'Regresar de Almuerzo'}
                 </Button>
               )}
 
               {currentSession && currentSession.fecha_regreso && !currentSession.fecha_salida && (
-                <Button onClick={handleEndShift} variant="destructive" className="w-full">
+                <Button 
+                  onClick={handleEndShift} 
+                  variant="destructive" 
+                  className="w-full"
+                  disabled={loading}
+                >
                   <LogOutIcon className="h-4 w-4 mr-2" />
-                  Finalizar Jornada
+                  {loading ? 'Finalizando...' : 'Finalizar Jornada'}
                 </Button>
               )}
             </div>
@@ -236,7 +342,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
               <div className="flex justify-between">
                 <span className="text-gray-600">Inicio:</span>
                 <span className="font-medium">
-                  {new Date(currentSession.fecha_inicio).toLocaleTimeString()}
+                  {new Date(currentSession.fecha_inicio).toLocaleTimeString('es-ES')}
                 </span>
               </div>
               
@@ -244,7 +350,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Almuerzo:</span>
                   <span className="font-medium">
-                    {new Date(currentSession.fecha_almuerzo).toLocaleTimeString()}
+                    {new Date(currentSession.fecha_almuerzo).toLocaleTimeString('es-ES')}
                   </span>
                 </div>
               )}
@@ -253,7 +359,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Regreso:</span>
                   <span className="font-medium">
-                    {new Date(currentSession.fecha_regreso).toLocaleTimeString()}
+                    {new Date(currentSession.fecha_regreso).toLocaleTimeString('es-ES')}
                   </span>
                 </div>
               )}
@@ -262,7 +368,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Salida:</span>
                   <span className="font-medium">
-                    {new Date(currentSession.fecha_salida).toLocaleTimeString()}
+                    {new Date(currentSession.fecha_salida).toLocaleTimeString('es-ES')}
                   </span>
                 </div>
               )}
