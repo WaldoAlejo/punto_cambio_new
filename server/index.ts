@@ -28,14 +28,16 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-// Rate limiting
+// Rate limiting - Updated configuration for compatibility
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100, // máximo 100 requests por IP por ventana
+  limit: 100, // máximo 100 requests por IP por ventana (updated from 'max' to 'limit')
   message: { error: 'Demasiadas peticiones, intente más tarde' },
-  standardHeaders: true,
+  standardHeaders: 'draft-7',
   legacyHeaders: false,
 });
+
+// Apply rate limiting to all API routes
 app.use('/api', limiter);
 
 app.use(cors({

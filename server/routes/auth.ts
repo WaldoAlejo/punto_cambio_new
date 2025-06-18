@@ -1,4 +1,3 @@
-
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
@@ -11,12 +10,14 @@ import { loginSchema, type LoginRequest } from '../schemas/validation.js';
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Rate limiting estricto para login
+// Rate limiting estricto para login - Updated configuration
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 5, // máximo 5 intentos de login por IP
+  limit: 5, // máximo 5 intentos de login por IP (updated from 'max' to 'limit')
   message: { error: 'Demasiados intentos de login, intente más tarde' },
   skipSuccessfulRequests: true,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
 });
 
 // Endpoint para login con validación y rate limiting
