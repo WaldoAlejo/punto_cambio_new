@@ -68,7 +68,7 @@ app.get('/health', (req: Request, res: Response) => {
 });
 
 // Test endpoint
-app.get('/api/test', async (req: Request, res: Response) => {
+app.get('/api/test', async (req: Request, res: Response): Promise<void> => {
   try {
     logger.info('Testing database connection');
     const userCount = await prisma.usuario.count();
@@ -253,7 +253,7 @@ app.post('/api/users',
 app.patch('/api/users/:userId/toggle',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(uuidSchema, 'params'),
-  async (req: Request, res: Response): Promise<void> => {
+  async (req: Request<{ userId: string }>, res: Response): Promise<void> => {
     try {
       const { userId } = req.params;
       
@@ -426,7 +426,7 @@ app.post('/api/currencies',
 );
 
 // Endpoint para obtener saldos por punto
-app.get('/api/balances/:pointId', async (req: Request, res: Response): Promise<void> => {
+app.get('/api/balances/:pointId', async (req: Request<{ pointId: string }>, res: Response): Promise<void> => {
   try {
     const { pointId } = req.params;
     
