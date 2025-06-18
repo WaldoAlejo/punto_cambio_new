@@ -1,5 +1,4 @@
-
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = "http://localhost:3001/api";
 
 export interface Balance {
   id: string;
@@ -17,20 +16,30 @@ export interface Balance {
   };
 }
 
+interface BalanceResponse {
+  balances: Balance[];
+  error?: string;
+}
+
 export const balanceService = {
-  async getBalancesByPoint(pointId: string): Promise<{ balances: Balance[]; error: string | null }> {
+  async getBalancesByPoint(
+    pointId: string
+  ): Promise<{ balances: Balance[]; error: string | null }> {
     try {
       const response = await fetch(`${API_BASE_URL}/balances/${pointId}`);
-      const data = await response.json();
+      const data: BalanceResponse = await response.json();
 
       if (!response.ok) {
-        return { balances: [], error: data.error || 'Error al obtener saldos' };
+        return {
+          balances: [],
+          error: data.error || "Error al obtener saldos",
+        };
       }
 
       return { balances: data.balances, error: null };
     } catch (error) {
-      console.error('Error en getBalancesByPoint:', error);
-      return { balances: [], error: 'Error de conexión con el servidor' };
+      console.error("Error en getBalancesByPoint:", error);
+      return { balances: [], error: "Error de conexión con el servidor" };
     }
-  }
+  },
 };

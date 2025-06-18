@@ -1,31 +1,30 @@
+import { authService } from "./authService";
 
-import { authService } from './authService';
-
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = "http://localhost:3001/api";
 
 class ApiService {
   private getAuthHeaders() {
     const token = authService.getStoredToken();
     return {
-      'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
+      "Content-Type": "application/json",
+      ...(token && { Authorization: `Bearer ${token}` }),
     };
   }
 
-  async get(endpoint: string) {
+  async get<T>(endpoint: string): Promise<T | null> {
     try {
       console.log(`Making GET request to: ${API_BASE_URL}${endpoint}`);
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers: this.getAuthHeaders()
+        headers: this.getAuthHeaders(),
       });
-      
+
       if (response.status === 401) {
         authService.removeStoredToken();
-        window.location.href = '/login';
+        window.location.href = "/login";
         return null;
       }
-      
-      const data = await response.json();
+
+      const data: T = await response.json();
       console.log(`Response for ${endpoint}:`, data);
       return data;
     } catch (error) {
@@ -34,22 +33,22 @@ class ApiService {
     }
   }
 
-  async post(endpoint: string, data: any) {
+  async post<T>(endpoint: string, data: unknown): Promise<T | null> {
     try {
       console.log(`Making POST request to: ${API_BASE_URL}${endpoint}`, data);
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: 'POST',
+        method: "POST",
         headers: this.getAuthHeaders(),
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
       });
-      
+
       if (response.status === 401) {
         authService.removeStoredToken();
-        window.location.href = '/login';
+        window.location.href = "/login";
         return null;
       }
-      
-      const responseData = await response.json();
+
+      const responseData: T = await response.json();
       console.log(`Response for POST ${endpoint}:`, responseData);
       return responseData;
     } catch (error) {
