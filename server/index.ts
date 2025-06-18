@@ -58,7 +58,7 @@ app.use(sanitizeInput);
 app.use(logRequest);
 
 // Health check
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (req: Request, res: Response): void => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
@@ -253,7 +253,7 @@ app.post('/api/users',
 app.patch('/api/users/:userId/toggle',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(uuidSchema, 'params'),
-  async (req: Request<{ userId: string }>, res: Response): Promise<void> => {
+  async (req: Request, res: Response): Promise<void> => {
     try {
       const { userId } = req.params;
       
@@ -426,7 +426,7 @@ app.post('/api/currencies',
 );
 
 // Endpoint para obtener saldos por punto
-app.get('/api/balances/:pointId', async (req: Request<{ pointId: string }>, res: Response): Promise<void> => {
+app.get('/api/balances/:pointId', async (req: Request, res: Response): Promise<void> => {
   try {
     const { pointId } = req.params;
     
@@ -534,7 +534,7 @@ app.get('/api/schedules', async (req: Request, res: Response): Promise<void> => 
 });
 
 // Manejo de errores global
-app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((error: Error, req: Request, res: Response, next: NextFunction): void => {
   logger.error('Error no manejado', { 
     error: error.message, 
     stack: error.stack,
@@ -550,25 +550,25 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
 });
 
 // Manejo de rutas no encontradas
-app.use('*', (req: Request, res: Response) => {
+app.use('*', (req: Request, res: Response): void => {
   logger.warn('Ruta no encontrada', { url: req.originalUrl, ip: req.ip });
   res.status(404).json({ error: 'Endpoint no encontrado' });
 });
 
 // Manejo graceful de shutdown
-process.on('SIGTERM', async () => {
+process.on('SIGTERM', async (): Promise<void> => {
   logger.info('SIGTERM recibido, cerrando servidor...');
   await prisma.$disconnect();
   process.exit(0);
 });
 
-process.on('SIGINT', async () => {
+process.on('SIGINT', async (): Promise<void> => {
   logger.info('SIGINT recibido, cerrando servidor...');
   await prisma.$disconnect();
   process.exit(0);
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, (): void => {
   logger.info('Servidor iniciado', { 
     port: PORT, 
     environment: process.env.NODE_ENV || 'development',
