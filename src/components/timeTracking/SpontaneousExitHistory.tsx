@@ -3,100 +3,134 @@ import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MapPin, Clock, ArrowLeft } from 'lucide-react';
+import { SpontaneousExit } from '../../services/spontaneousExitService';
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Clock, MapPin } from "lucide-react";
-import { SalidaEspontanea } from '../../types';
+import { spontaneousExitService } from '../../services/spontaneousExitService';
 
 interface SpontaneousExitHistoryProps {
-  exits: SalidaEspontanea[];
-  onExitReturn: (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => void;
+  exits: SpontaneousExit[];
+  onExitReturn?: (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => void;
 }
 
-const SpontaneousExitHistory = ({ exits, onExitReturn }: SpontaneousExitHistoryProps) => {
-  const [isGettingLocation, setIsGettingLocation] = useState<string | null>(null);
+const motivoLabels = {
+  'BANCO': 'Banco',
+  'DILIGENCIA_PERSONAL': 'Diligencia Personal',
+  'TRAMITE_GOBIERNO': 'Trámite de Gobierno',
+  'EMERGENCIA_MEDICA': 'Emergencia Médica',
+  'OTRO': 'Otro'
+};
 
-  const getLocation = (): Promise<{ lat: number; lng: number; direccion?: string }> => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('Geolocalización no soportada'));
-        return;
+const SpontaneousExitHistory = ({ exits, onExitReturn }: SpontaneousExitHistoryProps) => {
+  const [returningIds, setReturningIds] = useState<Set<string>>(new Set());
+
+  const handleMarkReturn = async (exitId: string) => {
+    if (returningIds.has(exitId)) return;
+
+    try {
+      setReturningIds(prev => new Set(prev).add(exitId));
+
+      // Obtener ubicación actual
+      const getCurrentLocation = (): Promise<{ lat: number; lng: number }> => {
+        return new Promise((resolve, reject) => {
+          if (!navigator.geolocation) {
+            reject(new Error('Geolocalización no soportada'));
+            return;
+          }
+
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              resolve({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              });
+            },
+            (error) => reject(error),
+            {
+              enableHighAccuracy: true,
+              timeout: 10000,
+              maximumAge: 60000
+            }
+          );
+        });
+      };
+
+      let ubicacionRegreso;
+      try {
+        ubicacionRegreso = await getCurrentLocation();
+      } catch (locationError) {
+        console.warn('No se pudo obtener ubicación:', locationError);
+        // Continuar sin ubicación
       }
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          resolve({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            direccion: 'Ubicación de regreso'
-          });
-        },
-        (error) => reject(error),
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-      );
-    });
-  };
-
-  const handleReturn = async (exitId: string) => {
-    try {
-      setIsGettingLocation(exitId);
-      const ubicacion = await getLocation();
-      onExitReturn(exitId, ubicacion);
-      
-      toast({
-        title: "Regreso registrado",
-        description: "Se ha registrado el regreso de la salida espontánea",
+      const { error } = await spontaneousExitService.markReturn(exitId, {
+        ubicacion_regreso: ubicacionRegreso
       });
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Regreso registrado",
+          description: "Se ha marcado tu regreso exitosamente",
+        });
+
+        // Notificar al componente padre si está disponible
+        if (onExitReturn && ubicacionRegreso) {
+          onExitReturn(exitId, ubicacionRegreso);
+        }
+      }
     } catch (error) {
+      console.error('Error marking return:', error);
       toast({
         title: "Error",
-        description: "No se pudo obtener la ubicación de regreso",
-        variant: "destructive"
+        description: "Error al marcar el regreso",
+        variant: "destructive",
       });
     } finally {
-      setIsGettingLocation(null);
+      setReturningIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(exitId);
+        return newSet;
+      });
     }
   };
 
-  const formatearHora = (fecha: string) => {
-    return new Date(fecha).toLocaleTimeString('es-ES', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const formatearDuracion = (minutos: number) => {
-    const horas = Math.floor(minutos / 60);
-    const mins = minutos % 60;
-    return horas > 0 ? `${horas}h ${mins}m` : `${mins}m`;
-  };
-
-  const getMotivoColor = (motivo: string) => {
-    switch (motivo) {
-      case 'DEPOSITO': return 'bg-blue-500';
-      case 'RETIRO': return 'bg-green-500';
-      case 'MOVILIZACION_DIVISAS': return 'bg-orange-500';
-      case 'OTROS': return 'bg-gray-500';
-      default: return 'bg-gray-500';
+  const getStatusBadge = (exit: SpontaneousExit) => {
+    if (exit.fecha_regreso) {
+      return <Badge className="bg-green-100 text-green-800">Completado</Badge>;
     }
+    return <Badge className="bg-yellow-100 text-yellow-800">En curso</Badge>;
   };
 
-  const getMotivoLabel = (motivo: string) => {
-    switch (motivo) {
-      case 'DEPOSITO': return 'Depósito';
-      case 'RETIRO': return 'Retiro';
-      case 'MOVILIZACION_DIVISAS': return 'Movilización de Divisas';
-      case 'OTROS': return 'Otros';
-      default: return motivo;
+  const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (hours > 0) {
+      return `${hours}h ${mins}m`;
     }
+    return `${mins}m`;
+  };
+
+  const calculateCurrentDuration = (fechaSalida: string) => {
+    const now = new Date();
+    const salida = new Date(fechaSalida);
+    const diffMinutes = Math.floor((now.getTime() - salida.getTime()) / (1000 * 60));
+    return diffMinutes;
   };
 
   if (exits.length === 0) {
     return (
       <Card>
-        <CardContent className="pt-6">
-          <p className="text-center text-gray-500">
-            No hay salidas espontáneas registradas hoy
-          </p>
+        <CardContent className="p-6">
+          <div className="text-center py-8 text-gray-500">
+            <Clock className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+            <p>No hay salidas espontáneas registradas</p>
+          </div>
         </CardContent>
       </Card>
     );
@@ -104,67 +138,92 @@ const SpontaneousExitHistory = ({ exits, onExitReturn }: SpontaneousExitHistoryP
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-semibold">Historial de Salidas Espontáneas</h2>
+      <h2 className="text-lg font-semibold text-gray-800">Historial de Salidas Espontáneas</h2>
       
       {exits.map((exit) => (
         <Card key={exit.id}>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg">
-                <Badge className={`${getMotivoColor(exit.motivo)} text-white`}>
-                  {getMotivoLabel(exit.motivo)}
-                </Badge>
-              </CardTitle>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Clock className="h-4 w-4" />
-                {formatearHora(exit.fecha_salida)}
+            <div className="flex justify-between items-start">
+              <div>
+                <CardTitle className="text-base">
+                  {motivoLabels[exit.motivo] || exit.motivo}
+                </CardTitle>
+                <CardDescription>
+                  {new Date(exit.fecha_salida).toLocaleString('es-ES')}
+                </CardDescription>
               </div>
+              {getStatusBadge(exit)}
             </div>
-            {exit.descripcion && (
-              <CardDescription>{exit.descripcion}</CardDescription>
-            )}
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
+              {exit.descripcion && (
+                <div>
+                  <p className="text-sm font-medium text-gray-700">Descripción:</p>
+                  <p className="text-sm text-gray-600">{exit.descripcion}</p>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="font-medium">Hora de Salida:</span>
-                  <div>{formatearHora(exit.fecha_salida)}</div>
-                </div>
-                <div>
-                  <span className="font-medium">Hora de Regreso:</span>
-                  <div>
-                    {exit.fecha_regreso ? formatearHora(exit.fecha_regreso) : 
-                      <Badge variant="destructive">Sin regreso</Badge>
-                    }
+                  <p className="font-medium text-gray-700">Salida:</p>
+                  <div className="flex items-center gap-1 text-gray-600">
+                    <Clock className="h-3 w-3" />
+                    {new Date(exit.fecha_salida).toLocaleTimeString('es-ES')}
                   </div>
+                  {exit.ubicacion_salida && (
+                    <div className="flex items-center gap-1 text-gray-600">
+                      <MapPin className="h-3 w-3" />
+                      Ubicación registrada
+                    </div>
+                  )}
                 </div>
-                {exit.duracion_minutos && (
-                  <div className="col-span-2">
-                    <span className="font-medium">Duración:</span>
-                    <div>{formatearDuracion(exit.duracion_minutos)}</div>
+
+                {exit.fecha_regreso ? (
+                  <div>
+                    <p className="font-medium text-gray-700">Regreso:</p>
+                    <div className="flex items-center gap-1 text-gray-600">
+                      <ArrowLeft className="h-3 w-3" />
+                      {new Date(exit.fecha_regreso).toLocaleTimeString('es-ES')}
+                    </div>
+                    {exit.ubicacion_regreso && (
+                      <div className="flex items-center gap-1 text-gray-600">
+                        <MapPin className="h-3 w-3" />
+                        Ubicación registrada
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <p className="font-medium text-gray-700">Estado:</p>
+                    <p className="text-yellow-600">En curso</p>
+                    <p className="text-xs text-gray-500">
+                      Duración actual: {formatDuration(calculateCurrentDuration(exit.fecha_salida))}
+                    </p>
                   </div>
                 )}
               </div>
 
-              {exit.ubicacion_salida && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <MapPin className="h-4 w-4" />
-                  <span>Ubicación registrada: {exit.ubicacion_salida.direccion}</span>
+              {exit.duracion_minutos && (
+                <div className="pt-2 border-t">
+                  <p className="text-sm">
+                    <span className="font-medium text-gray-700">Duración total:</span>{' '}
+                    <span className="text-blue-600">{formatDuration(exit.duracion_minutos)}</span>
+                  </p>
                 </div>
               )}
 
               {!exit.fecha_regreso && (
-                <Button
-                  onClick={() => handleReturn(exit.id)}
-                  disabled={isGettingLocation === exit.id}
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  {isGettingLocation === exit.id ? 'Registrando regreso...' : 'Registrar Regreso'}
-                </Button>
+                <div className="pt-2 border-t">
+                  <Button
+                    onClick={() => handleMarkReturn(exit.id)}
+                    disabled={returningIds.has(exit.id)}
+                    size="sm"
+                    className="w-full"
+                  >
+                    {returningIds.has(exit.id) ? 'Registrando regreso...' : 'Marcar Regreso'}
+                  </Button>
+                </div>
               )}
             </div>
           </CardContent>

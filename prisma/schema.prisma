@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -34,7 +35,10 @@ model Usuario {
   historialSaldos           HistorialSaldo[]
   transferenciasAprobadas   Transferencia[]  @relation("UsuarioAprobador")
   transferenciasSolicitadas Transferencia[]  @relation("UsuarioSolicitante")
+  transferenciasRechazadas  Transferencia[]  @relation("UsuarioRechazador")
   recibos                   Recibo[]
+  salidasEspontaneas        SalidaEspontanea[]
+  salidasAprobadas          SalidaEspontanea[] @relation("UsuarioAprobadorSalida")
 
   @@index([username])
   @@index([punto_atencion_id])
@@ -64,6 +68,7 @@ model PuntoAtencion {
   cuadresCaja           CuadreCaja[]
   historialSaldos       HistorialSaldo[]
   recibos               Recibo[]
+  salidasEspontaneas    SalidaEspontanea[]
 
   @@index([ciudad])
   @@index([activo])
@@ -169,19 +174,22 @@ model CambioDivisa {
 }
 
 model Transferencia {
-  id                 String              @id @default(uuid())
-  origen_id          String?
-  destino_id         String
-  moneda_id          String
-  monto              Decimal             @db.Decimal(15, 2)
-  tipo_transferencia TipoTransferencia
-  estado             EstadoTransferencia @default(PENDIENTE)
-  solicitado_por     String
-  aprobado_por       String?
-  fecha              DateTime            @default(now())
-  fecha_aprobacion   DateTime?
-  descripcion        String?
-  numero_recibo      String?             @unique
+  id                      String              @id @default(uuid())
+  origen_id               String?
+  destino_id              String
+  moneda_id               String
+  monto                   Decimal             @db.Decimal(15, 2)
+  tipo_transferencia      TipoTransferencia
+  estado                  EstadoTransferencia @default(PENDIENTE)
+  solicitado_por          String
+  aprobado_por            String?
+  rechazado_por           String?
+  fecha                   DateTime            @default(now())
+  fecha_aprobacion        DateTime?
+  fecha_rechazo           DateTime?
+  descripcion             String?
+  numero_recibo           String?             @unique
+  observaciones_aprobacion String?
 
   // Relaciones
   origen             PuntoAtencion? @relation("TransferenciasOrigen", fields: [origen_id], references: [id], onDelete: SetNull)
@@ -189,6 +197,7 @@ model Transferencia {
   moneda             Moneda         @relation(fields: [moneda_id], references: [id], onDelete: Restrict)
   usuarioSolicitante Usuario        @relation("UsuarioSolicitante", fields: [solicitado_por], references: [id], onDelete: Restrict)
   usuarioAprobador   Usuario?       @relation("UsuarioAprobador", fields: [aprobado_por], references: [id], onDelete: SetNull)
+  usuarioRechazador  Usuario?       @relation("UsuarioRechazador", fields: [rechazado_por], references: [id], onDelete: SetNull)
 
   @@index([fecha])
   @@index([estado])
@@ -272,6 +281,9 @@ model Jornada {
   fecha_almuerzo    DateTime?
   fecha_regreso     DateTime?
   fecha_salida      DateTime?
+  ubicacion_inicio  Json?
+  ubicacion_salida  Json?
+  estado            EstadoJornada @default(ACTIVO)
 
   // Relaciones
   usuario       Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
@@ -279,6 +291,34 @@ model Jornada {
 
   @@index([usuario_id])
   @@index([fecha_inicio])
+  @@index([punto_atencion_id])
+}
+
+model SalidaEspontanea {
+  id                 String            @id @default(uuid())
+  usuario_id         String
+  punto_atencion_id  String
+  motivo             MotivoSalida
+  descripcion        String?
+  fecha_salida       DateTime          @default(now())
+  fecha_regreso      DateTime?
+  ubicacion_salida   Json?
+  ubicacion_regreso  Json?
+  duracion_minutos   Int?
+  aprobado_por       String?
+  estado             EstadoSalida      @default(ACTIVO)
+  created_at         DateTime          @default(now())
+  updated_at         DateTime          @updatedAt
+
+  // Relaciones
+  usuario           Usuario        @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  puntoAtencion     PuntoAtencion  @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  usuarioAprobador  Usuario?       @relation("UsuarioAprobadorSalida", fields: [aprobado_por], references: [id], onDelete: SetNull)
+
+  @@index([usuario_id])
+  @@index([punto_atencion_id])
+  @@index([fecha_salida])
+  @@index([estado])
 }
 
 model CuadreCaja {
@@ -374,4 +414,24 @@ enum TipoRecibo {
   MOVIMIENTO
   DEPOSITO
   RETIRO
+}
+
+enum EstadoJornada {
+  ACTIVO
+  COMPLETADO
+  CANCELADO
+}
+
+enum MotivoSalida {
+  BANCO
+  DILIGENCIA_PERSONAL
+  TRAMITE_GOBIERNO
+  EMERGENCIA_MEDICA
+  OTRO
+}
+
+enum EstadoSalida {
+  ACTIVO
+  COMPLETADO
+  CANCELADO
 }

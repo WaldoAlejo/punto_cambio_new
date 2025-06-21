@@ -1,53 +1,63 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, PuntoAtencion, SalidaEspontanea } from '../../types';
+import { User, PuntoAtencion } from '../../types';
 import AutoTimeTracker from './AutoTimeTracker';
 import SpontaneousExitForm from './SpontaneousExitForm';
 import SpontaneousExitHistory from './SpontaneousExitHistory';
+import { spontaneousExitService, SpontaneousExit } from '../../services/spontaneousExitService';
+import { toast } from "@/hooks/use-toast";
 
 interface OperatorTimeManagementProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
-  spontaneousExits?: SalidaEspontanea[];
-  onExitRegistered?: (exit: SalidaEspontanea) => void;
-  onExitReturn?: (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => void;
 }
 
-const OperatorTimeManagement = ({ 
-  user, 
-  selectedPoint, 
-  spontaneousExits = [], 
-  onExitRegistered,
-  onExitReturn 
-}: OperatorTimeManagementProps) => {
-  const [localSpontaneousExits, setLocalSpontaneousExits] = useState<SalidaEspontanea[]>([]);
+const OperatorTimeManagement = ({ user, selectedPoint }: OperatorTimeManagementProps) => {
+  const [spontaneousExits, setSpontaneousExits] = useState<SpontaneousExit[]>([]);
+  const [isLoadingExits, setIsLoadingExits] = useState(true);
 
-  const currentExits = spontaneousExits.length > 0 ? spontaneousExits : localSpontaneousExits;
+  useEffect(() => {
+    loadSpontaneousExits();
+  }, []);
 
-  const handleExitRegistered = (exit: SalidaEspontanea) => {
-    if (onExitRegistered) {
-      onExitRegistered(exit);
-    } else {
-      setLocalSpontaneousExits(prev => [...prev, exit]);
+  const loadSpontaneousExits = async () => {
+    try {
+      setIsLoadingExits(true);
+      const { exits, error } = await spontaneousExitService.getAllExits();
+      
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive"
+        });
+      } else {
+        setSpontaneousExits(exits);
+      }
+    } catch (error) {
+      console.error('Error loading exits:', error);
+    } finally {
+      setIsLoadingExits(false);
     }
   };
 
+  const handleExitRegistered = (exit: SpontaneousExit) => {
+    setSpontaneousExits(prev => [exit, ...prev]);
+  };
+
   const handleExitReturn = (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => {
-    if (onExitReturn) {
-      onExitReturn(exitId, returnData);
-    } else {
-      setLocalSpontaneousExits(prev => prev.map(exit => 
-        exit.id === exitId 
-          ? { 
-              ...exit, 
-              fecha_regreso: new Date().toISOString(),
-              ubicacion_regreso: returnData,
-              duracion_minutos: Math.round((new Date().getTime() - new Date(exit.fecha_salida).getTime()) / (1000 * 60))
-            }
-          : exit
-      ));
-    }
+    setSpontaneousExits(prev => prev.map(exit => 
+      exit.id === exitId 
+        ? { 
+            ...exit, 
+            fecha_regreso: new Date().toISOString(),
+            ubicacion_regreso: returnData,
+            duracion_minutos: Math.round((new Date().getTime() - new Date(exit.fecha_salida).getTime()) / (1000 * 60)),
+            estado: 'COMPLETADO' as const
+          }
+        : exit
+    ));
   };
 
   return (
@@ -80,10 +90,17 @@ const OperatorTimeManagement = ({
         </TabsContent>
         
         <TabsContent value="history">
-          <SpontaneousExitHistory
-            exits={currentExits}
-            onExitReturn={handleExitReturn}
-          />
+          {isLoadingExits ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Cargando historial...</p>
+            </div>
+          ) : (
+            <SpontaneousExitHistory
+              exits={spontaneousExits}
+              onExitReturn={handleExitReturn}
+            />
+          )}
         </TabsContent>
       </Tabs>
     </div>

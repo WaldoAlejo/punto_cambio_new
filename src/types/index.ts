@@ -79,16 +79,22 @@ export interface Transferencia {
   estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
   solicitado_por: string;
   aprobado_por?: string;
+  rechazado_por?: string;
   fecha: string;
   fecha_aprobacion?: string;
+  fecha_rechazo?: string;
   descripcion?: string;
   numero_recibo?: string;
+  observaciones_aprobacion?: string;
   // Extended properties for frontend use
   detalle_divisas?: DetalleDivisasSimple;
   responsable_movilizacion?: ResponsableMovilizacion;
   moneda?: Moneda;
   origen?: PuntoAtencion;
   destino?: PuntoAtencion;
+  usuarioSolicitante?: User;
+  usuarioAprobador?: User;
+  usuarioRechazador?: User;
 }
 
 export interface Movimiento {
@@ -111,6 +117,19 @@ export interface Jornada {
   fecha_almuerzo?: string;
   fecha_regreso?: string;
   fecha_salida?: string;
+  ubicacion_inicio?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  };
+  ubicacion_salida?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  };
+  estado: 'ACTIVO' | 'COMPLETADO' | 'CANCELADO';
+  usuario?: User;
+  puntoAtencion?: PuntoAtencion;
 }
 
 export interface SolicitudSaldo {
@@ -155,10 +174,11 @@ export interface SalidaEspontanea {
   id: string;
   usuario_id: string;
   punto_atencion_id: string;
+  motivo: 'BANCO' | 'DILIGENCIA_PERSONAL' | 'TRAMITE_GOBIERNO' | 'EMERGENCIA_MEDICA' | 'OTRO';
+  descripcion?: string;
   fecha_salida: string;
   fecha_regreso?: string;
-  motivo: string;
-  ubicacion_salida: {
+  ubicacion_salida?: {
     lat: number;
     lng: number;
     direccion?: string;
@@ -169,8 +189,13 @@ export interface SalidaEspontanea {
     direccion?: string;
   };
   duracion_minutos?: number;
-  observaciones?: string;
-  descripcion?: string;
+  aprobado_por?: string;
+  estado: 'ACTIVO' | 'COMPLETADO' | 'CANCELADO';
+  created_at: string;
+  updated_at: string;
+  usuario?: User;
+  puntoAtencion?: PuntoAtencion;
+  usuarioAprobador?: User;
 }
 
 export interface DatosCliente {

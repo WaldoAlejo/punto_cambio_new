@@ -3,77 +3,50 @@ import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-import { apiService } from '../../services/apiService';
-import { User, Transferencia, Moneda, PuntoAtencion } from '../../types';
+import { transferApprovalService } from '../../services/transferApprovalService';
+import { User, Transferencia } from '../../types';
 
 interface TransferApprovalsProps {
   user: User;
 }
 
-interface ApiResponse {
-  transfers?: Transferencia[];
-  currencies?: Moneda[];
-  points?: PuntoAtencion[];
-  success?: boolean;
-  error?: string;
-}
-
 const TransferApprovals = ({ user }: TransferApprovalsProps) => {
   const [pendingTransfers, setPendingTransfers] = useState<Transferencia[]>([]);
-  const [currencies, setCurrencies] = useState<Moneda[]>([]);
-  const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  const [observaciones, setObservaciones] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Cargar datos reales desde la API
-        const [transfersResponse, currenciesResponse, pointsResponse] = await Promise.all([
-          apiService.get<ApiResponse>('/transfers'),
-          apiService.get<ApiResponse>('/currencies'),
-          apiService.get<ApiResponse>('/points')
-        ]);
-
-        if (transfersResponse && transfersResponse.transfers) {
-          // Filtrar solo las transferencias pendientes
-          const pending = transfersResponse.transfers.filter((t: Transferencia) => t.estado === 'PENDIENTE');
-          setPendingTransfers(pending);
-        }
-
-        if (currenciesResponse && currenciesResponse.currencies) {
-          setCurrencies(currenciesResponse.currencies);
-        }
-
-        if (pointsResponse && pointsResponse.points) {
-          setPoints(pointsResponse.points);
-        }
-
-      } catch (error) {
-        console.error('Error loading transfer approvals data:', error);
-        toast({
-          title: "Error",
-          description: "Error al cargar los datos de transferencias",
-          variant: "destructive"
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
+    loadPendingTransfers();
   }, []);
 
-  const getCurrencyName = (currencyId: string) => {
-    const currency = currencies.find(c => c.id === currencyId);
-    return currency ? currency.codigo : '';
-  };
-
-  const getPointName = (pointId: string) => {
-    const point = points.find(p => p.id === pointId);
-    return point ? point.nombre : '';
+  const loadPendingTransfers = async () => {
+    try {
+      setIsLoading(true);
+      const { transfers, error } = await transferApprovalService.getPendingTransfers();
+      
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive"
+        });
+      } else {
+        setPendingTransfers(transfers);
+      }
+    } catch (error) {
+      console.error('Error loading pending transfers:', error);
+      toast({
+        title: "Error",
+        description: "Error al cargar las transferencias pendientes",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getTransferTypeLabel = (type: string) => {
@@ -87,15 +60,35 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
   };
 
   const handleApprove = async (transferId: string) => {
+    if (processingIds.has(transferId)) return;
+    
     try {
-      // Aquí iría la llamada a la API para aprobar la transferencia
-      // Por ahora solo actualizamos el estado local
-      setPendingTransfers(prev => prev.filter(t => t.id !== transferId));
-
-      toast({
-        title: "Transferencia aprobada",
-        description: "La transferencia ha sido aprobada exitosamente",
+      setProcessingIds(prev => new Set(prev).add(transferId));
+      
+      const { error } = await transferApprovalService.approveTransfer(transferId, {
+        observaciones: observaciones[transferId] || undefined
       });
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive"
+        });
+      } else {
+        setPendingTransfers(prev => prev.filter(t => t.id !== transferId));
+        toast({
+          title: "Transferencia aprobada",
+          description: "La transferencia ha sido aprobada exitosamente",
+        });
+        
+        // Limpiar observaciones
+        setObservaciones(prev => {
+          const newObs = { ...prev };
+          delete newObs[transferId];
+          return newObs;
+        });
+      }
     } catch (error) {
       console.error('Error approving transfer:', error);
       toast({
@@ -103,26 +96,58 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
         description: "Error al aprobar la transferencia",
         variant: "destructive"
       });
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(transferId);
+        return newSet;
+      });
     }
   };
 
   const handleReject = async (transferId: string) => {
+    if (processingIds.has(transferId)) return;
+    
     try {
-      // Aquí iría la llamada a la API para rechazar la transferencia
-      // Por ahora solo actualizamos el estado local
-      setPendingTransfers(prev => prev.filter(t => t.id !== transferId));
-
-      toast({
-        title: "Transferencia rechazada",
-        description: "La transferencia ha sido rechazada",
-        variant: "destructive"
+      setProcessingIds(prev => new Set(prev).add(transferId));
+      
+      const { error } = await transferApprovalService.rejectTransfer(transferId, {
+        observaciones: observaciones[transferId] || undefined
       });
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive"
+        });
+      } else {
+        setPendingTransfers(prev => prev.filter(t => t.id !== transferId));
+        toast({
+          title: "Transferencia rechazada",
+          description: "La transferencia ha sido rechazada",
+          variant: "destructive"
+        });
+        
+        // Limpiar observaciones
+        setObservaciones(prev => {
+          const newObs = { ...prev };
+          delete newObs[transferId];
+          return newObs;
+        });
+      }
     } catch (error) {
       console.error('Error rejecting transfer:', error);
       toast({
         title: "Error",
         description: "Error al rechazar la transferencia",
         variant: "destructive"
+      });
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(transferId);
+        return newSet;
       });
     }
   };
@@ -142,9 +167,14 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Aprobación de Transferencias</h1>
-        <Badge variant="secondary">
-          {pendingTransfers.length} transferencias pendientes
-        </Badge>
+        <div className="flex gap-2">
+          <Badge variant="secondary">
+            {pendingTransfers.length} transferencias pendientes
+          </Badge>
+          <Button onClick={loadPendingTransfers} variant="outline" size="sm">
+            Actualizar
+          </Button>
+        </div>
       </div>
 
       {pendingTransfers.length === 0 ? (
@@ -166,7 +196,8 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
                       {getTransferTypeLabel(transfer.tipo_transferencia)}
                     </CardTitle>
                     <CardDescription>
-                      Recibo: {transfer.numero_recibo || 'Sin número'}
+                      Recibo: {transfer.numero_recibo || 'Sin número'} • 
+                      Solicitado por: {transfer.usuarioSolicitante?.nombre}
                     </CardDescription>
                   </div>
                   <Badge variant="outline" className="bg-yellow-50 text-yellow-800">
@@ -180,22 +211,22 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
                     <p className="text-sm font-medium text-gray-700">Detalles de la Transferencia</p>
                     <div className="text-sm space-y-1">
                       <p>
-                        <span className="font-medium">Monto:</span> {transfer.monto} {getCurrencyName(transfer.moneda_id)}
+                        <span className="font-medium">Monto:</span> {transfer.monto} {transfer.moneda?.codigo}
                       </p>
-                      {transfer.tipo_transferencia === 'ENTRE_PUNTOS' && transfer.origen_id && (
+                      {transfer.tipo_transferencia === 'ENTRE_PUNTOS' && transfer.origen && (
                         <p>
-                          <span className="font-medium">De:</span> {getPointName(transfer.origen_id)} 
+                          <span className="font-medium">De:</span> {transfer.origen.nombre} 
                           <span className="mx-2">→</span>
-                          <span className="font-medium">A:</span> {getPointName(transfer.destino_id)}
+                          <span className="font-medium">A:</span> {transfer.destino?.nombre}
                         </p>
                       )}
                       {transfer.tipo_transferencia !== 'ENTRE_PUNTOS' && (
                         <p>
-                          <span className="font-medium">Destino:</span> {getPointName(transfer.destino_id)}
+                          <span className="font-medium">Destino:</span> {transfer.destino?.nombre}
                         </p>
                       )}
                       <p>
-                        <span className="font-medium">Fecha:</span> {new Date(transfer.fecha).toLocaleString()}
+                        <span className="font-medium">Fecha:</span> {new Date(transfer.fecha).toLocaleString('es-ES')}
                       </p>
                     </div>
                   </div>
@@ -210,19 +241,37 @@ const TransferApprovals = ({ user }: TransferApprovalsProps) => {
                   )}
                 </div>
 
-                <div className="flex gap-2 pt-4 border-t">
-                  <Button 
-                    onClick={() => handleApprove(transfer.id)}
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    Aprobar
-                  </Button>
-                  <Button 
-                    variant="destructive"
-                    onClick={() => handleReject(transfer.id)}
-                  >
-                    Rechazar
-                  </Button>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor={`obs-${transfer.id}`}>Observaciones (opcional)</Label>
+                    <Textarea
+                      id={`obs-${transfer.id}`}
+                      placeholder="Agregar observaciones sobre la aprobación o rechazo..."
+                      value={observaciones[transfer.id] || ''}
+                      onChange={(e) => setObservaciones(prev => ({
+                        ...prev,
+                        [transfer.id]: e.target.value
+                      }))}
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-2 border-t">
+                    <Button 
+                      onClick={() => handleApprove(transfer.id)}
+                      disabled={processingIds.has(transfer.id)}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      {processingIds.has(transfer.id) ? 'Procesando...' : 'Aprobar'}
+                    </Button>
+                    <Button 
+                      variant="destructive"
+                      onClick={() => handleReject(transfer.id)}
+                      disabled={processingIds.has(transfer.id)}
+                    >
+                      {processingIds.has(transfer.id) ? 'Procesando...' : 'Rechazar'}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
