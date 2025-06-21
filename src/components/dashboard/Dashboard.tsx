@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -63,9 +64,6 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           <OperatorTimeManagement 
             user={user} 
             selectedPoint={selectedPoint}
-            spontaneousExits={spontaneousExits}
-            onExitRegistered={handleExitRegistered}
-            onExitReturn={handleExitReturn}
           />
         );
       case 'admin-time-management':

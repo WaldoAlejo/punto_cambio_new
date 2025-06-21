@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,6 +95,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
       usuario_id: user.id,
       punto_atencion_id: selectedPoint.id,
       fecha_inicio: new Date().toISOString(),
+      estado: 'ACTIVO'
     };
 
     setCurrentSession(newSession);
@@ -164,7 +164,8 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
 
     const updatedSession = {
       ...currentSession,
-      fecha_salida: new Date().toISOString()
+      fecha_salida: new Date().toISOString(),
+      estado: 'COMPLETADO' as const
     };
 
     setCurrentSession(updatedSession);
