@@ -61,6 +61,10 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
     }
   };
 
+  const handleReportTypeChange = (value: string) => {
+    setReportType(value as "exchanges" | "transfers" | "balances" | "users");
+  };
+
   const generateReport = async () => {
     if (!dateFrom || !dateTo) {
       toast({
@@ -140,7 +144,7 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
         reportType={reportType}
         dateFrom={dateFrom}
         dateTo={dateTo}
-        onReportTypeChange={setReportType}
+        onReportTypeChange={handleReportTypeChange}
         onDateFromChange={setDateFrom}
         onDateToChange={setDateTo}
         onGenerateReport={generateReport}
