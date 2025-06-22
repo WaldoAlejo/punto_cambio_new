@@ -257,30 +257,39 @@ export type Database = {
       }
       Jornada: {
         Row: {
+          estado: string | null
           fecha_almuerzo: string | null
           fecha_inicio: string
           fecha_regreso: string | null
           fecha_salida: string | null
           id: string
           punto_atencion_id: string
+          ubicacion_inicio: Json | null
+          ubicacion_salida: Json | null
           usuario_id: string
         }
         Insert: {
+          estado?: string | null
           fecha_almuerzo?: string | null
           fecha_inicio?: string
           fecha_regreso?: string | null
           fecha_salida?: string | null
           id?: string
           punto_atencion_id: string
+          ubicacion_inicio?: Json | null
+          ubicacion_salida?: Json | null
           usuario_id: string
         }
         Update: {
+          estado?: string | null
           fecha_almuerzo?: string | null
           fecha_inicio?: string
           fecha_regreso?: string | null
           fecha_salida?: string | null
           id?: string
           punto_atencion_id?: string
+          ubicacion_inicio?: Json | null
+          ubicacion_salida?: Json | null
           usuario_id?: string
         }
         Relationships: [
@@ -528,6 +537,57 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      SalidaEspontanea: {
+        Row: {
+          aprobado_por: string | null
+          created_at: string
+          descripcion: string | null
+          duracion_minutos: number | null
+          estado: string
+          fecha_regreso: string | null
+          fecha_salida: string
+          id: string
+          motivo: string
+          punto_atencion_id: string
+          ubicacion_regreso: Json | null
+          ubicacion_salida: Json | null
+          updated_at: string
+          usuario_id: string
+        }
+        Insert: {
+          aprobado_por?: string | null
+          created_at?: string
+          descripcion?: string | null
+          duracion_minutos?: number | null
+          estado?: string
+          fecha_regreso?: string | null
+          fecha_salida?: string
+          id?: string
+          motivo: string
+          punto_atencion_id: string
+          ubicacion_regreso?: Json | null
+          ubicacion_salida?: Json | null
+          updated_at?: string
+          usuario_id: string
+        }
+        Update: {
+          aprobado_por?: string | null
+          created_at?: string
+          descripcion?: string | null
+          duracion_minutos?: number | null
+          estado?: string
+          fecha_regreso?: string | null
+          fecha_salida?: string
+          id?: string
+          motivo?: string
+          punto_atencion_id?: string
+          ubicacion_regreso?: Json | null
+          ubicacion_salida?: Json | null
+          updated_at?: string
+          usuario_id?: string
+        }
+        Relationships: []
       }
       SolicitudSaldo: {
         Row: {
