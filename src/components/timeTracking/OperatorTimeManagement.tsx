@@ -58,7 +58,9 @@ const OperatorTimeManagement = ({ user, selectedPoint }: OperatorTimeManagementP
 
   const handleExitReturn = async (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => {
     try {
-      const { exit: updatedExit, error } = await spontaneousExitService.returnFromExit(exitId, returnData);
+      const { exit: updatedExit, error } = await spontaneousExitService.markReturn(exitId, {
+        ubicacion_regreso: returnData
+      });
       
       if (error) {
         toast({
