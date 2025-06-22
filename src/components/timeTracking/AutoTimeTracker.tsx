@@ -1,31 +1,24 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Coffee, LogOut as LogOutIcon, MapPin, AlertCircle } from 'lucide-react';
-import { User, PuntoAtencion, Jornada } from '../../types';
+import { User, PuntoAtencion } from '../../types';
 import { toast } from "@/hooks/use-toast";
-import { apiService } from '../../services/apiService';
+import { scheduleService, Schedule } from '../../services/scheduleService';
 
 interface AutoTimeTrackerProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
 }
 
-interface JornadaRequest {
-  usuario_id: string;
-  punto_atencion_id: string;
-  fecha_inicio?: string;
-  fecha_almuerzo?: string;
-  fecha_regreso?: string;
-  fecha_salida?: string;
-}
-
 const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
-  const [currentSession, setCurrentSession] = useState<Jornada | null>(null);
+  const [currentSession, setCurrentSession] = useState<Schedule | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -53,25 +46,56 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
   }, [user, selectedPoint]);
 
   const loadActiveSession = async () => {
-    // En una implementación real, aquí cargarías la jornada activa desde el servidor
-    // Por ahora, mantenemos el estado local
+    try {
+      setInitialLoading(true);
+      const { schedule, error } = await scheduleService.getActiveSchedule();
+      
+      if (error) {
+        console.error('Error loading active schedule:', error);
+        toast({
+          title: "Error",
+          description: "No se pudo cargar la jornada activa",
+          variant: "destructive",
+        });
+      } else if (schedule) {
+        setCurrentSession(schedule);
+      }
+    } catch (error) {
+      console.error('Error in loadActiveSession:', error);
+    } finally {
+      setInitialLoading(false);
+    }
   };
 
-  const saveJornada = async (jornadaData: JornadaRequest) => {
+  const saveSchedule = async (scheduleData: {
+    usuario_id: string;
+    punto_atencion_id: string;
+    fecha_inicio?: string;
+    fecha_almuerzo?: string;
+    fecha_regreso?: string;
+    fecha_salida?: string;
+    ubicacion_inicio?: { lat: number; lng: number };
+    ubicacion_salida?: { lat: number; lng: number };
+  }) => {
     try {
       setLoading(true);
-      const response = await apiService.post('/schedules', jornadaData);
+      const { schedule, error } = await scheduleService.createOrUpdateSchedule(scheduleData);
       
-      if (!response) {
-        throw new Error('No se recibió respuesta del servidor');
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive",
+        });
+        return null;
       }
 
-      return response;
+      return schedule;
     } catch (error) {
       console.error('Error guardando jornada:', error);
       toast({
         title: "Error",
-        description: "No se pudo guardar la jornada. Continuando en modo local.",
+        description: "No se pudo guardar la jornada",
         variant: "destructive",
       });
       return null;
@@ -90,100 +114,86 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
       return;
     }
 
-    const newSession: Jornada = {
-      id: Date.now().toString(),
+    const scheduleData = {
       usuario_id: user.id,
       punto_atencion_id: selectedPoint.id,
       fecha_inicio: new Date().toISOString(),
-      estado: 'ACTIVO'
+      ubicacion_inicio: location || undefined
     };
 
-    setCurrentSession(newSession);
-
-    // Intentar guardar en el servidor
-    await saveJornada({
-      usuario_id: user.id,
-      punto_atencion_id: selectedPoint.id,
-      fecha_inicio: newSession.fecha_inicio
-    });
+    const savedSchedule = await saveSchedule(scheduleData);
     
-    toast({
-      title: "Jornada iniciada",
-      description: `Bienvenido ${user.nombre}. Tu jornada ha comenzado.`,
-    });
+    if (savedSchedule) {
+      setCurrentSession(savedSchedule);
+      toast({
+        title: "Jornada iniciada",
+        description: `Bienvenido ${user.nombre}. Tu jornada ha comenzado.`,
+      });
+    }
   };
 
   const handleLunchBreak = async () => {
     if (!currentSession) return;
 
-    const updatedSession = {
-      ...currentSession,
+    const scheduleData = {
+      usuario_id: currentSession.usuario_id,
+      punto_atencion_id: currentSession.punto_atencion_id,
       fecha_almuerzo: new Date().toISOString()
     };
 
-    setCurrentSession(updatedSession);
-
-    // Intentar actualizar en el servidor
-    await saveJornada({
-      usuario_id: currentSession.usuario_id,
-      punto_atencion_id: currentSession.punto_atencion_id,
-      fecha_almuerzo: updatedSession.fecha_almuerzo
-    });
+    const updatedSchedule = await saveSchedule(scheduleData);
     
-    toast({
-      title: "Hora de almuerzo",
-      description: "Disfruta tu descanso. Recuerda marcar tu regreso.",
-    });
+    if (updatedSchedule) {
+      setCurrentSession(updatedSchedule);
+      toast({
+        title: "Hora de almuerzo",
+        description: "Disfruta tu descanso. Recuerda marcar tu regreso.",
+      });
+    }
   };
 
   const handleLunchReturn = async () => {
     if (!currentSession) return;
 
-    const updatedSession = {
-      ...currentSession,
+    const scheduleData = {
+      usuario_id: currentSession.usuario_id,
+      punto_atencion_id: currentSession.punto_atencion_id,
       fecha_regreso: new Date().toISOString()
     };
 
-    setCurrentSession(updatedSession);
-
-    // Intentar actualizar en el servidor
-    await saveJornada({
-      usuario_id: currentSession.usuario_id,
-      punto_atencion_id: currentSession.punto_atencion_id,
-      fecha_regreso: updatedSession.fecha_regreso
-    });
+    const updatedSchedule = await saveSchedule(scheduleData);
     
-    toast({
-      title: "Regreso de almuerzo",
-      description: "Bienvenido de vuelta. Continuemos con la jornada.",
-    });
+    if (updatedSchedule) {
+      setCurrentSession(updatedSchedule);
+      toast({
+        title: "Regreso de almuerzo",
+        description: "Bienvenido de vuelta. Continuemos con la jornada.",
+      });
+    }
   };
 
   const handleEndShift = async () => {
     if (!currentSession) return;
 
-    const updatedSession = {
-      ...currentSession,
-      fecha_salida: new Date().toISOString(),
-      estado: 'COMPLETADO' as const
-    };
-
-    setCurrentSession(updatedSession);
-
-    // Intentar actualizar en el servidor
-    await saveJornada({
+    const scheduleData = {
       usuario_id: currentSession.usuario_id,
       punto_atencion_id: currentSession.punto_atencion_id,
-      fecha_salida: updatedSession.fecha_salida
-    });
-    
-    toast({
-      title: "Jornada finalizada",
-      description: "¡Excelente trabajo hoy! Que tengas un buen día.",
-    });
+      fecha_salida: new Date().toISOString(),
+      ubicacion_salida: location || undefined
+    };
 
-    // Resetear después de 2 segundos
-    setTimeout(() => setCurrentSession(null), 2000);
+    const updatedSchedule = await saveSchedule(scheduleData);
+    
+    if (updatedSchedule) {
+      setCurrentSession(updatedSchedule);
+      toast({
+        title: "Jornada finalizada",
+        description: "¡Excelente trabajo hoy! Que tengas un buen día.",
+      });
+
+      // Resetear después de 2 segundos
+      setTimeout(() => setCurrentSession(null), 2000);
+    }
   };
 
   const getShiftDuration = () => {
@@ -245,6 +255,19 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
     );
   }
 
+  if (initialLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Cargando jornada...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Card>
@@ -294,7 +317,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
                 </Button>
               )}
 
-              {currentSession && !currentSession.fecha_almuerzo && (
+              {currentSession && !currentSession.fecha_almuerzo && currentSession.estado === 'ACTIVO' && (
                 <Button 
                   onClick={handleLunchBreak} 
                   variant="outline" 
@@ -306,7 +329,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
                 </Button>
               )}
 
-              {currentSession?.fecha_almuerzo && !currentSession.fecha_regreso && (
+              {currentSession?.fecha_almuerzo && !currentSession.fecha_regreso && currentSession.estado === 'ACTIVO' && (
                 <Button 
                   onClick={handleLunchReturn} 
                   className="w-full"
@@ -317,7 +340,7 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
                 </Button>
               )}
 
-              {currentSession && currentSession.fecha_regreso && !currentSession.fecha_salida && (
+              {currentSession && currentSession.fecha_regreso && !currentSession.fecha_salida && currentSession.estado === 'ACTIVO' && (
                 <Button 
                   onClick={handleEndShift} 
                   variant="destructive" 
@@ -373,6 +396,13 @@ const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
                   </span>
                 </div>
               )}
+
+              <div className="flex justify-between">
+                <span className="text-gray-600">Estado:</span>
+                <Badge className={getStatusColor()}>
+                  {currentSession.estado}
+                </Badge>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -27,6 +27,7 @@ const OperatorTimeManagement = ({ user, selectedPoint }: OperatorTimeManagementP
       const { exits, error } = await spontaneousExitService.getAllExits();
       
       if (error) {
+        console.error('Error loading exits:', error);
         toast({
           title: "Error",
           description: error,
@@ -37,27 +38,55 @@ const OperatorTimeManagement = ({ user, selectedPoint }: OperatorTimeManagementP
       }
     } catch (error) {
       console.error('Error loading exits:', error);
+      toast({
+        title: "Error",
+        description: "Error al cargar las salidas espontáneas",
+        variant: "destructive"
+      });
     } finally {
       setIsLoadingExits(false);
     }
   };
 
-  const handleExitRegistered = (exit: SpontaneousExit) => {
+  const handleExitRegistered = async (exit: SpontaneousExit) => {
     setSpontaneousExits(prev => [exit, ...prev]);
+    toast({
+      title: "Salida registrada",
+      description: `Salida espontánea por ${exit.motivo.toLowerCase().replace('_', ' ')} registrada correctamente`,
+    });
   };
 
-  const handleExitReturn = (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => {
-    setSpontaneousExits(prev => prev.map(exit => 
-      exit.id === exitId 
-        ? { 
-            ...exit, 
-            fecha_regreso: new Date().toISOString(),
-            ubicacion_regreso: returnData,
-            duracion_minutos: Math.round((new Date().getTime() - new Date(exit.fecha_salida).getTime()) / (1000 * 60)),
-            estado: 'COMPLETADO' as const
-          }
-        : exit
-    ));
+  const handleExitReturn = async (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => {
+    try {
+      const { exit: updatedExit, error } = await spontaneousExitService.returnFromExit(exitId, returnData);
+      
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (updatedExit) {
+        setSpontaneousExits(prev => prev.map(exit => 
+          exit.id === exitId ? updatedExit : exit
+        ));
+        
+        toast({
+          title: "Regreso registrado",
+          description: "Se ha registrado el regreso de la salida espontánea",
+        });
+      }
+    } catch (error) {
+      console.error('Error registering return:', error);
+      toast({
+        title: "Error",
+        description: "Error al registrar el regreso",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -82,11 +111,13 @@ const OperatorTimeManagement = ({ user, selectedPoint }: OperatorTimeManagementP
         </TabsContent>
         
         <TabsContent value="spontaneous">
-          <SpontaneousExitForm
-            user={user}
-            selectedPoint={selectedPoint}
-            onExitRegistered={handleExitRegistered}
-          />
+          <div className="space-y-6">
+            <SpontaneousExitForm
+              user={user}
+              selectedPoint={selectedPoint}
+              onExitRegistered={handleExitRegistered}
+            />
+          </div>
         </TabsContent>
         
         <TabsContent value="history">

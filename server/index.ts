@@ -1,14 +1,8 @@
 
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
-import { PrismaClient } from '@prisma/client';
-import logger, { logRequest } from './utils/logger.js';
-import { authenticateToken } from './middleware/auth.js';
-import { sanitizeInput } from './middleware/validation.js';
-
-// Import route modules
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import pointRoutes from './routes/points.js';
@@ -16,140 +10,88 @@ import currencyRoutes from './routes/currencies.js';
 import balanceRoutes from './routes/balances.js';
 import transferRoutes from './routes/transfers.js';
 import scheduleRoutes from './routes/schedules.js';
+import spontaneousExitRoutes from './routes/spontaneous-exits.js';
+import transferApprovalRoutes from './routes/transfer-approvals.js';
+import logger from './utils/logger.js';
 
 const app = express();
-const prisma = new PrismaClient({
-  log: ['query', 'error', 'warn'],
-});
 const PORT = process.env.PORT || 3001;
 
-// Configuración de seguridad
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
-
-// Rate limiting - Updated configuration for compatibility
+// Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  limit: 100, // máximo 100 requests por IP por ventana (updated from 'max' to 'limit')
-  message: { error: 'Demasiadas peticiones, intente más tarde' },
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
 });
 
-// Apply rate limiting to all API routes
-app.use('/api', limiter);
+// Middleware
+app.use(helmet());
+app.use(cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000'],
+  credentials: true
+}));
+app.use(limiter);
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Middleware para headers de no-cache en todas las respuestas API
-app.use('/api', (req: Request, res: Response, next: NextFunction) => {
-  res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
-    'Surrogate-Control': 'no-store',
-    'Content-Type': 'application/json; charset=utf-8'
+// Logging middleware
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.path}`, {
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    timestamp: new Date().toISOString()
   });
   next();
 });
 
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:8080',
-  credentials: true
-}));
-app.use(express.json({ limit: '10mb' }));
-app.use(sanitizeInput);
-app.use(logRequest);
-
-// Health check
-app.get('/health', (req: Request, res: Response): void => {
+// Health check endpoint
+app.get('/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    success: true
+    uptime: process.uptime()
   });
 });
 
-// Test endpoint
-app.get('/api/test', async (req: Request, res: Response): Promise<void> => {
-  try {
-    logger.info('Testing database connection');
-    const userCount = await prisma.usuario.count();
-    res.status(200).json({ 
-      message: 'Server running', 
-      userCount,
-      timestamp: new Date().toISOString(),
-      success: true
-    });
-  } catch (error) {
-    logger.error('Database test error', { 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
-    res.status(500).json({ 
-      error: 'Database connection failed',
-      success: false,
-      timestamp: new Date().toISOString()
-    });
-  }
-});
-
-// Mount route modules
+// API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/points', pointRoutes);
+app.use('/api/currencies', currencyRoutes);
+app.use('/api/balances', balanceRoutes);
+app.use('/api/transfers', transferRoutes);
+app.use('/api/schedules', scheduleRoutes);
+app.use('/api/spontaneous-exits', spontaneousExitRoutes);
+app.use('/api/transfer-approvals', transferApprovalRoutes);
 
-// Protected routes
-app.use('/api/users', authenticateToken, userRoutes);
-app.use('/api/points', authenticateToken, pointRoutes);
-app.use('/api/currencies', authenticateToken, currencyRoutes);
-app.use('/api/balances', authenticateToken, balanceRoutes);
-app.use('/api/transfers', authenticateToken, transferRoutes);
-app.use('/api/schedules', authenticateToken, scheduleRoutes);
-
-// Manejo de errores global
-app.use((error: Error, req: Request, res: Response, next: NextFunction): void => {
-  logger.error('Error no manejado', { 
-    error: error.message, 
-    stack: error.stack,
-    url: req.originalUrl,
+// Error handling middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  logger.error('Unhandled error', {
+    error: err.message,
+    stack: err.stack,
+    url: req.url,
     method: req.method,
-    ip: req.ip
+    ip: req.ip,
+    timestamp: new Date().toISOString()
   });
-  
-  res.status(500).json({ 
-    error: 'Error interno del servidor',
-    success: false,
+
+  res.status(500).json({
+    error: 'Internal server error',
     timestamp: new Date().toISOString()
   });
 });
 
-// Manejo de rutas no encontradas
-app.use('*', (req: Request, res: Response): void => {
-  logger.warn('Ruta no encontrada', { url: req.originalUrl, ip: req.ip });
-  res.status(404).json({ 
-    error: 'Endpoint no encontrado',
-    success: false,
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    path: req.originalUrl,
     timestamp: new Date().toISOString()
   });
 });
 
-// Manejo graceful de shutdown
-process.on('SIGTERM', async (): Promise<void> => {
-  logger.info('SIGTERM recibido, cerrando servidor...');
-  await prisma.$disconnect();
-  process.exit(0);
+app.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT}`);
 });
 
-process.on('SIGINT', async (): Promise<void> => {
-  logger.info('SIGINT recibido, cerrando servidor...');
-  await prisma.$disconnect();
-  process.exit(0);
-});
-
-app.listen(PORT, (): void => {
-  logger.info('Servidor iniciado', { 
-    port: PORT, 
-    environment: process.env.NODE_ENV || 'development',
-    timestamp: new Date().toISOString()
-  });
-});
+export default app;
