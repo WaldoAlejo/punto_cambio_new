@@ -116,9 +116,9 @@ router.patch('/:transferId/approve', authenticateToken, requireRole(['ADMIN', 'S
 
     if (transfer.estado !== 'PENDIENTE') {
       res.status(400).json({
-        error: 'La transferencia ya ha sido procesada',
+        error: "La transferencia ya ha sido procesada",
         success: false,
-        timestamp: new Date().toI SO String()
+        timestamp: new Date().toISOString(),
       });
       return;
     }

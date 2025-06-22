@@ -39,8 +39,8 @@ router.get('/', authenticateToken, async (req: express.Request, res: express.Res
       'Surrogate-Control': 'no-store'
     });
 
-    const whereClause: any = {};
-    
+    const whereClause: Record<string, unknown> = {};
+
     // Si es operador, solo ver sus propias salidas
     if (req.user?.rol === 'OPERADOR') {
       whereClause.usuario_id = req.user.id;

@@ -1,11 +1,24 @@
-
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users, Printer, Download } from "lucide-react";
-import { User, PuntoAtencion } from '../../types';
+import { User, PuntoAtencion } from "../../types";
 
 interface ActivePointsReportProps {
   user: User;
@@ -17,78 +30,44 @@ interface PuntoConUsuario extends PuntoAtencion {
   hora_inicio?: string;
 }
 
+interface PuntosActivosResponse {
+  puntos: PuntoConUsuario[];
+  success: boolean;
+  timestamp: string;
+}
+
 const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
   const [puntosActivos, setPuntosActivos] = useState<PuntoConUsuario[]>([]);
 
-  // Mock data - en producción vendría de la API
-  const mockPuntosActivos: PuntoConUsuario[] = [
-    {
-      id: '1',
-      nombre: 'Punto Centro',
-      direccion: 'Av. Principal #123',
-      ciudad: 'Caracas',
-      provincia: 'Distrito Capital',
-      activo: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      usuario_activo: {
-        id: '1',
-        username: 'juan.operador',
-        nombre: 'Juan Pérez',
-        rol: 'OPERADOR',
-        activo: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      estado_jornada: 'TRABAJANDO',
-      hora_inicio: '08:15'
-    },
-    {
-      id: '2',
-      nombre: 'Punto Norte',
-      direccion: 'Centro Comercial Norte',
-      ciudad: 'Caracas',
-      provincia: 'Distrito Capital',
-      activo: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      usuario_activo: {
-        id: '2',
-        username: 'maria.cajera',
-        nombre: 'María González',
-        rol: 'OPERADOR',
-        activo: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      },
-      estado_jornada: 'ALMUERZO',
-      hora_inicio: '09:00'
-    },
-    {
-      id: '3',
-      nombre: 'Punto Sur',
-      direccion: 'Mall del Sur',
-      ciudad: 'Caracas',
-      provincia: 'Distrito Capital',
-      activo: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+  const cargarPuntosActivos = useCallback(async () => {
+    try {
+      const response = await axios.get<PuntosActivosResponse>(
+        "/api/puntos/activos"
+      );
+      if (!response.data.success) {
+        alert("No se pudo cargar los puntos activos del sistema.");
+        return;
+      }
+      setPuntosActivos(response.data.puntos || []);
+    } catch (error) {
+      console.error("Error al cargar puntos activos", error);
+      alert("Hubo un error al cargar los puntos activos. Intenta nuevamente.");
     }
-  ];
+  }, []);
 
   useEffect(() => {
     cargarPuntosActivos();
-  }, []);
-
-  const cargarPuntosActivos = () => {
-    setPuntosActivos(mockPuntosActivos);
-  };
+  }, [cargarPuntosActivos]);
 
   const getEstadoBadge = (estado?: string) => {
     switch (estado) {
-      case 'TRABAJANDO':
-        return <Badge variant="default" className="bg-green-500">Trabajando</Badge>;
-      case 'ALMUERZO':
+      case "TRABAJANDO":
+        return (
+          <Badge variant="default" className="bg-green-500">
+            Trabajando
+          </Badge>
+        );
+      case "ALMUERZO":
         return <Badge variant="destructive">En almuerzo</Badge>;
       default:
         return <Badge variant="outline">Sin usuario</Badge>;
@@ -101,18 +80,22 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
       =====================================
       Fecha: ${new Date().toLocaleDateString()}
       Hora: ${new Date().toLocaleTimeString()}
-      
-      ${puntosActivos.map(punto => `
+
+      ${puntosActivos
+        .map(
+          (punto) => `
       Punto: ${punto.nombre}
       Dirección: ${punto.direccion}
-      Usuario: ${punto.usuario_activo?.nombre || 'Sin usuario'}
-      Estado: ${punto.estado_jornada || 'Inactivo'}
-      Inicio: ${punto.hora_inicio || 'N/A'}
+      Usuario: ${punto.usuario_activo?.nombre || "Sin usuario"}
+      Estado: ${punto.estado_jornada || "Inactivo"}
+      Inicio: ${punto.hora_inicio || "N/A"}
       ----------------------------------------
-      `).join('')}
+      `
+        )
+        .join("")}
     `;
 
-    const ventanaImpresion = window.open('', '_blank');
+    const ventanaImpresion = window.open("", "_blank");
     if (ventanaImpresion) {
       ventanaImpresion.document.write(`
         <html>
@@ -139,17 +122,17 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
   };
 
   const exportarExcel = () => {
-    const datos = puntosActivos.map(punto => ({
-      'Punto de Atención': punto.nombre,
-      'Dirección': punto.direccion,
-      'Usuario Activo': punto.usuario_activo?.nombre || 'Sin usuario',
-      'Estado': punto.estado_jornada || 'Inactivo',
-      'Hora Inicio': punto.hora_inicio || 'N/A',
-      'Ciudad': punto.ciudad
+    const datos = puntosActivos.map((punto) => ({
+      "Punto de Atención": punto.nombre,
+      Dirección: punto.direccion,
+      "Usuario Activo": punto.usuario_activo?.nombre || "Sin usuario",
+      Estado: punto.estado_jornada || "Inactivo",
+      "Hora Inicio": punto.hora_inicio || "N/A",
+      Ciudad: punto.ciudad,
     }));
 
-    console.log('Exportando a Excel:', datos);
-    // Aquí se implementaría la exportación real a Excel
+    console.log("Exportando a Excel:", datos);
+    // Aquí puedes implementar exportación real con xlsx o similar
   };
 
   return (
@@ -188,18 +171,24 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {puntosActivos.map(punto => (
+                {puntosActivos.map((punto) => (
                   <TableRow key={punto.id}>
-                    <TableCell className="font-medium">{punto.nombre}</TableCell>
+                    <TableCell className="font-medium">
+                      {punto.nombre}
+                    </TableCell>
                     <TableCell>{punto.direccion}</TableCell>
                     <TableCell>
                       {punto.usuario_activo?.nombre || (
-                        <span className="text-gray-500 italic">Sin usuario logueado</span>
+                        <span className="text-gray-500 italic">
+                          Sin usuario logueado
+                        </span>
                       )}
                     </TableCell>
-                    <TableCell>{getEstadoBadge(punto.estado_jornada)}</TableCell>
+                    <TableCell>
+                      {getEstadoBadge(punto.estado_jornada)}
+                    </TableCell>
                     <TableCell className="font-mono">
-                      {punto.hora_inicio || '--:--'}
+                      {punto.hora_inicio || "--:--"}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -209,7 +198,10 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
 
           <div className="text-sm text-gray-600">
             <p>Total de puntos: {puntosActivos.length}</p>
-            <p>Puntos con usuarios activos: {puntosActivos.filter(p => p.usuario_activo).length}</p>
+            <p>
+              Puntos con usuarios activos:{" "}
+              {puntosActivos.filter((p) => p.usuario_activo).length}
+            </p>
             <p>Última actualización: {new Date().toLocaleString()}</p>
           </div>
         </div>
