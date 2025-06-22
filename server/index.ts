@@ -1,3 +1,4 @@
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -11,6 +12,8 @@ import transferRoutes from "./routes/transfers.js";
 import scheduleRoutes from "./routes/schedules.js";
 import spontaneousExitRoutes from "./routes/spontaneous-exits.js";
 import transferApprovalRoutes from "./routes/transfer-approvals.js";
+import activePointsRoutes from "./routes/activePoints.js";
+import reportRoutes from "./routes/reports.js";
 import logger from "./utils/logger.js";
 
 const app = express();
@@ -64,6 +67,8 @@ app.use("/api/transfers", transferRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/spontaneous-exits", spontaneousExitRoutes);
 app.use("/api/transfer-approvals", transferApprovalRoutes);
+app.use("/api/active-points", activePointsRoutes);
+app.use("/api/reports", reportRoutes);
 
 // Error handling middleware
 app.use(

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { User, PuntoAtencion } from "../../types";
 import ReportFilters from "./ReportFilters";
@@ -15,14 +16,16 @@ interface ReportsProps {
 
 interface ReportItem {
   point: string;
+  user?: string;
   amount?: number;
   transfers?: number;
   balance?: number;
+  exchanges?: number;
 }
 
 const Reports = ({ user, selectedPoint }: ReportsProps) => {
   const [reportType, setReportType] = useState<
-    "exchanges" | "transfers" | "balances"
+    "exchanges" | "transfers" | "balances" | "users"
   >("exchanges");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -70,26 +73,43 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
 
     setIsLoading(true);
     try {
+      console.log(`Generating report: ${reportType} from ${dateFrom} to ${dateTo}`);
+      
       const { data, error } = await reportService.getReportData(
         reportType,
         dateFrom,
         dateTo
       );
-      if (error || !data.length) {
+      
+      if (error) {
+        toast({
+          title: "Error",
+          description: `Error al generar el reporte: ${error}`,
+          variant: "destructive",
+        });
+        setReportData([]);
+      } else if (!data.length) {
         toast({
           title: "Sin datos",
           description: "No hay operaciones en el rango de fechas seleccionado",
         });
         setReportData([]);
       } else {
+        console.log("Report data received:", data);
         setReportData(data);
+        toast({
+          title: "Éxito",
+          description: `Reporte generado con ${data.length} registros`,
+        });
       }
     } catch (error) {
+      console.error("Error generating report:", error);
       toast({
         title: "Error",
-        description: "Error al generar el reporte",
+        description: "Error inesperado al generar el reporte",
         variant: "destructive",
       });
+      setReportData([]);
     }
     setIsLoading(false);
   };
@@ -132,15 +152,20 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
             No hay datos para mostrar en el rango seleccionado
           </p>
           <p className="text-gray-400 mt-2">
-            La base de datos está limpia. Comience creando usuarios, puntos de
-            atención y realizando operaciones.
+            Intente con un rango de fechas diferente o verifique que existan operaciones registradas.
           </p>
         </div>
-      ) : (
+      ) : reportData.length > 0 ? (
         <>
           <ReportChart data={reportData} />
           <ReportTable data={reportData} reportType={reportType} />
         </>
+      ) : (
+        <div className="text-center py-12">
+          <p className="text-gray-500 text-lg">
+            Seleccione las fechas y haga clic en "Generar Reporte" para ver los datos
+          </p>
+        </div>
       )}
     </div>
   );
