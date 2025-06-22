@@ -1,8 +1,14 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
+import axios from "axios";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { User, PuntoAtencion } from '../../types';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { User, PuntoAtencion } from "../../types";
 
 interface PointSelectionProps {
   user: User;
@@ -11,20 +17,37 @@ interface PointSelectionProps {
   onLogout: () => void;
 }
 
-const PointSelection = ({ user, points, onPointSelect, onLogout }: PointSelectionProps) => {
+interface PuntosActivosResponse {
+  puntos: { id: string }[];
+}
+
+const PointSelection = ({
+  user,
+  points,
+  onPointSelect,
+  onLogout,
+}: PointSelectionProps) => {
   const [occupiedPoints, setOccupiedPoints] = useState<string[]>([]);
 
-  // Mock data - puntos ocupados (simulando usuarios conectados)
-  const mockOccupiedPoints = ['2']; // Punto Norte está ocupado
-
   useEffect(() => {
-    setOccupiedPoints(mockOccupiedPoints);
+    const fetchOccupiedPoints = async () => {
+      try {
+        const response = await axios.get<PuntosActivosResponse>(
+          "/api/puntos/activos"
+        );
+        const ocupados = response.data.puntos.map((p) => p.id);
+        setOccupiedPoints(ocupados);
+      } catch (error) {
+        console.error("Error al cargar puntos activos", error);
+        setOccupiedPoints([]); // fallback
+      }
+    };
+
+    fetchOccupiedPoints();
   }, []);
 
   const handlePointSelect = (point: PuntoAtencion) => {
-    if (occupiedPoints.includes(point.id)) {
-      return; // No permitir seleccionar puntos ocupados
-    }
+    if (occupiedPoints.includes(point.id)) return;
     onPointSelect(point);
   };
 
@@ -32,32 +55,39 @@ const PointSelection = ({ user, points, onPointSelect, onLogout }: PointSelectio
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-2xl">
         <CardHeader>
-          <CardTitle className="text-center">Seleccionar Punto de Atención</CardTitle>
+          <CardTitle className="text-center">
+            Seleccionar Punto de Atención
+          </CardTitle>
           <CardDescription className="text-center">
-            Hola {user.nombre}, selecciona el punto de atención donde trabajarás hoy
+            Hola {user.nombre}, selecciona el punto de atención donde trabajarás
+            hoy
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {points.map(point => {
+            {points.map((point) => {
               const isOccupied = occupiedPoints.includes(point.id);
               return (
                 <div
                   key={point.id}
                   className={`p-4 border rounded-lg transition-colors ${
-                    isOccupied 
-                      ? 'bg-gray-100 border-gray-300 cursor-not-allowed' 
-                      : 'hover:bg-blue-50 cursor-pointer border-gray-200'
+                    isOccupied
+                      ? "bg-gray-100 border-gray-300 cursor-not-allowed"
+                      : "hover:bg-blue-50 cursor-pointer border-gray-200"
                   }`}
                   onClick={() => handlePointSelect(point)}
                 >
                   <div className="flex items-center justify-between">
-                    <div className={isOccupied ? 'text-gray-500' : ''}>
+                    <div className={isOccupied ? "text-gray-500" : ""}>
                       <h3 className="font-semibold text-lg">{point.nombre}</h3>
                       <p className="text-sm text-gray-600">{point.direccion}</p>
-                      <p className="text-sm text-gray-600">{point.ciudad}, {point.provincia}</p>
+                      <p className="text-sm text-gray-600">
+                        {point.ciudad}, {point.provincia}
+                      </p>
                       {point.telefono && (
-                        <p className="text-sm text-gray-600">{point.telefono}</p>
+                        <p className="text-sm text-gray-600">
+                          {point.telefono}
+                        </p>
                       )}
                     </div>
                     <div className="text-right">
@@ -66,9 +96,7 @@ const PointSelection = ({ user, points, onPointSelect, onLogout }: PointSelectio
                           Ocupado por otro usuario
                         </span>
                       ) : (
-                        <Button size="sm">
-                          Seleccionar
-                        </Button>
+                        <Button size="sm">Seleccionar</Button>
                       )}
                     </div>
                   </div>
@@ -76,10 +104,10 @@ const PointSelection = ({ user, points, onPointSelect, onLogout }: PointSelectio
               );
             })}
           </div>
-          
+
           <div className="mt-6 pt-4 border-t flex justify-center">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={onLogout}
               className="text-red-600 border-red-600 hover:bg-red-50"
             >
