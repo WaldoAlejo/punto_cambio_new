@@ -1,6 +1,7 @@
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import logger from "../utils/logger.js";
+import { authenticateToken } from "../middleware/auth.js"; // ✅ IMPORTAR middleware
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -8,6 +9,7 @@ const prisma = new PrismaClient();
 // Endpoint para obtener puntos activos con jornada activa más reciente
 router.get(
   "/",
+  authenticateToken, // ✅ Middleware agregado
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
       res.set({
@@ -71,7 +73,7 @@ router.get(
 
       logger.info("Puntos activos con jornada obtenidos", {
         count: formatted.length,
-        requestedBy: req.user?.id,
+        requestedBy: req.user?.id, // ✅ Ahora sí está tipado correctamente
       });
 
       res.status(200).json({

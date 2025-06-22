@@ -1,15 +1,29 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+
+interface ReportItem {
+  point: string;
+  amount?: number;
+  transfers?: number;
+  balance?: number;
+}
 
 interface ReportChartProps {
-  data: any[];
+  data: ReportItem[];
 }
 
 const ReportChart = ({ data }: ReportChartProps) => {
-  const chartData = data.map(item => ({
+  const chartData = data.map((item) => ({
     name: item.point,
-    valor: item.amount || item.transfers || item.balance
+    valor: item.amount ?? item.transfers ?? item.balance ?? 0,
   }));
 
   return (

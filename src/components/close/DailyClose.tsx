@@ -1,10 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { User, PuntoAtencion, Moneda, CuadreCaja } from '../../types';
+import { User, PuntoAtencion, Moneda, CuadreCaja } from "../../types";
 
 interface DailyCloseProps {
   user: User;
@@ -13,43 +19,62 @@ interface DailyCloseProps {
 
 const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
-  const [balances, setBalances] = useState<{ [key: string]: { bills: string, coins: string } }>({});
+  const [balances, setBalances] = useState<{
+    [key: string]: { bills: string; coins: string };
+  }>({});
   const [todayClose, setTodayClose] = useState<CuadreCaja | null>(null);
 
-  // Mock currencies
-  const mockCurrencies: Moneda[] = [
-    { id: '1', codigo: 'USD', nombre: 'Dólar Estadounidense', simbolo: '$', activo: true, orden_display: 1, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '2', codigo: 'EUR', nombre: 'Euro', simbolo: '€', activo: true, orden_display: 2, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-    { id: '3', codigo: 'VES', nombre: 'Bolívar Venezolano', simbolo: 'Bs', activo: true, orden_display: 3, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }
-  ];
-
   useEffect(() => {
-    setCurrencies(mockCurrencies);
-    
-    // Initialize balances
-    const initialBalances: { [key: string]: { bills: string, coins: string } } = {};
-    mockCurrencies.forEach(currency => {
-      initialBalances[currency.id] = { bills: '', coins: '' };
-    });
-    setBalances(initialBalances);
+    const fetchCurrencies = async () => {
+      try {
+        const response = await fetch("/api/currencies");
+        const data = await response.json();
+        if (data.success && Array.isArray(data.currencies)) {
+          setCurrencies(data.currencies);
 
-    // Check if there's already a close for today
-    setTodayClose(null);
+          const initialBalances: {
+            [key: string]: { bills: string; coins: string };
+          } = {};
+          data.currencies.forEach((currency: Moneda) => {
+            initialBalances[currency.id] = { bills: "", coins: "" };
+          });
+          setBalances(initialBalances);
+        } else {
+          throw new Error("Respuesta inesperada del servidor");
+        }
+      } catch (error) {
+        console.error("Error al obtener monedas:", error);
+        toast({
+          title: "Error",
+          description: "No se pudo cargar la lista de monedas.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    if (selectedPoint) {
+      fetchCurrencies();
+      setTodayClose(null);
+    }
   }, [selectedPoint]);
 
-  const handleBalanceChange = (currencyId: string, type: 'bills' | 'coins', value: string) => {
-    setBalances(prev => ({
+  const handleBalanceChange = (
+    currencyId: string,
+    type: "bills" | "coins",
+    value: string
+  ) => {
+    setBalances((prev) => ({
       ...prev,
       [currencyId]: {
         ...prev[currencyId],
-        [type]: value
-      }
+        [type]: value,
+      },
     }));
   };
 
   const calculateTotalBalance = (currencyId: string) => {
-    const bills = parseFloat(balances[currencyId]?.bills || '0');
-    const coins = parseFloat(balances[currencyId]?.coins || '0');
+    const bills = parseFloat(balances[currencyId]?.bills || "0");
+    const coins = parseFloat(balances[currencyId]?.coins || "0");
     return bills + coins;
   };
 
@@ -58,37 +83,36 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       toast({
         title: "Error",
         description: "Debe seleccionar un punto de atención",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
-    // Validate that all balances are filled
-    const incompleteBalances = currencies.some(currency => 
-      !balances[currency.id]?.bills || !balances[currency.id]?.coins
+    const incompleteBalances = currencies.some(
+      (currency) =>
+        !balances[currency.id]?.bills || !balances[currency.id]?.coins
     );
 
     if (incompleteBalances) {
       toast({
         title: "Error",
         description: "Debe completar todos los saldos antes del cierre",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
-    // Create daily close
     const newClose: CuadreCaja = {
       id: Date.now().toString(),
       usuario_id: user.id,
       punto_atencion_id: selectedPoint.id,
-      fecha: new Date().toISOString().split('T')[0],
-      estado: 'CERRADO',
-      total_cambios: 15, // Mock data
+      fecha: new Date().toISOString().split("T")[0],
+      estado: "CERRADO",
+      total_cambios: 15,
       total_transferencias_entrada: 2,
       total_transferencias_salida: 1,
       fecha_cierre: new Date().toISOString(),
-      observaciones: ''
+      observaciones: "",
     };
 
     setTodayClose(newClose);
@@ -102,7 +126,6 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const generateCloseReport = () => {
     if (!todayClose) return;
 
-    // In a real application, this would generate and download a report
     toast({
       title: "Reporte generado",
       description: "El reporte de cierre diario se ha generado",
@@ -113,17 +136,21 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     return (
       <div className="p-6">
         <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">Debe seleccionar un punto de atención para realizar el cierre</p>
+          <p className="text-gray-500 text-lg">
+            Debe seleccionar un punto de atención para realizar el cierre
+          </p>
         </div>
       </div>
     );
   }
 
-  if (user.rol !== 'OPERADOR' && user.rol !== 'CONCESION') {
+  if (user.rol !== "OPERADOR" && user.rol !== "CONCESION") {
     return (
       <div className="p-6">
         <div className="text-center py-12">
-          <p className="text-red-500 text-lg">Solo operadores y concesiones pueden realizar cierres diarios</p>
+          <p className="text-red-500 text-lg">
+            Solo operadores y concesiones pueden realizar cierres diarios
+          </p>
         </div>
       </div>
     );
@@ -142,11 +169,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         <Card>
           <CardHeader>
             <CardTitle>Cuadre de Caja</CardTitle>
-            <CardDescription>Ingrese los saldos de billetes y monedas por cada divisa</CardDescription>
+            <CardDescription>
+              Ingrese los saldos de billetes y monedas por cada divisa
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {currencies.map(currency => (
+              {currencies.map((currency) => (
                 <div key={currency.id} className="border rounded-lg p-4">
                   <h3 className="font-semibold text-lg mb-4">
                     {currency.codigo} - {currency.nombre}
@@ -157,8 +186,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                       <Input
                         type="number"
                         step="0.01"
-                        value={balances[currency.id]?.bills || ''}
-                        onChange={(e) => handleBalanceChange(currency.id, 'bills', e.target.value)}
+                        value={balances[currency.id]?.bills || ""}
+                        onChange={(e) =>
+                          handleBalanceChange(
+                            currency.id,
+                            "bills",
+                            e.target.value
+                          )
+                        }
                         placeholder="0.00"
                       />
                     </div>
@@ -167,8 +202,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                       <Input
                         type="number"
                         step="0.01"
-                        value={balances[currency.id]?.coins || ''}
-                        onChange={(e) => handleBalanceChange(currency.id, 'coins', e.target.value)}
+                        value={balances[currency.id]?.coins || ""}
+                        onChange={(e) =>
+                          handleBalanceChange(
+                            currency.id,
+                            "coins",
+                            e.target.value
+                          )
+                        }
                         placeholder="0.00"
                       />
                     </div>
@@ -182,7 +223,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 </div>
               ))}
 
-              <Button 
+              <Button
                 onClick={performDailyClose}
                 className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
                 size="lg"
@@ -197,7 +238,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           <CardHeader>
             <CardTitle>Cierre Completado</CardTitle>
             <CardDescription>
-              Cierre diario realizado el {new Date(todayClose.fecha_cierre!).toLocaleString()}
+              Cierre diario realizado el{" "}
+              {new Date(todayClose.fecha_cierre!).toLocaleString()}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -205,20 +247,30 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-blue-700">Total Cambios</h4>
-                  <p className="text-2xl font-bold text-blue-600">{todayClose.total_cambios}</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {todayClose.total_cambios}
+                  </p>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg">
-                  <h4 className="font-semibold text-green-700">Transferencias Entrada</h4>
-                  <p className="text-2xl font-bold text-green-600">{todayClose.total_transferencias_entrada}</p>
+                  <h4 className="font-semibold text-green-700">
+                    Transferencias Entrada
+                  </h4>
+                  <p className="text-2xl font-bold text-green-600">
+                    {todayClose.total_transferencias_entrada}
+                  </p>
                 </div>
                 <div className="bg-orange-50 p-4 rounded-lg">
-                  <h4 className="font-semibold text-orange-700">Transferencias Salida</h4>
-                  <p className="text-2xl font-bold text-orange-600">{todayClose.total_transferencias_salida}</p>
+                  <h4 className="font-semibold text-orange-700">
+                    Transferencias Salida
+                  </h4>
+                  <p className="text-2xl font-bold text-orange-600">
+                    {todayClose.total_transferencias_salida}
+                  </p>
                 </div>
               </div>
 
               <div className="flex justify-end">
-                <Button 
+                <Button
                   onClick={generateCloseReport}
                   variant="outline"
                   className="border-blue-600 text-blue-600 hover:bg-blue-50"
