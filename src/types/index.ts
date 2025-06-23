@@ -14,6 +14,9 @@ export interface Usuario {
   puntoAtencion?: PuntoAtencion;
 }
 
+// Alias para compatibilidad
+export type User = Usuario;
+
 export interface PuntoAtencion {
   id: string;
   nombre: string;
@@ -39,6 +42,9 @@ export interface Moneda {
   updated_at: string;
 }
 
+// Alias para compatibilidad con currencyService
+export type Currency = Moneda;
+
 export interface Saldo {
   id: string;
   punto_atencion_id: string;
@@ -59,7 +65,7 @@ export interface Transferencia {
   descripcion?: string | null;
   numero_recibo?: string | null;
   estado: "PENDIENTE" | "APROBADO" | "RECHAZADO";
-  tipo_transferencia: "ENTRADA" | "SALIDA" | "INTERNA";
+  tipo_transferencia: "ENTRADA" | "SALIDA" | "INTERNA" | "ENTRE_PUNTOS" | "DEPOSITO_MATRIZ" | "RETIRO_GERENCIA" | "DEPOSITO_GERENCIA";
   solicitado_por: string;
   aprobado_por?: string | null;
   rechazado_por?: string | null;
@@ -89,6 +95,7 @@ export interface CambioDivisa {
   punto_atencion_id: string;
   estado: "PENDIENTE" | "COMPLETADO" | "CANCELADO";
   observacion?: string | null;
+  datos_cliente?: DatosCliente;
   monedaOrigen?: Moneda;
   monedaDestino?: Moneda;
   usuario?: Usuario;
@@ -146,6 +153,55 @@ export interface SalidaEspontanea {
   usuarioAprobador?: Usuario;
 }
 
+export interface CuadreCaja {
+  id: string;
+  usuario_id: string;
+  punto_atencion_id: string;
+  fecha: string;
+  estado: "ABIERTO" | "CERRADO";
+  total_cambios: number;
+  total_transferencias_entrada: number;
+  total_transferencias_salida: number;
+  fecha_cierre?: string | null;
+  observaciones?: string | null;
+}
+
+// Tipos para formularios de intercambio
+export interface DatosCliente {
+  nombre: string;
+  documento: string;
+  telefono?: string;
+  email?: string;
+}
+
+export interface DetalleDivisasSimple {
+  moneda_origen: string;
+  moneda_destino: string;
+  monto_origen: number;
+  tasa_cambio: number;
+  monto_destino: number;
+}
+
+export interface ResponsableMovilizacion {
+  nombre: string;
+  documento: string;
+  telefono?: string;
+}
+
+export interface Schedule {
+  id: string;
+  usuario_id: string;
+  punto_atencion_id: string;
+  fecha: string;
+  hora_inicio: string;
+  hora_fin: string;
+  estado: "PROGRAMADO" | "ACTIVO" | "COMPLETADO" | "CANCELADO";
+  created_at: string;
+  updated_at: string;
+  usuario?: Usuario;
+  puntoAtencion?: PuntoAtencion;
+}
+
 // Tipos de respuesta de la API
 export interface ApiResponse<T> {
   success: boolean;
@@ -195,7 +251,7 @@ export interface CreateTransferData {
   moneda_id: string;
   monto: number;
   descripcion?: string;
-  tipo_transferencia: "ENTRADA" | "SALIDA" | "INTERNA";
+  tipo_transferencia: "ENTRADA" | "SALIDA" | "INTERNA" | "ENTRE_PUNTOS" | "DEPOSITO_MATRIZ" | "RETIRO_GERENCIA" | "DEPOSITO_GERENCIA";
   origen_id?: string;
 }
 

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,15 +6,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { User } from '../../types';
+import { Usuario } from '../../types';
 import { userService } from '../../services/userService';
 
 interface UserManagementProps {
-  user: User;
+  user: Usuario;
 }
 
 const UserManagement = ({ user }: UserManagementProps) => {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<Usuario[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +22,7 @@ const UserManagement = ({ user }: UserManagementProps) => {
     username: '',
     correo: '',
     nombre: '',
-    rol: 'OPERADOR' as User['rol'],
+    rol: 'OPERADOR' as Usuario['rol'],
     password: ''
   });
 
@@ -121,12 +120,12 @@ const UserManagement = ({ user }: UserManagementProps) => {
 
   const toggleUserStatus = async (userId: string) => {
     try {
-      const { success, error } = await userService.toggleUserStatus(userId);
+      const { error } = await userService.toggleUserStatus(userId);
       
-      if (!success) {
+      if (error) {
         toast({
           title: "Error",
-          description: error || "Error al actualizar usuario",
+          description: error,
           variant: "destructive"
         });
         return;
@@ -232,7 +231,7 @@ const UserManagement = ({ user }: UserManagementProps) => {
                   <Label>Rol</Label>
                   <Select 
                     value={formData.rol} 
-                    onValueChange={(value: User['rol']) => setFormData(prev => ({ ...prev, rol: value }))}
+                    onValueChange={(value: Usuario['rol']) => setFormData(prev => ({ ...prev, rol: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue />
