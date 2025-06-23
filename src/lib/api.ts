@@ -1,33 +1,32 @@
-
-import { authService } from '@/services/authService';
+import { authService } from "@/services/authService";
 
 // Configuración base para las llamadas a la API
-export const API_BASE_URL = 'http://localhost:3001/api';
+export const API_BASE_URL = "http://localhost:3001/api";
 
 export const apiClient = {
-  async get(endpoint: string) {
+  async get<TResponse = unknown>(endpoint: string): Promise<TResponse | null> {
     try {
       console.log(`Making GET request to: ${API_BASE_URL}${endpoint}`);
-      
+
       const token = authService.getStoredToken();
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       };
-      
+
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        headers["Authorization"] = `Bearer ${token}`;
       }
-      
+
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        headers
+        headers,
       });
-      
+
       if (response.status === 401) {
         authService.removeStoredToken();
-        window.location.href = '/login';
+        window.location.href = "/login";
         return null;
       }
-      
+
       const data = await response.json();
       console.log(`Response for ${endpoint}:`, data);
       return data;
@@ -37,31 +36,34 @@ export const apiClient = {
     }
   },
 
-  async post(endpoint: string, data: any) {
+  async post<TRequest = unknown, TResponse = unknown>(
+    endpoint: string,
+    data: TRequest
+  ): Promise<TResponse | null> {
     try {
       console.log(`Making POST request to: ${API_BASE_URL}${endpoint}`, data);
-      
+
       const token = authService.getStoredToken();
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       };
-      
+
       if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        headers["Authorization"] = `Bearer ${token}`;
       }
-      
+
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: 'POST',
+        method: "POST",
         headers,
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
       });
-      
+
       if (response.status === 401) {
         authService.removeStoredToken();
-        window.location.href = '/login';
+        window.location.href = "/login";
         return null;
       }
-      
+
       const responseData = await response.json();
       console.log(`Response for POST ${endpoint}:`, responseData);
       return responseData;
@@ -69,5 +71,5 @@ export const apiClient = {
       console.error(`Error in POST ${endpoint}:`, error);
       throw error;
     }
-  }
+  },
 };

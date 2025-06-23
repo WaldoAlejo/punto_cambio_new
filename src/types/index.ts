@@ -5,7 +5,7 @@ export interface User {
   nombre: string;
   correo?: string;
   telefono?: string;
-  rol: 'SUPER_USUARIO' | 'ADMIN' | 'OPERADOR' | 'CONCESION';
+  rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION";
   activo: boolean;
   punto_atencion_id?: string;
   created_at: string;
@@ -47,26 +47,46 @@ export interface Saldo {
   moneda?: Moneda;
 }
 
+export interface DatosCliente {
+  nombre: string;
+  apellido: string;
+  cedula: string;
+  telefono?: string;
+  direccion?: string;
+}
+
+export interface DetalleDivisasSimple {
+  billetes: number;
+  monedas: number;
+  total: number;
+}
+
 export interface CambioDivisa {
   id: string;
   fecha: string;
   monto_origen: number;
   monto_destino: number;
   tasa_cambio: number;
-  tipo_operacion: 'COMPRA' | 'VENTA';
+  tipo_operacion: "COMPRA" | "VENTA";
   moneda_origen_id: string;
   moneda_destino_id: string;
   usuario_id: string;
   punto_atencion_id: string;
   observacion?: string;
   numero_recibo?: string;
-  estado: 'COMPLETADO' | 'PENDIENTE' | 'CANCELADO';
-  // Extended properties for frontend use
+  estado: "COMPLETADO" | "PENDIENTE" | "CANCELADO";
   datos_cliente?: DatosCliente;
   divisas_entregadas?: DetalleDivisasSimple;
   divisas_recibidas?: DetalleDivisasSimple;
   monedaOrigen?: Moneda;
   monedaDestino?: Moneda;
+}
+
+export interface ResponsableMovilizacion {
+  nombre: string;
+  cedula: string;
+  telefono: string;
+  empresa?: string;
 }
 
 export interface Transferencia {
@@ -75,8 +95,12 @@ export interface Transferencia {
   destino_id: string;
   moneda_id: string;
   monto: number;
-  tipo_transferencia: 'ENTRE_PUNTOS' | 'DEPOSITO_MATRIZ' | 'RETIRO_GERENCIA' | 'DEPOSITO_GERENCIA';
-  estado: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+  tipo_transferencia:
+    | "ENTRE_PUNTOS"
+    | "DEPOSITO_MATRIZ"
+    | "RETIRO_GERENCIA"
+    | "DEPOSITO_GERENCIA";
+  estado: "PENDIENTE" | "APROBADO" | "RECHAZADO";
   solicitado_por: string;
   aprobado_por?: string;
   rechazado_por?: string;
@@ -86,7 +110,6 @@ export interface Transferencia {
   descripcion?: string;
   numero_recibo?: string;
   observaciones_aprobacion?: string;
-  // Extended properties for frontend use
   detalle_divisas?: DetalleDivisasSimple;
   responsable_movilizacion?: ResponsableMovilizacion;
   moneda?: Moneda;
@@ -99,7 +122,12 @@ export interface Transferencia {
 
 export interface Movimiento {
   id: string;
-  tipo: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA_ENTRANTE' | 'TRANSFERENCIA_SALIENTE' | 'CAMBIO_DIVISA';
+  tipo:
+    | "INGRESO"
+    | "EGRESO"
+    | "TRANSFERENCIA_ENTRANTE"
+    | "TRANSFERENCIA_SALIENTE"
+    | "CAMBIO_DIVISA";
   monto: number;
   moneda_id: string;
   usuario_id: string;
@@ -127,7 +155,7 @@ export interface Jornada {
     lng: number;
     direccion?: string;
   };
-  estado: 'ACTIVO' | 'COMPLETADO' | 'CANCELADO';
+  estado: "ACTIVO" | "COMPLETADO" | "CANCELADO";
   usuario?: User;
   puntoAtencion?: PuntoAtencion;
 }
@@ -144,14 +172,13 @@ export interface SolicitudSaldo {
   observaciones?: string;
 }
 
-// Tipos adicionales que se necesitan en los componentes
 export interface CuadreCaja {
   id: string;
   usuario_id: string;
   punto_atencion_id: string;
   fecha: string;
   fecha_cierre?: string;
-  estado: 'ABIERTO' | 'CERRADO';
+  estado: "ABIERTO" | "CERRADO";
   total_cambios: number;
   total_transferencias_entrada: number;
   total_transferencias_salida: number;
@@ -174,7 +201,12 @@ export interface SalidaEspontanea {
   id: string;
   usuario_id: string;
   punto_atencion_id: string;
-  motivo: 'BANCO' | 'DILIGENCIA_PERSONAL' | 'TRAMITE_GOBIERNO' | 'EMERGENCIA_MEDICA' | 'OTRO';
+  motivo:
+    | "BANCO"
+    | "DILIGENCIA_PERSONAL"
+    | "TRAMITE_GOBIERNO"
+    | "EMERGENCIA_MEDICA"
+    | "OTRO";
   descripcion?: string;
   fecha_salida: string;
   fecha_regreso?: string;
@@ -190,7 +222,7 @@ export interface SalidaEspontanea {
   };
   duracion_minutos?: number;
   aprobado_por?: string;
-  estado: 'ACTIVO' | 'COMPLETADO' | 'CANCELADO';
+  estado: "ACTIVO" | "COMPLETADO" | "CANCELADO";
   created_at: string;
   updated_at: string;
   usuario?: User;
@@ -198,22 +230,6 @@ export interface SalidaEspontanea {
   usuarioAprobador?: User;
 }
 
-export interface DatosCliente {
-  nombre: string;
-  apellido: string;
-  cedula: string;
-  telefono?: string;
-  direccion?: string;
-}
-
-// Simplified version for form usage
-export interface DetalleDivisasSimple {
-  billetes: number;
-  monedas: number;
-  total: number;
-}
-
-// Full version matching Prisma schema
 export interface DetalleDivisas {
   moneda_id: string;
   cantidad: number;
@@ -227,13 +243,6 @@ export interface DetalleDivisas {
   }[];
 }
 
-export interface ResponsableMovilizacion {
-  nombre: string;
-  cedula: string;
-  telefono: string;
-  empresa?: string;
-}
-
 export interface HistorialSaldo {
   id: string;
   punto_atencion_id: string;
@@ -242,21 +251,29 @@ export interface HistorialSaldo {
   cantidad_anterior: number;
   cantidad_incrementada: number;
   cantidad_nueva: number;
-  tipo_movimiento: 'INGRESO' | 'EGRESO' | 'TRANSFERENCIA_ENTRANTE' | 'TRANSFERENCIA_SALIENTE' | 'CAMBIO_DIVISA';
+  tipo_movimiento:
+    | "INGRESO"
+    | "EGRESO"
+    | "TRANSFERENCIA_ENTRANTE"
+    | "TRANSFERENCIA_SALIENTE"
+    | "CAMBIO_DIVISA";
   fecha: string;
   descripcion?: string;
   numero_referencia?: string;
 }
 
+// Reemplazo del uso de `any` con un tipo seguro
+export type DatosOperacion = CambioDivisa | Transferencia;
+
 export interface Recibo {
   id: string;
   numero_recibo: string;
-  tipo_operacion: 'CAMBIO_DIVISA' | 'TRANSFERENCIA';
+  tipo_operacion: "CAMBIO_DIVISA" | "TRANSFERENCIA";
   referencia_id: string;
   usuario_id: string;
   punto_atencion_id: string;
   fecha: string;
-  datos_operacion: any;
+  datos_operacion: DatosOperacion;
   impreso: boolean;
   numero_copias: number;
 }

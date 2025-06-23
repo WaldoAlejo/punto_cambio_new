@@ -1,12 +1,17 @@
-
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface ReportFiltersProps {
-  reportType: string;
+  reportType: "exchanges" | "transfers" | "balances" | "users";
   dateFrom: string;
   dateTo: string;
   onReportTypeChange: (value: string) => void;
@@ -22,57 +27,93 @@ const ReportFilters = ({
   onReportTypeChange,
   onDateFromChange,
   onDateToChange,
-  onGenerateReport
+  onGenerateReport,
 }: ReportFiltersProps) => {
+  const colorMap = useMemo(
+    () => ({
+      exchanges: "text-blue-600",
+      transfers: "text-red-600",
+      balances: "text-green-600",
+      users: "text-indigo-600",
+    }),
+    []
+  );
+
+  const buttonColorMap = useMemo(
+    () => ({
+      exchanges: "bg-blue-600 hover:bg-blue-700 text-white",
+      transfers: "bg-red-600 hover:bg-red-700 text-white",
+      balances: "bg-green-600 hover:bg-green-700 text-white",
+      users: "bg-indigo-600 hover:bg-indigo-700 text-white",
+    }),
+    []
+  );
+
+  const titleText = useMemo(() => {
+    switch (reportType) {
+      case "exchanges":
+        return "Filtros de Cambios";
+      case "transfers":
+        return "Filtros de Transferencias";
+      case "balances":
+        return "Filtros de Saldos";
+      case "users":
+        return "Filtros de Usuarios";
+      default:
+        return "Filtros del Reporte";
+    }
+  }, [reportType]);
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Filtros de Reporte</CardTitle>
-        <CardDescription>Configura los parámetros del reporte</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="space-y-2">
-            <Label>Tipo de Reporte</Label>
-            <Select value={reportType} onValueChange={onReportTypeChange}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="exchanges">Cambios de Divisa</SelectItem>
-                <SelectItem value="transfers">Transferencias</SelectItem>
-                <SelectItem value="balances">Saldos</SelectItem>
-                <SelectItem value="users">Actividad de Usuarios</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+    <div className="space-y-4 border p-4 rounded-lg shadow-sm bg-white">
+      <h2 className={`text-lg font-bold ${colorMap[reportType]}`}>
+        {titleText}
+      </h2>
 
-          <div className="space-y-2">
-            <Label>Fecha Desde</Label>
-            <Input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => onDateFromChange(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Fecha Hasta</Label>
-            <Input
-              type="date"
-              value={dateTo}
-              onChange={(e) => onDateToChange(e.target.value)}
-            />
-          </div>
-
-          <div className="flex items-end">
-            <Button onClick={onGenerateReport} className="w-full">
-              Generar Reporte
-            </Button>
-          </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div>
+          <Label>Tipo de Reporte</Label>
+          <Select value={reportType} onValueChange={onReportTypeChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="Selecciona un tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="exchanges">Cambios</SelectItem>
+              <SelectItem value="transfers">Transferencias</SelectItem>
+              <SelectItem value="balances">Saldos</SelectItem>
+              <SelectItem value="users">Usuarios</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      </CardContent>
-    </Card>
+
+        <div>
+          <Label>Desde</Label>
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => onDateFromChange(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <Label>Hasta</Label>
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(e) => onDateToChange(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="pt-4">
+        <Button
+          onClick={onGenerateReport}
+          className={buttonColorMap[reportType]}
+        >
+          Generar Reporte
+        </Button>
+      </div>
+    </div>
   );
 };
 

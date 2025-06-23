@@ -1,14 +1,28 @@
-
-import { useState } from 'react';
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { MapPin, Clock } from 'lucide-react';
-import { User, PuntoAtencion } from '../../types';
+import { MapPin, Clock } from "lucide-react";
+import { User, PuntoAtencion } from "../../types";
 import { toast } from "@/hooks/use-toast";
-import { spontaneousExitService, SpontaneousExit } from '../../services/spontaneousExitService';
+import {
+  spontaneousExitService,
+  SpontaneousExit,
+} from "../../services/spontaneousExitService";
 
 interface SpontaneousExitFormProps {
   user: User;
@@ -16,18 +30,31 @@ interface SpontaneousExitFormProps {
   onExitRegistered?: (exit: SpontaneousExit) => void;
 }
 
-const motivoOptions = [
-  { value: 'BANCO', label: 'Banco' },
-  { value: 'DILIGENCIA_PERSONAL', label: 'Diligencia Personal' },
-  { value: 'TRAMITE_GOBIERNO', label: 'Trámite de Gobierno' },
-  { value: 'EMERGENCIA_MEDICA', label: 'Emergencia Médica' },
-  { value: 'OTRO', label: 'Otro' }
+type MotivoSalida =
+  | "BANCO"
+  | "DILIGENCIA_PERSONAL"
+  | "TRAMITE_GOBIERNO"
+  | "EMERGENCIA_MEDICA"
+  | "OTRO";
+
+const motivoOptions: { value: MotivoSalida; label: string }[] = [
+  { value: "BANCO", label: "Banco" },
+  { value: "DILIGENCIA_PERSONAL", label: "Diligencia Personal" },
+  { value: "TRAMITE_GOBIERNO", label: "Trámite de Gobierno" },
+  { value: "EMERGENCIA_MEDICA", label: "Emergencia Médica" },
+  { value: "OTRO", label: "Otro" },
 ];
 
-const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered }: SpontaneousExitFormProps) => {
-  const [motivo, setMotivo] = useState<string>('');
-  const [descripcion, setDescripcion] = useState('');
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+const SpontaneousExitForm = ({
+  user,
+  selectedPoint,
+  onExitRegistered,
+}: SpontaneousExitFormProps) => {
+  const [motivo, setMotivo] = useState<MotivoSalida | "">("");
+  const [descripcion, setDescripcion] = useState("");
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
 
@@ -46,7 +73,7 @@ const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered }: Spontane
       (position) => {
         setLocation({
           lat: position.coords.latitude,
-          lng: position.coords.longitude
+          lng: position.coords.longitude,
         });
         setGettingLocation(false);
         toast({
@@ -55,7 +82,7 @@ const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered }: Spontane
         });
       },
       (error) => {
-        console.error('Error obteniendo ubicación:', error);
+        console.error("Error obteniendo ubicación:", error);
         setGettingLocation(false);
         toast({
           title: "Error",
@@ -66,14 +93,14 @@ const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered }: Spontane
       {
         enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 60000
+        maximumAge: 60000,
       }
     );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!motivo) {
       toast({
         title: "Error",
@@ -94,11 +121,11 @@ const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered }: Spontane
 
     try {
       setIsLoading(true);
-      
+
       const exitData = {
-        motivo: motivo as any,
+        motivo,
         descripcion: descripcion || undefined,
-        ubicacion_salida: location || undefined
+        ubicacion_salida: location || undefined,
       };
 
       const { exit, error } = await spontaneousExitService.createExit(exitData);
@@ -112,21 +139,23 @@ const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered }: Spontane
       } else if (exit) {
         toast({
           title: "Salida registrada",
-          description: `Se ha registrado tu salida espontánea por ${motivoOptions.find(m => m.value === motivo)?.label}`,
+          description: `Se ha registrado tu salida espontánea por ${
+            motivoOptions.find((m) => m.value === motivo)?.label
+          }`,
         });
-        
+
         // Limpiar formulario
-        setMotivo('');
-        setDescripcion('');
+        setMotivo("");
+        setDescripcion("");
         setLocation(null);
-        
+
         // Notificar al componente padre
         if (onExitRegistered) {
           onExitRegistered(exit);
         }
       }
     } catch (error) {
-      console.error('Error creating exit:', error);
+      console.error("Error creating exit:", error);
       toast({
         title: "Error",
         description: "Error al registrar la salida espontánea",
@@ -137,7 +166,7 @@ const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered }: Spontane
     }
   };
 
-  if (user.rol !== 'OPERADOR') {
+  if (user.rol !== "OPERADOR") {
     return (
       <Card>
         <CardContent className="p-6">
@@ -158,19 +187,24 @@ const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered }: Spontane
           Registrar Salida Espontánea
         </CardTitle>
         <CardDescription>
-          {selectedPoint ? `Punto: ${selectedPoint.nombre}` : 'Selecciona un punto de atención'}
+          {selectedPoint
+            ? `Punto: ${selectedPoint.nombre}`
+            : "Selecciona un punto de atención"}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="motivo">Motivo de la salida *</Label>
-            <Select value={motivo} onValueChange={setMotivo}>
+            <Select
+              value={motivo}
+              onValueChange={(value) => setMotivo(value as MotivoSalida)}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Selecciona el motivo" />
               </SelectTrigger>
               <SelectContent>
-                {motivoOptions.map(option => (
+                {motivoOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -199,7 +233,7 @@ const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered }: Spontane
               className="flex items-center gap-2"
             >
               <MapPin className="h-4 w-4" />
-              {gettingLocation ? 'Obteniendo...' : 'Obtener Ubicación'}
+              {gettingLocation ? "Obteniendo..." : "Obtener Ubicación"}
             </Button>
             {location && (
               <span className="text-sm text-green-600 flex items-center gap-1">
@@ -210,12 +244,12 @@ const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered }: Spontane
           </div>
 
           <div className="flex gap-2 pt-4">
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               disabled={isLoading || !motivo || !selectedPoint}
               className="flex-1"
             >
-              {isLoading ? 'Registrando...' : 'Registrar Salida'}
+              {isLoading ? "Registrando..." : "Registrar Salida"}
             </Button>
           </div>
         </form>

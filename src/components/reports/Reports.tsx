@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { User, PuntoAtencion } from "../../types";
 import ReportFilters from "./ReportFilters";
@@ -7,6 +6,7 @@ import ReportTable from "./ReportTable";
 import { userService } from "../../services/userService";
 import { pointService } from "../../services/pointService";
 import { reportService } from "../../services/reportService";
+import { exportToExcel } from "@/utils/exportToExcel";
 import { toast } from "@/hooks/use-toast";
 
 interface ReportsProps {
@@ -22,6 +22,50 @@ interface ReportItem {
   balance?: number;
   exchanges?: number;
 }
+
+const getExcelFriendlyData = (
+  data: ReportItem[],
+  reportType: "exchanges" | "transfers" | "balances" | "users"
+) => {
+  return data.map((item) => {
+    const base = {
+      "Punto de Atención": item.point,
+    };
+
+    if (reportType === "exchanges") {
+      return {
+        ...base,
+        Usuario: item.user ?? "-",
+        "Nº de Cambios": item.exchanges ?? 0,
+        "Monto Total ($)": item.amount ?? 0,
+      };
+    }
+
+    if (reportType === "transfers") {
+      return {
+        ...base,
+        "Nº de Transferencias": item.transfers ?? 0,
+        "Monto Total ($)": item.amount ?? 0,
+      };
+    }
+
+    if (reportType === "balances") {
+      return {
+        ...base,
+        "Saldo Total ($)": item.balance ?? 0,
+      };
+    }
+
+    if (reportType === "users") {
+      return {
+        ...base,
+        Usuario: item.user ?? "-",
+      };
+    }
+
+    return base;
+  });
+};
 
 const Reports = ({ user, selectedPoint }: ReportsProps) => {
   const [reportType, setReportType] = useState<
@@ -77,14 +121,12 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
 
     setIsLoading(true);
     try {
-      console.log(`Generating report: ${reportType} from ${dateFrom} to ${dateTo}`);
-      
       const { data, error } = await reportService.getReportData(
         reportType,
         dateFrom,
         dateTo
       );
-      
+
       if (error) {
         toast({
           title: "Error",
@@ -99,7 +141,6 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
         });
         setReportData([]);
       } else {
-        console.log("Report data received:", data);
         setReportData(data);
         toast({
           title: "Éxito",
@@ -116,6 +157,21 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
       setReportData([]);
     }
     setIsLoading(false);
+  };
+
+  const getSheetName = () => {
+    switch (reportType) {
+      case "exchanges":
+        return "Cambios";
+      case "transfers":
+        return "Transferencias";
+      case "balances":
+        return "Saldos";
+      case "users":
+        return "Usuarios";
+      default:
+        return "Reporte";
+    }
   };
 
   if (isLoading) {
@@ -156,18 +212,40 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
             No hay datos para mostrar en el rango seleccionado
           </p>
           <p className="text-gray-400 mt-2">
-            Intente con un rango de fechas diferente o verifique que existan operaciones registradas.
+            Intente con un rango de fechas diferente o verifique que existan
+            operaciones registradas.
           </p>
         </div>
       ) : reportData.length > 0 ? (
         <>
-          <ReportChart data={reportData} />
+          <div className="flex justify-end">
+            <button
+              onClick={() =>
+                exportToExcel(
+                  getExcelFriendlyData(reportData, reportType),
+                  `reporte-${reportType}-${new Date()
+                    .toISOString()
+                    .slice(0, 10)}`,
+                  dateFrom,
+                  dateTo,
+                  selectedPoint?.nombre ?? null,
+                  getSheetName()
+                )
+              }
+              className="text-sm mb-2 px-4 py-2 bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 transition"
+            >
+              Exportar a Excel
+            </button>
+          </div>
+
+          <ReportChart data={reportData} reportType={reportType} />
           <ReportTable data={reportData} reportType={reportType} />
         </>
       ) : (
         <div className="text-center py-12">
           <p className="text-gray-500 text-lg">
-            Seleccione las fechas y haga clic en "Generar Reporte" para ver los datos
+            Seleccione las fechas y haga clic en "Generar Reporte" para ver los
+            datos
           </p>
         </div>
       )}
