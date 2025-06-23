@@ -1,6 +1,6 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authService, AuthUser, LoginCredentials } from '../services/authService';
+import { authService, AuthUser } from '../services/authService';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -16,14 +16,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Verificar si hay un token guardado al cargar la página
     const checkStoredAuth = async () => {
       try {
         const token = authService.getStoredToken();
         if (token) {
-          // Aquí podrías hacer una verificación del token con el servidor
-          // Por ahora, solo verificamos que exista
-          console.log('Token encontrado en localStorage');
+          console.log('Token encontrado, verificando validez...');
+          // Verificar token con el servidor
+          const verificationResult = await authService.verifyToken();
+          if (verificationResult.user) {
+            setUser(verificationResult.user);
+            console.log('Usuario autenticado:', verificationResult.user.username);
+          } else {
+            console.log('Token inválido, removiendo...');
+            authService.removeStoredToken();
+          }
         }
       } catch (error) {
         console.error('Error verificando token:', error);
@@ -43,6 +49,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       if (result.user && result.token) {
         setUser(result.user);
+        console.log('Login exitoso para:', result.user.username);
         return { success: true };
       } else {
         return { success: false, error: result.error || 'Error desconocido' };
@@ -58,6 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setUser(null);
     authService.removeStoredToken();
+    console.log('Usuario desconectado');
   };
 
   return (

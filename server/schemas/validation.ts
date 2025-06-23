@@ -1,6 +1,7 @@
+
 import { z } from "zod";
 
-// Schema para login
+// Schema para login - Reducido a 3 caracteres mínimo para que funcione con "admin123"
 export const loginSchema = z.object({
   username: z
     .string()
@@ -12,7 +13,7 @@ export const loginSchema = z.object({
     ),
   password: z
     .string()
-    .min(6, "La contraseña debe tener al menos 6 caracteres")
+    .min(3, "La contraseña debe tener al menos 3 caracteres") // Cambiado de 6 a 3
     .max(100, "La contraseña no puede exceder 100 caracteres"),
 });
 

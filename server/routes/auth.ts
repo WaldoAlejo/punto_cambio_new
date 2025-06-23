@@ -4,17 +4,17 @@ import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 import logger from '../utils/logger.js';
-import { generateToken } from '../middleware/auth.js';
+import { generateToken, authenticateToken } from '../middleware/auth.js';
 import { validate } from '../middleware/validation.js';
 import { loginSchema, type LoginRequest } from '../schemas/validation.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Rate limiting estricto para login - Updated configuration
+// Rate limiting estricto para login
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  limit: 5, // máximo 5 intentos de login por IP (updated from 'max' to 'limit')
+  limit: 5, // máximo 5 intentos de login por IP
   message: { error: 'Demasiados intentos de login, intente más tarde' },
   skipSuccessfulRequests: true,
   standardHeaders: 'draft-7',
@@ -94,6 +94,53 @@ router.post('/login',
         error: 'Error interno del servidor',
         success: false,
         timestamp: new Date().toISOString()
+      });
+    }
+  }
+);
+
+// Nuevo endpoint para verificar token
+router.get('/verify',
+  authenticateToken,
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    try {
+      // Si llegamos aquí, el token es válido (middleware authenticateToken lo verificó)
+      if (!req.user) {
+        res.status(401).json({ 
+          error: 'Usuario no válido',
+          valid: false 
+        });
+        return;
+      }
+
+      logger.info('Token verificado exitosamente', { 
+        userId: req.user.id, 
+        username: req.user.username 
+      });
+
+      res.status(200).json({
+        user: {
+          id: req.user.id,
+          username: req.user.username,
+          nombre: req.user.nombre,
+          rol: req.user.rol,
+          activo: req.user.activo,
+          punto_atencion_id: req.user.punto_atencion_id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        valid: true,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error('Error en verificación de token', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        ip: req.ip
+      });
+      
+      res.status(500).json({ 
+        error: 'Error interno del servidor',
+        valid: false 
       });
     }
   }

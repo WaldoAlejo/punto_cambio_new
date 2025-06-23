@@ -26,6 +26,12 @@ interface LoginResponse {
   error?: string;
 }
 
+interface TokenVerificationResponse {
+  user: AuthUser | null;
+  valid: boolean;
+  error?: string;
+}
+
 export const authService = {
   async login(
     credentials: LoginCredentials
@@ -42,6 +48,9 @@ export const authService = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0"
         },
         body: JSON.stringify(credentials),
       });
@@ -57,6 +66,14 @@ export const authService = {
             user: null,
             token: null,
             error: "Error interno del servidor. Verifique que el servidor esté ejecutándose.",
+          };
+        }
+        
+        if (response.status === 401) {
+          return {
+            user: null,
+            token: null,
+            error: "Credenciales incorrectas. Verifique usuario y contraseña.",
           };
         }
         
@@ -101,6 +118,44 @@ export const authService = {
         token: null,
         error: "Error de conexión con el servidor",
       };
+    }
+  },
+
+  async verifyToken(): Promise<TokenVerificationResponse> {
+    try {
+      const token = this.getStoredToken();
+      if (!token) {
+        return { user: null, valid: false, error: "No token found" };
+      }
+
+      console.log("Verificando token...");
+      const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          "Expires": "0"
+        },
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        console.log("Token inválido o expirado");
+        return { user: null, valid: false, error: "Token invalid" };
+      }
+
+      if (!response.ok) {
+        console.error("Error verificando token:", response.status);
+        return { user: null, valid: false, error: "Verification failed" };
+      }
+
+      const data = await response.json();
+      console.log("Token verificado exitosamente");
+      return { user: data.user, valid: true };
+    } catch (error) {
+      console.error("Error verificando token:", error);
+      return { user: null, valid: false, error: "Network error" };
     }
   },
 

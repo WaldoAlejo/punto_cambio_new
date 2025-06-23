@@ -8,11 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -24,30 +25,33 @@ const Login = () => {
     
     // Validaciones básicas
     if (!username.trim()) {
-      setError('El usuario es obligatorio');
+      const errorMessage = 'El usuario es obligatorio';
+      setError(errorMessage);
       toast({
         title: "Error de validación",
-        description: "Debe ingresar un usuario",
+        description: errorMessage,
         variant: "destructive"
       });
       return;
     }
 
     if (!password.trim()) {
-      setError('La contraseña es obligatoria');
+      const errorMessage = 'La contraseña es obligatoria';
+      setError(errorMessage);
       toast({
         title: "Error de validación",
-        description: "Debe ingresar una contraseña",
+        description: errorMessage,
         variant: "destructive"
       });
       return;
     }
 
-    if (password.length < 3) {
-      setError('La contraseña debe tener al menos 3 caracteres');
+    if (password.length < 6) {
+      const errorMessage = 'La contraseña debe tener al menos 6 caracteres';
+      setError(errorMessage);
       toast({
         title: "Error de validación",
-        description: "La contraseña es muy corta",
+        description: errorMessage,
         variant: "destructive"
       });
       return;
@@ -57,6 +61,7 @@ const Login = () => {
     setIsLoading(true);
 
     try {
+      console.log('Iniciando sesión...');
       const result = await login(username, password);
       
       if (result.success) {
@@ -64,6 +69,7 @@ const Login = () => {
           title: "Inicio de sesión exitoso",
           description: `Bienvenido al sistema`,
         });
+        console.log('Login exitoso, redirigiendo...');
         navigate('/dashboard');
       } else {
         const errorMessage = result.error || 'Error al iniciar sesión';
@@ -115,23 +121,39 @@ const Login = () => {
                 required
                 disabled={isLoading}
                 className={error && !username ? 'border-red-500' : ''}
+                autoComplete="username"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Ingresa tu contraseña"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (error) setError(''); // Limpiar error al escribir
-                }}
-                required
-                disabled={isLoading}
-                className={error && !password ? 'border-red-500' : ''}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Ingresa tu contraseña"
+                  value={password}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (error) setError(''); // Limpiar error al escribir
+                  }}
+                  required
+                  disabled={isLoading}
+                  className={error && !password ? 'border-red-500 pr-10' : 'pr-10'}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => setShowPassword(!showPassword)}
+                  disabled={isLoading}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </button>
+              </div>
             </div>
             {error && (
               <Alert variant="destructive">
@@ -140,7 +162,7 @@ const Login = () => {
             )}
             <Button 
               type="submit" 
-              className="w-full" 
+              className="w-full bg-blue-600 hover:bg-blue-700" 
               disabled={isLoading || !username.trim() || !password.trim()}
             >
               {isLoading ? (
@@ -153,9 +175,14 @@ const Login = () => {
               )}
             </Button>
           </form>
-          <div className="mt-4 text-center text-sm text-gray-600">
-            <p>Usuario de prueba: <strong>admin</strong></p>
-            <p>Contraseña: <strong>admin123</strong></p>
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+            <div className="text-center text-sm text-gray-600">
+              <p className="font-semibold mb-2">Credenciales de prueba:</p>
+              <div className="space-y-1">
+                <p><span className="font-medium">Usuario:</span> admin</p>
+                <p><span className="font-medium">Contraseña:</span> admin123</p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
