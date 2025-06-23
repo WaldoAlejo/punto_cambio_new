@@ -55,6 +55,7 @@ const TransferForm = ({
 
   const [responsable, setResponsable] = useState<ResponsableMovilizacion>({
     nombre: "",
+    documento: "",
     cedula: "",
     telefono: "",
   });
@@ -174,7 +175,7 @@ const TransferForm = ({
       billetes: "",
       monedas: "",
     });
-    setResponsable({ nombre: "", cedula: "", telefono: "" });
+    setResponsable({ nombre: "", documento: "", cedula: "", telefono: "" });
 
     toast({
       title: "Transferencia solicitada",
@@ -376,6 +377,7 @@ const TransferForm = ({
                       setResponsable((prev) => ({
                         ...prev,
                         cedula: e.target.value,
+                        documento: e.target.value,
                       }))
                     }
                     placeholder="Número de cédula"

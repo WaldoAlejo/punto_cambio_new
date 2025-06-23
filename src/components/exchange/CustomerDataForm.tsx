@@ -16,6 +16,7 @@ const CustomerDataForm = ({ onCustomerData, initialData }: CustomerDataFormProps
     initialData || {
       nombre: '',
       apellido: '',
+      documento: '',
       cedula: '',
       telefono: ''
     }
@@ -64,7 +65,7 @@ const CustomerDataForm = ({ onCustomerData, initialData }: CustomerDataFormProps
               <Label>Cédula *</Label>
               <Input
                 value={customerData.cedula}
-                onChange={(e) => setCustomerData(prev => ({ ...prev, cedula: e.target.value }))}
+                onChange={(e) => setCustomerData(prev => ({ ...prev, cedula: e.target.value, documento: e.target.value }))}
                 placeholder="Número de cédula"
                 required
               />

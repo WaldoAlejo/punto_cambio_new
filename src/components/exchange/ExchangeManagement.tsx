@@ -57,6 +57,7 @@ const ExchangeManagement = ({
   const [customerData, setCustomerData] = useState<DatosCliente>({
     nombre: "",
     apellido: "",
+    documento: "",
     cedula: "",
     telefono: "",
   });
@@ -194,7 +195,7 @@ const ExchangeManagement = ({
     setAmount("");
     setRate("");
     setObservation("");
-    setCustomerData({ nombre: "", apellido: "", cedula: "", telefono: "" });
+    setCustomerData({ nombre: "", apellido: "", documento: "", cedula: "", telefono: "" });
     setDivisasEntregadas({ billetes: 0, monedas: 0, total: 0 });
     setDivisasRecibidas({ billetes: 0, monedas: 0, total: 0 });
   };
@@ -353,7 +354,7 @@ const ExchangeManagement = ({
               )}
               {toCurrency && (
                 <CurrencyDetailForm
-                  currency={getCurrency(toCurrency)!}
+                  currency={getCurrency(toCurrency)!}  
                   title="Divisas Recibidas"
                   onDetailData={setDivisasRecibidas}
                   initialData={divisasRecibidas}

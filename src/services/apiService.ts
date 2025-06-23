@@ -49,27 +49,27 @@ const createApiService = (): ApiService => {
   return {
     async get<T>(endpoint: string): Promise<T> {
       const response = await axiosInstance.get(endpoint);
-      return response.data;
+      return response.data as T;
     },
 
     async post<T>(endpoint: string, data?: unknown): Promise<T> {
       const response = await axiosInstance.post(endpoint, data);
-      return response.data;
+      return response.data as T;
     },
 
     async put<T>(endpoint: string, data?: unknown): Promise<T> {
       const response = await axiosInstance.put(endpoint, data);
-      return response.data;
+      return response.data as T;
     },
 
     async patch<T>(endpoint: string, data?: unknown): Promise<T> {
       const response = await axiosInstance.patch(endpoint, data);
-      return response.data;
+      return response.data as T;
     },
 
-    async delete<T>(endpoint: string): Promise<T> {
+    async delete<T>(endpoint: string): Promise<T> {  
       const response = await axiosInstance.delete(endpoint);
-      return response.data;
+      return response.data as T;
     },
   };
 };
