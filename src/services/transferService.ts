@@ -1,66 +1,69 @@
-const API_BASE_URL = "http://localhost:3001/api";
 
-export interface PuntoAtencion {
-  id: string;
-  nombre: string;
+import { apiService } from "./apiService";
+import { Transferencia, CreateTransferData, ApiResponse, ListResponse } from "../types";
+
+interface TransfersResponse extends ListResponse<Transferencia> {
+  transfers: Transferencia[];
 }
 
-export interface Moneda {
-  id: string;
-  nombre: string;
-  simbolo: string;
-}
-
-export interface Usuario {
-  id: string;
-  nombre: string;
-  username: string;
-}
-
-export interface Transfer {
-  id: string;
-  origen_id: string | null;
-  destino_id: string;
-  moneda_id: string;
-  monto: number;
-  tipo_transferencia: string;
-  estado: string;
-  solicitado_por: string;
-  aprobado_por: string | null;
-  fecha: string;
-  fecha_aprobacion: string | null;
-  descripcion: string | null;
-  numero_recibo: string | null;
-  origen?: PuntoAtencion;
-  destino?: PuntoAtencion;
-  moneda?: Moneda;
-  usuarioSolicitante?: Usuario;
-  usuarioAprobador?: Usuario;
+interface TransferResponse extends ApiResponse<Transferencia> {
+  transfer: Transferencia;
 }
 
 export const transferService = {
   async getAllTransfers(): Promise<{
-    transfers: Transfer[];
+    transfers: Transferencia[];
     error: string | null;
   }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/transfers`, {
-        method: "GET",
-        credentials: "include", // 👈 Importante para cookies
-      });
-      const data = await response.json();
+      const response = await apiService.get<TransfersResponse>("/transfers");
 
-      if (!response.ok) {
+      if (!response) {
         return {
           transfers: [],
-          error: data.error || "Error al obtener transferencias",
+          error: "No se pudo obtener la respuesta del servidor",
         };
       }
 
-      return { transfers: data.transfers, error: null };
+      if (response.error || !response.success) {
+        return {
+          transfers: [],
+          error: response.error || "Error al obtener transferencias",
+        };
+      }
+
+      return { transfers: response.transfers || [], error: null };
     } catch (error) {
       console.error("Error en getAllTransfers:", error);
       return { transfers: [], error: "Error de conexión con el servidor" };
+    }
+  },
+
+  async createTransfer(transferData: CreateTransferData): Promise<{
+    transfer: Transferencia | null;
+    error: string | null;
+  }> {
+    try {
+      const response = await apiService.post<TransferResponse>("/transfers", transferData);
+
+      if (!response) {
+        return {
+          transfer: null,
+          error: "No se pudo obtener la respuesta del servidor",
+        };
+      }
+
+      if (response.error || !response.success) {
+        return {
+          transfer: null,
+          error: response.error || "Error al crear transferencia",
+        };
+      }
+
+      return { transfer: response.transfer, error: null };
+    } catch (error) {
+      console.error("Error en createTransfer:", error);
+      return { transfer: null, error: "Error de conexión con el servidor" };
     }
   },
 };

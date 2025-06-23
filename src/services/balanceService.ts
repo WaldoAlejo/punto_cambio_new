@@ -1,42 +1,34 @@
-const API_BASE_URL = "http://localhost:3001/api";
 
-export interface Balance {
-  id: string;
-  punto_atencion_id: string;
-  moneda_id: string;
-  cantidad: number;
-  billetes: number;
-  monedas_fisicas: number;
-  updated_at: string;
-  moneda?: {
-    id: string;
-    codigo: string;
-    nombre: string;
-    simbolo: string;
-  };
-}
+import { apiService } from "./apiService";
+import { Saldo, ApiResponse, ListResponse } from "../types";
 
-interface BalanceResponse {
-  balances: Balance[];
-  error?: string;
+interface BalancesResponse extends ListResponse<Saldo> {
+  balances: Saldo[];
 }
 
 export const balanceService = {
-  async getBalancesByPoint(
-    pointId: string
-  ): Promise<{ balances: Balance[]; error: string | null }> {
+  async getBalancesByPoint(pointId: string): Promise<{
+    balances: Saldo[];
+    error: string | null;
+  }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/balances/${pointId}`);
-      const data: BalanceResponse = await response.json();
+      const response = await apiService.get<BalancesResponse>(`/balances/${pointId}`);
 
-      if (!response.ok) {
+      if (!response) {
         return {
           balances: [],
-          error: data.error || "Error al obtener saldos",
+          error: "No se pudo obtener la respuesta del servidor",
         };
       }
 
-      return { balances: data.balances, error: null };
+      if (response.error || !response.success) {
+        return {
+          balances: [],
+          error: response.error || "Error al obtener saldos",
+        };
+      }
+
+      return { balances: response.balances || [], error: null };
     } catch (error) {
       console.error("Error en getBalancesByPoint:", error);
       return { balances: [], error: "Error de conexión con el servidor" };

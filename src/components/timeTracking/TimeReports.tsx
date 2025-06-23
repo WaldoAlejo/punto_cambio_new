@@ -1,54 +1,75 @@
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Calendar, Clock, RefreshCw, AlertCircle, Database } from 'lucide-react';
-import { User, PuntoAtencion } from '../../types';
-import { scheduleService, Schedule } from '../../services/scheduleService';
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import { scheduleService } from "@/services/scheduleService";
+import { spontaneousExitService } from "@/services/spontaneousExitService";
+import { Schedule, SalidaEspontanea } from "@/types";
+import { Clock, Download } from "lucide-react";
 
-interface TimeReportsProps {
-  user: User;
-  selectedPoint: PuntoAtencion | null;
-}
-
-const TimeReports = ({ user, selectedPoint }: TimeReportsProps) => {
+export const TimeReports = () => {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [exits, setExits] = useState<SalidaEspontanea[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [reportType, setReportType] = useState<"schedules" | "exits">("schedules");
+  const [filters, setFilters] = useState({
+    dateFrom: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    dateTo: new Date().toISOString().split('T')[0],
+  });
+  const { toast } = useToast();
 
-  const fetchSchedules = async () => {
+  const generateReport = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      
-      const { schedules: fetchedSchedules, error: fetchError } = await scheduleService.getAllSchedules();
-      
-      if (fetchError) {
-        setError(fetchError);
-        toast({
-          title: "Error al cargar horarios",
-          description: fetchError,
-          variant: "destructive",
-        });
-      } else {
-        setSchedules(fetchedSchedules);
-        if (fetchedSchedules.length === 0) {
+      if (reportType === "schedules") {
+        const result = await scheduleService.getAllSchedules();
+        if (result.error) {
           toast({
-            title: "Sin datos",
-            description: "No se encontraron registros de horarios",
+            title: "Error",
+            description: result.error,
+            variant: "destructive",
+          });
+        } else {
+          const filteredSchedules = result.schedules.filter(schedule => {
+            const scheduleDate = new Date(schedule.fecha_inicio).toISOString().split('T')[0];
+            return scheduleDate >= filters.dateFrom && scheduleDate <= filters.dateTo;
+          });
+          setSchedules(filteredSchedules);
+          toast({
+            title: "Éxito",
+            description: `Reporte generado con ${filteredSchedules.length} registros`,
+          });
+        }
+      } else {
+        const result = await spontaneousExitService.getAllExits();
+        if (result.error) {
+          toast({
+            title: "Error",
+            description: result.error,
+            variant: "destructive",
+          });
+        } else {
+          const filteredExits = result.exits.filter(exit => {
+            const exitDate = new Date(exit.fecha_salida).toISOString().split('T')[0];
+            return exitDate >= filters.dateFrom && exitDate <= filters.dateTo;
+          });
+          setExits(filteredExits);
+          toast({
+            title: "Éxito",
+            description: `Reporte generado con ${filteredExits.length} registros`,
           });
         }
       }
-    } catch (err) {
-      const errorMessage = "Error inesperado al cargar los horarios";
-      setError(errorMessage);
-      console.error("Error fetching schedules:", err);
+    } catch (error) {
       toast({
-        title: "Error de conexión",
-        description: errorMessage,
+        title: "Error",
+        description: "Error al generar el reporte",
         variant: "destructive",
       });
     } finally {
@@ -56,200 +77,259 @@ const TimeReports = ({ user, selectedPoint }: TimeReportsProps) => {
     }
   };
 
-  useEffect(() => {
-    fetchSchedules();
-  }, []);
-
-  const formatTime = (dateString: string | null) => {
-    if (!dateString) return '-';
-    try {
-      return new Date(dateString).toLocaleTimeString('es-ES', {
-        hour: '2-digit',
-        minute: '2-digit'
+  const exportToCSV = () => {
+    const data = reportType === "schedules" ? schedules : exits;
+    if (data.length === 0) {
+      toast({
+        title: "Error",
+        description: "No hay datos para exportar",
+        variant: "destructive",
       });
-    } catch {
-      return 'Hora inválida';
+      return;
     }
-  };
 
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleDateString('es-ES', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
+    let csv = '';
+    if (reportType === "schedules") {
+      csv = 'Usuario,Punto,Fecha Inicio,Fecha Almuerzo,Fecha Regreso,Fecha Salida,Estado\n';
+      schedules.forEach(schedule => {
+        csv += `${schedule.usuario?.nombre || 'N/A'},${schedule.puntoAtencion?.nombre || 'N/A'},${schedule.fecha_inicio},${schedule.fecha_almuerzo || ''},${schedule.fecha_regreso || ''},${schedule.fecha_salida || ''},${schedule.estado}\n`;
       });
-    } catch {
-      return 'Fecha inválida';
+    } else {
+      csv = 'Usuario,Punto,Motivo,Fecha Salida,Fecha Regreso,Duración (min),Estado\n';
+      exits.forEach(exit => {
+        csv += `${exit.usuario?.nombre || 'N/A'},${exit.puntoAtencion?.nombre || 'N/A'},${exit.motivo},${exit.fecha_salida},${exit.fecha_regreso || ''},${exit.duracion_minutos || ''},${exit.estado}\n`;
+      });
+    }
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporte_${reportType}_${filters.dateFrom}_${filters.dateTo}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const calculateWorkingHours = (schedule: Schedule) => {
+    if (!schedule.fecha_inicio || !schedule.fecha_salida) return 0;
+    
+    const start = new Date(schedule.fecha_inicio);
+    const end = new Date(schedule.fecha_salida);
+    const diff = end.getTime() - start.getTime();
+    
+    // Restar tiempo de almuerzo si existe
+    let lunchTime = 0;
+    if (schedule.fecha_almuerzo && schedule.fecha_regreso) {
+      const lunchStart = new Date(schedule.fecha_almuerzo);
+      const lunchEnd = new Date(schedule.fecha_regreso);
+      lunchTime = lunchEnd.getTime() - lunchStart.getTime();
+    }
+    
+    return Math.max(0, (diff - lunchTime) / (1000 * 60 * 60)); // Horas
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "ACTIVO":
+        return "default";
+      case "COMPLETADO":
+        return "secondary";
+      case "CANCELADO":
+        return "destructive";
+      default:
+        return "outline";
     }
   };
 
-  const calculateDuration = (start: string, end: string | null) => {
-    if (!end) return '-';
-    try {
-      const startTime = new Date(start);
-      const endTime = new Date(end);
-      const diff = endTime.getTime() - startTime.getTime();
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      return `${hours}h ${minutes}m`;
-    } catch {
-      return 'Error';
+  const getMotivoColor = (motivo: string) => {
+    switch (motivo) {
+      case "BANCO":
+        return "default";
+      case "DILIGENCIA_PERSONAL":
+        return "secondary";
+      case "TRAMITE_GOBIERNO":
+        return "outline";
+      case "EMERGENCIA_MEDICA":
+        return "destructive";
+      default:
+        return "outline";
     }
   };
-
-  const getShiftStatus = (schedule: Schedule) => {
-    if (schedule.fecha_salida) return { label: 'Completada', color: 'bg-green-100 text-green-800' };
-    if (schedule.fecha_regreso) return { label: 'Post-almuerzo', color: 'bg-blue-100 text-blue-800' };
-    if (schedule.fecha_almuerzo) return { label: 'En almuerzo', color: 'bg-yellow-100 text-yellow-800' };
-    return { label: 'En progreso', color: 'bg-orange-100 text-orange-800' };
-  };
-
-  const filteredSchedules = schedules.filter(schedule => {
-    if (user.rol === 'OPERADOR') {
-      return schedule.usuario_id === user.id;
-    }
-    if (selectedPoint && user.rol === 'ADMIN') {
-      return schedule.punto_atencion_id === selectedPoint.id;
-    }
-    return true;
-  });
-
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center py-8">
-            <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mr-3" />
-            <span className="text-lg text-gray-600">Cargando horarios...</span>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center py-8">
-            <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Error de Conexión</h3>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <Button onClick={fetchSchedules} className="flex items-center gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Reintentar
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (filteredSchedules.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Reportes de Horarios
-          </CardTitle>
-          <CardDescription>
-            Historial de jornadas laborales registradas
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8">
-            <Database className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">No hay datos disponibles</h3>
-            <p className="text-gray-600 mb-4">
-              No se encontraron registros de horarios para mostrar
-            </p>
-            <Button onClick={fetchSchedules} variant="outline" className="flex items-center gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Actualizar
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Reportes de Horarios
-            </CardTitle>
-            <CardDescription>
-              Historial de jornadas laborales ({filteredSchedules.length} registros)
-            </CardDescription>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center space-x-2">
+            <Clock className="h-5 w-5" />
+            <CardTitle>Reportes de Tiempo</CardTitle>
           </div>
-          <Button onClick={fetchSchedules} variant="outline" size="sm" className="flex items-center gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Actualizar
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Usuario</TableHead>
-                <TableHead>Punto de Atención</TableHead>
-                <TableHead>Inicio</TableHead>
-                <TableHead>Almuerzo</TableHead>
-                <TableHead>Regreso</TableHead>
-                <TableHead>Salida</TableHead>
-                <TableHead>Duración</TableHead>
-                <TableHead>Estado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredSchedules.map((schedule) => {
-                const status = getShiftStatus(schedule);
-                return (
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+            <div>
+              <Label htmlFor="reportType">Tipo de Reporte</Label>
+              <Select
+                value={reportType}
+                onValueChange={(value) => setReportType(value as "schedules" | "exits")}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="schedules">Jornadas Laborales</SelectItem>
+                  <SelectItem value="exits">Salidas Espontáneas</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="dateFrom">Fecha Desde</Label>
+              <Input
+                id="dateFrom"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="dateTo">Fecha Hasta</Label>
+              <Input
+                id="dateTo"
+                type="date"
+                value={filters.dateTo}
+                onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+              />
+            </div>
+            <div className="flex items-end space-x-2">
+              <Button onClick={generateReport} disabled={loading} className="flex-1">
+                {loading ? "Generando..." : "Generar"}
+              </Button>
+              {((reportType === "schedules" && schedules.length > 0) || 
+                (reportType === "exits" && exits.length > 0)) && (
+                <Button variant="outline" onClick={exportToCSV}>
+                  <Download className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {reportType === "schedules" && schedules.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Jornadas Laborales</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Punto</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Inicio</TableHead>
+                  <TableHead>Almuerzo</TableHead>
+                  <TableHead>Regreso</TableHead>
+                  <TableHead>Salida</TableHead>
+                  <TableHead>Horas Trabajadas</TableHead>
+                  <TableHead>Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {schedules.map((schedule) => (
                   <TableRow key={schedule.id}>
-                    <TableCell className="font-medium">
-                      {formatDate(schedule.fecha_inicio)}
+                    <TableCell>{schedule.usuario?.nombre || 'N/A'}</TableCell>
+                    <TableCell>{schedule.puntoAtencion?.nombre || 'N/A'}</TableCell>
+                    <TableCell>
+                      {new Date(schedule.fecha_inicio).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      {schedule.usuario?.nombre || 'Usuario desconocido'}
+                      {new Date(schedule.fecha_inicio).toLocaleTimeString()}
                     </TableCell>
                     <TableCell>
-                      {schedule.puntoAtencion?.nombre || 'Punto desconocido'}
+                      {schedule.fecha_almuerzo 
+                        ? new Date(schedule.fecha_almuerzo).toLocaleTimeString() 
+                        : '-'}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Clock className="h-3 w-3 text-gray-500" />
-                        {formatTime(schedule.fecha_inicio)}
-                      </div>
-                    </TableCell>
-                    <TableCell>{formatTime(schedule.fecha_almuerzo)}</TableCell>
-                    <TableCell>{formatTime(schedule.fecha_regreso)}</TableCell>
-                    <TableCell>{formatTime(schedule.fecha_salida)}</TableCell>
-                    <TableCell>
-                      {calculateDuration(schedule.fecha_inicio, schedule.fecha_salida)}
+                      {schedule.fecha_regreso 
+                        ? new Date(schedule.fecha_regreso).toLocaleTimeString() 
+                        : '-'}
                     </TableCell>
                     <TableCell>
-                      <Badge className={status.color}>
-                        {status.label}
+                      {schedule.fecha_salida 
+                        ? new Date(schedule.fecha_salida).toLocaleTimeString() 
+                        : '-'}
+                    </TableCell>
+                    <TableCell>
+                      {calculateWorkingHours(schedule).toFixed(1)}h
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusColor(schedule.estado)}>
+                        {schedule.estado}
                       </Badge>
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {reportType === "exits" && exits.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Salidas Espontáneas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Punto</TableHead>
+                  <TableHead>Motivo</TableHead>
+                  <TableHead>Fecha Salida</TableHead>
+                  <TableHead>Fecha Regreso</TableHead>
+                  <TableHead>Duración</TableHead>
+                  <TableHead>Estado</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {exits.map((exit) => (
+                  <TableRow key={exit.id}>
+                    <TableCell>{exit.usuario?.nombre || 'N/A'}</TableCell>
+                    <TableCell>{exit.puntoAtencion?.nombre || 'N/A'}</TableCell>
+                    <TableCell>
+                      <Badge variant={getMotivoColor(exit.motivo)}>
+                        {exit.motivo.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(exit.fecha_salida).toLocaleString()}
+                    </TableCell>
+                    <TableCell>
+                      {exit.fecha_regreso 
+                        ? new Date(exit.fecha_regreso).toLocaleString() 
+                        : 'En curso'}
+                    </TableCell>
+                    <TableCell>
+                      {exit.duracion_minutos 
+                        ? `${exit.duracion_minutos} min` 
+                        : '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={getStatusColor(exit.estado)}>
+                        {exit.estado}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 };
-
-export default TimeReports;

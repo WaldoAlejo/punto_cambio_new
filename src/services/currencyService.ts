@@ -1,100 +1,69 @@
 
 import { apiService } from "./apiService";
+import { Moneda, CreateCurrencyData, ApiResponse, ListResponse } from "../types";
 
-export interface Currency {
-  id: string;
-  nombre: string;
-  simbolo: string;
-  codigo: string;
-  activo: boolean;
-  orden_display: number;
-  created_at: string;
-  updated_at: string;
+interface CurrenciesResponse extends ListResponse<Moneda> {
+  currencies: Moneda[];
 }
 
-export interface CreateCurrencyData {
-  nombre: string;
-  simbolo: string;
-  codigo: string;
-  orden_display?: number;
-}
-
-interface CurrencyListResponse {
-  currencies: Currency[];
-  success: boolean;
-  error?: string;
-}
-
-interface CurrencyCreateResponse {
-  currency: Currency;
-  success: boolean;
-  error?: string;
+interface CurrencyResponse extends ApiResponse<Moneda> {
+  currency: Moneda;
 }
 
 export const currencyService = {
   async getAllCurrencies(): Promise<{
-    currencies: Currency[];
+    currencies: Moneda[];
     error: string | null;
   }> {
     try {
-      console.log('Fetching currencies from API...');
-      const response = await apiService.get<CurrencyListResponse>("/currencies");
+      const response = await apiService.get<CurrenciesResponse>("/currencies");
 
       if (!response) {
-        console.warn('No response received from currencies API');
         return {
           currencies: [],
           error: "No se pudo obtener la respuesta del servidor",
         };
       }
 
-      console.log('Currencies API response:', response);
-
       if (response.error || !response.success) {
-        console.warn('Currencies API returned error:', response.error);
         return {
           currencies: [],
           error: response.error || "Error al obtener monedas",
         };
       }
 
-      console.log('Currencies fetched successfully:', response.currencies?.length || 0);
       return { currencies: response.currencies || [], error: null };
     } catch (error) {
       console.error("Error en getAllCurrencies:", error);
-      const errorMessage = error instanceof Error ? error.message : "Error de conexión con el servidor";
-      return { currencies: [], error: errorMessage };
+      return { currencies: [], error: "Error de conexión con el servidor" };
     }
   },
 
-  async createCurrency(
-    currencyData: CreateCurrencyData
-  ): Promise<{ currency: Currency | null; error: string | null }> {
+  async createCurrency(currencyData: CreateCurrencyData): Promise<{
+    currency: Moneda | null;
+    error: string | null;
+  }> {
     try {
-      console.log('Creating currency via API...', currencyData);
-      const response = await apiService.post<CurrencyCreateResponse>("/currencies", currencyData);
+      const response = await apiService.post<CurrencyResponse>("/currencies", currencyData);
 
       if (!response) {
-        console.warn('No response received from create currency API');
         return {
           currency: null,
           error: "No se pudo obtener la respuesta del servidor",
         };
       }
 
-      console.log('Create currency API response:', response);
-
       if (response.error || !response.success) {
-        console.warn('Create currency API returned error:', response.error);
-        return { currency: null, error: response.error || "Error al crear moneda" };
+        return {
+          currency: null,
+          error: response.error || "Error al crear moneda",
+        };
       }
 
-      console.log('Currency created successfully:', response.currency);
-      return { currency: response.currency || null, error: null };
+      return { currency: response.currency, error: null };
     } catch (error) {
       console.error("Error en createCurrency:", error);
-      const errorMessage = error instanceof Error ? error.message : "Error de conexión con el servidor";
-      return { currency: null, error: errorMessage };
+      return { currency: null, error: "Error de conexión con el servidor" };
     }
   },
 };

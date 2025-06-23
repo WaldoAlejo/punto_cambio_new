@@ -1,4 +1,3 @@
-
 import { apiService } from "./apiService";
 
 export interface SpontaneousExit {
@@ -136,23 +135,3 @@ export const spontaneousExitService = {
       const response = await apiService.put<CreateExitResponse>(`/spontaneous-exits/${exitId}/return`, returnData);
 
       if (!response) {
-        return {
-          exit: null,
-          error: "No se pudo obtener la respuesta del servidor",
-        };
-      }
-
-      if (response.error || !response.success) {
-        return {
-          exit: null,
-          error: response.error || "Error al marcar regreso",
-        };
-      }
-
-      return { exit: response.exit, error: null };
-    } catch (error) {
-      console.error("Error en markReturn:", error);
-      return { exit: null, error: "Error de conexión con el servidor" };
-    }
-  },
-};

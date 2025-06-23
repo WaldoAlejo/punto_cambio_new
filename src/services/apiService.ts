@@ -1,165 +1,137 @@
 
-import { authService } from "./authService";
-
 const API_BASE_URL = "http://localhost:3001/api";
 
-class ApiService {
-  private getAuthHeaders() {
-    const token = authService.getStoredToken();
-    return {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "Pragma": "no-cache",
-      "Expires": "0",
-      ...(token && { Authorization: `Bearer ${token}` }),
-    };
+// Función para obtener el token de autenticación
+const getAuthToken = (): string | null => {
+  return localStorage.getItem("authToken");
+};
+
+// Función para manejar respuestas HTTP
+const handleResponse = async <T>(response: Response): Promise<T | null> => {
+  if (response.status === 401) {
+    localStorage.removeItem("authToken");
+    window.location.href = "/login";
+    return null;
   }
 
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`HTTP Error ${response.status}:`, errorText);
+    throw new Error(`HTTP ${response.status}: ${errorText}`);
+  }
+
+  return await response.json();
+};
+
+// Servicio API genérico
+export const apiService = {
   async get<T>(endpoint: string): Promise<T | null> {
     try {
-      console.log(`Making GET request to: ${API_BASE_URL}${endpoint}`);
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-        method: "GET",
-        headers: this.getAuthHeaders(),
-        cache: "no-store",
-      });
+      console.log(`GET request to: ${API_BASE_URL}${endpoint}`);
+      
+      const token = getAuthToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      };
 
-      console.log(`Response status: ${response.status}`);
-
-      if (response.status === 401) {
-        console.warn("Unauthorized request, removing token");
-        authService.removeStoredToken();
-        window.location.href = "/login";
-        return null;
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
       }
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`HTTP ${response.status}: ${errorText}`);
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data: T = await response.json();
-      console.log(`Response data for ${endpoint}:`, data);
-      return data;
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, { headers });
+      return await handleResponse<T>(response);
     } catch (error) {
       console.error(`Error in GET ${endpoint}:`, error);
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new Error('Error de conexión con el servidor. Verifique que el servidor esté ejecutándose en http://localhost:3001');
-      }
       throw error;
     }
-  }
+  },
 
-  async post<T>(endpoint: string, data: unknown): Promise<T | null> {
+  async post<T>(endpoint: string, data?: unknown): Promise<T | null> {
     try {
-      console.log(`Making POST request to: ${API_BASE_URL}${endpoint}`, data);
+      console.log(`POST request to: ${API_BASE_URL}${endpoint}`, data);
+      
+      const token = getAuthToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      };
+
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: "POST",
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(data),
-        cache: "no-store",
+        headers,
+        body: data ? JSON.stringify(data) : undefined,
       });
 
-      console.log(`Response status: ${response.status}`);
-
-      if (response.status === 401) {
-        console.warn("Unauthorized request, removing token");
-        authService.removeStoredToken();
-        window.location.href = "/login";
-        return null;
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`HTTP ${response.status}: ${errorText}`);
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const responseData: T = await response.json();
-      console.log(`Response data for POST ${endpoint}:`, responseData);
-      return responseData;
+      return await handleResponse<T>(response);
     } catch (error) {
       console.error(`Error in POST ${endpoint}:`, error);
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new Error('Error de conexión con el servidor. Verifique que el servidor esté ejecutándose en http://localhost:3001');
-      }
       throw error;
     }
-  }
+  },
 
-  async put<T>(endpoint: string, data: unknown): Promise<T | null> {
+  async put<T>(endpoint: string, data?: unknown): Promise<T | null> {
     try {
-      console.log(`Making PUT request to: ${API_BASE_URL}${endpoint}`, data);
+      console.log(`PUT request to: ${API_BASE_URL}${endpoint}`, data);
+      
+      const token = getAuthToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      };
+
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: "PUT",
-        headers: this.getAuthHeaders(),
-        body: JSON.stringify(data),
-        cache: "no-store",
+        headers,
+        body: data ? JSON.stringify(data) : undefined,
       });
 
-      console.log(`Response status: ${response.status}`);
-
-      if (response.status === 401) {
-        console.warn("Unauthorized request, removing token");
-        authService.removeStoredToken();
-        window.location.href = "/login";
-        return null;
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`HTTP ${response.status}: ${errorText}`);
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const responseData: T = await response.json();
-      console.log(`Response data for PUT ${endpoint}:`, responseData);
-      return responseData;
+      return await handleResponse<T>(response);
     } catch (error) {
       console.error(`Error in PUT ${endpoint}:`, error);
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new Error('Error de conexión con el servidor. Verifique que el servidor esté ejecutándose en http://localhost:3001');
-      }
       throw error;
     }
-  }
+  },
 
   async delete<T>(endpoint: string): Promise<T | null> {
     try {
-      console.log(`Making DELETE request to: ${API_BASE_URL}${endpoint}`);
+      console.log(`DELETE request to: ${API_BASE_URL}${endpoint}`);
+      
+      const token = getAuthToken();
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      };
+
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: "DELETE",
-        headers: this.getAuthHeaders(),
-        cache: "no-store",
+        headers,
       });
 
-      console.log(`Response status: ${response.status}`);
-
-      if (response.status === 401) {
-        console.warn("Unauthorized request, removing token");
-        authService.removeStoredToken();
-        window.location.href = "/login";
-        return null;
-      }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`HTTP ${response.status}: ${errorText}`);
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const responseData: T = await response.json();
-      console.log(`Response data for DELETE ${endpoint}:`, responseData);
-      return responseData;
+      return await handleResponse<T>(response);
     } catch (error) {
       console.error(`Error in DELETE ${endpoint}:`, error);
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        throw new Error('Error de conexión con el servidor. Verifique que el servidor esté ejecutándose en http://localhost:3001');
-      }
       throw error;
     }
-  }
-}
-
-export const apiService = new ApiService();
+  },
+};

@@ -1,71 +1,51 @@
 
-import winston from 'winston';
-import path from 'path';
-import { Request, Response, NextFunction } from 'express';
-
-const logDir = 'logs';
-
-// Configuración del logger
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp({
-      format: 'YYYY-MM-DD HH:mm:ss'
-    }),
-    winston.format.errors({ stack: true }),
-    winston.format.json()
-  ),
-  defaultMeta: { service: 'punto-cambio-api' },
-  transports: [
-    // Error logs
-    new winston.transports.File({
-      filename: path.join(logDir, 'error.log'),
-      level: 'error',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5
-    }),
-    // Combined logs
-    new winston.transports.File({
-      filename: path.join(logDir, 'combined.log'),
-      maxsize: 5242880, // 5MB
-      maxFiles: 5
-    })
-  ]
-});
-
-// Si no estamos en producción, también log a la consola
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple()
-    )
-  }));
+interface LogEntry {
+  level: string;
+  message: string;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
 }
 
-// Función helper para estructurar logs
-export const logRequest = (req: Request, res: Response, next: NextFunction): void => {
-  const start = Date.now();
-  
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    const logData = {
-      method: req.method,
-      url: req.originalUrl,
-      status: res.statusCode,
-      duration: `${duration}ms`,
-      ip: req.ip || req.socket.remoteAddress,
-      userAgent: req.get('User-Agent') || ''
+class Logger {
+  private formatMessage(level: string, message: string, metadata?: Record<string, unknown>): LogEntry {
+    return {
+      level,
+      message,
+      timestamp: new Date().toISOString(),
+      metadata
     };
+  }
 
-    if (res.statusCode >= 400) {
-      logger.error('HTTP Error', logData);
+  private write(entry: LogEntry): void {
+    const output = JSON.stringify(entry);
+    
+    if (entry.level === 'error') {
+      console.error(output);
+    } else if (entry.level === 'warn') {
+      console.warn(output);
     } else {
-      logger.info('HTTP Request', logData);
+      console.log(output);
     }
-  });
+  }
 
-  next();
-};
+  info(message: string, metadata?: Record<string, unknown>): void {
+    this.write(this.formatMessage('info', message, metadata));
+  }
 
+  warn(message: string, metadata?: Record<string, unknown>): void {
+    this.write(this.formatMessage('warn', message, metadata));
+  }
+
+  error(message: string, metadata?: Record<string, unknown>): void {
+    this.write(this.formatMessage('error', message, metadata));
+  }
+
+  debug(message: string, metadata?: Record<string, unknown>): void {
+    if (process.env.NODE_ENV === 'development') {
+      this.write(this.formatMessage('debug', message, metadata));
+    }
+  }
+}
+
+const logger = new Logger();
 export default logger;
