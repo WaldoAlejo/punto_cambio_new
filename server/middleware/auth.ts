@@ -1,3 +1,4 @@
+
 import jwt from "jsonwebtoken";
 import { PrismaClient } from "@prisma/client";
 import { Request, Response, NextFunction, RequestHandler } from "express";
@@ -76,12 +77,19 @@ export const authenticateToken: RequestHandler = async (
 // Middleware para verificar roles
 export const requireRole = (roles: string[]): RequestHandler => {
   return (req: Request, res: Response, next: NextFunction): void => {
+    console.log('=== ROLE CHECK MIDDLEWARE ===');
+    console.log('Required roles:', roles);
+    console.log('User object:', req.user);
+    console.log('User role:', req.user?.rol);
+    
     if (!req.user) {
+      console.log('No user found in request');
       res.status(401).json({ error: "Usuario no autenticado" });
       return;
     }
 
     if (!roles.includes(req.user.rol)) {
+      console.log('Role not allowed. User has:', req.user.rol, 'Required:', roles);
       logger.warn("Acceso denegado por rol", {
         userId: req.user.id,
         userRole: req.user.rol,
@@ -92,6 +100,7 @@ export const requireRole = (roles: string[]): RequestHandler => {
       return;
     }
 
+    console.log('Role check passed, proceeding to endpoint');
     next();
   };
 };
