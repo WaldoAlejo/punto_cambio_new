@@ -23,25 +23,32 @@ export const userService = {
       } else {
         return { user: null, error: 'Error al crear el usuario' };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating user:', error);
-      return { user: null, error: 'Error de conexión al crear usuario' };
+      return { user: null, error: error.response?.data?.error || 'Error de conexión al crear usuario' };
     }
   },
 
   async getAllUsers(): Promise<{ users: Usuario[]; error: string | null }> {
     try {
-      console.log('Fetching all users');
+      console.log('Fetching all users - attempting API call');
       const response = await apiService.get<{ users: Usuario[]; success: boolean }>('/users');
+      
+      console.log('Users API response:', response);
       
       if (response.success) {
         return { users: response.users, error: null };
       } else {
         return { users: [], error: 'Error al obtener los usuarios' };
       }
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      return { users: [], error: 'Error de conexión al obtener usuarios' };
+    } catch (error: any) {
+      console.error('Error fetching users - detailed:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      return { users: [], error: error.response?.data?.error || 'Error de conexión al obtener usuarios' };
     }
   },
 
@@ -55,9 +62,9 @@ export const userService = {
       } else {
         return { user: null, error: 'Error al cambiar el estado del usuario' };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error toggling user status:', error);
-      return { user: null, error: 'Error de conexión al cambiar estado del usuario' };
+      return { user: null, error: error.response?.data?.error || 'Error de conexión al cambiar estado del usuario' };
     }
   }
 };

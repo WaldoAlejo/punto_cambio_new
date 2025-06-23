@@ -1,7 +1,7 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'http://localhost:3001/api';
 
 export interface ApiService {
   get<T>(endpoint: string): Promise<T>;
@@ -26,17 +26,28 @@ const createApiService = (): ApiService => {
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+      console.log('Making API request to:', config.baseURL + config.url);
       return config;
     },
     (error) => {
+      console.error('Request interceptor error:', error);
       return Promise.reject(error);
     }
   );
 
   axiosInstance.interceptors.response.use(
-    (response) => response,
+    (response) => {
+      console.log('API Response received:', response.config.url, response.status);
+      return response;
+    },
     (error) => {
-      console.error('API Error:', error);
+      console.error('API Error details:', {
+        url: error.config?.url,
+        status: error.response?.status,
+        message: error.message,
+        data: error.response?.data
+      });
+      
       if (error.response?.status === 401) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
