@@ -1,3 +1,4 @@
+
 import express from "express";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
@@ -18,6 +19,9 @@ router.get(
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
+      console.log('=== USERS ENDPOINT CALLED ===');
+      console.log('User making request:', req.user);
+      
       res.set({
         "Cache-Control":
           "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -26,6 +30,7 @@ router.get(
         "Surrogate-Control": "no-store",
       });
 
+      console.log('About to query users from database...');
       const users = await prisma.usuario.findMany({
         orderBy: { created_at: "desc" },
         include: {
@@ -38,23 +43,33 @@ router.get(
         },
       });
 
+      console.log('Raw users from database:', users.length, 'users found');
+      console.log('First user (if any):', users[0]);
+
       const formattedUsers = users.map((user) => ({
         ...user,
         created_at: user.created_at ? user.created_at.toISOString() : null,
         updated_at: user.updated_at ? user.updated_at.toISOString() : null,
       }));
 
+      console.log('Formatted users:', formattedUsers.length);
+
       logger.info("Usuarios obtenidos", {
         count: formattedUsers.length,
         requestedBy: req.user?.id,
       });
 
+      console.log('About to send response...');
       res.status(200).json({
         users: formattedUsers,
         success: true,
         timestamp: new Date().toISOString(),
       });
+      console.log('Response sent successfully');
     } catch (error) {
+      console.error('=== ERROR IN USERS ENDPOINT ===');
+      console.error('Error details:', error);
+      
       logger.error("Error al obtener usuarios", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
