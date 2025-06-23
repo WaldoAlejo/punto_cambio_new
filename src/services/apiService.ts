@@ -1,4 +1,5 @@
-import axios, { AxiosResponse } from 'axios';
+
+import axios from 'axios';
 
 const API_BASE_URL = '/api';
 
@@ -47,27 +48,27 @@ const createApiService = (): ApiService => {
 
   return {
     async get<T>(endpoint: string): Promise<T> {
-      const response: AxiosResponse<T> = await axiosInstance.get(endpoint);
+      const response = await axiosInstance.get(endpoint);
       return response.data;
     },
 
     async post<T>(endpoint: string, data?: unknown): Promise<T> {
-      const response: AxiosResponse<T> = await axiosInstance.post(endpoint, data);
+      const response = await axiosInstance.post(endpoint, data);
       return response.data;
     },
 
     async put<T>(endpoint: string, data?: unknown): Promise<T> {
-      const response: AxiosResponse<T> = await axiosInstance.put(endpoint, data);
+      const response = await axiosInstance.put(endpoint, data);
       return response.data;
     },
 
     async patch<T>(endpoint: string, data?: unknown): Promise<T> {
-      const response: AxiosResponse<T> = await axiosInstance.patch(endpoint, data);
+      const response = await axiosInstance.patch(endpoint, data);
       return response.data;
     },
 
     async delete<T>(endpoint: string): Promise<T> {
-      const response: AxiosResponse<T> = await axiosInstance.delete(endpoint);
+      const response = await axiosInstance.delete(endpoint);
       return response.data;
     },
   };

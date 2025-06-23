@@ -1,4 +1,3 @@
-
 // Tipos base del sistema
 export interface Usuario {
   id: string;
@@ -56,29 +55,17 @@ export interface Saldo {
   moneda?: Moneda;
 }
 
-export interface Transferencia {
-  id: string;
-  origen_id?: string | null;
-  destino_id: string;
-  moneda_id: string;
-  monto: number;
-  descripcion?: string | null;
-  numero_recibo?: string | null;
-  estado: "PENDIENTE" | "APROBADO" | "RECHAZADO";
-  tipo_transferencia: "ENTRADA" | "SALIDA" | "INTERNA" | "ENTRE_PUNTOS" | "DEPOSITO_MATRIZ" | "RETIRO_GERENCIA" | "DEPOSITO_GERENCIA";
-  solicitado_por: string;
-  aprobado_por?: string | null;
-  rechazado_por?: string | null;
-  fecha: string;
-  fecha_aprobacion?: string | null;
-  fecha_rechazo?: string | null;
-  observaciones_aprobacion?: string | null;
-  origen?: PuntoAtencion;
-  destino?: PuntoAtencion;
-  moneda?: Moneda;
-  usuarioSolicitante?: Usuario;
-  usuarioAprobador?: Usuario;
-  usuarioRechazador?: Usuario;
+export interface DetalleDivisasSimple {
+  billetes: number;
+  monedas: number;
+  total: number;
+}
+
+export interface ResponsableMovilizacion {
+  nombre: string;
+  documento: string;
+  cedula: string;
+  telefono?: string;
 }
 
 export interface CambioDivisa {
@@ -96,10 +83,39 @@ export interface CambioDivisa {
   estado: "PENDIENTE" | "COMPLETADO" | "CANCELADO";
   observacion?: string | null;
   datos_cliente?: DatosCliente;
+  divisas_entregadas?: DetalleDivisasSimple;
+  divisas_recibidas?: DetalleDivisasSimple;
   monedaOrigen?: Moneda;
   monedaDestino?: Moneda;
   usuario?: Usuario;
   puntoAtencion?: PuntoAtencion;
+}
+
+export interface Transferencia {
+  id: string;
+  origen_id?: string | null;
+  destino_id: string;
+  moneda_id: string;
+  monto: number;
+  descripcion?: string | null;
+  numero_recibo?: string | null;
+  estado: "PENDIENTE" | "APROBADO" | "RECHAZADO";
+  tipo_transferencia: "ENTRADA" | "SALIDA" | "INTERNA" | "ENTRE_PUNTOS" | "DEPOSITO_MATRIZ" | "RETIRO_GERENCIA" | "DEPOSITO_GERENCIA";
+  solicitado_por: string;
+  aprobado_por?: string | null;
+  rechazado_por?: string | null;
+  fecha: string;
+  fecha_aprobacion?: string | null;
+  fecha_rechazo?: string | null;
+  observaciones_aprobacion?: string | null;
+  detalle_divisas?: DetalleDivisasSimple;
+  responsable_movilizacion?: ResponsableMovilizacion;
+  origen?: PuntoAtencion;
+  destino?: PuntoAtencion;
+  moneda?: Moneda;
+  usuarioSolicitante?: Usuario;
+  usuarioAprobador?: Usuario;
+  usuarioRechazador?: Usuario;
 }
 
 export interface Jornada {
@@ -169,23 +185,11 @@ export interface CuadreCaja {
 // Tipos para formularios de intercambio
 export interface DatosCliente {
   nombre: string;
+  apellido: string;
   documento: string;
+  cedula: string;
   telefono?: string;
   email?: string;
-}
-
-export interface DetalleDivisasSimple {
-  moneda_origen: string;
-  moneda_destino: string;
-  monto_origen: number;
-  tasa_cambio: number;
-  monto_destino: number;
-}
-
-export interface ResponsableMovilizacion {
-  nombre: string;
-  documento: string;
-  telefono?: string;
 }
 
 export interface Schedule {

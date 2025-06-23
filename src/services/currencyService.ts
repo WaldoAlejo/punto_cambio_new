@@ -1,4 +1,3 @@
-
 import { apiService } from "./apiService";
 import { Moneda, CreateCurrencyData, ApiResponse, ListResponse } from "../types";
 
@@ -9,6 +8,9 @@ interface CurrenciesResponse extends ListResponse<Moneda> {
 interface CurrencyResponse extends ApiResponse<Moneda> {
   currency: Moneda;
 }
+
+// Export Currency type for compatibility
+export type Currency = Moneda;
 
 export const currencyService = {
   async getAllCurrencies(): Promise<{

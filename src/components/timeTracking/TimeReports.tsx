@@ -69,7 +69,7 @@ const TimeReports = ({ user, selectedPoint }: TimeReportsProps) => {
         return;
       }
 
-      // Convert SpontaneousExit to SalidaEspontanea format
+      // Convert SpontaneousExit to SalidaEspontanea format with proper type handling
       const convertedExits: SalidaEspontanea[] = fetchedExits.map((exit: SpontaneousExit) => ({
         id: exit.id,
         usuario_id: exit.usuario_id,
@@ -97,7 +97,18 @@ const TimeReports = ({ user, selectedPoint }: TimeReportsProps) => {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         } : undefined,
-        puntoAtencion: exit.puntoAtencion,
+        puntoAtencion: exit.puntoAtencion ? {
+          id: exit.puntoAtencion.id,
+          nombre: exit.puntoAtencion.nombre,
+          direccion: '',
+          ciudad: '',
+          provincia: '',
+          codigo_postal: null,
+          telefono: null,
+          activo: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        } : undefined,
         usuarioAprobador: exit.usuarioAprobador ? {
           id: exit.usuarioAprobador.id,
           username: exit.usuarioAprobador.username,
