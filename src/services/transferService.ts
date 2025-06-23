@@ -1,69 +1,89 @@
 
-import { apiService } from "./apiService";
-import { Transferencia, CreateTransferData, ApiResponse, ListResponse } from "../types";
+import { apiService } from './apiService';
+import { Transferencia } from '../types';
 
-interface TransfersResponse extends ListResponse<Transferencia> {
-  transfers: Transferencia[];
-}
-
-interface TransferResponse extends ApiResponse<Transferencia> {
-  transfer: Transferencia;
+export interface CreateTransferData {
+  origen_id?: string;
+  destino_id: string;
+  moneda_id: string;
+  monto: number;
+  tipo_transferencia: 'ENTRE_PUNTOS' | 'DEPOSITO_MATRIZ' | 'RETIRO_GERENCIA' | 'DEPOSITO_GERENCIA';
+  descripcion?: string;
+  detalle_divisas: {
+    billetes: number;
+    monedas: number;
+    total: number;
+  };
+  responsable_movilizacion?: {
+    nombre: string;
+    documento: string;
+    cedula: string;
+    telefono: string;
+  };
 }
 
 export const transferService = {
-  async getAllTransfers(): Promise<{
-    transfers: Transferencia[];
-    error: string | null;
-  }> {
+  async createTransfer(data: CreateTransferData): Promise<{ transfer: Transferencia | null; error: string | null }> {
     try {
-      const response = await apiService.get<TransfersResponse>("/transfers");
-
-      if (!response) {
-        return {
-          transfers: [],
-          error: "No se pudo obtener la respuesta del servidor",
-        };
+      console.log('Creating transfer:', data);
+      const response = await apiService.post<{ transfer: Transferencia; success: boolean }>('/transfers', data);
+      
+      if (response.success) {
+        return { transfer: response.transfer, error: null };
+      } else {
+        return { transfer: null, error: 'Error al crear la transferencia' };
       }
-
-      if (response.error || !response.success) {
-        return {
-          transfers: [],
-          error: response.error || "Error al obtener transferencias",
-        };
-      }
-
-      return { transfers: response.transfers || [], error: null };
     } catch (error) {
-      console.error("Error en getAllTransfers:", error);
-      return { transfers: [], error: "Error de conexión con el servidor" };
+      console.error('Error creating transfer:', error);
+      return { transfer: null, error: 'Error de conexión al crear la transferencia' };
     }
   },
 
-  async createTransfer(transferData: CreateTransferData): Promise<{
-    transfer: Transferencia | null;
-    error: string | null;
-  }> {
+  async getAllTransfers(): Promise<{ transfers: Transferencia[]; error: string | null }> {
     try {
-      const response = await apiService.post<TransferResponse>("/transfers", transferData);
-
-      if (!response) {
-        return {
-          transfer: null,
-          error: "No se pudo obtener la respuesta del servidor",
-        };
+      console.log('Fetching all transfers');
+      const response = await apiService.get<{ transfers: Transferencia[]; success: boolean }>('/transfers');
+      
+      if (response.success) {
+        return { transfers: response.transfers, error: null };
+      } else {
+        return { transfers: [], error: 'Error al obtener las transferencias' };
       }
-
-      if (response.error || !response.success) {
-        return {
-          transfer: null,
-          error: response.error || "Error al crear transferencia",
-        };
-      }
-
-      return { transfer: response.transfer, error: null };
     } catch (error) {
-      console.error("Error en createTransfer:", error);
-      return { transfer: null, error: "Error de conexión con el servidor" };
+      console.error('Error fetching transfers:', error);
+      return { transfers: [], error: 'Error de conexión al obtener transferencias' };
     }
   },
+
+  async approveTransfer(transferId: string, observaciones?: string): Promise<{ transfer: Transferencia | null; error: string | null }> {
+    try {
+      console.log('Approving transfer:', transferId);
+      const response = await apiService.patch<{ transfer: Transferencia; success: boolean }>(`/transfer-approvals/${transferId}/approve`, { observaciones });
+      
+      if (response.success) {
+        return { transfer: response.transfer, error: null };
+      } else {
+        return { transfer: null, error: 'Error al aprobar la transferencia' };
+      }
+    } catch (error) {
+      console.error('Error approving transfer:', error);
+      return { transfer: null, error: 'Error de conexión al aprobar transferencia' };
+    }
+  },
+
+  async rejectTransfer(transferId: string, observaciones?: string): Promise<{ transfer: Transferencia | null; error: string | null }> {
+    try {
+      console.log('Rejecting transfer:', transferId);
+      const response = await apiService.patch<{ transfer: Transferencia; success: boolean }>(`/transfer-approvals/${transferId}/reject`, { observaciones });
+      
+      if (response.success) {
+        return { transfer: response.transfer, error: null };
+      } else {
+        return { transfer: null, error: 'Error al rechazar la transferencia' };
+      }
+    } catch (error) {
+      console.error('Error rejecting transfer:', error);
+      return { transfer: null, error: 'Error de conexión al rechazar transferencia' };
+    }
+  }
 };

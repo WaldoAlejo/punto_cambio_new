@@ -16,56 +16,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkStoredAuth = async () => {
+    const initializeAuth = async () => {
       try {
-        const token = authService.getStoredToken();
-        if (token) {
-          console.log('Token encontrado, verificando validez...');
-          // Verificar token con el servidor
-          const verificationResult = await authService.verifyToken();
-          if (verificationResult.user) {
-            setUser(verificationResult.user);
-            console.log('Usuario autenticado:', verificationResult.user.username);
-          } else {
-            console.log('Token inválido, removiendo...');
-            authService.removeStoredToken();
-          }
+        const { user: verifiedUser, valid } = await authService.verifyToken();
+        if (valid && verifiedUser) {
+          setUser(verifiedUser);
+        } else {
+          authService.removeStoredToken();
         }
       } catch (error) {
-        console.error('Error verificando token:', error);
+        console.error('Error verifying token:', error);
         authService.removeStoredToken();
       } finally {
         setIsLoading(false);
       }
     };
 
-    checkStoredAuth();
+    initializeAuth();
   }, []);
 
-  const login = async (username: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = async (username: string, password: string) => {
     try {
-      setIsLoading(true);
-      const result = await authService.login({ username, password });
+      const { user: loggedUser, token, error } = await authService.login({ username, password });
       
-      if (result.user && result.token) {
-        setUser(result.user);
-        console.log('Login exitoso para:', result.user.username);
+      if (loggedUser && token) {
+        setUser(loggedUser);
         return { success: true };
       } else {
-        return { success: false, error: result.error || 'Error desconocido' };
+        return { success: false, error: error || 'Error de autenticación' };
       }
     } catch (error) {
-      console.error('Error en login:', error);
+      console.error('Login error:', error);
       return { success: false, error: 'Error de conexión' };
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const logout = () => {
-    setUser(null);
     authService.removeStoredToken();
-    console.log('Usuario desconectado');
+    setUser(null);
   };
 
   return (
