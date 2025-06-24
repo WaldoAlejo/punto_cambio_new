@@ -1,16 +1,57 @@
 
 import express from "express";
-import { supabase } from "../../src/integrations/supabase/client.js";
+import { PrismaClient } from "@prisma/client";
 import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
+const prisma = new PrismaClient();
+
+interface AuthenticatedUser {
+  id: string;
+  username: string;
+  nombre: string;
+  rol: string;
+  activo: boolean;
+  punto_atencion_id: string | null;
+}
+
+interface AuthenticatedRequest extends express.Request {
+  user?: AuthenticatedUser;
+}
+
+interface ExchangeData {
+  point: string;
+  amount: number;
+  exchanges: number;
+  user: string;
+}
+
+interface TransferData {
+  point: string;
+  transfers: number;
+  amount: number;
+  user: string;
+}
+
+interface BalanceData {
+  point: string;
+  balance: number;
+}
+
+interface UserActivityData {
+  point: string;
+  user: string;
+  transfers: number;
+}
+
+type ReportData = ExchangeData | TransferData | BalanceData | UserActivityData;
 
 // Endpoint para generar reportes
 router.post(
   "/",
   authenticateToken,
-  async (req: express.Request, res: express.Response): Promise<void> => {
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       res.set({
         "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -34,100 +75,115 @@ router.post(
       const endDate = new Date(dateTo);
       endDate.setHours(23, 59, 59, 999); // Include the entire end date
 
-      let reportData: any[] = [];
+      let reportData: ReportData[] = [];
 
       switch (reportType) {
-        case 'exchanges':
+        case 'exchanges': {
           // Reporte de cambios de divisa
-          const { data: exchanges, error: exchangesError } = await supabase
-            .from('CambioDivisa')
-            .select(`
-              *,
-              PuntoAtencion:punto_atencion_id (nombre),
-              Usuario:usuario_id (nombre),
-              MonedaOrigen:moneda_origen_id (codigo, simbolo),
-              MonedaDestino:moneda_destino_id (codigo, simbolo)
-            `)
-            .gte('fecha', startDate.toISOString())
-            .lte('fecha', endDate.toISOString())
-            .eq('estado', 'COMPLETADO');
-
-          if (exchangesError) {
-            throw exchangesError;
-          }
+          const exchanges = await prisma.cambioDivisa.findMany({
+            where: {
+              fecha: {
+                gte: startDate,
+                lte: endDate,
+              },
+              estado: 'COMPLETADO',
+            },
+            include: {
+              puntoAtencion: {
+                select: { nombre: true }
+              },
+              usuario: {
+                select: { nombre: true }
+              },
+              monedaOrigen: {
+                select: { codigo: true, simbolo: true }
+              },
+              monedaDestino: {
+                select: { codigo: true, simbolo: true }
+              }
+            }
+          });
 
           // Group by point
-          const exchangesByPoint = exchanges?.reduce((acc: any, exchange) => {
-            const pointName = exchange.PuntoAtencion?.nombre || 'Punto desconocido';
+          const exchangesByPoint = exchanges.reduce((acc: Record<string, ExchangeData>, exchange) => {
+            const pointName = exchange.puntoAtencion?.nombre || 'Punto desconocido';
             if (!acc[pointName]) {
               acc[pointName] = {
                 point: pointName,
                 amount: 0,
                 exchanges: 0,
-                user: exchange.Usuario?.nombre || 'Usuario desconocido'
+                user: exchange.usuario?.nombre || 'Usuario desconocido'
               };
             }
             acc[pointName].amount += parseFloat(exchange.monto_origen.toString());
             acc[pointName].exchanges += 1;
             return acc;
-          }, {}) || {};
+          }, {});
 
           reportData = Object.values(exchangesByPoint);
           break;
+        }
 
-        case 'transfers':
+        case 'transfers': {
           // Reporte de transferencias
-          const { data: transfers, error: transfersError } = await supabase
-            .from('Transferencia')
-            .select(`
-              *,
-              Origen:origen_id (nombre),
-              Destino:destino_id (nombre),
-              UsuarioSolicitante:solicitado_por (nombre),
-              Moneda:moneda_id (codigo, simbolo)
-            `)
-            .gte('fecha', startDate.toISOString())
-            .lte('fecha', endDate.toISOString())
-            .eq('estado', 'APROBADO');
+          const transfers = await prisma.transferencia.findMany({
+            where: {
+              fecha: {
+                gte: startDate,
+                lte: endDate,
+              },
+              estado: 'APROBADO',
+            },
+            include: {
+              origen: {
+                select: { nombre: true }
+              },
+              destino: {
+                select: { nombre: true }
+              },
+              usuarioSolicitante: {
+                select: { nombre: true }
+              },
+              moneda: {
+                select: { codigo: true, simbolo: true }
+              }
+            }
+          });
 
-          if (transfersError) {
-            throw transfersError;
-          }
-
-          const transfersByPoint = transfers?.reduce((acc: any, transfer) => {
-            const pointName = transfer.Destino?.nombre || 'Punto desconocido';
+          const transfersByPoint = transfers.reduce((acc: Record<string, TransferData>, transfer) => {
+            const pointName = transfer.destino?.nombre || 'Punto desconocido';
             if (!acc[pointName]) {
               acc[pointName] = {
                 point: pointName,
                 transfers: 0,
                 amount: 0,
-                user: transfer.UsuarioSolicitante?.nombre || 'Usuario desconocido'
+                user: transfer.usuarioSolicitante?.nombre || 'Usuario desconocido'
               };
             }
             acc[pointName].transfers += 1;
             acc[pointName].amount += parseFloat(transfer.monto.toString());
             return acc;
-          }, {}) || {};
+          }, {});
 
           reportData = Object.values(transfersByPoint);
           break;
+        }
 
-        case 'balances':
+        case 'balances': {
           // Reporte de saldos actuales
-          const { data: balances, error: balancesError } = await supabase
-            .from('Saldo')
-            .select(`
-              *,
-              PuntoAtencion:punto_atencion_id (nombre),
-              Moneda:moneda_id (codigo, simbolo)
-            `);
+          const balances = await prisma.saldo.findMany({
+            include: {
+              puntoAtencion: {
+                select: { nombre: true }
+              },
+              moneda: {
+                select: { codigo: true, simbolo: true }
+              }
+            }
+          });
 
-          if (balancesError) {
-            throw balancesError;
-          }
-
-          const balancesByPoint = balances?.reduce((acc: any, balance) => {
-            const pointName = balance.PuntoAtencion?.nombre || 'Punto desconocido';
+          const balancesByPoint = balances.reduce((acc: Record<string, BalanceData>, balance) => {
+            const pointName = balance.puntoAtencion?.nombre || 'Punto desconocido';
             if (!acc[pointName]) {
               acc[pointName] = {
                 point: pointName,
@@ -136,43 +192,48 @@ router.post(
             }
             acc[pointName].balance += parseFloat(balance.cantidad.toString());
             return acc;
-          }, {}) || {};
+          }, {});
 
           reportData = Object.values(balancesByPoint);
           break;
+        }
 
-        case 'users':
+        case 'users': {
           // Reporte de actividad de usuarios
-          const { data: userActivity, error: activityError } = await supabase
-            .from('Jornada')
-            .select(`
-              *,
-              Usuario:usuario_id (nombre),
-              PuntoAtencion:punto_atencion_id (nombre)
-            `)
-            .gte('fecha_inicio', startDate.toISOString())
-            .lte('fecha_inicio', endDate.toISOString());
+          const userActivity = await prisma.jornada.findMany({
+            where: {
+              fecha_inicio: {
+                gte: startDate,
+                lte: endDate,
+              },
+            },
+            include: {
+              usuario: {
+                select: { nombre: true }
+              },
+              puntoAtencion: {
+                select: { nombre: true }
+              }
+            }
+          });
 
-          if (activityError) {
-            throw activityError;
-          }
-
-          const activityByPoint = userActivity?.reduce((acc: any, activity) => {
-            const pointName = activity.PuntoAtencion?.nombre || 'Punto desconocido';
+          const activityByPoint = userActivity.reduce((acc: Record<string, UserActivityData>, activity) => {
+            const pointName = activity.puntoAtencion?.nombre || 'Punto desconocido';
             if (!acc[pointName]) {
               acc[pointName] = {
                 point: pointName,
-                user: activity.Usuario?.nombre || 'Usuario desconocido',
+                user: activity.usuario?.nombre || 'Usuario desconocido',
                 transfers: userActivity.filter(a => 
-                  a.PuntoAtencion?.nombre === pointName
+                  a.puntoAtencion?.nombre === pointName
                 ).length
               };
             }
             return acc;
-          }, {}) || {};
+          }, {});
 
           reportData = Object.values(activityByPoint);
           break;
+        }
 
         default:
           res.status(400).json({
