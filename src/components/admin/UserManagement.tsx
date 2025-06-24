@@ -8,6 +8,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/hooks/use-toast";
 import { Usuario } from '../../types';
 import { userService } from '../../services/userService';
+import EditUserDialog from './EditUserDialog';
+import ResetPasswordDialog from './ResetPasswordDialog';
+import { Edit, Key } from 'lucide-react';
 
 interface UserManagementProps {
   user: Usuario;
@@ -25,6 +28,8 @@ const UserManagement = ({ user }: UserManagementProps) => {
     rol: 'OPERADOR' as Usuario['rol'],
     password: ''
   });
+  const [editingUser, setEditingUser] = useState<Usuario | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<Usuario | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -341,13 +346,29 @@ const UserManagement = ({ user }: UserManagementProps) => {
                       {new Date(userItem.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant={userItem.activo ? "destructive" : "default"}
-                        onClick={() => toggleUserStatus(userItem.id)}
-                      >
-                        {userItem.activo ? 'Desactivar' : 'Activar'}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingUser(userItem)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setResetPasswordUser(userItem)}
+                        >
+                          <Key className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={userItem.activo ? "destructive" : "default"}
+                          onClick={() => toggleUserStatus(userItem.id)}
+                        >
+                          {userItem.activo ? 'Desactivar' : 'Activar'}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -356,6 +377,20 @@ const UserManagement = ({ user }: UserManagementProps) => {
           )}
         </CardContent>
       </Card>
+
+      <EditUserDialog
+        user={editingUser!}
+        isOpen={!!editingUser}
+        onClose={() => setEditingUser(null)}
+        onUserUpdated={loadUsers}
+        currentUser={user}
+      />
+
+      <ResetPasswordDialog
+        user={resetPasswordUser!}
+        isOpen={!!resetPasswordUser}
+        onClose={() => setResetPasswordUser(null)}
+      />
     </div>
   );
 };

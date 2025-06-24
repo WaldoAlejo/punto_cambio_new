@@ -1,4 +1,3 @@
-
 import { apiService } from './apiService';
 import { Usuario } from '../types';
 
@@ -70,6 +69,57 @@ export const userService = {
       return { users: [], error: error.response?.data?.error || 'Error de conexión al obtener usuarios' };
     } finally {
       console.log('=== USER SERVICE - getAllUsers END ===');
+    }
+  },
+
+  async updateUser(userId: string, data: Partial<CreateUserData>): Promise<{ user: Usuario | null; error: string | null }> {
+    console.log('=== USER SERVICE - updateUser START ===');
+    console.log('User ID:', userId);
+    console.log('Update data:', data);
+
+    try {
+      console.log('Calling apiService.put for user update...');
+      const response = await apiService.put<{ user: Usuario; success: boolean }>(`/users/${userId}`, data);
+      console.log('updateUser - Raw response:', response);
+      
+      if (response.success) {
+        console.log('updateUser - Success! Updated user:', response.user);
+        return { user: response.user, error: null };
+      } else {
+        console.error('updateUser - Response indicates failure');
+        return { user: null, error: 'Error al actualizar el usuario' };
+      }
+    } catch (error: any) {
+      console.error('=== updateUser ERROR ===');
+      console.error('Error details:', error);
+      return { user: null, error: error.response?.data?.error || 'Error de conexión al actualizar usuario' };
+    } finally {
+      console.log('=== USER SERVICE - updateUser END ===');
+    }
+  },
+
+  async resetUserPassword(userId: string, password: string): Promise<{ success: boolean; error: string | null }> {
+    console.log('=== USER SERVICE - resetUserPassword START ===');
+    console.log('User ID:', userId);
+
+    try {
+      console.log('Calling apiService.patch for password reset...');
+      const response = await apiService.patch<{ success: boolean }>(`/users/${userId}/reset-password`, { password });
+      console.log('resetUserPassword - Raw response:', response);
+      
+      if (response.success) {
+        console.log('resetUserPassword - Success!');
+        return { success: true, error: null };
+      } else {
+        console.error('resetUserPassword - Response indicates failure');
+        return { success: false, error: 'Error al resetear la contraseña' };
+      }
+    } catch (error: any) {
+      console.error('=== resetUserPassword ERROR ===');
+      console.error('Error details:', error);
+      return { success: false, error: error.response?.data?.error || 'Error de conexión al resetear contraseña' };
+    } finally {
+      console.log('=== USER SERVICE - resetUserPassword END ===');
     }
   },
 

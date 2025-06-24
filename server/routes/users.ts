@@ -1,4 +1,3 @@
-
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
@@ -176,6 +175,185 @@ router.post('/',
       res.status(500).json(errorResponse);
     } finally {
       console.log('=== USERS ROUTE - POST / END ===');
+    }
+  }
+);
+
+// Editar usuario (solo admins)
+router.put('/:id',
+  authenticateToken,
+  requireRole(['ADMIN', 'SUPER_USUARIO']),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    console.log('=== USERS ROUTE - PUT /:id START ===');
+    console.log('Request headers:', req.headers);
+    console.log('Request user:', req.user);
+    console.log('User ID to edit:', req.params.id);
+    console.log('Update data received:', req.body);
+
+    try {
+      const userId = req.params.id;
+      const { nombre, correo, telefono, rol, punto_atencion_id } = req.body;
+
+      console.log('Checking if user exists...');
+      const existingUser = await prisma.usuario.findUnique({
+        where: { id: userId }
+      });
+
+      if (!existingUser) {
+        console.warn('User not found:', userId);
+        const notFoundResponse = {
+          error: 'Usuario no encontrado',
+          success: false,
+          timestamp: new Date().toISOString()
+        };
+        console.log('Sending not found response:', notFoundResponse);
+        res.status(404).json(notFoundResponse);
+        return;
+      }
+
+      const updateData: any = {};
+      if (nombre) updateData.nombre = nombre;
+      if (correo !== undefined) updateData.correo = correo || null;
+      if (telefono !== undefined) updateData.telefono = telefono || null;
+      if (rol) updateData.rol = rol;
+      if (punto_atencion_id !== undefined) updateData.punto_atencion_id = punto_atencion_id || null;
+
+      console.log('Updating user with data:', updateData);
+      const updatedUser = await prisma.usuario.update({
+        where: { id: userId },
+        data: updateData,
+        select: {
+          id: true,
+          username: true,
+          nombre: true,
+          correo: true,
+          telefono: true,
+          rol: true,
+          activo: true,
+          punto_atencion_id: true,
+          created_at: true,
+          updated_at: true,
+        }
+      });
+      console.log('User updated successfully:', updatedUser);
+
+      logger.info('Usuario actualizado', { 
+        userId: updatedUser.id, 
+        updatedBy: req.user?.id 
+      });
+
+      const responseData = {
+        user: updatedUser,
+        success: true,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending success response:', responseData);
+
+      res.status(200).json(responseData);
+    } catch (error) {
+      console.error('=== USERS ROUTE PUT ERROR ===');
+      console.error('Error details:', error);
+      
+      logger.error('Error al actualizar usuario', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        requestedBy: req.user?.id 
+      });
+      
+      const errorResponse = {
+        error: 'Error al actualizar usuario',
+        success: false,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending error response:', errorResponse);
+      res.status(500).json(errorResponse);
+    } finally {
+      console.log('=== USERS ROUTE - PUT /:id END ===');
+    }
+  }
+);
+
+// Resetear contraseña de usuario (solo admins)
+router.patch('/:id/reset-password',
+  authenticateToken,
+  requireRole(['ADMIN', 'SUPER_USUARIO']),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    console.log('=== USERS ROUTE - PATCH /:id/reset-password START ===');
+    console.log('Request user:', req.user);
+    console.log('User ID to reset password:', req.params.id);
+    console.log('New password data:', { password: '[HIDDEN]' });
+
+    try {
+      const userId = req.params.id;
+      const { password } = req.body;
+
+      if (!password) {
+        const badRequestResponse = {
+          error: 'La nueva contraseña es requerida',
+          success: false,
+          timestamp: new Date().toISOString()
+        };
+        console.log('Sending bad request response:', badRequestResponse);
+        res.status(400).json(badRequestResponse);
+        return;
+      }
+
+      console.log('Checking if user exists...');
+      const existingUser = await prisma.usuario.findUnique({
+        where: { id: userId }
+      });
+
+      if (!existingUser) {
+        console.warn('User not found:', userId);
+        const notFoundResponse = {
+          error: 'Usuario no encontrado',
+          success: false,
+          timestamp: new Date().toISOString()
+        };
+        console.log('Sending not found response:', notFoundResponse);
+        res.status(404).json(notFoundResponse);
+        return;
+      }
+
+      console.log('Hashing new password...');
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      console.log('Updating user password...');
+      await prisma.usuario.update({
+        where: { id: userId },
+        data: { password: hashedPassword }
+      });
+
+      logger.info('Contraseña reseteada', { 
+        userId: userId, 
+        resetBy: req.user?.id 
+      });
+
+      const responseData = {
+        message: 'Contraseña reseteada exitosamente',
+        success: true,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending success response:', responseData);
+
+      res.status(200).json(responseData);
+    } catch (error) {
+      console.error('=== USERS ROUTE RESET PASSWORD ERROR ===');
+      console.error('Error details:', error);
+      
+      logger.error('Error al resetear contraseña', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        requestedBy: req.user?.id 
+      });
+      
+      const errorResponse = {
+        error: 'Error al resetear contraseña',
+        success: false,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending error response:', errorResponse);
+      res.status(500).json(errorResponse);
+    } finally {
+      console.log('=== USERS ROUTE - PATCH /:id/reset-password END ===');
     }
   }
 );

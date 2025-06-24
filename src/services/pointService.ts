@@ -1,4 +1,3 @@
-
 import { apiService } from "./apiService";
 import { PuntoAtencion, CreatePointData, ApiResponse, ListResponse } from "../types";
 
@@ -15,10 +14,7 @@ interface ActivePointsResponse extends ListResponse<PuntoAtencion> {
 }
 
 export const pointService = {
-  async getAllPoints(): Promise<{
-    points: PuntoAtencion[];
-    error: string | null;
-  }> {
+  async getAllPoints(): Promise<{ points: PuntoAtencion[]; error: string | null }> {
     console.log('=== POINT SERVICE - getAllPoints START ===');
     try {
       console.log('Calling apiService.get("/points")...');
@@ -55,10 +51,7 @@ export const pointService = {
     }
   },
 
-  async getActivePoints(): Promise<{
-    points: PuntoAtencion[];
-    error: string | null;
-  }> {
+  async getActivePoints(): Promise<{ points: PuntoAtencion[]; error: string | null }> {
     console.log('=== POINT SERVICE - getActivePoints START ===');
     try {
       console.log('Calling apiService.get("/active-points")...');
@@ -94,10 +87,7 @@ export const pointService = {
     }
   },
 
-  async createPoint(pointData: CreatePointData): Promise<{
-    point: PuntoAtencion | null;
-    error: string | null;
-  }> {
+  async createPoint(pointData: CreatePointData): Promise<{ point: PuntoAtencion | null; error: string | null }> {
     console.log('=== POINT SERVICE - createPoint START ===');
     console.log('Input data:', pointData);
     console.log('Input data JSON:', JSON.stringify(pointData, null, 2));
@@ -135,4 +125,65 @@ export const pointService = {
       console.log('=== POINT SERVICE - createPoint END ===');
     }
   },
+
+  async updatePoint(pointId: string, pointData: Partial<CreatePointData>): Promise<{ point: PuntoAtencion | null; error: string | null }> {
+    console.log('=== POINT SERVICE - updatePoint START ===');
+    console.log('Point ID:', pointId);
+    console.log('Update data:', pointData);
+
+    try {
+      console.log('Calling apiService.put("/points/:id", pointData)...');
+      const response = await apiService.put<PointResponse>(`/points/${pointId}`, pointData);
+      console.log('updatePoint - Raw response:', response);
+
+      if (!response) {
+        console.error('updatePoint - No response received from server');
+        return { point: null, error: "No se pudo obtener la respuesta del servidor" };
+      }
+
+      if (response.error || !response.success) {
+        console.error('updatePoint - Response indicates failure:', response.error);
+        return { point: null, error: response.error || "Error al actualizar punto de atención" };
+      }
+
+      console.log('updatePoint - Success! Updated point:', response.point);
+      return { point: response.point, error: null };
+    } catch (error) {
+      console.error("=== updatePoint ERROR ===");
+      console.error("Error details:", error);
+      return { point: null, error: "Error de conexión con el servidor" };
+    } finally {
+      console.log('=== POINT SERVICE - updatePoint END ===');
+    }
+  },
+
+  async togglePointStatus(pointId: string): Promise<{ point: PuntoAtencion | null; error: string | null }> {
+    console.log('=== POINT SERVICE - togglePointStatus START ===');
+    console.log('Point ID:', pointId);
+
+    try {
+      console.log('Calling apiService.patch for point toggle...');
+      const response = await apiService.patch<PointResponse>(`/points/${pointId}/toggle`);
+      console.log('togglePointStatus - Raw response:', response);
+
+      if (!response) {
+        console.error('togglePointStatus - No response received from server');
+        return { point: null, error: "No se pudo obtener la respuesta del servidor" };
+      }
+
+      if (response.error || !response.success) {
+        console.error('togglePointStatus - Response indicates failure:', response.error);
+        return { point: null, error: response.error || "Error al cambiar estado del punto" };
+      }
+
+      console.log('togglePointStatus - Success! Updated point:', response.point);
+      return { point: response.point, error: null };
+    } catch (error) {
+      console.error("=== togglePointStatus ERROR ===");
+      console.error("Error details:", error);
+      return { point: null, error: "Error de conexión con el servidor" };
+    } finally {
+      console.log('=== POINT SERVICE - togglePointStatus END ===');
+    }
+  }
 };

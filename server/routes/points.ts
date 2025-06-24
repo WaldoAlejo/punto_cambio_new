@@ -152,4 +152,167 @@ router.post('/',
   }
 );
 
+// Editar punto de atención (requiere autenticación y rol de admin)
+router.put('/:id',
+  authenticateToken,
+  requireRole(['ADMIN', 'SUPER_USUARIO']),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    console.log('=== POINTS ROUTE - PUT /:id START ===');
+    console.log('Request headers:', req.headers);
+    console.log('Request user:', req.user);
+    console.log('Point ID to edit:', req.params.id);
+    console.log('Update data received:', req.body);
+
+    try {
+      const pointId = req.params.id;
+      const { nombre, direccion, ciudad, provincia, codigo_postal, telefono } = req.body;
+
+      console.log('Checking if point exists...');
+      const existingPoint = await prisma.puntoAtencion.findUnique({
+        where: { id: pointId }
+      });
+
+      if (!existingPoint) {
+        console.warn('Point not found:', pointId);
+        const notFoundResponse = {
+          error: 'Punto de atención no encontrado',
+          success: false,
+          timestamp: new Date().toISOString()
+        };
+        console.log('Sending not found response:', notFoundResponse);
+        res.status(404).json(notFoundResponse);
+        return;
+      }
+
+      const updateData: any = {};
+      if (nombre) updateData.nombre = nombre;
+      if (direccion) updateData.direccion = direccion;
+      if (ciudad) updateData.ciudad = ciudad;
+      if (provincia) updateData.provincia = provincia;
+      if (codigo_postal !== undefined) updateData.codigo_postal = codigo_postal || null;
+      if (telefono !== undefined) updateData.telefono = telefono || null;
+
+      console.log('Updating point with data:', updateData);
+      const updatedPoint = await prisma.puntoAtencion.update({
+        where: { id: pointId },
+        data: updateData
+      });
+      console.log('Point updated successfully:', updatedPoint);
+
+      logger.info('Punto actualizado', { 
+        pointId: updatedPoint.id, 
+        updatedBy: req.user?.id 
+      });
+
+      const responseData = {
+        point: {
+          ...updatedPoint,
+          created_at: updatedPoint.created_at.toISOString(),
+          updated_at: updatedPoint.updated_at.toISOString()
+        },
+        success: true,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending success response:', responseData);
+
+      res.status(200).json(responseData);
+    } catch (error) {
+      console.error('=== POINTS ROUTE PUT ERROR ===');
+      console.error('Error details:', error);
+      
+      logger.error('Error al actualizar punto', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        requestedBy: req.user?.id 
+      });
+      
+      const errorResponse = {
+        error: 'Error al actualizar punto de atención',
+        success: false,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending error response:', errorResponse);
+      res.status(500).json(errorResponse);
+    } finally {
+      console.log('=== POINTS ROUTE - PUT /:id END ===');
+    }
+  }
+);
+
+// Activar/desactivar punto de atención (requiere autenticación y rol de admin)
+router.patch('/:id/toggle',
+  authenticateToken,
+  requireRole(['ADMIN', 'SUPER_USUARIO']),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    console.log('=== POINTS ROUTE - PATCH /:id/toggle START ===');
+    console.log('Request headers:', req.headers);
+    console.log('Request user:', req.user);
+    console.log('Point ID to toggle:', req.params.id);
+
+    try {
+      const pointId = req.params.id;
+
+      console.log('Fetching point from database...');
+      const existingPoint = await prisma.puntoAtencion.findUnique({
+        where: { id: pointId }
+      });
+
+      if (!existingPoint) {
+        console.warn('Point not found:', pointId);
+        const notFoundResponse = {
+          error: 'Punto de atención no encontrado',
+          success: false,
+          timestamp: new Date().toISOString()
+        };
+        console.log('Sending not found response:', notFoundResponse);
+        res.status(404).json(notFoundResponse);
+        return;
+      }
+
+      console.log('Toggling point status...');
+      const updatedPoint = await prisma.puntoAtencion.update({
+        where: { id: pointId },
+        data: { activo: !existingPoint.activo }
+      });
+      console.log('Point status toggled successfully:', updatedPoint);
+
+      logger.info('Estado de punto cambiado', { 
+        pointId: updatedPoint.id, 
+        newStatus: updatedPoint.activo,
+        requestedBy: req.user?.id 
+      });
+
+      const responseData = {
+        point: {
+          ...updatedPoint,
+          created_at: updatedPoint.created_at.toISOString(),
+          updated_at: updatedPoint.updated_at.toISOString()
+        },
+        success: true,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending success response:', responseData);
+
+      res.status(200).json(responseData);
+    } catch (error) {
+      console.error('=== POINTS ROUTE TOGGLE ERROR ===');
+      console.error('Error details:', error);
+      
+      logger.error('Error al cambiar el estado del punto', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        requestedBy: req.user?.id 
+      });
+      
+      const errorResponse = {
+        error: 'Error al cambiar el estado del punto de atención',
+        success: false,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending error response:', errorResponse);
+      res.status(500).json(errorResponse);
+    } finally {
+      console.log('=== POINTS ROUTE - PATCH /:id/toggle END ===');
+    }
+  }
+);
+
 export default router;

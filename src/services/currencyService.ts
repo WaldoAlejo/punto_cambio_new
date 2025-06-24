@@ -1,4 +1,3 @@
-
 import { apiService } from "./apiService";
 import { Moneda, CreateCurrencyData, ApiResponse, ListResponse } from "../types";
 
@@ -14,10 +13,7 @@ interface CurrencyResponse extends ApiResponse<Moneda> {
 export type Currency = Moneda;
 
 export const currencyService = {
-  async getAllCurrencies(): Promise<{
-    currencies: Moneda[];
-    error: string | null;
-  }> {
+  async getAllCurrencies(): Promise<{ currencies: Moneda[]; error: string | null }> {
     console.log('=== CURRENCY SERVICE - getAllCurrencies START ===');
     try {
       console.log('Calling apiService.get("/currencies")...');
@@ -51,10 +47,7 @@ export const currencyService = {
     }
   },
 
-  async createCurrency(currencyData: CreateCurrencyData): Promise<{
-    currency: Moneda | null;
-    error: string | null;
-  }> {
+  async createCurrency(currencyData: CreateCurrencyData): Promise<{ currency: Moneda | null; error: string | null }> {
     console.log('=== CURRENCY SERVICE - createCurrency START ===');
     console.log('Input data:', currencyData);
     console.log('Input data JSON:', JSON.stringify(currencyData, null, 2));
@@ -90,4 +83,35 @@ export const currencyService = {
       console.log('=== CURRENCY SERVICE - createCurrency END ===');
     }
   },
+
+  async updateCurrency(currencyId: string, currencyData: Partial<CreateCurrencyData>): Promise<{ currency: Moneda | null; error: string | null }> {
+    console.log('=== CURRENCY SERVICE - updateCurrency START ===');
+    console.log('Currency ID:', currencyId);
+    console.log('Update data:', currencyData);
+
+    try {
+      console.log('Calling apiService.put("/currencies/:id", currencyData)...');
+      const response = await apiService.put<CurrencyResponse>(`/currencies/${currencyId}`, currencyData);
+      console.log('updateCurrency - Raw response:', response);
+
+      if (!response) {
+        console.error('updateCurrency - No response received');
+        return { currency: null, error: "No se pudo obtener la respuesta del servidor" };
+      }
+
+      if (response.error || !response.success) {
+        console.error('updateCurrency - Response error:', response.error);
+        return { currency: null, error: response.error || "Error al actualizar moneda" };
+      }
+
+      console.log('updateCurrency - Success! Updated currency:', response.currency);
+      return { currency: response.currency, error: null };
+    } catch (error) {
+      console.error("=== updateCurrency ERROR ===");
+      console.error("Error details:", error);
+      return { currency: null, error: "Error de conexión con el servidor" };
+    } finally {
+      console.log('=== CURRENCY SERVICE - updateCurrency END ===');
+    }
+  }
 };

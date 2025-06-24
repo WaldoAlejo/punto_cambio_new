@@ -172,4 +172,111 @@ router.post('/',
   }
 );
 
+// Editar moneda (requiere autenticación y rol de admin)
+router.put('/:id',
+  authenticateToken,
+  requireRole(['ADMIN', 'SUPER_USUARIO']),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    console.log('=== CURRENCIES ROUTE - PUT /:id START ===');
+    console.log('Request headers:', req.headers);
+    console.log('Request user:', req.user);
+    console.log('Currency ID to edit:', req.params.id);
+    console.log('Update data received:', req.body);
+
+    try {
+      const currencyId = req.params.id;
+      const { nombre, simbolo, codigo, orden_display } = req.body;
+
+      console.log('Checking if currency exists...');
+      const existingCurrency = await prisma.moneda.findUnique({
+        where: { id: currencyId }
+      });
+
+      if (!existingCurrency) {
+        console.warn('Currency not found:', currencyId);
+        const notFoundResponse = {
+          error: 'Moneda no encontrada',
+          success: false,
+          timestamp: new Date().toISOString()
+        };
+        console.log('Sending not found response:', notFoundResponse);
+        res.status(404).json(notFoundResponse);
+        return;
+      }
+
+      // Verificar si el código ya existe en otra moneda
+      if (codigo && codigo !== existingCurrency.codigo) {
+        console.log('Checking if new currency code already exists...');
+        const duplicateCurrency = await prisma.moneda.findFirst({
+          where: { 
+            codigo: codigo,
+            id: { not: currencyId }
+          }
+        });
+        
+        if (duplicateCurrency) {
+          console.warn('Currency code already exists:', codigo);
+          const conflictResponse = {
+            error: 'El código de moneda ya existe',
+            success: false,
+            timestamp: new Date().toISOString()
+          };
+          console.log('Sending conflict response:', conflictResponse);
+          res.status(400).json(conflictResponse);
+          return;
+        }
+      }
+
+      const updateData: any = {};
+      if (nombre) updateData.nombre = nombre;
+      if (simbolo) updateData.simbolo = simbolo;
+      if (codigo) updateData.codigo = codigo;
+      if (orden_display !== undefined) updateData.orden_display = orden_display;
+
+      console.log('Updating currency with data:', updateData);
+      const updatedCurrency = await prisma.moneda.update({
+        where: { id: currencyId },
+        data: updateData
+      });
+      console.log('Currency updated successfully:', updatedCurrency);
+
+      logger.info('Moneda actualizada', { 
+        currencyId: updatedCurrency.id, 
+        updatedBy: req.user?.id 
+      });
+
+      const responseData = {
+        currency: {
+          ...updatedCurrency,
+          created_at: updatedCurrency.created_at.toISOString(),
+          updated_at: updatedCurrency.updated_at.toISOString()
+        },
+        success: true,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending success response:', responseData);
+
+      res.status(200).json(responseData);
+    } catch (error) {
+      console.error('=== CURRENCIES ROUTE PUT ERROR ===');
+      console.error('Error details:', error);
+      
+      logger.error('Error al actualizar moneda', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        requestedBy: req.user?.id 
+      });
+      
+      const errorResponse = {
+        error: 'Error al actualizar moneda',
+        success: false,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending error response:', errorResponse);
+      res.status(500).json(errorResponse);
+    } finally {
+      console.log('=== CURRENCIES ROUTE - PUT /:id END ===');
+    }
+  }
+);
+
 export default router;
