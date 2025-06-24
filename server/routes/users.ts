@@ -1,9 +1,8 @@
-
 import express from "express";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import logger from "../utils/logger.js";
-import { requireRole } from "../middleware/auth.js";
+import { requireRole, authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import {
   createUserSchema,
@@ -16,6 +15,7 @@ const prisma = new PrismaClient();
 // Obtener usuarios (solo admins)
 router.get(
   "/",
+  authenticateToken,
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
@@ -88,6 +88,7 @@ router.get(
 // Crear usuario (solo admins)
 router.post(
   "/",
+  authenticateToken,
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   validate(createUserSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
@@ -178,6 +179,7 @@ router.post(
 // Activar/desactivar usuario (solo admins)
 router.patch(
   "/:userId/toggle",
+  authenticateToken,
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
