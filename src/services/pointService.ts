@@ -76,9 +76,16 @@ export const pointService = {
     error: string | null;
   }> {
     try {
+      console.log('=== POINT SERVICE CREATE DEBUG ===');
+      console.log('Point data being sent:', pointData);
+      console.log('Point data JSON:', JSON.stringify(pointData, null, 2));
+
       const response = await apiService.post<PointResponse>("/points", pointData);
 
+      console.log('Point service response received:', response);
+
       if (!response) {
+        console.error('No response received from server');
         return {
           point: null,
           error: "No se pudo obtener la respuesta del servidor",
@@ -86,15 +93,20 @@ export const pointService = {
       }
 
       if (response.error || !response.success) {
+        console.error('Point creation failed:', response.error);
         return {
           point: null,
           error: response.error || "Error al crear punto de atención",
         };
       }
 
+      console.log('Point created successfully:', response.point);
       return { point: response.point, error: null };
     } catch (error) {
-      console.error("Error en createPoint:", error);
+      console.error("=== POINT SERVICE ERROR ===");
+      console.error("Error details:", error);
+      console.error("Error message:", error instanceof Error ? error.message : 'Unknown error');
+      console.error("Stack trace:", error instanceof Error ? error.stack : 'No stack');
       return { point: null, error: "Error de conexión con el servidor" };
     }
   },

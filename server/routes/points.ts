@@ -62,16 +62,35 @@ router.post('/',
   validate(createPointSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
-      const newPoint = await prisma.puntoAtencion.create({
-        data: { ...req.body as CreatePointRequest, activo: true }
+      console.log('=== CREATE POINT ENDPOINT DEBUG ===');
+      console.log('Request body received:', req.body);
+      console.log('Request body JSON:', JSON.stringify(req.body, null, 2));
+      console.log('User making request:', req.user);
+
+      const pointData = req.body as CreatePointRequest;
+      
+      console.log('Point data extracted:', {
+        nombre: pointData.nombre,
+        direccion: pointData.direccion,
+        ciudad: pointData.ciudad,
+        provincia: pointData.provincia,
+        codigo_postal: pointData.codigo_postal,
+        telefono: pointData.telefono
       });
+
+      console.log('About to create point in database...');
+      const newPoint = await prisma.puntoAtencion.create({
+        data: { ...pointData, activo: true }
+      });
+
+      console.log('Point created successfully in database:', newPoint.id);
 
       logger.info('Punto creado', { 
         pointId: newPoint.id, 
         createdBy: req.user?.id 
       });
 
-      res.status(201).json({ 
+      const responseData = {
         point: {
           ...newPoint,
           created_at: newPoint.created_at.toISOString(),
@@ -79,8 +98,17 @@ router.post('/',
         },
         success: true,
         timestamp: new Date().toISOString()
-      });
+      };
+
+      console.log('Sending response:', responseData);
+
+      res.status(201).json(responseData);
     } catch (error) {
+      console.error('=== CREATE POINT ERROR ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
+      
       logger.error('Error al crear punto', { 
         error: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,

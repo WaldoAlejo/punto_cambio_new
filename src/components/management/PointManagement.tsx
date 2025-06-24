@@ -59,25 +59,48 @@ export const PointManagement = () => {
     e.preventDefault();
     
     try {
+      console.log('=== POINT MANAGEMENT CREATE DEBUG ===');
+      console.log('Form data before processing:', formData);
+      
+      // Validate required fields
+      if (!formData.nombre || !formData.direccion || !formData.ciudad || !formData.provincia) {
+        console.error('Missing required fields');
+        toast({
+          title: "Error",
+          description: "Los campos nombre, dirección, ciudad y provincia son obligatorios",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const pointData = {
         ...formData,
         codigo_postal: formData.codigo_postal || undefined,
         telefono: formData.telefono || undefined,
       };
 
+      console.log('Processed point data:', pointData);
+      console.log('About to call pointService.createPoint...');
+
       const result = await pointService.createPoint(pointData);
       
+      console.log('Point creation result:', result);
+      
       if (result.error) {
+        console.error('Point creation failed:', result.error);
         toast({
           title: "Error",
           description: result.error,
           variant: "destructive",
         });
       } else {
+        console.log('Point created successfully, showing success toast');
         toast({
           title: "Éxito",
           description: "Punto de atención creado correctamente",
         });
+        
+        console.log('Closing dialog and resetting form');
         setDialogOpen(false);
         setFormData({
           nombre: "",
@@ -87,9 +110,17 @@ export const PointManagement = () => {
           codigo_postal: "",
           telefono: "",
         });
-        loadPoints();
+        
+        console.log('Reloading points...');
+        await loadPoints();
+        console.log('Points reloaded successfully');
       }
     } catch (error) {
+      console.error('=== POINT MANAGEMENT ERROR ===');
+      console.error('Exception in handleCreatePoint:', error);
+      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
+      
       toast({
         title: "Error",
         description: "Error al crear punto de atención",
