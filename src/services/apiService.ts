@@ -1,5 +1,5 @@
 
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -52,7 +52,7 @@ const createApiService = (): ApiService => {
       console.warn('Response data:', response.data);
       return response;
     },
-    (error: AxiosError) => {
+    (error) => {
       console.error('=== API SERVICE RESPONSE ERROR ===');
       console.error('Error URL:', error.config?.url);
       console.error('Error status:', error.response?.status);

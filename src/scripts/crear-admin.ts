@@ -1,5 +1,8 @@
-import { prisma } from "@/lib/prisma"; // ya funciona con alias
+
+import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+
+const prisma = new PrismaClient();
 
 async function crearAdmin() {
   const admin = await prisma.usuario.upsert({
