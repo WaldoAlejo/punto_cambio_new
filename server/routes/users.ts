@@ -1,3 +1,4 @@
+
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
@@ -14,12 +15,12 @@ router.get('/',
   authenticateToken,
   requireRole(['ADMIN', 'SUPER_USUARIO']), 
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.log('=== USERS ROUTE - GET / START ===');
-    console.log('Request headers:', req.headers);
-    console.log('Request user:', req.user);
+    console.warn('=== USERS ROUTE - GET / START ===');
+    console.warn('Request headers:', req.headers);
+    console.warn('Request user:', req.user);
 
     try {
-      console.log('Querying database for users...');
+      console.warn('Querying database for users...');
       const users = await prisma.usuario.findMany({
         select: {
           id: true,
@@ -35,8 +36,8 @@ router.get('/',
         },
         orderBy: { created_at: 'desc' }
       });
-      console.log('Database query result - users count:', users.length);
-      console.log('Users data:', users);
+      console.warn('Database query result - users count:', users.length);
+      console.warn('Users data:', users);
 
       logger.info('Usuarios obtenidos', { 
         count: users.length, 
@@ -48,7 +49,7 @@ router.get('/',
         success: true,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending response:', responseData);
+      console.warn('Sending response:', responseData);
 
       res.status(200).json(responseData);
     } catch (error) {
@@ -66,10 +67,10 @@ router.get('/',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending error response:', errorResponse);
+      console.warn('Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
-      console.log('=== USERS ROUTE - GET / END ===');
+      console.warn('=== USERS ROUTE - GET / END ===');
     }
   }
 );
@@ -80,16 +81,16 @@ router.post('/',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createUserSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.log('=== USERS ROUTE - POST / START ===');
-    console.log('Request headers:', req.headers);
-    console.log('Request user:', req.user);
-    console.log('Request body received:', { ...req.body, password: '[HIDDEN]' });
+    console.warn('=== USERS ROUTE - POST / START ===');
+    console.warn('Request headers:', req.headers);
+    console.warn('Request user:', req.user);
+    console.warn('Request body received:', { ...req.body, password: '[HIDDEN]' });
 
     try {
       const userData = req.body as CreateUserRequest;
-      console.log('Extracted user data:', { ...userData, password: '[HIDDEN]' });
+      console.warn('Extracted user data:', { ...userData, password: '[HIDDEN]' });
       
-      console.log('Checking if username already exists...');
+      console.warn('Checking if username already exists...');
       const existingUser = await prisma.usuario.findUnique({
         where: { username: userData.username }
       });
@@ -101,14 +102,14 @@ router.post('/',
           success: false,
           timestamp: new Date().toISOString()
         };
-        console.log('Sending conflict response:', conflictResponse);
+        console.warn('Sending conflict response:', conflictResponse);
         res.status(400).json(conflictResponse);
         return;
       }
 
-      console.log('Hashing password...');
+      console.warn('Hashing password...');
       const hashedPassword = await bcrypt.hash(userData.password, 10);
-      console.log('Password hashed successfully');
+      console.warn('Password hashed successfully');
 
       const createData = {
         username: userData.username,
@@ -120,9 +121,9 @@ router.post('/',
         punto_atencion_id: userData.punto_atencion_id || null,
         activo: true
       };
-      console.log('Data to create user:', { ...createData, password: '[HIDDEN]' });
+      console.warn('Data to create user:', { ...createData, password: '[HIDDEN]' });
 
-      console.log('Creating user in database...');
+      console.warn('Creating user in database...');
       const newUser = await prisma.usuario.create({
         data: createData,
         select: {
@@ -138,7 +139,7 @@ router.post('/',
           updated_at: true,
         }
       });
-      console.log('User created successfully:', newUser);
+      console.warn('User created successfully:', newUser);
 
       logger.info('Usuario creado', { 
         userId: newUser.id, 
@@ -151,7 +152,7 @@ router.post('/',
         success: true,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending success response:', responseData);
+      console.warn('Sending success response:', responseData);
 
       res.status(201).json(responseData);
     } catch (error) {
@@ -171,10 +172,10 @@ router.post('/',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending error response:', errorResponse);
+      console.warn('Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
-      console.log('=== USERS ROUTE - POST / END ===');
+      console.warn('=== USERS ROUTE - POST / END ===');
     }
   }
 );
@@ -184,17 +185,17 @@ router.put('/:id',
   authenticateToken,
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.log('=== USERS ROUTE - PUT /:id START ===');
-    console.log('Request headers:', req.headers);
-    console.log('Request user:', req.user);
-    console.log('User ID to edit:', req.params.id);
-    console.log('Update data received:', req.body);
+    console.warn('=== USERS ROUTE - PUT /:id START ===');
+    console.warn('Request headers:', req.headers);
+    console.warn('Request user:', req.user);
+    console.warn('User ID to edit:', req.params.id);
+    console.warn('Update data received:', req.body);
 
     try {
       const userId = req.params.id;
       const { nombre, correo, telefono, rol, punto_atencion_id } = req.body;
 
-      console.log('Checking if user exists...');
+      console.warn('Checking if user exists...');
       const existingUser = await prisma.usuario.findUnique({
         where: { id: userId }
       });
@@ -206,19 +207,19 @@ router.put('/:id',
           success: false,
           timestamp: new Date().toISOString()
         };
-        console.log('Sending not found response:', notFoundResponse);
+        console.warn('Sending not found response:', notFoundResponse);
         res.status(404).json(notFoundResponse);
         return;
       }
 
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       if (nombre) updateData.nombre = nombre;
       if (correo !== undefined) updateData.correo = correo || null;
       if (telefono !== undefined) updateData.telefono = telefono || null;
       if (rol) updateData.rol = rol;
       if (punto_atencion_id !== undefined) updateData.punto_atencion_id = punto_atencion_id || null;
 
-      console.log('Updating user with data:', updateData);
+      console.warn('Updating user with data:', updateData);
       const updatedUser = await prisma.usuario.update({
         where: { id: userId },
         data: updateData,
@@ -235,7 +236,7 @@ router.put('/:id',
           updated_at: true,
         }
       });
-      console.log('User updated successfully:', updatedUser);
+      console.warn('User updated successfully:', updatedUser);
 
       logger.info('Usuario actualizado', { 
         userId: updatedUser.id, 
@@ -247,7 +248,7 @@ router.put('/:id',
         success: true,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending success response:', responseData);
+      console.warn('Sending success response:', responseData);
 
       res.status(200).json(responseData);
     } catch (error) {
@@ -264,10 +265,10 @@ router.put('/:id',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending error response:', errorResponse);
+      console.warn('Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
-      console.log('=== USERS ROUTE - PUT /:id END ===');
+      console.warn('=== USERS ROUTE - PUT /:id END ===');
     }
   }
 );
@@ -277,10 +278,10 @@ router.patch('/:id/reset-password',
   authenticateToken,
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.log('=== USERS ROUTE - PATCH /:id/reset-password START ===');
-    console.log('Request user:', req.user);
-    console.log('User ID to reset password:', req.params.id);
-    console.log('New password data:', { password: '[HIDDEN]' });
+    console.warn('=== USERS ROUTE - PATCH /:id/reset-password START ===');
+    console.warn('Request user:', req.user);
+    console.warn('User ID to reset password:', req.params.id);
+    console.warn('New password data:', { password: '[HIDDEN]' });
 
     try {
       const userId = req.params.id;
@@ -292,12 +293,12 @@ router.patch('/:id/reset-password',
           success: false,
           timestamp: new Date().toISOString()
         };
-        console.log('Sending bad request response:', badRequestResponse);
+        console.warn('Sending bad request response:', badRequestResponse);
         res.status(400).json(badRequestResponse);
         return;
       }
 
-      console.log('Checking if user exists...');
+      console.warn('Checking if user exists...');
       const existingUser = await prisma.usuario.findUnique({
         where: { id: userId }
       });
@@ -309,15 +310,15 @@ router.patch('/:id/reset-password',
           success: false,
           timestamp: new Date().toISOString()
         };
-        console.log('Sending not found response:', notFoundResponse);
+        console.warn('Sending not found response:', notFoundResponse);
         res.status(404).json(notFoundResponse);
         return;
       }
 
-      console.log('Hashing new password...');
+      console.warn('Hashing new password...');
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      console.log('Updating user password...');
+      console.warn('Updating user password...');
       await prisma.usuario.update({
         where: { id: userId },
         data: { password: hashedPassword }
@@ -333,7 +334,7 @@ router.patch('/:id/reset-password',
         success: true,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending success response:', responseData);
+      console.warn('Sending success response:', responseData);
 
       res.status(200).json(responseData);
     } catch (error) {
@@ -350,10 +351,10 @@ router.patch('/:id/reset-password',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending error response:', errorResponse);
+      console.warn('Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
-      console.log('=== USERS ROUTE - PATCH /:id/reset-password END ===');
+      console.warn('=== USERS ROUTE - PATCH /:id/reset-password END ===');
     }
   }
 );
@@ -363,15 +364,15 @@ router.patch('/:id/toggle',
   authenticateToken, 
   requireRole(['ADMIN', 'SUPER_USUARIO']), 
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.log('=== USERS ROUTE - PATCH /:id/toggle START ===');
-    console.log('Request headers:', req.headers);
-    console.log('Request user:', req.user);
-    console.log('User ID to toggle:', req.params.id);
+    console.warn('=== USERS ROUTE - PATCH /:id/toggle START ===');
+    console.warn('Request headers:', req.headers);
+    console.warn('Request user:', req.user);
+    console.warn('User ID to toggle:', req.params.id);
 
     try {
       const userId = req.params.id;
 
-      console.log('Fetching user from database...');
+      console.warn('Fetching user from database...');
       const existingUser = await prisma.usuario.findUnique({
         where: { id: userId },
         select: { activo: true, id: true, username: true }
@@ -384,12 +385,12 @@ router.patch('/:id/toggle',
           success: false,
           timestamp: new Date().toISOString()
         };
-        console.log('Sending not found response:', notFoundResponse);
+        console.warn('Sending not found response:', notFoundResponse);
         res.status(404).json(notFoundResponse);
         return;
       }
 
-      console.log('Toggling user status...');
+      console.warn('Toggling user status...');
       const updatedUser = await prisma.usuario.update({
         where: { id: userId },
         data: { activo: !existingUser.activo },
@@ -406,7 +407,7 @@ router.patch('/:id/toggle',
           updated_at: true,
         }
       });
-      console.log('User status toggled successfully:', updatedUser);
+      console.warn('User status toggled successfully:', updatedUser);
 
       logger.info('Estado de usuario cambiado', { 
         userId: updatedUser.id, 
@@ -419,7 +420,7 @@ router.patch('/:id/toggle',
         success: true,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending success response:', responseData);
+      console.warn('Sending success response:', responseData);
 
       res.status(200).json(responseData);
     } catch (error) {
@@ -439,10 +440,10 @@ router.patch('/:id/toggle',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending error response:', errorResponse);
+      console.warn('Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
-      console.log('=== USERS ROUTE - PATCH /:id/toggle END ===');
+      console.warn('=== USERS ROUTE - PATCH /:id/toggle END ===');
     }
   }
 );
