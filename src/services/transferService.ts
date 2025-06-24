@@ -2,13 +2,13 @@ import { apiService } from './apiService';
 import { Transferencia, ResponsableMovilizacion } from '../types';
 
 export interface CreateTransferData {
-  origen_id?: string;
+  origen_id?: string | null;
   destino_id: string;
   moneda_id: string;
   monto: number;
   tipo_transferencia: 'ENTRE_PUNTOS' | 'DEPOSITO_MATRIZ' | 'RETIRO_GERENCIA' | 'DEPOSITO_GERENCIA';
-  descripcion?: string;
-  detalle_divisas: {
+  descripcion?: string | null;
+  detalle_divisas?: {
     billetes: number;
     monedas: number;
     total: number;
@@ -19,16 +19,56 @@ export interface CreateTransferData {
 export const transferService = {
   async createTransfer(data: CreateTransferData): Promise<{ transfer: Transferencia | null; error: string | null }> {
     try {
-      console.log('Creating transfer:', data);
-      const response = await apiService.post<{ transfer: Transferencia; success: boolean }>('/transfers', data);
+      console.log('=== TRANSFER SERVICE - CREATE TRANSFER ===');
+      console.log('Datos enviados:', JSON.stringify(data, null, 2));
       
-      if (response.success) {
+      // Validaciones básicas antes de enviar
+      if (!data.destino_id) {
+        console.error('destino_id es requerido');
+        return { transfer: null, error: 'Punto de destino es requerido' };
+      }
+      
+      if (!data.moneda_id) {
+        console.error('moneda_id es requerido');
+        return { transfer: null, error: 'Moneda es requerida' };
+      }
+      
+      if (!data.monto || data.monto <= 0) {
+        console.error('monto inválido:', data.monto);
+        return { transfer: null, error: 'Monto debe ser mayor a 0' };
+      }
+      
+      if (!data.tipo_transferencia) {
+        console.error('tipo_transferencia es requerido');
+        return { transfer: null, error: 'Tipo de transferencia es requerido' };
+      }
+
+      const response = await apiService.post<{ transfer: Transferencia; success: boolean; message?: string }>('/transfers', data);
+      
+      console.log('Respuesta del servidor:', response);
+      
+      if (response.success && response.transfer) {
+        console.log('Transferencia creada exitosamente:', response.transfer);
         return { transfer: response.transfer, error: null };
       } else {
-        return { transfer: null, error: 'Error al crear la transferencia' };
+        const errorMsg = response.message || 'Error al crear la transferencia';
+        console.error('Error en respuesta:', errorMsg);
+        return { transfer: null, error: errorMsg };
       }
     } catch (error) {
-      console.error('Error creating transfer:', error);
+      console.error('=== ERROR EN TRANSFER SERVICE ===');
+      console.error('Error completo:', error);
+      
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as any;
+        console.error('Status:', axiosError.response?.status);
+        console.error('Data:', axiosError.response?.data);
+        
+        if (axiosError.response?.data?.error) {
+          return { transfer: null, error: axiosError.response.data.error };
+        }
+      }
+      
       return { transfer: null, error: 'Error de conexión al crear la transferencia' };
     }
   },

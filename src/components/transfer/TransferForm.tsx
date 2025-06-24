@@ -66,6 +66,7 @@ const TransferForm = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    console.log('=== TRANSFER FORM SUBMIT ===');
     console.log("Datos del formulario de transferencia:", {
       formData,
       responsable,
@@ -73,15 +74,35 @@ const TransferForm = ({
       user,
     });
 
-    if (!formData.type || !formData.currencyId || !formData.amount) {
+    // Validaciones mejoradas
+    if (!formData.type) {
       toast({
         title: "Error",
-        description: "Todos los campos obligatorios deben completarse",
+        description: "Debe seleccionar el tipo de transferencia",
         variant: "destructive",
       });
       return;
     }
 
+    if (!formData.currencyId) {
+      toast({
+        title: "Error",
+        description: "Debe seleccionar la moneda",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      toast({
+        title: "Error",
+        description: "El monto debe ser mayor a 0",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validar punto de destino para tipos que lo requieren
     if (
       [
         "ENTRE_PUNTOS",
@@ -99,9 +120,10 @@ const TransferForm = ({
       return;
     }
 
+    // Validar responsable para transferencias entre puntos
     if (
       formData.type === "ENTRE_PUNTOS" &&
-      (!responsable.nombre || !responsable.cedula)
+      (!responsable.nombre.trim() || !responsable.cedula.trim())
     ) {
       toast({
         title: "Error",
@@ -111,11 +133,13 @@ const TransferForm = ({
       return;
     }
 
+    // Validar detalle de divisas
     const billetes = parseFloat(formData.billetes) || 0;
     const monedas = parseFloat(formData.monedas) || 0;
     const total = billetes + monedas;
+    const amount = parseFloat(formData.amount);
 
-    if (Math.abs(total - parseFloat(formData.amount)) > 0.01) {
+    if (Math.abs(total - amount) > 0.01) {
       toast({
         title: "Error",
         description:
@@ -126,45 +150,59 @@ const TransferForm = ({
     }
 
     setIsSubmitting(true);
+    console.log('Iniciando proceso de creación de transferencia...');
 
     try {
       let destinoId = "";
-      let origenId: string | undefined = undefined;
+      let origenId: string | null = null;
 
+      // Determinar origen y destino según tipo de transferencia
       switch (formData.type) {
         case "ENTRE_PUNTOS":
-          origenId = selectedPoint?.id;
+          origenId = selectedPoint?.id || null;
           destinoId = formData.toPointId;
           break;
         case "DEPOSITO_MATRIZ":
+          origenId = null; // Matriz no tiene punto de origen específico
           destinoId = formData.toPointId;
           break;
         case "RETIRO_GERENCIA":
         case "DEPOSITO_GERENCIA":
-          origenId = selectedPoint?.id;
+          origenId = selectedPoint?.id || null;
           destinoId = formData.toPointId;
           break;
         default:
-          destinoId = selectedPoint?.id || "";
+          console.error('Tipo de transferencia no válido:', formData.type);
+          toast({
+            title: "Error",
+            description: "Tipo de transferencia no válido",
+            variant: "destructive",
+          });
+          return;
       }
 
       const transferData = {
         origen_id: origenId,
         destino_id: destinoId,
         moneda_id: formData.currencyId,
-        monto: parseFloat(formData.amount),
+        monto: amount,
         tipo_transferencia: formData.type as
           | "ENTRE_PUNTOS"
           | "DEPOSITO_MATRIZ"
           | "RETIRO_GERENCIA"
           | "DEPOSITO_GERENCIA",
-        descripcion: formData.notes || undefined,
+        descripcion: formData.notes.trim() || null,
         detalle_divisas: { billetes, monedas, total },
         responsable_movilizacion:
-          formData.type === "ENTRE_PUNTOS" ? responsable : undefined,
+          formData.type === "ENTRE_PUNTOS" ? {
+            nombre: responsable.nombre.trim(),
+            documento: responsable.documento.trim() || responsable.cedula.trim(),
+            cedula: responsable.cedula.trim(),
+            telefono: responsable.telefono.trim() || undefined,
+          } : undefined,
       };
 
-      console.log("Enviando datos de transferencia:", transferData);
+      console.log("Enviando datos de transferencia:", JSON.stringify(transferData, null, 2));
 
       const { transfer, error } = await transferService.createTransfer(transferData);
 
@@ -177,12 +215,26 @@ const TransferForm = ({
           description: error,
           variant: "destructive",
         });
-      } else if (transfer) {
-        console.log("Transferencia creada exitosamente:", transfer);
-        
-        onTransferCreated(transfer);
+        return;
+      }
 
-        // Generar recibo
+      if (!transfer) {
+        console.error("No se recibió la transferencia creada");
+        toast({
+          title: "Error",
+          description: "No se pudo crear la transferencia",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log("Transferencia creada exitosamente:", transfer);
+      
+      // Notificar al componente padre
+      onTransferCreated(transfer);
+
+      // Generar recibo
+      try {
         const numeroRecibo = ReceiptService.generateReceiptNumber("TRANSFERENCIA");
         const receiptData = ReceiptService.generateTransferReceipt(
           { ...transfer, numero_recibo: numeroRecibo },
@@ -190,27 +242,32 @@ const TransferForm = ({
           user.nombre
         );
         ReceiptService.printReceipt(receiptData, 2);
-
-        // Limpiar formulario
-        setFormData({
-          type: "",
-          toPointId: "",
-          currencyId: "",
-          amount: "",
-          notes: "",
-          billetes: "",
-          monedas: "",
-        });
-        setResponsable({ nombre: "", documento: "", cedula: "", telefono: "" });
-
-        toast({
-          title: "Transferencia solicitada",
-          description:
-            "La transferencia ha sido enviada para aprobación y se ha generado el recibo",
-        });
+        console.log('Recibo generado e impreso');
+      } catch (receiptError) {
+        console.error('Error generando recibo:', receiptError);
+        // No bloquear el flujo por error en el recibo
       }
+
+      // Limpiar formulario
+      setFormData({
+        type: "",
+        toPointId: "",
+        currencyId: "",
+        amount: "",
+        notes: "",
+        billetes: "",
+        monedas: "",
+      });
+      setResponsable({ nombre: "", documento: "", cedula: "", telefono: "" });
+
+      toast({
+        title: "Transferencia solicitada",
+        description:
+          "La transferencia ha sido enviada para aprobación y se ha generado el recibo",
+      });
+
     } catch (error) {
-      console.error("Error inesperado:", error);
+      console.error("Error inesperado en handleSubmit:", error);
       toast({
         title: "Error",
         description: "Error inesperado al procesar la transferencia",

@@ -8,24 +8,24 @@ import { z } from 'zod';
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Schema para crear transferencias
+// Schema para crear transferencias - más flexible
 const createTransferSchema = z.object({
-  origen_id: z.string().uuid().optional(),
+  origen_id: z.string().uuid().optional().nullable(),
   destino_id: z.string().uuid(),
   moneda_id: z.string().uuid(),
   monto: z.number().positive(),
   tipo_transferencia: z.enum(['ENTRE_PUNTOS', 'DEPOSITO_MATRIZ', 'RETIRO_GERENCIA', 'DEPOSITO_GERENCIA']),
-  descripcion: z.string().optional(),
+  descripcion: z.string().optional().nullable(),
   detalle_divisas: z.object({
-    billetes: z.number(),
-    monedas: z.number(),
-    total: z.number()
+    billetes: z.number().min(0),
+    monedas: z.number().min(0),
+    total: z.number().min(0)
   }).optional(),
   responsable_movilizacion: z.object({
-    nombre: z.string(),
-    documento: z.string(),
-    cedula: z.string(),
-    telefono: z.string()
+    nombre: z.string().min(1),
+    documento: z.string().min(1),
+    cedula: z.string().min(1),
+    telefono: z.string().optional()
   }).optional()
 });
 
@@ -43,24 +43,93 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       responsable_movilizacion
     } = req.body;
 
-    console.log('Creando transferencia con datos:', req.body);
-
-    // Generar número de recibo único
-    const numeroRecibo = `TR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-    const transferData: any = {
-      origen_id: origen_id || null,
+    console.log('=== CREAR TRANSFERENCIA ===');
+    console.log('Usuario ID:', req.user?.id);
+    console.log('Datos recibidos:', {
+      origen_id,
       destino_id,
       moneda_id,
       monto,
       tipo_transferencia,
-      solicitado_por: req.user?.id,
+      descripcion: descripcion || 'Sin descripción',
+      detalle_divisas,
+      responsable_movilizacion
+    });
+
+    // Validar que el usuario existe
+    if (!req.user?.id) {
+      logger.error('Usuario no autenticado intentando crear transferencia');
+      res.status(401).json({ 
+        error: 'Usuario no autenticado',
+        success: false,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    // Validar que el punto de destino existe
+    const destinoExists = await prisma.puntoAtencion.findUnique({
+      where: { id: destino_id }
+    });
+
+    if (!destinoExists) {
+      logger.error('Punto de destino no encontrado', { destino_id });
+      res.status(400).json({ 
+        error: 'Punto de destino no válido',
+        success: false,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    // Validar que la moneda existe
+    const monedaExists = await prisma.moneda.findUnique({
+      where: { id: moneda_id }
+    });
+
+    if (!monedaExists) {
+      logger.error('Moneda no encontrada', { moneda_id });
+      res.status(400).json({ 
+        error: 'Moneda no válida',
+        success: false,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+
+    // Validar origen si está presente
+    if (origen_id) {
+      const origenExists = await prisma.puntoAtencion.findUnique({
+        where: { id: origen_id }
+      });
+
+      if (!origenExists) {
+        logger.error('Punto de origen no encontrado', { origen_id });
+        res.status(400).json({ 
+          error: 'Punto de origen no válido',
+          success: false,
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+    }
+
+    // Generar número de recibo único
+    const numeroRecibo = `TR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    const transferData = {
+      origen_id: origen_id || null,
+      destino_id,
+      moneda_id,
+      monto: parseFloat(monto.toString()),
+      tipo_transferencia,
+      solicitado_por: req.user.id,
       descripcion: descripcion || null,
       numero_recibo: numeroRecibo,
-      estado: 'PENDIENTE'
+      estado: 'PENDIENTE' as const
     };
 
-    console.log('Datos para Prisma:', transferData);
+    console.log('Creando transferencia con datos:', transferData);
 
     const newTransfer = await prisma.transferencia.create({
       data: transferData,
@@ -100,22 +169,25 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       monto: parseFloat(newTransfer.monto.toString()),
       fecha: newTransfer.fecha.toISOString(),
       fecha_aprobacion: newTransfer.fecha_aprobacion?.toISOString() || null,
-      detalle_divisas,
-      responsable_movilizacion
+      detalle_divisas: detalle_divisas || null,
+      responsable_movilizacion: responsable_movilizacion || null
     };
 
-    logger.info('Transferencia creada', { 
+    logger.info('Transferencia creada exitosamente', { 
       transferId: newTransfer.id,
-      createdBy: req.user?.id,
+      createdBy: req.user.id,
       amount: monto,
-      type: tipo_transferencia
+      type: tipo_transferencia,
+      numeroRecibo
     });
 
     res.status(201).json({ 
       transfer: formattedTransfer,
       success: true,
+      message: 'Transferencia creada exitosamente',
       timestamp: new Date().toISOString()
     });
+
   } catch (error) {
     logger.error('Error al crear transferencia', { 
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -124,8 +196,12 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       body: req.body
     });
     
+    console.error('=== ERROR CREAR TRANSFERENCIA ===');
+    console.error('Error:', error);
+    console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
+    
     res.status(500).json({ 
-      error: 'Error al crear transferencia',
+      error: 'Error interno del servidor al crear transferencia',
       success: false,
       timestamp: new Date().toISOString()
     });
