@@ -60,7 +60,7 @@ router.post("/", authenticateToken, async (req, res) => {
     }
 
     // Buscar cuadre abierto existente
-    let cuadreExistente = await prisma.cuadreCaja.findFirst({
+    const cuadreExistente = await prisma.cuadreCaja.findFirst({
       where: {
         punto_atencion_id: puntoAtencionId,
         fecha: {
@@ -85,11 +85,7 @@ router.post("/", authenticateToken, async (req, res) => {
           estado: tipo_cierre,
           observaciones: observaciones || "",
           fecha_cierre: new Date(),
-          total_ingresos: totalIngresos,
-          total_egresos: totalEgresos,
           total_cambios: totalMovimientos,
-          saldo_inicial_calculado: true,
-          ...(tipo_cierre === "PARCIAL" ? { usuario_cierre_parcial: usuario.id } : {}),
         },
       });
     } else {
@@ -101,11 +97,7 @@ router.post("/", authenticateToken, async (req, res) => {
           estado: tipo_cierre,
           observaciones: observaciones || "",
           fecha_cierre: new Date(),
-          total_ingresos: totalIngresos,
-          total_egresos: totalEgresos,
           total_cambios: totalMovimientos,
-          saldo_inicial_calculado: true,
-          ...(tipo_cierre === "PARCIAL" ? { usuario_cierre_parcial: usuario.id } : {}),
         },
       });
     }
@@ -129,8 +121,6 @@ router.post("/", authenticateToken, async (req, res) => {
           billetes: parseInt(detalle.billetes.toString(), 10),
           monedas_fisicas: parseInt(detalle.monedas.toString(), 10),
           diferencia,
-          movimientos_periodo: detalle.movimientos_periodo || 0,
-          observaciones_detalle: detalle.observaciones_detalle,
         },
       });
     }

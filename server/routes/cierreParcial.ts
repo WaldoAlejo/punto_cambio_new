@@ -70,11 +70,7 @@ router.post("/parcial", authenticateToken, async (req, res) => {
         estado: "PARCIAL",
         observaciones: observaciones || "Cierre parcial realizado",
         fecha_cierre: new Date(),
-        usuario_cierre_parcial: usuario.id,
-        total_ingresos: totalIngresos,
-        total_egresos: totalEgresos,
         total_cambios: totalMovimientos,
-        saldo_inicial_calculado: true,
       },
     });
 
@@ -97,8 +93,6 @@ router.post("/parcial", authenticateToken, async (req, res) => {
           billetes: parseInt(detalle.billetes.toString(), 10),
           monedas_fisicas: parseInt(detalle.monedas.toString(), 10),
           diferencia,
-          movimientos_periodo: detalle.movimientos_periodo || 0,
-          observaciones_detalle: detalle.observaciones_detalle,
         },
       });
     }
@@ -169,7 +163,7 @@ router.get("/pendientes", authenticateToken, async (req, res) => {
             nombre: true,
           },
         },
-        usuarioCierreParcial: {
+        usuario: {
           select: {
             id: true,
             nombre: true,
