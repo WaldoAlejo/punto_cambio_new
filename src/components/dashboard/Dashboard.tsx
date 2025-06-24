@@ -12,7 +12,7 @@ import { CurrencyManagement } from '../management/CurrencyManagement';
 import Reports from '../reports/Reports';
 import DailyClose from '../close/DailyClose';
 import TransferApprovals from '../admin/TransferApprovals';
-import { User, PuntoAtencion, SalidaEspontanea } from '../../types';
+import { User, PuntoAtencion } from '../../types';
 
 interface DashboardProps {
   user: User;
@@ -23,7 +23,6 @@ interface DashboardProps {
 const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   const [activeView, setActiveView] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [spontaneousExits, setSpontaneousExits] = useState<SalidaEspontanea[]>([]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -31,23 +30,6 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
 
   const handleNotificationClick = () => {
     setActiveView('transfer-approvals');
-  };
-
-  const handleExitRegistered = (exit: SalidaEspontanea) => {
-    setSpontaneousExits(prev => [...prev, exit]);
-  };
-
-  const handleExitReturn = (exitId: string, returnData: { lat: number; lng: number; direccion?: string }) => {
-    setSpontaneousExits(prev => prev.map(exit => 
-      exit.id === exitId 
-        ? { 
-            ...exit, 
-            fecha_regreso: new Date().toISOString(),
-            ubicacion_regreso: returnData,
-            duracion_minutos: Math.round((new Date().getTime() - new Date(exit.fecha_salida).getTime()) / (1000 * 60))
-          }
-        : exit
-    ));
   };
 
   const renderContent = () => {

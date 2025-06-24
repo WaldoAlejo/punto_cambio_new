@@ -12,7 +12,7 @@ class ApiService {
   }
 
   async get<T>(endpoint: string): Promise<T> {
-    console.log(`[API] GET ${endpoint}`);
+    console.warn(`[API] GET ${endpoint}`);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'GET',
       headers: this.getHeaders()
@@ -25,12 +25,12 @@ class ApiService {
     }
 
     const data = await response.json();
-    console.log(`[API] GET ${endpoint} success:`, data);
+    console.warn(`[API] GET ${endpoint} success:`, data);
     return data;
   }
 
-  async post<T>(endpoint: string, data: any): Promise<T> {
-    console.log(`[API] POST ${endpoint}`, data);
+  async post<T>(endpoint: string, data: unknown): Promise<T> {
+    console.warn(`[API] POST ${endpoint}`, data);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers: this.getHeaders(),
@@ -44,12 +44,12 @@ class ApiService {
     }
 
     const result = await response.json();
-    console.log(`[API] POST ${endpoint} success:`, result);
+    console.warn(`[API] POST ${endpoint} success:`, result);
     return result;
   }
 
-  async put<T>(endpoint: string, data: any): Promise<T> {
-    console.log(`[API] PUT ${endpoint}`, data);
+  async put<T>(endpoint: string, data: unknown): Promise<T> {
+    console.warn(`[API] PUT ${endpoint}`, data);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PUT',
       headers: this.getHeaders(),
@@ -63,12 +63,12 @@ class ApiService {
     }
 
     const result = await response.json();
-    console.log(`[API] PUT ${endpoint} success:`, result);
+    console.warn(`[API] PUT ${endpoint} success:`, result);
     return result;
   }
 
-  async patch<T>(endpoint: string, data?: any): Promise<T> {
-    console.log(`[API] PATCH ${endpoint}`, data);
+  async patch<T>(endpoint: string, data?: unknown): Promise<T> {
+    console.warn(`[API] PATCH ${endpoint}`, data);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PATCH',
       headers: this.getHeaders(),
@@ -82,12 +82,12 @@ class ApiService {
     }
 
     const result = await response.json();
-    console.log(`[API] PATCH ${endpoint} success:`, result);
+    console.warn(`[API] PATCH ${endpoint} success:`, result);
     return result;
   }
 
   async delete<T>(endpoint: string): Promise<T> {
-    console.log(`[API] DELETE ${endpoint}`);
+    console.warn(`[API] DELETE ${endpoint}`);
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'DELETE',
       headers: this.getHeaders()
@@ -100,7 +100,7 @@ class ApiService {
     }
 
     const result = await response.json();
-    console.log(`[API] DELETE ${endpoint} success:`, result);
+    console.warn(`[API] DELETE ${endpoint} success:`, result);
     return result;
   }
 }

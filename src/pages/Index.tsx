@@ -23,7 +23,7 @@ const Index = () => {
     if (savedPoint) {
       try {
         const point = JSON.parse(savedPoint);
-        console.log('Punto recuperado del localStorage:', point);
+        console.warn('Punto recuperado del localStorage:', point);
         setSelectedPoint(point);
       } catch (error) {
         console.error('Error al recuperar punto guardado:', error);
@@ -55,7 +55,7 @@ const Index = () => {
 
         // Si ya hay un punto seleccionado (guardado en localStorage), usarlo
         if (selectedPoint) {
-          console.log('Usando punto previamente seleccionado:', selectedPoint);
+          console.warn('Usando punto previamente seleccionado:', selectedPoint);
           setIsLoading(false);
           toast({
             title: "Sesión continuada",
@@ -160,12 +160,6 @@ const Index = () => {
         variant: "destructive"
       });
     }
-  };
-
-  // Función para limpiar el punto seleccionado (solo se debe llamar en cierre de caja)
-  const clearSelectedPoint = () => {
-    localStorage.removeItem(SELECTED_POINT_KEY);
-    setSelectedPoint(null);
   };
 
   if (isLoading) {
