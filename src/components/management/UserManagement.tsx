@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,18 +36,27 @@ export const UserManagement = () => {
   const loadData = async () => {
     setLoading(true);
     try {
+      console.log('=== USER MANAGEMENT COMPONENT DEBUG ===');
+      console.log('Token en localStorage (authToken):', localStorage.getItem('authToken') ? 'Presente' : 'No encontrado');
+      console.log('Token en localStorage (token):', localStorage.getItem('token') ? 'Presente' : 'No encontrado');
+      console.log('About to call userService.getAllUsers()');
+      
       const [usersResult, pointsResult] = await Promise.all([
         userService.getAllUsers(),
         pointService.getAllPoints()
       ]);
 
+      console.log('Users result received:', usersResult);
+
       if (usersResult.error) {
+        console.error('Error from userService:', usersResult.error);
         toast({
           title: "Error",
           description: usersResult.error,
           variant: "destructive",
         });
       } else {
+        console.log('Users loaded successfully:', usersResult.users.length);
         setUsers(usersResult.users);
       }
 
@@ -62,6 +70,7 @@ export const UserManagement = () => {
         setPoints(pointsResult.points);
       }
     } catch (error) {
+      console.error('Exception in loadData:', error);
       toast({
         title: "Error",
         description: "Error al cargar datos",
