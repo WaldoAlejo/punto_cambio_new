@@ -36,6 +36,7 @@ const Index = () => {
           return;
         }
 
+        // Para operadores, cargar puntos libres (sin jornadas activas)
         const { points, error } = await pointService.getAllPoints();
         
         if (error) {
@@ -47,12 +48,11 @@ const Index = () => {
           return;
         }
 
-        setAvailablePoints(points);
-
-        // Si el usuario tiene un punto asignado, usarlo por defecto
+        // Si el usuario tiene un punto asignado, verificar si está libre
         if (user.punto_atencion_id) {
           const userPoint = points.find(p => p.id === user.punto_atencion_id);
           if (userPoint) {
+            // Para operadores con punto asignado, usar ese punto directamente
             setSelectedPoint(userPoint);
             toast({
               title: "Punto asignado",
@@ -63,18 +63,20 @@ const Index = () => {
           }
         }
 
-        // Para operadores sin punto asignado, mostrar selección
+        // Para operadores sin punto asignado, mostrar puntos disponibles
+        setAvailablePoints(points);
+
         if (points.length === 0) {
           toast({
             title: "Sin puntos disponibles",
-            description: "No hay puntos de atención configurados",
+            description: "No hay puntos de atención libres en este momento",
             variant: "destructive"
           });
         } else {
           setShowPointSelection(true);
           toast({
             title: "Seleccione un punto",
-            description: "Seleccione su punto de atención para continuar",
+            description: "Seleccione su punto de atención para iniciar jornada",
           });
         }
       } catch (error) {
@@ -97,8 +99,8 @@ const Index = () => {
       setSelectedPoint(point);
       setShowPointSelection(false);
       toast({
-        title: "Punto seleccionado",
-        description: `Conectado a ${point.nombre}`,
+        title: "Jornada iniciada",
+        description: `Jornada iniciada en ${point.nombre}`,
       });
     } catch (error) {
       console.error('Error selecting point:', error);
