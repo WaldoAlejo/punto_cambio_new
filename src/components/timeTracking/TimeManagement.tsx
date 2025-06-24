@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Clock, MapPin, Monitor, Wifi } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { User, PuntoAtencion, Schedule } from '../../types';
-import { scheduleService } from '../../services/scheduleService';
+import { User, PuntoAtencion } from '../../types';
+import { scheduleService, Schedule } from '../../services/scheduleService';
 import { deviceService, DeviceInfo } from '../../services/deviceService';
 
 interface TimeManagementProps {
