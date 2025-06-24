@@ -1,3 +1,4 @@
+
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import logger from '../utils/logger.js';
@@ -43,18 +44,9 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       responsable_movilizacion
     } = req.body;
 
-    console.log('=== CREAR TRANSFERENCIA ===');
+    console.log('=== CREAR TRANSFERENCIA EN SERVIDOR ===');
     console.log('Usuario ID:', req.user?.id);
-    console.log('Datos recibidos:', {
-      origen_id,
-      destino_id,
-      moneda_id,
-      monto,
-      tipo_transferencia,
-      descripcion: descripcion || 'Sin descripción',
-      detalle_divisas,
-      responsable_movilizacion
-    });
+    console.log('Datos recibidos:', JSON.stringify(req.body, null, 2));
 
     // Validar que el usuario existe
     if (!req.user?.id) {
@@ -117,6 +109,7 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
     // Generar número de recibo único
     const numeroRecibo = `TR-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
+    // Preparar datos para la base de datos
     const transferData = {
       origen_id: origen_id || null,
       destino_id,
@@ -126,11 +119,13 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       solicitado_por: req.user.id,
       descripcion: descripcion || null,
       numero_recibo: numeroRecibo,
-      estado: 'PENDIENTE' as const
+      estado: 'PENDIENTE' as const,
+      fecha: new Date()
     };
 
     console.log('Creando transferencia con datos:', transferData);
 
+    // Crear la transferencia en la base de datos
     const newTransfer = await prisma.transferencia.create({
       data: transferData,
       include: {
@@ -164,6 +159,50 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       }
     });
 
+    console.log('Transferencia creada en BD:', newTransfer);
+
+    // Crear registro adicional en tabla de movimientos si es necesario
+    try {
+      await prisma.movimiento.create({
+        data: {
+          punto_atencion_id: destino_id,
+          usuario_id: req.user.id,
+          moneda_id,
+          monto: parseFloat(monto.toString()),
+          tipo: 'TRANSFERENCIA',
+          descripcion: `Transferencia ${tipo_transferencia} - ${numeroRecibo}`,
+          numero_recibo: numeroRecibo
+        }
+      });
+      console.log('Movimiento registrado exitosamente');
+    } catch (movError) {
+      logger.warn('Error registrando movimiento (no crítico)', { error: movError });
+    }
+
+    // Crear recibo en la tabla de recibos
+    try {
+      await prisma.recibo.create({
+        data: {
+          numero_recibo: numeroRecibo,
+          tipo_operacion: 'TRANSFERENCIA',
+          referencia_id: newTransfer.id,
+          usuario_id: req.user.id,
+          punto_atencion_id: destino_id,
+          datos_operacion: {
+            transferencia: newTransfer,
+            detalle_divisas: detalle_divisas || null,
+            responsable_movilizacion: responsable_movilizacion || null,
+            tipo_transferencia,
+            monto,
+            fecha: new Date().toISOString()
+          }
+        }
+      });
+      console.log('Recibo registrado exitosamente');
+    } catch (reciboError) {
+      logger.warn('Error registrando recibo (no crítico)', { error: reciboError });
+    }
+
     const formattedTransfer = {
       ...newTransfer,
       monto: parseFloat(newTransfer.monto.toString()),
@@ -178,13 +217,14 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       createdBy: req.user.id,
       amount: monto,
       type: tipo_transferencia,
-      numeroRecibo
+      numeroRecibo,
+      saved: true
     });
 
     res.status(201).json({ 
       transfer: formattedTransfer,
       success: true,
-      message: 'Transferencia creada exitosamente',
+      message: 'Transferencia creada y guardada exitosamente',
       timestamp: new Date().toISOString()
     });
 
@@ -218,6 +258,8 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       'Expires': '0',
       'Surrogate-Control': 'no-store'
     });
+
+    console.log('Obteniendo transferencias de la base de datos...');
 
     const transfers = await prisma.transferencia.findMany({
       include: {
@@ -261,6 +303,8 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       }
     });
 
+    console.log(`Transferencias encontradas en BD: ${transfers.length}`);
+
     const formattedTransfers = transfers.map(transfer => ({
       ...transfer,
       monto: parseFloat(transfer.monto.toString()),
@@ -268,7 +312,7 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       fecha_aprobacion: transfer.fecha_aprobacion?.toISOString() || null
     }));
 
-    logger.info('Transferencias obtenidas', { 
+    logger.info('Transferencias obtenidas desde BD', { 
       count: formattedTransfers.length, 
       requestedBy: req.user?.id 
     });

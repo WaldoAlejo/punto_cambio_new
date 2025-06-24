@@ -20,7 +20,7 @@ export const transferService = {
   async createTransfer(data: CreateTransferData): Promise<{ transfer: Transferencia | null; error: string | null }> {
     try {
       console.log('=== TRANSFER SERVICE - CREATE TRANSFER ===');
-      console.log('Datos enviados:', JSON.stringify(data, null, 2));
+      console.log('Datos enviados al servidor:', JSON.stringify(data, null, 2));
       
       // Validaciones básicas antes de enviar
       if (!data.destino_id) {
@@ -43,16 +43,17 @@ export const transferService = {
         return { transfer: null, error: 'Tipo de transferencia es requerido' };
       }
 
+      console.log('Enviando petición POST a /api/transfers...');
       const response = await apiService.post<{ transfer: Transferencia; success: boolean; message?: string }>('/transfers', data);
       
-      console.log('Respuesta del servidor:', response);
+      console.log('Respuesta recibida del servidor:', response);
       
       if (response.success && response.transfer) {
-        console.log('Transferencia creada exitosamente:', response.transfer);
+        console.log('✅ Transferencia creada y guardada exitosamente:', response.transfer);
         return { transfer: response.transfer, error: null };
       } else {
         const errorMsg = response.message || 'Error al crear la transferencia';
-        console.error('Error en respuesta:', errorMsg);
+        console.error('❌ Error en respuesta del servidor:', errorMsg);
         return { transfer: null, error: errorMsg };
       }
     } catch (error) {
@@ -61,8 +62,8 @@ export const transferService = {
       
       if (error && typeof error === 'object' && 'response' in error) {
         const axiosError = error as any;
-        console.error('Status:', axiosError.response?.status);
-        console.error('Data:', axiosError.response?.data);
+        console.error('Status HTTP:', axiosError.response?.status);
+        console.error('Data del error:', axiosError.response?.data);
         
         if (axiosError.response?.data?.error) {
           return { transfer: null, error: axiosError.response.data.error };
@@ -75,12 +76,16 @@ export const transferService = {
 
   async getAllTransfers(): Promise<{ transfers: Transferencia[]; error: string | null }> {
     try {
-      console.log('Fetching all transfers');
+      console.log('Obteniendo todas las transferencias desde el servidor...');
       const response = await apiService.get<{ transfers: Transferencia[]; success: boolean }>('/transfers');
       
+      console.log('Respuesta de transferencias:', response);
+      
       if (response.success) {
+        console.log(`✅ ${response.transfers.length} transferencias obtenidas desde BD`);
         return { transfers: response.transfers, error: null };
       } else {
+        console.error('❌ Error obteniendo transferencias');
         return { transfers: [], error: 'Error al obtener las transferencias' };
       }
     } catch (error) {

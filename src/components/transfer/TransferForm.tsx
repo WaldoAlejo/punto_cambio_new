@@ -67,7 +67,8 @@ const TransferForm = ({
     e.preventDefault();
 
     console.log('=== TRANSFER FORM SUBMIT ===');
-    console.log("Datos del formulario de transferencia:", {
+    console.log("Iniciando proceso de creación de transferencia...");
+    console.log("Datos del formulario:", {
       formData,
       responsable,
       selectedPoint,
@@ -150,7 +151,7 @@ const TransferForm = ({
     }
 
     setIsSubmitting(true);
-    console.log('Iniciando proceso de creación de transferencia...');
+    console.log('🚀 Enviando transferencia al servidor...');
 
     try {
       let destinoId = "";
@@ -202,14 +203,12 @@ const TransferForm = ({
           } : undefined,
       };
 
-      console.log("Enviando datos de transferencia:", JSON.stringify(transferData, null, 2));
+      console.log("📤 Datos finales enviados:", JSON.stringify(transferData, null, 2));
 
       const { transfer, error } = await transferService.createTransfer(transferData);
 
-      console.log("Respuesta del servicio de transferencia:", { transfer, error });
-
       if (error) {
-        console.error("Error del servicio:", error);
+        console.error("❌ Error del servicio:", error);
         toast({
           title: "Error",
           description: error,
@@ -219,7 +218,7 @@ const TransferForm = ({
       }
 
       if (!transfer) {
-        console.error("No se recibió la transferencia creada");
+        console.error("❌ No se recibió la transferencia creada");
         toast({
           title: "Error",
           description: "No se pudo crear la transferencia",
@@ -228,7 +227,7 @@ const TransferForm = ({
         return;
       }
 
-      console.log("Transferencia creada exitosamente:", transfer);
+      console.log("✅ Transferencia procesada exitosamente:", transfer);
       
       // Notificar al componente padre
       onTransferCreated(transfer);
@@ -242,10 +241,9 @@ const TransferForm = ({
           user.nombre
         );
         ReceiptService.printReceipt(receiptData, 2);
-        console.log('Recibo generado e impreso');
+        console.log('📄 Recibo generado exitosamente');
       } catch (receiptError) {
-        console.error('Error generando recibo:', receiptError);
-        // No bloquear el flujo por error en el recibo
+        console.error('⚠️ Error generando recibo (no crítico):', receiptError);
       }
 
       // Limpiar formulario
@@ -261,13 +259,12 @@ const TransferForm = ({
       setResponsable({ nombre: "", documento: "", cedula: "", telefono: "" });
 
       toast({
-        title: "Transferencia solicitada",
-        description:
-          "La transferencia ha sido enviada para aprobación y se ha generado el recibo",
+        title: "✅ Transferencia creada",
+        description: "La transferencia ha sido guardada exitosamente en la base de datos y está pendiente de aprobación",
       });
 
     } catch (error) {
-      console.error("Error inesperado en handleSubmit:", error);
+      console.error("❌ Error inesperado en handleSubmit:", error);
       toast({
         title: "Error",
         description: "Error inesperado al procesar la transferencia",
