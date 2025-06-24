@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, forwardRef, useImperativeHandle } from "react";
 import CustomerDataForm from "./CustomerDataForm";
 import ExchangeForm, { ExchangeFormData } from "./ExchangeForm";
 import ExchangeDetailsForm from "./ExchangeDetailsForm";
@@ -17,105 +17,114 @@ export interface ExchangeCompleteData {
   divisasRecibidas: DetalleDivisasSimple;
 }
 
-const ExchangeSteps = ({ currencies, onComplete }: ExchangeStepsProps) => {
-  const [step, setStep] = useState<"customer" | "exchange" | "details">("customer");
-  const [customerData, setCustomerData] = useState<DatosCliente>({
-    nombre: "",
-    apellido: "",
-    documento: "",
-    cedula: "",
-    telefono: "",
-  });
-  const [exchangeData, setExchangeData] = useState<ExchangeFormData | null>(null);
-  const [divisasEntregadas, setDivisasEntregadas] = useState<DetalleDivisasSimple>({
-    billetes: 0,
-    monedas: 0,
-    total: 0,
-  });
-  const [divisasRecibidas, setDivisasRecibidas] = useState<DetalleDivisasSimple>({
-    billetes: 0,
-    monedas: 0,
-    total: 0,
-  });
+export interface ExchangeStepsRef {
+  resetSteps: () => void;
+}
 
-  const handleCustomerDataSubmit = (data: DatosCliente) => {
-    setCustomerData(data);
-    setStep("exchange");
-  };
+const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
+  ({ currencies, onComplete }, ref) => {
+    const [step, setStep] = useState<"customer" | "exchange" | "details">("customer");
+    const [customerData, setCustomerData] = useState<DatosCliente>({
+      nombre: "",
+      apellido: "",
+      documento: "",
+      cedula: "",
+      telefono: "",
+    });
+    const [exchangeData, setExchangeData] = useState<ExchangeFormData | null>(null);
+    const [divisasEntregadas, setDivisasEntregadas] = useState<DetalleDivisasSimple>({
+      billetes: 0,
+      monedas: 0,
+      total: 0,
+    });
+    const [divisasRecibidas, setDivisasRecibidas] = useState<DetalleDivisasSimple>({
+      billetes: 0,
+      monedas: 0,
+      total: 0,
+    });
 
-  const handleExchangeFormSubmit = (data: ExchangeFormData) => {
-    setExchangeData(data);
-    setStep("details");
-  };
+    const handleCustomerDataSubmit = (data: DatosCliente) => {
+      setCustomerData(data);
+      setStep("exchange");
+    };
 
-  const handleDetailsComplete = () => {
-    if (exchangeData) {
-      onComplete({
-        customerData,
-        exchangeData,
-        divisasEntregadas,
-        divisasRecibidas,
-      });
+    const handleExchangeFormSubmit = (data: ExchangeFormData) => {
+      setExchangeData(data);
+      setStep("details");
+    };
+
+    const handleDetailsComplete = () => {
+      if (exchangeData) {
+        onComplete({
+          customerData,
+          exchangeData,
+          divisasEntregadas,
+          divisasRecibidas,
+        });
+      }
+    };
+
+    const getCurrency = (currencyId: string) => {
+      return currencies.find((c) => c.id === currencyId);
+    };
+
+    const getCurrencyName = (currencyId: string) => {
+      const currency = currencies.find((c) => c.id === currencyId);
+      return currency ? currency.codigo : "";
+    };
+
+    const resetSteps = () => {
+      setStep("customer");
+      setCustomerData({ nombre: "", apellido: "", documento: "", cedula: "", telefono: "" });
+      setExchangeData(null);
+      setDivisasEntregadas({ billetes: 0, monedas: 0, total: 0 });
+      setDivisasRecibidas({ billetes: 0, monedas: 0, total: 0 });
+    };
+
+    useImperativeHandle(ref, () => ({
+      resetSteps,
+    }));
+
+    switch (step) {
+      case "customer":
+        return (
+          <CustomerDataForm
+            onCustomerData={handleCustomerDataSubmit}
+            initialData={customerData}
+          />
+        );
+
+      case "exchange":
+        return (
+          <ExchangeForm
+            currencies={currencies}
+            onBack={() => setStep("customer")}
+            onContinue={handleExchangeFormSubmit}
+          />
+        );
+
+      case "details":
+        return (
+          <ExchangeDetailsForm
+            fromCurrency={exchangeData ? getCurrency(exchangeData.fromCurrency) : null}
+            toCurrency={exchangeData ? getCurrency(exchangeData.toCurrency) : null}
+            fromCurrencyName={exchangeData ? getCurrencyName(exchangeData.fromCurrency) : ""}
+            toCurrencyName={exchangeData ? getCurrencyName(exchangeData.toCurrency) : ""}
+            onBack={() => setStep("exchange")}
+            onComplete={handleDetailsComplete}
+            onDivisasEntregadasChange={setDivisasEntregadas}
+            onDivisasRecibidasChange={setDivisasRecibidas}
+            divisasEntregadas={divisasEntregadas}
+            divisasRecibidas={divisasRecibidas}
+          />
+        );
+
+      default:
+        return null;
     }
-  };
-
-  const getCurrency = (currencyId: string) => {
-    return currencies.find((c) => c.id === currencyId);
-  };
-
-  const getCurrencyName = (currencyId: string) => {
-    const currency = currencies.find((c) => c.id === currencyId);
-    return currency ? currency.codigo : "";
-  };
-
-  const resetSteps = () => {
-    setStep("customer");
-    setCustomerData({ nombre: "", apellido: "", documento: "", cedula: "", telefono: "" });
-    setExchangeData(null);
-    setDivisasEntregadas({ billetes: 0, monedas: 0, total: 0 });
-    setDivisasRecibidas({ billetes: 0, monedas: 0, total: 0 });
-  };
-
-  // Expose reset function to parent
-  (ExchangeSteps as any).resetSteps = resetSteps;
-
-  switch (step) {
-    case "customer":
-      return (
-        <CustomerDataForm
-          onCustomerData={handleCustomerDataSubmit}
-          initialData={customerData}
-        />
-      );
-
-    case "exchange":
-      return (
-        <ExchangeForm
-          currencies={currencies}
-          onBack={() => setStep("customer")}
-          onContinue={handleExchangeFormSubmit}
-        />
-      );
-
-    case "details":
-      return (
-        <ExchangeDetailsForm
-          fromCurrency={exchangeData ? getCurrency(exchangeData.fromCurrency) : null}
-          toCurrency={exchangeData ? getCurrency(exchangeData.toCurrency) : null}
-          fromCurrencyName={exchangeData ? getCurrencyName(exchangeData.fromCurrency) : ""}
-          toCurrencyName={exchangeData ? getCurrencyName(exchangeData.toCurrency) : ""}
-          onBack={() => setStep("exchange")}
-          onComplete={handleDetailsComplete}
-          onDivisasEntregadasChange={setDivisasEntregadas}
-          onDivisasRecibidasChange={setDivisasRecibidas}
-          divisasEntregadas={divisasEntregadas}
-          divisasRecibidas={divisasRecibidas}
-        />
-      );
-
-    default:
-      return null;
   }
-};
+);
+
+ExchangeSteps.displayName = "ExchangeSteps";
 
 export default ExchangeSteps;

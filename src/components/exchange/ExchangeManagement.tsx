@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -10,7 +9,7 @@ import {
 import { ReceiptService } from "../../services/receiptService";
 import { currencyService } from "../../services/currencyService";
 import { exchangeService } from "../../services/exchangeService";
-import ExchangeSteps, { ExchangeCompleteData } from "./ExchangeSteps";
+import ExchangeSteps, { ExchangeCompleteData, ExchangeStepsRef } from "./ExchangeSteps";
 import ExchangeList from "./ExchangeList";
 
 interface ExchangeManagementProps {
@@ -26,7 +25,7 @@ const ExchangeManagement = ({
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [isLoadingCurrencies, setIsLoadingCurrencies] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-  const stepsRef = useRef<any>(null);
+  const stepsRef = useRef<ExchangeStepsRef>(null);
 
   useEffect(() => {
     const fetchCurrencies = async () => {
@@ -144,9 +143,9 @@ const ExchangeManagement = ({
         description: `Cambio completado exitosamente. Recibo: ${createdExchange.numero_recibo}`,
       });
 
-      // Reset form immediately
-      if (stepsRef.current && (ExchangeSteps as any).resetSteps) {
-        (ExchangeSteps as any).resetSteps();
+      // Reset form immediately using ref
+      if (stepsRef.current) {
+        stepsRef.current.resetSteps();
       }
 
       // Print receipt after short delay
