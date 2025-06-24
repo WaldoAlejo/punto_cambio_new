@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,12 +7,21 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { Usuario, PuntoAtencion, ReportFilters, ReportData } from '../../types';
-import { apiService } from '../../services/apiService';
+import { Download, BarChart3 } from "lucide-react";
+import { User, PuntoAtencion } from '../../types';
+import { reportService, ReportData } from '../../services/reportService';
+import * as XLSX from 'xlsx';
 
 interface ReportsProps {
-  user: Usuario;
+  user: User;
   selectedPoint: PuntoAtencion | null;
+}
+
+interface ReportFilters {
+  dateFrom: string;
+  dateTo: string;
+  reportType: 'exchanges' | 'transfers' | 'balances' | 'users';
+  pointId?: string;
 }
 
 const Reports = ({ user, selectedPoint }: ReportsProps) => {
@@ -33,17 +43,26 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
   const generateReport = async () => {
     setIsLoading(true);
     try {
-      const response = await apiService.post<{ data: ReportData[]; success: boolean; error?: string }>('/reports/generate', filters);
+      const { data, error } = await reportService.getReportData(
+        filters.reportType,
+        filters.dateFrom,
+        filters.dateTo
+      );
       
-      if (response.success && response.data) {
-        setReportData(response.data);
-      } else {
+      if (error) {
         toast({
           title: "Error",
-          description: response.error || "Error al generar reporte",
+          description: error,
           variant: "destructive"
         });
+        return;
       }
+
+      setReportData(data);
+      toast({
+        title: "Reporte generado",
+        description: `Se generaron ${data.length} registros`,
+      });
     } catch (error) {
       console.error('Error generating report:', error);
       toast({
@@ -54,6 +73,111 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const exportToExcel = () => {
+    if (reportData.length === 0) {
+      toast({
+        title: "Sin datos",
+        description: "No hay datos para exportar",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Configurar las cabeceras según el tipo de reporte
+    const headers = getReportHeaders(filters.reportType);
+    const title = getReportTitle(filters.reportType);
+    
+    // Formatear los datos para Excel
+    const formattedData = reportData.map(row => {
+      const formattedRow: any = {};
+      headers.forEach(header => {
+        formattedRow[header.label] = getFormattedValue(row, header.key);
+      });
+      return formattedRow;
+    });
+
+    // Crear el libro de Excel
+    const worksheet = XLSX.utils.json_to_sheet(formattedData);
+    
+    // Establecer anchos de columna
+    const columnWidths = headers.map(header => ({ wch: header.width || 15 }));
+    worksheet['!cols'] = columnWidths;
+
+    // Agregar título al reporte
+    XLSX.utils.sheet_add_aoa(worksheet, [[title]], { origin: 'A1' });
+    XLSX.utils.sheet_add_aoa(worksheet, [
+      [`Período: ${filters.dateFrom} - ${filters.dateTo}`]
+    ], { origin: 'A2' });
+    XLSX.utils.sheet_add_aoa(worksheet, [
+      [`Generado el: ${new Date().toLocaleString('es-ES')}`]
+    ], { origin: 'A3' });
+    XLSX.utils.sheet_add_aoa(worksheet, [['']], { origin: 'A4' }); // Línea en blanco
+
+    // Ajustar el rango para incluir las filas de título
+    const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    range.s.r = 0; // Comenzar desde la fila 0
+    worksheet['!ref'] = XLSX.utils.encode_range(range);
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Reporte');
+
+    // Generar nombre de archivo
+    const fileName = `${title.replace(/\s+/g, '_')}_${filters.dateFrom}_${filters.dateTo}.xlsx`;
+    
+    // Descargar el archivo
+    XLSX.writeFile(workbook, fileName);
+
+    toast({
+      title: "Exportación exitosa",
+      description: `Reporte exportado como ${fileName}`,
+    });
+  };
+
+  const getReportHeaders = (reportType: string) => {
+    const headerConfigs = {
+      exchanges: [
+        { key: 'point', label: 'Punto de Atención', width: 20 },
+        { key: 'user', label: 'Usuario', width: 15 },
+        { key: 'exchanges', label: 'Total Cambios', width: 12 },
+        { key: 'amount', label: 'Monto Total', width: 15 }
+      ],
+      transfers: [
+        { key: 'point', label: 'Punto de Atención', width: 20 },
+        { key: 'user', label: 'Usuario', width: 15 },
+        { key: 'transfers', label: 'Total Transferencias', width: 15 },
+        { key: 'amount', label: 'Monto Total', width: 15 }
+      ],
+      balances: [
+        { key: 'point', label: 'Punto de Atención', width: 20 },
+        { key: 'balance', label: 'Saldo Total', width: 15 }
+      ],
+      users: [
+        { key: 'point', label: 'Punto de Atención', width: 20 },
+        { key: 'user', label: 'Usuario', width: 15 },
+        { key: 'transfers', label: 'Actividades', width: 12 }
+      ]
+    };
+    return headerConfigs[reportType as keyof typeof headerConfigs] || [];
+  };
+
+  const getReportTitle = (reportType: string) => {
+    const titles = {
+      exchanges: 'Reporte de Cambios de Divisas',
+      transfers: 'Reporte de Transferencias',
+      balances: 'Reporte de Saldos',
+      users: 'Reporte de Actividad de Usuarios'
+    };
+    return titles[reportType as keyof typeof titles] || 'Reporte';
+  };
+
+  const getFormattedValue = (row: ReportData, key: string) => {
+    const value = row[key as keyof ReportData];
+    if (key === 'amount' || key === 'balance') {
+      return typeof value === 'number' ? value.toFixed(2) : '0.00';
+    }
+    return value || 'N/A';
   };
 
   if (user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
@@ -69,12 +193,21 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Reportes</h1>
+        <div className="flex items-center gap-2">
+          <BarChart3 className="h-6 w-6 text-blue-600" />
+          <h1 className="text-2xl font-bold text-gray-800">Reportes Gerenciales</h1>
+        </div>
+        {reportData.length > 0 && (
+          <Button onClick={exportToExcel} className="bg-green-600 hover:bg-green-700">
+            <Download className="h-4 w-4 mr-2" />
+            Exportar a Excel
+          </Button>
+        )}
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Generar Reporte</CardTitle>
+          <CardTitle>Configuración del Reporte</CardTitle>
           <CardDescription>Configure los filtros para generar el reporte deseado</CardDescription>
         </CardHeader>
         <CardContent>
@@ -107,8 +240,8 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
                 <SelectContent>
                   <SelectItem value="exchanges">Cambios de Divisas</SelectItem>
                   <SelectItem value="transfers">Transferencias</SelectItem>
-                  <SelectItem value="balances">Saldos</SelectItem>
-                  <SelectItem value="users">Usuarios</SelectItem>
+                  <SelectItem value="balances">Saldos Actuales</SelectItem>
+                  <SelectItem value="users">Actividad de Usuarios</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -124,31 +257,51 @@ const Reports = ({ user, selectedPoint }: ReportsProps) => {
       {reportData.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Resultados del Reporte</CardTitle>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>{getReportTitle(filters.reportType)}</CardTitle>
+                <CardDescription>
+                  {reportData.length} registros encontrados | Período: {filters.dateFrom} - {filters.dateTo}
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Punto</TableHead>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Monto</TableHead>
-                  <TableHead>Transferencias</TableHead>
-                  <TableHead>Intercambios</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {reportData.map((row, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{row.point}</TableCell>
-                    <TableCell>{row.user || 'N/A'}</TableCell>
-                    <TableCell>{row.amount || 0}</TableCell>
-                    <TableCell>{row.transfers || 0}</TableCell>
-                    <TableCell>{row.exchanges || 0}</TableCell>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50">
+                    {getReportHeaders(filters.reportType).map(header => (
+                      <TableHead key={header.key} className="font-semibold">
+                        {header.label}
+                      </TableHead>
+                    ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {reportData.map((row, index) => (
+                    <TableRow key={index} className="hover:bg-gray-50">
+                      {getReportHeaders(filters.reportType).map(header => (
+                        <TableCell key={header.key} className="py-3">
+                          {getFormattedValue(row, header.key)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {reportData.length === 0 && !isLoading && (
+        <Card>
+          <CardContent className="flex items-center justify-center h-32">
+            <div className="text-center">
+              <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-2" />
+              <p className="text-gray-500">Genere un reporte para ver los datos</p>
+            </div>
           </CardContent>
         </Card>
       )}

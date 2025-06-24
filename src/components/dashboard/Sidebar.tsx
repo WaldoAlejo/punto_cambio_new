@@ -37,13 +37,13 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
   const isOperator = user.rol === 'OPERADOR';
 
   const menuItems = [
-    // Operaciones principales (disponible para operadores)
+    // Operaciones principales (solo para operadores)
     {
       id: 'exchanges',
       label: 'Cambio de Divisas',
       icon: ArrowRightLeft,
       color: 'text-blue-600',
-      roles: ['OPERADOR', 'ADMIN', 'SUPER_USUARIO']
+      roles: ['OPERADOR'] // Removido ADMIN y SUPER_USUARIO
     },
     {
       id: 'transfers',
@@ -64,7 +64,7 @@ const Sidebar = ({ user, selectedPoint, activeView, onViewChange, isOpen, onTogg
       label: 'Cierre Diario',
       icon: Calculator,
       color: 'text-orange-600',
-      roles: ['OPERADOR', 'ADMIN', 'SUPER_USUARIO']
+      roles: ['OPERADOR'] // Removido ADMIN y SUPER_USUARIO
     },
   ];
 

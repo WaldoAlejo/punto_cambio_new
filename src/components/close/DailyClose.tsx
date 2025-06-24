@@ -144,12 +144,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     );
   }
 
-  if (user.rol !== "OPERADOR" && user.rol !== "CONCESION") {
+  // Solo operadores pueden realizar cierres diarios
+  if (user.rol !== "OPERADOR") {
     return (
       <div className="p-6">
         <div className="text-center py-12">
           <p className="text-red-500 text-lg">
-            Solo operadores y concesiones pueden realizar cierres diarios
+            Solo operadores pueden realizar cierres diarios
           </p>
         </div>
       </div>
