@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
@@ -59,7 +58,7 @@ const PointSelection = ({
       if (!navigator.geolocation) {
         return reject(new Error("Geolocalización no soportada"));
       }
-      
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
           resolve({
@@ -69,7 +68,7 @@ const PointSelection = ({
           });
         },
         (error) => {
-          console.log("No se pudo obtener ubicación:", error);
+          console.error("No se pudo obtener ubicación:", error);
           resolve({
             lat: 0,
             lng: 0,
@@ -83,23 +82,23 @@ const PointSelection = ({
 
   const handlePointSelect = async (point: PuntoAtencion) => {
     if (occupiedPoints.includes(point.id)) return;
-    
+
     setIsStartingShift(true);
-    
+
     try {
-      // Obtener ubicación
       const ubicacion = await getLocation();
-      
-      // Registrar inicio de jornada automáticamente
+
       const scheduleData = {
         usuario_id: user.id,
         punto_atencion_id: point.id,
         fecha_inicio: new Date().toISOString(),
-        ubicacion_inicio: ubicacion
+        ubicacion_inicio: ubicacion,
       };
 
-      const { schedule, error } = await scheduleService.createOrUpdateSchedule(scheduleData);
-      
+      const { error } = await scheduleService.createOrUpdateSchedule(
+        scheduleData
+      );
+
       if (error) {
         toast({
           title: "Error",
@@ -109,16 +108,14 @@ const PointSelection = ({
         return;
       }
 
-      // Continuar con selección de punto
       onPointSelect(point);
-      
+
       toast({
         title: "Jornada iniciada",
         description: `Bienvenido a ${point.nombre}. Tu jornada ha comenzado automáticamente.`,
       });
-      
     } catch (error) {
-      console.error('Error al iniciar jornada:', error);
+      console.error("Error al iniciar jornada:", error);
       toast({
         title: "Error",
         description: "Error al iniciar la jornada automáticamente",
@@ -174,11 +171,10 @@ const PointSelection = ({
                           Ocupado por otro usuario
                         </span>
                       ) : (
-                        <Button 
-                          size="sm" 
-                          disabled={isStartingShift}
-                        >
-                          {isStartingShift ? "Iniciando..." : "Seleccionar e Iniciar"}
+                        <Button size="sm" disabled={isStartingShift}>
+                          {isStartingShift
+                            ? "Iniciando..."
+                            : "Seleccionar e Iniciar"}
                         </Button>
                       )}
                     </div>

@@ -1,16 +1,35 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { Usuario } from '../../types';
-import { userService } from '../../services/userService';
-import EditUserDialog from './EditUserDialog';
-import ResetPasswordDialog from './ResetPasswordDialog';
-import { Edit, Key } from 'lucide-react';
+import { Usuario } from "../../types";
+import { userService } from "../../services/userService";
+import EditUserDialog from "./EditUserDialog";
+import ResetPasswordDialog from "./ResetPasswordDialog";
+import { Edit, Key } from "lucide-react";
 
 interface UserManagementProps {
   user: Usuario;
@@ -22,14 +41,16 @@ const UserManagement = ({ user }: UserManagementProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    username: '',
-    correo: '',
-    nombre: '',
-    rol: 'OPERADOR' as Usuario['rol'],
-    password: ''
+    username: "",
+    correo: "",
+    nombre: "",
+    rol: "OPERADOR" as Usuario["rol"],
+    password: "",
   });
   const [editingUser, setEditingUser] = useState<Usuario | null>(null);
-  const [resetPasswordUser, setResetPasswordUser] = useState<Usuario | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<Usuario | null>(
+    null
+  );
 
   useEffect(() => {
     loadUsers();
@@ -40,26 +61,26 @@ const UserManagement = ({ user }: UserManagementProps) => {
     setError(null);
     try {
       const { users: fetchedUsers, error } = await userService.getAllUsers();
-      
+
       if (error) {
         setError(error);
         toast({
           title: "Error",
           description: error,
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
 
       setUsers(fetchedUsers);
     } catch (error) {
-      console.error('Error loading users:', error);
+      console.error("Error loading users:", error);
       const errorMessage = "Error al cargar usuarios";
       setError(errorMessage);
       toast({
         title: "Error",
         description: errorMessage,
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
@@ -68,12 +89,17 @@ const UserManagement = ({ user }: UserManagementProps) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.username || !formData.correo || !formData.nombre || !formData.password) {
+
+    if (
+      !formData.username ||
+      !formData.correo ||
+      !formData.nombre ||
+      !formData.password
+    ) {
       toast({
         title: "Error",
         description: "Todos los campos son obligatorios",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -84,28 +110,25 @@ const UserManagement = ({ user }: UserManagementProps) => {
         password: formData.password,
         nombre: formData.nombre,
         correo: formData.correo,
-        rol: formData.rol
+        rol: formData.rol,
       });
 
       if (error || !newUser) {
         toast({
           title: "Error",
           description: error || "Error al crear usuario",
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
 
-      // Actualizar la lista de usuarios
       await loadUsers();
-      
-      // Reset form
       setFormData({
-        username: '',
-        correo: '',
-        nombre: '',
-        rol: 'OPERADOR',
-        password: ''
+        username: "",
+        correo: "",
+        nombre: "",
+        rol: "OPERADOR",
+        password: "",
       });
       setShowForm(false);
 
@@ -114,11 +137,11 @@ const UserManagement = ({ user }: UserManagementProps) => {
         description: `Usuario ${newUser.nombre} creado exitosamente`,
       });
     } catch (error) {
-      console.error('Error creating user:', error);
+      console.error("Error creating user:", error);
       toast({
         title: "Error",
         description: "Error interno del servidor",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
@@ -126,49 +149,51 @@ const UserManagement = ({ user }: UserManagementProps) => {
   const toggleUserStatus = async (userId: string) => {
     try {
       const { error } = await userService.toggleUserStatus(userId);
-      
+
       if (error) {
         toast({
           title: "Error",
           description: error,
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
 
-      // Recargar la lista de usuarios
       await loadUsers();
-      
-      const targetUser = users.find(u => u.id === userId);
+      const targetUser = users.find((u) => u.id === userId);
       toast({
         title: "Estado actualizado",
-        description: `Usuario ${targetUser?.nombre} ${targetUser?.activo ? 'desactivado' : 'activado'}`,
+        description: `Usuario ${targetUser?.nombre} ${
+          targetUser?.activo ? "desactivado" : "activado"
+        }`,
       });
     } catch (error) {
-      console.error('Error toggling user status:', error);
+      console.error("Error toggling user status:", error);
       toast({
         title: "Error",
         description: "Error interno del servidor",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
 
   const getRoleLabel = (rol: string) => {
     const roles = {
-      'SUPER_USUARIO': 'Super Usuario',
-      'ADMIN': 'Administrador',
-      'OPERADOR': 'Operador',
-      'CONCESION': 'Concesión'
+      SUPER_USUARIO: "Super Usuario",
+      ADMIN: "Administrador",
+      OPERADOR: "Operador",
+      CONCESION: "Concesión",
     };
     return roles[rol as keyof typeof roles] || rol;
   };
 
-  if (user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
+  if (user.rol !== "ADMIN" && user.rol !== "SUPER_USUARIO") {
     return (
       <div className="p-6">
         <div className="text-center py-12">
-          <p className="text-red-500 text-lg">No tiene permisos para acceder a esta sección</p>
+          <p className="text-red-500 text-lg">
+            No tiene permisos para acceder a esta sección
+          </p>
         </div>
       </div>
     );
@@ -191,11 +216,7 @@ const UserManagement = ({ user }: UserManagementProps) => {
         <div className="text-center py-12">
           <p className="text-red-500 text-lg">Error al cargar usuarios</p>
           <p className="text-gray-500 mt-2">{error}</p>
-          <Button 
-            onClick={loadUsers} 
-            className="mt-4"
-            variant="outline"
-          >
+          <Button onClick={loadUsers} className="mt-4" variant="outline">
             Reintentar
           </Button>
         </div>
@@ -206,12 +227,14 @@ const UserManagement = ({ user }: UserManagementProps) => {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Gestión de Usuarios</h1>
-        <Button 
+        <h1 className="text-2xl font-bold text-gray-800">
+          Gestión de Usuarios
+        </h1>
+        <Button
           onClick={() => setShowForm(!showForm)}
           className="bg-blue-600 hover:bg-blue-700"
         >
-          {showForm ? 'Cancelar' : 'Nuevo Usuario'}
+          {showForm ? "Cancelar" : "Nuevo Usuario"}
         </Button>
       </div>
 
@@ -219,7 +242,9 @@ const UserManagement = ({ user }: UserManagementProps) => {
         <Card>
           <CardHeader>
             <CardTitle>Crear Nuevo Usuario</CardTitle>
-            <CardDescription>Complete la información del nuevo usuario</CardDescription>
+            <CardDescription>
+              Complete la información del nuevo usuario
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -228,15 +253,22 @@ const UserManagement = ({ user }: UserManagementProps) => {
                   <Label>Nombre Completo</Label>
                   <Input
                     value={formData.nombre}
-                    onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        nombre: e.target.value,
+                      }))
+                    }
                     placeholder="Nombre completo"
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Rol</Label>
-                  <Select 
-                    value={formData.rol} 
-                    onValueChange={(value: Usuario['rol']) => setFormData(prev => ({ ...prev, rol: value }))}
+                  <Select
+                    value={formData.rol}
+                    onValueChange={(value: Usuario["rol"]) =>
+                      setFormData((prev) => ({ ...prev, rol: value }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -245,8 +277,10 @@ const UserManagement = ({ user }: UserManagementProps) => {
                       <SelectItem value="OPERADOR">Operador</SelectItem>
                       <SelectItem value="CONCESION">Concesión</SelectItem>
                       <SelectItem value="ADMIN">Administrador</SelectItem>
-                      {user.rol === 'SUPER_USUARIO' && (
-                        <SelectItem value="SUPER_USUARIO">Super Usuario</SelectItem>
+                      {user.rol === "SUPER_USUARIO" && (
+                        <SelectItem value="SUPER_USUARIO">
+                          Super Usuario
+                        </SelectItem>
                       )}
                     </SelectContent>
                   </Select>
@@ -258,7 +292,12 @@ const UserManagement = ({ user }: UserManagementProps) => {
                   <Label>Usuario</Label>
                   <Input
                     value={formData.username}
-                    onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        username: e.target.value,
+                      }))
+                    }
                     placeholder="Nombre de usuario"
                   />
                 </div>
@@ -267,7 +306,12 @@ const UserManagement = ({ user }: UserManagementProps) => {
                   <Input
                     type="email"
                     value={formData.correo}
-                    onChange={(e) => setFormData(prev => ({ ...prev, correo: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        correo: e.target.value,
+                      }))
+                    }
                     placeholder="email@ejemplo.com"
                   />
                 </div>
@@ -278,7 +322,12 @@ const UserManagement = ({ user }: UserManagementProps) => {
                 <Input
                   type="password"
                   value={formData.password}
-                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      password: e.target.value,
+                    }))
+                  }
                   placeholder="Contraseña temporal"
                 />
               </div>
@@ -287,9 +336,9 @@ const UserManagement = ({ user }: UserManagementProps) => {
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                   Crear Usuario
                 </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => setShowForm(false)}
                 >
                   Cancelar
@@ -303,12 +352,16 @@ const UserManagement = ({ user }: UserManagementProps) => {
       <Card>
         <CardHeader>
           <CardTitle>Usuarios del Sistema</CardTitle>
-          <CardDescription>Lista de todos los usuarios registrados</CardDescription>
+          <CardDescription>
+            Lista de todos los usuarios registrados
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {users.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">No hay usuarios registrados</p>
+              <p className="text-gray-500 text-lg">
+                No hay usuarios registrados
+              </p>
               <p className="text-gray-400 mt-2">
                 Cree el primer usuario haciendo clic en "Nuevo Usuario"
               </p>
@@ -329,17 +382,21 @@ const UserManagement = ({ user }: UserManagementProps) => {
               <TableBody>
                 {users.map((userItem) => (
                   <TableRow key={userItem.id}>
-                    <TableCell className="font-medium">{userItem.nombre}</TableCell>
+                    <TableCell className="font-medium">
+                      {userItem.nombre}
+                    </TableCell>
                     <TableCell>{userItem.username}</TableCell>
                     <TableCell>{userItem.correo}</TableCell>
                     <TableCell>{getRoleLabel(userItem.rol)}</TableCell>
                     <TableCell>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        userItem.activo 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {userItem.activo ? 'Activo' : 'Inactivo'}
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          userItem.activo
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {userItem.activo ? "Activo" : "Inactivo"}
                       </span>
                     </TableCell>
                     <TableCell>
@@ -366,7 +423,7 @@ const UserManagement = ({ user }: UserManagementProps) => {
                           variant={userItem.activo ? "destructive" : "default"}
                           onClick={() => toggleUserStatus(userItem.id)}
                         >
-                          {userItem.activo ? 'Desactivar' : 'Activar'}
+                          {userItem.activo ? "Desactivar" : "Activar"}
                         </Button>
                       </div>
                     </TableCell>
@@ -378,19 +435,23 @@ const UserManagement = ({ user }: UserManagementProps) => {
         </CardContent>
       </Card>
 
-      <EditUserDialog
-        user={editingUser!}
-        isOpen={!!editingUser}
-        onClose={() => setEditingUser(null)}
-        onUserUpdated={loadUsers}
-        currentUser={user}
-      />
+      {editingUser && (
+        <EditUserDialog
+          user={editingUser}
+          isOpen={true}
+          onClose={() => setEditingUser(null)}
+          onUserUpdated={loadUsers}
+          currentUser={user}
+        />
+      )}
 
-      <ResetPasswordDialog
-        user={resetPasswordUser!}
-        isOpen={!!resetPasswordUser}
-        onClose={() => setResetPasswordUser(null)}
-      />
+      {resetPasswordUser && (
+        <ResetPasswordDialog
+          user={resetPasswordUser}
+          isOpen={true}
+          onClose={() => setResetPasswordUser(null)}
+        />
+      )}
     </div>
   );
 };

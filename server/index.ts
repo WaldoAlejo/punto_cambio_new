@@ -17,6 +17,8 @@ import scheduleRoutes from "./routes/schedules.js";
 import spontaneousExitRoutes from "./routes/spontaneous-exits.js";
 import reportRoutes from "./routes/reports.js";
 import activePointsRoutes from "./routes/activePoints.js";
+import cuadreCajaRoutes from "./routes/cuadreCaja";
+
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -76,6 +78,8 @@ app.use("/api/schedules", scheduleRoutes);
 app.use("/api/spontaneous-exits", spontaneousExitRoutes);
 app.use("/api/active-points", activePointsRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/cuadre-caja", cuadreCajaRoutes);
+
 
 // Error handling middleware
 app.use(

@@ -47,21 +47,10 @@ const PointManagement = ({ user }: PointManagementProps) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { points: fetchedPoints, error } =
-        await pointService.getAllPoints();
-
-      if (error) {
-        setError(error);
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
-        return;
-      }
+      const { points: fetchedPoints } = await pointService.getAllPoints();
 
       setPoints(fetchedPoints);
-    } catch (error) {
+    } catch {
       const errorMessage = "Error al cargar puntos de atención";
       setError(errorMessage);
       toast({
@@ -93,14 +82,12 @@ const PointManagement = ({ user }: PointManagementProps) => {
     }
 
     try {
-      const { point: newPoint, error } = await pointService.createPoint(
-        formData
-      );
+      const { point: newPoint } = await pointService.createPoint(formData);
 
-      if (error || !newPoint) {
+      if (!newPoint) {
         toast({
           title: "Error",
-          description: error || "Error al crear punto de atención",
+          description: "Error al crear punto de atención",
           variant: "destructive",
         });
         return;
@@ -121,7 +108,7 @@ const PointManagement = ({ user }: PointManagementProps) => {
         title: "Punto creado",
         description: `Punto de atención ${newPoint.nombre} creado exitosamente`,
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Error interno del servidor",

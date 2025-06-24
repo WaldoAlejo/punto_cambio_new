@@ -78,7 +78,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     return bills + coins;
   };
 
-  const performDailyClose = () => {
+  const performDailyClose = async () => {
     if (!selectedPoint) {
       toast({
         title: "Error",
@@ -115,12 +115,32 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       observaciones: "",
     };
 
-    setTodayClose(newClose);
+    try {
+      const res = await fetch("/api/cuadre-caja", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newClose),
+      });
 
-    toast({
-      title: "Cierre realizado",
-      description: "El cierre diario se ha completado exitosamente",
-    });
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Error inesperado");
+      }
+
+      setTodayClose(data.cuadre);
+
+      toast({
+        title: "Cierre realizado",
+        description: "El cierre diario se ha guardado correctamente",
+      });
+    } catch  {
+      toast({
+        title: "Error",
+        description: "No se pudo guardar el cierre en la base de datos",
+        variant: "destructive",
+      });
+    }
   };
 
   const generateCloseReport = () => {
@@ -144,7 +164,6 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     );
   }
 
-  // Solo operadores pueden realizar cierres diarios
   if (user.rol !== "OPERADOR") {
     return (
       <div className="p-6">
@@ -240,7 +259,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             <CardTitle>Cierre Completado</CardTitle>
             <CardDescription>
               Cierre diario realizado el{" "}
-              {new Date(todayClose.fecha_cierre!).toLocaleString()}
+              {todayClose.fecha_cierre &&
+                new Date(todayClose.fecha_cierre).toLocaleString()}
             </CardDescription>
           </CardHeader>
           <CardContent>

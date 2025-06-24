@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, Clock, User, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiService } from '../../services/apiService';
-import { User as UserType } from '../../types';
-import { scheduleService } from '../../services/scheduleService';
+import { User as UserType } from "../../types";
+import { scheduleService } from "../../services/scheduleService";
 
 interface ActiveSchedule {
   id: string;
@@ -41,25 +40,16 @@ interface ActivePointsReportProps {
   user: UserType;
 }
 
-const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
+const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
   const [activeSchedules, setActiveSchedules] = useState<ActiveSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadActiveSchedules();
-  }, []);
-
-  const loadActiveSchedules = async () => {
+  const loadActiveSchedules = useCallback(async () => {
     setLoading(true);
     try {
-      console.log('Cargando horarios activos...');
-      
-      // Obtener todos los horarios y filtrar los activos
       const { schedules, error } = await scheduleService.getAllSchedules();
-      
       if (error) {
-        console.error('Error al cargar horarios:', error);
         toast({
           title: "Error",
           description: `Error al cargar horarios activos: ${error}`,
@@ -68,47 +58,48 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
         return;
       }
 
-      // Filtrar solo los horarios activos de hoy (que no han terminado)
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split("T")[0];
       const activesOnly = schedules
-        .filter(schedule => {
-          const scheduleDate = new Date(schedule.fecha_inicio).toISOString().split('T')[0];
-          return schedule.estado === 'ACTIVO' && 
-                 !schedule.fecha_salida && 
-                 scheduleDate === today &&
-                 schedule.usuario && 
-                 schedule.puntoAtencion;
+        .filter(
+          (schedule) =>
+            schedule.estado === "ACTIVO" &&
+            !schedule.fecha_salida &&
+            new Date(schedule.fecha_inicio).toISOString().split("T")[0] ===
+              today &&
+            schedule.usuario &&
+            schedule.puntoAtencion
+        )
+        .map((schedule) => {
+          if (!schedule.usuario || !schedule.puntoAtencion) return null;
+          return {
+            id: schedule.id,
+            fecha_inicio: schedule.fecha_inicio,
+            fecha_almuerzo: schedule.fecha_almuerzo,
+            fecha_regreso: schedule.fecha_regreso,
+            fecha_salida: schedule.fecha_salida,
+            ubicacion_inicio: schedule.ubicacion_inicio,
+            ubicacion_salida: schedule.ubicacion_salida,
+            estado: schedule.estado,
+            usuario: {
+              id: schedule.usuario.id,
+              nombre: schedule.usuario.nombre,
+              username: schedule.usuario.username,
+            },
+            puntoAtencion: {
+              id: schedule.puntoAtencion.id,
+              nombre: schedule.puntoAtencion.nombre,
+            },
+          };
         })
-        .map(schedule => ({
-          id: schedule.id,
-          fecha_inicio: schedule.fecha_inicio,
-          fecha_almuerzo: schedule.fecha_almuerzo,
-          fecha_regreso: schedule.fecha_regreso,
-          fecha_salida: schedule.fecha_salida,
-          ubicacion_inicio: schedule.ubicacion_inicio,
-          ubicacion_salida: schedule.ubicacion_salida,
-          estado: schedule.estado,
-          usuario: {
-            id: schedule.usuario!.id,
-            nombre: schedule.usuario!.nombre,
-            username: schedule.usuario!.username,
-          },
-          puntoAtencion: {
-            id: schedule.puntoAtencion!.id,
-            nombre: schedule.puntoAtencion!.nombre,
-          },
-        }));
+        .filter(Boolean) as ActiveSchedule[];
 
-      console.log('Horarios activos encontrados:', activesOnly);
       setActiveSchedules(activesOnly);
 
       toast({
         title: "Datos actualizados",
         description: `Se encontraron ${activesOnly.length} usuarios activos`,
       });
-
-    } catch (error) {
-      console.error('Error al cargar horarios activos:', error);
+    } catch {
       toast({
         title: "Error de conexión",
         description: "No se pudieron cargar los datos de usuarios activos",
@@ -117,21 +108,25 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
+
+  useEffect(() => {
+    loadActiveSchedules();
+  }, [loadActiveSchedules]);
 
   const formatTime = (dateString?: string) => {
-    if (!dateString) return 'No registrado';
-    return new Date(dateString).toLocaleTimeString('es-ES', {
-      hour: '2-digit',
-      minute: '2-digit'
+    if (!dateString) return "No registrado";
+    return new Date(dateString).toLocaleTimeString("es-ES", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
+    return new Date(dateString).toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
     });
   };
 
@@ -144,10 +139,16 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
     return `${hours}h ${minutes}m`;
   };
 
-  const getLocationString = (location?: { lat: number; lng: number; direccion?: string }) => {
-    if (!location) return 'No disponible';
-    if (location.direccion) return location.direccion;
-    return `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`;
+  const getLocationString = (location?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  }) => {
+    if (!location) return "No disponible";
+    return (
+      location.direccion ||
+      `${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}`
+    );
   };
 
   if (loading) {
@@ -165,7 +166,8 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Usuarios Activos</h2>
           <p className="text-gray-600">
-            Monitoreo en tiempo real de jornadas laborales - {formatDate(new Date().toISOString())}
+            Monitoreo en tiempo real de jornadas laborales -{" "}
+            {formatDate(new Date().toISOString())}
           </p>
         </div>
         <Button onClick={loadActiveSchedules} disabled={loading}>
@@ -179,7 +181,9 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
           <CardContent className="flex items-center justify-center h-32">
             <div className="text-center">
               <User className="h-12 w-12 text-gray-400 mx-auto mb-2" />
-              <p className="text-gray-500">No hay usuarios trabajando actualmente</p>
+              <p className="text-gray-500">
+                No hay usuarios trabajando actualmente
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -194,8 +198,12 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
                       <User className="h-5 w-5 text-blue-600" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg">{schedule.usuario.nombre}</CardTitle>
-                      <p className="text-sm text-gray-600">@{schedule.usuario.username}</p>
+                      <CardTitle className="text-lg">
+                        {schedule.usuario.nombre}
+                      </CardTitle>
+                      <p className="text-sm text-gray-600">
+                        @{schedule.usuario.username}
+                      </p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -208,79 +216,73 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
                   </div>
                 </div>
               </CardHeader>
-              
+
               <CardContent>
                 <Tabs defaultValue="schedule" className="w-full">
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="schedule">Horarios</TabsTrigger>
                     <TabsTrigger value="location">Ubicaciones</TabsTrigger>
                   </TabsList>
-                  
-                  <TabsContent value="schedule" className="space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="space-y-1">
+
+                  <TabsContent
+                    value="schedule"
+                    className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4"
+                  >
+                    {[
+                      {
+                        label: "Entrada",
+                        value: schedule.fecha_inicio,
+                        color: "text-green-600",
+                      },
+                      {
+                        label: "Almuerzo",
+                        value: schedule.fecha_almuerzo,
+                        color: "text-orange-600",
+                      },
+                      {
+                        label: "Regreso",
+                        value: schedule.fecha_regreso,
+                        color: "text-blue-600",
+                      },
+                      {
+                        label: "Salida",
+                        value: schedule.fecha_salida,
+                        color: "text-red-600",
+                      },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="space-y-1">
                         <div className="flex items-center text-sm text-gray-600">
                           <Clock className="h-4 w-4 mr-1" />
-                          Entrada
+                          {label}
                         </div>
-                        <p className="font-medium text-green-600">
-                          {formatTime(schedule.fecha_inicio)}
+                        <p className={`font-medium ${color}`}>
+                          {formatTime(value)}
                         </p>
                       </div>
-                      
-                      <div className="space-y-1">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <Clock className="h-4 w-4 mr-1" />
-                          Almuerzo
-                        </div>
-                        <p className="font-medium text-orange-600">
-                          {formatTime(schedule.fecha_almuerzo)}
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <Clock className="h-4 w-4 mr-1" />
-                          Regreso
-                        </div>
-                        <p className="font-medium text-blue-600">
-                          {formatTime(schedule.fecha_regreso)}
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <Clock className="h-4 w-4 mr-1" />
-                          Salida
-                        </div>
-                        <p className="font-medium text-red-600">
-                          {formatTime(schedule.fecha_salida)}
-                        </p>
-                      </div>
-                    </div>
+                    ))}
                   </TabsContent>
-                  
-                  <TabsContent value="location" className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <MapPin className="h-4 w-4 mr-1" />
-                          Ubicación de Entrada
-                        </div>
-                        <p className="text-sm bg-green-50 p-2 rounded border">
-                          {getLocationString(schedule.ubicacion_inicio)}
-                        </p>
+
+                  <TabsContent
+                    value="location"
+                    className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center text-sm text-gray-600">
+                        <MapPin className="h-4 w-4 mr-1" />
+                        Ubicación de Entrada
                       </div>
-                      
-                      <div className="space-y-2">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <MapPin className="h-4 w-4 mr-1" />
-                          Ubicación de Salida
-                        </div>
-                        <p className="text-sm bg-red-50 p-2 rounded border">
-                          {getLocationString(schedule.ubicacion_salida)}
-                        </p>
+                      <p className="text-sm bg-green-50 p-2 rounded border">
+                        {getLocationString(schedule.ubicacion_inicio)}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center text-sm text-gray-600">
+                        <MapPin className="h-4 w-4 mr-1" />
+                        Ubicación de Salida
                       </div>
+                      <p className="text-sm bg-red-50 p-2 rounded border">
+                        {getLocationString(schedule.ubicacion_salida)}
+                      </p>
                     </div>
                   </TabsContent>
                 </Tabs>
