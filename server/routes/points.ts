@@ -2,7 +2,7 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import logger from '../utils/logger.js';
-import { requireRole } from '../middleware/auth.js';
+import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validation.js';
 import { createPointSchema, type CreatePointRequest } from '../schemas/validation.js';
 
@@ -76,8 +76,9 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
   }
 });
 
-// Crear punto de atención (solo admins)
+// Crear punto de atención (solo admins) - CORREGIDO: agregar authenticateToken
 router.post('/',
+  authenticateToken,
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createPointSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
