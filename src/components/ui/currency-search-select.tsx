@@ -11,6 +11,7 @@ interface CurrencySearchSelectProps {
   onValueChange: (value: string) => void;
   placeholder?: string;
   label?: string;
+  disabled?: boolean;
 }
 
 const CurrencySearchSelect = ({ 
@@ -18,7 +19,8 @@ const CurrencySearchSelect = ({
   value, 
   onValueChange, 
   placeholder = "Seleccionar moneda",
-  label = "Moneda" 
+  label = "Moneda",
+  disabled = false
 }: CurrencySearchSelectProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,10 +36,10 @@ const CurrencySearchSelect = ({
   );
 
   useEffect(() => {
-    if (isOpen && searchInputRef.current) {
+    if (isOpen && searchInputRef.current && !disabled) {
       searchInputRef.current.focus();
     }
-  }, [isOpen]);
+  }, [isOpen, disabled]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -53,6 +55,8 @@ const CurrencySearchSelect = ({
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (disabled) return;
+    
     if (!isOpen) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
@@ -92,6 +96,7 @@ const CurrencySearchSelect = ({
   };
 
   const handleCurrencySelect = (currency: Moneda) => {
+    if (disabled) return;
     onValueChange(currency.id);
     setIsOpen(false);
     setSearchTerm('');
@@ -99,6 +104,7 @@ const CurrencySearchSelect = ({
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (disabled) return;
     setSearchTerm(e.target.value);
     setHighlightedIndex(-1);
   };
@@ -113,8 +119,11 @@ const CurrencySearchSelect = ({
           role="combobox"
           aria-expanded={isOpen}
           aria-haspopup="listbox"
-          className="w-full justify-between h-10 px-3 py-2 text-left font-normal"
-          onClick={() => setIsOpen(!isOpen)}
+          disabled={disabled}
+          className={`w-full justify-between h-10 px-3 py-2 text-left font-normal ${
+            disabled ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
           onKeyDown={handleKeyDown}
         >
           <span className={selectedCurrency ? "text-foreground" : "text-muted-foreground"}>
@@ -128,7 +137,7 @@ const CurrencySearchSelect = ({
           }`} />
         </Button>
 
-        {isOpen && (
+        {isOpen && !disabled && (
           <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-80 overflow-hidden">
             {/* Search Input */}
             <div className="p-3 border-b border-gray-100">
