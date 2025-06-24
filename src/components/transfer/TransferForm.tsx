@@ -26,6 +26,7 @@ import {
   ResponsableMovilizacion,
 } from "../../types";
 import { ReceiptService } from "../../services/receiptService";
+import { transferService } from "../../services/transferService";
 import CurrencySearchSelect from "../ui/currency-search-select";
 
 interface TransferFormProps {
@@ -60,8 +61,17 @@ const TransferForm = ({
     telefono: "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    console.log("Datos del formulario de transferencia:", {
+      formData,
+      responsable,
+      selectedPoint,
+      user,
+    });
 
     if (!formData.type || !formData.currencyId || !formData.amount) {
       toast({
@@ -101,27 +111,6 @@ const TransferForm = ({
       return;
     }
 
-    let destinoId = "";
-    let origenId: string | undefined = undefined;
-
-    switch (formData.type) {
-      case "ENTRE_PUNTOS":
-        origenId = selectedPoint?.id;
-        destinoId = formData.toPointId;
-        break;
-      case "DEPOSITO_MATRIZ":
-        destinoId = formData.toPointId;
-        break;
-      case "RETIRO_GERENCIA":
-      case "DEPOSITO_GERENCIA":
-        origenId = selectedPoint?.id;
-        destinoId = formData.toPointId;
-        break;
-      default:
-        destinoId = selectedPoint?.id || "";
-    }
-
-    const numeroRecibo = ReceiptService.generateReceiptNumber("TRANSFERENCIA");
     const billetes = parseFloat(formData.billetes) || 0;
     const monedas = parseFloat(formData.monedas) || 0;
     const total = billetes + monedas;
@@ -136,52 +125,100 @@ const TransferForm = ({
       return;
     }
 
-    const newTransfer: Transferencia = {
-      id: Date.now().toString(),
-      origen_id: origenId,
-      destino_id: destinoId,
-      moneda_id: formData.currencyId,
-      monto: parseFloat(formData.amount),
-      tipo_transferencia: formData.type as
-        | "ENTRE_PUNTOS"
-        | "DEPOSITO_MATRIZ"
-        | "RETIRO_GERENCIA"
-        | "DEPOSITO_GERENCIA",
-      estado: "PENDIENTE",
-      solicitado_por: user.id,
-      fecha: new Date().toISOString(),
-      descripcion: formData.notes,
-      numero_recibo: numeroRecibo,
-      detalle_divisas: { billetes, monedas, total },
-      responsable_movilizacion:
-        formData.type === "ENTRE_PUNTOS" ? responsable : undefined,
-    };
+    setIsSubmitting(true);
 
-    onTransferCreated(newTransfer);
+    try {
+      let destinoId = "";
+      let origenId: string | undefined = undefined;
 
-    const receiptData = ReceiptService.generateTransferReceipt(
-      newTransfer,
-      selectedPoint?.nombre || "Sistema",
-      user.nombre
-    );
-    ReceiptService.printReceipt(receiptData, 2);
+      switch (formData.type) {
+        case "ENTRE_PUNTOS":
+          origenId = selectedPoint?.id;
+          destinoId = formData.toPointId;
+          break;
+        case "DEPOSITO_MATRIZ":
+          destinoId = formData.toPointId;
+          break;
+        case "RETIRO_GERENCIA":
+        case "DEPOSITO_GERENCIA":
+          origenId = selectedPoint?.id;
+          destinoId = formData.toPointId;
+          break;
+        default:
+          destinoId = selectedPoint?.id || "";
+      }
 
-    setFormData({
-      type: "",
-      toPointId: "",
-      currencyId: "",
-      amount: "",
-      notes: "",
-      billetes: "",
-      monedas: "",
-    });
-    setResponsable({ nombre: "", documento: "", cedula: "", telefono: "" });
+      const transferData = {
+        origen_id: origenId,
+        destino_id: destinoId,
+        moneda_id: formData.currencyId,
+        monto: parseFloat(formData.amount),
+        tipo_transferencia: formData.type as
+          | "ENTRE_PUNTOS"
+          | "DEPOSITO_MATRIZ"
+          | "RETIRO_GERENCIA"
+          | "DEPOSITO_GERENCIA",
+        descripcion: formData.notes || undefined,
+        detalle_divisas: { billetes, monedas, total },
+        responsable_movilizacion:
+          formData.type === "ENTRE_PUNTOS" ? responsable : undefined,
+      };
 
-    toast({
-      title: "Transferencia solicitada",
-      description:
-        "La transferencia ha sido enviada para aprobación y se ha generado el recibo",
-    });
+      console.log("Enviando datos de transferencia:", transferData);
+
+      const { transfer, error } = await transferService.createTransfer(transferData);
+
+      console.log("Respuesta del servicio de transferencia:", { transfer, error });
+
+      if (error) {
+        console.error("Error del servicio:", error);
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive",
+        });
+      } else if (transfer) {
+        console.log("Transferencia creada exitosamente:", transfer);
+        
+        onTransferCreated(transfer);
+
+        // Generar recibo
+        const numeroRecibo = ReceiptService.generateReceiptNumber("TRANSFERENCIA");
+        const receiptData = ReceiptService.generateTransferReceipt(
+          { ...transfer, numero_recibo: numeroRecibo },
+          selectedPoint?.nombre || "Sistema",
+          user.nombre
+        );
+        ReceiptService.printReceipt(receiptData, 2);
+
+        // Limpiar formulario
+        setFormData({
+          type: "",
+          toPointId: "",
+          currencyId: "",
+          amount: "",
+          notes: "",
+          billetes: "",
+          monedas: "",
+        });
+        setResponsable({ nombre: "", documento: "", cedula: "", telefono: "" });
+
+        toast({
+          title: "Transferencia solicitada",
+          description:
+            "La transferencia ha sido enviada para aprobación y se ha generado el recibo",
+        });
+      }
+    } catch (error) {
+      console.error("Error inesperado:", error);
+      toast({
+        title: "Error",
+        description: "Error inesperado al procesar la transferencia",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getAvailablePoints = () => {
@@ -415,10 +452,20 @@ const TransferForm = ({
           <Button
             type="submit"
             className="w-full bg-blue-600 hover:bg-blue-700"
+            disabled={isSubmitting}
           >
-            {user.rol === "ADMIN" || user.rol === "SUPER_USUARIO"
-              ? "Realizar Transferencia"
-              : "Solicitar Transferencia"}
+            {isSubmitting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Procesando...
+              </>
+            ) : (
+              <>
+                {user.rol === "ADMIN" || user.rol === "SUPER_USUARIO"
+                  ? "Realizar Transferencia"
+                  : "Solicitar Transferencia"}
+              </>
+            )}
           </Button>
         </form>
       </CardContent>
