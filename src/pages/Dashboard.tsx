@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,13 +18,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (user?.punto_atencion_id) {
-      loadDashboardData();
-    }
-  }, [user]);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     if (!user?.punto_atencion_id) {
       setLoading(false);
       return;
@@ -35,7 +28,7 @@ const Dashboard = () => {
     try {
       const [balancesResult, transfersResult] = await Promise.all([
         balanceService.getBalancesByPoint(user.punto_atencion_id),
-        transferService.getAllTransfers()
+        transferService.getAllTransfers(),
       ]);
 
       if (balancesResult.error) {
@@ -57,16 +50,16 @@ const Dashboard = () => {
       } else {
         setTransfers(transfersResult.transfers);
       }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al cargar datos del dashboard",
-        variant: "destructive",
-      });
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast, user?.punto_atencion_id]);
+
+  useEffect(() => {
+    if (user?.punto_atencion_id) {
+      loadDashboardData();
+    }
+  }, [user, loadDashboardData]);
 
   const handleLogout = () => {
     logout();
@@ -76,11 +69,13 @@ const Dashboard = () => {
     });
   };
 
-  // Calcular estadísticas
-  const totalBalance = balances.reduce((sum, balance) => sum + balance.cantidad, 0);
+  const totalBalance = balances.reduce(
+    (sum, balance) => sum + balance.cantidad,
+    0
+  );
   const totalTransfers = transfers.length;
-  const activeUsers = 1; // Solo el usuario actual por ahora
-  const dailyGrowth = Math.random() * 10 - 5; // Simulado por ahora
+  const activeUsers = 1; // Usuario actual
+  const dailyGrowth = Math.random() * 10 - 5; // Simulado
 
   if (loading) {
     return (
@@ -169,10 +164,12 @@ const Dashboard = () => {
                 <strong>Versión:</strong> 1.0.0
               </div>
               <div>
-                <strong>Última actualización:</strong> {new Date().toLocaleDateString()}
+                <strong>Última actualización:</strong>{" "}
+                {new Date().toLocaleDateString()}
               </div>
               <div>
-                <strong>Estado:</strong> <span className="text-green-600">Activo</span>
+                <strong>Estado:</strong>{" "}
+                <span className="text-green-600">Activo</span>
               </div>
             </div>
           </CardContent>
