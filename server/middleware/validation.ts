@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 import { Request, Response, NextFunction, RequestHandler } from "express";
 import logger from "../utils/logger.js";
@@ -10,16 +11,22 @@ export const validate = (
   property: RequestProperty = "body"
 ): RequestHandler => {
   return (req: Request, res: Response, next: NextFunction): void => {
+    console.log(`=== VALIDATION MIDDLEWARE START ===`);
+    console.log(`Validating property: ${property}`);
+    console.log(`Data to validate:`, req[property]);
+    console.log(`Data JSON:`, JSON.stringify(req[property], null, 2));
+    console.log(`Schema:`, schema._def);
+
     try {
-      console.log(`=== VALIDATION MIDDLEWARE DEBUG ===`);
-      console.log(`Validating ${property}:`, req[property]);
-      console.log(`Validation data JSON:`, JSON.stringify(req[property], null, 2));
-      
       const data = req[property];
+      console.log('Calling schema.parse...');
       const validatedData = schema.parse(data);
       
-      console.log('Validation successful, validated data:', validatedData);
+      console.log('Validation successful!');
+      console.log('Validated data:', validatedData);
       (req as unknown as Record<string, unknown>)[property] = validatedData;
+      console.log('Data set on request object');
+      
       next();
     } catch (error) {
       console.error('=== VALIDATION ERROR ===');
@@ -31,6 +38,7 @@ export const validate = (
           field: err.path.join("."),
           message: err.message,
         }));
+        console.log('Formatted validation errors:', errors);
 
         logger.warn("Validación fallida", {
           errors,
@@ -38,19 +46,27 @@ export const validate = (
           ip: req.ip,
         });
 
-        res.status(400).json({
+        const errorResponse = {
           error: "Datos de entrada inválidos",
           details: errors,
-        });
+        };
+        console.log('Sending validation error response:', errorResponse);
+
+        res.status(400).json(errorResponse);
         return;
       }
 
+      console.error('Non-Zod validation error:', error);
       logger.error("Error en validación", {
         error: error instanceof Error ? error.message : "Unknown error",
         ip: req.ip,
       });
 
-      res.status(500).json({ error: "Error interno del servidor" });
+      const errorResponse = { error: "Error interno del servidor" };
+      console.log('Sending internal error response:', errorResponse);
+      res.status(500).json(errorResponse);
+    } finally {
+      console.log(`=== VALIDATION MIDDLEWARE END ===`);
     }
   };
 };
