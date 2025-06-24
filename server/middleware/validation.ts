@@ -11,12 +11,22 @@ export const validate = (
 ): RequestHandler => {
   return (req: Request, res: Response, next: NextFunction): void => {
     try {
+      console.log(`=== VALIDATION MIDDLEWARE DEBUG ===`);
+      console.log(`Validating ${property}:`, req[property]);
+      console.log(`Validation data JSON:`, JSON.stringify(req[property], null, 2));
+      
       const data = req[property];
       const validatedData = schema.parse(data);
+      
+      console.log('Validation successful, validated data:', validatedData);
       (req as unknown as Record<string, unknown>)[property] = validatedData;
       next();
     } catch (error) {
+      console.error('=== VALIDATION ERROR ===');
+      console.error('Validation error details:', error);
+      
       if (error instanceof z.ZodError) {
+        console.error('Zod validation errors:', error.errors);
         const errors = error.errors.map((err) => ({
           field: err.path.join("."),
           message: err.message,

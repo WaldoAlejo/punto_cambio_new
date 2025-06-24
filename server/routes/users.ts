@@ -93,15 +93,33 @@ router.post(
   validate(createUserSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
+      console.log('=== CREATE USER ENDPOINT DEBUG ===');
+      console.log('Request body received:', req.body);
+      console.log('Request body JSON:', JSON.stringify(req.body, null, 2));
+      console.log('User making request:', req.user);
+      
       const { username, password, nombre, correo, rol, punto_atencion_id } =
         req.body as CreateUserRequest;
+
+      console.log('Extracted fields:', {
+        username,
+        password: password ? '[PROVIDED]' : '[MISSING]',
+        nombre,
+        correo,
+        rol,
+        punto_atencion_id
+      });
 
       const [existingUser, existingEmail] = await Promise.all([
         prisma.usuario.findFirst({ where: { username } }),
         correo ? prisma.usuario.findFirst({ where: { correo } }) : null,
       ]);
 
+      console.log('Existing user check:', existingUser ? 'Found duplicate username' : 'Username available');
+      console.log('Existing email check:', existingEmail ? 'Found duplicate email' : 'Email available');
+
       if (existingUser) {
+        console.log('Returning error: username already exists');
         res.status(400).json({
           error: "El nombre de usuario ya existe",
           success: false,
@@ -111,6 +129,7 @@ router.post(
       }
 
       if (existingEmail) {
+        console.log('Returning error: email already exists');
         res.status(400).json({
           error: "El correo electrónico ya existe",
           success: false,
@@ -120,7 +139,9 @@ router.post(
       }
 
       const hashedPassword = await bcrypt.hash(password, 12);
+      console.log('Password hashed successfully');
 
+      console.log('About to create user in database...');
       const newUser = await prisma.usuario.create({
         data: {
           username,
@@ -140,6 +161,8 @@ router.post(
           },
         },
       });
+
+      console.log('User created successfully:', newUser.id);
 
       logger.info("Usuario creado", {
         newUserId: newUser.id,
@@ -161,6 +184,11 @@ router.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      console.error('=== CREATE USER ERROR ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
+      
       logger.error("Error al crear usuario", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,

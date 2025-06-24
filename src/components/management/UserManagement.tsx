@@ -85,16 +85,25 @@ export const UserManagement = () => {
     e.preventDefault();
     
     try {
+      console.log('=== CREATE USER DEBUG ===');
+      console.log('Raw form data:', formData);
+      
       const userData = {
         ...formData,
         punto_atencion_id: formData.punto_atencion_id || undefined,
         correo: formData.correo || undefined,
         telefono: formData.telefono || undefined,
       };
+      
+      console.log('Processed user data being sent:', userData);
+      console.log('User data JSON:', JSON.stringify(userData, null, 2));
 
       const result = await userService.createUser(userData);
       
+      console.log('Create user result:', result);
+      
       if (result.error) {
+        console.error('Create user error:', result.error);
         toast({
           title: "Error",
           description: result.error,
@@ -118,6 +127,7 @@ export const UserManagement = () => {
         loadData();
       }
     } catch (error) {
+      console.error('Exception in handleCreateUser:', error);
       toast({
         title: "Error",
         description: "Error al crear usuario",
