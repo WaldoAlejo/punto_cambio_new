@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 
 interface ReportFiltersProps {
-  reportType: "exchanges" | "transfers" | "balances" | "users";
+  reportType: "exchanges" | "transfers" | "balances" | "users" | "summary";
   dateFrom: string;
   dateTo: string;
   onReportTypeChange: (value: string) => void;
@@ -35,6 +35,7 @@ const ReportFilters = ({
       transfers: "text-red-600",
       balances: "text-green-600",
       users: "text-indigo-600",
+      summary: "text-yellow-600",
     }),
     []
   );
@@ -45,6 +46,7 @@ const ReportFilters = ({
       transfers: "bg-red-600 hover:bg-red-700 text-white",
       balances: "bg-green-600 hover:bg-green-700 text-white",
       users: "bg-indigo-600 hover:bg-indigo-700 text-white",
+      summary: "bg-yellow-600 hover:bg-yellow-700 text-white",
     }),
     []
   );
@@ -59,6 +61,8 @@ const ReportFilters = ({
         return "Filtros de Saldos";
       case "users":
         return "Filtros de Usuarios";
+      case "summary":
+        return "Filtros de Resumen";
       default:
         return "Filtros del Reporte";
     }
@@ -82,6 +86,7 @@ const ReportFilters = ({
               <SelectItem value="transfers">Transferencias</SelectItem>
               <SelectItem value="balances">Saldos</SelectItem>
               <SelectItem value="users">Usuarios</SelectItem>
+              <SelectItem value="summary">Resumen</SelectItem>
             </SelectContent>
           </Select>
         </div>

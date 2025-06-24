@@ -19,14 +19,13 @@ interface ReportItem {
 
 interface ReportTableProps {
   data: ReportItem[];
-  reportType: "exchanges" | "transfers" | "balances" | "users";
+  reportType: "exchanges" | "transfers" | "balances";
 }
 
 const colorMap: Record<ReportTableProps["reportType"], string> = {
   exchanges: "text-blue-600 font-semibold",
   transfers: "text-red-600 font-semibold",
   balances: "text-green-600 font-semibold",
-  users: "text-indigo-600 font-semibold",
 };
 
 const ReportTable = ({ data, reportType }: ReportTableProps) => {
@@ -48,9 +47,7 @@ const ReportTable = ({ data, reportType }: ReportTableProps) => {
             <TableHeader>
               <TableRow>
                 <TableHead>Punto</TableHead>
-                {(reportType === "exchanges" || reportType === "users") && (
-                  <TableHead>Usuario</TableHead>
-                )}
+                {reportType === "exchanges" && <TableHead>Usuario</TableHead>}
                 {reportType === "exchanges" && (
                   <>
                     <TableHead>Cambios</TableHead>
@@ -70,7 +67,7 @@ const ReportTable = ({ data, reportType }: ReportTableProps) => {
               {data.map((item, index) => (
                 <TableRow key={index}>
                   <TableCell>{item.point}</TableCell>
-                  {(reportType === "exchanges" || reportType === "users") && (
+                  {reportType === "exchanges" && (
                     <TableCell>{item.user || "-"}</TableCell>
                   )}
                   {reportType === "exchanges" && (

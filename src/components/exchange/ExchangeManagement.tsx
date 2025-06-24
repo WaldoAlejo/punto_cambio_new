@@ -1,4 +1,3 @@
-
 import { useRef } from "react";
 import { User, PuntoAtencion } from "../../types";
 import { useExchangeData } from "../../hooks/useExchangeData";
@@ -11,21 +10,26 @@ interface ExchangeManagementProps {
   selectedPoint: PuntoAtencion | null;
 }
 
-const ExchangeManagement = ({ user, selectedPoint }: ExchangeManagementProps) => {
+const ExchangeManagement = ({
+  user,
+  selectedPoint,
+}: ExchangeManagementProps) => {
   const stepsRef = useRef<ExchangeStepsRef>(null);
-  const { exchanges, currencies, isLoadingCurrencies, addExchange } = useExchangeData();
-  
+  const { currencies, exchanges, isLoadingCurrencies, addExchange } =
+    useExchangeData(selectedPoint);
+
   const { isProcessing, processExchange } = useExchangeProcess({
     user,
     selectedPoint,
     onExchangeCreated: addExchange,
-    onResetForm: () => stepsRef.current?.resetSteps()
+    onResetForm: () => stepsRef.current?.resetSteps(),
   });
 
   if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
     return (
       <div className="p-6 text-center py-12 text-gray-500 text-lg">
-        Los cambios de divisas solo pueden ser realizados por operadores y concesiones
+        Los cambios de divisas solo pueden ser realizados por operadores y
+        concesiones
       </div>
     );
   }

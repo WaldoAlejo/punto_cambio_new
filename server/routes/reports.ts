@@ -1,4 +1,3 @@
-
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { reportController } from "../controllers/reportController.js";

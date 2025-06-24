@@ -1,4 +1,3 @@
-
 import express from "express";
 import { reportService } from "../services/reportService.js";
 import { AuthenticatedUser, ReportRequest } from "../types/reportTypes.js";
@@ -9,54 +8,60 @@ interface AuthenticatedRequest extends express.Request {
 }
 
 export const reportController = {
-  async generateReport(req: AuthenticatedRequest, res: express.Response): Promise<void> {
+  async generateReport(
+    req: AuthenticatedRequest,
+    res: express.Response
+  ): Promise<void> {
     try {
       res.set({
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Cache-Control":
+          "no-store, no-cache, must-revalidate, proxy-revalidate",
         Pragma: "no-cache",
         Expires: "0",
         "Surrogate-Control": "no-store",
       });
 
-      const { reportType, dateFrom, dateTo } = req.body;
+      const { reportType, dateFrom, dateTo, pointId, userId } = req.body;
 
       if (!reportType || !dateFrom || !dateTo) {
         res.status(400).json({
-          error: "Faltan parámetros requeridos: reportType, dateFrom, dateTo",
           success: false,
+          error: "Faltan parámetros requeridos: reportType, dateFrom, dateTo",
           timestamp: new Date().toISOString(),
         });
         return;
       }
 
-      const reportRequest: ReportRequest = {
+      const requestPayload: ReportRequest = {
         reportType,
         dateFrom,
-        dateTo
+        dateTo,
+        pointId,
+        userId,
       };
 
-      const reportData = await reportService.generateReport(reportRequest, req.user?.id);
+      const data = await reportService.generateReport(
+        requestPayload,
+        req.user?.id
+      );
 
       res.status(200).json({
-        data: reportData,
         success: true,
+        data,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
       logger.error("Error al generar reporte", {
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : "Error desconocido",
         stack: error instanceof Error ? error.stack : undefined,
         requestedBy: req.user?.id,
       });
 
-      const errorMessage = error instanceof Error ? error.message : "Error interno del servidor al generar reporte";
-      const statusCode = error instanceof Error && error.message === "Tipo de reporte no válido" ? 400 : 500;
-
-      res.status(statusCode).json({
-        error: errorMessage,
+      res.status(500).json({
         success: false,
+        error: "Error interno al generar el reporte",
         timestamp: new Date().toISOString(),
       });
     }
-  }
+  },
 };

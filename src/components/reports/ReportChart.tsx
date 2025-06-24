@@ -19,7 +19,7 @@ interface ReportItem {
 
 interface ReportChartProps {
   data: ReportItem[];
-  reportType: "exchanges" | "transfers" | "balances" | "users";
+  reportType: "exchanges" | "transfers" | "balances";
 }
 
 const ReportChart = ({ data, reportType }: ReportChartProps) => {
@@ -45,14 +45,12 @@ const ReportChart = ({ data, reportType }: ReportChartProps) => {
     exchanges: "Monto Total ($)",
     transfers: "Cantidad de Transferencias",
     balances: "Saldo Total ($)",
-    users: "Cantidad de Usuarios",
   };
 
   const colorMap: Record<typeof reportType, string> = {
-    exchanges: "#3b82f6", // azul
-    transfers: "#ef4444", // rojo
-    balances: "#10b981", // verde
-    users: "#6366f1", // índigo
+    exchanges: "#3b82f6",
+    transfers: "#ef4444",
+    balances: "#10b981",
   };
 
   return (
@@ -61,31 +59,37 @@ const ReportChart = ({ data, reportType }: ReportChartProps) => {
         <CardTitle>Gráfico</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis
-              tickFormatter={(value) =>
-                isMonetary ? `$${value.toLocaleString()}` : value
-              }
-            >
-              <Label
-                value={labelMap[reportType]}
-                angle={-90}
-                position="insideLeft"
-                style={{ textAnchor: "middle" }}
+        {data.length === 0 ? (
+          <div className="text-center text-muted-foreground py-12">
+            No hay datos para mostrar en el gráfico.
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis
+                tickFormatter={(value) =>
+                  isMonetary ? `$${value.toLocaleString()}` : value
+                }
+              >
+                <Label
+                  value={labelMap[reportType]}
+                  angle={-90}
+                  position="insideLeft"
+                  style={{ textAnchor: "middle" }}
+                />
+              </YAxis>
+              <Tooltip
+                formatter={(value: number) =>
+                  isMonetary ? `$${value.toLocaleString()}` : value
+                }
+                labelFormatter={(label: string) => `Punto: ${label}`}
               />
-            </YAxis>
-            <Tooltip
-              formatter={(value: number) =>
-                isMonetary ? `$${value.toLocaleString()}` : value
-              }
-              labelFormatter={(label: string) => `Punto: ${label}`}
-            />
-            <Bar dataKey="valor" fill={colorMap[reportType]} />
-          </BarChart>
-        </ResponsiveContainer>
+              <Bar dataKey="valor" fill={colorMap[reportType]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </CardContent>
     </Card>
   );

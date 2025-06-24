@@ -1,3 +1,5 @@
+// server/utils/logger.ts
+
 interface LogEntry {
   level: string;
   message: string;
@@ -31,14 +33,13 @@ class Logger {
         break;
       case "info":
       case "debug":
-        // En producción no se muestran info/debug
         if (process.env.NODE_ENV !== "production") {
-          console.warn(output); // usa warn para cumplir con ESLint
+          console.warn(output); // Usamos warn para evitar error de ESLint
         }
         break;
       default:
         if (process.env.NODE_ENV !== "production") {
-          console.warn(output); // fallback
+          console.warn(output);
         }
     }
   }

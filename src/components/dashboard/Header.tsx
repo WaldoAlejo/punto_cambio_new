@@ -1,9 +1,8 @@
-
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { LogOut, Menu } from "lucide-react";
-import { User, PuntoAtencion } from '../../types';
-import TransferNotifications from '../notifications/TransferNotifications';
+import { User, PuntoAtencion } from "../../types";
+import TransferNotifications from "../notifications/TransferNotifications";
 
 interface HeaderProps {
   user: User;
@@ -13,12 +12,18 @@ interface HeaderProps {
   onNotificationClick?: () => void;
 }
 
-const Header = ({ user, selectedPoint, onLogout, onToggleSidebar, onNotificationClick }: HeaderProps) => {
+const Header = ({
+  user,
+  selectedPoint,
+  onLogout,
+  onToggleSidebar,
+  onNotificationClick,
+}: HeaderProps) => {
   const getUserInitials = (name: string) => {
     return name
-      .split(' ')
-      .map(n => n[0])
-      .join('')
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
       .toUpperCase()
       .slice(0, 2);
   };
@@ -40,7 +45,7 @@ const Header = ({ user, selectedPoint, onLogout, onToggleSidebar, onNotification
         >
           <Menu className="h-4 w-4" />
         </Button>
-        
+
         <div>
           <h1 className="text-lg font-semibold text-gray-900">
             Sistema Punto Cambio
@@ -50,34 +55,30 @@ const Header = ({ user, selectedPoint, onLogout, onToggleSidebar, onNotification
               {selectedPoint.nombre} - {selectedPoint.ciudad}
             </p>
           )}
-          {!selectedPoint && (user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO') && (
-            <p className="text-sm text-blue-600">
-              Panel Administrativo
-            </p>
-          )}
+          {!selectedPoint &&
+            (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") && (
+              <p className="text-sm text-blue-600">Panel Administrativo</p>
+            )}
         </div>
       </div>
 
       <div className="flex items-center gap-4">
-        <TransferNotifications 
-          user={user} 
-          onNotificationClick={handleNotificationClick}
-        />
-        
+        <TransferNotifications onNotificationClick={handleNotificationClick} />
+
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-sm font-medium text-gray-900">{user.nombre}</p>
             <p className="text-xs text-gray-500 capitalize">
-              {user.rol ? user.rol.replace('_', ' ').toLowerCase() : 'Sin rol'}
+              {user.rol ? user.rol.replace("_", " ").toLowerCase() : "Sin rol"}
             </p>
           </div>
-          
+
           <Avatar className="h-8 w-8">
             <AvatarFallback className="bg-blue-600 text-white text-xs">
               {getUserInitials(user.nombre)}
             </AvatarFallback>
           </Avatar>
-          
+
           <Button
             variant="ghost"
             size="sm"

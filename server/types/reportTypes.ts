@@ -1,4 +1,3 @@
-
 export interface AuthenticatedUser {
   id: string;
   username: string;
@@ -8,6 +7,7 @@ export interface AuthenticatedUser {
   punto_atencion_id: string | null;
 }
 
+// Datos individuales por tipo de reporte
 export interface ExchangeData {
   point: string;
   amount: number;
@@ -33,10 +33,30 @@ export interface UserActivityData {
   transfers: number;
 }
 
-export type ReportData = ExchangeData | TransferData | BalanceData | UserActivityData;
+// Datos agregados para reportes tipo summary
+export interface SummaryReportResponse {
+  exchanges: ExchangeData[];
+  transfers: TransferData[];
+  summary: {
+    totalExchanges: number;
+    totalTransfers: number;
+    totalVolume: number;
+    averageTransaction: number;
+  };
+}
 
+// Tipo genérico para otros reportes
+export type ReportData =
+  | ExchangeData
+  | TransferData
+  | BalanceData
+  | UserActivityData;
+
+// Tipos de request
 export interface ReportRequest {
-  reportType: 'exchanges' | 'transfers' | 'balances' | 'users';
+  reportType: "exchanges" | "transfers" | "balances" | "users" | "summary";
   dateFrom: string;
   dateTo: string;
+  pointId?: string; // <-- Agregado
+  userId?: string; // <-- Agregado
 }

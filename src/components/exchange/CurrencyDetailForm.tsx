@@ -1,10 +1,14 @@
-
-import { useState } from 'react';
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DetalleDivisasSimple, Moneda } from '../../types';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { DetalleDivisasSimple, Moneda } from "../../types";
 
 interface CurrencyDetailFormProps {
   currency: Moneda;
@@ -13,12 +17,17 @@ interface CurrencyDetailFormProps {
   initialData?: DetalleDivisasSimple;
 }
 
-const CurrencyDetailForm = ({ currency, title, onDetailData, initialData }: CurrencyDetailFormProps) => {
+const CurrencyDetailForm = ({
+  currency,
+  title,
+  onDetailData,
+  initialData,
+}: CurrencyDetailFormProps) => {
   const [detail, setDetail] = useState<DetalleDivisasSimple>(
     initialData || {
       billetes: 0,
       monedas: 0,
-      total: 0
+      total: 0,
     }
   );
 
@@ -58,7 +67,7 @@ const CurrencyDetailForm = ({ currency, title, onDetailData, initialData }: Curr
               <Input
                 type="number"
                 step="0.01"
-                value={detail.billetes || ''}
+                value={detail.billetes || ""}
                 onChange={(e) => handleBilletesChange(e.target.value)}
                 placeholder="0.00"
               />
@@ -68,7 +77,7 @@ const CurrencyDetailForm = ({ currency, title, onDetailData, initialData }: Curr
               <Input
                 type="number"
                 step="0.01"
-                value={detail.monedas || ''}
+                value={detail.monedas || ""}
                 onChange={(e) => handleMonedasChange(e.target.value)}
                 placeholder="0.00"
               />
