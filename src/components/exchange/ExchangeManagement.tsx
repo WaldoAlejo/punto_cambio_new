@@ -1,36 +1,17 @@
-import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+
+import { useState, useEffect, useRef } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
   User,
   PuntoAtencion,
   Moneda,
   CambioDivisa,
-  DatosCliente,
-  DetalleDivisasSimple,
 } from "../../types";
 import { ReceiptService } from "../../services/receiptService";
 import { currencyService } from "../../services/currencyService";
 import { exchangeService } from "../../services/exchangeService";
-import CurrencySearchSelect from "../ui/currency-search-select";
-import CustomerDataForm from "./CustomerDataForm";
-import CurrencyDetailForm from "./CurrencyDetailForm";
+import ExchangeSteps, { ExchangeCompleteData } from "./ExchangeSteps";
+import ExchangeList from "./ExchangeList";
 
 interface ExchangeManagementProps {
   user: User;
@@ -41,42 +22,11 @@ const ExchangeManagement = ({
   user,
   selectedPoint,
 }: ExchangeManagementProps) => {
-  const [step, setStep] = useState<"customer" | "exchange" | "details">(
-    "customer"
-  );
-  const [operationType, setOperationType] = useState<"COMPRA" | "VENTA">(
-    "COMPRA"
-  );
-  const [rate, setRate] = useState("");
-  const [fromCurrency, setFromCurrency] = useState("");
-  const [toCurrency, setToCurrency] = useState("");
-  const [amount, setAmount] = useState("");
-  const [destinationAmount, setDestinationAmount] = useState(0);
-  const [observation, setObservation] = useState("");
   const [exchanges, setExchanges] = useState<CambioDivisa[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [isLoadingCurrencies, setIsLoadingCurrencies] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
-
-  const [customerData, setCustomerData] = useState<DatosCliente>({
-    nombre: "",
-    apellido: "",
-    documento: "",
-    cedula: "",
-    telefono: "",
-  });
-  const [divisasEntregadas, setDivisasEntregadas] =
-    useState<DetalleDivisasSimple>({
-      billetes: 0,
-      monedas: 0,
-      total: 0,
-    });
-  const [divisasRecibidas, setDivisasRecibidas] =
-    useState<DetalleDivisasSimple>({
-      billetes: 0,
-      monedas: 0,
-      total: 0,
-    });
+  const stepsRef = useRef<any>(null);
 
   useEffect(() => {
     const fetchCurrencies = async () => {
@@ -113,25 +63,6 @@ const ExchangeManagement = ({
     fetchCurrencies();
   }, []);
 
-  useEffect(() => {
-    if (rate && amount) {
-      const rateValue = parseFloat(rate) || 0;
-      const amountValue = parseFloat(amount) || 0;
-      setDestinationAmount(amountValue * rateValue);
-    } else {
-      setDestinationAmount(0);
-    }
-  }, [amount, rate]);
-
-  const getCurrencyName = (currencyId: string) => {
-    const currency = currencies.find((c) => c.id === currencyId);
-    return currency ? currency.codigo : "";
-  };
-
-  const getCurrency = (currencyId: string) => {
-    return currencies.find((c) => c.id === currencyId);
-  };
-
   const generateReceiptAndPrint = (exchange: CambioDivisa) => {
     const receiptData = ReceiptService.generateCurrencyExchangeReceipt(
       exchange,
@@ -139,7 +70,6 @@ const ExchangeManagement = ({
       user.nombre
     );
 
-    // Imprimir sin bloquear la UI
     try {
       ReceiptService.printReceipt(receiptData, 2);
     } catch (error) {
@@ -152,40 +82,7 @@ const ExchangeManagement = ({
     }
   };
 
-  const handleCustomerDataSubmit = (data: DatosCliente) => {
-    setCustomerData(data);
-    setStep("exchange");
-  };
-
-  const handleExchangeFormSubmit = () => {
-    if (!fromCurrency || !toCurrency) {
-      toast({
-        title: "Error",
-        description: "Debe seleccionar las monedas de origen y destino",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!rate) {
-      toast({
-        title: "Error",
-        description: "Debe ingresar la tasa de cambio",
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!amount) {
-      toast({
-        title: "Error",
-        description: "Debe ingresar el monto a cambiar",
-        variant: "destructive",
-      });
-      return;
-    }
-    setStep("details");
-  };
-
-  const performExchange = async () => {
+  const handleExchangeComplete = async (data: ExchangeCompleteData) => {
     if (!selectedPoint) {
       toast({
         title: "Error",
@@ -199,27 +96,25 @@ const ExchangeManagement = ({
     console.log('=== INICIANDO PROCESO DE CAMBIO DE DIVISA ===');
 
     try {
-      const rateValue = parseFloat(rate) || 0;
+      const rateValue = parseFloat(data.exchangeData.rate) || 0;
 
-      // Preparar datos para el servicio
-      const exchangeData = {
-        moneda_origen_id: fromCurrency,
-        moneda_destino_id: toCurrency,
-        monto_origen: parseFloat(amount),
-        monto_destino: destinationAmount,
+      const exchangePayload = {
+        moneda_origen_id: data.exchangeData.fromCurrency,
+        moneda_destino_id: data.exchangeData.toCurrency,
+        monto_origen: parseFloat(data.exchangeData.amount),
+        monto_destino: data.exchangeData.destinationAmount,
         tasa_cambio: rateValue,
-        tipo_operacion: operationType,
+        tipo_operacion: data.exchangeData.operationType,
         punto_atencion_id: selectedPoint.id,
-        datos_cliente: customerData,
-        divisas_entregadas: divisasEntregadas,
-        divisas_recibidas: divisasRecibidas,
-        observacion: observation || undefined,
+        datos_cliente: data.customerData,
+        divisas_entregadas: data.divisasEntregadas,
+        divisas_recibidas: data.divisasRecibidas,
+        observacion: data.exchangeData.observation || undefined,
       };
 
-      console.log('Datos del cambio a enviar:', exchangeData);
+      console.log('Datos del cambio a enviar:', exchangePayload);
 
-      // Llamar al servicio para crear el cambio
-      const { exchange: createdExchange, error } = await exchangeService.createExchange(exchangeData);
+      const { exchange: createdExchange, error } = await exchangeService.createExchange(exchangePayload);
 
       if (error) {
         console.error('Error del servicio:', error);
@@ -242,19 +137,19 @@ const ExchangeManagement = ({
 
       console.log('Cambio creado exitosamente:', createdExchange);
 
-      // Actualizar la lista local de cambios
       setExchanges([createdExchange, ...exchanges]);
 
-      // Mostrar mensaje de éxito antes de imprimir
       toast({
         title: "Cambio realizado",
         description: `Cambio completado exitosamente. Recibo: ${createdExchange.numero_recibo}`,
       });
 
-      // Limpiar el formulario inmediatamente para evitar pantalla en blanco
-      resetFormOnly();
+      // Reset form immediately
+      if (stepsRef.current && (ExchangeSteps as any).resetSteps) {
+        (ExchangeSteps as any).resetSteps();
+      }
 
-      // Generar e imprimir el recibo después de limpiar el formulario
+      // Print receipt after short delay
       setTimeout(() => {
         generateReceiptAndPrint(createdExchange);
       }, 100);
@@ -269,26 +164,6 @@ const ExchangeManagement = ({
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  // Nueva función que solo resetea el formulario sin afectar la jornada
-  const resetFormOnly = () => {
-    console.log('=== RESETEANDO SOLO FORMULARIO DE CAMBIO ===');
-    setStep("customer");
-    setAmount("");
-    setRate("");
-    setObservation("");
-    setFromCurrency("");
-    setToCurrency("");
-    setDestinationAmount(0);
-    setCustomerData({ nombre: "", apellido: "", documento: "", cedula: "", telefono: "" });
-    setDivisasEntregadas({ billetes: 0, monedas: 0, total: 0 });
-    setDivisasRecibidas({ billetes: 0, monedas: 0, total: 0 });
-  };
-
-  // Función de reseteo completo (si se necesita en el futuro)
-  const resetForm = () => {
-    resetFormOnly();
   };
 
   if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
@@ -328,206 +203,21 @@ const ExchangeManagement = ({
 
       <div className="grid lg:grid-cols-2 gap-6">
         <div className="space-y-6">
-          {step === "customer" && (
-            <CustomerDataForm
-              onCustomerData={handleCustomerDataSubmit}
-              initialData={customerData}
-            />
-          )}
-
-          {step === "exchange" && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Datos del Cambio</CardTitle>
-                <CardDescription>
-                  Configure los detalles de la operación
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Tipo de Operación</Label>
-                    <Select
-                      value={operationType}
-                      onValueChange={(value: "COMPRA" | "VENTA") =>
-                        setOperationType(value)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="COMPRA">Compra</SelectItem>
-                        <SelectItem value="VENTA">Venta</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <CurrencySearchSelect
-                    currencies={currencies}
-                    value={fromCurrency}
-                    onValueChange={setFromCurrency}
-                    placeholder="Seleccionar moneda origen"
-                    label="Moneda Origen"
-                  />
-
-                  <CurrencySearchSelect
-                    currencies={currencies}
-                    value={toCurrency}
-                    onValueChange={setToCurrency}
-                    placeholder="Seleccionar moneda destino"
-                    label="Moneda Destino"
-                  />
-
-                  <div className="space-y-2">
-                    <Label>Tasa de Cambio</Label>
-                    <Input
-                      type="number"
-                      step="0.0001"
-                      value={rate}
-                      onChange={(e) => setRate(e.target.value)}
-                      placeholder="Ingrese la tasa de cambio"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Monto a Cambiar ({getCurrencyName(fromCurrency)})</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Monto Resultante ({getCurrencyName(toCurrency)})</Label>
-                      <div className="h-10 px-3 py-2 border rounded-md bg-gray-50 flex items-center font-bold">
-                        {destinationAmount.toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Observaciones (Opcional)</Label>
-                    <Input
-                      value={observation}
-                      onChange={(e) => setObservation(e.target.value)}
-                      placeholder="Observaciones adicionales"
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setStep("customer")}
-                    >
-                      Atrás
-                    </Button>
-                    <Button
-                      onClick={handleExchangeFormSubmit}
-                      disabled={
-                        !fromCurrency || !toCurrency || !amount || !rate
-                      }
-                      className="flex-1"
-                    >
-                      Continuar
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {step === "details" && (
-            <div className="space-y-4">
-              {fromCurrency && (
-                <CurrencyDetailForm
-                  currency={getCurrency(fromCurrency)!}
-                  title={`Divisas Entregadas (${getCurrencyName(fromCurrency)})`}
-                  onDetailData={setDivisasEntregadas}
-                  initialData={divisasEntregadas}
-                />
-              )}
-              {toCurrency && (
-                <CurrencyDetailForm
-                  currency={getCurrency(toCurrency)!}  
-                  title={`Divisas Recibidas (${getCurrencyName(toCurrency)})`}
-                  onDetailData={setDivisasRecibidas}
-                  initialData={divisasRecibidas}
-                />
-              )}
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setStep("exchange")}>
-                  Atrás
-                </Button>
-                <Button 
-                  onClick={performExchange} 
-                  className="flex-1"
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? "Procesando..." : "Completar Cambio"}
-                </Button>
-              </div>
+          {isProcessing ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-4 text-gray-600">Procesando cambio...</p>
             </div>
+          ) : (
+            <ExchangeSteps
+              ref={stepsRef}
+              currencies={currencies}
+              onComplete={handleExchangeComplete}
+            />
           )}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Cambios Recientes</CardTitle>
-            <CardDescription>Últimas operaciones realizadas</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {exchanges.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No hay cambios registrados
-              </div>
-            ) : (
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {exchanges.map((exchange) => (
-                  <div key={exchange.id} className="border rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          exchange.tipo_operacion === "COMPRA"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-blue-100 text-blue-800"
-                        }`}
-                      >
-                        {exchange.tipo_operacion}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(exchange.fecha).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="text-sm space-y-1">
-                      <p className="font-medium">
-                        {exchange.datos_cliente?.nombre}{" "}
-                        {exchange.datos_cliente?.apellido}
-                      </p>
-                      <p>
-                        {exchange.monto_origen}{" "}
-                        {getCurrencyName(exchange.moneda_origen_id)} →{" "}
-                        {exchange.monto_destino.toFixed(2)}{" "}
-                        {getCurrencyName(exchange.moneda_destino_id)}
-                      </p>
-                      <p className="text-gray-600">
-                        Tasa: {exchange.tasa_cambio}
-                      </p>
-                      {exchange.numero_recibo && (
-                        <p className="text-gray-600 text-xs">
-                          Recibo: {exchange.numero_recibo}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <ExchangeList exchanges={exchanges} currencies={currencies} />
       </div>
     </div>
   );
