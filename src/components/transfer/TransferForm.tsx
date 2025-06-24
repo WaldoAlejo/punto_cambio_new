@@ -65,6 +65,13 @@ const TransferForm = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+
+    // Prevenir múltiples envíos
+    if (isSubmitting) {
+      console.log('⚠️ Envío ya en proceso, ignorando...');
+      return;
+    }
 
     console.log('=== TRANSFER FORM SUBMIT ===');
     console.log("Iniciando proceso de creación de transferencia...");
@@ -232,19 +239,21 @@ const TransferForm = ({
       // Notificar al componente padre
       onTransferCreated(transfer);
 
-      // Generar recibo
-      try {
-        const numeroRecibo = ReceiptService.generateReceiptNumber("TRANSFERENCIA");
-        const receiptData = ReceiptService.generateTransferReceipt(
-          { ...transfer, numero_recibo: numeroRecibo },
-          selectedPoint?.nombre || "Sistema",
-          user.nombre
-        );
-        ReceiptService.printReceipt(receiptData, 2);
-        console.log('📄 Recibo generado exitosamente');
-      } catch (receiptError) {
-        console.error('⚠️ Error generando recibo (no crítico):', receiptError);
-      }
+      // Generar recibo de forma asíncrona para no bloquear la UI
+      setTimeout(async () => {
+        try {
+          const numeroRecibo = ReceiptService.generateReceiptNumber("TRANSFERENCIA");
+          const receiptData = ReceiptService.generateTransferReceipt(
+            { ...transfer, numero_recibo: numeroRecibo },
+            selectedPoint?.nombre || "Sistema",
+            user.nombre
+          );
+          ReceiptService.printReceipt(receiptData, 2);
+          console.log('📄 Recibo generado exitosamente');
+        } catch (receiptError) {
+          console.error('⚠️ Error generando recibo (no crítico):', receiptError);
+        }
+      }, 100);
 
       // Limpiar formulario
       setFormData({
@@ -348,6 +357,7 @@ const TransferForm = ({
               onValueChange={(value) =>
                 setFormData((prev) => ({ ...prev, type: value, toPointId: "" }))
               }
+              disabled={isSubmitting}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar tipo" />
@@ -370,6 +380,7 @@ const TransferForm = ({
                 onValueChange={(value) =>
                   setFormData((prev) => ({ ...prev, toPointId: value }))
                 }
+                disabled={isSubmitting}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar punto" />
@@ -393,6 +404,7 @@ const TransferForm = ({
             }
             placeholder="Seleccionar moneda"
             label="Moneda"
+            disabled={isSubmitting}
           />
 
           <div className="grid grid-cols-3 gap-4">
@@ -406,6 +418,7 @@ const TransferForm = ({
                   setFormData((prev) => ({ ...prev, billetes: e.target.value }))
                 }
                 placeholder="0.00"
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -418,6 +431,7 @@ const TransferForm = ({
                   setFormData((prev) => ({ ...prev, monedas: e.target.value }))
                 }
                 placeholder="0.00"
+                disabled={isSubmitting}
               />
             </div>
             <div className="space-y-2">
@@ -438,6 +452,7 @@ const TransferForm = ({
                 setFormData((prev) => ({ ...prev, amount: e.target.value }))
               }
               placeholder="0.00"
+              disabled={isSubmitting}
             />
           </div>
 
@@ -458,6 +473,7 @@ const TransferForm = ({
                       }))
                     }
                     placeholder="Nombre del responsable"
+                    disabled={isSubmitting}
                   />
                 </div>
                 <div className="space-y-2">
@@ -472,6 +488,7 @@ const TransferForm = ({
                       }))
                     }
                     placeholder="Número de cédula"
+                    disabled={isSubmitting}
                   />
                 </div>
               </div>
@@ -486,6 +503,7 @@ const TransferForm = ({
                     }))
                   }
                   placeholder="Número de teléfono"
+                  disabled={isSubmitting}
                 />
               </div>
             </div>
@@ -500,6 +518,7 @@ const TransferForm = ({
               }
               placeholder="Comentarios adicionales..."
               rows={3}
+              disabled={isSubmitting}
             />
           </div>
 
