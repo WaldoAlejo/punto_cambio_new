@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { User, PuntoAtencion, Moneda, Transferencia } from '../../types';
 import { toast } from "@/hooks/use-toast";
@@ -30,7 +29,7 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
     const loadData = async () => {
       try {
         setIsLoading(true);
-        console.log('Cargando datos de transferencias...');
+        console.warn('Cargando datos de transferencias...');
         
         // Cargar datos reales desde la API
         const [transfersResponse, currenciesResponse, pointsResponse] = await Promise.all([
@@ -39,14 +38,14 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
           apiService.get<ApiResponse>('/points')
         ]);
 
-        console.log('Respuestas obtenidas:', {
+        console.warn('Respuestas obtenidas:', {
           transfers: transfersResponse,
           currencies: currenciesResponse,
           points: pointsResponse
         });
 
         if (transfersResponse.transfers) {
-          console.log(`Cargando ${transfersResponse.transfers.length} transferencias`);
+          console.warn(`Cargando ${transfersResponse.transfers.length} transferencias`);
           setTransfers(transfersResponse.transfers);
         } else if (transfersResponse.error) {
           console.error('Error cargando transferencias:', transfersResponse.error);
@@ -83,7 +82,7 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
 
   const handleTransferCreated = async (transfer: Transferencia) => {
     try {
-      console.log('Nueva transferencia creada:', transfer);
+      console.warn('Nueva transferencia creada:', transfer);
       
       // Actualizar la lista local inmediatamente
       setTransfers(prev => [transfer, ...prev]);
@@ -110,7 +109,7 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
 
   const handleTransferApproved = async (transferId: string) => {
     try {
-      console.log('Aprobando transferencia:', transferId);
+      console.warn('Aprobando transferencia:', transferId);
       
       // Aprobar la transferencia usando el servicio
       const { transfer: approvedTransfer, error } = await transferService.approveTransfer(transferId);

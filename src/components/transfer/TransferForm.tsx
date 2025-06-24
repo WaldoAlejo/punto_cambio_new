@@ -69,13 +69,13 @@ const TransferForm = ({
 
     // Prevenir múltiples envíos
     if (isSubmitting) {
-      console.log('⚠️ Envío ya en proceso, ignorando...');
+      console.warn('⚠️ Envío ya en proceso, ignorando...');
       return;
     }
 
-    console.log('=== TRANSFER FORM SUBMIT ===');
-    console.log("Iniciando proceso de creación de transferencia...");
-    console.log("Datos del formulario:", {
+    console.warn('=== TRANSFER FORM SUBMIT ===');
+    console.warn("Iniciando proceso de creación de transferencia...");
+    console.warn("Datos del formulario:", {
       formData,
       responsable,
       selectedPoint,
@@ -158,7 +158,7 @@ const TransferForm = ({
     }
 
     setIsSubmitting(true);
-    console.log('🚀 Enviando transferencia al servidor...');
+    console.warn('🚀 Enviando transferencia al servidor...');
 
     try {
       let destinoId = "";
@@ -210,7 +210,7 @@ const TransferForm = ({
           } : undefined,
       };
 
-      console.log("📤 Datos finales enviados:", JSON.stringify(transferData, null, 2));
+      console.warn("📤 Datos finales enviados:", JSON.stringify(transferData, null, 2));
 
       const { transfer, error } = await transferService.createTransfer(transferData);
 
@@ -249,9 +249,9 @@ const TransferForm = ({
             user.nombre
           );
           ReceiptService.printReceipt(receiptData, 2);
-          console.log('📄 Recibo generado exitosamente');
+          console.warn('📄 Recibo generado exitosamente');
         } catch (receiptError) {
-          console.error('⚠️ Error generando recibo (no crítico):', receiptError);
+          console.warn('⚠️ Error generando recibo (no crítico):', receiptError);
         }
       }, 100);
 

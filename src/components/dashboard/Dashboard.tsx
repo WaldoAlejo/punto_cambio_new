@@ -66,7 +66,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
       case 'admin-time-management':
         return <AdminTimeManagement user={user} selectedPoint={selectedPoint} />;
       case 'transfer-approvals':
-        return <TransferApprovals user={user} />;
+        return <TransferApprovals />;
       case 'users':
         return <UserManagement />;
       case 'points':

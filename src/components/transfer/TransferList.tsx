@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +13,7 @@ interface TransferListProps {
   onTransferApproved: (transferId: string) => void;
 }
 
-const TransferList = ({ user, transfers, currencies, points, selectedPoint, onTransferApproved }: TransferListProps) => {
+const TransferList = ({ user, transfers, currencies, points, onTransferApproved }: TransferListProps) => {
   const getCurrencyName = (currencyId: string) => {
     const currency = currencies.find(c => c.id === currencyId);
     return currency ? currency.codigo : '';
