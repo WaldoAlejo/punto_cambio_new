@@ -23,8 +23,8 @@ const PORT = process.env.PORT || 3001;
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: "Too many requests from this IP, please try again later.",
 });
 
@@ -33,9 +33,9 @@ app.use(helmet());
 app.use(
   cors({
     origin: [
-      "http://localhost:5173", 
+      "http://localhost:5173",
       "http://localhost:3000",
-      "http://localhost:8080"  // Agregamos el puerto 8080
+      "http://localhost:8080",
     ],
     credentials: true,
   })
@@ -83,7 +83,7 @@ app.use(
     err: unknown,
     req: express.Request,
     res: express.Response,
-    next: express.NextFunction
+    _next: express.NextFunction
   ) => {
     const error = err instanceof Error ? err : new Error("Unknown error");
 

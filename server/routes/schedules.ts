@@ -8,13 +8,6 @@ import { z } from "zod";
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Tipos auxiliares
-type Ubicacion = {
-  lat: number;
-  lng: number;
-  direccion?: string;
-};
-
 // Schema para crear/actualizar jornada - más flexible
 const scheduleSchema = z.object({
   usuario_id: z.string().uuid(),

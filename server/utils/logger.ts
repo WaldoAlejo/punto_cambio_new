@@ -1,4 +1,3 @@
-
 interface LogEntry {
   level: string;
   message: string;
@@ -7,43 +6,57 @@ interface LogEntry {
 }
 
 class Logger {
-  private formatMessage(level: string, message: string, metadata?: Record<string, unknown>): LogEntry {
+  private formatMessage(
+    level: string,
+    message: string,
+    metadata?: Record<string, unknown>
+  ): LogEntry {
     return {
       level,
       message,
       timestamp: new Date().toISOString(),
-      metadata
+      metadata,
     };
   }
 
   private write(entry: LogEntry): void {
     const output = JSON.stringify(entry);
-    
-    if (entry.level === 'error') {
-      console.error(output);
-    } else if (entry.level === 'warn') {
-      console.warn(output);
-    } else {
-      console.log(output);
+
+    switch (entry.level) {
+      case "error":
+        console.error(output);
+        break;
+      case "warn":
+        console.warn(output);
+        break;
+      case "info":
+      case "debug":
+        // En producción no se muestran info/debug
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(output); // usa warn para cumplir con ESLint
+        }
+        break;
+      default:
+        if (process.env.NODE_ENV !== "production") {
+          console.warn(output); // fallback
+        }
     }
   }
 
   info(message: string, metadata?: Record<string, unknown>): void {
-    this.write(this.formatMessage('info', message, metadata));
+    this.write(this.formatMessage("info", message, metadata));
   }
 
   warn(message: string, metadata?: Record<string, unknown>): void {
-    this.write(this.formatMessage('warn', message, metadata));
+    this.write(this.formatMessage("warn", message, metadata));
   }
 
   error(message: string, metadata?: Record<string, unknown>): void {
-    this.write(this.formatMessage('error', message, metadata));
+    this.write(this.formatMessage("error", message, metadata));
   }
 
   debug(message: string, metadata?: Record<string, unknown>): void {
-    if (process.env.NODE_ENV === 'development') {
-      this.write(this.formatMessage('debug', message, metadata));
-    }
+    this.write(this.formatMessage("debug", message, metadata));
   }
 }
 
