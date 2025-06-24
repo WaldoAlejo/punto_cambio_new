@@ -68,11 +68,11 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
       case 'transfer-approvals':
         return <TransferApprovals user={user} />;
       case 'users':
-        return <UserManagement user={user} />;
+        return <UserManagement />;
       case 'points':
-        return <PointManagement user={user} />;
+        return <PointManagement />;
       case 'currencies':
-        return <CurrencyManagement user={user} />;
+        return <CurrencyManagement />;
       case 'reports':
         return <Reports user={user} selectedPoint={selectedPoint} />;
       case 'daily-close':
