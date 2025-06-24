@@ -9,13 +9,20 @@ import { createCurrencySchema, type CreateCurrencyRequest } from '../schemas/val
 const router = express.Router();
 const prisma = new PrismaClient();
 
+interface UpdateData {
+  nombre?: string;
+  simbolo?: string;
+  codigo?: string;
+  orden_display?: number;
+}
+
 // Obtener todas las monedas (sin autenticación requerida para GET)
 router.get('/', async (req: express.Request, res: express.Response): Promise<void> => {
-  console.log('=== CURRENCIES ROUTE - GET / START ===');
-  console.log('Request method:', req.method);
-  console.log('Request path:', req.path);
-  console.log('Request headers authorization:', req.headers.authorization);
-  console.log('Request user:', req.user);
+  console.warn('=== CURRENCIES ROUTE - GET / START ===');
+  console.warn('Request method:', req.method);
+  console.warn('Request path:', req.path);
+  console.warn('Request headers authorization:', req.headers.authorization);
+  console.warn('Request user:', req.user);
   
   try {
     // Headers para evitar caché
@@ -26,20 +33,20 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       'Surrogate-Control': 'no-store'
     });
 
-    console.log('🔍 Querying database for active currencies...');
+    console.warn('🔍 Querying database for active currencies...');
     const currencies = await prisma.moneda.findMany({
       where: { activo: true },
       orderBy: { orden_display: 'asc' }
     });
-    console.log('✅ Database query result - currencies count:', currencies.length);
-    console.log('Raw currencies from database:', currencies);
+    console.warn('✅ Database query result - currencies count:', currencies.length);
+    console.warn('Raw currencies from database:', currencies);
 
     const formattedCurrencies = currencies.map(currency => ({
       ...currency,
       created_at: currency.created_at.toISOString(),
       updated_at: currency.updated_at.toISOString()
     }));
-    console.log('✅ Formatted currencies:', formattedCurrencies);
+    console.warn('✅ Formatted currencies:', formattedCurrencies);
 
     logger.info('Monedas obtenidas', { 
       count: formattedCurrencies.length, 
@@ -51,7 +58,7 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       success: true,
       timestamp: new Date().toISOString()
     };
-    console.log('✅ Sending response:', responseData);
+    console.warn('✅ Sending response:', responseData);
 
     res.status(200).json(responseData);
   } catch (error) {
@@ -71,10 +78,10 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       success: false,
       timestamp: new Date().toISOString()
     };
-    console.log('❌ Sending error response:', errorResponse);
+    console.warn('❌ Sending error response:', errorResponse);
     res.status(500).json(errorResponse);
   } finally {
-    console.log('=== CURRENCIES ROUTE - GET / END ===');
+    console.warn('=== CURRENCIES ROUTE - GET / END ===');
   }
 });
 
@@ -84,18 +91,18 @@ router.post('/',
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createCurrencySchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.log('=== CURRENCIES ROUTE - POST / START ===');
-    console.log('Request method:', req.method);
-    console.log('Request path:', req.path);
-    console.log('Request headers authorization:', req.headers.authorization);
-    console.log('Request user:', req.user);
-    console.log('Request body received:', req.body);
-    console.log('Request body JSON:', JSON.stringify(req.body, null, 2));
+    console.warn('=== CURRENCIES ROUTE - POST / START ===');
+    console.warn('Request method:', req.method);
+    console.warn('Request path:', req.path);
+    console.warn('Request headers authorization:', req.headers.authorization);
+    console.warn('Request user:', req.user);
+    console.warn('Request body received:', req.body);
+    console.warn('Request body JSON:', JSON.stringify(req.body, null, 2));
 
     try {
       const currencyData = req.body as CreateCurrencyRequest;
       
-      console.log('✅ Extracted currency data:', {
+      console.warn('✅ Extracted currency data:', {
         nombre: currencyData.nombre,
         simbolo: currencyData.simbolo,
         codigo: currencyData.codigo,
@@ -103,7 +110,7 @@ router.post('/',
       });
 
       // Verificar si el código ya existe
-      console.log('🔍 Checking if currency code already exists...');
+      console.warn('🔍 Checking if currency code already exists...');
       const existingCurrency = await prisma.moneda.findFirst({
         where: { codigo: currencyData.codigo }
       });
@@ -115,12 +122,12 @@ router.post('/',
           success: false,
           timestamp: new Date().toISOString()
         };
-        console.log('❌ Sending conflict response:', conflictResponse);
+        console.warn('❌ Sending conflict response:', conflictResponse);
         res.status(400).json(conflictResponse);
         return;
       }
 
-      console.log('🔍 Creating currency in database with data:', { ...currencyData, activo: true });
+      console.warn('🔍 Creating currency in database with data:', { ...currencyData, activo: true });
       const newCurrency = await prisma.moneda.create({
         data: { 
           ...currencyData, 
@@ -128,7 +135,7 @@ router.post('/',
           orden_display: currencyData.orden_display || 0
         }
       });
-      console.log('✅ Database create result:', newCurrency);
+      console.warn('✅ Database create result:', newCurrency);
 
       logger.info('Moneda creada', { 
         currencyId: newCurrency.id, 
@@ -144,7 +151,7 @@ router.post('/',
         success: true,
         timestamp: new Date().toISOString()
       };
-      console.log('✅ Sending success response:', responseData);
+      console.warn('✅ Sending success response:', responseData);
 
       res.status(201).json(responseData);
     } catch (error) {
@@ -164,10 +171,10 @@ router.post('/',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.log('❌ Sending error response:', errorResponse);
+      console.warn('❌ Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
-      console.log('=== CURRENCIES ROUTE - POST / END ===');
+      console.warn('=== CURRENCIES ROUTE - POST / END ===');
     }
   }
 );
@@ -177,17 +184,17 @@ router.put('/:id',
   authenticateToken,
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.log('=== CURRENCIES ROUTE - PUT /:id START ===');
-    console.log('Request headers:', req.headers);
-    console.log('Request user:', req.user);
-    console.log('Currency ID to edit:', req.params.id);
-    console.log('Update data received:', req.body);
+    console.warn('=== CURRENCIES ROUTE - PUT /:id START ===');
+    console.warn('Request headers:', req.headers);
+    console.warn('Request user:', req.user);
+    console.warn('Currency ID to edit:', req.params.id);
+    console.warn('Update data received:', req.body);
 
     try {
       const currencyId = req.params.id;
       const { nombre, simbolo, codigo, orden_display } = req.body;
 
-      console.log('Checking if currency exists...');
+      console.warn('Checking if currency exists...');
       const existingCurrency = await prisma.moneda.findUnique({
         where: { id: currencyId }
       });
@@ -199,14 +206,14 @@ router.put('/:id',
           success: false,
           timestamp: new Date().toISOString()
         };
-        console.log('Sending not found response:', notFoundResponse);
+        console.warn('Sending not found response:', notFoundResponse);
         res.status(404).json(notFoundResponse);
         return;
       }
 
       // Verificar si el código ya existe en otra moneda
       if (codigo && codigo !== existingCurrency.codigo) {
-        console.log('Checking if new currency code already exists...');
+        console.warn('Checking if new currency code already exists...');
         const duplicateCurrency = await prisma.moneda.findFirst({
           where: { 
             codigo: codigo,
@@ -221,24 +228,24 @@ router.put('/:id',
             success: false,
             timestamp: new Date().toISOString()
           };
-          console.log('Sending conflict response:', conflictResponse);
+          console.warn('Sending conflict response:', conflictResponse);
           res.status(400).json(conflictResponse);
           return;
         }
       }
 
-      const updateData: any = {};
+      const updateData: UpdateData = {};
       if (nombre) updateData.nombre = nombre;
       if (simbolo) updateData.simbolo = simbolo;
       if (codigo) updateData.codigo = codigo;
       if (orden_display !== undefined) updateData.orden_display = orden_display;
 
-      console.log('Updating currency with data:', updateData);
+      console.warn('Updating currency with data:', updateData);
       const updatedCurrency = await prisma.moneda.update({
         where: { id: currencyId },
         data: updateData
       });
-      console.log('Currency updated successfully:', updatedCurrency);
+      console.warn('Currency updated successfully:', updatedCurrency);
 
       logger.info('Moneda actualizada', { 
         currencyId: updatedCurrency.id, 
@@ -254,7 +261,7 @@ router.put('/:id',
         success: true,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending success response:', responseData);
+      console.warn('Sending success response:', responseData);
 
       res.status(200).json(responseData);
     } catch (error) {
@@ -271,10 +278,10 @@ router.put('/:id',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending error response:', errorResponse);
+      console.warn('Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
-      console.log('=== CURRENCIES ROUTE - PUT /:id END ===');
+      console.warn('=== CURRENCIES ROUTE - PUT /:id END ===');
     }
   }
 );

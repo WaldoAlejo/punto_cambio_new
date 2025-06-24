@@ -43,11 +43,17 @@ interface ExchangeWhereClause {
   usuario_id?: string;
 }
 
+interface AuthenticatedUser {
+  id: string;
+  username: string;
+  nombre: string;
+  rol: string;
+  activo: boolean;
+  punto_atencion_id: string | null;
+}
+
 interface AuthenticatedRequest extends express.Request {
-  user?: {
-    id: string;
-    rol: string;
-  };
+  user?: AuthenticatedUser;
 }
 
 // Crear cambio de divisa

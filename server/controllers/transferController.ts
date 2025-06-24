@@ -7,8 +7,21 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+interface AuthenticatedUser {
+  id: string;
+  username: string;
+  nombre: string;
+  rol: string;
+  activo: boolean;
+  punto_atencion_id: string | null;
+}
+
+interface AuthenticatedRequest extends express.Request {
+  user?: AuthenticatedUser;
+}
+
 export const transferController = {
-  async createTransfer(req: express.Request, res: express.Response): Promise<void> {
+  async createTransfer(req: AuthenticatedRequest, res: express.Response): Promise<void> {
     try {
       const {
         origen_id,
@@ -67,6 +80,16 @@ export const transferController = {
         return;
       }
 
+      // Verificar que el usuario esté autenticado después de las validaciones
+      if (!req.user) {
+        res.status(401).json({ 
+          error: 'Usuario no autenticado',
+          success: false,
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+
       // Crear transferencia
       const numeroRecibo = transferCreationService.generateReceiptNumber();
       
@@ -76,7 +99,7 @@ export const transferController = {
         moneda_id,
         monto: parseFloat(monto.toString()),
         tipo_transferencia,
-        solicitado_por: req.user!.id,
+        solicitado_por: req.user.id,
         descripcion: descripcion || null,
         numero_recibo: numeroRecibo,
         estado: 'PENDIENTE' as const,
@@ -88,7 +111,7 @@ export const transferController = {
       // Crear registros adicionales
       await transferCreationService.createMovement({
         punto_atencion_id: destino_id,
-        usuario_id: req.user!.id,
+        usuario_id: req.user.id,
         moneda_id,
         monto: parseFloat(monto.toString()),
         tipo_transferencia,
@@ -97,7 +120,7 @@ export const transferController = {
 
       await transferCreationService.createReceipt({
         numero_recibo: numeroRecibo,
-        usuario_id: req.user!.id,
+        usuario_id: req.user.id,
         punto_atencion_id: destino_id,
         transferencia: newTransfer,
         detalle_divisas,
@@ -117,7 +140,7 @@ export const transferController = {
 
       logger.info('Transferencia creada exitosamente', { 
         transferId: newTransfer.id,
-        createdBy: req.user!.id,
+        createdBy: req.user.id,
         amount: monto,
         type: tipo_transferencia,
         numeroRecibo,
