@@ -1,119 +1,137 @@
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
-import { pointService } from '../../services/pointService';
-import { PuntoAtencion } from '../../types';
-import { Plus, MapPin, ToggleLeft, ToggleRight } from 'lucide-react';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "@/hooks/use-toast";
+import { PuntoAtencion } from "../../types";
+import { pointService } from "../../services/pointService";
 
 export const PointManagement = () => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const { toast } = useToast();
-
+  const [showForm, setShowForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    nombre: '',
-    direccion: '',
-    ciudad: '',
-    provincia: '',
-    codigo_postal: '',
-    telefono: ''
+    nombre: "",
+    direccion: "",
+    ciudad: "",
+    provincia: "",
+    codigo_postal: "",
+    telefono: "",
   });
+
+  const loadPoints = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { points: fetchedPoints } = await pointService.getAllPoints();
+      setPoints(fetchedPoints);
+    } catch {
+      const errorMessage = "Error al cargar puntos de atención";
+      setError(errorMessage);
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadPoints();
   }, []);
 
-  const loadPoints = async () => {
-    setLoading(true);
-    try {
-      const { points: pointsData, error } = await pointService.getAllPoints();
-      
-      if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive"
-        });
-      } else {
-        setPoints(pointsData);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  const handleCreatePoint = async () => {
-    if (!formData.nombre || !formData.direccion || !formData.ciudad) {
+    if (
+      !formData.nombre ||
+      !formData.direccion ||
+      !formData.ciudad ||
+      !formData.provincia
+    ) {
       toast({
         title: "Error",
-        description: "Complete los campos obligatorios",
-        variant: "destructive"
+        description:
+          "Los campos nombre, dirección, ciudad y provincia son obligatorios",
+        variant: "destructive",
       });
       return;
     }
 
-    const { point, error } = await pointService.createPoint(formData);
-    
-    if (error) {
-      toast({
-        title: "Error",
-        description: error,
-        variant: "destructive"
+    try {
+      const { point: newPoint } = await pointService.createPoint(formData);
+
+      if (!newPoint) {
+        toast({
+          title: "Error",
+          description: "Error al crear punto de atención",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await loadPoints();
+      setFormData({
+        nombre: "",
+        direccion: "",
+        ciudad: "",
+        provincia: "",
+        codigo_postal: "",
+        telefono: "",
       });
-    } else if (point) {
-      setPoints([...points, point]);
-      setIsCreateDialogOpen(false);
-      resetForm();
+      setShowForm(false);
+
       toast({
         title: "Punto creado",
-        description: "El punto de atención se creó exitosamente"
+        description: `Punto de atención ${newPoint.nombre} creado exitosamente`,
       });
-    }
-  };
-
-  const handleTogglePoint = async (pointId: string) => {
-    const { point, error } = await pointService.togglePointStatus(pointId);
-    
-    if (error) {
+    } catch {
       toast({
         title: "Error",
-        description: error,
-        variant: "destructive"
-      });
-    } else if (point) {
-      setPoints(points.map(p => p.id === pointId ? point : p));
-      toast({
-        title: "Estado actualizado",
-        description: `Punto ${point.activo ? 'activado' : 'desactivado'} exitosamente`
+        description: "Error interno del servidor",
+        variant: "destructive",
       });
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      nombre: '',
-      direccion: '',
-      ciudad: '',
-      provincia: '',
-      codigo_postal: '',
-      telefono: ''
-    });
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Cargando puntos...</p>
-        </div>
+      <div className="p-6 text-center py-12">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Cargando puntos de atención...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6 text-center py-12">
+        <p className="text-red-500 text-lg">
+          Error al cargar puntos de atención
+        </p>
+        <p className="text-gray-500 mt-2">{error}</p>
+        <Button onClick={loadPoints} className="mt-4" variant="outline">
+          Reintentar
+        </Button>
       </div>
     );
   }
@@ -121,123 +139,165 @@ export const PointManagement = () => {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Gestión de Puntos de Atención</h1>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo Punto
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Crear Nuevo Punto de Atención</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="nombre">Nombre *</Label>
-                <Input
-                  id="nombre"
-                  value={formData.nombre}
-                  onChange={(e) => setFormData({...formData, nombre: e.target.value})}
-                  placeholder="Nombre del punto"
-                />
+        <h1 className="text-2xl font-bold text-gray-800">
+          Gestión de Puntos de Atención
+        </h1>
+        <Button
+          onClick={() => setShowForm(!showForm)}
+          className="bg-blue-600 hover:bg-blue-700"
+        >
+          {showForm ? "Cancelar" : "Nuevo Punto"}
+        </Button>
+      </div>
+
+      {showForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Crear Nuevo Punto de Atención</CardTitle>
+            <CardDescription>
+              Complete la información del nuevo punto de atención
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nombre *</Label>
+                  <Input
+                    value={formData.nombre}
+                    onChange={(e) =>
+                      setFormData({ ...formData, nombre: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Ciudad *</Label>
+                  <Input
+                    value={formData.ciudad}
+                    onChange={(e) =>
+                      setFormData({ ...formData, ciudad: e.target.value })
+                    }
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="direccion">Dirección *</Label>
+
+              <div className="space-y-2">
+                <Label>Dirección *</Label>
                 <Input
-                  id="direccion"
                   value={formData.direccion}
-                  onChange={(e) => setFormData({...formData, direccion: e.target.value})}
-                  placeholder="Dirección completa"
+                  onChange={(e) =>
+                    setFormData({ ...formData, direccion: e.target.value })
+                  }
                 />
               </div>
-              <div>
-                <Label htmlFor="ciudad">Ciudad *</Label>
-                <Input
-                  id="ciudad"
-                  value={formData.ciudad}
-                  onChange={(e) => setFormData({...formData, ciudad: e.target.value})}
-                  placeholder="Ciudad"
-                />
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Provincia *</Label>
+                  <Input
+                    value={formData.provincia}
+                    onChange={(e) =>
+                      setFormData({ ...formData, provincia: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Código Postal</Label>
+                  <Input
+                    value={formData.codigo_postal}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        codigo_postal: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Teléfono</Label>
+                  <Input
+                    value={formData.telefono}
+                    onChange={(e) =>
+                      setFormData({ ...formData, telefono: e.target.value })
+                    }
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="provincia">Provincia</Label>
-                <Input
-                  id="provincia"
-                  value={formData.provincia}
-                  onChange={(e) => setFormData({...formData, provincia: e.target.value})}
-                  placeholder="Provincia"
-                />
-              </div>
-              <div>
-                <Label htmlFor="codigo_postal">Código Postal</Label>
-                <Input
-                  id="codigo_postal"
-                  value={formData.codigo_postal}
-                  onChange={(e) => setFormData({...formData, codigo_postal: e.target.value})}
-                  placeholder="Código postal"
-                />
-              </div>
-              <div>
-                <Label htmlFor="telefono">Teléfono</Label>
-                <Input
-                  id="telefono"
-                  value={formData.telefono}
-                  onChange={(e) => setFormData({...formData, telefono: e.target.value})}
-                  placeholder="Número de teléfono"
-                />
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleCreatePoint}>
+
+              <div className="flex gap-2">
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                   Crear Punto
                 </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowForm(false)}
+                >
+                  Cancelar
+                </Button>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Puntos de Atención</CardTitle>
+          <CardTitle>Puntos de Atención del Sistema</CardTitle>
+          <CardDescription>
+            Lista de todos los puntos de atención registrados
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {points.map(point => (
-              <div key={point.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-4">
-                    <MapPin className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <h3 className="font-medium">{point.nombre}</h3>
-                      <p className="text-sm text-gray-500">{point.direccion}</p>
-                      <p className="text-sm text-gray-500">{point.ciudad}, {point.provincia}</p>
-                    </div>
-                    <Badge variant={point.activo ? "default" : "secondary"}>
-                      {point.activo ? "Activo" : "Inactivo"}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleTogglePoint(point.id)}
-                  >
-                    {point.activo ? (
-                      <ToggleRight className="h-4 w-4" />
-                    ) : (
-                      <ToggleLeft className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+          {points.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">No hay puntos registrados</p>
+              <p className="text-gray-400 mt-2">
+                Cree uno haciendo clic en "Nuevo Punto"
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Dirección</TableHead>
+                  <TableHead>Ciudad</TableHead>
+                  <TableHead>Provincia</TableHead>
+                  <TableHead>Teléfono</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Fecha Creación</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {points.map((point) => (
+                  <TableRow key={point.id}>
+                    <TableCell className="font-medium">
+                      {point.nombre}
+                    </TableCell>
+                    <TableCell>{point.direccion}</TableCell>
+                    <TableCell>{point.ciudad}</TableCell>
+                    <TableCell>{point.provincia}</TableCell>
+                    <TableCell>{point.telefono || "N/A"}</TableCell>
+                    <TableCell>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          point.activo
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {point.activo ? "Activo" : "Inactivo"}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(point.created_at).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
