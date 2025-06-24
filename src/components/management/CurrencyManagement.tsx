@@ -59,6 +59,20 @@ export const CurrencyManagement = () => {
     e.preventDefault();
     
     try {
+      // Validar que no exista una moneda con el mismo código
+      const existingCurrency = currencies.find(
+        currency => currency.codigo.toUpperCase() === formData.codigo.toUpperCase()
+      );
+      
+      if (existingCurrency) {
+        toast({
+          title: "Error",
+          description: `Ya existe una moneda con el código ${formData.codigo.toUpperCase()}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const result = await currencyService.createCurrency(formData);
       
       if (result.error) {
@@ -96,6 +110,21 @@ export const CurrencyManagement = () => {
     if (!editingCurrency) return;
 
     try {
+      // Validar que no exista otra moneda con el mismo código
+      const existingCurrency = currencies.find(
+        currency => currency.id !== editingCurrency.id && 
+        currency.codigo.toUpperCase() === formData.codigo.toUpperCase()
+      );
+      
+      if (existingCurrency) {
+        toast({
+          title: "Error",
+          description: `Ya existe otra moneda con el código ${formData.codigo.toUpperCase()}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const result = await currencyService.updateCurrency(editingCurrency.id, formData);
       
       if (result.error) {
