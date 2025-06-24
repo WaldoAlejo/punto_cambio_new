@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,6 +27,7 @@ import {
   DetalleDivisasSimple,
 } from "../../types";
 import { ReceiptService } from "../../services/receiptService";
+import { currencyService } from "../../services/currencyService";
 import CurrencySearchSelect from "../ui/currency-search-select";
 import CustomerDataForm from "./CustomerDataForm";
 import CurrencyDetailForm from "./CurrencyDetailForm";
@@ -53,6 +55,7 @@ const ExchangeManagement = ({
   const [observation, setObservation] = useState("");
   const [exchanges, setExchanges] = useState<CambioDivisa[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
+  const [isLoadingCurrencies, setIsLoadingCurrencies] = useState(true);
 
   const [customerData, setCustomerData] = useState<DatosCliente>({
     nombre: "",
@@ -76,21 +79,33 @@ const ExchangeManagement = ({
 
   useEffect(() => {
     const fetchCurrencies = async () => {
+      console.log('=== FETCHING CURRENCIES IN EXCHANGE MANAGEMENT ===');
+      setIsLoadingCurrencies(true);
       try {
-        const res = await fetch("/api/currencies");
-        const data = await res.json();
-        if (data.success && Array.isArray(data.currencies)) {
-          setCurrencies(data.currencies);
+        const { currencies: fetchedCurrencies, error } = await currencyService.getAllCurrencies();
+        
+        if (error) {
+          console.error("Error fetching currencies:", error);
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar las monedas: " + error,
+            variant: "destructive",
+          });
+          setCurrencies([]);
         } else {
-          throw new Error("Respuesta inesperada al obtener monedas");
+          console.log('Currencies loaded successfully:', fetchedCurrencies);
+          setCurrencies(fetchedCurrencies || []);
         }
       } catch (error) {
         console.error("Error al obtener monedas:", error);
         toast({
           title: "Error",
-          description: "No se pudieron cargar las monedas.",
+          description: "Error de conexión al cargar las monedas.",
           variant: "destructive",
         });
+        setCurrencies([]);
+      } finally {
+        setIsLoadingCurrencies(false);
       }
     };
 
@@ -100,7 +115,10 @@ const ExchangeManagement = ({
   useEffect(() => {
     if (rate && amount) {
       const rateValue = parseFloat(rate) || 0;
-      setDestinationAmount(parseFloat(amount) * rateValue);
+      const amountValue = parseFloat(amount) || 0;
+      setDestinationAmount(amountValue * rateValue);
+    } else {
+      setDestinationAmount(0);
     }
   }, [amount, rate]);
 
@@ -132,15 +150,23 @@ const ExchangeManagement = ({
     if (!fromCurrency || !toCurrency) {
       toast({
         title: "Error",
-        description: "Debe seleccionar las monedas",
+        description: "Debe seleccionar las monedas de origen y destino",
         variant: "destructive",
       });
       return;
     }
-    if (!amount || !rate) {
+    if (!rate) {
       toast({
         title: "Error",
-        description: "Debe ingresar el monto y la tasa de cambio",
+        description: "Debe ingresar la tasa de cambio",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (!amount) {
+      toast({
+        title: "Error",
+        description: "Debe ingresar el monto a cambiar",
         variant: "destructive",
       });
       return;
@@ -195,6 +221,9 @@ const ExchangeManagement = ({
     setAmount("");
     setRate("");
     setObservation("");
+    setFromCurrency("");
+    setToCurrency("");
+    setDestinationAmount(0);
     setCustomerData({ nombre: "", apellido: "", documento: "", cedula: "", telefono: "" });
     setDivisasEntregadas({ billetes: 0, monedas: 0, total: 0 });
     setDivisasRecibidas({ billetes: 0, monedas: 0, total: 0 });
@@ -213,6 +242,15 @@ const ExchangeManagement = ({
     return (
       <div className="p-6 text-center py-12 text-gray-500 text-lg">
         Debe seleccionar un punto de atención
+      </div>
+    );
+  }
+
+  if (isLoadingCurrencies) {
+    return (
+      <div className="p-6 text-center py-12">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Cargando monedas...</p>
       </div>
     );
   }
@@ -245,56 +283,54 @@ const ExchangeManagement = ({
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Tipo de Operación</Label>
-                      <Select
-                        value={operationType}
-                        onValueChange={(value: "COMPRA" | "VENTA") =>
-                          setOperationType(value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="COMPRA">Compra</SelectItem>
-                          <SelectItem value="VENTA">Venta</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Tasa de Cambio</Label>
-                      <Input
-                        type="number"
-                        step="0.0001"
-                        value={rate}
-                        onChange={(e) => setRate(e.target.value)}
-                        placeholder="Ingrese tasa"
-                      />
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Tipo de Operación</Label>
+                    <Select
+                      value={operationType}
+                      onValueChange={(value: "COMPRA" | "VENTA") =>
+                        setOperationType(value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="COMPRA">Compra</SelectItem>
+                        <SelectItem value="VENTA">Venta</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <CurrencySearchSelect
-                      currencies={currencies}
-                      value={fromCurrency}
-                      onValueChange={setFromCurrency}
-                      placeholder="Moneda origen"
-                      label="Moneda Origen"
-                    />
-                    <CurrencySearchSelect
-                      currencies={currencies}
-                      value={toCurrency}
-                      onValueChange={setToCurrency}
-                      placeholder="Moneda destino"
-                      label="Moneda Destino"
+                  <CurrencySearchSelect
+                    currencies={currencies}
+                    value={fromCurrency}
+                    onValueChange={setFromCurrency}
+                    placeholder="Seleccionar moneda origen"
+                    label="Moneda Origen"
+                  />
+
+                  <CurrencySearchSelect
+                    currencies={currencies}
+                    value={toCurrency}
+                    onValueChange={setToCurrency}
+                    placeholder="Seleccionar moneda destino"
+                    label="Moneda Destino"
+                  />
+
+                  <div className="space-y-2">
+                    <Label>Tasa de Cambio</Label>
+                    <Input
+                      type="number"
+                      step="0.0001"
+                      value={rate}
+                      onChange={(e) => setRate(e.target.value)}
+                      placeholder="Ingrese la tasa de cambio"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Monto a Cambiar</Label>
+                      <Label>Monto a Cambiar ({getCurrencyName(fromCurrency)})</Label>
                       <Input
                         type="number"
                         step="0.01"
@@ -304,7 +340,7 @@ const ExchangeManagement = ({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Monto Resultante</Label>
+                      <Label>Monto Resultante ({getCurrencyName(toCurrency)})</Label>
                       <div className="h-10 px-3 py-2 border rounded-md bg-gray-50 flex items-center font-bold">
                         {destinationAmount.toFixed(2)}
                       </div>
@@ -347,7 +383,7 @@ const ExchangeManagement = ({
               {fromCurrency && (
                 <CurrencyDetailForm
                   currency={getCurrency(fromCurrency)!}
-                  title="Divisas Entregadas"
+                  title={`Divisas Entregadas (${getCurrencyName(fromCurrency)})`}
                   onDetailData={setDivisasEntregadas}
                   initialData={divisasEntregadas}
                 />
@@ -355,7 +391,7 @@ const ExchangeManagement = ({
               {toCurrency && (
                 <CurrencyDetailForm
                   currency={getCurrency(toCurrency)!}  
-                  title="Divisas Recibidas"
+                  title={`Divisas Recibidas (${getCurrencyName(toCurrency)})`}
                   onDetailData={setDivisasRecibidas}
                   initialData={divisasRecibidas}
                 />
