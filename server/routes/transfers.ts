@@ -44,9 +44,10 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       responsable_movilizacion
     } = req.body;
 
-    console.log('=== CREAR TRANSFERENCIA EN SERVIDOR ===');
-    console.log('Usuario ID:', req.user?.id);
-    console.log('Datos recibidos:', JSON.stringify(req.body, null, 2));
+    logger.info('=== CREAR TRANSFERENCIA EN SERVIDOR ===', {
+      usuarioId: req.user?.id,
+      datosRecibidos: req.body
+    });
 
     // Validar que el usuario existe
     if (!req.user?.id) {
@@ -123,7 +124,7 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       fecha: new Date()
     };
 
-    console.log('Creando transferencia con datos:', transferData);
+    logger.info('Creando transferencia con datos:', transferData);
 
     // Crear la transferencia en la base de datos
     const newTransfer = await prisma.transferencia.create({
@@ -159,7 +160,7 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       }
     });
 
-    console.log('Transferencia creada en BD:', newTransfer);
+    logger.info('Transferencia creada en BD:', newTransfer);
 
     // Crear registro adicional en tabla de movimientos si es necesario
     try {
@@ -169,12 +170,12 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
           usuario_id: req.user.id,
           moneda_id,
           monto: parseFloat(monto.toString()),
-          tipo: 'TRANSFERENCIA',
+          tipo: 'ENTRADA', // Usar valor válido del enum TipoMovimiento
           descripcion: `Transferencia ${tipo_transferencia} - ${numeroRecibo}`,
           numero_recibo: numeroRecibo
         }
       });
-      console.log('Movimiento registrado exitosamente');
+      logger.info('Movimiento registrado exitosamente');
     } catch (movError) {
       logger.warn('Error registrando movimiento (no crítico)', { error: movError });
     }
@@ -198,7 +199,7 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
           }
         }
       });
-      console.log('Recibo registrado exitosamente');
+      logger.info('Recibo registrado exitosamente');
     } catch (reciboError) {
       logger.warn('Error registrando recibo (no crítico)', { error: reciboError });
     }
@@ -236,9 +237,10 @@ router.post('/', authenticateToken, validate(createTransferSchema), async (req: 
       body: req.body
     });
     
-    console.error('=== ERROR CREAR TRANSFERENCIA ===');
-    console.error('Error:', error);
-    console.error('Stack:', error instanceof Error ? error.stack : 'No stack');
+    logger.error('=== ERROR CREAR TRANSFERENCIA ===', {
+      error: error,
+      stack: error instanceof Error ? error.stack : 'No stack'
+    });
     
     res.status(500).json({ 
       error: 'Error interno del servidor al crear transferencia',
@@ -259,7 +261,7 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       'Surrogate-Control': 'no-store'
     });
 
-    console.log('Obteniendo transferencias de la base de datos...');
+    logger.info('Obteniendo transferencias de la base de datos...');
 
     const transfers = await prisma.transferencia.findMany({
       include: {
@@ -303,7 +305,7 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       }
     });
 
-    console.log(`Transferencias encontradas en BD: ${transfers.length}`);
+    logger.info(`Transferencias encontradas en BD: ${transfers.length}`);
 
     const formattedTransfers = transfers.map(transfer => ({
       ...transfer,
