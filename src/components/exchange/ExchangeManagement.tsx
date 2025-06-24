@@ -28,6 +28,7 @@ import {
 } from "../../types";
 import { ReceiptService } from "../../services/receiptService";
 import { currencyService } from "../../services/currencyService";
+import { exchangeService } from "../../services/exchangeService";
 import CurrencySearchSelect from "../ui/currency-search-select";
 import CustomerDataForm from "./CustomerDataForm";
 import CurrencyDetailForm from "./CurrencyDetailForm";
@@ -56,6 +57,7 @@ const ExchangeManagement = ({
   const [exchanges, setExchanges] = useState<CambioDivisa[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [isLoadingCurrencies, setIsLoadingCurrencies] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const [customerData, setCustomerData] = useState<DatosCliente>({
     nombre: "",
@@ -174,7 +176,7 @@ const ExchangeManagement = ({
     setStep("details");
   };
 
-  const performExchange = () => {
+  const performExchange = async () => {
     if (!selectedPoint) {
       toast({
         title: "Error",
@@ -184,39 +186,82 @@ const ExchangeManagement = ({
       return;
     }
 
-    const rateValue = parseFloat(rate) || 0;
+    setIsProcessing(true);
+    console.log('=== INICIANDO PROCESO DE CAMBIO DE DIVISA ===');
 
-    const newExchange: CambioDivisa = {
-      id: Date.now().toString(),
-      fecha: new Date().toISOString(),
-      monto_origen: parseFloat(amount),
-      monto_destino: destinationAmount,
-      tasa_cambio: rateValue,
-      tipo_operacion: operationType,
-      moneda_origen_id: fromCurrency,
-      moneda_destino_id: toCurrency,
-      usuario_id: user.id,
-      punto_atencion_id: selectedPoint.id,
-      observacion: observation,
-      numero_recibo: ReceiptService.generateReceiptNumber("CAMBIO_DIVISA"),
-      estado: "COMPLETADO",
-      datos_cliente: customerData,
-      divisas_entregadas: divisasEntregadas,
-      divisas_recibidas: divisasRecibidas,
-      monedaOrigen: getCurrency(fromCurrency),
-      monedaDestino: getCurrency(toCurrency),
-    };
+    try {
+      const rateValue = parseFloat(rate) || 0;
 
-    setExchanges([newExchange, ...exchanges]);
-    generateReceiptAndPrint(newExchange);
-    resetForm();
-    toast({
-      title: "Cambio realizado",
-      description: `Cambio completado y recibo generado`,
-    });
+      // Preparar datos para el servicio
+      const exchangeData = {
+        moneda_origen_id: fromCurrency,
+        moneda_destino_id: toCurrency,
+        monto_origen: parseFloat(amount),
+        monto_destino: destinationAmount,
+        tasa_cambio: rateValue,
+        tipo_operacion: operationType,
+        punto_atencion_id: selectedPoint.id,
+        datos_cliente: customerData,
+        divisas_entregadas: divisasEntregadas,
+        divisas_recibidas: divisasRecibidas,
+        observacion: observation || undefined,
+      };
+
+      console.log('Datos del cambio a enviar:', exchangeData);
+
+      // Llamar al servicio para crear el cambio
+      const { exchange: createdExchange, error } = await exchangeService.createExchange(exchangeData);
+
+      if (error) {
+        console.error('Error del servicio:', error);
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!createdExchange) {
+        toast({
+          title: "Error",
+          description: "No se pudo crear el cambio de divisa",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('Cambio creado exitosamente:', createdExchange);
+
+      // Actualizar la lista local de cambios
+      setExchanges([createdExchange, ...exchanges]);
+
+      // Generar e imprimir el recibo
+      generateReceiptAndPrint(createdExchange);
+
+      // Limpiar el formulario pero mantener la jornada de trabajo
+      resetFormOnly();
+
+      toast({
+        title: "Cambio realizado",
+        description: `Cambio completado exitosamente. Recibo: ${createdExchange.numero_recibo}`,
+      });
+
+    } catch (error) {
+      console.error('Error inesperado al procesar cambio:', error);
+      toast({
+        title: "Error",
+        description: "Error inesperado al procesar el cambio",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const resetForm = () => {
+  // Nueva función que solo resetea el formulario sin afectar la jornada
+  const resetFormOnly = () => {
+    console.log('=== RESETEANDO SOLO FORMULARIO DE CAMBIO ===');
     setStep("customer");
     setAmount("");
     setRate("");
@@ -227,6 +272,11 @@ const ExchangeManagement = ({
     setCustomerData({ nombre: "", apellido: "", documento: "", cedula: "", telefono: "" });
     setDivisasEntregadas({ billetes: 0, monedas: 0, total: 0 });
     setDivisasRecibidas({ billetes: 0, monedas: 0, total: 0 });
+  };
+
+  // Función de reseteo completo (si se necesita en el futuro)
+  const resetForm = () => {
+    resetFormOnly();
   };
 
   if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
@@ -400,8 +450,12 @@ const ExchangeManagement = ({
                 <Button variant="outline" onClick={() => setStep("exchange")}>
                   Atrás
                 </Button>
-                <Button onClick={performExchange} className="flex-1">
-                  Completar Cambio
+                <Button 
+                  onClick={performExchange} 
+                  className="flex-1"
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? "Procesando..." : "Completar Cambio"}
                 </Button>
               </div>
             </div>
