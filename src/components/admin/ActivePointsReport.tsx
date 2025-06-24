@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -56,9 +55,8 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
     try {
       console.log('Cargando horarios activos...');
       
-      // Obtener horarios activos de hoy
-      const today = new Date().toISOString().split('T')[0];
-      const { schedules, error } = await scheduleService.getSchedules({ fecha: today });
+      // Obtener todos los horarios y filtrar los activos
+      const { schedules, error } = await scheduleService.getAllSchedules();
       
       if (error) {
         console.error('Error al cargar horarios:', error);
@@ -70,10 +68,14 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
         return;
       }
 
-      // Filtrar solo los horarios activos (que no han terminado)
-      const activesOnly = schedules.filter(schedule => 
-        schedule.estado === 'ACTIVO' && !schedule.fecha_salida
-      );
+      // Filtrar solo los horarios activos de hoy (que no han terminado)
+      const today = new Date().toISOString().split('T')[0];
+      const activesOnly = schedules.filter(schedule => {
+        const scheduleDate = new Date(schedule.fecha_inicio).toISOString().split('T')[0];
+        return schedule.estado === 'ACTIVO' && 
+               !schedule.fecha_salida && 
+               scheduleDate === today;
+      });
 
       console.log('Horarios activos encontrados:', activesOnly);
       setActiveSchedules(activesOnly);
