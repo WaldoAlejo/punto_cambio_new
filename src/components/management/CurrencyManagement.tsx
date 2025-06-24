@@ -10,12 +10,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { currencyService } from "@/services/currencyService";
 import { Moneda, CreateCurrencyData } from "@/types";
-import { Coins, Plus } from "lucide-react";
+import { Coins, Plus, Edit } from "lucide-react";
 
 export const CurrencyManagement = () => {
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingCurrency, setEditingCurrency] = useState<Moneda | null>(null);
   const [formData, setFormData] = useState<CreateCurrencyData>({
     nombre: "",
     simbolo: "",
@@ -86,6 +88,57 @@ export const CurrencyManagement = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleEditCurrency = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!editingCurrency) return;
+
+    try {
+      const result = await currencyService.updateCurrency(editingCurrency.id, formData);
+      
+      if (result.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Éxito",
+          description: "Moneda actualizada correctamente",
+        });
+        
+        setEditDialogOpen(false);
+        setEditingCurrency(null);
+        setFormData({
+          nombre: "",
+          simbolo: "",
+          codigo: "",
+          orden_display: 0,
+        });
+        
+        await loadCurrencies();
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al actualizar moneda",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openEditDialog = (currency: Moneda) => {
+    setEditingCurrency(currency);
+    setFormData({
+      nombre: currency.nombre,
+      simbolo: currency.simbolo,
+      codigo: currency.codigo,
+      orden_display: currency.orden_display,
+    });
+    setEditDialogOpen(true);
   };
 
   if (loading) {
@@ -182,6 +235,7 @@ export const CurrencyManagement = () => {
               <TableHead>Símbolo</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead>Fecha Creación</TableHead>
+              <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -199,11 +253,86 @@ export const CurrencyManagement = () => {
                 <TableCell>
                   {new Date(currency.created_at).toLocaleDateString()}
                 </TableCell>
+                <TableCell>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openEditDialog(currency)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </CardContent>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Moneda</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditCurrency} className="space-y-4">
+            <div>
+              <Label htmlFor="edit_nombre">Nombre</Label>
+              <Input
+                id="edit_nombre"
+                value={formData.nombre}
+                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                placeholder="Dólar Estadounidense"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit_simbolo">Símbolo</Label>
+                <Input
+                  id="edit_simbolo"
+                  value={formData.simbolo}
+                  onChange={(e) => setFormData({ ...formData, simbolo: e.target.value })}
+                  placeholder="$"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit_codigo">Código</Label>
+                <Input
+                  id="edit_codigo"
+                  value={formData.codigo}
+                  onChange={(e) => setFormData({ ...formData, codigo: e.target.value.toUpperCase() })}
+                  placeholder="USD"
+                  maxLength={3}
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="edit_orden_display">Orden de Visualización</Label>
+              <Input
+                id="edit_orden_display"
+                type="number"
+                value={formData.orden_display}
+                onChange={(e) => setFormData({ ...formData, orden_display: parseInt(e.target.value) || 0 })}
+                min="0"
+              />
+            </div>
+            <div className="flex space-x-2">
+              <Button type="submit" className="flex-1">
+                Actualizar Moneda
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

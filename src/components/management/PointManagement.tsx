@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,12 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { pointService } from "@/services/pointService";
 import { PuntoAtencion, CreatePointData } from "@/types";
-import { MapPin, Plus } from "lucide-react";
+import { MapPin, Plus, Edit, Power } from "lucide-react";
 
 export const PointManagement = () => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingPoint, setEditingPoint] = useState<PuntoAtencion | null>(null);
   const [formData, setFormData] = useState<CreatePointData>({
     nombre: "",
     direccion: "",
@@ -59,12 +60,7 @@ export const PointManagement = () => {
     e.preventDefault();
     
     try {
-      console.log('=== POINT MANAGEMENT CREATE DEBUG ===');
-      console.log('Form data before processing:', formData);
-      
-      // Validate required fields
       if (!formData.nombre || !formData.direccion || !formData.ciudad || !formData.provincia) {
-        console.error('Missing required fields');
         toast({
           title: "Error",
           description: "Los campos nombre, dirección, ciudad y provincia son obligatorios",
@@ -79,28 +75,20 @@ export const PointManagement = () => {
         telefono: formData.telefono || undefined,
       };
 
-      console.log('Processed point data:', pointData);
-      console.log('About to call pointService.createPoint...');
-
       const result = await pointService.createPoint(pointData);
       
-      console.log('Point creation result:', result);
-      
       if (result.error) {
-        console.error('Point creation failed:', result.error);
         toast({
           title: "Error",
           description: result.error,
           variant: "destructive",
         });
       } else {
-        console.log('Point created successfully, showing success toast');
         toast({
           title: "Éxito",
           description: "Punto de atención creado correctamente",
         });
         
-        console.log('Closing dialog and resetting form');
         setDialogOpen(false);
         setFormData({
           nombre: "",
@@ -111,22 +99,97 @@ export const PointManagement = () => {
           telefono: "",
         });
         
-        console.log('Reloading points...');
         await loadPoints();
-        console.log('Points reloaded successfully');
       }
     } catch (error) {
-      console.error('=== POINT MANAGEMENT ERROR ===');
-      console.error('Exception in handleCreatePoint:', error);
-      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
-      console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
-      
       toast({
         title: "Error",
         description: "Error al crear punto de atención",
         variant: "destructive",
       });
     }
+  };
+
+  const handleEditPoint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!editingPoint) return;
+
+    try {
+      const result = await pointService.updatePoint(editingPoint.id, formData);
+      
+      if (result.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Éxito",
+          description: "Punto de atención actualizado correctamente",
+        });
+        
+        setEditDialogOpen(false);
+        setEditingPoint(null);
+        setFormData({
+          nombre: "",
+          direccion: "",
+          ciudad: "",
+          provincia: "",
+          codigo_postal: "",
+          telefono: "",
+        });
+        
+        await loadPoints();
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al actualizar punto de atención",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleToggleStatus = async (point: PuntoAtencion) => {
+    try {
+      const result = await pointService.togglePointStatus(point.id);
+      
+      if (result.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Éxito",
+          description: `Punto ${result.point?.activo ? 'activado' : 'desactivado'} correctamente`,
+        });
+        
+        await loadPoints();
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Error al cambiar estado del punto",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openEditDialog = (point: PuntoAtencion) => {
+    setEditingPoint(point);
+    setFormData({
+      nombre: point.nombre,
+      direccion: point.direccion,
+      ciudad: point.ciudad,
+      provincia: point.provincia,
+      codigo_postal: point.codigo_postal || "",
+      telefono: point.telefono || "",
+    });
+    setEditDialogOpen(true);
   };
 
   if (loading) {
@@ -236,6 +299,7 @@ export const PointManagement = () => {
               <TableHead>Provincia</TableHead>
               <TableHead>Teléfono</TableHead>
               <TableHead>Estado</TableHead>
+              <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -251,11 +315,108 @@ export const PointManagement = () => {
                     {point.activo ? "Activo" : "Inactivo"}
                   </Badge>
                 </TableCell>
+                <TableCell>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEditDialog(point)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={point.activo ? "destructive" : "default"}
+                      size="sm"
+                      onClick={() => handleToggleStatus(point)}
+                    >
+                      <Power className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </CardContent>
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Punto de Atención</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditPoint} className="space-y-4">
+            <div>
+              <Label htmlFor="edit_nombre">Nombre</Label>
+              <Input
+                id="edit_nombre"
+                value={formData.nombre}
+                onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                required
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit_direccion">Dirección</Label>
+              <Input
+                id="edit_direccion"
+                value={formData.direccion}
+                onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit_ciudad">Ciudad</Label>
+                <Input
+                  id="edit_ciudad"
+                  value={formData.ciudad}
+                  onChange={(e) => setFormData({ ...formData, ciudad: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit_provincia">Provincia</Label>
+                <Input
+                  id="edit_provincia"
+                  value={formData.provincia}
+                  onChange={(e) => setFormData({ ...formData, provincia: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit_codigo_postal">Código Postal</Label>
+                <Input
+                  id="edit_codigo_postal"
+                  value={formData.codigo_postal}
+                  onChange={(e) => setFormData({ ...formData, codigo_postal: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit_telefono">Teléfono</Label>
+                <Input
+                  id="edit_telefono"
+                  value={formData.telefono}
+                  onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <Button type="submit" className="flex-1">
+                Actualizar Punto
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
