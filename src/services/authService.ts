@@ -41,8 +41,8 @@ export const authService = {
     error: string | null;
   }> {
     try {
-      console.log("Intentando login con:", credentials.username);
-      console.log("Making request to:", `${API_BASE_URL}/auth/login`);
+      console.warn("Intentando login con:", credentials.username);
+      console.warn("Making request to:", `${API_BASE_URL}/auth/login`);
 
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
@@ -55,7 +55,7 @@ export const authService = {
         body: JSON.stringify(credentials),
       });
 
-      console.log("Login response status:", response.status);
+      console.warn("Login response status:", response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -85,10 +85,10 @@ export const authService = {
       }
 
       const data: Partial<LoginResponse> = await response.json();
-      console.log("Login response data:", data);
+      console.warn("Login response data:", data);
 
       if (!data.success || !data.user || !data.token) {
-        console.log("Error en login:", data.error);
+        console.warn("Error en login:", data.error);
         return {
           user: null,
           token: null,
@@ -96,7 +96,7 @@ export const authService = {
         };
       }
 
-      console.log("Login exitoso para:", data.user.username);
+      console.warn("Login exitoso para:", data.user.username);
 
       // Guardar token en localStorage
       localStorage.setItem("authToken", data.token);
@@ -128,7 +128,7 @@ export const authService = {
         return { user: null, valid: false, error: "No token found" };
       }
 
-      console.log("Verificando token...");
+      console.warn("Verificando token...");
       const response = await fetch(`${API_BASE_URL}/auth/verify`, {
         method: "GET",
         headers: {
@@ -141,7 +141,7 @@ export const authService = {
       });
 
       if (response.status === 401 || response.status === 403) {
-        console.log("Token inválido o expirado");
+        console.warn("Token inválido o expirado");
         return { user: null, valid: false, error: "Token invalid" };
       }
 
@@ -151,7 +151,7 @@ export const authService = {
       }
 
       const data = await response.json();
-      console.log("Token verificado exitosamente");
+      console.warn("Token verificado exitosamente");
       return { user: data.user, valid: true };
     } catch (error) {
       console.error("Error verificando token:", error);

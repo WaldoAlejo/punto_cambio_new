@@ -43,12 +43,19 @@ interface ExchangeWhereClause {
   usuario_id?: string;
 }
 
+interface AuthenticatedRequest extends express.Request {
+  user?: {
+    id: string;
+    rol: string;
+  };
+}
+
 // Crear cambio de divisa
 router.post(
   "/",
   authenticateToken,
   validate(exchangeSchema),
-  async (req: express.Request, res: express.Response): Promise<void> => {
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       const {
         moneda_origen_id,
@@ -219,8 +226,17 @@ router.post(
 router.get(
   "/",
   authenticateToken,
-  async (req: express.Request, res: express.Response): Promise<void> => {
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
+      if (!req.user?.id) {
+        res.status(401).json({
+          error: "Usuario no autenticado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       const whereClause: ExchangeWhereClause = {};
 
       // Filtrar por punto de atención si se proporciona
@@ -229,7 +245,7 @@ router.get(
       }
 
       // Los operadores solo pueden ver sus propios cambios
-      if (req.user?.rol === "OPERADOR") {
+      if (req.user.rol === "OPERADOR") {
         whereClause.usuario_id = req.user.id;
       }
 
@@ -274,7 +290,7 @@ router.get(
 
       logger.info("Cambios de divisa obtenidos", {
         count: exchanges.length,
-        usuario_id: req.user?.id,
+        usuario_id: req.user.id,
       });
 
       res.status(200).json({

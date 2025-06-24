@@ -31,6 +31,7 @@ export const useExchangeProcess = ({
     try {
       ReceiptService.printReceipt(receiptData, 2);
     } catch (error) {
+      console.warn('Error al imprimir recibo:', error);
       toast({
         title: "Advertencia",
         description: "El recibo se generó correctamente pero hubo un problema con la impresión",
@@ -102,6 +103,7 @@ export const useExchangeProcess = ({
       }, 100);
 
     } catch (error) {
+      console.error('Error al procesar cambio:', error);
       toast({
         title: "Error",
         description: "Error inesperado al procesar el cambio",

@@ -30,11 +30,21 @@ export interface CreateExchangeData {
   observacion?: string;
 }
 
+interface ExchangeResponse {
+  exchange: CambioDivisa;
+  success: boolean;
+}
+
+interface ExchangesResponse {
+  exchanges: CambioDivisa[];
+  success: boolean;
+}
+
 export const exchangeService = {
   async createExchange(data: CreateExchangeData): Promise<{ exchange: CambioDivisa | null; error: string | null }> {
     try {
-      console.log('Creating exchange:', data);
-      const response = await apiService.post<{ exchange: CambioDivisa; success: boolean }>('/exchanges', data);
+      console.warn('Creating exchange:', data);
+      const response = await apiService.post<ExchangeResponse>('/exchanges', data);
       
       if (response.success) {
         return { exchange: response.exchange, error: null };
@@ -49,8 +59,8 @@ export const exchangeService = {
 
   async getAllExchanges(): Promise<{ exchanges: CambioDivisa[]; error: string | null }> {
     try {
-      console.log('Fetching all exchanges');
-      const response = await apiService.get<{ exchanges: CambioDivisa[]; success: boolean }>('/exchanges');
+      console.warn('Fetching all exchanges');
+      const response = await apiService.get<ExchangesResponse>('/exchanges');
       
       if (response.success) {
         return { exchanges: response.exchanges, error: null };
@@ -65,8 +75,8 @@ export const exchangeService = {
 
   async getExchangesByPoint(pointId: string): Promise<{ exchanges: CambioDivisa[]; error: string | null }> {
     try {
-      console.log('Fetching exchanges for point:', pointId);
-      const response = await apiService.get<{ exchanges: CambioDivisa[]; success: boolean }>(`/exchanges?point_id=${pointId}`);
+      console.warn('Fetching exchanges for point:', pointId);
+      const response = await apiService.get<ExchangesResponse>(`/exchanges?point_id=${pointId}`);
       
       if (response.success) {
         return { exchanges: response.exchanges, error: null };

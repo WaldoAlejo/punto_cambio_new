@@ -17,11 +17,28 @@ export interface CreateTransferData {
   responsable_movilizacion?: ResponsableMovilizacion;
 }
 
+interface ApiResponse<T> {
+  success: boolean;
+  message?: string;
+  data?: T;
+}
+
+interface TransferResponse {
+  transfer: Transferencia;
+  success: boolean;
+  message?: string;
+}
+
+interface TransfersResponse {
+  transfers: Transferencia[];
+  success: boolean;
+}
+
 export const transferService = {
   async createTransfer(data: CreateTransferData): Promise<{ transfer: Transferencia | null; error: string | null }> {
     try {
-      console.log('=== TRANSFER SERVICE - CREATE TRANSFER ===');
-      console.log('Datos enviados al servidor:', JSON.stringify(data, null, 2));
+      console.warn('=== TRANSFER SERVICE - CREATE TRANSFER ===');
+      console.warn('Datos enviados al servidor:', JSON.stringify(data, null, 2));
       
       // Validaciones básicas antes de enviar
       if (!data.destino_id) {
@@ -44,13 +61,13 @@ export const transferService = {
         return { transfer: null, error: 'Tipo de transferencia es requerido' };
       }
 
-      console.log('Enviando petición POST a /transfers...');
-      const response = await apiService.post<{ transfer: Transferencia; success: boolean; message?: string }>('/transfers', data);
+      console.warn('Enviando petición POST a /transfers...');
+      const response = await apiService.post<TransferResponse>('/transfers', data);
       
-      console.log('Respuesta recibida del servidor:', response);
+      console.warn('Respuesta recibida del servidor:', response);
       
       if (response && response.success && response.transfer) {
-        console.log('✅ Transferencia creada y guardada exitosamente:', response.transfer);
+        console.warn('✅ Transferencia creada y guardada exitosamente:', response.transfer);
         return { transfer: response.transfer, error: null };
       } else {
         const errorMsg = response?.message || 'Error al crear la transferencia';
@@ -62,7 +79,7 @@ export const transferService = {
       console.error('Error completo:', error);
       
       if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as any;
+        const axiosError = error as { response?: { status?: number; data?: { error?: string } } };
         console.error('Status HTTP:', axiosError.response?.status);
         console.error('Data del error:', axiosError.response?.data);
         
@@ -77,13 +94,13 @@ export const transferService = {
 
   async getAllTransfers(): Promise<{ transfers: Transferencia[]; error: string | null }> {
     try {
-      console.log('Obteniendo todas las transferencias desde el servidor...');
-      const response = await apiService.get<{ transfers: Transferencia[]; success: boolean }>('/transfers');
+      console.warn('Obteniendo todas las transferencias desde el servidor...');
+      const response = await apiService.get<TransfersResponse>('/transfers');
       
-      console.log('Respuesta de transferencias:', response);
+      console.warn('Respuesta de transferencias:', response);
       
       if (response && response.success) {
-        console.log(`✅ ${response.transfers.length} transferencias obtenidas desde BD`);
+        console.warn(`✅ ${response.transfers.length} transferencias obtenidas desde BD`);
         return { transfers: response.transfers, error: null };
       } else {
         console.error('❌ Error obteniendo transferencias');
@@ -97,13 +114,13 @@ export const transferService = {
 
   async getPendingTransfers(): Promise<{ transfers: Transferencia[]; error: string | null }> {
     try {
-      console.log('Obteniendo transferencias pendientes...');
-      const response = await apiService.get<{ transfers: Transferencia[]; success: boolean }>('/transfer-approvals');
+      console.warn('Obteniendo transferencias pendientes...');
+      const response = await apiService.get<TransfersResponse>('/transfer-approvals');
       
-      console.log('Respuesta de transferencias pendientes:', response);
+      console.warn('Respuesta de transferencias pendientes:', response);
       
       if (response && response.success) {
-        console.log(`✅ ${response.transfers.length} transferencias pendientes obtenidas`);
+        console.warn(`✅ ${response.transfers.length} transferencias pendientes obtenidas`);
         return { transfers: response.transfers, error: null };
       } else {
         console.error('❌ Error obteniendo transferencias pendientes');
@@ -117,11 +134,11 @@ export const transferService = {
 
   async approveTransfer(transferId: string, observaciones?: string): Promise<{ transfer: Transferencia | null; error: string | null }> {
     try {
-      console.log('Aprobando transferencia:', transferId);
-      const response = await apiService.patch<{ transfer: Transferencia; success: boolean }>(`/transfer-approvals/${transferId}/approve`, { observaciones });
+      console.warn('Aprobando transferencia:', transferId);
+      const response = await apiService.patch<TransferResponse>(`/transfer-approvals/${transferId}/approve`, { observaciones });
       
       if (response && response.success) {
-        console.log('✅ Transferencia aprobada exitosamente');
+        console.warn('✅ Transferencia aprobada exitosamente');
         return { transfer: response.transfer, error: null };
       } else {
         return { transfer: null, error: 'Error al aprobar la transferencia' };
@@ -134,11 +151,11 @@ export const transferService = {
 
   async rejectTransfer(transferId: string, observaciones?: string): Promise<{ transfer: Transferencia | null; error: string | null }> {
     try {
-      console.log('Rechazando transferencia:', transferId);
-      const response = await apiService.patch<{ transfer: Transferencia; success: boolean }>(`/transfer-approvals/${transferId}/reject`, { observaciones });
+      console.warn('Rechazando transferencia:', transferId);
+      const response = await apiService.patch<TransferResponse>(`/transfer-approvals/${transferId}/reject`, { observaciones });
       
       if (response && response.success) {
-        console.log('✅ Transferencia rechazada exitosamente');
+        console.warn('✅ Transferencia rechazada exitosamente');
         return { transfer: response.transfer, error: null };
       } else {
         return { transfer: null, error: 'Error al rechazar la transferencia' };

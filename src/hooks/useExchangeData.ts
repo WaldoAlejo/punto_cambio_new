@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react';
 import { toast } from "@/hooks/use-toast";
 import { Moneda, CambioDivisa } from '../types';
 import { currencyService } from '../services/currencyService';
-import { exchangeService } from '../services/exchangeService';
 
 export const useExchangeData = () => {
   const [exchanges, setExchanges] = useState<CambioDivisa[]>([]);
