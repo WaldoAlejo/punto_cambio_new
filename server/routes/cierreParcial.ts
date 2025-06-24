@@ -1,4 +1,3 @@
-
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "../middleware/auth";
@@ -10,7 +9,10 @@ const prisma = new PrismaClient();
 // Endpoint para realizar un cierre parcial de caja
 router.post("/parcial", authenticateToken, async (req, res) => {
   try {
-    const { detalles, observaciones }: {
+    const {
+      detalles,
+      observaciones,
+    }: {
       detalles: Array<{
         moneda_id: string;
         saldo_apertura: number;
@@ -59,9 +61,18 @@ router.post("/parcial", authenticateToken, async (req, res) => {
     }
 
     // Calcular totales
-    const totalIngresos = detalles.reduce((sum, d) => sum + (d.ingresos_periodo || 0), 0);
-    const totalEgresos = detalles.reduce((sum, d) => sum + (d.egresos_periodo || 0), 0);
-    const totalMovimientos = detalles.reduce((sum, d) => sum + (d.movimientos_periodo || 0), 0);
+    const totalIngresos = detalles.reduce(
+      (sum, d) => sum + (d.ingresos_periodo || 0),
+      0
+    );
+    const totalEgresos = detalles.reduce(
+      (sum, d) => sum + (d.egresos_periodo || 0),
+      0
+    );
+    const totalMovimientos = detalles.reduce(
+      (sum, d) => sum + (d.movimientos_periodo || 0),
+      0
+    );
 
     // Actualizar cuadre a estado PARCIAL
     const cuadreActualizado = await prisma.cuadreCaja.update({
@@ -71,6 +82,8 @@ router.post("/parcial", authenticateToken, async (req, res) => {
         observaciones: observaciones || "Cierre parcial realizado",
         fecha_cierre: new Date(),
         total_cambios: totalMovimientos,
+        total_ingresos: totalIngresos,
+        total_egresos: totalEgresos,
       },
     });
 
@@ -81,7 +94,9 @@ router.post("/parcial", authenticateToken, async (req, res) => {
 
     // Crear los detalles del cierre parcial
     for (const detalle of detalles) {
-      const diferencia = parseFloat((detalle.conteo_fisico - detalle.saldo_cierre).toFixed(2));
+      const diferencia = parseFloat(
+        (detalle.conteo_fisico - detalle.saldo_cierre).toFixed(2)
+      );
 
       await prisma.detalleCuadreCaja.create({
         data: {
@@ -183,7 +198,7 @@ router.get("/pendientes", authenticateToken, async (req, res) => {
         },
       },
       orderBy: {
-        fecha_cierre: 'desc',
+        fecha_cierre: "desc",
       },
     });
 
