@@ -15,7 +15,7 @@ export interface CreateExchangeData {
     apellido: string;
     documento: string;
     cedula: string;
-    telefono: string;
+    telefono?: string;
   };
   divisas_entregadas: {
     billetes: number;
