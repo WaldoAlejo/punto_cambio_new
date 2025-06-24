@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from '../hooks/useAuth';
 import Dashboard from '../components/dashboard/Dashboard';
 import PointSelection from '../components/auth/PointSelection';
-import { PuntoAtencion } from '../types';
+import { PuntoAtencion, User } from '../types';
 import { pointService } from '../services/pointService';
 import { useToast } from "@/hooks/use-toast";
 
@@ -179,7 +179,16 @@ const Index = () => {
         points={availablePoints}
         onPointSelect={handlePointSelect}
         onLogout={handleLogout}
-        user={user || { id: '', nombre: '', email: '', rol: 'OPERADOR', activo: true, created_at: '', updated_at: '' }}
+        user={user || { 
+          id: '', 
+          nombre: '', 
+          correo: '', 
+          rol: 'OPERADOR', 
+          activo: true, 
+          created_at: '', 
+          updated_at: '',
+          username: ''
+        } as User}
       />
     );
   }

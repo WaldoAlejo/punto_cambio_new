@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { User, PuntoAtencion, Moneda, Transferencia } from '../../types';
 import { toast } from "@/hooks/use-toast";
@@ -80,28 +81,24 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
     loadData();
   }, [selectedPoint]);
 
-  const handleTransferCreated = async (transfer: Transferencia) => {
+  const handleTransferCreated = async () => {
     try {
-      console.warn('Nueva transferencia creada:', transfer);
-      
-      // Actualizar la lista local inmediatamente
-      setTransfers(prev => [transfer, ...prev]);
+      console.warn('Recargando transferencias después de crear una nueva...');
       
       // Recargar todas las transferencias para asegurar sincronización
       const { transfers: updatedTransfers, error } = await transferService.getAllTransfers();
       if (updatedTransfers && !error) {
         setTransfers(updatedTransfers);
+        toast({
+          title: "✅ Transferencia creada",
+          description: "Transferencia creada exitosamente y guardada en la base de datos",
+        });
       }
-      
-      toast({
-        title: "✅ Transferencia creada",
-        description: `Transferencia de ${transfer.monto} creada exitosamente y guardada en la base de datos`,
-      });
     } catch (error) {
-      console.error('Error processing transfer creation:', error);
+      console.error('Error reloading transfers:', error);
       toast({
         title: "Error",
-        description: "Error al procesar la transferencia",
+        description: "Error al recargar las transferencias",
         variant: "destructive"
       });
     }

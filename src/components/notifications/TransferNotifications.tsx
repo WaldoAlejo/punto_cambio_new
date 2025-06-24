@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from 'react';
-import { Bell, CheckCircle, AlertCircle } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { transferApprovalService } from '../../services/transferApprovalService';

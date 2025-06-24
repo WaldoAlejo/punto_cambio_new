@@ -201,7 +201,7 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
       {/* History */}
       {showHistory && (
         <SpontaneousExitHistory
-          user={user}
+          _user={user}
           selectedPoint={selectedPoint}
         />
       )}

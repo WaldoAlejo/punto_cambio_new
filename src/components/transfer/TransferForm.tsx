@@ -103,13 +103,12 @@ const TransferForm = ({ user, selectedPoint, onTransferCreated, onCancel }: Tran
       setIsLoading(true);
       
       const transferData = {
-        punto_origen_id: selectedPoint.id,
-        punto_destino_id: destinationPointId,
+        origen_id: selectedPoint.id,
+        destino_id: destinationPointId,
         moneda_id: currencyId,
         monto: transferAmount,
         descripcion: description.trim(),
-        usuario_solicitante_id: user.id,
-        estado: 'PENDIENTE' as const
+        tipo_transferencia: 'ENTRE_PUNTOS' as const
       };
 
       console.warn('Creating transfer:', transferData);
