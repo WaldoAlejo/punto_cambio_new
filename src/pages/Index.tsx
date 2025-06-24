@@ -7,6 +7,8 @@ import { PuntoAtencion } from '../types';
 import { pointService } from '../services/pointService';
 import { useToast } from "@/hooks/use-toast";
 
+const SELECTED_POINT_KEY = 'selectedPoint';
+
 const Index = () => {
   const { user, logout } = useAuth();
   const [selectedPoint, setSelectedPoint] = useState<PuntoAtencion | null>(null);
@@ -14,6 +16,21 @@ const Index = () => {
   const [availablePoints, setAvailablePoints] = useState<PuntoAtencion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  // Cargar punto guardado del localStorage al iniciar
+  useEffect(() => {
+    const savedPoint = localStorage.getItem(SELECTED_POINT_KEY);
+    if (savedPoint) {
+      try {
+        const point = JSON.parse(savedPoint);
+        console.log('Punto recuperado del localStorage:', point);
+        setSelectedPoint(point);
+      } catch (error) {
+        console.error('Error al recuperar punto guardado:', error);
+        localStorage.removeItem(SELECTED_POINT_KEY);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     const loadPoints = async () => {
@@ -27,7 +44,7 @@ const Index = () => {
         
         // Si es administrador, no necesita seleccionar punto
         if (user.rol === 'ADMIN' || user.rol === 'SUPER_USUARIO') {
-          setSelectedPoint(null); // Admin no tiene punto específico
+          setSelectedPoint(null);
           setIsLoading(false);
           toast({
             title: "Acceso administrativo",
@@ -36,7 +53,18 @@ const Index = () => {
           return;
         }
 
-        // Para operadores, cargar puntos libres (sin jornadas activas)
+        // Si ya hay un punto seleccionado (guardado en localStorage), usarlo
+        if (selectedPoint) {
+          console.log('Usando punto previamente seleccionado:', selectedPoint);
+          setIsLoading(false);
+          toast({
+            title: "Sesión continuada",
+            description: `Continuando en ${selectedPoint.nombre}`,
+          });
+          return;
+        }
+
+        // Para operadores, cargar puntos disponibles
         const { points, error } = await pointService.getAllPoints();
         
         if (error) {
@@ -48,12 +76,13 @@ const Index = () => {
           return;
         }
 
-        // Si el usuario tiene un punto asignado, verificar si está libre
+        // Si el usuario tiene un punto asignado, verificar si está disponible
         if (user.punto_atencion_id) {
           const userPoint = points.find(p => p.id === user.punto_atencion_id);
           if (userPoint) {
-            // Para operadores con punto asignado, usar ese punto directamente
             setSelectedPoint(userPoint);
+            // Guardar en localStorage
+            localStorage.setItem(SELECTED_POINT_KEY, JSON.stringify(userPoint));
             toast({
               title: "Punto asignado",
               description: `Conectado a ${userPoint.nombre}`,
@@ -76,7 +105,7 @@ const Index = () => {
           setShowPointSelection(true);
           toast({
             title: "Seleccione un punto",
-            description: "Seleccione su punto de atención para iniciar jornada",
+            description: "Seleccione su punto de atención para continuar",
           });
         }
       } catch (error) {
@@ -92,12 +121,14 @@ const Index = () => {
     };
 
     loadPoints();
-  }, [user, toast]);
+  }, [user, toast]); // Removed selectedPoint from dependencies to avoid re-loading when point is set
 
   const handlePointSelect = (point: PuntoAtencion) => {
     try {
       setSelectedPoint(point);
       setShowPointSelection(false);
+      // Guardar en localStorage para persistir entre recargas
+      localStorage.setItem(SELECTED_POINT_KEY, JSON.stringify(point));
       toast({
         title: "Jornada iniciada",
         description: `Jornada iniciada en ${point.nombre}`,
@@ -114,6 +145,8 @@ const Index = () => {
 
   const handleLogout = () => {
     try {
+      // IMPORTANTE: NO limpiar el punto seleccionado al cerrar sesión
+      // El punto debe persistir hasta el cierre de caja
       logout();
       toast({
         title: "Sesión cerrada",
@@ -127,6 +160,12 @@ const Index = () => {
         variant: "destructive"
       });
     }
+  };
+
+  // Función para limpiar el punto seleccionado (solo se debe llamar en cierre de caja)
+  const clearSelectedPoint = () => {
+    localStorage.removeItem(SELECTED_POINT_KEY);
+    setSelectedPoint(null);
   };
 
   if (isLoading) {

@@ -1,3 +1,4 @@
+
 import { CambioDivisa, Transferencia } from "../types";
 
 type CurrencyExchangeDetails = {
@@ -212,7 +213,12 @@ ${separator}
               </head>
               <body>
                 <div class="receipt">${formattedReceipt}</div>
-                <script>window.print(); window.close();</script>
+                <script>
+                  window.print(); 
+                  setTimeout(() => {
+                    window.close();
+                  }, 1000);
+                </script>
               </body>
             </html>
           `);

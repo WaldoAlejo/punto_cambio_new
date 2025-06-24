@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -140,7 +139,17 @@ const ExchangeManagement = ({
       user.nombre
     );
 
-    ReceiptService.printReceipt(receiptData, 2);
+    // Imprimir sin bloquear la UI
+    try {
+      ReceiptService.printReceipt(receiptData, 2);
+    } catch (error) {
+      console.error('Error al imprimir recibo:', error);
+      toast({
+        title: "Advertencia",
+        description: "El recibo se generó correctamente pero hubo un problema con la impresión",
+        variant: "default",
+      });
+    }
   };
 
   const handleCustomerDataSubmit = (data: DatosCliente) => {
@@ -236,16 +245,19 @@ const ExchangeManagement = ({
       // Actualizar la lista local de cambios
       setExchanges([createdExchange, ...exchanges]);
 
-      // Generar e imprimir el recibo
-      generateReceiptAndPrint(createdExchange);
-
-      // Limpiar el formulario pero mantener la jornada de trabajo
-      resetFormOnly();
-
+      // Mostrar mensaje de éxito antes de imprimir
       toast({
         title: "Cambio realizado",
         description: `Cambio completado exitosamente. Recibo: ${createdExchange.numero_recibo}`,
       });
+
+      // Limpiar el formulario inmediatamente para evitar pantalla en blanco
+      resetFormOnly();
+
+      // Generar e imprimir el recibo después de limpiar el formulario
+      setTimeout(() => {
+        generateReceiptAndPrint(createdExchange);
+      }, 100);
 
     } catch (error) {
       console.error('Error inesperado al procesar cambio:', error);
