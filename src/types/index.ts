@@ -3,14 +3,13 @@ export interface Usuario {
   id: string;
   username: string;
   nombre: string;
-  correo?: string | null;
-  telefono?: string | null;
+  correo?: string;
+  telefono?: string;
   rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION";
   activo: boolean;
-  punto_atencion_id?: string | null;
+  punto_atencion_id?: string;
   created_at: string;
   updated_at: string;
-  puntoAtencion?: PuntoAtencion;
 }
 
 // Alias para compatibilidad
@@ -22,19 +21,18 @@ export interface PuntoAtencion {
   direccion: string;
   ciudad: string;
   provincia: string;
-  codigo_postal?: string | null;
-  telefono?: string | null;
+  codigo_postal?: string;
+  telefono?: string;
   activo: boolean;
   created_at: string;
   updated_at: string;
-  jornada?: Jornada;
 }
 
 export interface Moneda {
   id: string;
+  codigo: string;
   nombre: string;
   simbolo: string;
-  codigo: string;
   activo: boolean;
   orden_display: number;
   created_at: string;
@@ -210,12 +208,11 @@ export interface Schedule {
 export interface ApiResponse<T> {
   success: boolean;
   error?: string;
-  timestamp: string;
-  data?: T;
+  timestamp?: string;
 }
 
-export interface ListResponse<T> extends ApiResponse<T[]> {
-  count?: number;
+export interface ListResponse<T> extends ApiResponse<T> {
+  data?: T[];
 }
 
 // Tipos para formularios
@@ -238,7 +235,7 @@ export interface CreatePointData {
   nombre: string;
   direccion: string;
   ciudad: string;
-  provincia: string;
+  provincia?: string;
   codigo_postal?: string;
   telefono?: string;
 }

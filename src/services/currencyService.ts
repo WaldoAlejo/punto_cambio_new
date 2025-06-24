@@ -1,5 +1,13 @@
+
 import { apiService } from "./apiService";
-import { Moneda, CreateCurrencyData, ApiResponse, ListResponse } from "../types";
+import { Moneda, ApiResponse, ListResponse } from "../types";
+
+interface CreateCurrencyData {
+  codigo: string;
+  nombre: string;
+  simbolo: string;
+  orden_display?: number;
+}
 
 interface CurrenciesResponse extends ListResponse<Moneda> {
   currencies: Moneda[];
@@ -8,9 +16,6 @@ interface CurrenciesResponse extends ListResponse<Moneda> {
 interface CurrencyResponse extends ApiResponse<Moneda> {
   currency: Moneda;
 }
-
-// Export Currency type for compatibility
-export type Currency = Moneda;
 
 export const currencyService = {
   async getAllCurrencies(): Promise<{ currencies: Moneda[]; error: string | null }> {
@@ -36,7 +41,7 @@ export const currencyService = {
         };
       }
 
-      console.log('getAllCurrencies - Success! Currencies count:', response.currencies?.length || 0);
+      console.log('getAllCurrencies - Success, currencies count:', response.currencies?.length || 0);
       return { currencies: response.currencies || [], error: null };
     } catch (error) {
       console.error("=== getAllCurrencies ERROR ===");
@@ -50,7 +55,6 @@ export const currencyService = {
   async createCurrency(currencyData: CreateCurrencyData): Promise<{ currency: Moneda | null; error: string | null }> {
     console.log('=== CURRENCY SERVICE - createCurrency START ===');
     console.log('Input data:', currencyData);
-    console.log('Input data JSON:', JSON.stringify(currencyData, null, 2));
 
     try {
       console.log('Calling apiService.post("/currencies", currencyData)...');
@@ -58,7 +62,7 @@ export const currencyService = {
       console.log('createCurrency - Raw response:', response);
 
       if (!response) {
-        console.error('createCurrency - No response received');
+        console.error('createCurrency - No response received from server');
         return {
           currency: null,
           error: "No se pudo obtener la respuesta del servidor",
@@ -66,7 +70,7 @@ export const currencyService = {
       }
 
       if (response.error || !response.success) {
-        console.error('createCurrency - Response error:', response.error);
+        console.error('createCurrency - Response indicates failure:', response.error);
         return {
           currency: null,
           error: response.error || "Error al crear moneda",
@@ -84,34 +88,33 @@ export const currencyService = {
     }
   },
 
-  async updateCurrency(currencyId: string, currencyData: Partial<CreateCurrencyData>): Promise<{ currency: Moneda | null; error: string | null }> {
-    console.log('=== CURRENCY SERVICE - updateCurrency START ===');
+  async toggleCurrencyStatus(currencyId: string): Promise<{ currency: Moneda | null; error: string | null }> {
+    console.log('=== CURRENCY SERVICE - toggleCurrencyStatus START ===');
     console.log('Currency ID:', currencyId);
-    console.log('Update data:', currencyData);
 
     try {
-      console.log('Calling apiService.put("/currencies/:id", currencyData)...');
-      const response = await apiService.put<CurrencyResponse>(`/currencies/${currencyId}`, currencyData);
-      console.log('updateCurrency - Raw response:', response);
+      console.log('Calling apiService.patch for currency toggle...');
+      const response = await apiService.patch<CurrencyResponse>(`/currencies/${currencyId}/toggle`);
+      console.log('toggleCurrencyStatus - Raw response:', response);
 
       if (!response) {
-        console.error('updateCurrency - No response received');
+        console.error('toggleCurrencyStatus - No response received from server');
         return { currency: null, error: "No se pudo obtener la respuesta del servidor" };
       }
 
       if (response.error || !response.success) {
-        console.error('updateCurrency - Response error:', response.error);
-        return { currency: null, error: response.error || "Error al actualizar moneda" };
+        console.error('toggleCurrencyStatus - Response indicates failure:', response.error);
+        return { currency: null, error: response.error || "Error al cambiar estado de la moneda" };
       }
 
-      console.log('updateCurrency - Success! Updated currency:', response.currency);
+      console.log('toggleCurrencyStatus - Success! Updated currency:', response.currency);
       return { currency: response.currency, error: null };
     } catch (error) {
-      console.error("=== updateCurrency ERROR ===");
+      console.error("=== toggleCurrencyStatus ERROR ===");
       console.error("Error details:", error);
       return { currency: null, error: "Error de conexión con el servidor" };
     } finally {
-      console.log('=== CURRENCY SERVICE - updateCurrency END ===');
+      console.log('=== CURRENCY SERVICE - toggleCurrencyStatus END ===');
     }
   }
 };

@@ -3,162 +3,140 @@ import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import logger from '../utils/logger.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
-import { validate } from '../middleware/validation.js';
-import { createCurrencySchema, type CreateCurrencyRequest } from '../schemas/validation.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-interface UpdateData {
-  nombre?: string;
-  simbolo?: string;
-  codigo?: string;
-  orden_display?: number;
-}
+// Obtener todas las monedas (acceso para todos los usuarios autenticados)
+router.get('/', 
+  authenticateToken,
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    console.warn('=== CURRENCIES ROUTE - GET / START ===');
+    console.warn('Request headers:', req.headers);
+    console.warn('Request user:', req.user);
 
-// Obtener todas las monedas (sin autenticación requerida para GET)
-router.get('/', async (req: express.Request, res: express.Response): Promise<void> => {
-  console.warn('=== CURRENCIES ROUTE - GET / START ===');
-  console.warn('Request method:', req.method);
-  console.warn('Request path:', req.path);
-  console.warn('Request headers authorization:', req.headers.authorization);
-  console.warn('Request user:', req.user);
-  
-  try {
-    // Headers para evitar caché
-    res.set({
-      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'Surrogate-Control': 'no-store'
-    });
+    try {
+      console.warn('Querying database for currencies...');
+      const currencies = await prisma.moneda.findMany({
+        orderBy: [
+          { orden_display: 'asc' },
+          { nombre: 'asc' }
+        ]
+      });
+      console.warn('Database query result - currencies count:', currencies.length);
+      console.warn('Currencies data:', currencies);
 
-    console.warn('🔍 Querying database for active currencies...');
-    const currencies = await prisma.moneda.findMany({
-      where: { activo: true },
-      orderBy: { orden_display: 'asc' }
-    });
-    console.warn('✅ Database query result - currencies count:', currencies.length);
-    console.warn('Raw currencies from database:', currencies);
+      logger.info('Monedas obtenidas', { 
+        count: currencies.length, 
+        requestedBy: req.user?.id 
+      });
 
-    const formattedCurrencies = currencies.map(currency => ({
-      ...currency,
-      created_at: currency.created_at.toISOString(),
-      updated_at: currency.updated_at.toISOString()
-    }));
-    console.warn('✅ Formatted currencies:', formattedCurrencies);
+      const responseData = {
+        currencies,
+        success: true,
+        timestamp: new Date().toISOString()
+      };
+      console.warn('Sending response:', responseData);
 
-    logger.info('Monedas obtenidas', { 
-      count: formattedCurrencies.length, 
-      requestedBy: req.user?.id || 'anonymous'
-    });
-
-    const responseData = { 
-      currencies: formattedCurrencies,
-      success: true,
-      timestamp: new Date().toISOString()
-    };
-    console.warn('✅ Sending response:', responseData);
-
-    res.status(200).json(responseData);
-  } catch (error) {
-    console.error('=== CURRENCIES ROUTE GET ERROR ===');
-    console.error('❌ Error details:', error);
-    console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
-    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
-    
-    logger.error('Error al obtener monedas', { 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      requestedBy: req.user?.id || 'anonymous'
-    });
-    
-    const errorResponse = { 
-      error: 'Error al obtener monedas',
-      success: false,
-      timestamp: new Date().toISOString()
-    };
-    console.warn('❌ Sending error response:', errorResponse);
-    res.status(500).json(errorResponse);
-  } finally {
-    console.warn('=== CURRENCIES ROUTE - GET / END ===');
+      res.status(200).json(responseData);
+    } catch (error) {
+      console.error('=== CURRENCIES ROUTE GET ERROR ===');
+      console.error('Error details:', error);
+      
+      logger.error('Error al obtener monedas', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id 
+      });
+      
+      const errorResponse = {
+        error: 'Error al obtener monedas',
+        success: false,
+        timestamp: new Date().toISOString()
+      };
+      console.warn('Sending error response:', errorResponse);
+      res.status(500).json(errorResponse);
+    } finally {
+      console.warn('=== CURRENCIES ROUTE - GET / END ===');
+    }
   }
-});
+);
 
-// Crear moneda (requiere autenticación y rol de admin)
+// Crear moneda (solo admins)
 router.post('/',
   authenticateToken,
   requireRole(['ADMIN', 'SUPER_USUARIO']),
-  validate(createCurrencySchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
     console.warn('=== CURRENCIES ROUTE - POST / START ===');
-    console.warn('Request method:', req.method);
-    console.warn('Request path:', req.path);
-    console.warn('Request headers authorization:', req.headers.authorization);
+    console.warn('Request headers:', req.headers);
     console.warn('Request user:', req.user);
     console.warn('Request body received:', req.body);
-    console.warn('Request body JSON:', JSON.stringify(req.body, null, 2));
 
     try {
-      const currencyData = req.body as CreateCurrencyRequest;
+      const { codigo, nombre, simbolo, orden_display = 0 } = req.body;
+      console.warn('Extracted currency data:', { codigo, nombre, simbolo, orden_display });
       
-      console.warn('✅ Extracted currency data:', {
-        nombre: currencyData.nombre,
-        simbolo: currencyData.simbolo,
-        codigo: currencyData.codigo,
-        orden_display: currencyData.orden_display
-      });
+      if (!codigo || !nombre || !simbolo) {
+        console.warn('Missing required fields');
+        const badRequestResponse = {
+          error: 'Los campos código, nombre y símbolo son obligatorios',
+          success: false,
+          timestamp: new Date().toISOString()
+        };
+        console.warn('Sending bad request response:', badRequestResponse);
+        res.status(400).json(badRequestResponse);
+        return;
+      }
 
-      // Verificar si el código ya existe
-      console.warn('🔍 Checking if currency code already exists...');
+      console.warn('Checking if currency code already exists...');
       const existingCurrency = await prisma.moneda.findFirst({
-        where: { codigo: currencyData.codigo }
+        where: { codigo: codigo.toUpperCase() }
       });
       
       if (existingCurrency) {
-        console.warn('❌ Currency code already exists:', currencyData.codigo);
+        console.warn('Currency code already exists:', codigo);
         const conflictResponse = {
           error: 'El código de moneda ya existe',
           success: false,
           timestamp: new Date().toISOString()
         };
-        console.warn('❌ Sending conflict response:', conflictResponse);
+        console.warn('Sending conflict response:', conflictResponse);
         res.status(400).json(conflictResponse);
         return;
       }
 
-      console.warn('🔍 Creating currency in database with data:', { ...currencyData, activo: true });
+      const createData = {
+        codigo: codigo.toUpperCase(),
+        nombre,
+        simbolo,
+        orden_display: parseInt(orden_display.toString()) || 0,
+        activo: true
+      };
+      console.warn('Data to create currency:', createData);
+
+      console.warn('Creating currency in database...');
       const newCurrency = await prisma.moneda.create({
-        data: { 
-          ...currencyData, 
-          activo: true,
-          orden_display: currencyData.orden_display || 0
-        }
+        data: createData
       });
-      console.warn('✅ Database create result:', newCurrency);
+      console.warn('Currency created successfully:', newCurrency);
 
       logger.info('Moneda creada', { 
         currencyId: newCurrency.id, 
+        codigo: newCurrency.codigo,
         createdBy: req.user?.id 
       });
 
       const responseData = {
-        currency: {
-          ...newCurrency,
-          created_at: newCurrency.created_at.toISOString(),
-          updated_at: newCurrency.updated_at.toISOString()
-        },
+        currency: newCurrency,
         success: true,
         timestamp: new Date().toISOString()
       };
-      console.warn('✅ Sending success response:', responseData);
+      console.warn('Sending success response:', responseData);
 
       res.status(201).json(responseData);
     } catch (error) {
       console.error('=== CURRENCIES ROUTE POST ERROR ===');
-      console.error('❌ Error details:', error);
-      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
-      console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
+      console.error('Error details:', error);
       
       logger.error('Error al crear moneda', { 
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -166,12 +144,12 @@ router.post('/',
         requestedBy: req.user?.id 
       });
       
-      const errorResponse = { 
+      const errorResponse = {
         error: 'Error al crear moneda',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.warn('❌ Sending error response:', errorResponse);
+      console.warn('Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
       console.warn('=== CURRENCIES ROUTE - POST / END ===');
@@ -179,22 +157,20 @@ router.post('/',
   }
 );
 
-// Editar moneda (requiere autenticación y rol de admin)
-router.put('/:id',
-  authenticateToken,
-  requireRole(['ADMIN', 'SUPER_USUARIO']),
+// Cambiar el estado de una moneda (solo admins)
+router.patch('/:id/toggle', 
+  authenticateToken, 
+  requireRole(['ADMIN', 'SUPER_USUARIO']), 
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.warn('=== CURRENCIES ROUTE - PUT /:id START ===');
+    console.warn('=== CURRENCIES ROUTE - PATCH /:id/toggle START ===');
     console.warn('Request headers:', req.headers);
     console.warn('Request user:', req.user);
-    console.warn('Currency ID to edit:', req.params.id);
-    console.warn('Update data received:', req.body);
+    console.warn('Currency ID to toggle:', req.params.id);
 
     try {
       const currencyId = req.params.id;
-      const { nombre, simbolo, codigo, orden_display } = req.body;
 
-      console.warn('Checking if currency exists...');
+      console.warn('Fetching currency from database...');
       const existingCurrency = await prisma.moneda.findUnique({
         where: { id: currencyId }
       });
@@ -211,53 +187,21 @@ router.put('/:id',
         return;
       }
 
-      // Verificar si el código ya existe en otra moneda
-      if (codigo && codigo !== existingCurrency.codigo) {
-        console.warn('Checking if new currency code already exists...');
-        const duplicateCurrency = await prisma.moneda.findFirst({
-          where: { 
-            codigo: codigo,
-            id: { not: currencyId }
-          }
-        });
-        
-        if (duplicateCurrency) {
-          console.warn('Currency code already exists:', codigo);
-          const conflictResponse = {
-            error: 'El código de moneda ya existe',
-            success: false,
-            timestamp: new Date().toISOString()
-          };
-          console.warn('Sending conflict response:', conflictResponse);
-          res.status(400).json(conflictResponse);
-          return;
-        }
-      }
-
-      const updateData: UpdateData = {};
-      if (nombre) updateData.nombre = nombre;
-      if (simbolo) updateData.simbolo = simbolo;
-      if (codigo) updateData.codigo = codigo;
-      if (orden_display !== undefined) updateData.orden_display = orden_display;
-
-      console.warn('Updating currency with data:', updateData);
+      console.warn('Toggling currency status...');
       const updatedCurrency = await prisma.moneda.update({
         where: { id: currencyId },
-        data: updateData
+        data: { activo: !existingCurrency.activo }
       });
-      console.warn('Currency updated successfully:', updatedCurrency);
+      console.warn('Currency status toggled successfully:', updatedCurrency);
 
-      logger.info('Moneda actualizada', { 
+      logger.info('Estado de moneda cambiado', { 
         currencyId: updatedCurrency.id, 
-        updatedBy: req.user?.id 
+        newStatus: updatedCurrency.activo,
+        requestedBy: req.user?.id 
       });
 
       const responseData = {
-        currency: {
-          ...updatedCurrency,
-          created_at: updatedCurrency.created_at.toISOString(),
-          updated_at: updatedCurrency.updated_at.toISOString()
-        },
+        currency: updatedCurrency,
         success: true,
         timestamp: new Date().toISOString()
       };
@@ -265,23 +209,24 @@ router.put('/:id',
 
       res.status(200).json(responseData);
     } catch (error) {
-      console.error('=== CURRENCIES ROUTE PUT ERROR ===');
+      console.error('=== CURRENCIES ROUTE TOGGLE ERROR ===');
       console.error('Error details:', error);
       
-      logger.error('Error al actualizar moneda', { 
+      logger.error('Error al cambiar el estado de la moneda', { 
         error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
         requestedBy: req.user?.id 
       });
       
       const errorResponse = {
-        error: 'Error al actualizar moneda',
+        error: 'Error al cambiar el estado de la moneda',
         success: false,
         timestamp: new Date().toISOString()
       };
       console.warn('Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
-      console.warn('=== CURRENCIES ROUTE - PUT /:id END ===');
+      console.warn('=== CURRENCIES ROUTE - PATCH /:id/toggle END ===');
     }
   }
 );
