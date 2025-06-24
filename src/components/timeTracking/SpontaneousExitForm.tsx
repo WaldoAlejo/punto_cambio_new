@@ -1,120 +1,47 @@
 
-import { useState } from "react";
+import { useState } from 'react';
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, Clock } from "lucide-react";
-import { User, PuntoAtencion } from "../../types";
-import { toast } from "@/hooks/use-toast";
-import {
-  spontaneousExitService,
-  SpontaneousExit,
-} from "../../services/spontaneousExitService";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Clock, Save, X } from "lucide-react";
+import { User, PuntoAtencion } from '../../types';
+import { spontaneousExitService } from '../../services/spontaneousExitService';
+import { useToast } from "@/hooks/use-toast";
 
 interface SpontaneousExitFormProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
-  onExitRegistered?: (exit: SpontaneousExit) => void;
+  onExitRegistered: () => void;
+  onCancel: () => void;
 }
 
-type MotivoSalida =
-  | "BANCO"
-  | "DILIGENCIA_PERSONAL"
-  | "TRAMITE_GOBIERNO"
-  | "EMERGENCIA_MEDICA"
-  | "OTRO";
-
-const motivoOptions: { value: MotivoSalida; label: string }[] = [
-  { value: "BANCO", label: "Banco" },
-  { value: "DILIGENCIA_PERSONAL", label: "Diligencia Personal" },
-  { value: "TRAMITE_GOBIERNO", label: "Trámite de Gobierno" },
-  { value: "EMERGENCIA_MEDICA", label: "Emergencia Médica" },
-  { value: "OTRO", label: "Otro" },
+const exitTypes = [
+  { value: 'BATHROOM', label: 'Baño' },
+  { value: 'LUNCH', label: 'Almuerzo' },
+  { value: 'BREAK', label: 'Descanso' },
+  { value: 'PERSONAL', label: 'Personal' },
+  { value: 'MEDICAL', label: 'Médico' },
+  { value: 'OTHER', label: 'Otro' }
 ];
 
-const SpontaneousExitForm = ({
-  user,
-  selectedPoint,
-  onExitRegistered,
-}: SpontaneousExitFormProps) => {
-  const [motivo, setMotivo] = useState<MotivoSalida | "">("");
-  const [descripcion, setDescripcion] = useState("");
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
-    null
-  );
+const SpontaneousExitForm = ({ user, selectedPoint, onExitRegistered, onCancel }: SpontaneousExitFormProps) => {
+  const [exitType, setExitType] = useState('');
+  const [duration, setDuration] = useState('');
+  const [reason, setReason] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [gettingLocation, setGettingLocation] = useState(false);
-
-  const getCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      toast({
-        title: "Error",
-        description: "Tu navegador no soporta geolocalización",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-        setGettingLocation(false);
-        toast({
-          title: "Ubicación obtenida",
-          description: "Se ha registrado tu ubicación actual",
-        });
-      },
-      (error) => {
-        console.error("Error obteniendo ubicación:", error);
-        setGettingLocation(false);
-        toast({
-          title: "Error",
-          description: "No se pudo obtener la ubicación. Inténtalo de nuevo.",
-          variant: "destructive",
-        });
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000,
-      }
-    );
-  };
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    console.log("Datos del formulario:", {
-      motivo,
-      descripcion,
-      location,
-      selectedPoint,
-      user
-    });
-
-    if (!motivo) {
+    
+    if (!exitType || !duration) {
       toast({
         title: "Error",
-        description: "Debe seleccionar un motivo para la salida",
-        variant: "destructive",
+        description: "Por favor complete todos los campos obligatorios",
+        variant: "destructive"
       });
       return;
     }
@@ -122,83 +49,70 @@ const SpontaneousExitForm = ({
     if (!selectedPoint) {
       toast({
         title: "Error",
-        description: "Debe seleccionar un punto de atención",
-        variant: "destructive",
+        description: "No hay punto de atención seleccionado",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const durationMinutes = parseInt(duration);
+    if (isNaN(durationMinutes) || durationMinutes <= 0) {
+      toast({
+        title: "Error",
+        description: "La duración debe ser un número válido mayor a 0",
+        variant: "destructive"
       });
       return;
     }
 
     try {
       setIsLoading(true);
-
+      
       const exitData = {
-        motivo,
-        descripcion: descripcion.trim() || undefined,
-        ubicacion_salida: location 
-          ? {
-              lat: location.lat,
-              lng: location.lng,
-              direccion: "Ubicación de salida"
-            }
-          : undefined,
+        user_id: user.id,
+        punto_atencion_id: selectedPoint.id,
+        tipo_salida: exitType,
+        duracion_minutos: durationMinutes,
+        motivo: reason || null,
+        fecha_salida: new Date().toISOString(),
+        hora_salida: new Date().toLocaleTimeString('es-ES', { 
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit'
+        })
       };
 
-      console.log("Enviando datos de salida:", exitData);
+      console.warn('Registering spontaneous exit:', exitData);
 
-      const { exit, error } = await spontaneousExitService.createExit(exitData);
+      const { exit, error } = await spontaneousExitService.createSpontaneousExit(exitData);
 
-      console.log("Respuesta del servicio:", { exit, error });
-
-      if (error) {
-        console.error("Error del servicio:", error);
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
-      } else if (exit) {
-        console.log("Salida creada exitosamente:", exit);
-        toast({
-          title: "Salida registrada",
-          description: `Se ha registrado tu salida espontánea por ${
-            motivoOptions.find((m) => m.value === motivo)?.label
-          }`,
-        });
-
-        // Limpiar formulario
-        setMotivo("");
-        setDescripcion("");
-        setLocation(null);
-
-        // Notificar al componente padre
-        if (onExitRegistered) {
-          onExitRegistered(exit);
-        }
+      if (error || !exit) {
+        throw new Error(error || 'Error desconocido al registrar salida');
       }
+
+      toast({
+        title: "Salida registrada",
+        description: `Salida espontánea de ${durationMinutes} minutos registrada exitosamente`,
+      });
+
+      // Reset form
+      setExitType('');
+      setDuration('');
+      setReason('');
+      
+      onExitRegistered();
+      
     } catch (error) {
-      console.error("Error creating exit:", error);
+      console.error('Error registering spontaneous exit:', error);
       toast({
         title: "Error",
         description: "Error al registrar la salida espontánea",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);
     }
   };
-
-  if (user.rol !== "OPERADOR") {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center py-8 text-gray-500">
-            <Clock className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <p>Las salidas espontáneas son solo para operadores</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card>
@@ -208,69 +122,61 @@ const SpontaneousExitForm = ({
           Registrar Salida Espontánea
         </CardTitle>
         <CardDescription>
-          {selectedPoint
-            ? `Punto: ${selectedPoint.nombre}`
-            : "Selecciona un punto de atención"}
+          Registre una salida espontánea indicando el tipo, duración y motivo
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="motivo">Motivo de la salida *</Label>
-            <Select
-              value={motivo}
-              onValueChange={(value) => setMotivo(value as MotivoSalida)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecciona el motivo" />
-              </SelectTrigger>
-              <SelectContent>
-                {motivoOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="exitType">Tipo de Salida *</Label>
+              <Select value={exitType} onValueChange={setExitType}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione el tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {exitTypes.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="duration">Duración (minutos) *</Label>
+              <Input
+                id="duration"
+                type="number"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+                placeholder="15"
+                min="1"
+                max="480"
+              />
+            </div>
           </div>
 
-          <div>
-            <Label htmlFor="descripcion">Descripción (opcional)</Label>
+          <div className="space-y-2">
+            <Label htmlFor="reason">Motivo (Opcional)</Label>
             <Textarea
-              id="descripcion"
-              placeholder="Describe los detalles de tu salida..."
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
+              id="reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Descripción adicional del motivo de la salida..."
               rows={3}
             />
           </div>
 
-          <div className="flex items-center gap-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={getCurrentLocation}
-              disabled={gettingLocation}
-              className="flex items-center gap-2"
-            >
-              <MapPin className="h-4 w-4" />
-              {gettingLocation ? "Obteniendo..." : "Obtener Ubicación"}
-            </Button>
-            {location && (
-              <span className="text-sm text-green-600 flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                Ubicación registrada
-              </span>
-            )}
-          </div>
-
           <div className="flex gap-2 pt-4">
-            <Button
-              type="submit"
-              disabled={isLoading || !motivo || !selectedPoint}
-              className="flex-1"
-            >
-              {isLoading ? "Registrando..." : "Registrar Salida"}
+            <Button type="submit" disabled={isLoading}>
+              <Save className="mr-2 h-4 w-4" />
+              {isLoading ? 'Registrando...' : 'Registrar Salida'}
+            </Button>
+            <Button type="button" variant="outline" onClick={onCancel}>
+              <X className="mr-2 h-4 w-4" />
+              Cancelar
             </Button>
           </div>
         </form>

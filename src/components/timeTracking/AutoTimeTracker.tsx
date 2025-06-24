@@ -1,412 +1,58 @@
 
-import { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Clock, Coffee, LogOut as LogOutIcon, MapPin, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { User, PuntoAtencion } from '../../types';
-import { toast } from "@/hooks/use-toast";
-import { scheduleService, Schedule } from '../../services/scheduleService';
 
 interface AutoTimeTrackerProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
+  onTimeUpdate?: (totalMinutes: number) => void;
 }
 
-const AutoTimeTracker = ({ user, selectedPoint }: AutoTimeTrackerProps) => {
-  const [currentSession, setCurrentSession] = useState<Schedule | null>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
+const AutoTimeTracker = ({ user, selectedPoint, onTimeUpdate }: AutoTimeTrackerProps) => {
+  const [startTime] = useState<Date>(new Date());
+  const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+    const interval = setInterval(() => {
+      const now = new Date();
+      setCurrentTime(now);
+      
+      const totalMinutes = Math.floor((now.getTime() - startTime.getTime()) / (1000 * 60));
+      
+      if (onTimeUpdate) {
+        onTimeUpdate(totalMinutes);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [startTime, onTimeUpdate]);
 
   useEffect(() => {
-    // Obtener ubicación al cargar
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        (error) => {
-          console.log('Error obteniendo ubicación:', error);
-        }
-      );
+    if (user && selectedPoint) {
+      console.warn(`Time tracking started for user ${user.nombre} at point ${selectedPoint.nombre}`);
     }
-
-    // Cargar jornada activa si existe
-    loadActiveSession();
   }, [user, selectedPoint]);
 
-  const loadActiveSession = async () => {
-    try {
-      setInitialLoading(true);
-      const { schedule, error } = await scheduleService.getActiveSchedule();
-      
-      if (error) {
-        console.error('Error loading active schedule:', error);
-        toast({
-          title: "Error",
-          description: "No se pudo cargar la jornada activa",
-          variant: "destructive",
-        });
-      } else if (schedule) {
-        setCurrentSession(schedule);
-      }
-    } catch (error) {
-      console.error('Error in loadActiveSession:', error);
-    } finally {
-      setInitialLoading(false);
-    }
-  };
-
-  const saveSchedule = async (scheduleData: {
-    usuario_id: string;
-    punto_atencion_id: string;
-    fecha_inicio?: string;
-    fecha_almuerzo?: string;
-    fecha_regreso?: string;
-    fecha_salida?: string;
-    ubicacion_inicio?: { lat: number; lng: number };
-    ubicacion_salida?: { lat: number; lng: number };
-  }) => {
-    try {
-      setLoading(true);
-      const { schedule, error } = await scheduleService.createOrUpdateSchedule(scheduleData);
-      
-      if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
-        return null;
-      }
-
-      return schedule;
-    } catch (error) {
-      console.error('Error guardando jornada:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo guardar la jornada",
-        variant: "destructive",
-      });
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStartShift = async () => {
-    if (!selectedPoint) {
-      toast({
-        title: "Error",
-        description: "Debe seleccionar un punto de atención",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const scheduleData = {
-      usuario_id: user.id,
-      punto_atencion_id: selectedPoint.id,
-      fecha_inicio: new Date().toISOString(),
-      ubicacion_inicio: location || undefined
-    };
-
-    const savedSchedule = await saveSchedule(scheduleData);
-    
-    if (savedSchedule) {
-      setCurrentSession(savedSchedule);
-      toast({
-        title: "Jornada iniciada",
-        description: `Bienvenido ${user.nombre}. Tu jornada ha comenzado.`,
-      });
-    }
-  };
-
-  const handleLunchBreak = async () => {
-    if (!currentSession) return;
-
-    const scheduleData = {
-      usuario_id: currentSession.usuario_id,
-      punto_atencion_id: currentSession.punto_atencion_id,
-      fecha_almuerzo: new Date().toISOString()
-    };
-
-    const updatedSchedule = await saveSchedule(scheduleData);
-    
-    if (updatedSchedule) {
-      setCurrentSession(updatedSchedule);
-      toast({
-        title: "Hora de almuerzo",
-        description: "Disfruta tu descanso. Recuerda marcar tu regreso.",
-      });
-    }
-  };
-
-  const handleLunchReturn = async () => {
-    if (!currentSession) return;
-
-    const scheduleData = {
-      usuario_id: currentSession.usuario_id,
-      punto_atencion_id: currentSession.punto_atencion_id,
-      fecha_regreso: new Date().toISOString()
-    };
-
-    const updatedSchedule = await saveSchedule(scheduleData);
-    
-    if (updatedSchedule) {
-      setCurrentSession(updatedSchedule);
-      toast({
-        title: "Regreso de almuerzo",
-        description: "Bienvenido de vuelta. Continuemos con la jornada.",
-      });
-    }
-  };
-
-  const handleEndShift = async () => {
-    if (!currentSession) return;
-
-    const scheduleData = {
-      usuario_id: currentSession.usuario_id,
-      punto_atencion_id: currentSession.punto_atencion_id,
-      fecha_salida: new Date().toISOString(),
-      ubicacion_salida: location || undefined
-    };
-
-    const updatedSchedule = await saveSchedule(scheduleData);
-    
-    if (updatedSchedule) {
-      setCurrentSession(updatedSchedule);
-      toast({
-        title: "Jornada finalizada",
-        description: "¡Excelente trabajo hoy! Que tengas un buen día.",
-      });
-
-      // Resetear después de 2 segundos
-      setTimeout(() => setCurrentSession(null), 2000);
-    }
-  };
-
-  const getShiftDuration = () => {
-    if (!currentSession?.fecha_inicio) return '00:00:00';
-    
-    const start = new Date(currentSession.fecha_inicio);
-    const now = currentTime;
-    const diff = now.getTime() - start.getTime();
-    
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-    
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const getShiftStatus = () => {
-    if (!currentSession) return 'Sin iniciar';
-    if (currentSession.fecha_salida) return 'Finalizada';
-    if (currentSession.fecha_almuerzo && !currentSession.fecha_regreso) return 'En almuerzo';
-    if (currentSession.fecha_regreso) return 'Activa (post-almuerzo)';
-    return 'Activa';
-  };
-
-  const getStatusColor = () => {
-    const status = getShiftStatus();
-    switch (status) {
-      case 'Activa': case 'Activa (post-almuerzo)': return 'bg-green-100 text-green-800';
-      case 'En almuerzo': return 'bg-yellow-100 text-yellow-800';
-      case 'Finalizada': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-blue-100 text-blue-800';
-    }
-  };
-
-  if (user.rol !== 'OPERADOR') {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center py-8 text-gray-500">
-            <Clock className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <p>El control automático de horarios es solo para operadores</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (!selectedPoint) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center py-8 text-gray-500">
-            <AlertCircle className="h-12 w-12 mx-auto mb-4 text-yellow-500" />
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Punto de Atención Requerido</h3>
-            <p>Debe seleccionar un punto de atención para iniciar su jornada</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (initialLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Cargando jornada...</p>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const totalMinutes = Math.floor((currentTime.getTime() - startTime.getTime()) / (1000 * 60));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Control Automático de Jornada
-          </CardTitle>
-          <CardDescription>
-            Punto seleccionado: {selectedPoint.nombre}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">Estado:</span>
-                <Badge className={getStatusColor()}>
-                  {getShiftStatus()}
-                </Badge>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">Tiempo trabajado:</span>
-                <span className="font-mono text-lg font-semibold text-blue-600">
-                  {getShiftDuration()}
-                </span>
-              </div>
-
-              {location && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <MapPin className="h-4 w-4" />
-                  <span>Ubicación registrada</span>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              {!currentSession && (
-                <Button 
-                  onClick={handleStartShift} 
-                  className="w-full"
-                  disabled={loading}
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  {loading ? 'Iniciando...' : 'Iniciar Jornada'}
-                </Button>
-              )}
-
-              {currentSession && !currentSession.fecha_almuerzo && currentSession.estado === 'ACTIVO' && (
-                <Button 
-                  onClick={handleLunchBreak} 
-                  variant="outline" 
-                  className="w-full"
-                  disabled={loading}
-                >
-                  <Coffee className="h-4 w-4 mr-2" />
-                  {loading ? 'Registrando...' : 'Ir a Almorzar'}
-                </Button>
-              )}
-
-              {currentSession?.fecha_almuerzo && !currentSession.fecha_regreso && currentSession.estado === 'ACTIVO' && (
-                <Button 
-                  onClick={handleLunchReturn} 
-                  className="w-full"
-                  disabled={loading}
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  {loading ? 'Registrando...' : 'Regresar de Almuerzo'}
-                </Button>
-              )}
-
-              {currentSession && currentSession.fecha_regreso && !currentSession.fecha_salida && currentSession.estado === 'ACTIVO' && (
-                <Button 
-                  onClick={handleEndShift} 
-                  variant="destructive" 
-                  className="w-full"
-                  disabled={loading}
-                >
-                  <LogOutIcon className="h-4 w-4 mr-2" />
-                  {loading ? 'Finalizando...' : 'Finalizar Jornada'}
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {currentSession && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Resumen de Jornada</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Inicio:</span>
-                <span className="font-medium">
-                  {new Date(currentSession.fecha_inicio).toLocaleTimeString('es-ES')}
-                </span>
-              </div>
-              
-              {currentSession.fecha_almuerzo && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Almuerzo:</span>
-                  <span className="font-medium">
-                    {new Date(currentSession.fecha_almuerzo).toLocaleTimeString('es-ES')}
-                  </span>
-                </div>
-              )}
-              
-              {currentSession.fecha_regreso && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Regreso:</span>
-                  <span className="font-medium">
-                    {new Date(currentSession.fecha_regreso).toLocaleTimeString('es-ES')}
-                  </span>
-                </div>
-              )}
-              
-              {currentSession.fecha_salida && (
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Salida:</span>
-                  <span className="font-medium">
-                    {new Date(currentSession.fecha_salida).toLocaleTimeString('es-ES')}
-                  </span>
-                </div>
-              )}
-
-              <div className="flex justify-between">
-                <span className="text-gray-600">Estado:</span>
-                <Badge className={getStatusColor()}>
-                  {currentSession.estado}
-                </Badge>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-green-800">Tiempo de sesión</p>
+          <p className="text-xs text-green-600">
+            Iniciado: {startTime.toLocaleTimeString()}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-lg font-bold text-green-800">
+            {hours.toString().padStart(2, '0')}:{minutes.toString().padStart(2, '0')}
+          </p>
+          <p className="text-xs text-green-600">h:m</p>
+        </div>
+      </div>
     </div>
   );
 };

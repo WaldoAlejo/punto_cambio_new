@@ -121,7 +121,7 @@ const Index = () => {
     };
 
     loadPoints();
-  }, [user, toast]); // Removed selectedPoint from dependencies to avoid re-loading when point is set
+  }, [user, toast, selectedPoint]);
 
   const handlePointSelect = (point: PuntoAtencion) => {
     try {
@@ -179,7 +179,7 @@ const Index = () => {
         points={availablePoints}
         onPointSelect={handlePointSelect}
         onLogout={handleLogout}
-        user={user!}
+        user={user || { id: '', nombre: '', email: '', rol: 'OPERADOR', activo: true, created_at: '', updated_at: '' }}
       />
     );
   }

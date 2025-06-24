@@ -1,53 +1,37 @@
 
 import { useState, useEffect } from 'react';
-import { toast } from "@/hooks/use-toast";
-import { Moneda, CambioDivisa } from '../types';
+import { Moneda, PuntoAtencion } from '../types';
 import { currencyService } from '../services/currencyService';
 
-export const useExchangeData = () => {
-  const [exchanges, setExchanges] = useState<CambioDivisa[]>([]);
+export const useExchangeData = (selectedPoint: PuntoAtencion | null) => {
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
-  const [isLoadingCurrencies, setIsLoadingCurrencies] = useState(true);
-
+  const [isLoading, setIsLoading] = useState(true);
+  
   useEffect(() => {
-    const fetchCurrencies = async () => {
-      setIsLoadingCurrencies(true);
+    const loadCurrencies = async () => {
       try {
-        const { currencies: fetchedCurrencies, error } = await currencyService.getAllCurrencies();
+        setIsLoading(true);
+        const { currencies: fetchedCurrencies } = await currencyService.getAllCurrencies();
         
-        if (error) {
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar las monedas: " + error,
-            variant: "destructive",
-          });
-          setCurrencies([]);
-        } else {
-          setCurrencies(fetchedCurrencies || []);
-        }
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: "Error de conexión al cargar las monedas.",
-          variant: "destructive",
-        });
+        // Filter only active currencies
+        const activeCurrencies = fetchedCurrencies.filter(currency => currency.activo);
+        setCurrencies(activeCurrencies);
+        
+      } catch (_error) {
+        console.error('Error loading currencies');
         setCurrencies([]);
       } finally {
-        setIsLoadingCurrencies(false);
+        setIsLoading(false);
       }
     };
 
-    fetchCurrencies();
-  }, []);
-
-  const addExchange = (exchange: CambioDivisa) => {
-    setExchanges(prev => [exchange, ...prev]);
-  };
+    if (selectedPoint) {
+      loadCurrencies();
+    }
+  }, [selectedPoint]);
 
   return {
-    exchanges,
     currencies,
-    isLoadingCurrencies,
-    addExchange
+    isLoading
   };
 };
