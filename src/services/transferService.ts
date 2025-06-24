@@ -1,3 +1,4 @@
+
 import { apiService } from './apiService';
 import { Transferencia, ResponsableMovilizacion } from '../types';
 
@@ -43,16 +44,16 @@ export const transferService = {
         return { transfer: null, error: 'Tipo de transferencia es requerido' };
       }
 
-      console.log('Enviando petición POST a /api/transfers...');
+      console.log('Enviando petición POST a /transfers...');
       const response = await apiService.post<{ transfer: Transferencia; success: boolean; message?: string }>('/transfers', data);
       
       console.log('Respuesta recibida del servidor:', response);
       
-      if (response.success && response.transfer) {
+      if (response && response.success && response.transfer) {
         console.log('✅ Transferencia creada y guardada exitosamente:', response.transfer);
         return { transfer: response.transfer, error: null };
       } else {
-        const errorMsg = response.message || 'Error al crear la transferencia';
+        const errorMsg = response?.message || 'Error al crear la transferencia';
         console.error('❌ Error en respuesta del servidor:', errorMsg);
         return { transfer: null, error: errorMsg };
       }
@@ -81,7 +82,7 @@ export const transferService = {
       
       console.log('Respuesta de transferencias:', response);
       
-      if (response.success) {
+      if (response && response.success) {
         console.log(`✅ ${response.transfers.length} transferencias obtenidas desde BD`);
         return { transfers: response.transfers, error: null };
       } else {
@@ -94,12 +95,33 @@ export const transferService = {
     }
   },
 
+  async getPendingTransfers(): Promise<{ transfers: Transferencia[]; error: string | null }> {
+    try {
+      console.log('Obteniendo transferencias pendientes...');
+      const response = await apiService.get<{ transfers: Transferencia[]; success: boolean }>('/transfer-approvals');
+      
+      console.log('Respuesta de transferencias pendientes:', response);
+      
+      if (response && response.success) {
+        console.log(`✅ ${response.transfers.length} transferencias pendientes obtenidas`);
+        return { transfers: response.transfers, error: null };
+      } else {
+        console.error('❌ Error obteniendo transferencias pendientes');
+        return { transfers: [], error: 'Error al obtener las transferencias pendientes' };
+      }
+    } catch (error) {
+      console.error('Error fetching pending transfers:', error);
+      return { transfers: [], error: 'Error de conexión al obtener transferencias pendientes' };
+    }
+  },
+
   async approveTransfer(transferId: string, observaciones?: string): Promise<{ transfer: Transferencia | null; error: string | null }> {
     try {
-      console.log('Approving transfer:', transferId);
+      console.log('Aprobando transferencia:', transferId);
       const response = await apiService.patch<{ transfer: Transferencia; success: boolean }>(`/transfer-approvals/${transferId}/approve`, { observaciones });
       
-      if (response.success) {
+      if (response && response.success) {
+        console.log('✅ Transferencia aprobada exitosamente');
         return { transfer: response.transfer, error: null };
       } else {
         return { transfer: null, error: 'Error al aprobar la transferencia' };
@@ -112,10 +134,11 @@ export const transferService = {
 
   async rejectTransfer(transferId: string, observaciones?: string): Promise<{ transfer: Transferencia | null; error: string | null }> {
     try {
-      console.log('Rejecting transfer:', transferId);
+      console.log('Rechazando transferencia:', transferId);
       const response = await apiService.patch<{ transfer: Transferencia; success: boolean }>(`/transfer-approvals/${transferId}/reject`, { observaciones });
       
-      if (response.success) {
+      if (response && response.success) {
+        console.log('✅ Transferencia rechazada exitosamente');
         return { transfer: response.transfer, error: null };
       } else {
         return { transfer: null, error: 'Error al rechazar la transferencia' };

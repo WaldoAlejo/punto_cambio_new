@@ -5,18 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { apiService } from '../../services/apiService';
+import { transferService } from '../../services/transferService';
 import { User, Transferencia } from '../../types';
 
 interface TransferNotificationsProps {
   user: User;
   onNotificationClick: () => void;
-}
-
-interface ApiResponse {
-  transfers?: Transferencia[];
-  success?: boolean;
-  error?: string;
 }
 
 const TransferNotifications = ({ user, onNotificationClick }: TransferNotificationsProps) => {
@@ -28,10 +22,15 @@ const TransferNotifications = ({ user, onNotificationClick }: TransferNotificati
 
     const checkPendingTransfers = async () => {
       try {
-        const response = await apiService.get<ApiResponse>('/transfers');
-        if (response && response.transfers) {
-          const pending = response.transfers.filter((t: Transferencia) => t.estado === 'PENDIENTE');
-          setPendingTransfers(pending);
+        console.log('Verificando transferencias pendientes para notificaciones...');
+        const { transfers, error } = await transferService.getPendingTransfers();
+        
+        if (error) {
+          console.error('Error obteniendo transferencias pendientes:', error);
+          setPendingTransfers([]);
+        } else {
+          console.log(`${transfers.length} transferencias pendientes encontradas`);
+          setPendingTransfers(transfers);
         }
       } catch (error) {
         console.error('Error loading pending transfers:', error);
@@ -51,6 +50,16 @@ const TransferNotifications = ({ user, onNotificationClick }: TransferNotificati
   const handleNotificationClick = () => {
     setIsOpen(false);
     onNotificationClick();
+  };
+
+  const getTransferTypeLabel = (type: string) => {
+    const types = {
+      'ENTRE_PUNTOS': 'Entre Puntos',
+      'DEPOSITO_MATRIZ': 'Depósito Matriz',
+      'RETIRO_GERENCIA': 'Retiro Gerencia',
+      'DEPOSITO_GERENCIA': 'Depósito Gerencia'
+    };
+    return types[type as keyof typeof types] || type;
   };
 
   if (user.rol !== 'ADMIN' && user.rol !== 'SUPER_USUARIO') {
@@ -78,7 +87,7 @@ const TransferNotifications = ({ user, onNotificationClick }: TransferNotificati
             <CardTitle className="text-sm">Transferencias Pendientes</CardTitle>
             <CardDescription>
               {pendingTransfers.length === 0 
-                ? 'No hay transferencias pendientes'
+                ? 'No hay transferencias pendientes de aprobación'
                 : `${pendingTransfers.length} transferencia(s) esperando aprobación`
               }
             </CardDescription>
@@ -86,18 +95,31 @@ const TransferNotifications = ({ user, onNotificationClick }: TransferNotificati
           {pendingTransfers.length > 0 && (
             <CardContent className="space-y-2">
               {pendingTransfers.slice(0, 3).map(transfer => (
-                <div key={transfer.id} className="p-2 bg-yellow-50 rounded border-l-4 border-yellow-400">
+                <div key={transfer.id} className="p-3 bg-yellow-50 rounded border-l-4 border-yellow-400">
                   <p className="text-sm font-medium">
-                    {transfer.tipo_transferencia.replace('_', ' ')}
+                    {getTransferTypeLabel(transfer.tipo_transferencia)}
                   </p>
                   <p className="text-xs text-gray-600">
-                    Monto: {transfer.monto}
+                    Monto: {transfer.monto} {transfer.moneda?.codigo || ''}
+                  </p>
+                  <p className="text-xs text-gray-600">
+                    {transfer.destino?.nombre || 'Destino desconocido'}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {new Date(transfer.fecha).toLocaleString()}
+                    {new Date(transfer.fecha).toLocaleDateString('es-ES', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
                   </p>
                 </div>
               ))}
+              {pendingTransfers.length > 3 && (
+                <p className="text-xs text-gray-500 text-center pt-2">
+                  +{pendingTransfers.length - 3} transferencias más...
+                </p>
+              )}
               <Button 
                 onClick={handleNotificationClick}
                 className="w-full mt-3"
