@@ -15,14 +15,14 @@ type Ubicacion = {
   direccion?: string;
 };
 
-// Schema para crear/actualizar jornada
+// Schema para crear/actualizar jornada - más flexible
 const scheduleSchema = z.object({
   usuario_id: z.string().uuid(),
   punto_atencion_id: z.string().uuid(),
-  fecha_inicio: z.string().optional(),
-  fecha_almuerzo: z.string().optional(),
-  fecha_regreso: z.string().optional(),
-  fecha_salida: z.string().optional(),
+  fecha_inicio: z.string().datetime().optional(),
+  fecha_almuerzo: z.string().datetime().optional(),
+  fecha_regreso: z.string().datetime().optional(),
+  fecha_salida: z.string().datetime().optional(),
   ubicacion_inicio: z
     .object({
       lat: z.number(),
@@ -37,7 +37,15 @@ const scheduleSchema = z.object({
       direccion: z.string().optional(),
     })
     .optional(),
-});
+}).refine(
+  (data) => {
+    // Al menos uno de los campos de fecha debe estar presente
+    return data.fecha_inicio || data.fecha_almuerzo || data.fecha_regreso || data.fecha_salida;
+  },
+  {
+    message: "Se requiere al menos una fecha (inicio, almuerzo, regreso o salida)",
+  }
+);
 
 // Obtener jornadas/horarios
 router.get(

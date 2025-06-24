@@ -1,20 +1,22 @@
-
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import logger from "./utils/logger.js";
+
+// Routes
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import pointRoutes from "./routes/points.js";
 import currencyRoutes from "./routes/currencies.js";
 import balanceRoutes from "./routes/balances.js";
 import transferRoutes from "./routes/transfers.js";
+import transferApprovalRoutes from "./routes/transfer-approvals.js";
+import exchangeRoutes from "./routes/exchanges.js";
 import scheduleRoutes from "./routes/schedules.js";
 import spontaneousExitRoutes from "./routes/spontaneous-exits.js";
-import transferApprovalRoutes from "./routes/transfer-approvals.js";
-import activePointsRoutes from "./routes/activePoints.js";
 import reportRoutes from "./routes/reports.js";
-import logger from "./utils/logger.js";
+import activePointsRoutes from "./routes/activePoints.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -68,9 +70,10 @@ app.use("/api/points", pointRoutes);
 app.use("/api/currencies", currencyRoutes);
 app.use("/api/balances", balanceRoutes);
 app.use("/api/transfers", transferRoutes);
+app.use("/api/transfer-approvals", transferApprovalRoutes);
+app.use("/api/exchanges", exchangeRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/spontaneous-exits", spontaneousExitRoutes);
-app.use("/api/transfer-approvals", transferApprovalRoutes);
 app.use("/api/active-points", activePointsRoutes);
 app.use("/api/reports", reportRoutes);
 
