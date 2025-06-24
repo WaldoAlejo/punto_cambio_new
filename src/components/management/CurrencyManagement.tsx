@@ -1,22 +1,19 @@
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
-import { currencyService } from '../../services/currencyService';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { toast } from "@/hooks/use-toast";
 import { Moneda } from '../../types';
-import { Plus, Coins, ToggleLeft, ToggleRight } from 'lucide-react';
+import { currencyService } from '../../services/currencyService';
 
 export const CurrencyManagement = () => {
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const { toast } = useToast();
-
+  const [showForm, setShowForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     codigo: '',
     nombre: '',
@@ -24,91 +21,118 @@ export const CurrencyManagement = () => {
     orden_display: 0
   });
 
-  useEffect(() => {
-    loadCurrencies();
-  }, []);
-
   const loadCurrencies = async () => {
-    setLoading(true);
+    setIsLoading(true);
+    setError(null);
     try {
-      const { currencies: currenciesData, error } = await currencyService.getAllCurrencies();
+      const { currencies: fetchedCurrencies, error } = await currencyService.getAllCurrencies();
       
       if (error) {
+        setError(error);
         toast({
           title: "Error",
           description: error,
           variant: "destructive"
         });
-      } else {
-        setCurrencies(currenciesData);
+        return;
       }
+
+      setCurrencies(fetchedCurrencies);
+    } catch (error) {
+      console.error('Error loading currencies:', error);
+      const errorMessage = "Error al cargar monedas";
+      setError(errorMessage);
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive"
+      });
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleCreateCurrency = async () => {
+  useEffect(() => {
+    loadCurrencies();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     if (!formData.codigo || !formData.nombre || !formData.simbolo) {
       toast({
         title: "Error",
-        description: "Complete los campos obligatorios",
+        description: "Todos los campos son obligatorios",
         variant: "destructive"
       });
       return;
     }
 
-    const { currency, error } = await currencyService.createCurrency(formData);
-    
-    if (error) {
-      toast({
-        title: "Error",
-        description: error,
-        variant: "destructive"
+    try {
+      const { currency: newCurrency, error } = await currencyService.createCurrency({
+        codigo: formData.codigo.toUpperCase(),
+        nombre: formData.nombre,
+        simbolo: formData.simbolo,
+        orden_display: formData.orden_display || currencies.length + 1
       });
-    } else if (currency) {
-      setCurrencies([...currencies, currency]);
-      setIsCreateDialogOpen(false);
-      resetForm();
+
+      if (error || !newCurrency) {
+        toast({
+          title: "Error",
+          description: error || "Error al crear moneda",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      await loadCurrencies();
+      
+      setFormData({
+        codigo: '',
+        nombre: '',
+        simbolo: '',
+        orden_display: 0
+      });
+      setShowForm(false);
+
       toast({
         title: "Moneda creada",
-        description: "La moneda se creó exitosamente"
+        description: `Moneda ${newCurrency.nombre} creada exitosamente`,
       });
-    }
-  };
-
-  const handleToggleCurrency = async (currencyId: string) => {
-    const { currency, error } = await currencyService.toggleCurrencyStatus(currencyId);
-    
-    if (error) {
+    } catch (error) {
+      console.error('Error creating currency:', error);
       toast({
         title: "Error",
-        description: error,
+        description: "Error interno del servidor",
         variant: "destructive"
-      });
-    } else if (currency) {
-      setCurrencies(currencies.map(c => c.id === currencyId ? currency : c));
-      toast({
-        title: "Estado actualizado",
-        description: `Moneda ${currency.activo ? 'activada' : 'desactivada'} exitosamente`
       });
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      codigo: '',
-      nombre: '',
-      simbolo: '',
-      orden_display: 0
-    });
-  };
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="p-6">
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Cargando monedas...</p>
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando monedas...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <p className="text-red-500 text-lg">Error al cargar monedas</p>
+          <p className="text-gray-500 mt-2">{error}</p>
+          <Button 
+            onClick={loadCurrencies} 
+            className="mt-4"
+            variant="outline"
+          >
+            Reintentar
+          </Button>
         </div>
       </div>
     );
@@ -118,112 +142,128 @@ export const CurrencyManagement = () => {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Gestión de Monedas</h1>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Nueva Moneda
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Crear Nueva Moneda</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="codigo">Código *</Label>
-                <Input
-                  id="codigo"
-                  value={formData.codigo}
-                  onChange={(e) => setFormData({...formData, codigo: e.target.value.toUpperCase()})}
-                  placeholder="USD, EUR, COP..."
-                  maxLength={3}
-                />
+        <Button 
+          onClick={() => setShowForm(!showForm)}
+          className="bg-blue-600 hover:bg-blue-700"
+        >
+          {showForm ? 'Cancelar' : 'Nueva Moneda'}
+        </Button>
+      </div>
+
+      {showForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Crear Nueva Moneda</CardTitle>
+            <CardDescription>Complete la información de la nueva moneda</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Código (3 letras)</Label>
+                  <Input
+                    value={formData.codigo}
+                    onChange={(e) => setFormData(prev => ({ ...prev, codigo: e.target.value.toUpperCase() }))}
+                    placeholder="USD"
+                    maxLength={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Símbolo</Label>
+                  <Input
+                    value={formData.simbolo}
+                    onChange={(e) => setFormData(prev => ({ ...prev, simbolo: e.target.value }))}
+                    placeholder="$"
+                    maxLength={5}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Orden (Opcional)</Label>
+                  <Input
+                    type="number"
+                    value={formData.orden_display}
+                    onChange={(e) => setFormData(prev => ({ ...prev, orden_display: parseInt(e.target.value) || 0 }))}
+                    placeholder="1"
+                    min="0"
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="nombre">Nombre *</Label>
+
+              <div className="space-y-2">
+                <Label>Nombre Completo</Label>
                 <Input
-                  id="nombre"
                   value={formData.nombre}
-                  onChange={(e) => setFormData({...formData, nombre: e.target.value})}
-                  placeholder="Dólar Americano, Euro..."
+                  onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
+                  placeholder="Dólar Estadounidense"
                 />
               </div>
-              <div>
-                <Label htmlFor="simbolo">Símbolo *</Label>
-                <Input
-                  id="simbolo"
-                  value={formData.simbolo}
-                  onChange={(e) => setFormData({...formData, simbolo: e.target.value})}
-                  placeholder="$, €, ₡..."
-                  maxLength={5}
-                />
-              </div>
-              <div>
-                <Label htmlFor="orden">Orden de Display</Label>
-                <Input
-                  id="orden"
-                  type="number"
-                  value={formData.orden_display}
-                  onChange={(e) => setFormData({...formData, orden_display: parseInt(e.target.value) || 0})}
-                  placeholder="0"
-                />
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleCreateCurrency}>
+
+              <div className="flex gap-2">
+                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                   Crear Moneda
                 </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowForm(false)}
+                >
+                  Cancelar
+                </Button>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Monedas</CardTitle>
+          <CardTitle>Monedas del Sistema</CardTitle>
+          <CardDescription>Lista de todas las monedas registradas</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {currencies.map(currency => (
-              <div key={currency.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-4">
-                    <Coins className="h-5 w-5 text-gray-400" />
-                    <div>
-                      <h3 className="font-medium">{currency.nombre}</h3>
-                      <div className="flex items-center space-x-2 text-sm text-gray-500">
-                        <span>{currency.codigo}</span>
-                        <span>•</span>
-                        <span>{currency.simbolo}</span>
-                        <span>•</span>
-                        <span>Orden: {currency.orden_display}</span>
-                      </div>
-                    </div>
-                    <Badge variant={currency.activo ? "default" : "secondary"}>
-                      {currency.activo ? "Activa" : "Inactiva"}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleToggleCurrency(currency.id)}
-                  >
-                    {currency.activo ? (
-                      <ToggleRight className="h-4 w-4" />
-                    ) : (
-                      <ToggleLeft className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+          {currencies.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">No hay monedas registradas en la base de datos</p>
+              <p className="text-gray-400 mt-2">
+                Cree la primera moneda haciendo clic en "Nueva Moneda"
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Símbolo</TableHead>
+                  <TableHead>Orden</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Fecha Creación</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {currencies.map((currency) => (
+                  <TableRow key={currency.id}>
+                    <TableCell className="font-medium">{currency.codigo}</TableCell>
+                    <TableCell>{currency.nombre}</TableCell>
+                    <TableCell>{currency.simbolo}</TableCell>
+                    <TableCell>{currency.orden_display}</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                        currency.activo 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {currency.activo ? 'Activa' : 'Inactiva'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(currency.created_at).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
