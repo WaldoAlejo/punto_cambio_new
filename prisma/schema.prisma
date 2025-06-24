@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -37,6 +38,7 @@ model Usuario {
   recibos                   Recibo[]
   salidasEspontaneas        SalidaEspontanea[]
   salidasAprobadas          SalidaEspontanea[] @relation("UsuarioAprobadorSalida")
+  cuadresCierreParcial      CuadreCaja[]     @relation("UsuarioCierreParcial")
 
   @@index([username])
   @@index([punto_atencion_id])
@@ -319,30 +321,39 @@ model CuadreCaja {
   total_transferencias_salida  Int          @default(0)
   fecha_cierre                  DateTime?
   observaciones                 String?
+  saldo_inicial_calculado       Boolean      @default(false)
+  total_ingresos                Decimal      @default(0) @db.Decimal(15, 2)
+  total_egresos                 Decimal      @default(0) @db.Decimal(15, 2)
+  usuario_cierre_parcial        String?
 
-  usuario       Usuario             @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
-  puntoAtencion PuntoAtencion       @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
-  detalles      DetalleCuadreCaja[]
+  usuario               Usuario             @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  puntoAtencion         PuntoAtencion       @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
+  usuarioCierreParcial  Usuario?            @relation("UsuarioCierreParcial", fields: [usuario_cierre_parcial], references: [id], onDelete: SetNull)
+  detalles              DetalleCuadreCaja[]
 
   @@index([fecha])
   @@index([punto_atencion_id])
+  @@index([estado])
 }
 
 model DetalleCuadreCaja {
-  id              String  @id @default(uuid())
-  cuadre_id       String
-  moneda_id       String
-  saldo_apertura  Decimal @db.Decimal(15, 2)
-  saldo_cierre    Decimal @db.Decimal(15, 2)
-  conteo_fisico   Decimal @db.Decimal(15, 2)
-  billetes        Int     @default(0)
-  monedas_fisicas Int     @default(0)
-  diferencia      Decimal @default(0) @db.Decimal(15, 2)
+  id                    String  @id @default(uuid())
+  cuadre_id             String
+  moneda_id             String
+  saldo_apertura        Decimal @db.Decimal(15, 2)
+  saldo_cierre          Decimal @db.Decimal(15, 2)
+  conteo_fisico         Decimal @db.Decimal(15, 2)
+  billetes              Int     @default(0)
+  monedas_fisicas       Int     @default(0)
+  diferencia            Decimal @default(0) @db.Decimal(15, 2)
+  movimientos_periodo   Int     @default(0)
+  observaciones_detalle String?
 
   cuadre CuadreCaja @relation(fields: [cuadre_id], references: [id], onDelete: Cascade)
   moneda Moneda     @relation(fields: [moneda_id], references: [id], onDelete: Restrict)
 
   @@unique([cuadre_id, moneda_id])
+  @@index([moneda_id])
 }
 
 // ============================
