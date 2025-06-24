@@ -8,6 +8,22 @@ type CurrencyExchangeDetails = {
   monedaDestino: string;
   tasaCambio: number;
   observacion?: string | null;
+  cliente: {
+    nombre: string;
+    apellido: string;
+    cedula: string;
+    telefono: string;
+  };
+  divisasEntregadas: {
+    billetes: number;
+    monedas: number;
+    total: number;
+  };
+  divisasRecibidas: {
+    billetes: number;
+    monedas: number;
+    total: number;
+  };
 };
 
 type TransferDetails = {
@@ -66,6 +82,22 @@ export class ReceiptService {
         monedaDestino: exchange.monedaDestino?.codigo || "",
         tasaCambio: exchange.tasa_cambio,
         observacion: exchange.observacion,
+        cliente: {
+          nombre: exchange.datos_cliente?.nombre || "",
+          apellido: exchange.datos_cliente?.apellido || "",
+          cedula: exchange.datos_cliente?.cedula || "",
+          telefono: exchange.datos_cliente?.telefono || "",
+        },
+        divisasEntregadas: {
+          billetes: exchange.divisas_entregadas?.billetes || 0,
+          monedas: exchange.divisas_entregadas?.monedas || 0,
+          total: exchange.divisas_entregadas?.total || 0,
+        },
+        divisasRecibidas: {
+          billetes: exchange.divisas_recibidas?.billetes || 0,
+          monedas: exchange.divisas_recibidas?.monedas || 0,
+          total: exchange.divisas_recibidas?.total || 0,
+        },
       },
     };
   }
@@ -114,11 +146,26 @@ ${halfSeparator}
     if (receipt.tipo === "CAMBIO DE DIVISA") {
       const detalles = receipt.detalles as CurrencyExchangeDetails;
       receiptText += `
-Operación: ${detalles.tipoOperacion}
+DATOS DEL CLIENTE:
+Nombre: ${detalles.cliente.nombre} ${detalles.cliente.apellido}
+Cédula: ${detalles.cliente.cedula}
+Teléfono: ${detalles.cliente.telefono}
+${halfSeparator}
+OPERACIÓN: ${detalles.tipoOperacion}
 Entrega: ${detalles.montoOrigen} ${detalles.monedaOrigen}
 Recibe: ${detalles.montoDestino} ${detalles.monedaDestino}
 Tasa: ${detalles.tasaCambio}
-${detalles.observacion ? `Obs: ${detalles.observacion}` : ""}
+${halfSeparator}
+DETALLE DIVISAS ENTREGADAS:
+Billetes: ${detalles.divisasEntregadas.billetes} ${detalles.monedaOrigen}
+Monedas: ${detalles.divisasEntregadas.monedas} ${detalles.monedaOrigen}
+Total: ${detalles.divisasEntregadas.total} ${detalles.monedaOrigen}
+${halfSeparator}
+DETALLE DIVISAS RECIBIDAS:
+Billetes: ${detalles.divisasRecibidas.billetes} ${detalles.monedaDestino}
+Monedas: ${detalles.divisasRecibidas.monedas} ${detalles.monedaDestino}
+Total: ${detalles.divisasRecibidas.total} ${detalles.monedaDestino}
+${detalles.observacion ? `${halfSeparator}\nObs: ${detalles.observacion}` : ""}
 `;
     } else if (receipt.tipo === "TRANSFERENCIA") {
       const detalles = receipt.detalles as TransferDetails;
