@@ -70,12 +70,34 @@ const ActivePointsReport = ({ user }: ActivePointsReportProps) => {
 
       // Filtrar solo los horarios activos de hoy (que no han terminado)
       const today = new Date().toISOString().split('T')[0];
-      const activesOnly = schedules.filter(schedule => {
-        const scheduleDate = new Date(schedule.fecha_inicio).toISOString().split('T')[0];
-        return schedule.estado === 'ACTIVO' && 
-               !schedule.fecha_salida && 
-               scheduleDate === today;
-      });
+      const activesOnly = schedules
+        .filter(schedule => {
+          const scheduleDate = new Date(schedule.fecha_inicio).toISOString().split('T')[0];
+          return schedule.estado === 'ACTIVO' && 
+                 !schedule.fecha_salida && 
+                 scheduleDate === today &&
+                 schedule.usuario && 
+                 schedule.puntoAtencion;
+        })
+        .map(schedule => ({
+          id: schedule.id,
+          fecha_inicio: schedule.fecha_inicio,
+          fecha_almuerzo: schedule.fecha_almuerzo,
+          fecha_regreso: schedule.fecha_regreso,
+          fecha_salida: schedule.fecha_salida,
+          ubicacion_inicio: schedule.ubicacion_inicio,
+          ubicacion_salida: schedule.ubicacion_salida,
+          estado: schedule.estado,
+          usuario: {
+            id: schedule.usuario!.id,
+            nombre: schedule.usuario!.nombre,
+            username: schedule.usuario!.username,
+          },
+          puntoAtencion: {
+            id: schedule.puntoAtencion!.id,
+            nombre: schedule.puntoAtencion!.nombre,
+          },
+        }));
 
       console.log('Horarios activos encontrados:', activesOnly);
       setActiveSchedules(activesOnly);
