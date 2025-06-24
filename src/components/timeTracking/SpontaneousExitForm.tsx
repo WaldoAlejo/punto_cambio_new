@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -101,6 +102,14 @@ const SpontaneousExitForm = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    console.log("Datos del formulario:", {
+      motivo,
+      descripcion,
+      location,
+      selectedPoint,
+      user
+    });
+
     if (!motivo) {
       toast({
         title: "Error",
@@ -124,19 +133,31 @@ const SpontaneousExitForm = ({
 
       const exitData = {
         motivo,
-        descripcion: descripcion || undefined,
-        ubicacion_salida: location || undefined,
+        descripcion: descripcion.trim() || undefined,
+        ubicacion_salida: location 
+          ? {
+              lat: location.lat,
+              lng: location.lng,
+              direccion: "Ubicación de salida"
+            }
+          : undefined,
       };
+
+      console.log("Enviando datos de salida:", exitData);
 
       const { exit, error } = await spontaneousExitService.createExit(exitData);
 
+      console.log("Respuesta del servicio:", { exit, error });
+
       if (error) {
+        console.error("Error del servicio:", error);
         toast({
           title: "Error",
           description: error,
           variant: "destructive",
         });
       } else if (exit) {
+        console.log("Salida creada exitosamente:", exit);
         toast({
           title: "Salida registrada",
           description: `Se ha registrado tu salida espontánea por ${

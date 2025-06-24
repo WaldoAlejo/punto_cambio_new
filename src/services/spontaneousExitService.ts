@@ -77,7 +77,10 @@ export const spontaneousExitService = {
   }> {
     try {
       const endpoint = usuarioId ? `/spontaneous-exits?usuario_id=${usuarioId}` : '/spontaneous-exits';
+      console.log("Obteniendo salidas desde:", endpoint);
+      
       const response = await apiService.get<SpontaneousExitsResponse>(endpoint);
+      console.log("Respuesta de getAllExits:", response);
 
       if (!response) {
         return {
@@ -105,7 +108,10 @@ export const spontaneousExitService = {
     error: string | null;
   }> {
     try {
+      console.log("Creando salida con datos:", exitData);
+      
       const response = await apiService.post<CreateExitResponse>("/spontaneous-exits", exitData);
+      console.log("Respuesta del servidor al crear salida:", response);
 
       if (!response) {
         return {
@@ -133,7 +139,10 @@ export const spontaneousExitService = {
     error: string | null;
   }> {
     try {
+      console.log("Marcando regreso para salida:", exitId, "con datos:", returnData);
+      
       const response = await apiService.patch<CreateExitResponse>(`/spontaneous-exits/${exitId}/return`, returnData);
+      console.log("Respuesta del servidor al marcar regreso:", response);
 
       if (!response) {
         return {
