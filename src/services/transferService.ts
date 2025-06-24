@@ -1,6 +1,5 @@
-
 import { apiService } from './apiService';
-import { Transferencia } from '../types';
+import { Transferencia, ResponsableMovilizacion } from '../types';
 
 export interface CreateTransferData {
   origen_id?: string;
@@ -14,12 +13,7 @@ export interface CreateTransferData {
     monedas: number;
     total: number;
   };
-  responsable_movilizacion?: {
-    nombre: string;
-    documento: string;
-    cedula: string;
-    telefono: string;
-  };
+  responsable_movilizacion?: ResponsableMovilizacion;
 }
 
 export const transferService = {
