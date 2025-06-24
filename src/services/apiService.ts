@@ -22,9 +22,13 @@ const createApiService = (): ApiService => {
 
   axiosInstance.interceptors.request.use(
     (config) => {
-      const token = localStorage.getItem('token');
+      // Buscar el token en ambas ubicaciones para asegurar compatibilidad
+      const token = localStorage.getItem('authToken') || localStorage.getItem('token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
+        console.log('Token added to request:', token.substring(0, 20) + '...');
+      } else {
+        console.log('No token found in localStorage');
       }
       console.log('Making API request to:', config.baseURL + config.url);
       return config;
@@ -50,6 +54,7 @@ const createApiService = (): ApiService => {
       
       if (error.response?.status === 401) {
         localStorage.removeItem('token');
+        localStorage.removeItem('authToken');
         localStorage.removeItem('user');
         window.location.href = '/login';
       }

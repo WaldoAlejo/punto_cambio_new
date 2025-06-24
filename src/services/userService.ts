@@ -32,6 +32,9 @@ export const userService = {
   async getAllUsers(): Promise<{ users: Usuario[]; error: string | null }> {
     try {
       console.log('Fetching all users - attempting API call');
+      console.log('Token in localStorage:', localStorage.getItem('token') ? 'Present' : 'Not found');
+      console.log('AuthToken in localStorage:', localStorage.getItem('authToken') ? 'Present' : 'Not found');
+      
       const response = await apiService.get<{ users: Usuario[]; success: boolean }>('/users');
       
       console.log('Users API response:', response);
