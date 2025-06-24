@@ -9,10 +9,12 @@ import { createPointSchema, type CreatePointRequest } from '../schemas/validatio
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Endpoint para obtener puntos de atención
+// Endpoint para obtener puntos de atención (sin autenticación requerida para GET)
 router.get('/', async (req: express.Request, res: express.Response): Promise<void> => {
   console.log('=== POINTS ROUTE - GET / START ===');
-  console.log('Request headers:', req.headers);
+  console.log('Request method:', req.method);
+  console.log('Request path:', req.path);
+  console.log('Request headers authorization:', req.headers.authorization);
   console.log('Request user:', req.user);
   
   try {
@@ -24,12 +26,12 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       'Surrogate-Control': 'no-store'
     });
 
-    console.log('Querying database for active points...');
+    console.log('🔍 Querying database for active points...');
     const points = await prisma.puntoAtencion.findMany({
       where: { activo: true },
       orderBy: { nombre: 'asc' }
     });
-    console.log('Database query result - points count:', points.length);
+    console.log('✅ Database query result - points count:', points.length);
     console.log('Raw points from database:', points);
 
     const formattedPoints = points.map(point => ({
@@ -37,11 +39,11 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       created_at: point.created_at.toISOString(),
       updated_at: point.updated_at.toISOString()
     }));
-    console.log('Formatted points:', formattedPoints);
+    console.log('✅ Formatted points:', formattedPoints);
 
     logger.info('Puntos obtenidos', { 
       count: formattedPoints.length, 
-      requestedBy: req.user?.id 
+      requestedBy: req.user?.id || 'anonymous'
     });
 
     const responseData = { 
@@ -49,19 +51,19 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       success: true,
       timestamp: new Date().toISOString()
     };
-    console.log('Sending response:', responseData);
+    console.log('✅ Sending response:', responseData);
 
     res.status(200).json(responseData);
   } catch (error) {
     console.error('=== POINTS ROUTE GET ERROR ===');
-    console.error('Error details:', error);
+    console.error('❌ Error details:', error);
     console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
     console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
     
     logger.error('Error al obtener puntos', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      requestedBy: req.user?.id 
+      requestedBy: req.user?.id || 'anonymous'
     });
     
     const errorResponse = { 
@@ -69,21 +71,23 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       success: false,
       timestamp: new Date().toISOString()
     };
-    console.log('Sending error response:', errorResponse);
+    console.log('❌ Sending error response:', errorResponse);
     res.status(500).json(errorResponse);
   } finally {
     console.log('=== POINTS ROUTE - GET / END ===');
   }
 });
 
-// Crear punto de atención (solo admins) - CORREGIDO: agregar authenticateToken
+// Crear punto de atención (requiere autenticación y rol de admin)
 router.post('/',
   authenticateToken,
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createPointSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
     console.log('=== POINTS ROUTE - POST / START ===');
-    console.log('Request headers:', req.headers);
+    console.log('Request method:', req.method);
+    console.log('Request path:', req.path);
+    console.log('Request headers authorization:', req.headers.authorization);
     console.log('Request user:', req.user);
     console.log('Request body received:', req.body);
     console.log('Request body JSON:', JSON.stringify(req.body, null, 2));
@@ -91,7 +95,7 @@ router.post('/',
     try {
       const pointData = req.body as CreatePointRequest;
       
-      console.log('Extracted point data:', {
+      console.log('✅ Extracted point data:', {
         nombre: pointData.nombre,
         direccion: pointData.direccion,
         ciudad: pointData.ciudad,
@@ -100,11 +104,11 @@ router.post('/',
         telefono: pointData.telefono
       });
 
-      console.log('Creating point in database with data:', { ...pointData, activo: true });
+      console.log('🔍 Creating point in database with data:', { ...pointData, activo: true });
       const newPoint = await prisma.puntoAtencion.create({
         data: { ...pointData, activo: true }
       });
-      console.log('Database create result:', newPoint);
+      console.log('✅ Database create result:', newPoint);
 
       logger.info('Punto creado', { 
         pointId: newPoint.id, 
@@ -120,12 +124,12 @@ router.post('/',
         success: true,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending success response:', responseData);
+      console.log('✅ Sending success response:', responseData);
 
       res.status(201).json(responseData);
     } catch (error) {
       console.error('=== POINTS ROUTE POST ERROR ===');
-      console.error('Error details:', error);
+      console.error('❌ Error details:', error);
       console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
       console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
       
@@ -140,7 +144,7 @@ router.post('/',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending error response:', errorResponse);
+      console.log('❌ Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
       console.log('=== POINTS ROUTE - POST / END ===');

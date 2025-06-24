@@ -9,10 +9,12 @@ import { createCurrencySchema, type CreateCurrencyRequest } from '../schemas/val
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Obtener todas las monedas
+// Obtener todas las monedas (sin autenticación requerida para GET)
 router.get('/', async (req: express.Request, res: express.Response): Promise<void> => {
   console.log('=== CURRENCIES ROUTE - GET / START ===');
-  console.log('Request headers:', req.headers);
+  console.log('Request method:', req.method);
+  console.log('Request path:', req.path);
+  console.log('Request headers authorization:', req.headers.authorization);
   console.log('Request user:', req.user);
   
   try {
@@ -24,12 +26,12 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       'Surrogate-Control': 'no-store'
     });
 
-    console.log('Querying database for active currencies...');
+    console.log('🔍 Querying database for active currencies...');
     const currencies = await prisma.moneda.findMany({
       where: { activo: true },
       orderBy: { orden_display: 'asc' }
     });
-    console.log('Database query result - currencies count:', currencies.length);
+    console.log('✅ Database query result - currencies count:', currencies.length);
     console.log('Raw currencies from database:', currencies);
 
     const formattedCurrencies = currencies.map(currency => ({
@@ -37,11 +39,11 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       created_at: currency.created_at.toISOString(),
       updated_at: currency.updated_at.toISOString()
     }));
-    console.log('Formatted currencies:', formattedCurrencies);
+    console.log('✅ Formatted currencies:', formattedCurrencies);
 
     logger.info('Monedas obtenidas', { 
       count: formattedCurrencies.length, 
-      requestedBy: req.user?.id 
+      requestedBy: req.user?.id || 'anonymous'
     });
 
     const responseData = { 
@@ -49,19 +51,19 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       success: true,
       timestamp: new Date().toISOString()
     };
-    console.log('Sending response:', responseData);
+    console.log('✅ Sending response:', responseData);
 
     res.status(200).json(responseData);
   } catch (error) {
     console.error('=== CURRENCIES ROUTE GET ERROR ===');
-    console.error('Error details:', error);
+    console.error('❌ Error details:', error);
     console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
     console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
     
     logger.error('Error al obtener monedas', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      requestedBy: req.user?.id 
+      requestedBy: req.user?.id || 'anonymous'
     });
     
     const errorResponse = { 
@@ -69,21 +71,23 @@ router.get('/', async (req: express.Request, res: express.Response): Promise<voi
       success: false,
       timestamp: new Date().toISOString()
     };
-    console.log('Sending error response:', errorResponse);
+    console.log('❌ Sending error response:', errorResponse);
     res.status(500).json(errorResponse);
   } finally {
     console.log('=== CURRENCIES ROUTE - GET / END ===');
   }
 });
 
-// Crear moneda (solo admins)
+// Crear moneda (requiere autenticación y rol de admin)
 router.post('/',
   authenticateToken,
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createCurrencySchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
     console.log('=== CURRENCIES ROUTE - POST / START ===');
-    console.log('Request headers:', req.headers);
+    console.log('Request method:', req.method);
+    console.log('Request path:', req.path);
+    console.log('Request headers authorization:', req.headers.authorization);
     console.log('Request user:', req.user);
     console.log('Request body received:', req.body);
     console.log('Request body JSON:', JSON.stringify(req.body, null, 2));
@@ -91,7 +95,7 @@ router.post('/',
     try {
       const currencyData = req.body as CreateCurrencyRequest;
       
-      console.log('Extracted currency data:', {
+      console.log('✅ Extracted currency data:', {
         nombre: currencyData.nombre,
         simbolo: currencyData.simbolo,
         codigo: currencyData.codigo,
@@ -99,24 +103,24 @@ router.post('/',
       });
 
       // Verificar si el código ya existe
-      console.log('Checking if currency code already exists...');
+      console.log('🔍 Checking if currency code already exists...');
       const existingCurrency = await prisma.moneda.findFirst({
         where: { codigo: currencyData.codigo }
       });
       
       if (existingCurrency) {
-        console.warn('Currency code already exists:', currencyData.codigo);
+        console.warn('❌ Currency code already exists:', currencyData.codigo);
         const conflictResponse = {
           error: 'El código de moneda ya existe',
           success: false,
           timestamp: new Date().toISOString()
         };
-        console.log('Sending conflict response:', conflictResponse);
+        console.log('❌ Sending conflict response:', conflictResponse);
         res.status(400).json(conflictResponse);
         return;
       }
 
-      console.log('Creating currency in database with data:', { ...currencyData, activo: true });
+      console.log('🔍 Creating currency in database with data:', { ...currencyData, activo: true });
       const newCurrency = await prisma.moneda.create({
         data: { 
           ...currencyData, 
@@ -124,7 +128,7 @@ router.post('/',
           orden_display: currencyData.orden_display || 0
         }
       });
-      console.log('Database create result:', newCurrency);
+      console.log('✅ Database create result:', newCurrency);
 
       logger.info('Moneda creada', { 
         currencyId: newCurrency.id, 
@@ -140,12 +144,12 @@ router.post('/',
         success: true,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending success response:', responseData);
+      console.log('✅ Sending success response:', responseData);
 
       res.status(201).json(responseData);
     } catch (error) {
       console.error('=== CURRENCIES ROUTE POST ERROR ===');
-      console.error('Error details:', error);
+      console.error('❌ Error details:', error);
       console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
       console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
       
@@ -160,7 +164,7 @@ router.post('/',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending error response:', errorResponse);
+      console.log('❌ Sending error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
       console.log('=== CURRENCIES ROUTE - POST / END ===');

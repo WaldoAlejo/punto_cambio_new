@@ -12,33 +12,34 @@ export const validate = (
 ): RequestHandler => {
   return (req: Request, res: Response, next: NextFunction): void => {
     console.log(`=== VALIDATION MIDDLEWARE START ===`);
+    console.log(`Request method:`, req.method);
+    console.log(`Request path:`, req.path);
     console.log(`Validating property: ${property}`);
     console.log(`Data to validate:`, req[property]);
     console.log(`Data JSON:`, JSON.stringify(req[property], null, 2));
-    console.log(`Schema:`, schema._def);
 
     try {
       const data = req[property];
-      console.log('Calling schema.parse...');
+      console.log('🔍 Calling schema.parse...');
       const validatedData = schema.parse(data);
       
-      console.log('Validation successful!');
+      console.log('✅ Validation successful!');
       console.log('Validated data:', validatedData);
       (req as unknown as Record<string, unknown>)[property] = validatedData;
-      console.log('Data set on request object');
+      console.log('✅ Data set on request object');
       
       next();
     } catch (error) {
       console.error('=== VALIDATION ERROR ===');
-      console.error('Validation error details:', error);
+      console.error('❌ Validation error details:', error);
       
       if (error instanceof z.ZodError) {
-        console.error('Zod validation errors:', error.errors);
+        console.error('❌ Zod validation errors:', error.errors);
         const errors = error.errors.map((err) => ({
           field: err.path.join("."),
           message: err.message,
         }));
-        console.log('Formatted validation errors:', errors);
+        console.log('❌ Formatted validation errors:', errors);
 
         logger.warn("Validación fallida", {
           errors,
@@ -49,21 +50,27 @@ export const validate = (
         const errorResponse = {
           error: "Datos de entrada inválidos",
           details: errors,
+          success: false,
+          timestamp: new Date().toISOString()
         };
-        console.log('Sending validation error response:', errorResponse);
+        console.log('❌ Sending validation error response:', errorResponse);
 
         res.status(400).json(errorResponse);
         return;
       }
 
-      console.error('Non-Zod validation error:', error);
+      console.error('❌ Non-Zod validation error:', error);
       logger.error("Error en validación", {
         error: error instanceof Error ? error.message : "Unknown error",
         ip: req.ip,
       });
 
-      const errorResponse = { error: "Error interno del servidor" };
-      console.log('Sending internal error response:', errorResponse);
+      const errorResponse = { 
+        error: "Error interno del servidor",
+        success: false,
+        timestamp: new Date().toISOString()
+      };
+      console.log('❌ Sending internal error response:', errorResponse);
       res.status(500).json(errorResponse);
     } finally {
       console.log(`=== VALIDATION MIDDLEWARE END ===`);
@@ -77,6 +84,8 @@ export const sanitizeInput: RequestHandler = (
   res: Response,
   next: NextFunction
 ): void => {
+  console.log('=== SANITIZE INPUT MIDDLEWARE START ===');
+  
   const sanitizeString = (str: unknown): unknown => {
     if (typeof str !== "string") return str;
     return str.trim().replace(/[<>"']/g, "");
@@ -99,8 +108,11 @@ export const sanitizeInput: RequestHandler = (
   };
 
   if (req.body) {
+    console.log('🔍 Sanitizing request body...');
     req.body = sanitizeObject(req.body);
+    console.log('✅ Request body sanitized');
   }
 
+  console.log('=== SANITIZE INPUT MIDDLEWARE END ===');
   next();
 };
