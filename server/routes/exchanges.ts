@@ -38,6 +38,11 @@ const exchangeSchema = z.object({
   observacion: z.string().optional(),
 });
 
+interface ExchangeWhereClause {
+  punto_atencion_id?: string;
+  usuario_id?: string;
+}
+
 // Crear cambio de divisa
 router.post(
   "/",
@@ -59,8 +64,18 @@ router.post(
         observacion,
       } = req.body;
 
+      // Verificar que el usuario esté autenticado
+      if (!req.user?.id) {
+        res.status(401).json({
+          error: "Usuario no autenticado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       logger.info("Creando cambio de divisa", {
-        usuario_id: req.user?.id,
+        usuario_id: req.user.id,
         punto_atencion_id,
         tipo_operacion,
         monto_origen,
@@ -109,7 +124,7 @@ router.post(
           monto_destino,
           tasa_cambio,
           tipo_operacion,
-          usuario_id: req.user!.id,
+          usuario_id: req.user.id,
           punto_atencion_id,
           observacion: observacion || null,
           numero_recibo: numeroRecibo,
@@ -154,7 +169,7 @@ router.post(
           numero_recibo: numeroRecibo,
           tipo_operacion: "CAMBIO_DIVISA",
           referencia_id: exchange.id,
-          usuario_id: req.user!.id,
+          usuario_id: req.user.id,
           punto_atencion_id,
           datos_operacion: {
             ...exchange,
@@ -176,7 +191,7 @@ router.post(
       logger.info("Cambio de divisa creado exitosamente", {
         exchangeId: exchange.id,
         numeroRecibo,
-        usuario_id: req.user?.id,
+        usuario_id: req.user.id,
       });
 
       res.status(201).json({
@@ -206,7 +221,7 @@ router.get(
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
-      const whereClause: any = {};
+      const whereClause: ExchangeWhereClause = {};
 
       // Filtrar por punto de atención si se proporciona
       if (req.query.point_id) {
