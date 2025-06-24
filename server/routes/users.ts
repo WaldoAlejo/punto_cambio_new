@@ -1,8 +1,9 @@
+
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
 import logger from '../utils/logger.js';
-import { requireRole } from '../middleware/auth.js';
+import { authenticateToken, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validation.js';
 import { createUserSchema, type CreateUserRequest } from '../schemas/validation.js';
 
@@ -10,68 +11,73 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 // Obtener todos los usuarios (solo admins)
-router.get('/', requireRole(['ADMIN', 'SUPER_USUARIO']), async (req: express.Request, res: express.Response): Promise<void> => {
-  console.log('=== USERS ROUTE - GET / START ===');
-  console.log('Request headers:', req.headers);
-  console.log('Request user:', req.user);
+router.get('/', 
+  authenticateToken,
+  requireRole(['ADMIN', 'SUPER_USUARIO']), 
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    console.log('=== USERS ROUTE - GET / START ===');
+    console.log('Request headers:', req.headers);
+    console.log('Request user:', req.user);
 
-  try {
-    console.log('Querying database for users...');
-    const users = await prisma.usuario.findMany({
-      select: {
-        id: true,
-        username: true,
-        nombre: true,
-        correo: true,
-        telefono: true,
-        rol: true,
-        activo: true,
-        punto_atencion_id: true,
-        created_at: true,
-        updated_at: true,
-      },
-      orderBy: { created_at: 'desc' }
-    });
-    console.log('Database query result - users count:', users.length);
-    console.log('Users data:', users);
+    try {
+      console.log('Querying database for users...');
+      const users = await prisma.usuario.findMany({
+        select: {
+          id: true,
+          username: true,
+          nombre: true,
+          correo: true,
+          telefono: true,
+          rol: true,
+          activo: true,
+          punto_atencion_id: true,
+          created_at: true,
+          updated_at: true,
+        },
+        orderBy: { created_at: 'desc' }
+      });
+      console.log('Database query result - users count:', users.length);
+      console.log('Users data:', users);
 
-    logger.info('Usuarios obtenidos', { 
-      count: users.length, 
-      requestedBy: req.user?.id 
-    });
+      logger.info('Usuarios obtenidos', { 
+        count: users.length, 
+        requestedBy: req.user?.id 
+      });
 
-    const responseData = {
-      users,
-      success: true,
-      timestamp: new Date().toISOString()
-    };
-    console.log('Sending response:', responseData);
+      const responseData = {
+        users,
+        success: true,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending response:', responseData);
 
-    res.status(200).json(responseData);
-  } catch (error) {
-    console.error('=== USERS ROUTE GET ERROR ===');
-    console.error('Error details:', error);
-    
-    logger.error('Error al obtener usuarios', { 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      requestedBy: req.user?.id 
-    });
-    
-    const errorResponse = {
-      error: 'Error al obtener usuarios',
-      success: false,
-      timestamp: new Date().toISOString()
-    };
-    console.log('Sending error response:', errorResponse);
-    res.status(500).json(errorResponse);
-  } finally {
-    console.log('=== USERS ROUTE - GET / END ===');
+      res.status(200).json(responseData);
+    } catch (error) {
+      console.error('=== USERS ROUTE GET ERROR ===');
+      console.error('Error details:', error);
+      
+      logger.error('Error al obtener usuarios', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id 
+      });
+      
+      const errorResponse = {
+        error: 'Error al obtener usuarios',
+        success: false,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending error response:', errorResponse);
+      res.status(500).json(errorResponse);
+    } finally {
+      console.log('=== USERS ROUTE - GET / END ===');
+    }
   }
-});
+);
 
 // Crear usuario (solo admins)
 router.post('/',
+  authenticateToken,
   requireRole(['ADMIN', 'SUPER_USUARIO']),
   validate(createUserSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
@@ -175,88 +181,92 @@ router.post('/',
 );
 
 // Cambiar el estado de un usuario (solo admins)
-router.patch('/:id/toggle', requireRole(['ADMIN', 'SUPER_USUARIO']), async (req: express.Request, res: express.Response): Promise<void> => {
-  console.log('=== USERS ROUTE - PATCH /:id/toggle START ===');
-  console.log('Request headers:', req.headers);
-  console.log('Request user:', req.user);
-  console.log('User ID to toggle:', req.params.id);
+router.patch('/:id/toggle', 
+  authenticateToken, 
+  requireRole(['ADMIN', 'SUPER_USUARIO']), 
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    console.log('=== USERS ROUTE - PATCH /:id/toggle START ===');
+    console.log('Request headers:', req.headers);
+    console.log('Request user:', req.user);
+    console.log('User ID to toggle:', req.params.id);
 
-  try {
-    const userId = req.params.id;
+    try {
+      const userId = req.params.id;
 
-    console.log('Fetching user from database...');
-    const existingUser = await prisma.usuario.findUnique({
-      where: { id: userId },
-      select: { activo: true, id: true, username: true }
-    });
+      console.log('Fetching user from database...');
+      const existingUser = await prisma.usuario.findUnique({
+        where: { id: userId },
+        select: { activo: true, id: true, username: true }
+      });
 
-    if (!existingUser) {
-      console.warn('User not found:', userId);
-      const notFoundResponse = {
-        error: 'Usuario no encontrado',
+      if (!existingUser) {
+        console.warn('User not found:', userId);
+        const notFoundResponse = {
+          error: 'Usuario no encontrado',
+          success: false,
+          timestamp: new Date().toISOString()
+        };
+        console.log('Sending not found response:', notFoundResponse);
+        res.status(404).json(notFoundResponse);
+        return;
+      }
+
+      console.log('Toggling user status...');
+      const updatedUser = await prisma.usuario.update({
+        where: { id: userId },
+        data: { activo: !existingUser.activo },
+        select: {
+          id: true,
+          username: true,
+          nombre: true,
+          correo: true,
+          telefono: true,
+          rol: true,
+          activo: true,
+          punto_atencion_id: true,
+          created_at: true,
+          updated_at: true,
+        }
+      });
+      console.log('User status toggled successfully:', updatedUser);
+
+      logger.info('Estado de usuario cambiado', { 
+        userId: updatedUser.id, 
+        newStatus: updatedUser.activo,
+        requestedBy: req.user?.id 
+      });
+
+      const responseData = {
+        user: updatedUser,
+        success: true,
+        timestamp: new Date().toISOString()
+      };
+      console.log('Sending success response:', responseData);
+
+      res.status(200).json(responseData);
+    } catch (error) {
+      console.error('=== USERS ROUTE TOGGLE ERROR ===');
+      console.error('Error details:', error);
+      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
+      
+      logger.error('Error al cambiar el estado del usuario', { 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id 
+      });
+      
+      const errorResponse = {
+        error: 'Error al cambiar el estado del usuario',
         success: false,
         timestamp: new Date().toISOString()
       };
-      console.log('Sending not found response:', notFoundResponse);
-      res.status(404).json(notFoundResponse);
-      return;
+      console.log('Sending error response:', errorResponse);
+      res.status(500).json(errorResponse);
+    } finally {
+      console.log('=== USERS ROUTE - PATCH /:id/toggle END ===');
     }
-
-    console.log('Toggling user status...');
-    const updatedUser = await prisma.usuario.update({
-      where: { id: userId },
-      data: { activo: !existingUser.activo },
-      select: {
-        id: true,
-        username: true,
-        nombre: true,
-        correo: true,
-        telefono: true,
-        rol: true,
-        activo: true,
-        punto_atencion_id: true,
-        created_at: true,
-        updated_at: true,
-      }
-    });
-    console.log('User status toggled successfully:', updatedUser);
-
-    logger.info('Estado de usuario cambiado', { 
-      userId: updatedUser.id, 
-      newStatus: updatedUser.activo,
-      requestedBy: req.user?.id 
-    });
-
-    const responseData = {
-      user: updatedUser,
-      success: true,
-      timestamp: new Date().toISOString()
-    };
-    console.log('Sending success response:', responseData);
-
-    res.status(200).json(responseData);
-  } catch (error) {
-    console.error('=== USERS ROUTE TOGGLE ERROR ===');
-    console.error('Error details:', error);
-    console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
-    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack');
-    
-    logger.error('Error al cambiar el estado del usuario', { 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      requestedBy: req.user?.id 
-    });
-    
-    const errorResponse = {
-      error: 'Error al cambiar el estado del usuario',
-      success: false,
-      timestamp: new Date().toISOString()
-    };
-    console.log('Sending error response:', errorResponse);
-    res.status(500).json(errorResponse);
-  } finally {
-    console.log('=== USERS ROUTE - PATCH /:id/toggle END ===');
   }
-});
+);
 
 export default router;
