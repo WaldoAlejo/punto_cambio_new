@@ -108,7 +108,7 @@ router.get("/", authenticateToken, async (req, res) => {
         
         // Calcular saldo de apertura
         const saldoApertura = await calcularSaldoApertura(
-          usuario.punto_atencion_id,
+          usuario.punto_atencion_id as string,
           moneda.id,
           hoy
         );
