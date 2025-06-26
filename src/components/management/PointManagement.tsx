@@ -21,7 +21,7 @@ import { toast } from "@/hooks/use-toast";
 import { PuntoAtencion } from "../../types";
 import { pointService } from "../../services/pointService";
 import EditPointDialog from "@/components/admin/EditPointDialog";
-import { Edit } from "lucide-react"; // Icono de editar
+import { Edit } from "lucide-react";
 
 export const PointManagement = () => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
@@ -36,8 +36,6 @@ export const PointManagement = () => {
     codigo_postal: "",
     telefono: "",
   });
-
-  // NUEVO: Estado para edición de punto
   const [editingPoint, setEditingPoint] = useState<PuntoAtencion | null>(null);
 
   const loadPoints = async () => {
@@ -117,6 +115,28 @@ export const PointManagement = () => {
     }
   };
 
+  // --- ACTIVAR/DESACTIVAR ---
+  const togglePointStatus = async (pointId: string) => {
+    try {
+      await pointService.togglePointStatus(pointId);
+      await loadPoints();
+      const targetPoint = points.find((p) => p.id === pointId);
+      toast({
+        title: "Estado actualizado",
+        description: `Punto ${targetPoint?.nombre} ${
+          targetPoint?.activo ? "desactivado" : "activado"
+        }`,
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo cambiar el estado del punto",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // --- UI ---
   if (isLoading) {
     return (
       <div className="p-6 text-center py-12">
@@ -271,7 +291,6 @@ export const PointManagement = () => {
                   <TableHead>Teléfono</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Fecha Creación</TableHead>
-                  {/* Columna de acciones */}
                   <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -299,16 +318,24 @@ export const PointManagement = () => {
                     <TableCell>
                       {new Date(point.created_at).toLocaleDateString()}
                     </TableCell>
-                    {/* Botón editar */}
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditingPoint(point)}
-                        title="Editar punto"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingPoint(point)}
+                          title="Editar punto"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={point.activo ? "destructive" : "default"}
+                          onClick={() => togglePointStatus(point.id)}
+                        >
+                          {point.activo ? "Desactivar" : "Activar"}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
