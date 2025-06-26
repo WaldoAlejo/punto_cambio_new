@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -46,6 +46,17 @@ const Sidebar = ({
   onToggle,
 }: SidebarProps) => {
   const [adminExpanded, setAdminExpanded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detecta tamaño de pantalla y ajusta sidebar (colapsa en desktop si es necesario)
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const isAdmin = user.rol === "ADMIN" || user.rol === "SUPER_USUARIO";
 
@@ -122,14 +133,13 @@ const Sidebar = ({
   const renderMenuItem = (item: MenuItem) => {
     const Icon = item.icon;
     const isActive = activeView === item.id;
-
     return (
       <Button
         key={item.id}
         variant={isActive ? "default" : "ghost"}
         className={`w-full justify-start h-10 px-3 ${
-          isActive ? "bg-blue-600 text-white" : "hover:bg-gray-100"
-        } ${!isOpen ? "px-2" : ""}`}
+          isActive ? "bg-blue-700 text-white shadow" : "hover:bg-gray-100"
+        } ${!isOpen ? "px-2" : ""} transition-all`}
         onClick={() => onViewChange(item.id)}
       >
         <Icon
@@ -146,43 +156,54 @@ const Sidebar = ({
 
   return (
     <>
-      {isOpen && (
+      {/* Overlay sólo mobile */}
+      {isMobile && isOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-40"
           onClick={onToggle}
         />
       )}
 
-      <div
+      {/* Sidebar */}
+      <aside
         className={`
-        fixed left-0 top-0 h-full bg-white border-r border-gray-200 z-50 transition-all duration-300
-        ${isOpen ? "w-64" : "w-16"}
-        lg:relative lg:z-auto
-      `}
+          fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-50 transition-all duration-300
+          flex flex-col
+          ${isOpen ? "w-64" : "w-16"}
+          ${isMobile ? "shadow-xl" : ""}
+          lg:relative lg:z-auto
+        `}
+        style={{
+          transitionProperty: "width",
+          transitionDuration: "300ms",
+        }}
       >
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           {isOpen && (
-            <div className="flex-1">
-              <h1 className="text-lg font-bold text-gray-800">PuntoCambio</h1>
-              <p className="text-xs text-gray-600">Sistema de Gestión</p>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg font-bold text-blue-800 tracking-tight">
+                PuntoCambio
+              </h1>
+              <p className="text-xs text-gray-500">Sistema de Gestión</p>
             </div>
           )}
+          {/* El botón de menú siempre visible en mobile y desktop */}
           <Button
             variant="ghost"
             size="sm"
             onClick={onToggle}
-            className="p-1 h-8 w-8"
+            className="p-1 h-8 w-8 ml-2"
           >
             {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </Button>
         </div>
 
-        <ScrollArea className="flex-1 px-3 py-4">
+        <ScrollArea className="flex-1 px-2 py-4">
           <div className="space-y-2">
             {isOpen && (
               <div className="mb-4">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="font-medium text-sm text-gray-800">
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <p className="font-medium text-sm text-blue-900">
                     {user.nombre}
                   </p>
                   <p className="text-xs text-gray-600 capitalize">
@@ -203,13 +224,13 @@ const Sidebar = ({
               variant={activeView === "dashboard" ? "default" : "ghost"}
               className={`w-full justify-start h-10 px-3 ${
                 activeView === "dashboard"
-                  ? "bg-blue-600 text-white"
+                  ? "bg-blue-700 text-white shadow"
                   : "hover:bg-gray-100"
-              } ${!isOpen ? "px-2" : ""}`}
+              } ${!isOpen ? "px-2" : ""} transition-all`}
               onClick={() => onViewChange("dashboard")}
             >
               <BarChart3
-                className={`h-4 w-4 text-blue-600 ${
+                className={`h-4 w-4 text-blue-700 ${
                   activeView === "dashboard" ? "text-white" : ""
                 } ${!isOpen ? "mx-auto" : "mr-3"}`}
               />
@@ -229,7 +250,7 @@ const Sidebar = ({
                 {isOpen && (
                   <Button
                     variant="ghost"
-                    className="w-full justify-between h-8 px-3 text-gray-700 hover:bg-gray-100"
+                    className="w-full justify-between h-8 px-3 text-blue-900 hover:bg-gray-100"
                     onClick={() => setAdminExpanded(!adminExpanded)}
                   >
                     <span className="text-sm font-medium">Administración</span>
@@ -253,12 +274,12 @@ const Sidebar = ({
 
         {isOpen && (
           <div className="p-3 border-t border-gray-200">
-            <p className="text-xs text-gray-500 text-center">
+            <p className="text-xs text-gray-400 text-center">
               © 2025 PuntoCambio
             </p>
           </div>
         )}
-      </div>
+      </aside>
     </>
   );
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,21 +40,28 @@ interface ActivePointsReportProps {
   user: UserType;
 }
 
+const AUTO_REFRESH_INTERVAL = 0; // Pon aquí los milisegundos si quieres refresco automático, ej: 60000 para 1 min.
+
 const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
   const [activeSchedules, setActiveSchedules] = useState<ActiveSchedule[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { toast } = useToast();
+  const refreshTimeout = useRef<number | undefined>(undefined);
 
   const loadActiveSchedules = useCallback(async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const { schedules, error } = await scheduleService.getAllSchedules();
       if (error) {
+        setErrorMsg(error);
         toast({
           title: "Error",
           description: `Error al cargar horarios activos: ${error}`,
           variant: "destructive",
         });
+        setActiveSchedules([]);
         return;
       }
 
@@ -99,12 +106,18 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
         title: "Datos actualizados",
         description: `Se encontraron ${activesOnly.length} usuarios activos`,
       });
-    } catch {
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "No se pudieron cargar los datos de usuarios activos";
+      setErrorMsg(msg);
       toast({
         title: "Error de conexión",
-        description: "No se pudieron cargar los datos de usuarios activos",
+        description: msg,
         variant: "destructive",
       });
+      setActiveSchedules([]);
     } finally {
       setLoading(false);
     }
@@ -112,6 +125,19 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
 
   useEffect(() => {
     loadActiveSchedules();
+
+    // Opcional: refresco automático si lo deseas (deja AUTO_REFRESH_INTERVAL en 0 si NO quieres)
+    if (AUTO_REFRESH_INTERVAL > 0) {
+      refreshTimeout.current = window.setTimeout(
+        loadActiveSchedules,
+        AUTO_REFRESH_INTERVAL
+      );
+    }
+    return () => {
+      if (refreshTimeout.current) {
+        clearTimeout(refreshTimeout.current);
+      }
+    };
   }, [loadActiveSchedules]);
 
   const formatTime = (dateString?: string) => {
@@ -156,6 +182,14 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         <span className="ml-2">Cargando usuarios activos...</span>
+      </div>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-red-600">{errorMsg}</p>
       </div>
     );
   }
