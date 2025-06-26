@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +20,8 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { PuntoAtencion } from "../../types";
 import { pointService } from "../../services/pointService";
+import EditPointDialog from "@/components/admin/EditPointDialog";
+import { Edit } from "lucide-react"; // Icono de editar
 
 export const PointManagement = () => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
@@ -35,6 +36,9 @@ export const PointManagement = () => {
     codigo_postal: "",
     telefono: "",
   });
+
+  // NUEVO: Estado para edición de punto
+  const [editingPoint, setEditingPoint] = useState<PuntoAtencion | null>(null);
 
   const loadPoints = async () => {
     setIsLoading(true);
@@ -267,6 +271,8 @@ export const PointManagement = () => {
                   <TableHead>Teléfono</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Fecha Creación</TableHead>
+                  {/* Columna de acciones */}
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -293,6 +299,17 @@ export const PointManagement = () => {
                     <TableCell>
                       {new Date(point.created_at).toLocaleDateString()}
                     </TableCell>
+                    {/* Botón editar */}
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditingPoint(point)}
+                        title="Editar punto"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -300,6 +317,16 @@ export const PointManagement = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* MODAL de edición */}
+      {editingPoint && (
+        <EditPointDialog
+          point={editingPoint}
+          isOpen={!!editingPoint}
+          onClose={() => setEditingPoint(null)}
+          onPointUpdated={loadPoints}
+        />
+      )}
     </div>
   );
 };
