@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,12 +27,29 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { Usuario } from "../../types";
 import { userService } from "../../services/userService";
+import EditUserDialog from "../../components/admin/EditUserDialog";
+import ResetPasswordDialog from "../../components/admin/ResetPasswordDialog";
+import { Edit, Key } from "lucide-react";
+
+// MOCK de usuario actual con rol ADMIN (sustituye esto por el contexto real de tu auth)
+const currentUser: Usuario = {
+  id: "1",
+  username: "admin",
+  correo: "admin@demo.com",
+  nombre: "Admin Principal",
+  rol: "ADMIN",
+  activo: true,
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+};
 
 export const UserManagement = () => {
   const [users, setUsers] = useState<Usuario[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<Usuario | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<Usuario | null>(null);
   const [formData, setFormData] = useState({
     username: "",
     correo: "",
@@ -46,21 +62,10 @@ export const UserManagement = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { users: fetchedUsers, error } = await userService.getAllUsers();
-
-      if (error) {
-        setError(error);
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
-        return;
-      }
-
+      const { users: fetchedUsers } = await userService.getAllUsers();
       setUsers(fetchedUsers);
-    } catch (error) {
-      console.error("Error loading users:", error);
+    } catch (err) {
+      console.error("Error loading users:", err);
       const errorMessage = "Error al cargar usuarios";
       setError(errorMessage);
       toast({
@@ -95,7 +100,7 @@ export const UserManagement = () => {
     }
 
     try {
-      const { user: newUser, error } = await userService.createUser({
+      const { user: newUser } = await userService.createUser({
         username: formData.username,
         password: formData.password,
         nombre: formData.nombre,
@@ -103,10 +108,10 @@ export const UserManagement = () => {
         rol: formData.rol,
       });
 
-      if (error || !newUser) {
+      if (!newUser) {
         toast({
           title: "Error",
-          description: error || "Error al crear usuario",
+          description: "Error al crear usuario",
           variant: "destructive",
         });
         return;
@@ -126,8 +131,8 @@ export const UserManagement = () => {
         title: "Usuario creado",
         description: `Usuario ${newUser.nombre} creado exitosamente`,
       });
-    } catch (error) {
-      console.error("Error creating user:", error);
+    } catch (err) {
+      console.error("Error creating user:", err);
       toast({
         title: "Error",
         description: "Error interno del servidor",
@@ -138,17 +143,7 @@ export const UserManagement = () => {
 
   const toggleUserStatus = async (userId: string) => {
     try {
-      const { error } = await userService.toggleUserStatus(userId);
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
-        return;
-      }
-
+      await userService.toggleUserStatus(userId);
       await loadData();
       const targetUser = users.find((u) => u.id === userId);
       toast({
@@ -157,8 +152,8 @@ export const UserManagement = () => {
           targetUser?.activo ? "desactivado" : "activado"
         }`,
       });
-    } catch (error) {
-      console.error("Error toggling user status:", error);
+    } catch (err) {
+      console.error("Error toggling user status:", err);
       toast({
         title: "Error",
         description: "Error interno del servidor",
@@ -176,6 +171,19 @@ export const UserManagement = () => {
     };
     return roles[rol] || rol;
   };
+
+  // Solo ADMIN o SUPER_USUARIO pueden ver el componente
+  if (currentUser.rol !== "ADMIN" && currentUser.rol !== "SUPER_USUARIO") {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <p className="text-red-500 text-lg">
+            No tiene permisos para acceder a esta sección
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -379,13 +387,29 @@ export const UserManagement = () => {
                       {new Date(userItem.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant={userItem.activo ? "destructive" : "default"}
-                        onClick={() => toggleUserStatus(userItem.id)}
-                      >
-                        {userItem.activo ? "Desactivar" : "Activar"}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingUser(userItem)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setResetPasswordUser(userItem)}
+                        >
+                          <Key className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={userItem.activo ? "destructive" : "default"}
+                          onClick={() => toggleUserStatus(userItem.id)}
+                        >
+                          {userItem.activo ? "Desactivar" : "Activar"}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -394,6 +418,26 @@ export const UserManagement = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Diálogos */}
+      {editingUser && (
+        <EditUserDialog
+          user={editingUser}
+          isOpen={true}
+          onClose={() => setEditingUser(null)}
+          onUserUpdated={loadData}
+          currentUser={currentUser}
+        />
+      )}
+      {resetPasswordUser && (
+        <ResetPasswordDialog
+          user={resetPasswordUser}
+          isOpen={true}
+          onClose={() => setResetPasswordUser(null)}
+        />
+      )}
     </div>
   );
 };
+
+export default UserManagement;
