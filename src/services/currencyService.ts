@@ -21,11 +21,11 @@ export const currencyService = {
     currencies: Moneda[];
     error: string | null;
   }> {
-    console.log("=== CURRENCY SERVICE - getAllCurrencies START ===");
+    console.warn("=== CURRENCY SERVICE - getAllCurrencies START ===");
     try {
-      console.log('Calling apiService.get("/currencies")...');
+      console.warn('Calling apiService.get("/currencies")...');
       const response = await apiService.get<CurrenciesResponse>("/currencies");
-      console.log("getAllCurrencies - Raw response:", response);
+      console.warn("getAllCurrencies - Raw response:", response);
 
       if (!response) {
         console.error("getAllCurrencies - No response received");
@@ -43,7 +43,7 @@ export const currencyService = {
         };
       }
 
-      console.log(
+      console.warn(
         "getAllCurrencies - Success, currencies count:",
         response.currencies?.length || 0
       );
@@ -53,23 +53,23 @@ export const currencyService = {
       console.error("Error details:", error);
       return { currencies: [], error: "Error de conexión con el servidor" };
     } finally {
-      console.log("=== CURRENCY SERVICE - getAllCurrencies END ===");
+      console.warn("=== CURRENCY SERVICE - getAllCurrencies END ===");
     }
   },
 
   async createCurrency(
     currencyData: CreateCurrencyData
   ): Promise<{ currency: Moneda | null; error: string | null }> {
-    console.log("=== CURRENCY SERVICE - createCurrency START ===");
-    console.log("Input data:", currencyData);
+    console.warn("=== CURRENCY SERVICE - createCurrency START ===");
+    console.warn("Input data:", currencyData);
 
     try {
-      console.log('Calling apiService.post("/currencies", currencyData)...');
+      console.warn('Calling apiService.post("/currencies", currencyData)...');
       const response = await apiService.post<CurrencyResponse>(
         "/currencies",
         currencyData
       );
-      console.log("createCurrency - Raw response:", response);
+      console.warn("createCurrency - Raw response:", response);
 
       if (!response) {
         console.error("createCurrency - No response received from server");
@@ -90,7 +90,7 @@ export const currencyService = {
         };
       }
 
-      console.log(
+      console.warn(
         "createCurrency - Success! Created currency:",
         response.currency
       );
@@ -100,22 +100,22 @@ export const currencyService = {
       console.error("Error details:", error);
       return { currency: null, error: "Error de conexión con el servidor" };
     } finally {
-      console.log("=== CURRENCY SERVICE - createCurrency END ===");
+      console.warn("=== CURRENCY SERVICE - createCurrency END ===");
     }
   },
 
   async toggleCurrencyStatus(
     currencyId: string
   ): Promise<{ currency: Moneda | null; error: string | null }> {
-    console.log("=== CURRENCY SERVICE - toggleCurrencyStatus START ===");
-    console.log("Currency ID:", currencyId);
+    console.warn("=== CURRENCY SERVICE - toggleCurrencyStatus START ===");
+    console.warn("Currency ID:", currencyId);
 
     try {
-      console.log("Calling apiService.patch for currency toggle...");
+      console.warn("Calling apiService.patch for currency toggle...");
       const response = await apiService.patch<CurrencyResponse>(
         `/currencies/${currencyId}/toggle`
       );
-      console.log("toggleCurrencyStatus - Raw response:", response);
+      console.warn("toggleCurrencyStatus - Raw response:", response);
 
       if (!response) {
         console.error(
@@ -138,7 +138,7 @@ export const currencyService = {
         };
       }
 
-      console.log(
+      console.warn(
         "toggleCurrencyStatus - Success! Updated currency:",
         response.currency
       );
@@ -148,7 +148,7 @@ export const currencyService = {
       console.error("Error details:", error);
       return { currency: null, error: "Error de conexión con el servidor" };
     } finally {
-      console.log("=== CURRENCY SERVICE - toggleCurrencyStatus END ===");
+      console.warn("=== CURRENCY SERVICE - toggleCurrencyStatus END ===");
     }
   },
 
@@ -156,16 +156,16 @@ export const currencyService = {
     currencyId: string,
     data: Partial<Moneda>
   ): Promise<{ currency: Moneda | null; error: string | null }> {
-    console.log("=== CURRENCY SERVICE - updateCurrency START ===");
-    console.log("Currency ID:", currencyId, "Data:", data);
+    console.warn("=== CURRENCY SERVICE - updateCurrency START ===");
+    console.warn("Currency ID:", currencyId, "Data:", data);
 
     try {
-      console.log('Calling apiService.put("/currencies/:id", data)...');
+      console.warn('Calling apiService.put("/currencies/:id", data)...');
       const response = await apiService.put<CurrencyResponse>(
         `/currencies/${currencyId}`,
         data
       );
-      console.log("updateCurrency - Raw response:", response);
+      console.warn("updateCurrency - Raw response:", response);
 
       if (!response) {
         console.error("updateCurrency - No response received from server");
@@ -186,7 +186,7 @@ export const currencyService = {
         };
       }
 
-      console.log(
+      console.warn(
         "updateCurrency - Success! Updated currency:",
         response.currency
       );
@@ -196,7 +196,7 @@ export const currencyService = {
       console.error("Error details:", error);
       return { currency: null, error: "Error de conexión con el servidor" };
     } finally {
-      console.log("=== CURRENCY SERVICE - updateCurrency END ===");
+      console.warn("=== CURRENCY SERVICE - updateCurrency END ===");
     }
   },
 };

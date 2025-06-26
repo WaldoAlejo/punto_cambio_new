@@ -78,7 +78,7 @@ const EditCurrencyDialog = ({
       });
       onClose();
       onCurrencyUpdated();
-    } catch (err) {
+    } catch {
       toast({
         title: "Error",
         description: "No se pudo actualizar la moneda",
