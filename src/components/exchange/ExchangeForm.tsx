@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,13 +28,33 @@ export interface ExchangeFormData {
   observation: string;
 }
 
-const ExchangeForm = ({ currencies, onBack, onContinue }: ExchangeFormProps) => {
-  const [operationType, setOperationType] = useState<"COMPRA" | "VENTA">("COMPRA");
+const ExchangeForm = ({
+  currencies,
+  onBack,
+  onContinue,
+}: ExchangeFormProps) => {
+  const [operationType, setOperationType] = useState<"COMPRA" | "VENTA">(
+    "COMPRA"
+  );
   const [fromCurrency, setFromCurrency] = useState("");
   const [toCurrency, setToCurrency] = useState("");
   const [observation, setObservation] = useState("");
-  
-  const { rate, setRate, amount, setAmount, destinationAmount } = useExchangeCalculations();
+  const { rate, setRate, amount, setAmount, destinationAmount } =
+    useExchangeCalculations();
+
+  // NUEVO: Validación de monedas cargadas
+  if (!currencies || currencies.length < 2) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Datos del Cambio</CardTitle>
+          <CardDescription>
+            Debe haber al menos 2 monedas registradas para operar un cambio.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   const getCurrencyName = (currencyId: string) => {
     const currency = currencies.find((c) => c.id === currencyId);
@@ -105,7 +124,7 @@ const ExchangeForm = ({ currencies, onBack, onContinue }: ExchangeFormProps) => 
           currencies={currencies}
           getCurrencyName={getCurrencyName}
         />
-        
+
         <div className="flex gap-2 mt-4">
           <Button variant="outline" onClick={onBack}>
             Atrás

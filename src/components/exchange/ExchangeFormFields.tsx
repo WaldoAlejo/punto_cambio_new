@@ -1,4 +1,3 @@
-
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -44,8 +43,18 @@ const ExchangeFormFields = ({
   observation,
   setObservation,
   currencies,
-  getCurrencyName
+  getCurrencyName,
 }: ExchangeFormFieldsProps) => {
+  // Si no hay monedas, muestra mensaje claro
+  if (!currencies || currencies.length === 0) {
+    return (
+      <div className="text-red-500 text-sm py-4">
+        No hay monedas registradas en el sistema. Solicite a un administrador
+        que registre al menos dos monedas para operar.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -55,7 +64,7 @@ const ExchangeFormFields = ({
           onValueChange={(value: "COMPRA" | "VENTA") => setOperationType(value)}
         >
           <SelectTrigger>
-            <SelectValue />
+            <SelectValue placeholder="Seleccionar tipo" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="COMPRA">Compra</SelectItem>
@@ -93,7 +102,10 @@ const ExchangeFormFields = ({
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label>Monto a Cambiar ({getCurrencyName(fromCurrency)})</Label>
+          <Label>
+            Monto a Cambiar
+            {fromCurrency && ` (${getCurrencyName(fromCurrency)})`}
+          </Label>
           <Input
             type="number"
             step="0.01"
@@ -103,9 +115,12 @@ const ExchangeFormFields = ({
           />
         </div>
         <div className="space-y-2">
-          <Label>Monto Resultante ({getCurrencyName(toCurrency)})</Label>
+          <Label>
+            Monto Resultante
+            {toCurrency && ` (${getCurrencyName(toCurrency)})`}
+          </Label>
           <div className="h-10 px-3 py-2 border rounded-md bg-gray-50 flex items-center font-bold">
-            {destinationAmount.toFixed(2)}
+            {isNaN(destinationAmount) ? "0.00" : destinationAmount.toFixed(2)}
           </div>
         </div>
       </div>

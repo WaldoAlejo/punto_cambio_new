@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import CurrencyDetailForm from "./CurrencyDetailForm";
 import { DetalleDivisasSimple, Moneda } from "../../types";
@@ -28,6 +27,15 @@ const ExchangeDetailsForm = ({
   divisasEntregadas,
   divisasRecibidas,
 }: ExchangeDetailsFormProps) => {
+  // NUEVO: validación robusta, nunca deja la pantalla en blanco si no hay monedas
+  if (!fromCurrency && !toCurrency) {
+    return (
+      <div className="text-center text-red-500 p-6">
+        No se han encontrado monedas de origen ni destino para este cambio.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {fromCurrency && (
@@ -50,7 +58,11 @@ const ExchangeDetailsForm = ({
         <Button variant="outline" onClick={onBack}>
           Atrás
         </Button>
-        <Button onClick={onComplete} className="flex-1">
+        <Button
+          onClick={onComplete}
+          className="flex-1"
+          disabled={!fromCurrency || !toCurrency}
+        >
           Completar Cambio
         </Button>
       </div>

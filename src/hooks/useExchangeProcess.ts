@@ -1,10 +1,9 @@
-
-import { useState } from 'react';
+import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
-import { User, PuntoAtencion, CambioDivisa } from '../types';
-import { exchangeService } from '../services/exchangeService';
-import { ReceiptService } from '../services/receiptService';
-import { ExchangeCompleteData } from '../components/exchange/ExchangeSteps';
+import { User, PuntoAtencion, CambioDivisa } from "../types";
+import { exchangeService } from "../services/exchangeService";
+import { ReceiptService } from "../services/receiptService";
+import { ExchangeCompleteData } from "../components/exchange/ExchangeSteps";
 
 interface UseExchangeProcessProps {
   user: User;
@@ -13,11 +12,11 @@ interface UseExchangeProcessProps {
   onResetForm: () => void;
 }
 
-export const useExchangeProcess = ({ 
-  user, 
-  selectedPoint, 
-  onExchangeCreated, 
-  onResetForm 
+export const useExchangeProcess = ({
+  user,
+  selectedPoint,
+  onExchangeCreated,
+  onResetForm,
 }: UseExchangeProcessProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -31,16 +30,27 @@ export const useExchangeProcess = ({
     try {
       ReceiptService.printReceipt(receiptData, 2);
     } catch (error) {
-      console.warn('Error al imprimir recibo:', error);
+      console.warn("Error al imprimir recibo:", error);
       toast({
         title: "Advertencia",
-        description: "El recibo se generó correctamente pero hubo un problema con la impresión",
+        description:
+          "El recibo se generó correctamente pero hubo un problema con la impresión",
         variant: "default",
       });
     }
   };
 
   const processExchange = async (data: ExchangeCompleteData) => {
+    if (isProcessing) return; // Protección extra
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Usuario no válido, reintente sesión.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!selectedPoint) {
       toast({
         title: "Error",
@@ -53,12 +63,29 @@ export const useExchangeProcess = ({
     setIsProcessing(true);
 
     try {
-      const rateValue = parseFloat(data.exchangeData.rate) || 0;
+      const rateValue = parseFloat(data.exchangeData.rate);
+      const montoOrigen = parseFloat(data.exchangeData.amount);
+
+      if (
+        !data.exchangeData.fromCurrency ||
+        !data.exchangeData.toCurrency ||
+        isNaN(rateValue) ||
+        isNaN(montoOrigen) ||
+        !data.exchangeData.operationType
+      ) {
+        toast({
+          title: "Error",
+          description: "Datos incompletos o inválidos para procesar el cambio.",
+          variant: "destructive",
+        });
+        setIsProcessing(false);
+        return;
+      }
 
       const exchangePayload = {
         moneda_origen_id: data.exchangeData.fromCurrency,
         moneda_destino_id: data.exchangeData.toCurrency,
-        monto_origen: parseFloat(data.exchangeData.amount),
+        monto_origen: montoOrigen,
         monto_destino: data.exchangeData.destinationAmount,
         tasa_cambio: rateValue,
         tipo_operacion: data.exchangeData.operationType,
@@ -69,7 +96,8 @@ export const useExchangeProcess = ({
         observacion: data.exchangeData.observation || undefined,
       };
 
-      const { exchange: createdExchange, error } = await exchangeService.createExchange(exchangePayload);
+      const { exchange: createdExchange, error } =
+        await exchangeService.createExchange(exchangePayload);
 
       if (error) {
         toast({
@@ -101,9 +129,8 @@ export const useExchangeProcess = ({
       setTimeout(() => {
         generateReceiptAndPrint(createdExchange);
       }, 100);
-
     } catch (error) {
-      console.error('Error al procesar cambio:', error);
+      console.error("Error al procesar cambio:", error);
       toast({
         title: "Error",
         description: "Error inesperado al procesar el cambio",
@@ -116,6 +143,6 @@ export const useExchangeProcess = ({
 
   return {
     isProcessing,
-    processExchange
+    processExchange,
   };
 };

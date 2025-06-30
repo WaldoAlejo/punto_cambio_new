@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 
 export const useExchangeCalculations = () => {
   const [rate, setRate] = useState("");
@@ -7,20 +6,29 @@ export const useExchangeCalculations = () => {
   const [destinationAmount, setDestinationAmount] = useState(0);
 
   useEffect(() => {
-    if (rate && amount) {
-      const rateValue = parseFloat(rate) || 0;
-      const amountValue = parseFloat(amount) || 0;
+    // Limpieza para evitar que la UI muestre "NaN" en algún error de parseo
+    const rateValue = parseFloat(rate.replace(",", ".")) || 0;
+    const amountValue = parseFloat(amount.replace(",", ".")) || 0;
+    if (rate && amount && rateValue > 0 && amountValue > 0) {
       setDestinationAmount(amountValue * rateValue);
     } else {
       setDestinationAmount(0);
     }
   }, [amount, rate]);
 
+  // Útil si quieres saber cuándo ambos datos son válidos
+  const isValid = () => {
+    const rateValue = parseFloat(rate.replace(",", ".")) || 0;
+    const amountValue = parseFloat(amount.replace(",", ".")) || 0;
+    return rateValue > 0 && amountValue > 0;
+  };
+
   return {
     rate,
     setRate,
     amount,
     setAmount,
-    destinationAmount
+    destinationAmount,
+    isValid: isValid(),
   };
 };

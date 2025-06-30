@@ -1,4 +1,3 @@
-
 import { useState, forwardRef, useImperativeHandle } from "react";
 import CustomerDataForm from "./CustomerDataForm";
 import ExchangeForm, { ExchangeFormData } from "./ExchangeForm";
@@ -23,7 +22,9 @@ export interface ExchangeStepsRef {
 
 const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
   ({ currencies, onComplete }, ref) => {
-    const [step, setStep] = useState<"customer" | "exchange" | "details">("customer");
+    const [step, setStep] = useState<"customer" | "exchange" | "details">(
+      "customer"
+    );
     const [customerData, setCustomerData] = useState<DatosCliente>({
       nombre: "",
       apellido: "",
@@ -31,17 +32,21 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
       cedula: "",
       telefono: "",
     });
-    const [exchangeData, setExchangeData] = useState<ExchangeFormData | null>(null);
-    const [divisasEntregadas, setDivisasEntregadas] = useState<DetalleDivisasSimple>({
-      billetes: 0,
-      monedas: 0,
-      total: 0,
-    });
-    const [divisasRecibidas, setDivisasRecibidas] = useState<DetalleDivisasSimple>({
-      billetes: 0,
-      monedas: 0,
-      total: 0,
-    });
+    const [exchangeData, setExchangeData] = useState<ExchangeFormData | null>(
+      null
+    );
+    const [divisasEntregadas, setDivisasEntregadas] =
+      useState<DetalleDivisasSimple>({
+        billetes: 0,
+        monedas: 0,
+        total: 0,
+      });
+    const [divisasRecibidas, setDivisasRecibidas] =
+      useState<DetalleDivisasSimple>({
+        billetes: 0,
+        monedas: 0,
+        total: 0,
+      });
 
     const handleCustomerDataSubmit = (data: DatosCliente) => {
       setCustomerData(data);
@@ -75,7 +80,13 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
 
     const resetSteps = () => {
       setStep("customer");
-      setCustomerData({ nombre: "", apellido: "", documento: "", cedula: "", telefono: "" });
+      setCustomerData({
+        nombre: "",
+        apellido: "",
+        documento: "",
+        cedula: "",
+        telefono: "",
+      });
       setExchangeData(null);
       setDivisasEntregadas({ billetes: 0, monedas: 0, total: 0 });
       setDivisasRecibidas({ billetes: 0, monedas: 0, total: 0 });
@@ -84,6 +95,16 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
     useImperativeHandle(ref, () => ({
       resetSteps,
     }));
+
+    // NUEVO: Validar si hay monedas antes de permitir pasos
+    if (!currencies || currencies.length < 2) {
+      return (
+        <div className="text-center text-red-500 p-6">
+          Debe haber al menos dos monedas registradas para operar un cambio.
+          Solicite a un administrador registrar monedas.
+        </div>
+      );
+    }
 
     switch (step) {
       case "customer":
@@ -106,10 +127,18 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
       case "details":
         return (
           <ExchangeDetailsForm
-            fromCurrency={exchangeData ? getCurrency(exchangeData.fromCurrency) : null}
-            toCurrency={exchangeData ? getCurrency(exchangeData.toCurrency) : null}
-            fromCurrencyName={exchangeData ? getCurrencyName(exchangeData.fromCurrency) : ""}
-            toCurrencyName={exchangeData ? getCurrencyName(exchangeData.toCurrency) : ""}
+            fromCurrency={
+              exchangeData ? getCurrency(exchangeData.fromCurrency) : null
+            }
+            toCurrency={
+              exchangeData ? getCurrency(exchangeData.toCurrency) : null
+            }
+            fromCurrencyName={
+              exchangeData ? getCurrencyName(exchangeData.fromCurrency) : ""
+            }
+            toCurrencyName={
+              exchangeData ? getCurrencyName(exchangeData.toCurrency) : ""
+            }
             onBack={() => setStep("exchange")}
             onComplete={handleDetailsComplete}
             onDivisasEntregadasChange={setDivisasEntregadas}

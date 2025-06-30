@@ -7,20 +7,23 @@ export const useExchangeData = (selectedPoint: PuntoAtencion | null) => {
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [exchanges, setExchanges] = useState<CambioDivisa[]>([]);
   const [isLoadingCurrencies, setIsLoadingCurrencies] = useState(true);
+  const [error, setError] = useState<string | null>(null); // NUEVO
 
   useEffect(() => {
     const loadCurrencies = async () => {
       try {
         setIsLoadingCurrencies(true);
+        setError(null); // limpia error previo
         const { currencies: fetchedCurrencies } =
           await currencyService.getAllCurrencies();
         const activeCurrencies = fetchedCurrencies.filter(
           (currency) => currency.activo
         );
         setCurrencies(activeCurrencies);
-      } catch {
-        console.error("Error loading currencies");
+      } catch (err) {
+        console.error("Error loading currencies", err);
         setCurrencies([]);
+        setError("Error al cargar monedas. Intente de nuevo más tarde.");
       } finally {
         setIsLoadingCurrencies(false);
       }
@@ -28,21 +31,28 @@ export const useExchangeData = (selectedPoint: PuntoAtencion | null) => {
 
     const loadExchanges = async () => {
       try {
+        setError(null); // limpia error previo
         if (selectedPoint) {
           const { exchanges } = await exchangeService.getExchangesByPoint(
             selectedPoint.id
           );
           setExchanges(exchanges);
         }
-      } catch {
-        console.error("Error loading exchanges");
+      } catch (err) {
+        console.error("Error loading exchanges", err);
         setExchanges([]);
+        setError("Error al cargar el historial de cambios.");
       }
     };
 
     if (selectedPoint) {
       loadCurrencies();
       loadExchanges();
+    } else {
+      // Limpia datos si no hay punto seleccionado
+      setCurrencies([]);
+      setExchanges([]);
+      setError(null);
     }
   }, [selectedPoint]);
 
@@ -55,5 +65,6 @@ export const useExchangeData = (selectedPoint: PuntoAtencion | null) => {
     exchanges,
     addExchange,
     isLoadingCurrencies,
+    error, // NUEVO: para manejar errores en la UI
   };
 };

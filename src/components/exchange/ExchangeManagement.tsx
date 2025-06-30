@@ -15,8 +15,13 @@ const ExchangeManagement = ({
   selectedPoint,
 }: ExchangeManagementProps) => {
   const stepsRef = useRef<ExchangeStepsRef>(null);
-  const { currencies, exchanges, isLoadingCurrencies, addExchange } =
-    useExchangeData(selectedPoint);
+  const {
+    currencies,
+    exchanges,
+    isLoadingCurrencies,
+    addExchange,
+    error: dataError,
+  } = useExchangeData(selectedPoint);
 
   const { isProcessing, processExchange } = useExchangeProcess({
     user,
@@ -24,6 +29,14 @@ const ExchangeManagement = ({
     onExchangeCreated: addExchange,
     onResetForm: () => stepsRef.current?.resetSteps(),
   });
+
+  if (!user) {
+    return (
+      <div className="p-6 text-center py-12 text-gray-500 text-lg">
+        Cargando usuario...
+      </div>
+    );
+  }
 
   if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
     return (
@@ -47,6 +60,25 @@ const ExchangeManagement = ({
       <div className="p-6 text-center py-12">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
         <p className="mt-4 text-gray-600">Cargando monedas...</p>
+      </div>
+    );
+  }
+
+  // NUEVO: Mostrar error de carga de monedas
+  if (dataError) {
+    return (
+      <div className="p-6 text-center py-12 text-red-500 text-lg">
+        Error al cargar datos: {dataError}
+      </div>
+    );
+  }
+
+  // NUEVO: Validar que sí existan monedas para operar
+  if (!currencies || currencies.length < 2) {
+    return (
+      <div className="p-6 text-center py-12 text-red-500 text-lg">
+        Debe haber al menos dos monedas registradas para operar un cambio.
+        Solicite al administrador registrar monedas.
       </div>
     );
   }
@@ -76,7 +108,7 @@ const ExchangeManagement = ({
           )}
         </div>
 
-        <ExchangeList exchanges={exchanges} currencies={currencies} />
+        <ExchangeList exchanges={exchanges || []} currencies={currencies} />
       </div>
     </div>
   );

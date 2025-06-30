@@ -1,26 +1,38 @@
-
-import { useState } from 'react';
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DatosCliente } from '../../types';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { DatosCliente } from "../../types";
 
 interface CustomerDataFormProps {
   onCustomerData: (data: DatosCliente) => void;
   initialData?: DatosCliente;
 }
 
-const CustomerDataForm = ({ onCustomerData, initialData }: CustomerDataFormProps) => {
-  const [customerData, setCustomerData] = useState<DatosCliente>(
-    initialData || {
-      nombre: '',
-      apellido: '',
-      documento: '',
-      cedula: '',
-      telefono: ''
-    }
-  );
+const emptyCustomer: DatosCliente = {
+  nombre: "",
+  apellido: "",
+  documento: "",
+  cedula: "",
+  telefono: "",
+};
+
+const CustomerDataForm = ({
+  onCustomerData,
+  initialData,
+}: CustomerDataFormProps) => {
+  // Blindaje: siempre todos los campos iniciales definidos
+  const [customerData, setCustomerData] = useState<DatosCliente>({
+    ...emptyCustomer,
+    ...initialData,
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,14 +40,20 @@ const CustomerDataForm = ({ onCustomerData, initialData }: CustomerDataFormProps
   };
 
   const isFormValid = () => {
-    return customerData.nombre && customerData.apellido && customerData.cedula;
+    return !!(
+      customerData.nombre &&
+      customerData.apellido &&
+      customerData.cedula
+    );
   };
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Datos del Cliente</CardTitle>
-        <CardDescription>Ingrese los datos del cliente para el cambio de divisas</CardDescription>
+        <CardDescription>
+          Ingrese los datos del cliente para el cambio de divisas
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -44,7 +62,12 @@ const CustomerDataForm = ({ onCustomerData, initialData }: CustomerDataFormProps
               <Label>Nombre *</Label>
               <Input
                 value={customerData.nombre}
-                onChange={(e) => setCustomerData(prev => ({ ...prev, nombre: e.target.value }))}
+                onChange={(e) =>
+                  setCustomerData((prev) => ({
+                    ...prev,
+                    nombre: e.target.value,
+                  }))
+                }
                 placeholder="Nombre del cliente"
                 required
               />
@@ -53,7 +76,12 @@ const CustomerDataForm = ({ onCustomerData, initialData }: CustomerDataFormProps
               <Label>Apellido *</Label>
               <Input
                 value={customerData.apellido}
-                onChange={(e) => setCustomerData(prev => ({ ...prev, apellido: e.target.value }))}
+                onChange={(e) =>
+                  setCustomerData((prev) => ({
+                    ...prev,
+                    apellido: e.target.value,
+                  }))
+                }
                 placeholder="Apellido del cliente"
                 required
               />
@@ -65,7 +93,13 @@ const CustomerDataForm = ({ onCustomerData, initialData }: CustomerDataFormProps
               <Label>Cédula *</Label>
               <Input
                 value={customerData.cedula}
-                onChange={(e) => setCustomerData(prev => ({ ...prev, cedula: e.target.value, documento: e.target.value }))}
+                onChange={(e) =>
+                  setCustomerData((prev) => ({
+                    ...prev,
+                    cedula: e.target.value,
+                    documento: e.target.value,
+                  }))
+                }
                 placeholder="Número de cédula"
                 required
               />
@@ -74,17 +108,18 @@ const CustomerDataForm = ({ onCustomerData, initialData }: CustomerDataFormProps
               <Label>Teléfono</Label>
               <Input
                 value={customerData.telefono}
-                onChange={(e) => setCustomerData(prev => ({ ...prev, telefono: e.target.value }))}
+                onChange={(e) =>
+                  setCustomerData((prev) => ({
+                    ...prev,
+                    telefono: e.target.value,
+                  }))
+                }
                 placeholder="Número de teléfono"
               />
             </div>
           </div>
 
-          <Button 
-            type="submit" 
-            className="w-full"
-            disabled={!isFormValid()}
-          >
+          <Button type="submit" className="w-full" disabled={!isFormValid()}>
             Confirmar Datos del Cliente
           </Button>
         </form>
