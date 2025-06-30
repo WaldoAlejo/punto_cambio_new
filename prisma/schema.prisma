@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -157,6 +156,22 @@ model CambioDivisa {
   observacion       String?
   numero_recibo     String?           @unique
   estado            EstadoTransaccion @default(COMPLETADO)
+
+  // ==== CAMPOS PARA ENTREGA Y FLUJO PARCIAL ====
+  metodo_entrega             String        // "efectivo" | "transferencia"
+  transferencia_numero       String?       // Número transferencia si aplica
+  transferencia_banco        String?       // Banco transferencia si aplica
+  transferencia_imagen_url   String?       // URL del comprobante, si aplica
+
+  // ==== CAMPOS PARA CAMBIO PARCIAL O DIFERIDO ====
+  abono_inicial_monto        Decimal?      @db.Decimal(15, 2)
+  abono_inicial_fecha        DateTime?
+  abono_inicial_recibido_por String?
+  saldo_pendiente            Decimal?      @db.Decimal(15, 2)
+  fecha_compromiso           DateTime?
+  observacion_parcial        String?
+  referencia_cambio_principal String?
+  // ==== FIN CAMPOS ====
 
   monedaOrigen  Moneda        @relation("MonedaOrigen", fields: [moneda_origen_id], references: [id], onDelete: Restrict)
   monedaDestino Moneda        @relation("MonedaDestino", fields: [moneda_destino_id], references: [id], onDelete: Restrict)
@@ -317,8 +332,8 @@ model CuadreCaja {
   fecha                         DateTime     @default(now())
   estado                        EstadoCierre @default(ABIERTO)
   total_cambios                 Int          @default(0)
-  total_transferencias_entrada Int          @default(0)
-  total_transferencias_salida  Int          @default(0)
+  total_transferencias_entrada  Int          @default(0)
+  total_transferencias_salida   Int          @default(0)
   fecha_cierre                  DateTime?
   observaciones                 String?
   saldo_inicial_calculado       Boolean      @default(false)

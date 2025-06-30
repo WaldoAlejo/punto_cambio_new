@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { toast } from "@/hooks/use-toast";
-import { User, PuntoAtencion, CambioDivisa } from "../types";
+import {
+  User,
+  PuntoAtencion,
+  CambioDivisa,
+  DatosCliente,
+  DetalleDivisasSimple,
+} from "../types";
 import { exchangeService } from "../services/exchangeService";
 import { ReceiptService } from "../services/receiptService";
 import { ExchangeCompleteData } from "../components/exchange/ExchangeSteps";
@@ -11,6 +17,42 @@ interface UseExchangeProcessProps {
   onExchangeCreated: (exchange: CambioDivisa) => void;
   onResetForm: () => void;
 }
+
+interface ExchangePayload {
+  moneda_origen_id: string;
+  moneda_destino_id: string;
+  monto_origen: number;
+  monto_destino: number;
+  tasa_cambio: number;
+  tipo_operacion: "COMPRA" | "VENTA";
+  punto_atencion_id: string;
+  datos_cliente: DatosCliente;
+  divisas_entregadas: DetalleDivisasSimple;
+  divisas_recibidas: DetalleDivisasSimple;
+  observacion?: string;
+  metodo_entrega: "efectivo" | "transferencia";
+  transferencia_numero?: string | null;
+  transferencia_banco?: string | null;
+  transferencia_imagen_url?: string | null;
+  // NUEVOS CAMPOS flujo parcial
+  abono_inicial_monto?: number | null;
+  abono_inicial_fecha?: string | null;
+  abono_inicial_recibido_por?: string | null;
+  saldo_pendiente?: number | null;
+  referencia_cambio_principal?: string | null;
+}
+
+type ExchangeCompleteDataExtend = ExchangeCompleteData & {
+  metodoEntrega: "efectivo" | "transferencia";
+  transferenciaNumero?: string;
+  transferenciaBanco?: string;
+  transferenciaImagen?: File | null;
+  abonoInicialMonto?: number | null;
+  abonoInicialFecha?: string | null;
+  abonoInicialRecibidoPor?: string | null;
+  saldoPendiente?: number | null;
+  referenciaCambioPrincipal?: string | null;
+};
 
 export const useExchangeProcess = ({
   user,
@@ -40,8 +82,8 @@ export const useExchangeProcess = ({
     }
   };
 
-  const processExchange = async (data: ExchangeCompleteData) => {
-    if (isProcessing) return; // Protección extra
+  const processExchange = async (data: ExchangeCompleteDataExtend) => {
+    if (isProcessing) return;
     if (!user) {
       toast({
         title: "Error",
@@ -50,7 +92,6 @@ export const useExchangeProcess = ({
       });
       return;
     }
-
     if (!selectedPoint) {
       toast({
         title: "Error",
@@ -82,18 +123,47 @@ export const useExchangeProcess = ({
         return;
       }
 
-      const exchangePayload = {
+      // Procesamiento del comprobante de transferencia (si lo implementas)
+      let transferenciaImagenUrl: string | null = null;
+      if (data.metodoEntrega === "transferencia" && data.transferenciaImagen) {
+        // Puedes subir el archivo aquí y asignar el URL
+        // transferenciaImagenUrl = await uploadComprobante(data.transferenciaImagen);
+        toast({
+          title: "Nota",
+          description:
+            "El archivo de comprobante de transferencia se debe subir manualmente (integra S3/Cloudinary si deseas).",
+          variant: "default",
+        });
+      }
+
+      const exchangePayload: ExchangePayload = {
         moneda_origen_id: data.exchangeData.fromCurrency,
         moneda_destino_id: data.exchangeData.toCurrency,
         monto_origen: montoOrigen,
         monto_destino: data.exchangeData.destinationAmount,
         tasa_cambio: rateValue,
-        tipo_operacion: data.exchangeData.operationType,
+        tipo_operacion: data.exchangeData.operationType as "COMPRA" | "VENTA",
         punto_atencion_id: selectedPoint.id,
         datos_cliente: data.customerData,
         divisas_entregadas: data.divisasEntregadas,
         divisas_recibidas: data.divisasRecibidas,
         observacion: data.exchangeData.observation || undefined,
+        metodo_entrega: data.metodoEntrega,
+        transferencia_numero:
+          data.metodoEntrega === "transferencia"
+            ? data.transferenciaNumero || ""
+            : undefined,
+        transferencia_banco:
+          data.metodoEntrega === "transferencia"
+            ? data.transferenciaBanco || ""
+            : undefined,
+        transferencia_imagen_url: transferenciaImagenUrl,
+        // --- CAMPOS DE ABONO PARCIAL ---
+        abono_inicial_monto: data.abonoInicialMonto ?? null,
+        abono_inicial_fecha: data.abonoInicialFecha ?? null,
+        abono_inicial_recibido_por: data.abonoInicialRecibidoPor ?? null,
+        saldo_pendiente: data.saldoPendiente ?? null,
+        referencia_cambio_principal: data.referenciaCambioPrincipal ?? null,
       };
 
       const { exchange: createdExchange, error } =

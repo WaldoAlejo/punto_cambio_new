@@ -14,6 +14,16 @@ export interface ExchangeCompleteData {
   exchangeData: ExchangeFormData;
   divisasEntregadas: DetalleDivisasSimple;
   divisasRecibidas: DetalleDivisasSimple;
+  metodoEntrega: "efectivo" | "transferencia";
+  transferenciaNumero?: string;
+  transferenciaBanco?: string;
+  transferenciaImagen?: File | null;
+  // NUEVO: Campos para abono parcial
+  abonoInicialMonto?: number | null;
+  abonoInicialFecha?: string | null;
+  abonoInicialRecibidoPor?: string | null;
+  saldoPendiente?: number | null;
+  referenciaCambioPrincipal?: string | null;
 }
 
 export interface ExchangeStepsRef {
@@ -48,6 +58,43 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
         total: 0,
       });
 
+    // Estados del método de entrega
+    const [metodoEntrega, setMetodoEntrega] = useState<
+      "efectivo" | "transferencia"
+    >("efectivo");
+    const [transferenciaNumero, setTransferenciaNumero] = useState("");
+    const [transferenciaBanco, setTransferenciaBanco] = useState("");
+    const [transferenciaImagen, setTransferenciaImagen] = useState<File | null>(
+      null
+    );
+
+    // Estados para abono parcial
+    const [abonoInicialMonto, setAbonoInicialMonto] = useState<number | null>(
+      null
+    );
+    const [abonoInicialFecha, setAbonoInicialFecha] = useState<string | null>(
+      null
+    );
+    const [abonoInicialRecibidoPor, setAbonoInicialRecibidoPor] = useState<
+      string | null
+    >(null);
+    const [saldoPendiente, setSaldoPendiente] = useState<number | null>(null);
+    const [referenciaCambioPrincipal, setReferenciaCambioPrincipal] = useState<
+      string | null
+    >(null);
+
+    // Handlers para abonos parciales
+    const handleAbonoInicialMontoChange = (v: number | null) =>
+      setAbonoInicialMonto(v);
+    const handleAbonoInicialFechaChange = (v: string | null) =>
+      setAbonoInicialFecha(v);
+    const handleAbonoInicialRecibidoPorChange = (v: string | null) =>
+      setAbonoInicialRecibidoPor(v);
+    const handleSaldoPendienteChange = (v: number | null) =>
+      setSaldoPendiente(v);
+    const handleReferenciaCambioPrincipalChange = (v: string | null) =>
+      setReferenciaCambioPrincipal(v);
+
     const handleCustomerDataSubmit = (data: DatosCliente) => {
       setCustomerData(data);
       setStep("exchange");
@@ -58,6 +105,31 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
       setStep("details");
     };
 
+    const handleDivisasEntregadasChange = (data: DetalleDivisasSimple) => {
+      setDivisasEntregadas(data);
+    };
+
+    const handleDivisasRecibidasChange = (data: DetalleDivisasSimple) => {
+      setDivisasRecibidas(data);
+    };
+
+    const handleMetodoEntregaChange = (value: "efectivo" | "transferencia") => {
+      setMetodoEntrega(value);
+    };
+
+    const handleTransferenciaNumeroChange = (value: string) => {
+      setTransferenciaNumero(value);
+    };
+
+    const handleTransferenciaBancoChange = (value: string) => {
+      setTransferenciaBanco(value);
+    };
+
+    const handleTransferenciaImagenChange = (file: File | null) => {
+      setTransferenciaImagen(file);
+    };
+
+    // Al completar, envía todos los datos juntos (incluyendo abonos parciales)
     const handleDetailsComplete = () => {
       if (exchangeData) {
         onComplete({
@@ -65,6 +137,15 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
           exchangeData,
           divisasEntregadas,
           divisasRecibidas,
+          metodoEntrega,
+          transferenciaNumero,
+          transferenciaBanco,
+          transferenciaImagen,
+          abonoInicialMonto,
+          abonoInicialFecha,
+          abonoInicialRecibidoPor,
+          saldoPendiente,
+          referenciaCambioPrincipal,
         });
       }
     };
@@ -90,13 +171,21 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
       setExchangeData(null);
       setDivisasEntregadas({ billetes: 0, monedas: 0, total: 0 });
       setDivisasRecibidas({ billetes: 0, monedas: 0, total: 0 });
+      setMetodoEntrega("efectivo");
+      setTransferenciaNumero("");
+      setTransferenciaBanco("");
+      setTransferenciaImagen(null);
+      setAbonoInicialMonto(null);
+      setAbonoInicialFecha(null);
+      setAbonoInicialRecibidoPor(null);
+      setSaldoPendiente(null);
+      setReferenciaCambioPrincipal(null);
     };
 
     useImperativeHandle(ref, () => ({
       resetSteps,
     }));
 
-    // NUEVO: Validar si hay monedas antes de permitir pasos
     if (!currencies || currencies.length < 2) {
       return (
         <div className="text-center text-red-500 p-6">
@@ -114,7 +203,6 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
             initialData={customerData}
           />
         );
-
       case "exchange":
         return (
           <ExchangeForm
@@ -123,7 +211,6 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
             onContinue={handleExchangeFormSubmit}
           />
         );
-
       case "details":
         return (
           <ExchangeDetailsForm
@@ -141,13 +228,36 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
             }
             onBack={() => setStep("exchange")}
             onComplete={handleDetailsComplete}
-            onDivisasEntregadasChange={setDivisasEntregadas}
-            onDivisasRecibidasChange={setDivisasRecibidas}
+            onDivisasEntregadasChange={handleDivisasEntregadasChange}
+            onDivisasRecibidasChange={handleDivisasRecibidasChange}
             divisasEntregadas={divisasEntregadas}
             divisasRecibidas={divisasRecibidas}
+            // Props para método de entrega
+            metodoEntrega={metodoEntrega}
+            onMetodoEntregaChange={handleMetodoEntregaChange}
+            transferenciaNumero={transferenciaNumero}
+            onTransferenciaNumeroChange={handleTransferenciaNumeroChange}
+            transferenciaBanco={transferenciaBanco}
+            onTransferenciaBancoChange={handleTransferenciaBancoChange}
+            transferenciaImagen={transferenciaImagen}
+            onTransferenciaImagenChange={handleTransferenciaImagenChange}
+            // Props para abonos parciales
+            abonoInicialMonto={abonoInicialMonto}
+            onAbonoInicialMontoChange={handleAbonoInicialMontoChange}
+            abonoInicialFecha={abonoInicialFecha}
+            onAbonoInicialFechaChange={handleAbonoInicialFechaChange}
+            abonoInicialRecibidoPor={abonoInicialRecibidoPor}
+            onAbonoInicialRecibidoPorChange={
+              handleAbonoInicialRecibidoPorChange
+            }
+            saldoPendiente={saldoPendiente}
+            onSaldoPendienteChange={handleSaldoPendienteChange}
+            referenciaCambioPrincipal={referenciaCambioPrincipal}
+            onReferenciaCambioPrincipalChange={
+              handleReferenciaCambioPrincipalChange
+            }
           />
         );
-
       default:
         return null;
     }

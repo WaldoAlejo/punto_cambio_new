@@ -1,4 +1,3 @@
-
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import logger from "../utils/logger.js";
@@ -9,7 +8,7 @@ import { z } from "zod";
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Schema para crear cambio de divisa
+// Schema para crear cambio de divisa (AGREGADO LO NUEVO)
 const exchangeSchema = z.object({
   moneda_origen_id: z.string().uuid(),
   moneda_destino_id: z.string().uuid(),
@@ -36,6 +35,17 @@ const exchangeSchema = z.object({
     total: z.number().default(0),
   }),
   observacion: z.string().optional(),
+  // NUEVO
+  metodo_entrega: z.enum(["efectivo", "transferencia"]),
+  transferencia_numero: z.string().optional().nullable(),
+  transferencia_banco: z.string().optional().nullable(),
+  transferencia_imagen_url: z.string().optional().nullable(),
+  // CAMPOS DE ABONO PARCIAL (AGREGADOS)
+  abono_inicial_monto: z.number().optional().nullable(),
+  abono_inicial_fecha: z.string().optional().nullable(), // ISO string
+  abono_inicial_recibido_por: z.string().uuid().optional().nullable(),
+  saldo_pendiente: z.number().optional().nullable(),
+  referencia_cambio_principal: z.string().optional().nullable(),
 });
 
 interface ExchangeWhereClause {
@@ -75,6 +85,17 @@ router.post(
         divisas_entregadas,
         divisas_recibidas,
         observacion,
+        // NUEVO
+        metodo_entrega,
+        transferencia_numero,
+        transferencia_banco,
+        transferencia_imagen_url,
+        // ABONO PARCIAL NUEVOS CAMPOS
+        abono_inicial_monto,
+        abono_inicial_fecha,
+        abono_inicial_recibido_por,
+        saldo_pendiente,
+        referencia_cambio_principal,
       } = req.body;
 
       // Verificar que el usuario esté autenticado
@@ -93,6 +114,10 @@ router.post(
         tipo_operacion,
         monto_origen,
         monto_destino,
+        metodo_entrega,
+        abono_inicial_monto,
+        saldo_pendiente,
+        referencia_cambio_principal,
       });
 
       // Verificar que el punto de atención existe
@@ -128,7 +153,7 @@ router.post(
       const timestamp = new Date().getTime();
       const numeroRecibo = `CAM-${timestamp}`;
 
-      // Crear el cambio de divisa
+      // Crear el cambio de divisa (AGREGADO LOS CAMPOS NUEVOS)
       const exchange = await prisma.cambioDivisa.create({
         data: {
           moneda_origen_id,
@@ -142,6 +167,24 @@ router.post(
           observacion: observacion || null,
           numero_recibo: numeroRecibo,
           estado: "COMPLETADO",
+          // NUEVO
+          metodo_entrega,
+          transferencia_numero:
+            metodo_entrega === "transferencia" ? transferencia_numero : null,
+          transferencia_banco:
+            metodo_entrega === "transferencia" ? transferencia_banco : null,
+          transferencia_imagen_url:
+            metodo_entrega === "transferencia"
+              ? transferencia_imagen_url
+              : null,
+          // ABONO PARCIAL NUEVOS CAMPOS
+          abono_inicial_monto: abono_inicial_monto ?? null,
+          abono_inicial_fecha: abono_inicial_fecha
+            ? new Date(abono_inicial_fecha)
+            : null,
+          abono_inicial_recibido_por: abono_inicial_recibido_por ?? null,
+          saldo_pendiente: saldo_pendiente ?? null,
+          referencia_cambio_principal: referencia_cambio_principal ?? null,
         },
         include: {
           monedaOrigen: {
