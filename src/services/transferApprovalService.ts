@@ -1,4 +1,3 @@
-
 import { apiService } from "./apiService";
 import { Transferencia } from "../types";
 
@@ -24,7 +23,9 @@ export const transferApprovalService = {
     error: string | null;
   }> {
     try {
-      const response = await apiService.get<TransferApprovalsResponse>("/transfer-approvals");
+      const response = await apiService.get<TransferApprovalsResponse>(
+        "/transfer-approvals"
+      );
 
       if (!response) {
         return {
@@ -41,18 +42,23 @@ export const transferApprovalService = {
       }
 
       return { transfers: response.transfers || [], error: null };
-    } catch (error) {
-      console.error("Error en getPendingTransfers:", error);
+    } catch {
       return { transfers: [], error: "Error de conexión con el servidor" };
     }
   },
 
-  async approveTransfer(transferId: string, data: ApprovalData): Promise<{
+  async approveTransfer(
+    transferId: string,
+    data: ApprovalData
+  ): Promise<{
     transfer: Transferencia | null;
     error: string | null;
   }> {
     try {
-      const response = await apiService.put<ApprovalResponse>(`/transfer-approvals/${transferId}/approve`, data);
+      const response = await apiService.patch<ApprovalResponse>(
+        `/transfer-approvals/${transferId}/approve`,
+        data
+      );
 
       if (!response) {
         return {
@@ -69,18 +75,23 @@ export const transferApprovalService = {
       }
 
       return { transfer: response.transfer, error: null };
-    } catch (error) {
-      console.error("Error en approveTransfer:", error);
+    } catch {
       return { transfer: null, error: "Error de conexión con el servidor" };
     }
   },
 
-  async rejectTransfer(transferId: string, data: ApprovalData): Promise<{
+  async rejectTransfer(
+    transferId: string,
+    data: ApprovalData
+  ): Promise<{
     transfer: Transferencia | null;
     error: string | null;
   }> {
     try {
-      const response = await apiService.put<ApprovalResponse>(`/transfer-approvals/${transferId}/reject`, data);
+      const response = await apiService.patch<ApprovalResponse>(
+        `/transfer-approvals/${transferId}/reject`,
+        data
+      );
 
       if (!response) {
         return {
@@ -97,8 +108,7 @@ export const transferApprovalService = {
       }
 
       return { transfer: response.transfer, error: null };
-    } catch (error) {
-      console.error("Error en rejectTransfer:", error);
+    } catch {
       return { transfer: null, error: "Error de conexión con el servidor" };
     }
   },

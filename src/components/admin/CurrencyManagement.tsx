@@ -20,6 +20,8 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { User, Moneda } from "../../types";
 import { currencyService } from "../../services/currencyService";
+import EditCurrencyDialog from "@/components/admin/EditCurrencyDialog";
+import { Edit } from "lucide-react";
 
 interface CurrencyManagementProps {
   user: User;
@@ -39,6 +41,7 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState(initialForm);
   const [fieldError, setFieldError] = useState<{ [key: string]: string }>({});
+  const [editingCurrency, setEditingCurrency] = useState<Moneda | null>(null);
 
   useEffect(() => {
     loadCurrencies();
@@ -48,10 +51,15 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { currencies: fetchedCurrencies } =
-        await currencyService.getAllCurrencies(); // <-- Quitamos "error"
+      const { currencies: fetchedCurrencies, error } =
+        await currencyService.getAllCurrencies();
+      if (error) {
+        setError(error);
+        toast({ title: "Error", description: error, variant: "destructive" });
+        return;
+      }
       setCurrencies(fetchedCurrencies);
-    } catch (error) {
+    } catch {
       setError("Error al cargar monedas");
       toast({
         title: "Error",
@@ -74,40 +82,61 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     const errors = validateFields();
     setFieldError(errors);
     if (Object.keys(errors).length > 0) return;
 
     try {
-      const { currency: newCurrency } = await currencyService.createCurrency({
-        codigo: formData.codigo.toUpperCase(),
-        nombre: formData.nombre.trim(),
-        simbolo: formData.simbolo,
-        orden_display: formData.orden_display || currencies.length + 1,
-      }); // <-- Quitamos "error"
-
-      if (!newCurrency) {
+      const { currency: newCurrency, error } =
+        await currencyService.createCurrency({
+          codigo: formData.codigo.toUpperCase(),
+          nombre: formData.nombre.trim(),
+          simbolo: formData.simbolo,
+          orden_display: formData.orden_display || currencies.length + 1,
+        });
+      if (!newCurrency || error) {
         toast({
           title: "Error",
-          description: "Error al crear moneda",
+          description: error || "Error al crear moneda",
           variant: "destructive",
         });
         return;
       }
-
       setFormData(initialForm);
       setShowForm(false);
       await loadCurrencies();
-
       toast({
         title: "Moneda creada",
         description: `Moneda ${newCurrency.nombre} creada exitosamente`,
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Error interno del servidor",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const toggleCurrencyStatus = async (currencyId: string) => {
+    try {
+      const { currency: updatedCurrency, error } =
+        await currencyService.toggleCurrencyStatus(currencyId);
+      if (error) {
+        toast({ title: "Error", description: error, variant: "destructive" });
+        return;
+      }
+      await loadCurrencies();
+      toast({
+        title: "Estado actualizado",
+        description: `Moneda ${updatedCurrency?.nombre} ${
+          updatedCurrency?.activo ? "activada" : "desactivada"
+        }`,
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo cambiar el estado de la moneda",
         variant: "destructive",
       });
     }
@@ -232,7 +261,6 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
                   />
                 </div>
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="nombre">Nombre Completo</Label>
                 <Input
@@ -249,7 +277,6 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
                   </span>
                 )}
               </div>
-
               <div className="flex gap-2">
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                   Crear Moneda
@@ -294,6 +321,7 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
                   <TableHead>Orden</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Fecha Creación</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -319,6 +347,25 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
                     <TableCell>
                       {new Date(currency.created_at).toLocaleDateString()}
                     </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setEditingCurrency(currency)}
+                          title="Editar moneda"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={currency.activo ? "destructive" : "default"}
+                          onClick={() => toggleCurrencyStatus(currency.id)}
+                        >
+                          {currency.activo ? "Desactivar" : "Activar"}
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -326,6 +373,15 @@ const CurrencyManagement = ({ user }: CurrencyManagementProps) => {
           )}
         </CardContent>
       </Card>
+
+      {editingCurrency && (
+        <EditCurrencyDialog
+          currency={editingCurrency}
+          isOpen={!!editingCurrency}
+          onClose={() => setEditingCurrency(null)}
+          onCurrencyUpdated={loadCurrencies}
+        />
+      )}
     </div>
   );
 };

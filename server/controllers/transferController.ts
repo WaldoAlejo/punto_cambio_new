@@ -1,7 +1,7 @@
 import express from "express";
 import logger from "../utils/logger.js";
-import { transferValidationService } from "../services/transferValidationService.js";
-import { transferCreationService } from "../services/transferCreationService.js";
+import { transferValidationService } from "../services/transferValidationService";
+import { transferCreationService } from "../services/transferCreationService";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -121,7 +121,7 @@ export const transferController = {
         punto_atencion_id: destino_id,
         usuario_id: req.user.id,
         moneda_id,
-        monto, // ya es number
+        monto,
         tipo_transferencia,
         numero_recibo: numeroRecibo,
       });
@@ -134,11 +134,12 @@ export const transferController = {
         detalle_divisas,
         responsable_movilizacion,
         tipo_transferencia,
-        monto, // ya es number
+        monto,
       });
 
       const formattedTransfer = {
         ...newTransfer,
+        solicitado_por: req.user.id, // <-- Devuelve siempre el id
         monto: parseFloat(newTransfer.monto.toString()),
         fecha: newTransfer.fecha.toISOString(),
         fecha_aprobacion: newTransfer.fecha_aprobacion?.toISOString() || null,
@@ -213,6 +214,9 @@ export const transferController = {
 
       const formattedTransfers = transfers.map((transfer) => ({
         ...transfer,
+        solicitado_por: transfer.solicitado_por
+          ? transfer.solicitado_por
+          : transfer.usuarioSolicitante?.id ?? "",
         monto: parseFloat(transfer.monto.toString()),
         fecha: transfer.fecha.toISOString(),
         fecha_aprobacion: transfer.fecha_aprobacion?.toISOString() || null,

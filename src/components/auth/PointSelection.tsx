@@ -41,11 +41,9 @@ const PointSelection = ({
         const ocupados = response.data.puntos.map((p) => p.id);
         setOccupiedPoints(ocupados);
       } catch (error) {
-        console.error("Error al cargar puntos activos", error);
-        setOccupiedPoints([]); // fallback
+        setOccupiedPoints([]);
       }
     };
-
     fetchOccupiedPoints();
   }, []);
 
@@ -58,7 +56,6 @@ const PointSelection = ({
       if (!navigator.geolocation) {
         return reject(new Error("Geolocalización no soportada"));
       }
-
       navigator.geolocation.getCurrentPosition(
         (position) => {
           resolve({
@@ -67,8 +64,7 @@ const PointSelection = ({
             direccion: "Ubicación de inicio de jornada",
           });
         },
-        (error) => {
-          console.error("No se pudo obtener ubicación:", error);
+        () => {
           resolve({
             lat: 0,
             lng: 0,
@@ -87,7 +83,6 @@ const PointSelection = ({
 
     try {
       const ubicacion = await getLocation();
-
       const scheduleData = {
         usuario_id: user.id,
         punto_atencion_id: point.id,
@@ -115,7 +110,6 @@ const PointSelection = ({
         description: `Bienvenido a ${point.nombre}. Tu jornada ha comenzado automáticamente.`,
       });
     } catch (error) {
-      console.error("Error al iniciar jornada:", error);
       toast({
         title: "Error",
         description: "Error al iniciar la jornada automáticamente",
@@ -125,6 +119,11 @@ const PointSelection = ({
       setIsStartingShift(false);
     }
   };
+
+  // Filtrar solo puntos que no están ocupados
+  const freePoints = points.filter(
+    (point) => !occupiedPoints.includes(point.id)
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -140,20 +139,21 @@ const PointSelection = ({
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {points.map((point) => {
-              const isOccupied = occupiedPoints.includes(point.id);
-              return (
+            {freePoints.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No hay puntos de atención disponibles por el momento.
+              </div>
+            ) : (
+              freePoints.map((point) => (
                 <div
                   key={point.id}
-                  className={`p-4 border rounded-lg transition-colors ${
-                    isOccupied
-                      ? "bg-gray-100 border-gray-300 cursor-not-allowed"
-                      : "hover:bg-blue-50 cursor-pointer border-gray-200"
-                  } ${isStartingShift ? "opacity-50" : ""}`}
+                  className={`p-4 border rounded-lg transition-colors hover:bg-blue-50 cursor-pointer border-gray-200 ${
+                    isStartingShift ? "opacity-50" : ""
+                  }`}
                   onClick={() => !isStartingShift && handlePointSelect(point)}
                 >
                   <div className="flex items-center justify-between">
-                    <div className={isOccupied ? "text-gray-500" : ""}>
+                    <div>
                       <h3 className="font-semibold text-lg">{point.nombre}</h3>
                       <p className="text-sm text-gray-600">{point.direccion}</p>
                       <p className="text-sm text-gray-600">
@@ -166,24 +166,17 @@ const PointSelection = ({
                       )}
                     </div>
                     <div className="text-right">
-                      {isOccupied ? (
-                        <span className="text-sm text-red-600 font-medium">
-                          Ocupado por otro usuario
-                        </span>
-                      ) : (
-                        <Button size="sm" disabled={isStartingShift}>
-                          {isStartingShift
-                            ? "Iniciando..."
-                            : "Seleccionar e Iniciar"}
-                        </Button>
-                      )}
+                      <Button size="sm" disabled={isStartingShift}>
+                        {isStartingShift
+                          ? "Iniciando..."
+                          : "Seleccionar e Iniciar"}
+                      </Button>
                     </div>
                   </div>
                 </div>
-              );
-            })}
+              ))
+            )}
           </div>
-
           <div className="mt-6 pt-4 border-t flex justify-center">
             <Button
               variant="outline"

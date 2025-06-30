@@ -27,37 +27,18 @@ export const transferCreationService = {
   },
 
   async createTransfer(transferData: TransferData) {
-    logger.info("Creando transferencia con datos:", { ...transferData }); // ✅ Spread para evitar TS2345
+    logger.info("Creando transferencia con datos:", { ...transferData });
 
     const newTransfer = await prisma.transferencia.create({
       data: transferData,
       include: {
-        origen: {
-          select: {
-            id: true,
-            nombre: true,
-          },
-        },
-        destino: {
-          select: {
-            id: true,
-            nombre: true,
-          },
-        },
+        origen: { select: { id: true, nombre: true } },
+        destino: { select: { id: true, nombre: true } },
         moneda: {
-          select: {
-            id: true,
-            codigo: true,
-            nombre: true,
-            simbolo: true,
-          },
+          select: { id: true, codigo: true, nombre: true, simbolo: true },
         },
         usuarioSolicitante: {
-          select: {
-            id: true,
-            nombre: true,
-            username: true,
-          },
+          select: { id: true, nombre: true, username: true },
         },
       },
     });

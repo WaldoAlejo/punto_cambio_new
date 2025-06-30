@@ -1,15 +1,13 @@
-
-import { useState, useEffect } from 'react';
-import { User, PuntoAtencion, Moneda, Transferencia } from '../../types';
+import { useState, useEffect } from "react";
+import { User, PuntoAtencion, Moneda, Transferencia } from "../../types";
 import { toast } from "@/hooks/use-toast";
-import { apiService } from '../../services/apiService';
-import { transferService } from '../../services/transferService';
-import TransferForm from './TransferForm';
-import TransferList from './TransferList';
+import { apiService } from "../../services/apiService";
+import { transferService } from "../../services/transferService";
+import TransferForm from "./TransferForm";
+import TransferList from "./TransferList";
 
 interface TransferManagementProps {
   user: User;
-  selectedPoint: PuntoAtencion | null;
 }
 
 interface ApiResponse {
@@ -20,58 +18,50 @@ interface ApiResponse {
   error?: string;
 }
 
-const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) => {
+const TransferManagement = ({ user }: TransferManagementProps) => {
   const [transfers, setTransfers] = useState<Transferencia[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const selectedPoint =
+    points.find((p) => p.id === user.punto_atencion_id) || null;
+
+  // Refresca solo transferencias
+  const fetchTransfers = async () => {
+    try {
+      const { transfers: updatedTransfers } =
+        await transferService.getAllTransfers();
+      setTransfers(updatedTransfers || []);
+    } catch {
+      toast({
+        title: "Error",
+        description: "Error al recargar las transferencias",
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        console.warn('Cargando datos de transferencias...');
-        
-        // Cargar datos reales desde la API
-        const [transfersResponse, currenciesResponse, pointsResponse] = await Promise.all([
-          transferService.getAllTransfers(),
-          apiService.get<ApiResponse>('/currencies'),
-          apiService.get<ApiResponse>('/points')
-        ]);
 
-        console.warn('Respuestas obtenidas:', {
-          transfers: transfersResponse,
-          currencies: currenciesResponse,
-          points: pointsResponse
-        });
+        const [transfersResponse, currenciesResponse, pointsResponse] =
+          await Promise.all([
+            transferService.getAllTransfers(),
+            apiService.get<ApiResponse>("/currencies"),
+            apiService.get<ApiResponse>("/points"),
+          ]);
 
-        if (transfersResponse.transfers) {
-          console.warn(`Cargando ${transfersResponse.transfers.length} transferencias`);
-          setTransfers(transfersResponse.transfers);
-        } else if (transfersResponse.error) {
-          console.error('Error cargando transferencias:', transfersResponse.error);
-          toast({
-            title: "Error",
-            description: transfersResponse.error,
-            variant: "destructive"
-          });
-        }
-
-        if (currenciesResponse && currenciesResponse.currencies) {
-          setCurrencies(currenciesResponse.currencies);
-        }
-
-        if (pointsResponse && pointsResponse.points) {
-          // Incluir todos los puntos para las transferencias
-          setPoints(pointsResponse.points);
-        }
-        
-      } catch (error) {
-        console.error('Error loading transfer data:', error);
+        setTransfers(transfersResponse.transfers || []);
+        setCurrencies(currenciesResponse.currencies || []);
+        setPoints(pointsResponse.points || []);
+      } catch {
         toast({
           title: "Error",
           description: "Error al cargar los datos de transferencias",
-          variant: "destructive"
+          variant: "destructive",
         });
       } finally {
         setIsLoading(false);
@@ -79,66 +69,40 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
     };
 
     loadData();
-  }, [selectedPoint]);
+    const interval = setInterval(fetchTransfers, 10000);
+    return () => clearInterval(interval);
+  }, []); // Solo al montar
 
   const handleTransferCreated = async () => {
-    try {
-      console.warn('Recargando transferencias después de crear una nueva...');
-      
-      // Recargar todas las transferencias para asegurar sincronización
-      const { transfers: updatedTransfers, error } = await transferService.getAllTransfers();
-      if (updatedTransfers && !error) {
-        setTransfers(updatedTransfers);
-        toast({
-          title: "✅ Transferencia creada",
-          description: "Transferencia creada exitosamente y guardada en la base de datos",
-        });
-      }
-    } catch (error) {
-      console.error('Error reloading transfers:', error);
-      toast({
-        title: "Error",
-        description: "Error al recargar las transferencias",
-        variant: "destructive"
-      });
-    }
+    await fetchTransfers();
+    toast({
+      title: "✅ Transferencia creada",
+      description:
+        "Transferencia creada exitosamente y guardada en la base de datos",
+    });
   };
 
   const handleTransferApproved = async (transferId: string) => {
     try {
-      console.warn('Aprobando transferencia:', transferId);
-      
-      // Aprobar la transferencia usando el servicio
-      const { transfer: approvedTransfer, error } = await transferService.approveTransfer(transferId);
-      
+      const { error } = await transferService.approveTransfer(transferId);
       if (error) {
         toast({
           title: "Error",
           description: error,
-          variant: "destructive"
+          variant: "destructive",
         });
         return;
       }
-
-      if (approvedTransfer) {
-        // Actualizar la lista local
-        setTransfers(prev => prev.map(t => 
-          t.id === transferId 
-            ? { ...approvedTransfer, estado: 'APROBADO', aprobado_por: user.id }
-            : t
-        ));
-        
-        toast({
-          title: "✅ Transferencia aprobada",
-          description: "La transferencia ha sido aprobada exitosamente",
-        });
-      }
-    } catch (error) {
-      console.error('Error approving transfer:', error);
+      await fetchTransfers();
+      toast({
+        title: "✅ Transferencia aprobada",
+        description: "La transferencia ha sido aprobada exitosamente",
+      });
+    } catch {
       toast({
         title: "Error",
         description: "Error al aprobar la transferencia",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
@@ -157,9 +121,13 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Gestión de Transferencias</h1>
+        <h1 className="text-2xl font-bold text-gray-800">
+          Gestión de Transferencias
+        </h1>
         <div className="text-sm text-gray-500">
-          {selectedPoint ? `Punto: ${selectedPoint.nombre}` : 'Panel Administrativo'}
+          {selectedPoint
+            ? `Punto: ${selectedPoint.nombre}`
+            : "Panel Administrativo"}
         </div>
       </div>
 
@@ -167,11 +135,9 @@ const TransferManagement = ({ user, selectedPoint }: TransferManagementProps) =>
         <TransferForm
           user={user}
           selectedPoint={selectedPoint}
-          currencies={currencies}
-          points={points}
           onTransferCreated={handleTransferCreated}
+          onCancel={() => {}}
         />
-
         <TransferList
           user={user}
           selectedPoint={selectedPoint}

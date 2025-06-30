@@ -36,7 +36,7 @@ const LoginForm = () => {
     try {
       const result = await login(username, password);
 
-      if (result.success) {
+      if (result?.success) {
         toast({
           title: "Bienvenido",
           description: "Inicio de sesión exitoso",
@@ -44,10 +44,16 @@ const LoginForm = () => {
       } else {
         toast({
           title: "Error de autenticación",
-          description: result.error || "Credenciales incorrectas",
+          description: result?.error || "Credenciales incorrectas",
           variant: "destructive",
         });
       }
+    } catch {
+      toast({
+        title: "Error de red",
+        description: "No se pudo conectar al servidor. Intente de nuevo.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

@@ -1,16 +1,27 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Send, X } from "lucide-react";
-import { User, PuntoAtencion, Moneda } from '../../types';
-import { transferService } from '../../services/transferService';
-import { currencyService } from '../../services/currencyService';
-import { pointService } from '../../services/pointService';
+import { User, PuntoAtencion, Moneda } from "../../types";
+import { transferService } from "../../services/transferService";
+import { currencyService } from "../../services/currencyService";
+import { pointService } from "../../services/pointService";
 import { useToast } from "@/hooks/use-toast";
 
 interface TransferFormProps {
@@ -20,47 +31,47 @@ interface TransferFormProps {
   onCancel: () => void;
 }
 
-const TransferForm = ({ user, selectedPoint, onTransferCreated, onCancel }: TransferFormProps) => {
-  const [destinationPointId, setDestinationPointId] = useState('');
-  const [currencyId, setCurrencyId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
+const TIPO_TRANSFERENCIA_ENTRE_PUNTOS = "ENTRE_PUNTOS" as const;
+
+const initialErrorState = {
+  destinationPointId: "",
+  currencyId: "",
+  amount: "",
+  description: "",
+};
+
+const TransferForm = ({
+  user,
+  selectedPoint,
+  onTransferCreated,
+  onCancel,
+}: TransferFormProps) => {
+  const [destinationPointId, setDestinationPointId] = useState("");
+  const [currencyId, setCurrencyId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [availablePoints, setAvailablePoints] = useState<PuntoAtencion[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
+  const [errors, setErrors] = useState(initialErrorState);
   const { toast } = useToast();
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load available points
-        const { points, error: pointsError } = await pointService.getAllPoints();
-        if (pointsError) {
-          console.error('Error loading points:', pointsError);
-          return;
-        }
+        const { points } = await pointService.getAllPoints();
+        setAvailablePoints(
+          points.filter((point) => point.id !== selectedPoint?.id)
+        );
 
-        // Filter out current point
-        const filteredPoints = points.filter(point => point.id !== selectedPoint?.id);
-        setAvailablePoints(filteredPoints);
-
-        // Load currencies
-        const { currencies: fetchedCurrencies, error: currenciesError } = await currencyService.getAllCurrencies();
-        if (currenciesError) {
-          console.error('Error loading currencies:', currenciesError);
-          return;
-        }
-
-        // Filter only active currencies
-        const activeCurrencies = fetchedCurrencies.filter(currency => currency.activo);
-        setCurrencies(activeCurrencies);
-
-      } catch (error) {
-        console.error('Error in loadData:', error);
+        const { currencies: fetchedCurrencies } =
+          await currencyService.getAllCurrencies();
+        setCurrencies(fetchedCurrencies.filter((currency) => currency.activo));
+      } catch {
         toast({
           title: "Error",
           description: "Error al cargar datos necesarios",
-          variant: "destructive"
+          variant: "destructive",
         });
       }
     };
@@ -68,14 +79,37 @@ const TransferForm = ({ user, selectedPoint, onTransferCreated, onCancel }: Tran
     loadData();
   }, [selectedPoint, toast]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Validación en tiempo real
+  useEffect(() => {
+    setErrors({
+      destinationPointId: destinationPointId ? "" : "Selecciona el destino",
+      currencyId: currencyId ? "" : "Selecciona la moneda",
+      amount: !amount
+        ? "Ingresa un monto"
+        : parseFloat(amount) <= 0
+        ? "El monto debe ser mayor a 0"
+        : "",
+      description: description.trim() ? "" : "Describe el motivo",
+    });
+  }, [destinationPointId, currencyId, amount, description]);
+
+  const formHasData = destinationPointId || currencyId || amount || description;
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    if (!destinationPointId || !currencyId || !amount || !description.trim()) {
+
+    // Chequeo rápido antes de enviar
+    if (
+      !destinationPointId ||
+      !currencyId ||
+      !amount ||
+      !description.trim() ||
+      parseFloat(amount) <= 0
+    ) {
       toast({
         title: "Error",
-        description: "Todos los campos son obligatorios",
-        variant: "destructive"
+        description: "Completa todos los campos requeridos correctamente",
+        variant: "destructive",
       });
       return;
     }
@@ -84,68 +118,62 @@ const TransferForm = ({ user, selectedPoint, onTransferCreated, onCancel }: Tran
       toast({
         title: "Error",
         description: "No hay punto de origen seleccionado",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const transferAmount = parseFloat(amount);
-    if (isNaN(transferAmount) || transferAmount <= 0) {
-      toast({
-        title: "Error",
-        description: "El monto debe ser un número válido mayor a 0",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
     try {
       setIsLoading(true);
-      
+
       const transferData = {
         origen_id: selectedPoint.id,
         destino_id: destinationPointId,
         moneda_id: currencyId,
-        monto: transferAmount,
+        monto: parseFloat(amount),
         descripcion: description.trim(),
-        tipo_transferencia: 'ENTRE_PUNTOS' as const
+        tipo_transferencia: TIPO_TRANSFERENCIA_ENTRE_PUNTOS,
+        solicitado_por: user.id,
       };
 
-      console.warn('Creating transfer:', transferData);
-
-      const { transfer, error } = await transferService.createTransfer(transferData);
+      const { transfer, error } = await transferService.createTransfer(
+        transferData
+      );
 
       if (error || !transfer) {
-        throw new Error(error || 'Error desconocido al crear transferencia');
+        toast({
+          title: "Error",
+          description: error || "Error al crear la transferencia",
+          variant: "destructive",
+        });
+        return;
       }
 
       toast({
-        title: "Transferencia creada",
-        description: `Transferencia por ${transferAmount} creada exitosamente. ID: ${transfer.id}`,
+        title: "Transferencia registrada",
+        description: `Solicitud de transferencia por ${transfer.monto} creada con éxito.`,
       });
 
-      // Reset form
-      setDestinationPointId('');
-      setCurrencyId('');
-      setAmount('');
-      setDescription('');
-      
+      setDestinationPointId("");
+      setCurrencyId("");
+      setAmount("");
+      setDescription("");
       onTransferCreated();
-      
-    } catch (error) {
-      console.warn('Error creating transfer:', error);
+    } catch {
       toast({
         title: "Error",
         description: "Error al crear la transferencia",
-        variant: "destructive"
+        variant: "destructive",
       });
-    } finally {
+    }finally {
       setIsLoading(false);
     }
   };
 
-  const selectedCurrency = currencies.find(c => c.id === currencyId);
-  const selectedDestinationPoint = availablePoints.find(p => p.id === destinationPointId);
+  const selectedCurrency = currencies.find((c) => c.id === currencyId);
+  const selectedDestinationPoint = availablePoints.find(
+    (p) => p.id === destinationPointId
+  );
 
   return (
     <Card>
@@ -155,60 +183,89 @@ const TransferForm = ({ user, selectedPoint, onTransferCreated, onCancel }: Tran
           Nueva Transferencia
         </CardTitle>
         <CardDescription>
-          Complete la información para solicitar una transferencia entre puntos
+          Solicita una transferencia entre puntos. Todos los campos son
+          obligatorios.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
+            {/* Origen */}
+            <div className="space-y-1">
               <Label>Punto de Origen</Label>
               <Input
-                value={selectedPoint?.nombre || 'No seleccionado'}
+                value={selectedPoint?.nombre || "No seleccionado"}
                 disabled
                 className="bg-gray-50"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="destinationPoint">Punto de Destino *</Label>
-              <Select value={destinationPointId} onValueChange={setDestinationPointId}>
+            {/* Destino */}
+            <div className="space-y-1">
+              <Label htmlFor="destinationPoint">
+                Punto de Destino <span className="text-red-600">*</span>
+              </Label>
+              <Select
+                value={destinationPointId}
+                onValueChange={setDestinationPointId}
+                name="destinationPoint"
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione punto de destino" />
                 </SelectTrigger>
                 <SelectContent>
                   {availablePoints.map((point) => (
                     <SelectItem key={point.id} value={point.id}>
-                      {point.nombre} - {point.direccion}
+                      {point.nombre} — {point.direccion}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {errors.destinationPointId && (
+                <span className="text-xs text-red-600">
+                  {errors.destinationPointId}
+                </span>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="currency">Moneda *</Label>
-              <Select value={currencyId} onValueChange={setCurrencyId}>
+            {/* Moneda */}
+            <div className="space-y-1">
+              <Label htmlFor="currency">
+                Moneda <span className="text-red-600">*</span>
+              </Label>
+              <Select
+                value={currencyId}
+                onValueChange={setCurrencyId}
+                name="currency"
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccione moneda" />
                 </SelectTrigger>
                 <SelectContent>
                   {currencies.map((currency) => (
                     <SelectItem key={currency.id} value={currency.id}>
-                      {currency.codigo} - {currency.nombre}
+                      {currency.codigo} — {currency.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {errors.currencyId && (
+                <span className="text-xs text-red-600">
+                  {errors.currencyId}
+                </span>
+              )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="amount">Monto *</Label>
+            {/* Monto */}
+            <div className="space-y-1">
+              <Label htmlFor="amount">
+                Monto <span className="text-red-600">*</span>
+              </Label>
               <div className="flex">
                 <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                  {selectedCurrency?.simbolo || '$'}
+                  {selectedCurrency?.simbolo || "$"}
                 </span>
                 <Input
                   id="amount"
@@ -219,44 +276,79 @@ const TransferForm = ({ user, selectedPoint, onTransferCreated, onCancel }: Tran
                   step="0.01"
                   min="0.01"
                   className="rounded-l-none"
+                  disabled={!currencyId}
+                  autoComplete="off"
                 />
               </div>
+              {errors.amount && (
+                <span className="text-xs text-red-600">{errors.amount}</span>
+              )}
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">Descripción/Motivo *</Label>
+          {/* Descripción */}
+          <div className="space-y-1">
+            <Label htmlFor="description">
+              Descripción / Motivo <span className="text-red-600">*</span>
+            </Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describa el motivo de la transferencia..."
-              rows={3}
+              placeholder="Ej: Transferencia de fondos para cambio de turno"
+              rows={2}
             />
+            {errors.description && (
+              <span className="text-xs text-red-600">{errors.description}</span>
+            )}
           </div>
 
-          {/* Transfer Summary */}
-          {destinationPointId && currencyId && amount && (
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <h4 className="font-medium text-blue-900 mb-2">Resumen de Transferencia</h4>
-              <div className="space-y-1 text-sm text-blue-800">
-                <p><strong>Desde:</strong> {selectedPoint?.nombre}</p>
-                <p><strong>Hacia:</strong> {selectedDestinationPoint?.nombre}</p>
-                <p><strong>Monto:</strong> {selectedCurrency?.simbolo}{amount} {selectedCurrency?.codigo}</p>
-                <p><strong>Solicitante:</strong> {user.nombre}</p>
+          {/* Resumen */}
+          {destinationPointId &&
+            currencyId &&
+            amount &&
+            parseFloat(amount) > 0 && (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                <h4 className="font-medium text-blue-900 mb-2">
+                  Resumen de Transferencia
+                </h4>
+                <div className="space-y-1 text-sm text-blue-800">
+                  <p>
+                    <strong>Desde:</strong> {selectedPoint?.nombre}
+                  </p>
+                  <p>
+                    <strong>Hacia:</strong> {selectedDestinationPoint?.nombre}
+                  </p>
+                  <p>
+                    <strong>Monto:</strong> {selectedCurrency?.simbolo}
+                    {amount} {selectedCurrency?.codigo}
+                  </p>
+                  <p>
+                    <strong>Solicitante:</strong> {user.nombre}
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="flex gap-2 pt-4">
-            <Button type="submit" disabled={isLoading}>
+          <div className="flex gap-2 pt-3">
+            <Button
+              type="submit"
+              disabled={isLoading || Object.values(errors).some(Boolean)}
+            >
               <Send className="mr-2 h-4 w-4" />
-              {isLoading ? 'Creando...' : 'Crear Transferencia'}
+              {isLoading ? "Creando..." : "Crear Transferencia"}
             </Button>
-            <Button type="button" variant="outline" onClick={onCancel}>
-              <X className="mr-2 h-4 w-4" />
-              Cancelar
-            </Button>
+            {formHasData && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onCancel}
+                disabled={isLoading}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Cancelar
+              </Button>
+            )}
           </div>
         </form>
       </CardContent>
