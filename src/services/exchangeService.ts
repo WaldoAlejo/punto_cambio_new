@@ -121,4 +121,52 @@ export const exchangeService = {
       };
     }
   },
+
+  // NUEVO: obtener cambios pendientes por punto
+  async getPendingExchangesByPoint(
+    pointId: string
+  ): Promise<{ exchanges: CambioDivisa[]; error: string | null }> {
+    try {
+      console.warn("Fetching pending exchanges for point:", pointId);
+      const response = await apiService.get<ExchangesResponse>(
+        `/exchanges?point_id=${pointId}&estado=PENDIENTE`
+      );
+
+      if (response.success) {
+        return { exchanges: response.exchanges, error: null };
+      } else {
+        return {
+          exchanges: [],
+          error: "Error al obtener los cambios pendientes del punto",
+        };
+      }
+    } catch (error) {
+      console.error("Error fetching pending exchanges by point:", error);
+      return {
+        exchanges: [],
+        error: "Error de conexión al obtener cambios pendientes del punto",
+      };
+    }
+  },
+
+  // NUEVO: cerrar cambio pendiente
+  async closePendingExchange(
+    exchangeId: string
+  ): Promise<{ exchange: CambioDivisa | null; error: string | null }> {
+    try {
+      console.warn("Closing pending exchange with id:", exchangeId);
+      const response = await apiService.patch<ExchangeResponse>(
+        `/exchanges/${exchangeId}/cerrar`
+      );
+
+      if (response.success) {
+        return { exchange: response.exchange, error: null };
+      } else {
+        return { exchange: null, error: "Error al cerrar el cambio pendiente" };
+      }
+    } catch (error) {
+      console.error("Error closing pending exchange:", error);
+      return { exchange: null, error: "Error de conexión al cerrar el cambio" };
+    }
+  },
 };

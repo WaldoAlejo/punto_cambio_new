@@ -48,7 +48,6 @@ const Sidebar = ({
   const [adminExpanded, setAdminExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Detecta tamaño de pantalla y ajusta sidebar (colapsa en desktop si es necesario)
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 1024);
@@ -66,6 +65,13 @@ const Sidebar = ({
       label: "Cambio de Divisas",
       icon: ArrowRightLeft,
       color: "text-blue-600",
+      roles: ["OPERADOR"],
+    },
+    {
+      id: "pending-exchanges",
+      label: "Cambios Pendientes",
+      icon: Clock,
+      color: "text-red-600",
       roles: ["OPERADOR"],
     },
     {
@@ -156,7 +162,6 @@ const Sidebar = ({
 
   return (
     <>
-      {/* Overlay sólo mobile */}
       {isMobile && isOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40"
@@ -164,7 +169,6 @@ const Sidebar = ({
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={`
           fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-50 transition-all duration-300
@@ -187,7 +191,6 @@ const Sidebar = ({
               <p className="text-xs text-gray-500">Sistema de Gestión</p>
             </div>
           )}
-          {/* El botón de menú siempre visible en mobile y desktop */}
           <Button
             variant="ghost"
             size="sm"

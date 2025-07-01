@@ -1,7 +1,8 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import ExchangeManagement from "../exchange/ExchangeManagement";
+import PendingExchangesList from "../exchange/PendingExchangesList"; // Importa el componente correcto
 import TransferManagement from "../transfer/TransferManagement";
 import OperatorTimeManagement from "../timeTracking/OperatorTimeManagement";
 import AdminTimeManagement from "../timeTracking/AdminTimeManagement";
@@ -35,8 +36,18 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
     switch (activeView) {
       case "exchanges":
         return <ExchangeManagement user={user} selectedPoint={selectedPoint} />;
+      case "pending-exchanges":
+        return (
+          <PendingExchangesList
+            user={user}
+            selectedPoint={selectedPoint}
+            onCloseSuccess={() => {
+              /* Opcional: refrescar datos o mostrar notificación */
+            }}
+          />
+        );
       case "transfers":
-        return <TransferManagement user={user} selectedPoint={selectedPoint} />;
+        return <TransferManagement user={user} />;
       case "operator-time-management":
         return (
           <OperatorTimeManagement user={user} selectedPoint={selectedPoint} />
@@ -105,7 +116,6 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
 
   return (
     <div className="flex min-h-screen bg-gray-50 relative">
-      {/* Sidebar */}
       <Sidebar
         user={user}
         selectedPoint={selectedPoint}
@@ -115,7 +125,6 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         onToggle={toggleSidebar}
       />
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         <Header
           user={user}
@@ -125,7 +134,6 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           onNotificationClick={handleNotificationClick}
         />
 
-        {/* Padding general para todos los tamaños */}
         <main className="flex-1 w-full max-w-full p-2 sm:p-4 md:p-6 lg:p-8">
           {renderContent()}
         </main>
