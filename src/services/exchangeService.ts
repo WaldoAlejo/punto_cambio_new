@@ -122,7 +122,6 @@ export const exchangeService = {
     }
   },
 
-  // NUEVO: obtener cambios pendientes por punto
   async getPendingExchangesByPoint(
     pointId: string
   ): Promise<{ exchanges: CambioDivisa[]; error: string | null }> {
@@ -149,7 +148,6 @@ export const exchangeService = {
     }
   },
 
-  // NUEVO: cerrar cambio pendiente
   async closePendingExchange(
     exchangeId: string
   ): Promise<{ exchange: CambioDivisa | null; error: string | null }> {

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import ExchangeManagement from "../exchange/ExchangeManagement";
-import PendingExchangesList from "../exchange/PendingExchangesList"; // Importa el componente correcto
+import PendingExchangesList from "../exchange/PendingExchangesList";
 import TransferManagement from "../transfer/TransferManagement";
 import OperatorTimeManagement from "../timeTracking/OperatorTimeManagement";
 import AdminTimeManagement from "../timeTracking/AdminTimeManagement";

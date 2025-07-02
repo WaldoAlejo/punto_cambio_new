@@ -1,5 +1,3 @@
-// src/services/authService.ts
-
 const API_BASE_URL = "http://localhost:3001/api";
 
 export interface LoginCredentials {
@@ -15,7 +13,7 @@ export interface AuthUser {
   telefono?: string;
   rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION";
   activo: boolean;
-  punto_atencion_id?: string;
+  punto_atencion_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -132,7 +130,7 @@ export const authService = {
 
       const data = await response.json();
       return { user: data.user, valid: true };
-    } catch (error) {
+    } catch  {
       return { user: null, valid: false, error: "Network error" };
     }
   },

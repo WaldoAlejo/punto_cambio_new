@@ -1,18 +1,39 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, Play, Square, Plus, List } from "lucide-react";
-import { User, PuntoAtencion } from '../../types';
+import { User, PuntoAtencion } from "../../types";
 import { useToast } from "@/hooks/use-toast";
-import AutoTimeTracker from './AutoTimeTracker';
-import SpontaneousExitForm from './SpontaneousExitForm';
-import SpontaneousExitHistory from './SpontaneousExitHistory';
+import { scheduleService } from "../../services/scheduleService";
+import {
+  spontaneousExitService,
+  SpontaneousExit,
+} from "../../services/spontaneousExitService";
+import AutoTimeTracker from "./AutoTimeTracker";
+import SpontaneousExitForm from "./SpontaneousExitForm";
+import SpontaneousExitHistory from "./SpontaneousExitHistory";
 
 interface TimeManagementProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
+}
+
+interface Schedule {
+  id: string;
+  usuario_id: string;
+  punto_atencion_id: string;
+  fecha_inicio: string;
+  fecha_almuerzo?: string;
+  fecha_regreso?: string;
+  fecha_salida?: string;
+  estado: string;
 }
 
 const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
@@ -21,54 +42,138 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
   const [showHistory, setShowHistory] = useState(false);
   const [currentSessionTime, setCurrentSessionTime] = useState(0);
   const { toast } = useToast();
+  const [activeSession, setActiveSession] = useState<Schedule | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // NUEVO: Salidas espontáneas del usuario y punto
+  const [exits, setExits] = useState<SpontaneousExit[]>([]);
+  const [loadingExits, setLoadingExits] = useState(false);
+
+  // Consultar el estado de la jornada activa del backend
+  const fetchActiveSession = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await scheduleService.getActiveSchedule();
+      if (res && res.schedule && !res.error) {
+        setActiveSession(res.schedule);
+        setIsTracking(true);
+      } else {
+        setActiveSession(null);
+        setIsTracking(false);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Cargar historial de salidas espontáneas
+  const fetchExits = useCallback(async () => {
+    if (!user?.id /*|| !selectedPoint?.id*/) {
+      setExits([]);
+      return;
+    }
+    setLoadingExits(true);
+    try {
+      // Solo necesita user.id, punto es opcional según tus endpoints
+      const { exits, error } = await spontaneousExitService.getAllExits(
+        user.id
+      );
+      if (!error) {
+        setExits(exits);
+      } else {
+        setExits([]);
+        toast({
+          title: "Error",
+          description: "No se pudo obtener el historial de salidas espontáneas",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      setExits([]);
+    } finally {
+      setLoadingExits(false);
+    }
+  }, [user?.id, toast]);
 
   useEffect(() => {
-    // Check if there's an active session
-    const savedSession = localStorage.getItem('timeTrackingSession');
+    fetchActiveSession();
+  }, [user.id, selectedPoint?.id, fetchActiveSession]);
+
+  useEffect(() => {
+    fetchExits();
+  }, [fetchExits, showHistory, showExitForm]); // Asegura recarga al mostrar historial o después de una nueva salida
+
+  useEffect(() => {
+    // Revisar si hay tracking local (compatibilidad previa)
+    const savedSession = localStorage.getItem("timeTrackingSession");
     if (savedSession) {
       try {
         const session = JSON.parse(savedSession);
-        if (session.userId === user.id && session.pointId === selectedPoint?.id) {
+        if (
+          session.userId === user.id &&
+          session.pointId === selectedPoint?.id
+        ) {
           setIsTracking(true);
-          console.warn('Resuming active time tracking session');
         }
-      } catch (error) {
-        console.error('Error parsing saved session:', error);
-        localStorage.removeItem('timeTrackingSession');
+      } catch {
+        localStorage.removeItem("timeTrackingSession");
       }
     }
   }, [user.id, selectedPoint?.id]);
 
-  const startTracking = () => {
+  const startTracking = async () => {
     if (!selectedPoint) {
       toast({
         title: "Error",
-        description: "Debe seleccionar un punto de atención para iniciar el tracking",
-        variant: "destructive"
+        description:
+          "Debe seleccionar un punto de atención para iniciar el tracking",
+        variant: "destructive",
       });
       return;
     }
-
-    const session = {
-      userId: user.id,
-      pointId: selectedPoint.id,
-      startTime: new Date().toISOString()
+    // Registrar inicio de jornada en backend
+    const scheduleData = {
+      usuario_id: user.id,
+      punto_atencion_id: selectedPoint.id,
+      fecha_inicio: new Date().toISOString(),
     };
-
-    localStorage.setItem('timeTrackingSession', JSON.stringify(session));
+    const res = await scheduleService.createOrUpdateSchedule(scheduleData);
+    if (res.error) {
+      toast({
+        title: "Error",
+        description: res.error,
+        variant: "destructive",
+      });
+      return;
+    }
     setIsTracking(true);
-
+    setActiveSession(res.schedule);
     toast({
       title: "Tracking iniciado",
       description: "Se ha iniciado el seguimiento de tiempo",
     });
   };
 
-  const stopTracking = () => {
-    localStorage.removeItem('timeTrackingSession');
+  const stopTracking = async () => {
+    if (!activeSession) return;
+    // Registrar cierre de jornada en backend
+    const scheduleData = {
+      usuario_id: user.id,
+      punto_atencion_id: selectedPoint?.id || "",
+      fecha_salida: new Date().toISOString(),
+    };
+    const res = await scheduleService.createOrUpdateSchedule(scheduleData);
+    if (res.error) {
+      toast({
+        title: "Error",
+        description: res.error,
+        variant: "destructive",
+      });
+      return;
+    }
     setIsTracking(false);
+    setActiveSession(null);
     setCurrentSessionTime(0);
-
     toast({
       title: "Tracking detenido",
       description: "Se ha detenido el seguimiento de tiempo",
@@ -81,6 +186,8 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
       title: "Salida registrada",
       description: "La salida espontánea ha sido registrada exitosamente",
     });
+    fetchExits(); // <-- refrescar historial tras registrar salida
+    fetchActiveSession();
   };
 
   const handleTimeUpdate = (totalMinutes: number) => {
@@ -90,8 +197,21 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
   const formatTime = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
-    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+    return `${hours.toString().padStart(2, "0")}:${mins
+      .toString()
+      .padStart(2, "0")}`;
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-24 w-24 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Cargando gestión de tiempo...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -122,18 +242,22 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
               </Button>
             ) : (
               <div className="space-y-4">
-                <AutoTimeTracker 
-                  user={user} 
+                <AutoTimeTracker
+                  user={user}
                   selectedPoint={selectedPoint}
                   onTimeUpdate={handleTimeUpdate}
                 />
                 <div className="flex gap-2">
-                  <Button onClick={stopTracking} variant="destructive" className="flex-1">
+                  <Button
+                    onClick={stopTracking}
+                    variant="destructive"
+                    className="flex-1"
+                  >
                     <Square className="mr-2 h-4 w-4" />
                     Detener
                   </Button>
-                  <Button 
-                    onClick={() => setShowExitForm(true)} 
+                  <Button
+                    onClick={() => setShowExitForm(true)}
                     variant="outline"
                     disabled={showExitForm}
                   >
@@ -144,13 +268,13 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
               </div>
             )}
 
-            <Button 
-              onClick={() => setShowHistory(!showHistory)} 
-              variant="outline" 
+            <Button
+              onClick={() => setShowHistory(!showHistory)}
+              variant="outline"
               className="w-full"
             >
               <List className="mr-2 h-4 w-4" />
-              {showHistory ? 'Ocultar' : 'Ver'} Historial
+              {showHistory ? "Ocultar" : "Ver"} Historial
             </Button>
           </CardContent>
         </Card>
@@ -171,7 +295,9 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
               </div>
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Punto:</span>
-                <span className="text-sm">{selectedPoint?.nombre || 'No seleccionado'}</span>
+                <span className="text-sm">
+                  {selectedPoint?.nombre || "No seleccionado"}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Estado:</span>
@@ -181,7 +307,9 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
               </div>
               <div className="flex justify-between">
                 <span className="text-sm font-medium">Tiempo actual:</span>
-                <span className="text-sm font-mono">{formatTime(currentSessionTime)}</span>
+                <span className="text-sm font-mono">
+                  {formatTime(currentSessionTime)}
+                </span>
               </div>
             </div>
           </CardContent>
@@ -200,10 +328,15 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
 
       {/* History */}
       {showHistory && (
-        <SpontaneousExitHistory
-          _user={user}
-          selectedPoint={selectedPoint}
-        />
+        <div>
+          {loadingExits ? (
+            <div className="text-center p-4 text-gray-400">
+              Cargando historial...
+            </div>
+          ) : (
+            <SpontaneousExitHistory exits={exits} />
+          )}
+        </div>
       )}
     </div>
   );

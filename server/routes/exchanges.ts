@@ -48,7 +48,7 @@ const exchangeSchema = z.object({
 interface ExchangeWhereClause {
   punto_atencion_id?: string;
   usuario_id?: string;
-  estado?: EstadoTransaccion; // Cambiar string a enum EstadoTransaccion
+  estado?: EstadoTransaccion;
 }
 
 interface AuthenticatedUser {
@@ -278,7 +278,6 @@ router.get(
       }
 
       if (req.query.estado) {
-        // Validar que sea uno de los valores del enum
         const estadoQuery = req.query.estado as string;
         if (
           estadoQuery === EstadoTransaccion.PENDIENTE ||

@@ -1,12 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Clock,
@@ -118,7 +112,7 @@ const TimeTracker = ({
       try {
         ubicacion = await getLocation();
       } catch (error) {
-        console.log("No se pudo obtener ubicación:", error);
+        console.warn("No se pudo obtener ubicación:", error);
       }
       const ahora = new Date().toISOString();
       guardarJornada({

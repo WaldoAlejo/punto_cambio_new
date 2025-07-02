@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,12 +12,13 @@ import {
 import { User, PuntoAtencion } from "../../types";
 import { scheduleService } from "../../services/scheduleService";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface PointSelectionProps {
   user: User;
   points: PuntoAtencion[];
-  onPointSelect: (point: PuntoAtencion) => void;
   onLogout: () => void;
+  onPointSelect?: (point: PuntoAtencion) => void; // <-- agregada para integración flexible
 }
 
 interface PuntosActivosResponse {
@@ -26,11 +28,14 @@ interface PuntosActivosResponse {
 const PointSelection = ({
   user,
   points,
-  onPointSelect,
   onLogout,
+  onPointSelect,
 }: PointSelectionProps) => {
   const [occupiedPoints, setOccupiedPoints] = useState<string[]>([]);
   const [isStartingShift, setIsStartingShift] = useState(false);
+
+  const { setSelectedPoint, selectedPoint } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchOccupiedPoints = async () => {
@@ -40,12 +45,19 @@ const PointSelection = ({
         );
         const ocupados = response.data.puntos.map((p) => p.id);
         setOccupiedPoints(ocupados);
-      } catch (error) {
+      } catch {
         setOccupiedPoints([]);
       }
     };
     fetchOccupiedPoints();
   }, []);
+
+  // Redireccionar automáticamente si ya hay punto seleccionado
+  useEffect(() => {
+    if (selectedPoint) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [selectedPoint, navigate]);
 
   const getLocation = (): Promise<{
     lat: number;
@@ -103,13 +115,20 @@ const PointSelection = ({
         return;
       }
 
-      onPointSelect(point);
+      setSelectedPoint(point);
 
       toast({
         title: "Jornada iniciada",
         description: `Bienvenido a ${point.nombre}. Tu jornada ha comenzado automáticamente.`,
       });
-    } catch (error) {
+
+      // Si el padre pasa la prop onPointSelect, llamarla aquí:
+      if (typeof onPointSelect === "function") {
+        onPointSelect(point);
+      }
+
+      navigate("/dashboard", { replace: true });
+    } catch {
       toast({
         title: "Error",
         description: "Error al iniciar la jornada automáticamente",
@@ -120,7 +139,6 @@ const PointSelection = ({
     }
   };
 
-  // Filtrar solo puntos que no están ocupados
   const freePoints = points.filter(
     (point) => !occupiedPoints.includes(point.id)
   );

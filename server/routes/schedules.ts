@@ -9,36 +9,44 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 // Schema para crear/actualizar jornada - más flexible
-const scheduleSchema = z.object({
-  usuario_id: z.string().uuid(),
-  punto_atencion_id: z.string().uuid(),
-  fecha_inicio: z.string().datetime().optional(),
-  fecha_almuerzo: z.string().datetime().optional(),
-  fecha_regreso: z.string().datetime().optional(),
-  fecha_salida: z.string().datetime().optional(),
-  ubicacion_inicio: z
-    .object({
-      lat: z.number(),
-      lng: z.number(),
-      direccion: z.string().optional(),
-    })
-    .optional(),
-  ubicacion_salida: z
-    .object({
-      lat: z.number(),
-      lng: z.number(),
-      direccion: z.string().optional(),
-    })
-    .optional(),
-}).refine(
-  (data) => {
-    // Al menos uno de los campos de fecha debe estar presente
-    return data.fecha_inicio || data.fecha_almuerzo || data.fecha_regreso || data.fecha_salida;
-  },
-  {
-    message: "Se requiere al menos una fecha (inicio, almuerzo, regreso o salida)",
-  }
-);
+const scheduleSchema = z
+  .object({
+    usuario_id: z.string().uuid(),
+    punto_atencion_id: z.string().uuid(),
+    fecha_inicio: z.string().datetime().optional(),
+    fecha_almuerzo: z.string().datetime().optional(),
+    fecha_regreso: z.string().datetime().optional(),
+    fecha_salida: z.string().datetime().optional(),
+    ubicacion_inicio: z
+      .object({
+        lat: z.number(),
+        lng: z.number(),
+        direccion: z.string().optional(),
+      })
+      .optional(),
+    ubicacion_salida: z
+      .object({
+        lat: z.number(),
+        lng: z.number(),
+        direccion: z.string().optional(),
+      })
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      // Al menos uno de los campos de fecha debe estar presente
+      return (
+        data.fecha_inicio ||
+        data.fecha_almuerzo ||
+        data.fecha_regreso ||
+        data.fecha_salida
+      );
+    },
+    {
+      message:
+        "Se requiere al menos una fecha (inicio, almuerzo, regreso o salida)",
+    }
+  );
 
 // Obtener jornadas/horarios
 router.get(
@@ -237,6 +245,12 @@ router.post(
           },
         });
       }
+
+      // <<<<<<<<<<<<<<<< AGREGADO - ACTUALIZA EL USUARIO >>>>>>>>>>>>>>>>
+      await prisma.usuario.update({
+        where: { id: usuario_id },
+        data: { punto_atencion_id },
+      });
 
       logger.info("Jornada procesada", {
         scheduleId: schedule.id,

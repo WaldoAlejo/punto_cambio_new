@@ -37,7 +37,6 @@ interface ExchangePayload {
   // NUEVOS CAMPOS flujo parcial
   abono_inicial_monto?: number | null;
   abono_inicial_fecha?: string | null;
-  abono_inicial_recibido_por?: string | null;
   saldo_pendiente?: number | null;
   referencia_cambio_principal?: string | null;
 }
@@ -49,7 +48,6 @@ type ExchangeCompleteDataExtend = ExchangeCompleteData & {
   transferenciaImagen?: File | null;
   abonoInicialMonto?: number | null;
   abonoInicialFecha?: string | null;
-  abonoInicialRecibidoPor?: string | null;
   saldoPendiente?: number | null;
   referenciaCambioPrincipal?: string | null;
 };
@@ -123,11 +121,9 @@ export const useExchangeProcess = ({
         return;
       }
 
-      // Procesamiento del comprobante de transferencia (si lo implementas)
       let transferenciaImagenUrl: string | null = null;
       if (data.metodoEntrega === "transferencia" && data.transferenciaImagen) {
-        // Puedes subir el archivo aquí y asignar el URL
-        // transferenciaImagenUrl = await uploadComprobante(data.transferenciaImagen);
+        // Aquí podrías implementar la subida del archivo y obtener la URL
         toast({
           title: "Nota",
           description:
@@ -161,7 +157,6 @@ export const useExchangeProcess = ({
         // --- CAMPOS DE ABONO PARCIAL ---
         abono_inicial_monto: data.abonoInicialMonto ?? null,
         abono_inicial_fecha: data.abonoInicialFecha ?? null,
-        abono_inicial_recibido_por: data.abonoInicialRecibidoPor ?? null,
         saldo_pendiente: data.saldoPendiente ?? null,
         referencia_cambio_principal: data.referenciaCambioPrincipal ?? null,
       };

@@ -31,8 +31,8 @@ export interface ExchangeDetailsFormProps {
   onAbonoInicialMontoChange?: (v: number | null) => void;
   abonoInicialFecha?: string | null;
   onAbonoInicialFechaChange?: (v: string | null) => void;
-  abonoInicialRecibidoPor?: string | null;
-  onAbonoInicialRecibidoPorChange?: (v: string | null) => void;
+  abonoInicialRecibidoPor?: string | null; // Solo lectura, el usuario logueado
+  onAbonoInicialRecibidoPorChange?: (v: string | null) => void; // Opcional, no recomendado usar
   saldoPendiente?: number | null;
   onSaldoPendienteChange?: (v: number | null) => void;
   referenciaCambioPrincipal?: string | null;
@@ -79,12 +79,6 @@ const ExchangeDetailsForm = ({
     );
   }
 
-  // Validación de campos requeridos según método
-  const isTransferenciaValida =
-    metodoEntrega === "transferencia"
-      ? transferenciaNumero.trim() !== "" && transferenciaBanco.trim() !== ""
-      : true;
-
   const handleImagenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       onTransferenciaImagenChange(e.target.files[0]);
@@ -92,12 +86,6 @@ const ExchangeDetailsForm = ({
       onTransferenciaImagenChange(null);
     }
   };
-
-  // Validación mínima para abono parcial: sólo ejemplo, puedes ajustar según tu lógica
-  const isAbonoParcialValido =
-    abonoInicialMonto === undefined ||
-    abonoInicialMonto === null ||
-    (abonoInicialMonto >= 0 && saldoPendiente !== undefined);
 
   return (
     <div className="space-y-4">
@@ -185,7 +173,7 @@ const ExchangeDetailsForm = ({
         />
       )}
 
-      {/* === CAMPOS PARA ABONO PARCIAL (opcional, muestra solo si algún handler está presente) === */}
+      {/* === CAMPOS PARA ABONO PARCIAL (solo lectura para recibidoPor) === */}
       {(onAbonoInicialMontoChange || onSaldoPendienteChange) && (
         <div className="border rounded-xl p-3 space-y-2 bg-yellow-50">
           <Label className="font-semibold">Flujo de cambio parcial</Label>
@@ -221,18 +209,13 @@ const ExchangeDetailsForm = ({
                 />
               </div>
             )}
-            {onAbonoInicialRecibidoPorChange && (
+            {abonoInicialRecibidoPor !== undefined && (
               <div>
                 <Label>Recibido por (usuario)</Label>
                 <Input
                   type="text"
                   value={abonoInicialRecibidoPor ?? ""}
-                  onChange={(e) =>
-                    onAbonoInicialRecibidoPorChange(
-                      e.target.value ? e.target.value : null
-                    )
-                  }
-                  placeholder="Usuario que recibe el abono"
+                  readOnly
                 />
               </div>
             )}
@@ -272,6 +255,7 @@ const ExchangeDetailsForm = ({
         </div>
       )}
 
+      {/* Botones de navegación */}
       <div className="flex gap-2">
         <Button variant="outline" onClick={onBack}>
           Atrás
@@ -282,8 +266,12 @@ const ExchangeDetailsForm = ({
           disabled={
             !fromCurrency ||
             !toCurrency ||
-            (metodoEntrega === "transferencia" && !isTransferenciaValida) ||
-            !isAbonoParcialValido
+            (metodoEntrega === "transferencia" &&
+              (transferenciaNumero.trim() === "" ||
+                transferenciaBanco.trim() === "")) ||
+            (abonoInicialMonto !== undefined &&
+              abonoInicialMonto !== null &&
+              abonoInicialMonto < 0)
           }
         >
           Completar Cambio

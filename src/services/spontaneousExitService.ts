@@ -1,11 +1,15 @@
-
 import { apiService } from "./apiService";
 
 export interface SpontaneousExit {
   id: string;
   usuario_id: string;
   punto_atencion_id: string;
-  motivo: 'BANCO' | 'DILIGENCIA_PERSONAL' | 'TRAMITE_GOBIERNO' | 'EMERGENCIA_MEDICA' | 'OTRO';
+  motivo:
+    | "BANCO"
+    | "DILIGENCIA_PERSONAL"
+    | "TRAMITE_GOBIERNO"
+    | "EMERGENCIA_MEDICA"
+    | "OTRO";
   descripcion?: string;
   fecha_salida: string;
   fecha_regreso?: string;
@@ -21,7 +25,7 @@ export interface SpontaneousExit {
   };
   duracion_minutos?: number;
   aprobado_por?: string;
-  estado: 'ACTIVO' | 'COMPLETADO' | 'CANCELADO';
+  estado: "ACTIVO" | "COMPLETADO" | "CANCELADO";
   created_at: string;
   updated_at: string;
   usuario?: {
@@ -47,7 +51,12 @@ interface SpontaneousExitsResponse {
 }
 
 interface CreateExitData {
-  motivo: 'BANCO' | 'DILIGENCIA_PERSONAL' | 'TRAMITE_GOBIERNO' | 'EMERGENCIA_MEDICA' | 'OTRO';
+  motivo:
+    | "BANCO"
+    | "DILIGENCIA_PERSONAL"
+    | "TRAMITE_GOBIERNO"
+    | "EMERGENCIA_MEDICA"
+    | "OTRO";
   descripcion?: string;
   ubicacion_salida?: {
     lat: number;
@@ -76,11 +85,13 @@ export const spontaneousExitService = {
     error: string | null;
   }> {
     try {
-      const endpoint = usuarioId ? `/spontaneous-exits?usuario_id=${usuarioId}` : '/spontaneous-exits';
-      console.log("Obteniendo salidas desde:", endpoint);
-      
+      const endpoint = usuarioId
+        ? `/spontaneous-exits?usuario_id=${usuarioId}`
+        : "/spontaneous-exits";
+      console.warn("Obteniendo salidas desde:", endpoint);
+
       const response = await apiService.get<SpontaneousExitsResponse>(endpoint);
-      console.log("Respuesta de getAllExits:", response);
+      console.warn("Respuesta de getAllExits:", response);
 
       if (!response) {
         return {
@@ -108,10 +119,13 @@ export const spontaneousExitService = {
     error: string | null;
   }> {
     try {
-      console.log("Creando salida con datos:", exitData);
-      
-      const response = await apiService.post<CreateExitResponse>("/spontaneous-exits", exitData);
-      console.log("Respuesta del servidor al crear salida:", response);
+      console.warn("Creando salida con datos:", exitData);
+
+      const response = await apiService.post<CreateExitResponse>(
+        "/spontaneous-exits",
+        exitData
+      );
+      console.warn("Respuesta del servidor al crear salida:", response);
 
       if (!response) {
         return {
@@ -134,15 +148,26 @@ export const spontaneousExitService = {
     }
   },
 
-  async markReturn(exitId: string, returnData: ReturnExitData): Promise<{
+  async markReturn(
+    exitId: string,
+    returnData: ReturnExitData
+  ): Promise<{
     exit: SpontaneousExit | null;
     error: string | null;
   }> {
     try {
-      console.log("Marcando regreso para salida:", exitId, "con datos:", returnData);
-      
-      const response = await apiService.patch<CreateExitResponse>(`/spontaneous-exits/${exitId}/return`, returnData);
-      console.log("Respuesta del servidor al marcar regreso:", response);
+      console.warn(
+        "Marcando regreso para salida:",
+        exitId,
+        "con datos:",
+        returnData
+      );
+
+      const response = await apiService.patch<CreateExitResponse>(
+        `/spontaneous-exits/${exitId}/return`,
+        returnData
+      );
+      console.warn("Respuesta del servidor al marcar regreso:", response);
 
       if (!response) {
         return {
@@ -163,5 +188,5 @@ export const spontaneousExitService = {
       console.error("Error en markReturn:", error);
       return { exit: null, error: "Error de conexión con el servidor" };
     }
-  }
+  },
 };
