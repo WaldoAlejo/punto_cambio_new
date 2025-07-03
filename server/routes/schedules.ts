@@ -1,5 +1,5 @@
 import express from "express";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma, EstadoJornada } from "@prisma/client";
 import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
@@ -8,7 +8,7 @@ import { z } from "zod";
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Schema para crear/actualizar jornada - más flexible
+// Schema para crear/actualizar jornada
 const scheduleSchema = z
   .object({
     usuario_id: z.string().uuid(),
@@ -34,7 +34,6 @@ const scheduleSchema = z
   })
   .refine(
     (data) => {
-      // Al menos uno de los campos de fecha debe estar presente
       return (
         data.fecha_inicio ||
         data.fecha_almuerzo ||
@@ -48,7 +47,7 @@ const scheduleSchema = z
     }
   );
 
-// Obtener jornadas/horarios
+// Obtener jornadas
 router.get(
   "/",
   authenticateToken,
@@ -141,7 +140,7 @@ router.get(
   }
 );
 
-// Crear o actualizar jornada
+// Crear o actualizar jornada (ciclo completo)
 router.post(
   "/",
   authenticateToken,
@@ -173,6 +172,7 @@ router.post(
       const manana = new Date(hoy);
       manana.setDate(manana.getDate() + 1);
 
+      // Permite estados ACTIVO o ALMUERZO como "abierta"
       const existingSchedule = await prisma.jornada.findFirst({
         where: {
           usuario_id,
@@ -180,7 +180,10 @@ router.post(
             gte: hoy,
             lt: manana,
           },
-          estado: "ACTIVO",
+          OR: [
+            { estado: EstadoJornada.ACTIVO },
+            { estado: EstadoJornada.ALMUERZO },
+          ],
         },
       });
 
@@ -189,12 +192,22 @@ router.post(
       if (existingSchedule) {
         const updateData: Prisma.JornadaUpdateInput = {};
 
-        if (fecha_almuerzo)
+        if (fecha_almuerzo) {
           updateData.fecha_almuerzo = new Date(fecha_almuerzo);
-        if (fecha_regreso) updateData.fecha_regreso = new Date(fecha_regreso);
+          updateData.estado = EstadoJornada.ALMUERZO;
+        }
+        if (fecha_regreso) {
+          updateData.fecha_regreso = new Date(fecha_regreso);
+          updateData.estado = EstadoJornada.ACTIVO;
+        }
         if (fecha_salida) {
           updateData.fecha_salida = new Date(fecha_salida);
-          updateData.estado = "COMPLETADO";
+          updateData.estado = EstadoJornada.COMPLETADO;
+          // Limpia el punto de atención SOLO al cerrar jornada
+          await prisma.usuario.update({
+            where: { id: usuario_id },
+            data: { punto_atencion_id: null },
+          });
         }
         if (ubicacion_salida)
           updateData.ubicacion_salida =
@@ -226,7 +239,7 @@ router.post(
             punto_atencion_id,
             fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : new Date(),
             ubicacion_inicio: ubicacion_inicio || null,
-            estado: "ACTIVO",
+            estado: EstadoJornada.ACTIVO,
           },
           include: {
             usuario: {
@@ -246,11 +259,13 @@ router.post(
         });
       }
 
-      // <<<<<<<<<<<<<<<< AGREGADO - ACTUALIZA EL USUARIO >>>>>>>>>>>>>>>>
-      await prisma.usuario.update({
-        where: { id: usuario_id },
-        data: { punto_atencion_id },
-      });
+      // Solo asigna el punto de atención SI NO se está cerrando jornada
+      if (!fecha_salida) {
+        await prisma.usuario.update({
+          where: { id: usuario_id },
+          data: { punto_atencion_id },
+        });
+      }
 
       logger.info("Jornada procesada", {
         scheduleId: schedule.id,
@@ -315,7 +330,10 @@ router.get(
             gte: hoy,
             lt: manana,
           },
-          estado: "ACTIVO",
+          OR: [
+            { estado: EstadoJornada.ACTIVO },
+            { estado: EstadoJornada.ALMUERZO },
+          ],
         },
         include: {
           usuario: {

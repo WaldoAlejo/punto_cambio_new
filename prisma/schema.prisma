@@ -430,6 +430,7 @@ enum TipoRecibo {
 
 enum EstadoJornada {
   ACTIVO
+  ALMUERZO   // <--- AGREGADO
   COMPLETADO
   CANCELADO
 }

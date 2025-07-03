@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-// Importa Input con _ para evitar warning por no usarlo
 import { Input as _Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Clock, Save, X } from "lucide-react";
-import { User, PuntoAtencion } from "../../types";
+import { User, PuntoAtencion, SalidaEspontanea } from "../../types";
 import {
   spontaneousExitService,
   SpontaneousExit,
@@ -27,9 +26,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 
 interface SpontaneousExitFormProps {
-  user: User; // prefijo _ si no se usa: _user
+  user: User;
   selectedPoint: PuntoAtencion | null;
-  onExitRegistered: (exit: SpontaneousExit) => void; // Usar tipo correcto aquí
+  onExitRegistered: (exit: SalidaEspontanea) => void; // <-- Tipo correcto
   onCancel: () => void;
 }
 
@@ -41,8 +40,63 @@ const motivoOptions = [
   { value: "OTRO", label: "Otro" },
 ];
 
+// Adaptador para convertir SpontaneousExit (del backend) a SalidaEspontanea (esperado en frontend)
+function adaptExitToSalidaEspontanea(
+  exit: SpontaneousExit,
+  userFallback: User,
+  selectedPoint?: PuntoAtencion | null
+): SalidaEspontanea {
+  return {
+    ...exit,
+    usuario: {
+      id: exit.usuario.id,
+      nombre: exit.usuario.nombre,
+      username: exit.usuario.username,
+      rol: userFallback.rol,
+      activo: userFallback.activo,
+      created_at: userFallback.created_at,
+      updated_at: userFallback.updated_at,
+      correo: userFallback.correo,
+      telefono: userFallback.telefono,
+      punto_atencion_id: userFallback.punto_atencion_id,
+    },
+    puntoAtencion:
+      selectedPoint &&
+      exit.puntoAtencion &&
+      selectedPoint.id === exit.puntoAtencion.id
+        ? selectedPoint
+        : {
+            id: exit.puntoAtencion.id,
+            nombre: exit.puntoAtencion.nombre,
+            direccion: "",
+            ciudad: "",
+            provincia: "",
+            codigo_postal: "",
+            telefono: "",
+            activo: true,
+            created_at: "",
+            updated_at: "",
+          },
+    // Puedes adaptar usuarioAprobador si lo necesitas, igual a usuario
+    usuarioAprobador: exit.usuarioAprobador
+      ? {
+          id: exit.usuarioAprobador.id,
+          nombre: exit.usuarioAprobador.nombre,
+          username: exit.usuarioAprobador.username,
+          rol: "ADMIN",
+          activo: true,
+          created_at: "",
+          updated_at: "",
+          correo: "",
+          telefono: "",
+          punto_atencion_id: "",
+        }
+      : undefined,
+  };
+}
+
 const SpontaneousExitForm = ({
-  user: _user,
+  user,
   selectedPoint,
   onExitRegistered,
   onCancel,
@@ -100,7 +154,8 @@ const SpontaneousExitForm = ({
 
       setMotivo("");
       setDescripcion("");
-      onExitRegistered(exit); // Enviar exit con tipo correcto
+      // Aquí adaptamos la salida antes de entregarla al padre
+      onExitRegistered(adaptExitToSalidaEspontanea(exit, user, selectedPoint));
     } catch (error) {
       console.error("Error registering spontaneous exit:", error);
       toast({

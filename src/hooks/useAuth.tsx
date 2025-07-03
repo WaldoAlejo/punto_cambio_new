@@ -26,7 +26,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
   const [selectedPoint, setSelectedPointState] = useState<PuntoAtencion | null>(
     null
   );
@@ -60,7 +59,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else {
           authService.removeStoredToken();
         }
-      } catch  {
+      } catch {
         authService.removeStoredToken();
       } finally {
         setIsLoading(false);
@@ -83,7 +82,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } else {
         return { success: false, error: error || "Error de autenticación" };
       }
-    } catch  {
+    } catch {
       return { success: false, error: "Error de conexión" };
     }
   };

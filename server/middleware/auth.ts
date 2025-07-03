@@ -107,6 +107,34 @@ export const authenticateToken: RequestHandler = async (
       return;
     }
 
+    // --- CORRECCIÓN IMPORTANTE PARA OPERADOR ---
+    if (user.rol === "OPERADOR") {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const manana = new Date(hoy);
+      manana.setDate(manana.getDate() + 1);
+
+      const jornadaHoy = await prisma.jornada.findFirst({
+        where: {
+          usuario_id: user.id,
+          fecha_inicio: { gte: hoy, lt: manana },
+          OR: [{ estado: "ACTIVO" }, { estado: "ALMUERZO" }],
+        },
+      });
+
+      if (!jornadaHoy) {
+        // Limpiar en BD solo si está asignado
+        if (user.punto_atencion_id) {
+          await prisma.usuario.update({
+            where: { id: user.id },
+            data: { punto_atencion_id: null },
+          });
+        }
+        user.punto_atencion_id = null;
+      }
+    }
+    // --- FIN CORRECCIÓN ---
+
     req.user = user;
     logger.info("Usuario autenticado correctamente", { userId: user.id });
     next();

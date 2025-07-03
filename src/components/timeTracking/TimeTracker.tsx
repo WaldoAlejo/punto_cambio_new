@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,18 +20,76 @@ interface TimeTrackerProps {
   spontaneousExits: SalidaEspontanea[];
 }
 
-interface JornadaEstado {
+// Estados frontend válidos
+type EstadoFrontend = "NO_INICIADO" | "TRABAJANDO" | "ALMUERZO" | "FINALIZADO";
+
+// Jornada como llega del backend
+interface JornadaEstadoBackend {
   id?: string;
   fecha_inicio?: string;
   fecha_almuerzo?: string;
   fecha_regreso?: string;
   fecha_salida?: string;
-  estado: "NO_INICIADO" | "TRABAJANDO" | "ALMUERZO" | "FINALIZADO";
+  estado: string;
   ubicacion_inicio?: {
     lat: number;
     lng: number;
     direccion?: string;
-  };
+  } | null;
+  ubicacion_salida?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  } | null;
+}
+
+// Jornada usada en el frontend
+interface JornadaEstado extends Omit<JornadaEstadoBackend, "estado"> {
+  estado: EstadoFrontend;
+}
+
+interface ActiveScheduleResponse {
+  success: boolean;
+  schedule: JornadaEstadoBackend | null;
+}
+
+interface SaveScheduleResponse {
+  success: boolean;
+  schedule: JornadaEstadoBackend;
+}
+
+interface JornadaPayload {
+  usuario_id: string;
+  punto_atencion_id: string | undefined;
+  fecha_inicio?: string;
+  fecha_almuerzo?: string;
+  fecha_regreso?: string;
+  fecha_salida?: string;
+  ubicacion_inicio?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  } | null;
+  ubicacion_salida?: {
+    lat: number;
+    lng: number;
+    direccion?: string;
+  } | null;
+}
+
+// Mapea los estados del backend a los del frontend
+function mapEstadoJornada(estado: string): EstadoFrontend {
+  switch (estado) {
+    case "ACTIVO":
+      return "TRABAJANDO";
+    case "ALMUERZO":
+      return "ALMUERZO";
+    case "COMPLETADO":
+    case "CANCELADO":
+      return "FINALIZADO";
+    default:
+      return "NO_INICIADO";
+  }
 }
 
 const TimeTracker = ({
@@ -52,16 +111,29 @@ const TimeTracker = ({
   }, []);
 
   useEffect(() => {
-    const cargarJornadaActual = () => {
-      const jornadaGuardada = localStorage.getItem(
-        `jornada_${user.id}_${selectedPoint?.id}`
-      );
-      if (jornadaGuardada) {
-        const jornada = JSON.parse(jornadaGuardada);
-        setJornadaActual(jornada);
+    const cargarJornadaActual = async () => {
+      try {
+        if (!user.id || !selectedPoint?.id) return;
+        const { data } = await axios.get<ActiveScheduleResponse>(
+          "/api/jornada/active"
+        );
+        if (data.success && data.schedule) {
+          setJornadaActual({
+            ...data.schedule,
+            estado: mapEstadoJornada(data.schedule.estado),
+          });
+        } else {
+          setJornadaActual({ estado: "NO_INICIADO" });
+        }
+      } catch {
+        toast({
+          title: "Error",
+          description: "No se pudo cargar la jornada activa",
+          variant: "destructive",
+        });
       }
     };
-    if (user.id && selectedPoint?.id) cargarJornadaActual();
+    cargarJornadaActual();
   }, [user.id, selectedPoint?.id]);
 
   const getLocation = (): Promise<{
@@ -82,21 +154,13 @@ const TimeTracker = ({
             direccion: "Ubicación de trabajo",
           });
         },
-        (error) => {
+        () => {
           setIsGettingLocation(false);
-          reject(error);
+          reject(new Error("Error al obtener ubicación"));
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     });
-  };
-
-  const guardarJornada = (nuevaJornada: JornadaEstado) => {
-    localStorage.setItem(
-      `jornada_${user.id}_${selectedPoint?.id}`,
-      JSON.stringify(nuevaJornada)
-    );
-    setJornadaActual(nuevaJornada);
   };
 
   const formatearHora = (fecha: string) => {
@@ -106,21 +170,48 @@ const TimeTracker = ({
     });
   };
 
+  const guardarJornadaBackend = async (data: JornadaPayload) => {
+    try {
+      const response = await axios.post<SaveScheduleResponse>(
+        "/api/jornada",
+        data
+      );
+      if (response.data.success) {
+        setJornadaActual({
+          ...response.data.schedule,
+          estado: mapEstadoJornada(response.data.schedule.estado),
+        });
+        return response.data.schedule;
+      } else {
+        throw new Error("Error guardando jornada");
+      }
+    } catch {
+      toast({
+        title: "Error",
+        description: "Error al guardar la jornada en backend",
+        variant: "destructive",
+      });
+      throw new Error("Error guardando jornada");
+    }
+  };
+
   const iniciarJornada = async () => {
     try {
       let ubicacion;
       try {
         ubicacion = await getLocation();
-      } catch (error) {
-        console.warn("No se pudo obtener ubicación:", error);
+      } catch {
+        ubicacion = null;
       }
       const ahora = new Date().toISOString();
-      guardarJornada({
-        id: `jornada_${Date.now()}`,
+
+      await guardarJornadaBackend({
+        usuario_id: user.id,
+        punto_atencion_id: selectedPoint?.id,
         fecha_inicio: ahora,
-        estado: "TRABAJANDO",
         ubicacion_inicio: ubicacion,
       });
+
       toast({
         title: "Jornada iniciada",
         description: `Inicio a las ${formatearHora(ahora)}${
@@ -128,54 +219,62 @@ const TimeTracker = ({
         }`,
       });
     } catch {
-      toast({
-        title: "Error",
-        description: "Error al iniciar la jornada",
-        variant: "destructive",
-      });
+      // El error ya fue manejado en guardarJornadaBackend
     }
   };
 
-  const irAlmuerzo = () => {
+  const irAlmuerzo = async () => {
     if (jornadaActual.estado !== "TRABAJANDO") return;
     const ahora = new Date().toISOString();
-    guardarJornada({
-      ...jornadaActual,
-      fecha_almuerzo: ahora,
-      estado: "ALMUERZO",
-    });
-    toast({
-      title: "Salida a almuerzo",
-      description: `A las ${formatearHora(ahora)}`,
-    });
+    try {
+      await guardarJornadaBackend({
+        usuario_id: user.id,
+        punto_atencion_id: selectedPoint?.id,
+        fecha_almuerzo: ahora,
+      });
+      toast({
+        title: "Salida a almuerzo",
+        description: `A las ${formatearHora(ahora)}`,
+      });
+    } catch {
+      // Error manejado en guardarJornadaBackend
+    }
   };
 
-  const regresarAlmuerzo = () => {
+  const regresarAlmuerzo = async () => {
     if (jornadaActual.estado !== "ALMUERZO") return;
     const ahora = new Date().toISOString();
-    guardarJornada({
-      ...jornadaActual,
-      fecha_regreso: ahora,
-      estado: "TRABAJANDO",
-    });
-    toast({
-      title: "Regreso de almuerzo",
-      description: `A las ${formatearHora(ahora)}`,
-    });
+    try {
+      await guardarJornadaBackend({
+        usuario_id: user.id,
+        punto_atencion_id: selectedPoint?.id,
+        fecha_regreso: ahora,
+      });
+      toast({
+        title: "Regreso de almuerzo",
+        description: `A las ${formatearHora(ahora)}`,
+      });
+    } catch {
+      // Error manejado en guardarJornadaBackend
+    }
   };
 
-  const finalizarJornada = () => {
+  const finalizarJornada = async () => {
     if (jornadaActual.estado !== "TRABAJANDO") return;
     const ahora = new Date().toISOString();
-    guardarJornada({
-      ...jornadaActual,
-      fecha_salida: ahora,
-      estado: "FINALIZADO",
-    });
-    toast({
-      title: "Jornada finalizada",
-      description: `Salida a las ${formatearHora(ahora)}`,
-    });
+    try {
+      await guardarJornadaBackend({
+        usuario_id: user.id,
+        punto_atencion_id: selectedPoint?.id,
+        fecha_salida: ahora,
+      });
+      toast({
+        title: "Jornada finalizada",
+        description: `Salida a las ${formatearHora(ahora)}`,
+      });
+    } catch {
+      // Error manejado en guardarJornadaBackend
+    }
   };
 
   const calcularTiempoTrabajado = () => {

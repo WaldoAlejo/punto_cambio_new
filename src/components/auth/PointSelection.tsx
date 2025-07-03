@@ -41,7 +41,7 @@ const PointSelection = ({
     const fetchOccupiedPoints = async () => {
       try {
         const response = await axios.get<PuntosActivosResponse>(
-          "/api/puntos/activos"
+          "/api/puntos/ocupados" // <-- ¡CAMBIADO!
         );
         const ocupados = response.data.puntos.map((p) => p.id);
         setOccupiedPoints(ocupados);
