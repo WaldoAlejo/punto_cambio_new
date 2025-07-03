@@ -1,214 +1,184 @@
-
-import express from 'express';
-import { PrismaClient } from '@prisma/client';
-import logger from '../utils/logger.js';
-import { authenticateToken, requireRole } from '../middleware/auth.js';
+import express from "express";
+import { PrismaClient } from "@prisma/client";
+import logger from "../utils/logger.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Obtener todos los puntos (acceso para todos los usuarios autenticados)
-router.get('/', 
+// Obtener todos los puntos LIBRES (activos y sin jornada ACTIVO o ALMUERZO hoy)
+router.get(
+  "/",
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.warn('=== POINTS ROUTE - GET / START ===');
-    console.warn('Request headers:', req.headers);
-    console.warn('Request user:', req.user);
-
     try {
-      console.warn('Querying database for points...');
-      const points = await prisma.puntoAtencion.findMany({
-        orderBy: { nombre: 'asc' }
-      });
-      console.warn('Database query result - points count:', points.length);
-      console.warn('Points data:', points);
+      // Obtener fecha de hoy (00:00:00) y mañana (00:00:00)
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const manana = new Date(hoy);
+      manana.setDate(manana.getDate() + 1);
 
-      logger.info('Puntos obtenidos', { 
-        count: points.length, 
-        requestedBy: req.user?.id 
+      // Buscar puntos activos que NO tengan jornada ACTIVO o ALMUERZO hoy
+      const puntosLibres = await prisma.puntoAtencion.findMany({
+        where: {
+          activo: true,
+          NOT: {
+            jornadas: {
+              some: {
+                estado: { in: ["ACTIVO", "ALMUERZO"] },
+                fecha_inicio: { gte: hoy, lt: manana },
+              },
+            },
+          },
+        },
+        orderBy: { nombre: "asc" },
       });
 
-      const responseData = {
-        points,
+      // Formatear respuesta
+      const formatted = puntosLibres.map((punto) => ({
+        id: punto.id,
+        nombre: punto.nombre,
+        direccion: punto.direccion,
+        ciudad: punto.ciudad,
+        provincia: punto.provincia,
+        codigo_postal: punto.codigo_postal,
+        telefono: punto.telefono,
+        activo: punto.activo,
+        created_at: punto.created_at.toISOString(),
+        updated_at: punto.updated_at.toISOString(),
+      }));
+
+      logger.info("Puntos libres obtenidos", {
+        count: formatted.length,
+        requestedBy: req.user?.id,
+      });
+
+      res.status(200).json({
+        points: formatted,
         success: true,
-        timestamp: new Date().toISOString()
-      };
-      console.warn('Sending response:', responseData);
-
-      res.status(200).json(responseData);
-    } catch (error) {
-      console.error('=== POINTS ROUTE GET ERROR ===');
-      console.error('Error details:', error);
-      
-      logger.error('Error al obtener puntos', { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id 
+        timestamp: new Date().toISOString(),
       });
-      
-      const errorResponse = {
-        error: 'Error al obtener puntos de atención',
+    } catch (error) {
+      logger.error("Error al obtener puntos libres", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id,
+      });
+
+      res.status(500).json({
+        error: "Error al obtener puntos libres",
         success: false,
-        timestamp: new Date().toISOString()
-      };
-      console.warn('Sending error response:', errorResponse);
-      res.status(500).json(errorResponse);
-    } finally {
-      console.warn('=== POINTS ROUTE - GET / END ===');
+        timestamp: new Date().toISOString(),
+      });
     }
   }
 );
 
-// Crear punto (solo admins)
-router.post('/',
+// Crear punto (solo admins/superusuario)
+router.post(
+  "/",
   authenticateToken,
-  requireRole(['ADMIN', 'SUPER_USUARIO']),
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.warn('=== POINTS ROUTE - POST / START ===');
-    console.warn('Request headers:', req.headers);
-    console.warn('Request user:', req.user);
-    console.warn('Request body received:', req.body);
-
     try {
-      const { nombre, direccion, ciudad, provincia, codigo_postal, telefono } = req.body;
-      console.warn('Extracted point data:', { nombre, direccion, ciudad, provincia, codigo_postal, telefono });
-      
+      const { nombre, direccion, ciudad, provincia, codigo_postal, telefono } =
+        req.body;
       if (!nombre || !direccion || !ciudad) {
-        console.warn('Missing required fields');
-        const badRequestResponse = {
-          error: 'Los campos nombre, dirección y ciudad son obligatorios',
+        res.status(400).json({
+          error: "Los campos nombre, dirección y ciudad son obligatorios",
           success: false,
-          timestamp: new Date().toISOString()
-        };
-        console.warn('Sending bad request response:', badRequestResponse);
-        res.status(400).json(badRequestResponse);
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
-
       const createData = {
         nombre,
         direccion,
         ciudad,
-        provincia: provincia || '',
+        provincia: provincia || "",
         codigo_postal: codigo_postal || null,
         telefono: telefono || null,
-        activo: true
+        activo: true,
       };
-      console.warn('Data to create point:', createData);
 
-      console.warn('Creating point in database...');
       const newPoint = await prisma.puntoAtencion.create({
-        data: createData
+        data: createData,
       });
-      console.warn('Point created successfully:', newPoint);
 
-      logger.info('Punto creado', { 
-        pointId: newPoint.id, 
+      logger.info("Punto creado", {
+        pointId: newPoint.id,
         nombre: newPoint.nombre,
-        createdBy: req.user?.id 
+        createdBy: req.user?.id,
       });
 
-      const responseData = {
+      res.status(201).json({
         point: newPoint,
         success: true,
-        timestamp: new Date().toISOString()
-      };
-      console.warn('Sending success response:', responseData);
-
-      res.status(201).json(responseData);
-    } catch (error) {
-      console.error('=== POINTS ROUTE POST ERROR ===');
-      console.error('Error details:', error);
-      
-      logger.error('Error al crear punto', { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id 
+        timestamp: new Date().toISOString(),
       });
-      
-      const errorResponse = {
-        error: 'Error al crear punto de atención',
+    } catch (error) {
+      logger.error("Error al crear punto", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id,
+      });
+      res.status(500).json({
+        error: "Error al crear punto de atención",
         success: false,
-        timestamp: new Date().toISOString()
-      };
-      console.warn('Sending error response:', errorResponse);
-      res.status(500).json(errorResponse);
-    } finally {
-      console.warn('=== POINTS ROUTE - POST / END ===');
+        timestamp: new Date().toISOString(),
+      });
     }
   }
 );
 
-// Cambiar el estado de un punto (solo admins)
-router.patch('/:id/toggle', 
-  authenticateToken, 
-  requireRole(['ADMIN', 'SUPER_USUARIO']), 
+// Cambiar el estado de un punto (activar/inactivar)
+router.patch(
+  "/:id/toggle",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
-    console.warn('=== POINTS ROUTE - PATCH /:id/toggle START ===');
-    console.warn('Request headers:', req.headers);
-    console.warn('Request user:', req.user);
-    console.warn('Point ID to toggle:', req.params.id);
-
     try {
       const pointId = req.params.id;
-
-      console.warn('Fetching point from database...');
       const existingPoint = await prisma.puntoAtencion.findUnique({
-        where: { id: pointId }
+        where: { id: pointId },
       });
 
       if (!existingPoint) {
-        console.warn('Point not found:', pointId);
-        const notFoundResponse = {
-          error: 'Punto de atención no encontrado',
+        res.status(404).json({
+          error: "Punto de atención no encontrado",
           success: false,
-          timestamp: new Date().toISOString()
-        };
-        console.warn('Sending not found response:', notFoundResponse);
-        res.status(404).json(notFoundResponse);
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
 
-      console.warn('Toggling point status...');
       const updatedPoint = await prisma.puntoAtencion.update({
         where: { id: pointId },
-        data: { activo: !existingPoint.activo }
+        data: { activo: !existingPoint.activo },
       });
-      console.warn('Point status toggled successfully:', updatedPoint);
 
-      logger.info('Estado de punto cambiado', { 
-        pointId: updatedPoint.id, 
+      logger.info("Estado de punto cambiado", {
+        pointId: updatedPoint.id,
         newStatus: updatedPoint.activo,
-        requestedBy: req.user?.id 
+        requestedBy: req.user?.id,
       });
 
-      const responseData = {
+      res.status(200).json({
         point: updatedPoint,
         success: true,
-        timestamp: new Date().toISOString()
-      };
-      console.warn('Sending success response:', responseData);
-
-      res.status(200).json(responseData);
-    } catch (error) {
-      console.error('=== POINTS ROUTE TOGGLE ERROR ===');
-      console.error('Error details:', error);
-      
-      logger.error('Error al cambiar el estado del punto', { 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id 
+        timestamp: new Date().toISOString(),
       });
-      
-      const errorResponse = {
-        error: 'Error al cambiar el estado del punto de atención',
+    } catch (error) {
+      logger.error("Error al cambiar el estado del punto", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id,
+      });
+      res.status(500).json({
+        error: "Error al cambiar el estado del punto de atención",
         success: false,
-        timestamp: new Date().toISOString()
-      };
-      console.warn('Sending error response:', errorResponse);
-      res.status(500).json(errorResponse);
-    } finally {
-      console.warn('=== POINTS ROUTE - PATCH /:id/toggle END ===');
+        timestamp: new Date().toISOString(),
+      });
     }
   }
 );

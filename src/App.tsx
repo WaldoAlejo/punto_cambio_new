@@ -6,7 +6,8 @@ import PointSelection from "./components/auth/PointSelection";
 import Index from "./pages/Index";
 import "./App.css";
 import { useEffect, useState } from "react";
-import axios from "axios";
+// Cambia este import:
+import axiosInstance from "@/services/axiosInstance";
 import { PuntoAtencion } from "./types";
 
 interface JornadaActiveResponse {
@@ -28,15 +29,14 @@ interface JornadaActiveResponse {
 function App() {
   const { user, selectedPoint, setSelectedPoint, isLoading, logout } =
     useAuth();
-
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [verifyingJornada, setVerifyingJornada] = useState(false);
 
-  // Verificar si existe jornada activa para el operador (backend = fuente de verdad)
+  // Verifica si existe jornada activa
   useEffect(() => {
     if (user && user.rol === "OPERADOR") {
       setVerifyingJornada(true);
-      axios
+      axiosInstance
         .get<JornadaActiveResponse>("/api/jornada/active")
         .then((res) => {
           const active = res.data?.schedule;
@@ -47,7 +47,6 @@ function App() {
             active.punto_atencion_id &&
             (!selectedPoint || selectedPoint.id !== active.punto_atencion_id)
           ) {
-            // Reconstruir objeto con defaults si el backend no retorna todo
             setSelectedPoint({
               id: active.puntoAtencion?.id || active.punto_atencion_id,
               nombre: active.puntoAtencion?.nombre || "",
@@ -69,11 +68,10 @@ function App() {
           setVerifyingJornada(false);
         });
     }
-    // Solo debe correr al cambiar user (evita bucles)
     // eslint-disable-next-line
   }, [user]);
 
-  // Cargar puntos de atención si es operador y no tiene punto seleccionado y terminó la verificación
+  // Carga los puntos de atención libres si corresponde
   useEffect(() => {
     if (
       user &&
@@ -81,15 +79,13 @@ function App() {
       !selectedPoint &&
       !verifyingJornada
     ) {
-      axios
-        .get<{ points: PuntoAtencion[] }>("/api/puntos")
+      axiosInstance
+        .get<{ points: PuntoAtencion[] }>("/api/points")
         .then((res) => setPoints(res.data.points || []))
         .catch(() => setPoints([]));
     }
   }, [user, selectedPoint, verifyingJornada]);
 
-  // **¡CORRECCIÓN AQUÍ!**
-  // Todo va dentro del <Router> para evitar errores de hooks de navegación
   return (
     <Router>
       {isLoading || verifyingJornada ? (

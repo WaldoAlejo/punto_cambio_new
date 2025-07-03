@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
+import axiosInstance from "@/services/axiosInstance";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +20,8 @@ interface TimeTrackerProps {
   spontaneousExits: SalidaEspontanea[];
 }
 
-// Estados frontend válidos
 type EstadoFrontend = "NO_INICIADO" | "TRABAJANDO" | "ALMUERZO" | "FINALIZADO";
 
-// Jornada como llega del backend
 interface JornadaEstadoBackend {
   id?: string;
   fecha_inicio?: string;
@@ -43,7 +41,6 @@ interface JornadaEstadoBackend {
   } | null;
 }
 
-// Jornada usada en el frontend
 interface JornadaEstado extends Omit<JornadaEstadoBackend, "estado"> {
   estado: EstadoFrontend;
 }
@@ -77,7 +74,6 @@ interface JornadaPayload {
   } | null;
 }
 
-// Mapea los estados del backend a los del frontend
 function mapEstadoJornada(estado: string): EstadoFrontend {
   switch (estado) {
     case "ACTIVO":
@@ -114,7 +110,7 @@ const TimeTracker = ({
     const cargarJornadaActual = async () => {
       try {
         if (!user.id || !selectedPoint?.id) return;
-        const { data } = await axios.get<ActiveScheduleResponse>(
+        const { data } = await axiosInstance.get<ActiveScheduleResponse>(
           "/api/jornada/active"
         );
         if (data.success && data.schedule) {
@@ -172,7 +168,7 @@ const TimeTracker = ({
 
   const guardarJornadaBackend = async (data: JornadaPayload) => {
     try {
-      const response = await axios.post<SaveScheduleResponse>(
+      const response = await axiosInstance.post<SaveScheduleResponse>(
         "/api/jornada",
         data
       );

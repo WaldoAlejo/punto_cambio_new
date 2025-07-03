@@ -4,6 +4,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import logger from "./utils/logger.js";
 
+
 // Routes
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
@@ -16,8 +17,8 @@ import exchangeRoutes from "./routes/exchanges.js";
 import scheduleRoutes from "./routes/schedules.js";
 import spontaneousExitRoutes from "./routes/spontaneous-exits.js";
 import reportRoutes from "./routes/reports.js";
-import activePointsRoutes from "./routes/activePoints.js";
 import cuadreCajaRoutes from "./routes/cuadreCaja";
+
 
 
 const app = express();
@@ -76,7 +77,6 @@ app.use("/api/transfer-approvals", transferApprovalRoutes);
 app.use("/api/exchanges", exchangeRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/spontaneous-exits", spontaneousExitRoutes);
-app.use("/api/active-points", activePointsRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/cuadre-caja", cuadreCajaRoutes);
 
