@@ -6,9 +6,9 @@ import {
   ReactNode,
 } from "react";
 import { authService, AuthUser } from "../services/authService";
+import { scheduleService } from "../services/scheduleService";
 import { PuntoAtencion } from "../types";
 
-// Contexto de autenticación
 interface AuthContextType {
   user: AuthUser | null;
   login: (
@@ -30,15 +30,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     null
   );
 
-  // Leer punto de atención de localStorage al iniciar
   useEffect(() => {
     const storedPoint = localStorage.getItem("puntoAtencionSeleccionado");
     if (storedPoint) {
-      setSelectedPointState(JSON.parse(storedPoint));
+      try {
+        const parsedPoint: PuntoAtencion = JSON.parse(storedPoint);
+        setSelectedPointState(parsedPoint);
+      } catch {
+        localStorage.removeItem("puntoAtencionSeleccionado");
+      }
     }
   }, []);
 
-  // Sincronizar con localStorage cada vez que cambie
   useEffect(() => {
     if (selectedPoint) {
       localStorage.setItem(
@@ -56,6 +59,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const { user: verifiedUser, valid } = await authService.verifyToken();
         if (valid && verifiedUser) {
           setUser(verifiedUser);
+
+          const storedPoint = localStorage.getItem("puntoAtencionSeleccionado");
+          if (!storedPoint) {
+            const res = await scheduleService.getActiveSchedule();
+            if (res?.schedule?.puntoAtencion) {
+              setSelectedPointState(
+                res.schedule.puntoAtencion as PuntoAtencion
+              ); // ✅ aquí
+            }
+          }
         } else {
           authService.removeStoredToken();
         }
@@ -76,8 +89,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         token,
         error,
       } = await authService.login({ username, password });
+
       if (loggedUser && token) {
         setUser(loggedUser);
+
+        const res = await scheduleService.getActiveSchedule();
+        if (res?.schedule?.puntoAtencion) {
+          setSelectedPointState(res.schedule.puntoAtencion as PuntoAtencion); // ✅ aquí
+        }
+
         return { success: true };
       } else {
         return { success: false, error: error || "Error de autenticación" };
@@ -114,6 +134,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

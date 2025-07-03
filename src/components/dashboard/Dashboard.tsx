@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import ExchangeManagement from "../exchange/ExchangeManagement";
@@ -13,6 +13,7 @@ import Reports from "../reports/Reports";
 import DailyClose from "../close/DailyClose";
 import TransferApprovals from "../admin/TransferApprovals";
 import { User, PuntoAtencion } from "../../types";
+import { useNavigate } from "react-router-dom";
 
 interface DashboardProps {
   user: User;
@@ -21,8 +22,16 @@ interface DashboardProps {
 }
 
 const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
-  const [activeView, setActiveView] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeView, setActiveView] = React.useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = React.useState(true);
+  const navigate = useNavigate();
+
+  // 🚫 Protege contra acceso sin punto asignado
+  useEffect(() => {
+    if (user.rol === "OPERADOR" && !selectedPoint) {
+      navigate("/seleccionar-punto", { replace: true });
+    }
+  }, [user, selectedPoint, navigate]);
 
   const toggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
@@ -41,9 +50,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           <PendingExchangesList
             user={user}
             selectedPoint={selectedPoint}
-            onCloseSuccess={() => {
-              /* Opcional: refrescar datos o mostrar notificación */
-            }}
+            onCloseSuccess={() => {}}
           />
         );
       case "transfers":

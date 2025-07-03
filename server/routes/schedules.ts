@@ -8,7 +8,6 @@ import { z } from "zod";
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Schema para crear/actualizar jornada
 const scheduleSchema = z
   .object({
     usuario_id: z.string().uuid(),
@@ -33,14 +32,11 @@ const scheduleSchema = z
       .optional(),
   })
   .refine(
-    (data) => {
-      return (
-        data.fecha_inicio ||
-        data.fecha_almuerzo ||
-        data.fecha_regreso ||
-        data.fecha_salida
-      );
-    },
+    (data) =>
+      data.fecha_inicio ||
+      data.fecha_almuerzo ||
+      data.fecha_regreso ||
+      data.fecha_salida,
     {
       message:
         "Se requiere al menos una fecha (inicio, almuerzo, regreso o salida)",
@@ -48,104 +44,106 @@ const scheduleSchema = z
   );
 
 // Obtener jornadas
-router.get(
-  "/",
-  authenticateToken,
-  async (req: express.Request, res: express.Response): Promise<void> => {
-    try {
-      res.set({
-        "Cache-Control":
-          "no-store, no-cache, must-revalidate, proxy-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-        "Surrogate-Control": "no-store",
-      });
+router.get("/", authenticateToken, async (req, res) => {
+  try {
+    res.set({
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+      "Surrogate-Control": "no-store",
+    });
 
-      const whereClause: Record<string, unknown> = {};
+    const whereClause: Record<string, unknown> = {};
 
-      if (req.user?.rol === "OPERADOR") {
-        whereClause.usuario_id = req.user.id;
-      }
-
-      if (
-        req.query.usuario_id &&
-        ["ADMIN", "SUPER_USUARIO"].includes(req.user?.rol || "")
-      ) {
-        whereClause.usuario_id = req.query.usuario_id as string;
-      }
-
-      if (req.query.fecha) {
-        const fecha = new Date(req.query.fecha as string);
-        const siguienteDia = new Date(fecha);
-        siguienteDia.setDate(siguienteDia.getDate() + 1);
-        whereClause.fecha_inicio = {
-          gte: fecha,
-          lt: siguienteDia,
-        };
-      }
-
-      const schedules = await prisma.jornada.findMany({
-        where: whereClause,
-        include: {
-          usuario: {
-            select: {
-              id: true,
-              nombre: true,
-              username: true,
-            },
-          },
-          puntoAtencion: {
-            select: {
-              id: true,
-              nombre: true,
-            },
-          },
-        },
-        orderBy: {
-          fecha_inicio: "desc",
-        },
-      });
-
-      const formattedSchedules = schedules.map((schedule) => ({
-        ...schedule,
-        fecha_inicio: schedule.fecha_inicio.toISOString(),
-        fecha_almuerzo: schedule.fecha_almuerzo?.toISOString() || null,
-        fecha_regreso: schedule.fecha_regreso?.toISOString() || null,
-        fecha_salida: schedule.fecha_salida?.toISOString() || null,
-      }));
-
-      logger.info("Horarios obtenidos", {
-        count: formattedSchedules.length,
-        requestedBy: req.user?.id,
-      });
-
-      res.status(200).json({
-        schedules: formattedSchedules,
-        success: true,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      logger.error("Error al obtener horarios", {
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
-      });
-
-      res.status(500).json({
-        error: "Error al obtener horarios",
-        success: false,
-        timestamp: new Date().toISOString(),
-      });
+    if (req.user?.rol === "OPERADOR") {
+      whereClause.usuario_id = req.user.id;
     }
-  }
-);
 
-// Crear o actualizar jornada (ciclo completo)
+    if (
+      req.query.usuario_id &&
+      ["ADMIN", "SUPER_USUARIO"].includes(req.user?.rol || "")
+    ) {
+      whereClause.usuario_id = req.query.usuario_id as string;
+    }
+
+    if (req.query.fecha) {
+      const fecha = new Date(req.query.fecha as string);
+      const siguienteDia = new Date(fecha);
+      siguienteDia.setDate(siguienteDia.getDate() + 1);
+      whereClause.fecha_inicio = {
+        gte: fecha,
+        lt: siguienteDia,
+      };
+    }
+
+    const schedules = await prisma.jornada.findMany({
+      where: whereClause,
+      include: {
+        usuario: {
+          select: {
+            id: true,
+            nombre: true,
+            username: true,
+          },
+        },
+        puntoAtencion: {
+          select: {
+            id: true,
+            nombre: true,
+            direccion: true,
+            ciudad: true,
+            provincia: true,
+            codigo_postal: true,
+            activo: true,
+            created_at: true,
+            updated_at: true,
+          },
+        },
+      },
+      orderBy: {
+        fecha_inicio: "desc",
+      },
+    });
+
+    const formattedSchedules = schedules.map((s) => ({
+      ...s,
+      fecha_inicio: s.fecha_inicio.toISOString(),
+      fecha_almuerzo: s.fecha_almuerzo?.toISOString() || null,
+      fecha_regreso: s.fecha_regreso?.toISOString() || null,
+      fecha_salida: s.fecha_salida?.toISOString() || null,
+    }));
+
+    logger.info("Horarios obtenidos", {
+      count: formattedSchedules.length,
+      requestedBy: req.user?.id,
+    });
+
+    res.status(200).json({
+      schedules: formattedSchedules,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error al obtener horarios", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+      requestedBy: req.user?.id,
+    });
+
+    res.status(500).json({
+      error: "Error al obtener horarios",
+      success: false,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// Crear o actualizar jornada
 router.post(
   "/",
   authenticateToken,
   validate(scheduleSchema),
-  async (req: express.Request, res: express.Response): Promise<void> => {
+  async (req, res) => {
     try {
       const {
         usuario_id,
@@ -172,7 +170,6 @@ router.post(
       const manana = new Date(hoy);
       manana.setDate(manana.getDate() + 1);
 
-      // Permite estados ACTIVO o ALMUERZO como "abierta"
       const existingSchedule = await prisma.jornada.findFirst({
         where: {
           usuario_id,
@@ -203,15 +200,15 @@ router.post(
         if (fecha_salida) {
           updateData.fecha_salida = new Date(fecha_salida);
           updateData.estado = EstadoJornada.COMPLETADO;
-          // Limpia el punto de atención SOLO al cerrar jornada
           await prisma.usuario.update({
             where: { id: usuario_id },
             data: { punto_atencion_id: null },
           });
         }
-        if (ubicacion_salida)
+        if (ubicacion_salida) {
           updateData.ubicacion_salida =
             ubicacion_salida as Prisma.InputJsonValue;
+        }
 
         schedule = await prisma.jornada.update({
           where: { id: existingSchedule.id },
@@ -228,6 +225,13 @@ router.post(
               select: {
                 id: true,
                 nombre: true,
+                direccion: true,
+                ciudad: true,
+                provincia: true,
+                codigo_postal: true,
+                activo: true,
+                created_at: true,
+                updated_at: true,
               },
             },
           },
@@ -253,13 +257,19 @@ router.post(
               select: {
                 id: true,
                 nombre: true,
+                direccion: true,
+                ciudad: true,
+                provincia: true,
+                codigo_postal: true,
+                activo: true,
+                created_at: true,
+                updated_at: true,
               },
             },
           },
         });
       }
 
-      // Solo asigna el punto de atención SI NO se está cerrando jornada
       if (!fecha_salida) {
         await prisma.usuario.update({
           where: { id: usuario_id },
@@ -301,91 +311,94 @@ router.post(
   }
 );
 
-// Obtener jornada activa del usuario
-router.get(
-  "/active",
-  authenticateToken,
-  async (req: express.Request, res: express.Response): Promise<void> => {
-    try {
-      const userId = req.user?.id;
+// Obtener jornada activa
+router.get("/active", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
 
-      if (!userId) {
-        res.status(401).json({
-          error: "Usuario no autenticado",
-          success: false,
-          timestamp: new Date().toISOString(),
-        });
-        return;
-      }
-
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      const manana = new Date(hoy);
-      manana.setDate(manana.getDate() + 1);
-
-      const activeSchedule = await prisma.jornada.findFirst({
-        where: {
-          usuario_id: userId,
-          fecha_inicio: {
-            gte: hoy,
-            lt: manana,
-          },
-          OR: [
-            { estado: EstadoJornada.ACTIVO },
-            { estado: EstadoJornada.ALMUERZO },
-          ],
-        },
-        include: {
-          usuario: {
-            select: {
-              id: true,
-              nombre: true,
-              username: true,
-            },
-          },
-          puntoAtencion: {
-            select: {
-              id: true,
-              nombre: true,
-            },
-          },
-        },
-      });
-
-      if (!activeSchedule) {
-        res.status(200).json({
-          schedule: null,
-          success: true,
-          timestamp: new Date().toISOString(),
-        });
-        return;
-      }
-
-      res.status(200).json({
-        schedule: {
-          ...activeSchedule,
-          fecha_inicio: activeSchedule.fecha_inicio.toISOString(),
-          fecha_almuerzo: activeSchedule.fecha_almuerzo?.toISOString() || null,
-          fecha_regreso: activeSchedule.fecha_regreso?.toISOString() || null,
-          fecha_salida: activeSchedule.fecha_salida?.toISOString() || null,
-        },
-        success: true,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      logger.error("Error al obtener jornada activa", {
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
-      });
-
-      res.status(500).json({
-        error: "Error al obtener jornada activa",
+    if (!userId) {
+      res.status(401).json({
+        error: "Usuario no autenticado",
         success: false,
         timestamp: new Date().toISOString(),
       });
+      return;
     }
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const manana = new Date(hoy);
+    manana.setDate(manana.getDate() + 1);
+
+    const activeSchedule = await prisma.jornada.findFirst({
+      where: {
+        usuario_id: userId,
+        fecha_inicio: {
+          gte: hoy,
+          lt: manana,
+        },
+        OR: [
+          { estado: EstadoJornada.ACTIVO },
+          { estado: EstadoJornada.ALMUERZO },
+        ],
+      },
+      include: {
+        usuario: {
+          select: {
+            id: true,
+            nombre: true,
+            username: true,
+          },
+        },
+        puntoAtencion: {
+          select: {
+            id: true,
+            nombre: true,
+            direccion: true,
+            ciudad: true,
+            provincia: true,
+            codigo_postal: true,
+            activo: true,
+            created_at: true,
+            updated_at: true,
+          },
+        },
+      },
+    });
+
+    if (!activeSchedule) {
+      res.status(200).json({
+        schedule: null,
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    res.status(200).json({
+      schedule: {
+        ...activeSchedule,
+        fecha_inicio: activeSchedule.fecha_inicio.toISOString(),
+        fecha_almuerzo: activeSchedule.fecha_almuerzo?.toISOString() || null,
+        fecha_regreso: activeSchedule.fecha_regreso?.toISOString() || null,
+        fecha_salida: activeSchedule.fecha_salida?.toISOString() || null,
+      },
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error al obtener jornada activa", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+      requestedBy: req.user?.id,
+    });
+
+    res.status(500).json({
+      error: "Error al obtener jornada activa",
+      success: false,
+      timestamp: new Date().toISOString(),
+    });
   }
-);
+});
 
 export default router;

@@ -6,29 +6,12 @@ import { PuntoAtencion } from "../types";
 import { pointService } from "../services/pointService";
 import { useToast } from "@/hooks/use-toast";
 
-const SELECTED_POINT_KEY = "selectedPoint";
-
 const Index = () => {
-  const { user, logout } = useAuth();
-  const [selectedPoint, setSelectedPoint] = useState<PuntoAtencion | null>(
-    null
-  );
-  const [showPointSelection, setShowPointSelection] = useState(false);
+  const { user, logout, selectedPoint, setSelectedPoint } = useAuth();
   const [availablePoints, setAvailablePoints] = useState<PuntoAtencion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showPointSelection, setShowPointSelection] = useState(false);
   const { toast } = useToast();
-
-  useEffect(() => {
-    const savedPoint = localStorage.getItem(SELECTED_POINT_KEY);
-    if (savedPoint) {
-      try {
-        const point = JSON.parse(savedPoint);
-        setSelectedPoint(point);
-      } catch {
-        localStorage.removeItem(SELECTED_POINT_KEY);
-      }
-    }
-  }, []);
 
   useEffect(() => {
     const loadPoints = async () => {
@@ -39,29 +22,31 @@ const Index = () => {
 
       try {
         setIsLoading(true);
+
         if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
-          setSelectedPoint(null);
-          setIsLoading(false);
           toast({
             title: "Acceso administrativo",
             description: `Bienvenido ${user.nombre}`,
           });
+          setIsLoading(false);
           return;
         }
+
         if (selectedPoint) {
-          setIsLoading(false);
           toast({
             title: "Sesión continuada",
             description: `Continuando en ${selectedPoint.nombre}`,
           });
+          setIsLoading(false);
           return;
         }
+
         const { points } = await pointService.getAllPoints();
+
         if (user.punto_atencion_id) {
           const userPoint = points.find((p) => p.id === user.punto_atencion_id);
           if (userPoint) {
             setSelectedPoint(userPoint);
-            localStorage.setItem(SELECTED_POINT_KEY, JSON.stringify(userPoint));
             toast({
               title: "Punto asignado",
               description: `Conectado a ${userPoint.nombre}`,
@@ -70,6 +55,7 @@ const Index = () => {
             return;
           }
         }
+
         setAvailablePoints(points);
 
         if (points.length === 0) {
@@ -79,16 +65,16 @@ const Index = () => {
             variant: "destructive",
           });
         } else {
-          setShowPointSelection(true);
           toast({
             title: "Seleccione un punto",
             description: "Seleccione su punto de atención para continuar",
           });
+          setShowPointSelection(true);
         }
       } catch {
         toast({
           title: "Error de conexión",
-          description: "Error al conectar con el servidor",
+          description: "No se pudieron cargar los puntos",
           variant: "destructive",
         });
       } finally {
@@ -98,13 +84,12 @@ const Index = () => {
 
     loadPoints();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedPoint]);
+  }, [user]);
 
   const handlePointSelect = (point: PuntoAtencion) => {
     try {
       setSelectedPoint(point);
       setShowPointSelection(false);
-      localStorage.setItem(SELECTED_POINT_KEY, JSON.stringify(point));
       toast({
         title: "Jornada iniciada",
         description: `Jornada iniciada en ${point.nombre}`,
@@ -112,7 +97,7 @@ const Index = () => {
     } catch {
       toast({
         title: "Error",
-        description: "Error al seleccionar el punto",
+        description: "No se pudo seleccionar el punto",
         variant: "destructive",
       });
     }
@@ -128,7 +113,7 @@ const Index = () => {
     } catch {
       toast({
         title: "Error",
-        description: "Error al cerrar sesión",
+        description: "No se pudo cerrar sesión",
         variant: "destructive",
       });
     }
@@ -145,6 +130,14 @@ const Index = () => {
     );
   }
 
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-600">Redirigiendo al login...</p>
+      </div>
+    );
+  }
+
   if (showPointSelection) {
     return (
       <PointSelection
@@ -153,16 +146,6 @@ const Index = () => {
         onLogout={handleLogout}
         user={user}
       />
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600">Redirigiendo al login...</p>
-        </div>
-      </div>
     );
   }
 

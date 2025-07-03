@@ -30,14 +30,14 @@ const PointSelection = ({
   const { setSelectedPoint, selectedPoint } = useAuth();
   const navigate = useNavigate();
 
-  // Redirecciona automáticamente cuando el punto queda seleccionado
+  // Redirige automáticamente si ya hay punto seleccionado
   useEffect(() => {
     if (selectedPoint) {
-      navigate("/dashboard", { replace: true });
+      navigate("/", { replace: true }); // ← volver al índice para que cargue Dashboard
     }
   }, [selectedPoint, navigate]);
 
-  async function handlePointSelect(point: PuntoAtencion) {
+  const handlePointSelect = async (point: PuntoAtencion) => {
     setIsStartingShift(true);
     try {
       const ubicacion = await getLocation();
@@ -47,6 +47,7 @@ const PointSelection = ({
         fecha_inicio: new Date().toISOString(),
         ubicacion_inicio: ubicacion,
       };
+
       const { error } = await scheduleService.createOrUpdateSchedule(
         scheduleData
       );
@@ -58,35 +59,44 @@ const PointSelection = ({
         });
         return;
       }
+
       setSelectedPoint(point);
+
       toast({
         title: "Jornada iniciada",
-        description: `Bienvenido a ${point.nombre}. Tu jornada ha comenzado automáticamente.`,
+        description: `Conectado a ${point.nombre}. Jornada iniciada automáticamente.`,
       });
+
       if (typeof onPointSelect === "function") {
         onPointSelect(point);
       }
-      // NO navegues aquí, el useEffect lo hace
+
+      // No navegar manualmente. Lo hace el useEffect al detectar selectedPoint
     } catch {
       toast({
         title: "Error",
-        description: "Error al iniciar la jornada automáticamente",
+        description: "No se pudo obtener la ubicación",
         variant: "destructive",
       });
     } finally {
       setIsStartingShift(false);
     }
-  }
+  };
 
-  function getLocation(): Promise<{
+  const getLocation = (): Promise<{
     lat: number;
     lng: number;
     direccion?: string;
-  }> {
-    return new Promise((resolve, reject) => {
+  }> => {
+    return new Promise((resolve) => {
       if (!navigator.geolocation) {
-        return reject(new Error("Geolocalización no soportada"));
+        return resolve({
+          lat: 0,
+          lng: 0,
+          direccion: "Ubicación no soportada",
+        });
       }
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
           resolve({
@@ -105,7 +115,7 @@ const PointSelection = ({
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
       );
     });
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -115,24 +125,23 @@ const PointSelection = ({
             Seleccionar Punto de Atención
           </CardTitle>
           <CardDescription className="text-center">
-            Hola {user.nombre}, selecciona el punto de atención donde trabajarás
-            hoy. Tu jornada iniciará automáticamente.
+            Hola {user.nombre}, selecciona el punto donde trabajarás hoy.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {points.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                No hay puntos de atención disponibles por el momento.
+                No hay puntos disponibles.
               </div>
             ) : (
               points.map((point) => (
                 <div
                   key={point.id}
                   className={`p-4 border rounded-lg transition-colors hover:bg-blue-50 cursor-pointer border-gray-200 ${
-                    isStartingShift ? "opacity-50" : ""
+                    isStartingShift ? "opacity-50 pointer-events-none" : ""
                   }`}
-                  onClick={() => !isStartingShift && handlePointSelect(point)}
+                  onClick={() => handlePointSelect(point)}
                 >
                   <div className="flex items-center justify-between">
                     <div>
@@ -149,9 +158,7 @@ const PointSelection = ({
                     </div>
                     <div className="text-right">
                       <Button size="sm" disabled={isStartingShift}>
-                        {isStartingShift
-                          ? "Iniciando..."
-                          : "Seleccionar e Iniciar"}
+                        {isStartingShift ? "Iniciando..." : "Seleccionar"}
                       </Button>
                     </div>
                   </div>
