@@ -141,7 +141,6 @@ model HistorialSaldo {
 // ============================
 // Modelos de operaciones
 // ============================
-
 model CambioDivisa {
   id                String            @id @default(uuid())
   fecha             DateTime          @default(now())
@@ -171,6 +170,7 @@ model CambioDivisa {
   fecha_compromiso           DateTime?
   observacion_parcial        String?
   referencia_cambio_principal String?
+  cliente                    String?       // <-- agregado
   // ==== FIN CAMPOS ====
 
   monedaOrigen  Moneda        @relation("MonedaOrigen", fields: [moneda_origen_id], references: [id], onDelete: Restrict)
@@ -182,6 +182,7 @@ model CambioDivisa {
   @@index([punto_atencion_id])
   @@index([usuario_id])
 }
+
 
 model Transferencia {
   id                      String              @id @default(uuid())
