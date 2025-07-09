@@ -63,6 +63,48 @@ export class ReceiptService {
     return `${prefix}-${timestamp}`;
   }
 
+  static generatePartialExchangeReceipt(
+    exchange: CambioDivisa,
+    puntoNombre: string,
+    usuarioNombre: string,
+    isInitialPayment: boolean = false
+  ): ReceiptData {
+    const tipo = isInitialPayment ? "CAMBIO PARCIAL - ABONO INICIAL" : "CAMBIO PARCIAL - CIERRE";
+    
+    return {
+      numeroRecibo: exchange.numero_recibo || this.generateReceiptNumber("CAMBIO_DIVISA"),
+      fecha: new Date().toLocaleString(),
+      tipo,
+      puntoAtencion: puntoNombre,
+      usuario: usuarioNombre,
+      detalles: {
+        tipoOperacion: exchange.tipo_operacion,
+        montoOrigen: exchange.monto_origen,
+        monedaOrigen: exchange.monedaOrigen?.codigo || "",
+        montoDestino: exchange.monto_destino,
+        monedaDestino: exchange.monedaDestino?.codigo || "",
+        tasaCambio: exchange.tasa_cambio,
+        observacion: exchange.observacion,
+        cliente: {
+          nombre: exchange.datos_cliente?.nombre || "",
+          apellido: exchange.datos_cliente?.apellido || "",
+          cedula: exchange.datos_cliente?.cedula || "",
+          telefono: exchange.datos_cliente?.telefono || "",
+        },
+        divisasEntregadas: {
+          billetes: 0,
+          monedas: 0,
+          total: exchange.monto_origen,
+        },
+        divisasRecibidas: {
+          billetes: 0,
+          monedas: 0,
+          total: exchange.monto_destino,
+        },
+      },
+    };
+  }
+
   static generateCurrencyExchangeReceipt(
     exchange: CambioDivisa,
     puntoNombre: string,

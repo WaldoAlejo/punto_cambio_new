@@ -102,24 +102,28 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       return;
     }
 
-    const newClose: CuadreCaja = {
-      id: Date.now().toString(),
-      usuario_id: user.id,
-      punto_atencion_id: selectedPoint.id,
-      fecha: new Date().toISOString().split("T")[0],
-      estado: "CERRADO",
-      total_cambios: 15,
-      total_transferencias_entrada: 2,
-      total_transferencias_salida: 1,
-      fecha_cierre: new Date().toISOString(),
-      observaciones: "",
-    };
+    // Preparar detalles del cuadre
+    const detalles = currencies.map((currency) => ({
+      moneda_id: currency.id,
+      conteo_fisico: calculateTotalBalance(currency.id),
+      billetes: parseInt(balances[currency.id]?.bills || "0"),
+      monedas: parseInt(balances[currency.id]?.coins || "0"),
+      saldo_apertura: 0, // Se calculará en el backend
+      saldo_cierre: 0, // Se calculará en el backend
+    }));
 
     try {
+      const token = localStorage.getItem("token");
       const res = await fetch("/api/cuadre-caja", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newClose),
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          detalles,
+          observaciones: ""
+        }),
       });
 
       const data = await res.json();
@@ -134,10 +138,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         title: "Cierre realizado",
         description: "El cierre diario se ha guardado correctamente",
       });
-    } catch  {
+    } catch (error) {
       toast({
         title: "Error",
-        description: "No se pudo guardar el cierre en la base de datos",
+        description: error instanceof Error ? error.message : "No se pudo guardar el cierre",
         variant: "destructive",
       });
     }
