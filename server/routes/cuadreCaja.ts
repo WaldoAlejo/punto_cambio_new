@@ -201,4 +201,99 @@ async function calcularSaldoApertura(
   }
 }
 
+// Guardar cierre de caja
+router.post("/", authenticateToken, async (req, res) => {
+  try {
+    const usuario = req.user;
+    if (!usuario || !usuario.punto_atencion_id) {
+      return res.status(401).json({
+        success: false,
+        error: "Usuario no autenticado o sin punto de atención asignado",
+      });
+    }
+
+    const { detalles, observaciones } = req.body;
+
+    if (!detalles || !Array.isArray(detalles)) {
+      return res.status(400).json({
+        success: false,
+        error: "Detalles del cuadre son requeridos",
+      });
+    }
+
+    // Crear el cuadre principal
+    const cuadre = await prisma.cuadreCaja.create({
+      data: {
+        usuario_id: usuario.id,
+        punto_atencion_id: usuario.punto_atencion_id,
+        estado: "CERRADO",
+        observaciones: observaciones || null,
+        fecha_cierre: new Date(),
+        total_cambios: 0, // Se calculará después
+        total_transferencias_entrada: 0,
+        total_transferencias_salida: 0,
+      },
+    });
+
+    // Crear los detalles del cuadre
+    const detallePromises = detalles.map((detalle: any) =>
+      prisma.detalleCuadreCaja.create({
+        data: {
+          cuadre_id: cuadre.id,
+          moneda_id: detalle.moneda_id,
+          saldo_apertura: detalle.saldo_apertura || 0,
+          saldo_cierre: detalle.saldo_cierre || 0,
+          conteo_fisico: detalle.conteo_fisico || 0,
+          billetes: detalle.billetes || 0,
+          monedas_fisicas: detalle.monedas || 0,
+          diferencia: (detalle.conteo_fisico || 0) - (detalle.saldo_cierre || 0),
+          movimientos_periodo: detalle.movimientos_periodo || 0,
+        },
+      })
+    );
+
+    await Promise.all(detallePromises);
+
+    // Obtener el cuadre completo
+    const cuadreCompleto = await prisma.cuadreCaja.findUnique({
+      where: { id: cuadre.id },
+      include: {
+        detalles: {
+          include: {
+            moneda: true,
+          },
+        },
+        usuario: {
+          select: {
+            nombre: true,
+            username: true,
+          },
+        },
+      },
+    });
+
+    logger.info("Cuadre de caja guardado exitosamente", {
+      cuadreId: cuadre.id,
+      usuario_id: usuario.id,
+      punto_atencion_id: usuario.punto_atencion_id,
+    });
+
+    res.status(201).json({
+      success: true,
+      cuadre: cuadreCompleto,
+      message: "Cuadre de caja guardado exitosamente",
+    });
+  } catch (error) {
+    logger.error("Error al guardar cuadre de caja", {
+      error: error instanceof Error ? error.message : "Unknown",
+      stack: error instanceof Error ? error.stack : undefined,
+      usuario_id: req.user?.id,
+    });
+    res.status(500).json({
+      success: false,
+      error: "Error interno del servidor",
+    });
+  }
+});
+
 export default router;

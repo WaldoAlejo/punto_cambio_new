@@ -173,6 +173,7 @@ router.post(
           abono_inicial_recibido_por: abono_inicial_recibido_por ?? null,
           saldo_pendiente: saldo_pendiente ?? null,
           referencia_cambio_principal: referencia_cambio_principal ?? null,
+          cliente: `${datos_cliente.nombre} ${datos_cliente.apellido}`,
         },
         include: {
           monedaOrigen: {
