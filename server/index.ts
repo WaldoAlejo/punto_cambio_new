@@ -2,26 +2,26 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import logger from "./utils/logger.js";
+import logger from "./utils/logger";
 
 
 // Routes
-import authRoutes from "./routes/auth.js";
-import userRoutes from "./routes/users.js";
-import pointRoutes from "./routes/points.js";
-import currencyRoutes from "./routes/currencies.js";
-import balanceRoutes from "./routes/balances.js";
-import transferRoutes from "./routes/transfers.js";
-import transferApprovalRoutes from "./routes/transfer-approvals.js";
-import exchangeRoutes from "./routes/exchanges.js";
-import scheduleRoutes from "./routes/schedules.js";
-import spontaneousExitRoutes from "./routes/spontaneous-exits.js";
-import reportRoutes from "./routes/reports.js";
+import authRoutes from "./routes/auth";
+import userRoutes from "./routes/users";
+import pointRoutes from "./routes/points";
+import currencyRoutes from "./routes/currencies";
+import balanceRoutes from "./routes/balances";
+import transferRoutes from "./routes/transfers";
+import transferApprovalRoutes from "./routes/transfer-approvals";
+import exchangeRoutes from "./routes/exchanges";
+import scheduleRoutes from "./routes/schedules";
+import spontaneousExitRoutes from "./routes/spontaneous-exits";
+import reportRoutes from "./routes/reports";
 import cuadreCajaRoutes from "./routes/cuadreCaja";
-import activePointsRoutes from "./routes/activePoints.js";
-import saldosInicialesRoutes from "./routes/saldos-iniciales.js";
-import vistaSaldosRoutes from "./routes/vista-saldos-puntos.js";
-import movimientosSaldoRoutes from "./routes/movimientos-saldo.js";
+import activePointsRoutes from "./routes/activePoints";
+import saldosInicialesRoutes from "./routes/saldos-iniciales";
+import vistaSaldosRoutes from "./routes/vista-saldos-puntos";
+import movimientosSaldoRoutes from "./routes/movimientos-saldo";
 
 
 

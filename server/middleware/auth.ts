@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
-import { PrismaClient } from "@prisma/client";
+import { pool } from "../lib/database";
 import { Request, Response, NextFunction, RequestHandler } from "express";
-import logger from "../utils/logger.js";
+import logger from "../utils/logger";
 
 interface AuthenticatedUser {
   id: string;
@@ -19,7 +19,7 @@ declare module "express-serve-static-core" {
   }
 }
 
-const prisma = new PrismaClient();
+// Usando conexión directa a PostgreSQL
 const JWT_SECRET =
   process.env.JWT_SECRET || "your-super-secret-key-change-in-production";
 
@@ -67,17 +67,11 @@ export const authenticateToken: RequestHandler = async (
       return;
     }
 
-    const user = await prisma.usuario.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        username: true,
-        nombre: true,
-        rol: true,
-        activo: true,
-        punto_atencion_id: true,
-      },
-    });
+    const userQuery = await pool.query(
+      'SELECT id, username, nombre, rol, activo, punto_atencion_id FROM "Usuario" WHERE id = $1',
+      [decoded.userId]
+    );
+    const user = userQuery.rows[0];
 
     logger.info("Resultado de búsqueda de usuario en BD", { user });
 
@@ -114,21 +108,19 @@ export const authenticateToken: RequestHandler = async (
       const manana = new Date(hoy);
       manana.setDate(manana.getDate() + 1);
 
-      const jornadaHoy = await prisma.jornada.findFirst({
-        where: {
-          usuario_id: user.id,
-          fecha_inicio: { gte: hoy, lt: manana },
-          OR: [{ estado: "ACTIVO" }, { estado: "ALMUERZO" }],
-        },
-      });
+      const jornadaQuery = await pool.query(
+        'SELECT id FROM "Jornada" WHERE usuario_id = $1 AND fecha_inicio >= $2 AND fecha_inicio < $3 AND (estado = $4 OR estado = $5) LIMIT 1',
+        [user.id, hoy, manana, "ACTIVO", "ALMUERZO"]
+      );
+      const jornadaHoy = jornadaQuery.rows[0];
 
       if (!jornadaHoy) {
         // Limpiar en BD solo si está asignado
         if (user.punto_atencion_id) {
-          await prisma.usuario.update({
-            where: { id: user.id },
-            data: { punto_atencion_id: null },
-          });
+          await pool.query(
+            'UPDATE "Usuario" SET punto_atencion_id = NULL WHERE id = $1',
+            [user.id]
+          );
         }
         user.punto_atencion_id = null;
       }
