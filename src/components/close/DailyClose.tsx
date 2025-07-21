@@ -186,7 +186,16 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       console.log("📍 Selected point:", selectedPoint);
       
       if (!token) {
-        throw new Error("No hay token de autenticación. Por favor, inicie sesión nuevamente.");
+        toast({
+          title: "Sesión Expirada",
+          description: "Su sesión ha expirado. Por favor, inicie sesión nuevamente.",
+          variant: "destructive",
+        });
+        // Redirigir al login después de 2 segundos
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 2000);
+        return;
       }
       
       const requestBody = {
