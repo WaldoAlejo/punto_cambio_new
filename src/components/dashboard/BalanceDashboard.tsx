@@ -93,6 +93,25 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Saldos por Moneda</h2>
+            <p className="text-gray-600">{selectedPoint.nombre} - {selectedPoint.ciudad}</p>
+          </div>
+        </div>
+        <div className="flex justify-center items-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Cargando saldos...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">

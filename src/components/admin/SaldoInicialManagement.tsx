@@ -33,47 +33,65 @@ const SaldoInicialManagement = () => {
   }, []);
 
   const loadInitialData = async () => {
+    console.log('🔄 SaldoInicialManagement - loadInitialData START');
     setLoading(true);
     try {
+      console.log('📡 Calling services...');
       const [pointsResponse, currenciesResponse, vistaSaldosResponse] = await Promise.all([
         pointService.getAllPoints(),
         currencyService.getAllCurrencies(),
         saldoInicialService.getVistaSaldosPorPunto()
       ]);
 
+      console.log('📝 Points response:', pointsResponse);
+      console.log('💰 Currencies response:', currenciesResponse);
+      console.log('📊 Vista saldos response:', vistaSaldosResponse);
+
       if (pointsResponse.error) {
+        console.error('❌ Points error:', pointsResponse.error);
         toast({
           title: "Error",
           description: pointsResponse.error,
           variant: "destructive",
         });
       } else {
+        console.log('✅ Points loaded:', pointsResponse.points.length);
         setPoints(pointsResponse.points);
       }
 
       if (currenciesResponse.error) {
+        console.error('❌ Currencies error:', currenciesResponse.error);
         toast({
           title: "Error",
           description: currenciesResponse.error,
           variant: "destructive",
         });
       } else {
+        console.log('✅ Currencies loaded:', currenciesResponse.currencies.length);
         setCurrencies(currenciesResponse.currencies);
       }
 
       if (vistaSaldosResponse.error) {
+        console.error('❌ Vista saldos error:', vistaSaldosResponse.error);
         toast({
           title: "Error",
           description: vistaSaldosResponse.error,
           variant: "destructive",
         });
       } else {
+        console.log('✅ Vista saldos loaded:', vistaSaldosResponse.saldos.length);
         setVistaSaldos(vistaSaldosResponse.saldos);
       }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('💥 Error loading data:', error);
+      toast({
+        title: "Error Critical",
+        description: `Error inesperado: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
+      console.log('🏁 SaldoInicialManagement - loadInitialData END');
     }
   };
 
@@ -175,6 +193,22 @@ const SaldoInicialManagement = () => {
     acc[saldo.punto_atencion_id].monedas.push(saldo);
     return acc;
   }, {} as Record<string, { punto: VistaSaldosPorPunto; monedas: VistaSaldosPorPunto[] }>);
+
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-800">Gestión de Saldos Iniciales</h1>
+        </div>
+        <div className="flex justify-center items-center h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Cargando datos...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
