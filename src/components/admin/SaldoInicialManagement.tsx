@@ -105,6 +105,19 @@ const SaldoInicialManagement = () => {
       return;
     }
 
+    // Verificar si el punto seleccionado es el principal
+    const selectedPointData = points.find(p => p.id === selectedPoint);
+    const isPuntoPrincipal = selectedPointData?.nombre === "Casa de Cambios Principal";
+    
+    if (!isPuntoPrincipal) {
+      toast({
+        title: "Acceso Restringido",
+        description: "Solo se puede asignar/editar saldo inicial en la Casa de Cambios Principal. Los dueños pueden ingresar dinero en efectivo únicamente en este punto.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await saldoInicialService.asignarSaldoInicial({
@@ -123,7 +136,7 @@ const SaldoInicialManagement = () => {
       } else {
         toast({
           title: "Éxito",
-          description: "Saldo inicial asignado correctamente",
+          description: "Saldo inicial asignado correctamente en Casa de Cambios Principal",
         });
         setDialogOpen(false);
         resetForm();
@@ -218,12 +231,12 @@ const SaldoInicialManagement = () => {
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="h-4 w-4 mr-2" />
-              Asignar Saldo Inicial
+              Asignar/Editar Saldo Inicial (Solo Punto Principal)
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Asignar Saldo Inicial</DialogTitle>
+              <DialogTitle>Asignar/Editar Saldo Inicial - Solo Casa de Cambios Principal</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -233,11 +246,14 @@ const SaldoInicialManagement = () => {
                     <SelectValue placeholder="Seleccionar punto" />
                   </SelectTrigger>
                   <SelectContent>
-                    {points.map((point) => (
-                      <SelectItem key={point.id} value={point.id}>
-                        {point.nombre} - {point.ciudad}
-                      </SelectItem>
-                    ))}
+                    {points
+                      .filter(point => point.nombre === "Casa de Cambios Principal")
+                      .map((point) => (
+                        <SelectItem key={point.id} value={point.id}>
+                          {point.nombre} - {point.ciudad}
+                        </SelectItem>
+                      ))
+                    }
                   </SelectContent>
                 </Select>
               </div>
