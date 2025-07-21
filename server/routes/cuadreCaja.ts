@@ -49,9 +49,9 @@ router.get("/", authenticateToken, async (req, res) => {
                  )
                )
              ) FILTER (WHERE dc.id IS NOT NULL) as detalles
-      FROM cuadrecaja c
-      LEFT JOIN detallecuadrecaja dc ON c.id = dc.cuadre_id
-      LEFT JOIN moneda m ON dc.moneda_id = m.id
+      FROM "CuadreCaja" c
+      LEFT JOIN "DetalleCuadreCaja" dc ON c.id = dc.cuadre_id
+      LEFT JOIN "Moneda" m ON dc.moneda_id = m.id
       WHERE c.punto_atencion_id = $1 
         AND c.fecha >= $2 
         AND c.estado = 'ABIERTO'
@@ -70,7 +70,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
     // Obtener jornada activa para calcular período
     const jornadaQuery = `
-      SELECT * FROM jornada 
+      SELECT * FROM "Jornada" 
       WHERE usuario_id = $1 
         AND punto_atencion_id = $2 
         AND estado = 'ACTIVO'
@@ -103,7 +103,7 @@ router.get("/", authenticateToken, async (req, res) => {
     // Obtener cambios realizados en el período
     const cambiosQuery = `
       SELECT id, moneda_origen_id, moneda_destino_id, monto_origen, monto_destino, fecha, estado
-      FROM cambiodivisa
+      FROM "CambioDivisa"
       WHERE punto_atencion_id = $1 
         AND fecha >= $2 
         AND estado = 'COMPLETADO'
@@ -121,7 +121,7 @@ router.get("/", authenticateToken, async (req, res) => {
     // Obtener transferencias del período
     const transferenciasEntradaQuery = `
       SELECT id, monto, moneda_id, tipo_transferencia
-      FROM transferencia
+      FROM "Transferencia"
       WHERE destino_id = $1 
         AND fecha >= $2 
         AND estado = 'APROBADA'
@@ -129,7 +129,7 @@ router.get("/", authenticateToken, async (req, res) => {
     
     const transferenciasSalidaQuery = `
       SELECT id, monto, moneda_id, tipo_transferencia
-      FROM transferencia
+      FROM "Transferencia"
       WHERE origen_id = $1 
         AND fecha >= $2 
         AND estado = 'APROBADA'
@@ -194,7 +194,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
     // Obtener información de las monedas utilizadas
     const monedasQuery = `
-      SELECT * FROM moneda
+      SELECT * FROM "Moneda"
       WHERE id = ANY($1::uuid[]) 
         AND activo = true
       ORDER BY orden_display ASC
@@ -310,8 +310,8 @@ async function calcularSaldoApertura(
     console.log(`🔍 Buscando último cierre anterior...`);
     const ultimoCierreQuery = `
       SELECT dc.*, c.fecha as fecha_cuadre, c.estado as estado_cuadre
-      FROM detallecuadrecaja dc
-      INNER JOIN cuadrecaja c ON dc.cuadre_id = c.id
+      FROM "DetalleCuadreCaja" dc
+      INNER JOIN "CuadreCaja" c ON dc.cuadre_id = c.id
       WHERE dc.moneda_id = $1 
         AND c.punto_atencion_id = $2 
         AND c.estado IN ('CERRADO', 'PARCIAL')
@@ -347,8 +347,8 @@ async function calcularSaldoApertura(
     // Primero verificar todos los saldos del punto
     const todosSaldosQuery = `
       SELECT s.*, m.codigo as moneda_codigo
-      FROM saldo s
-      INNER JOIN moneda m ON s.moneda_id = m.id
+      FROM "Saldo" s
+      INNER JOIN "Moneda" m ON s.moneda_id = m.id
       WHERE s.punto_atencion_id = $1
     `;
     
@@ -368,8 +368,8 @@ async function calcularSaldoApertura(
 
     const saldoInicialQuery = `
       SELECT s.*, m.codigo as moneda_codigo
-      FROM saldo s
-      INNER JOIN moneda m ON s.moneda_id = m.id
+      FROM "Saldo" s
+      INNER JOIN "Moneda" m ON s.moneda_id = m.id
       WHERE s.punto_atencion_id = $1 AND s.moneda_id = $2
     `;
     
@@ -425,7 +425,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     // Obtener jornada activa para calcular período
     const jornadaQuery = `
-      SELECT * FROM jornada 
+      SELECT * FROM "Jornada" 
       WHERE usuario_id = $1 
         AND punto_atencion_id = $2 
         AND estado = 'ACTIVO'
@@ -441,21 +441,21 @@ router.post("/", authenticateToken, async (req, res) => {
 
     // Calcular totales del período
     const totalCambiosQuery = `
-      SELECT COUNT(*) FROM cambiodivisa
+      SELECT COUNT(*) FROM "CambioDivisa"
       WHERE punto_atencion_id = $1 
         AND fecha >= $2 
         AND estado = 'COMPLETADO'
     `;
     
     const totalTransferenciasEntradaQuery = `
-      SELECT COUNT(*) FROM transferencia
+      SELECT COUNT(*) FROM "Transferencia"
       WHERE destino_id = $1 
         AND fecha >= $2 
         AND estado = 'APROBADA'
     `;
     
     const totalTransferenciasSalidaQuery = `
-      SELECT COUNT(*) FROM transferencia
+      SELECT COUNT(*) FROM "Transferencia"
       WHERE origen_id = $1 
         AND fecha >= $2 
         AND estado = 'APROBADA'
@@ -471,7 +471,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     // Crear el cuadre principal
     const cuadreInsertQuery = `
-      INSERT INTO cuadrecaja (
+      INSERT INTO "CuadreCaja" (
         usuario_id, punto_atencion_id, estado, observaciones, 
         fecha_cierre, total_cambios, total_transferencias_entrada, total_transferencias_salida
       )
@@ -494,7 +494,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     // Crear los detalles del cuadre
     const detalleInsertQuery = `
-      INSERT INTO detallecuadrecaja (
+      INSERT INTO "DetalleCuadreCaja" (
         cuadre_id, moneda_id, saldo_apertura, saldo_cierre, 
         conteo_fisico, billetes, monedas_fisicas, diferencia
       )
@@ -536,10 +536,10 @@ router.post("/", authenticateToken, async (req, res) => {
                  )
                )
              ) FILTER (WHERE dc.id IS NOT NULL) as detalles
-      FROM cuadrecaja c
-      LEFT JOIN usuario u ON c.usuario_id = u.id
-      LEFT JOIN detallecuadrecaja dc ON c.id = dc.cuadre_id
-      LEFT JOIN moneda m ON dc.moneda_id = m.id
+      FROM "CuadreCaja" c
+      LEFT JOIN "Usuario" u ON c.usuario_id = u.id
+      LEFT JOIN "DetalleCuadreCaja" dc ON c.id = dc.cuadre_id
+      LEFT JOIN "Moneda" m ON dc.moneda_id = m.id
       WHERE c.id = $1
       GROUP BY c.id, u.nombre, u.username
     `;
