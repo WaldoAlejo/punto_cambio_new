@@ -1,11 +1,11 @@
 import express from 'express';
-import { auth } from '../middleware/auth.js';
-import { pool } from '../lib/database.js';
+import { authenticateToken, requireRole } from '../middleware/auth';
+import { pool } from '../lib/database';
 
 const router = express.Router();
 
 // Obtener saldos iniciales por punto de atención
-router.get('/:pointId', auth, async (req, res) => {
+router.get('/:pointId', authenticateToken, async (req, res) => {
   try {
     const { pointId } = req.params;
 
@@ -35,7 +35,7 @@ router.get('/:pointId', auth, async (req, res) => {
 });
 
 // Asignar saldo inicial
-router.post('/', auth, async (req, res) => {
+router.post('/', authenticateToken, requireRole(['ADMIN']), async (req, res) => {
   try {
     const { punto_atencion_id, moneda_id, cantidad_inicial, observaciones } = req.body;
 

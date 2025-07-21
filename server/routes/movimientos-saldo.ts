@@ -1,11 +1,11 @@
 import express from 'express';
-import { auth } from '../middleware/auth.js';
-import { pool } from '../lib/database.js';
+import { authenticateToken } from '../middleware/auth';
+import { pool } from '../lib/database';
 
 const router = express.Router();
 
 // Obtener movimientos de saldo por punto
-router.get('/:pointId', auth, async (req, res) => {
+router.get('/:pointId', authenticateToken, async (req, res) => {
   try {
     const { pointId } = req.params;
     const { limit = 50 } = req.query;

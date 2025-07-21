@@ -1,11 +1,11 @@
 import express from 'express';
-import { auth } from '../middleware/auth.js';
-import { pool } from '../lib/database.js';
+import { authenticateToken } from '../middleware/auth';
+import { pool } from '../lib/database';
 
 const router = express.Router();
 
 // Obtener vista consolidada de saldos por punto
-router.get('/', auth, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const query = `
       SELECT 
