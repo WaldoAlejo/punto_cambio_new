@@ -23,6 +23,41 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     [key: string]: { bills: string; coins: string };
   }>({});
   const [todayClose, setTodayClose] = useState<CuadreCaja | null>(null);
+  const [hasActiveJornada, setHasActiveJornada] = useState<boolean | null>(null);
+
+  // Verificar jornada activa
+  useEffect(() => {
+    const checkActiveJornada = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        const response = await fetch("/api/schedules/active", {
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log("🕒 Active jornada check:", data);
+          setHasActiveJornada(data.success && data.jornada);
+        } else {
+          console.log("❌ No active jornada or error:", response.status);
+          setHasActiveJornada(false);
+        }
+      } catch (error) {
+        console.error("Error checking active jornada:", error);
+        setHasActiveJornada(false);
+      }
+    };
+
+    if (user.rol === "OPERADOR") {
+      checkActiveJornada();
+    } else {
+      setHasActiveJornada(true); // Los admin siempre pueden
+    }
+  }, [user]);
 
   useEffect(() => {
     const fetchCurrencies = async () => {
@@ -146,12 +181,20 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     try {
       const token = localStorage.getItem("token");
       console.log("🔑 Token exists:", !!token);
+      console.log("🔑 Token preview:", token ? token.substring(0, 50) + "..." : "No token");
+      console.log("👤 Current user:", user);
+      console.log("📍 Selected point:", selectedPoint);
+      
+      if (!token) {
+        throw new Error("No hay token de autenticación. Por favor, inicie sesión nuevamente.");
+      }
       
       const requestBody = {
         detalles,
         observaciones: ""
       };
       console.log("📡 Request body:", requestBody);
+      console.log("📡 Making request to:", "/api/cuadre-caja");
       
       const res = await fetch("/api/cuadre-caja", {
         method: "POST",
@@ -163,6 +206,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       });
       
       console.log("📥 Response status:", res.status);
+      console.log("📥 Response headers:", Object.fromEntries(res.headers.entries()));
 
       const data = await res.json();
       console.log("📄 Response data:", data);
@@ -215,6 +259,32 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           <p className="text-red-500 text-lg">
             Solo operadores pueden realizar cierres diarios
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasActiveJornada === false) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <p className="text-red-500 text-lg">
+            Debe tener una jornada activa para realizar el cierre diario
+          </p>
+          <p className="text-gray-500 text-sm mt-2">
+            Inicie su jornada desde "Gestión de Horarios" para continuar
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasActiveJornada === null) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Verificando jornada activa...</p>
         </div>
       </div>
     );
