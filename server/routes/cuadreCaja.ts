@@ -298,9 +298,14 @@ async function calcularSaldoApertura(
   fecha: Date
 ): Promise<number> {
   try {
-    console.log(`🔍 Calculando saldo apertura para punto ${puntoAtencionId}, moneda ${monedaId}, fecha ${fecha}`);
+    console.log(`🔍 CALCULANDO SALDO APERTURA - Datos:`, {
+      puntoAtencionId,
+      monedaId,
+      fecha: fecha.toISOString()
+    });
     
     // 1. Buscar el último cierre anterior
+    console.log(`🔍 Buscando último cierre anterior...`);
     const ultimoCierre = await prisma.detalleCuadreCaja.findFirst({
       include: {
         cuadre: true,
@@ -324,27 +329,64 @@ async function calcularSaldoApertura(
       },
     });
 
+    console.log(`🔍 Resultado búsqueda último cierre:`, ultimoCierre ? {
+      id: ultimoCierre.id,
+      conteo_fisico: ultimoCierre.conteo_fisico,
+      fecha_cuadre: ultimoCierre.cuadre.fecha,
+      estado_cuadre: ultimoCierre.cuadre.estado
+    } : 'NO ENCONTRADO');
+
     if (ultimoCierre) {
-      console.log(`✅ Último cierre encontrado: ${ultimoCierre.conteo_fisico}`);
+      console.log(`✅ USANDO ÚLTIMO CIERRE: ${ultimoCierre.conteo_fisico}`);
       return Number(ultimoCierre.conteo_fisico);
     }
 
     // 2. Si no hay cierre anterior, buscar saldo inicial actual
+    console.log(`🔍 No hay cierre anterior, buscando saldo inicial en tabla Saldo...`);
+    
+    // Primero verificar todos los saldos del punto
+    const todosSaldos = await prisma.saldo.findMany({
+      where: {
+        punto_atencion_id: puntoAtencionId,
+      },
+      include: {
+        moneda: true
+      }
+    });
+    
+    console.log(`🔍 TODOS LOS SALDOS del punto ${puntoAtencionId}:`, todosSaldos.map(s => ({
+      moneda_id: s.moneda_id,
+      moneda_codigo: s.moneda.codigo,
+      cantidad: s.cantidad
+    })));
+
     const saldoInicial = await prisma.saldo.findFirst({
       where: {
         punto_atencion_id: puntoAtencionId,
         moneda_id: monedaId,
       },
+      include: {
+        moneda: true
+      }
     });
 
+    console.log(`🔍 SALDO INICIAL específico:`, saldoInicial ? {
+      id: saldoInicial.id,
+      punto_atencion_id: saldoInicial.punto_atencion_id,
+      moneda_id: saldoInicial.moneda_id,
+      moneda_codigo: saldoInicial.moneda.codigo,
+      cantidad: saldoInicial.cantidad
+    } : 'NO ENCONTRADO');
+
     if (saldoInicial) {
-      console.log(`✅ Saldo inicial encontrado: ${saldoInicial.cantidad}`);
+      console.log(`✅ USANDO SALDO INICIAL: ${saldoInicial.cantidad}`);
       return Number(saldoInicial.cantidad);
     }
 
-    console.log(`⚠️ No se encontró saldo apertura, usando 0`);
+    console.log(`❌ NO SE ENCONTRÓ SALDO APERTURA, usando 0`);
     return 0;
   } catch (error) {
+    console.error(`💥 ERROR calculando saldo apertura:`, error);
     logger.error("Error calculando saldo apertura", { error });
     return 0;
   }
