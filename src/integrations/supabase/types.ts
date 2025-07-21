@@ -196,6 +196,45 @@ export type Database = {
           },
         ]
       }
+      HistorialAsignacionPunto: {
+        Row: {
+          autorizado_por: string | null
+          created_at: string
+          fecha_asignacion: string
+          id: string
+          motivo_cambio: string | null
+          observaciones: string | null
+          punto_atencion_anterior_id: string | null
+          punto_atencion_nuevo_id: string
+          tipo_asignacion: string
+          usuario_id: string
+        }
+        Insert: {
+          autorizado_por?: string | null
+          created_at?: string
+          fecha_asignacion?: string
+          id?: string
+          motivo_cambio?: string | null
+          observaciones?: string | null
+          punto_atencion_anterior_id?: string | null
+          punto_atencion_nuevo_id: string
+          tipo_asignacion?: string
+          usuario_id: string
+        }
+        Update: {
+          autorizado_por?: string | null
+          created_at?: string
+          fecha_asignacion?: string
+          id?: string
+          motivo_cambio?: string | null
+          observaciones?: string | null
+          punto_atencion_anterior_id?: string | null
+          punto_atencion_nuevo_id?: string
+          tipo_asignacion?: string
+          usuario_id?: string
+        }
+        Relationships: []
+      }
       HistorialSaldo: {
         Row: {
           cantidad_anterior: number
@@ -268,9 +307,12 @@ export type Database = {
           fecha_regreso: string | null
           fecha_salida: string | null
           id: string
+          motivo_cambio: string | null
+          observaciones: string | null
           punto_atencion_id: string
           ubicacion_inicio: Json | null
           ubicacion_salida: Json | null
+          usuario_autorizo: string | null
           usuario_id: string
         }
         Insert: {
@@ -280,9 +322,12 @@ export type Database = {
           fecha_regreso?: string | null
           fecha_salida?: string | null
           id?: string
+          motivo_cambio?: string | null
+          observaciones?: string | null
           punto_atencion_id: string
           ubicacion_inicio?: Json | null
           ubicacion_salida?: Json | null
+          usuario_autorizo?: string | null
           usuario_id: string
         }
         Update: {
@@ -292,9 +337,12 @@ export type Database = {
           fecha_regreso?: string | null
           fecha_salida?: string | null
           id?: string
+          motivo_cambio?: string | null
+          observaciones?: string | null
           punto_atencion_id?: string
           ubicacion_inicio?: Json | null
           ubicacion_salida?: Json | null
+          usuario_autorizo?: string | null
           usuario_id?: string
         }
         Relationships: [
@@ -788,7 +836,23 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      VistaHistorialPuntos: {
+        Row: {
+          autorizado_por_nombre: string | null
+          fecha_asignacion: string | null
+          id: string | null
+          motivo_cambio: string | null
+          observaciones: string | null
+          punto_anterior_nombre: string | null
+          punto_ciudad: string | null
+          punto_nuevo_nombre: string | null
+          tipo_asignacion: string | null
+          usuario_nombre: string | null
+          usuario_rol: Database["public"]["Enums"]["RolUsuario"] | null
+          usuario_username: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
