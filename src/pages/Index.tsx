@@ -41,7 +41,7 @@ const Index = () => {
           return;
         }
 
-        const { points } = await pointService.getAllPoints();
+        const { points } = await pointService.getActivePoints();
 
         if (user.punto_atencion_id) {
           const userPoint = points.find((p) => p.id === user.punto_atencion_id);
