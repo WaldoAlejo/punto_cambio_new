@@ -40,6 +40,8 @@ model Usuario {
   cuadresCierreParcial      CuadreCaja[]     @relation("UsuarioCierreParcial")
   historialAsignaciones     HistorialAsignacionPunto[] @relation("UsuarioAsignacion")
   historialAutorizados      HistorialAsignacionPunto[] @relation("UsuarioAutorizador")
+  saldosAsignados           SaldoInicial[]   @relation("UsuarioAsignadorSaldo")
+  movimientosSaldo          MovimientoSaldo[]
 
   @@index([username])
   @@index([punto_atencion_id])
@@ -59,6 +61,8 @@ model PuntoAtencion {
 
   usuarios              Usuario[]
   saldos                Saldo[]
+  saldosIniciales       SaldoInicial[]
+  movimientosSaldo      MovimientoSaldo[]
   jornadas              Jornada[]
   cambios               CambioDivisa[]
   movimientos           Movimiento[]
@@ -87,6 +91,8 @@ model Moneda {
   updated_at    DateTime @updatedAt
 
   saldos          Saldo[]
+  saldosIniciales SaldoInicial[]
+  movimientosSaldo MovimientoSaldo[]
   cambiosOrigen   CambioDivisa[]      @relation("MonedaOrigen")
   cambiosDestino  CambioDivisa[]      @relation("MonedaDestino")
   movimientos     Movimiento[]
@@ -118,6 +124,53 @@ model Saldo {
   @@unique([punto_atencion_id, moneda_id])
   @@index([punto_atencion_id])
   @@index([moneda_id])
+}
+
+model SaldoInicial {
+  id                String   @id @default(uuid())
+  punto_atencion_id String
+  moneda_id         String
+  cantidad_inicial  Decimal  @default(0) @db.Decimal(15, 2)
+  fecha_asignacion  DateTime @default(now())
+  asignado_por      String
+  activo            Boolean  @default(true)
+  observaciones     String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  puntoAtencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  moneda        Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
+  usuarioAsignador Usuario   @relation("UsuarioAsignadorSaldo", fields: [asignado_por], references: [id])
+
+  @@unique([punto_atencion_id, moneda_id, activo])
+  @@index([punto_atencion_id])
+  @@index([moneda_id])
+  @@index([activo])
+}
+
+model MovimientoSaldo {
+  id                String    @id @default(uuid())
+  punto_atencion_id String
+  moneda_id         String
+  tipo_movimiento   String    // 'VENTA', 'COMPRA', 'TRANSFERENCIA_ENTRADA', 'TRANSFERENCIA_SALIDA', 'AJUSTE', 'SALDO_INICIAL'
+  monto             Decimal   @db.Decimal(15, 2)
+  saldo_anterior    Decimal   @db.Decimal(15, 2)
+  saldo_nuevo       Decimal   @db.Decimal(15, 2)
+  usuario_id        String
+  referencia_id     String?   // ID de la operación relacionada
+  tipo_referencia   String?   // 'CAMBIO_DIVISA', 'TRANSFERENCIA', 'AJUSTE_MANUAL'
+  descripcion       String?
+  fecha             DateTime  @default(now())
+  created_at        DateTime  @default(now())
+
+  puntoAtencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  moneda        Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
+  usuario       Usuario       @relation(fields: [usuario_id], references: [id])
+
+  @@index([punto_atencion_id])
+  @@index([moneda_id])
+  @@index([fecha])
+  @@index([referencia_id, tipo_referencia])
 }
 
 model HistorialSaldo {
