@@ -559,10 +559,8 @@ router.get("/pending", authenticateToken, async (req: AuthenticatedRequest, res:
         punto_atencion_id: pointId as string,
         estado: {
           in: [EstadoTransaccion.PENDIENTE]
-        },
-        saldo_pendiente: {
-          gt: 0
         }
+        // Removido el filtro de saldo_pendiente > 0 para mostrar TODOS los cambios pendientes
       },
       include: {
         monedaOrigen: {

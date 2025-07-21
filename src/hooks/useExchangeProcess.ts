@@ -182,13 +182,48 @@ export const useExchangeProcess = ({
         return;
       }
 
+      // 🎯 LÓGICA MEJORADA: Decidir si auto-completar o quedar pendiente
+      const shouldAutoComplete = 
+        data.metodoEntrega === "efectivo" && // Solo efectivo se completa automáticamente
+        !data.saldoPendiente && // No hay saldo pendiente
+        !data.abonoInicialMonto; // No es un abono parcial
+
+      if (shouldAutoComplete) {
+        // Auto-completar el cambio inmediatamente
+        console.log("🚀 Auto-completing exchange for cash transaction");
+        const { error: closeError } = await exchangeService.closePendingExchange(createdExchange.id);
+        
+        if (closeError) {
+          toast({
+            title: "⚠️ Cambio creado pero pendiente",
+            description: `El cambio se creó correctamente pero no se pudo completar automáticamente. Debe completarlo manualmente desde "Cambios Pendientes". Error: ${closeError}`,
+            variant: "default",
+          });
+        } else {
+          // Disparar evento para actualizar saldos
+          window.dispatchEvent(new CustomEvent('exchangeCompleted'));
+          
+          toast({
+            title: "✅ Cambio completado",
+            description: `Cambio completado automáticamente. Los saldos se han actualizado. Recibo: ${createdExchange.numero_recibo}`,
+          });
+        }
+      } else {
+        // Quedar pendiente y mostrar explicación
+        const reason = data.metodoEntrega === "transferencia" 
+          ? "transferencia bancaria" 
+          : data.saldoPendiente 
+          ? "tiene saldo pendiente" 
+          : "requiere abono parcial";
+          
+        toast({
+          title: "⏳ Cambio pendiente",
+          description: `El cambio quedó pendiente porque es por ${reason}. Debe completarlo desde "Cambios Pendientes" cuando esté listo.`,
+          variant: "default",
+        });
+      }
+
       onExchangeCreated(createdExchange);
-
-      toast({
-        title: "Cambio realizado",
-        description: `Cambio completado exitosamente. Recibo: ${createdExchange.numero_recibo}`,
-      });
-
       onResetForm();
 
       setTimeout(() => {
