@@ -38,6 +38,8 @@ model Usuario {
   salidasEspontaneas        SalidaEspontanea[]
   salidasAprobadas          SalidaEspontanea[] @relation("UsuarioAprobadorSalida")
   cuadresCierreParcial      CuadreCaja[]     @relation("UsuarioCierreParcial")
+  historialAsignaciones     HistorialAsignacionPunto[] @relation("UsuarioAsignacion")
+  historialAutorizados      HistorialAsignacionPunto[] @relation("UsuarioAutorizador")
 
   @@index([username])
   @@index([punto_atencion_id])
@@ -67,6 +69,8 @@ model PuntoAtencion {
   historialSaldos       HistorialSaldo[]
   recibos               Recibo[]
   salidasEspontaneas    SalidaEspontanea[]
+  historialAsignacionesAnteriores HistorialAsignacionPunto[] @relation("PuntoAnterior")
+  historialAsignacionesNuevas     HistorialAsignacionPunto[] @relation("PuntoNuevo")
 
   @@index([ciudad])
   @@index([activo])
@@ -291,6 +295,9 @@ model Jornada {
   ubicacion_inicio  Json?
   ubicacion_salida  Json?
   estado            EstadoJornada @default(ACTIVO)
+  motivo_cambio     String?
+  usuario_autorizo  String?
+  observaciones     String?
 
   usuario       Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
   puntoAtencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
@@ -370,6 +377,28 @@ model DetalleCuadreCaja {
 
   @@unique([cuadre_id, moneda_id])
   @@index([moneda_id])
+}
+
+model HistorialAsignacionPunto {
+  id                          String   @id @default(uuid())
+  usuario_id                  String
+  punto_atencion_anterior_id  String?
+  punto_atencion_nuevo_id     String
+  fecha_asignacion            DateTime @default(now())
+  motivo_cambio               String?
+  autorizado_por              String?
+  tipo_asignacion             String   @default("MANUAL") // "MANUAL", "AUTO_LOGIN", "JORNADA_INICIO", etc.
+  observaciones               String?
+  created_at                  DateTime @default(now())
+
+  usuario           Usuario        @relation("UsuarioAsignacion", fields: [usuario_id], references: [id], onDelete: Cascade)
+  puntoAnterior     PuntoAtencion? @relation("PuntoAnterior", fields: [punto_atencion_anterior_id], references: [id], onDelete: SetNull)
+  puntoNuevo        PuntoAtencion  @relation("PuntoNuevo", fields: [punto_atencion_nuevo_id], references: [id], onDelete: Restrict)
+  usuarioAutorizador Usuario?      @relation("UsuarioAutorizador", fields: [autorizado_por], references: [id], onDelete: SetNull)
+
+  @@index([usuario_id, fecha_asignacion])
+  @@index([punto_atencion_nuevo_id, fecha_asignacion])
+  @@index([tipo_asignacion, fecha_asignacion])
 }
 
 // ============================
