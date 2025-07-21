@@ -84,6 +84,39 @@ router.get("/", authenticateToken, async (req, res) => {
       },
     });
 
+    // Obtener transferencias del período
+    const transferenciasEntrada = await prisma.transferencia.findMany({
+      where: {
+        destino_id: usuario.punto_atencion_id,
+        fecha: {
+          gte: fechaInicio,
+        },
+        estado: "APROBADA",
+      },
+      select: {
+        id: true,
+        monto: true,
+        moneda_id: true,
+        tipo_transferencia: true,
+      },
+    });
+
+    const transferenciasSalida = await prisma.transferencia.findMany({
+      where: {
+        origen_id: usuario.punto_atencion_id,
+        fecha: {
+          gte: fechaInicio,
+        },
+        estado: "APROBADA",
+      },
+      select: {
+        id: true,
+        monto: true,
+        moneda_id: true,
+        tipo_transferencia: true,
+      },
+    });
+
     // TEMPORAL: También obtener cambios pendientes para debug
     const cambiosPendientes = await prisma.cambioDivisa.findMany({
       where: {
@@ -130,6 +163,11 @@ router.get("/", authenticateToken, async (req, res) => {
       }))
     });
 
+    console.log("📈 Transferencias:", {
+      entrada: transferenciasEntrada.length,
+      salida: transferenciasSalida.length
+    });
+
     // Identificar monedas utilizadas
     const monedasUsadas = new Set<string>();
     cambiosHoy.forEach((cambio) => {
@@ -147,6 +185,11 @@ router.get("/", authenticateToken, async (req, res) => {
           detalles: [],
           observaciones: "",
           mensaje: "No se han realizado cambios de divisa hoy",
+          totales: {
+            cambios: 0,
+            transferencias_entrada: transferenciasEntrada.length,
+            transferencias_salida: transferenciasSalida.length,
+          },
         },
       });
     }
@@ -229,6 +272,11 @@ router.get("/", authenticateToken, async (req, res) => {
         observaciones: cuadre?.observaciones || "",
         cuadre_id: cuadre?.id,
         periodo_inicio: fechaInicio,
+        totales: {
+          cambios: cambiosHoy.length,
+          transferencias_entrada: transferenciasEntrada.length,
+          transferencias_salida: transferenciasSalida.length,
+        },
       },
     });
   } catch (error) {
@@ -322,6 +370,52 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
+    // Obtener jornada activa para calcular período
+    const jornadaActiva = await prisma.jornada.findFirst({
+      where: {
+        usuario_id: usuario.id,
+        punto_atencion_id: usuario.punto_atencion_id,
+        estado: "ACTIVO",
+      },
+      orderBy: {
+        fecha_inicio: 'desc'
+      }
+    });
+
+    const fechaInicio = jornadaActiva?.fecha_inicio || new Date();
+    fechaInicio.setHours(0, 0, 0, 0);
+
+    // Calcular totales del período
+    const totalCambios = await prisma.cambioDivisa.count({
+      where: {
+        punto_atencion_id: usuario.punto_atencion_id,
+        fecha: {
+          gte: fechaInicio,
+        },
+        estado: "COMPLETADO",
+      },
+    });
+
+    const totalTransferenciasEntrada = await prisma.transferencia.count({
+      where: {
+        destino_id: usuario.punto_atencion_id,
+        fecha: {
+          gte: fechaInicio,
+        },
+        estado: "APROBADA",
+      },
+    });
+
+    const totalTransferenciasSalida = await prisma.transferencia.count({
+      where: {
+        origen_id: usuario.punto_atencion_id,
+        fecha: {
+          gte: fechaInicio,
+        },
+        estado: "APROBADA",
+      },
+    });
+
     // Crear el cuadre principal
     const cuadre = await prisma.cuadreCaja.create({
       data: {
@@ -330,9 +424,9 @@ router.post("/", authenticateToken, async (req, res) => {
         estado: "CERRADO",
         observaciones: observaciones || null,
         fecha_cierre: new Date(),
-        total_cambios: 0, // Se calculará después
-        total_transferencias_entrada: 0,
-        total_transferencias_salida: 0,
+        total_cambios: totalCambios,
+        total_transferencias_entrada: totalTransferenciasEntrada,
+        total_transferencias_salida: totalTransferenciasSalida,
       },
     });
 

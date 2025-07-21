@@ -38,6 +38,11 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     observaciones: string;
     cuadre_id?: string;
     periodo_inicio?: string;
+    totales?: {
+      cambios: number;
+      transferencias_entrada: number;
+      transferencias_salida: number;
+    };
   } | null>(null);
   const [userAdjustments, setUserAdjustments] = useState<{
     [key: string]: { bills: string; coins: string };
@@ -396,6 +401,30 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Mostrar totales del día */}
+            {cuadreData?.totales && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                <div className="text-center">
+                  <h4 className="font-semibold text-blue-700">Total Cambios</h4>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {cuadreData.totales.cambios}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <h4 className="font-semibold text-green-700">Transferencias Entrada</h4>
+                  <p className="text-2xl font-bold text-green-600">
+                    {cuadreData.totales.transferencias_entrada}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <h4 className="font-semibold text-orange-700">Transferencias Salida</h4>
+                  <p className="text-2xl font-bold text-orange-600">
+                    {cuadreData.totales.transferencias_salida}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {cuadreData?.detalles.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">
