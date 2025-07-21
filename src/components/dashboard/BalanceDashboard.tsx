@@ -28,9 +28,12 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
     
     setLoading(true);
     try {
+      console.log('Loading balances for point:', selectedPoint.id);
       const response = await saldoInicialService.getVistaSaldosPorPunto();
+      console.log('Balance response:', response);
       
       if (response.error) {
+        console.error('Balance service error:', response.error);
         toast({
           title: "Error",
           description: response.error,
@@ -39,6 +42,7 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
       } else {
         // Filtrar solo los saldos del punto seleccionado
         const saldosPunto = response.saldos.filter(s => s.punto_atencion_id === selectedPoint.id);
+        console.log('Filtered balances:', saldosPunto);
         setSaldos(saldosPunto);
         setLastUpdate(new Date());
       }
@@ -46,7 +50,7 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
       console.error('Error loading balances:', error);
       toast({
         title: "Error",
-        description: "Error inesperado al cargar saldos",
+        description: `Error inesperado: ${error instanceof Error ? error.message : 'Error desconocido'}`,
         variant: "destructive",
       });
     } finally {
