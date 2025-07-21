@@ -57,7 +57,7 @@ export const exchangeService = {
     data: CreateExchangeData
   ): Promise<{ exchange: CambioDivisa | null; error: string | null }> {
     try {
-      console.warn("Creating exchange:", data);
+      // Creating exchange
       const response = await apiService.post<ExchangeResponse>(
         "/exchanges",
         data
@@ -79,7 +79,7 @@ export const exchangeService = {
     error: string | null;
   }> {
     try {
-      console.warn("Fetching all exchanges");
+      // Fetching all exchanges
       const response = await apiService.get<ExchangesResponse>("/exchanges");
 
       if (response.success) {
@@ -100,7 +100,7 @@ export const exchangeService = {
     pointId: string
   ): Promise<{ exchanges: CambioDivisa[]; error: string | null }> {
     try {
-      console.warn("Fetching exchanges for point:", pointId);
+      // Fetching exchanges for point
       const response = await apiService.get<ExchangesResponse>(
         `/exchanges?point_id=${pointId}`
       );
@@ -126,9 +126,9 @@ export const exchangeService = {
     pointId: string
   ): Promise<{ exchanges: CambioDivisa[]; error: string | null }> {
     try {
-      console.warn("Fetching pending exchanges for point:", pointId);
+      // Fetching pending exchanges for point
       const response = await apiService.get<ExchangesResponse>(
-        `/exchanges?point_id=${pointId}&estado=PENDIENTE`
+        `/exchanges/pending?pointId=${pointId}`
       );
 
       if (response.success) {
@@ -152,7 +152,7 @@ export const exchangeService = {
     exchangeId: string
   ): Promise<{ exchange: CambioDivisa | null; error: string | null }> {
     try {
-      console.warn("Closing pending exchange with id:", exchangeId);
+      // Closing pending exchange
       const response = await apiService.patch<ExchangeResponse>(
         `/exchanges/${exchangeId}/cerrar`
       );

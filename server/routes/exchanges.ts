@@ -442,75 +442,81 @@ router.patch(
 );
 
 // Endpoint para obtener cambios pendientes
-router.get("/pending", authenticateToken, async (req, res) => {
+router.get("/pending", authenticateToken, async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
   try {
     const { pointId } = req.query;
     
     if (!pointId) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         success: false, 
         error: "Se requiere pointId" 
       });
+      return;
     }
 
     const exchanges = await prisma.cambioDivisa.findMany({
       where: {
         punto_atencion_id: pointId as string,
         estado: {
-          in: ["PARCIAL", "PENDIENTE"]
+          in: [EstadoTransaccion.PENDIENTE]
+        },
+        saldo_pendiente: {
+          gt: 0
         }
       },
       include: {
-        moneda_origen: true,
-        moneda_destino: true,
-        usuario: true,
-        punto_atencion: true,
+        monedaOrigen: {
+          select: {
+            id: true,
+            nombre: true,
+            codigo: true,
+            simbolo: true,
+          },
+        },
+        monedaDestino: {
+          select: {
+            id: true,
+            nombre: true,
+            codigo: true,
+            simbolo: true,
+          },
+        },
+        usuario: {
+          select: {
+            id: true,
+            nombre: true,
+            username: true,
+          },
+        },
+        puntoAtencion: {
+          select: {
+            id: true,
+            nombre: true,
+          },
+        },
       },
       orderBy: {
         fecha: "desc",
       },
     });
 
+    logger.info("Cambios pendientes obtenidos", {
+      count: exchanges.length,
+      pointId,
+    });
+
     res.json({
       success: true,
       exchanges,
     });
-  } catch (error: any) {
-    console.error("Error fetching pending exchanges:", error);
+  } catch (error) {
+    logger.error("Error fetching pending exchanges", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     res.status(500).json({
       success: false,
-      error: error.message || "Error interno del servidor",
-    });
-  }
-});
-
-// Endpoint para cerrar un cambio pendiente
-router.patch("/:id/cerrar", authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const exchange = await prisma.cambioDivisa.update({
-      where: { id },
-      data: {
-        estado: "COMPLETADO",
-      },
-      include: {
-        moneda_origen: true,
-        moneda_destino: true,
-        usuario: true,
-        punto_atencion: true,
-      },
-    });
-
-    res.json({
-      success: true,
-      exchange,
-    });
-  } catch (error: any) {
-    console.error("Error closing exchange:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Error interno del servidor",
+      error: "Error interno del servidor",
     });
   }
 });

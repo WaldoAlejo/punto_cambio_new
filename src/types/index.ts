@@ -83,6 +83,24 @@ export interface CambioDivisa {
   datos_cliente?: DatosCliente;
   divisas_entregadas?: DetalleDivisasSimple;
   divisas_recibidas?: DetalleDivisasSimple;
+  
+  // Campos para método de entrega
+  metodo_entrega?: "efectivo" | "transferencia";
+  transferencia_numero?: string | null;
+  transferencia_banco?: string | null;
+  transferencia_imagen_url?: string | null;
+  
+  // Campos para cambios parciales
+  abono_inicial_monto?: number | null;
+  abono_inicial_fecha?: string | null;
+  abono_inicial_recibido_por?: string | null;
+  saldo_pendiente?: number | null;
+  fecha_compromiso?: string | null;
+  observacion_parcial?: string | null;
+  referencia_cambio_principal?: string | null;
+  cliente?: string | null;
+  
+  // Relaciones
   monedaOrigen?: Moneda;
   monedaDestino?: Moneda;
   usuario?: Usuario;
