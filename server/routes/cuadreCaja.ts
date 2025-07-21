@@ -1,11 +1,14 @@
 
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import { createClient } from "@supabase/supabase-js";
 import { authenticateToken } from "../middleware/auth";
 import logger from "../utils/logger.js";
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+const supabaseUrl = "https://kmmkrrlmvijvntnarfmo.supabase.co";
+const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttbWtycmxtdmlqdm50bmFyZm1vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk5MDYzNTIsImV4cCI6MjA2NTQ4MjM1Mn0.0Lj7RAlvwCh-xNpST8AEE_OHUNghqrljF5gkCfCvm4c";
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Obtener el cuadre actual y datos para cierre
 router.get("/", authenticateToken, async (req, res) => {
@@ -22,36 +25,40 @@ router.get("/", authenticateToken, async (req, res) => {
     hoy.setHours(0, 0, 0, 0);
 
     // Buscar cuadre abierto del día
-    const cuadre = await prisma.cuadreCaja.findFirst({
-      where: {
-        punto_atencion_id: usuario.punto_atencion_id,
-        fecha: {
-          gte: hoy,
-        },
-        estado: "ABIERTO",
-      },
-      include: {
-        detalles: {
-          include: {
-            moneda: true,
-          },
-        },
-      },
-    });
+    const { data: cuadre, error: cuadreError } = await supabase
+      .from('CuadreCaja')
+      .select(`
+        *,
+        detalles:DetalleCuadreCaja(
+          *,
+          moneda:Moneda(*)
+        )
+      `)
+      .eq('punto_atencion_id', usuario.punto_atencion_id)
+      .gte('fecha', hoy.toISOString())
+      .eq('estado', 'ABIERTO')
+      .single();
+
+    if (cuadreError && cuadreError.code !== 'PGRST116') {
+      console.error('Error obteniendo cuadre:', cuadreError);
+    }
 
     // Obtener jornada activa para calcular período
-    const jornadaActiva = await prisma.jornada.findFirst({
-      where: {
-        usuario_id: usuario.id,
-        punto_atencion_id: usuario.punto_atencion_id,
-        estado: "ACTIVO",
-      },
-      orderBy: {
-        fecha_inicio: 'desc'
-      }
-    });
+    const { data: jornadaActiva, error: jornadaError } = await supabase
+      .from('Jornada')
+      .select('*')
+      .eq('usuario_id', usuario.id)
+      .eq('punto_atencion_id', usuario.punto_atencion_id)
+      .eq('estado', 'ACTIVO')
+      .order('fecha_inicio', { ascending: false })
+      .limit(1)
+      .single();
 
-    const fechaInicio = jornadaActiva?.fecha_inicio || hoy;
+    if (jornadaError && jornadaError.code !== 'PGRST116') {
+      console.error('Error obteniendo jornada:', jornadaError);
+    }
+
+    const fechaInicio = jornadaActiva?.fecha_inicio ? new Date(jornadaActiva.fecha_inicio) : hoy;
 
     console.log("📅 Cuadre debug info:", {
       puntoAtencionId: usuario.punto_atencion_id,
@@ -65,94 +72,40 @@ router.get("/", authenticateToken, async (req, res) => {
     });
 
     // Obtener cambios realizados en el período
-    const cambiosHoy = await prisma.cambioDivisa.findMany({
-      where: {
-        punto_atencion_id: usuario.punto_atencion_id,
-        fecha: {
-          gte: fechaInicio,
-        },
-        estado: "COMPLETADO",
-      },
-      select: {
-        id: true,
-        moneda_origen_id: true,
-        moneda_destino_id: true,
-        monto_origen: true,
-        monto_destino: true,
-        fecha: true,
-        estado: true,
-      },
-    });
+    const { data: cambiosHoy, error: cambiosError } = await supabase
+      .from('CambioDivisa')
+      .select('id, moneda_origen_id, moneda_destino_id, monto_origen, monto_destino, fecha, estado')
+      .eq('punto_atencion_id', usuario.punto_atencion_id)
+      .gte('fecha', fechaInicio.toISOString())
+      .eq('estado', 'COMPLETADO');
+
+    if (cambiosError) {
+      console.error('Error obteniendo cambios:', cambiosError);
+      return res.status(500).json({ success: false, error: 'Error obteniendo cambios' });
+    }
 
     // Obtener transferencias del período
-    const transferenciasEntrada = await prisma.transferencia.findMany({
-      where: {
-        destino_id: usuario.punto_atencion_id,
-        fecha: {
-          gte: fechaInicio,
-        },
-        estado: "APROBADA",
-      },
-      select: {
-        id: true,
-        monto: true,
-        moneda_id: true,
-        tipo_transferencia: true,
-      },
-    });
+    const { data: transferenciasEntrada, error: transferenciasEntradaError } = await supabase
+      .from('Transferencia')
+      .select('id, monto, moneda_id, tipo_transferencia')
+      .eq('destino_id', usuario.punto_atencion_id)
+      .gte('fecha', fechaInicio.toISOString())
+      .eq('estado', 'APROBADA');
 
-    const transferenciasSalida = await prisma.transferencia.findMany({
-      where: {
-        origen_id: usuario.punto_atencion_id,
-        fecha: {
-          gte: fechaInicio,
-        },
-        estado: "APROBADA",
-      },
-      select: {
-        id: true,
-        monto: true,
-        moneda_id: true,
-        tipo_transferencia: true,
-      },
-    });
+    const { data: transferenciasSalida, error: transferenciasSalidaError } = await supabase
+      .from('Transferencia')
+      .select('id, monto, moneda_id, tipo_transferencia')
+      .eq('origen_id', usuario.punto_atencion_id)
+      .gte('fecha', fechaInicio.toISOString())
+      .eq('estado', 'APROBADA');
 
-    // TEMPORAL: También obtener cambios pendientes para debug
-    const cambiosPendientes = await prisma.cambioDivisa.findMany({
-      where: {
-        punto_atencion_id: usuario.punto_atencion_id,
-        fecha: {
-          gte: fechaInicio,
-        },
-        estado: "PENDIENTE",
-      },
-      select: {
-        id: true,
-        moneda_origen_id: true,
-        moneda_destino_id: true,
-        monto_origen: true,
-        monto_destino: true,
-        fecha: true,
-        estado: true,
-      },
-    });
+    if (transferenciasEntradaError || transferenciasSalidaError) {
+      console.error('Error obteniendo transferencias:', { transferenciasEntradaError, transferenciasSalidaError });
+    }
 
     console.log("💱 Cambios COMPLETADOS:", {
-      total: cambiosHoy.length,
-      cambios: cambiosHoy.map(c => ({
-        id: c.id,
-        fecha: c.fecha,
-        estado: c.estado,
-        origen: c.moneda_origen_id,
-        destino: c.moneda_destino_id,
-        montoOrigen: c.monto_origen,
-        montoDestino: c.monto_destino
-      }))
-    });
-
-    console.log("⏳ Cambios PENDIENTES:", {
-      total: cambiosPendientes.length,
-      cambios: cambiosPendientes.map(c => ({
+      total: cambiosHoy?.length || 0,
+      cambios: cambiosHoy?.map(c => ({
         id: c.id,
         fecha: c.fecha,
         estado: c.estado,
@@ -164,13 +117,13 @@ router.get("/", authenticateToken, async (req, res) => {
     });
 
     console.log("📈 Transferencias:", {
-      entrada: transferenciasEntrada.length,
-      salida: transferenciasSalida.length
+      entrada: transferenciasEntrada?.length || 0,
+      salida: transferenciasSalida?.length || 0
     });
 
     // Identificar monedas utilizadas
     const monedasUsadas = new Set<string>();
-    cambiosHoy.forEach((cambio) => {
+    cambiosHoy?.forEach((cambio) => {
       monedasUsadas.add(cambio.moneda_origen_id);
       monedasUsadas.add(cambio.moneda_destino_id);
     });
@@ -187,30 +140,30 @@ router.get("/", authenticateToken, async (req, res) => {
           mensaje: "No se han realizado cambios de divisa hoy",
           totales: {
             cambios: 0,
-            transferencias_entrada: transferenciasEntrada.length,
-            transferencias_salida: transferenciasSalida.length,
+            transferencias_entrada: transferenciasEntrada?.length || 0,
+            transferencias_salida: transferenciasSalida?.length || 0,
           },
         },
       });
     }
 
     // Obtener información de las monedas utilizadas
-    const monedas = await prisma.moneda.findMany({
-      where: {
-        id: {
-          in: Array.from(monedasUsadas),
-        },
-        activo: true,
-      },
-      orderBy: {
-        orden_display: 'asc'
-      }
-    });
+    const { data: monedas, error: monedasError } = await supabase
+      .from('Moneda')
+      .select('*')
+      .in('id', Array.from(monedasUsadas))
+      .eq('activo', true)
+      .order('orden_display', { ascending: true });
+
+    if (monedasError) {
+      console.error('Error obteniendo monedas:', monedasError);
+      return res.status(500).json({ success: false, error: 'Error obteniendo monedas' });
+    }
 
     // Calcular movimientos para cada moneda
     const detallesConValores = await Promise.all(
-      monedas.map(async (moneda) => {
-        const detalle = cuadre?.detalles.find((d) => d.moneda_id === moneda.id);
+      (monedas || []).map(async (moneda) => {
+        const detalle = cuadre?.detalles?.find((d: any) => d.moneda_id === moneda.id);
         
         // Calcular saldo de apertura
         const saldoApertura = await calcularSaldoApertura(
@@ -221,7 +174,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
         console.log(`💰 Calculando movimientos para ${moneda.codigo}:`, {
           saldoApertura,
-          cambiosHoy: cambiosHoy.filter(c => 
+          cambiosHoy: cambiosHoy?.filter(c => 
             c.moneda_origen_id === moneda.id || c.moneda_destino_id === moneda.id
           )
         });
@@ -229,13 +182,13 @@ router.get("/", authenticateToken, async (req, res) => {
         // Calcular movimientos del período con mejor claridad
         // INGRESOS: cuando esta moneda es la que SE RECIBE (moneda_destino)
         const ingresos = cambiosHoy
-          .filter(c => c.moneda_destino_id === moneda.id)
-          .reduce((sum, c) => sum + Number(c.monto_destino), 0);
+          ?.filter(c => c.moneda_destino_id === moneda.id)
+          .reduce((sum, c) => sum + Number(c.monto_destino), 0) || 0;
 
         // EGRESOS: cuando esta moneda es la que SE ENTREGA (moneda_origen)
         const egresos = cambiosHoy
-          .filter(c => c.moneda_origen_id === moneda.id)
-          .reduce((sum, c) => sum + Number(c.monto_origen), 0);
+          ?.filter(c => c.moneda_origen_id === moneda.id)
+          .reduce((sum, c) => sum + Number(c.monto_origen), 0) || 0;
 
         const saldoCierre = saldoApertura + ingresos - egresos;
 
@@ -258,9 +211,9 @@ router.get("/", authenticateToken, async (req, res) => {
           monedas: detalle?.monedas_fisicas || 0,
           ingresos_periodo: ingresos,
           egresos_periodo: egresos,
-          movimientos_periodo: cambiosHoy.filter(c => 
+          movimientos_periodo: cambiosHoy?.filter(c => 
             c.moneda_origen_id === moneda.id || c.moneda_destino_id === moneda.id
-          ).length,
+          ).length || 0,
         };
       })
     );
@@ -273,9 +226,9 @@ router.get("/", authenticateToken, async (req, res) => {
         cuadre_id: cuadre?.id,
         periodo_inicio: fechaInicio,
         totales: {
-          cambios: cambiosHoy.length,
-          transferencias_entrada: transferenciasEntrada.length,
-          transferencias_salida: transferenciasSalida.length,
+          cambios: cambiosHoy?.length || 0,
+          transferencias_entrada: transferenciasEntrada?.length || 0,
+          transferencias_salida: transferenciasSalida?.length || 0,
         },
       },
     });
@@ -306,34 +259,29 @@ async function calcularSaldoApertura(
     
     // 1. Buscar el último cierre anterior
     console.log(`🔍 Buscando último cierre anterior...`);
-    const ultimoCierre = await prisma.detalleCuadreCaja.findFirst({
-      include: {
-        cuadre: true,
-      },
-      where: {
-        moneda_id: monedaId,
-        cuadre: {
-          punto_atencion_id: puntoAtencionId,
-          estado: {
-            in: ["CERRADO", "PARCIAL"],
-          },
-          fecha: {
-            lt: fecha,
-          },
-        },
-      },
-      orderBy: {
-        cuadre: {
-          fecha: "desc",
-        },
-      },
-    });
+    const { data: ultimoCierre, error: ultimoCierreError } = await supabase
+      .from('DetalleCuadreCaja')
+      .select(`
+        *,
+        cuadre:CuadreCaja(*)
+      `)
+      .eq('moneda_id', monedaId)
+      .eq('cuadre.punto_atencion_id', puntoAtencionId)
+      .in('cuadre.estado', ['CERRADO', 'PARCIAL'])
+      .lt('cuadre.fecha', fecha.toISOString())
+      .order('cuadre.fecha', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (ultimoCierreError && ultimoCierreError.code !== 'PGRST116') {
+      console.error('Error buscando último cierre:', ultimoCierreError);
+    }
 
     console.log(`🔍 Resultado búsqueda último cierre:`, ultimoCierre ? {
       id: ultimoCierre.id,
       conteo_fisico: ultimoCierre.conteo_fisico,
-      fecha_cuadre: ultimoCierre.cuadre.fecha,
-      estado_cuadre: ultimoCierre.cuadre.estado
+      fecha_cuadre: ultimoCierre.cuadre?.fecha,
+      estado_cuadre: ultimoCierre.cuadre?.estado
     } : 'NO ENCONTRADO');
 
     if (ultimoCierre) {
@@ -345,36 +293,43 @@ async function calcularSaldoApertura(
     console.log(`🔍 No hay cierre anterior, buscando saldo inicial en tabla Saldo...`);
     
     // Primero verificar todos los saldos del punto
-    const todosSaldos = await prisma.saldo.findMany({
-      where: {
-        punto_atencion_id: puntoAtencionId,
-      },
-      include: {
-        moneda: true
-      }
-    });
+    const { data: todosSaldos, error: todosSaldosError } = await supabase
+      .from('Saldo')
+      .select(`
+        *,
+        moneda:Moneda(codigo)
+      `)
+      .eq('punto_atencion_id', puntoAtencionId);
+
+    if (todosSaldosError) {
+      console.error('Error obteniendo todos los saldos:', todosSaldosError);
+    }
     
-    console.log(`🔍 TODOS LOS SALDOS del punto ${puntoAtencionId}:`, todosSaldos.map(s => ({
+    console.log(`🔍 TODOS LOS SALDOS del punto ${puntoAtencionId}:`, todosSaldos?.map(s => ({
       moneda_id: s.moneda_id,
-      moneda_codigo: s.moneda.codigo,
+      moneda_codigo: s.moneda?.codigo,
       cantidad: s.cantidad
     })));
 
-    const saldoInicial = await prisma.saldo.findFirst({
-      where: {
-        punto_atencion_id: puntoAtencionId,
-        moneda_id: monedaId,
-      },
-      include: {
-        moneda: true
-      }
-    });
+    const { data: saldoInicial, error: saldoInicialError } = await supabase
+      .from('Saldo')
+      .select(`
+        *,
+        moneda:Moneda(codigo)
+      `)
+      .eq('punto_atencion_id', puntoAtencionId)
+      .eq('moneda_id', monedaId)
+      .single();
+
+    if (saldoInicialError && saldoInicialError.code !== 'PGRST116') {
+      console.error('Error obteniendo saldo inicial:', saldoInicialError);
+    }
 
     console.log(`🔍 SALDO INICIAL específico:`, saldoInicial ? {
       id: saldoInicial.id,
       punto_atencion_id: saldoInicial.punto_atencion_id,
       moneda_id: saldoInicial.moneda_id,
-      moneda_codigo: saldoInicial.moneda.codigo,
+      moneda_codigo: saldoInicial.moneda?.codigo,
       cantidad: saldoInicial.cantidad
     } : 'NO ENCONTRADO');
 
@@ -413,101 +368,106 @@ router.post("/", authenticateToken, async (req, res) => {
     }
 
     // Obtener jornada activa para calcular período
-    const jornadaActiva = await prisma.jornada.findFirst({
-      where: {
-        usuario_id: usuario.id,
-        punto_atencion_id: usuario.punto_atencion_id,
-        estado: "ACTIVO",
-      },
-      orderBy: {
-        fecha_inicio: 'desc'
-      }
-    });
+    const { data: jornadaActiva, error: jornadaError } = await supabase
+      .from('Jornada')
+      .select('*')
+      .eq('usuario_id', usuario.id)
+      .eq('punto_atencion_id', usuario.punto_atencion_id)
+      .eq('estado', 'ACTIVO')
+      .order('fecha_inicio', { ascending: false })
+      .limit(1)
+      .single();
 
-    const fechaInicio = jornadaActiva?.fecha_inicio || new Date();
+    const fechaInicio = jornadaActiva?.fecha_inicio ? new Date(jornadaActiva.fecha_inicio) : new Date();
     fechaInicio.setHours(0, 0, 0, 0);
 
     // Calcular totales del período
-    const totalCambios = await prisma.cambioDivisa.count({
-      where: {
-        punto_atencion_id: usuario.punto_atencion_id,
-        fecha: {
-          gte: fechaInicio,
-        },
-        estado: "COMPLETADO",
-      },
-    });
+    const { count: totalCambios } = await supabase
+      .from('CambioDivisa')
+      .select('*', { count: 'exact', head: true })
+      .eq('punto_atencion_id', usuario.punto_atencion_id)
+      .gte('fecha', fechaInicio.toISOString())
+      .eq('estado', 'COMPLETADO');
 
-    const totalTransferenciasEntrada = await prisma.transferencia.count({
-      where: {
-        destino_id: usuario.punto_atencion_id,
-        fecha: {
-          gte: fechaInicio,
-        },
-        estado: "APROBADA",
-      },
-    });
+    const { count: totalTransferenciasEntrada } = await supabase
+      .from('Transferencia')
+      .select('*', { count: 'exact', head: true })
+      .eq('destino_id', usuario.punto_atencion_id)
+      .gte('fecha', fechaInicio.toISOString())
+      .eq('estado', 'APROBADA');
 
-    const totalTransferenciasSalida = await prisma.transferencia.count({
-      where: {
-        origen_id: usuario.punto_atencion_id,
-        fecha: {
-          gte: fechaInicio,
-        },
-        estado: "APROBADA",
-      },
-    });
+    const { count: totalTransferenciasSalida } = await supabase
+      .from('Transferencia')
+      .select('*', { count: 'exact', head: true })
+      .eq('origen_id', usuario.punto_atencion_id)
+      .gte('fecha', fechaInicio.toISOString())
+      .eq('estado', 'APROBADA');
 
     // Crear el cuadre principal
-    const cuadre = await prisma.cuadreCaja.create({
-      data: {
+    const { data: cuadre, error: cuadreError } = await supabase
+      .from('CuadreCaja')
+      .insert({
         usuario_id: usuario.id,
         punto_atencion_id: usuario.punto_atencion_id,
-        estado: "CERRADO",
+        estado: 'CERRADO',
         observaciones: observaciones || null,
-        fecha_cierre: new Date(),
-        total_cambios: totalCambios,
-        total_transferencias_entrada: totalTransferenciasEntrada,
-        total_transferencias_salida: totalTransferenciasSalida,
-      },
-    });
+        fecha_cierre: new Date().toISOString(),
+        total_cambios: totalCambios || 0,
+        total_transferencias_entrada: totalTransferenciasEntrada || 0,
+        total_transferencias_salida: totalTransferenciasSalida || 0,
+      })
+      .select()
+      .single();
+
+    if (cuadreError) {
+      console.error('Error creando cuadre:', cuadreError);
+      return res.status(500).json({
+        success: false,
+        error: 'Error creando cuadre de caja',
+      });
+    }
 
     // Crear los detalles del cuadre
-    const detallePromises = detalles.map((detalle: any) =>
-      prisma.detalleCuadreCaja.create({
-        data: {
-          cuadre_id: cuadre.id,
-          moneda_id: detalle.moneda_id,
-          saldo_apertura: detalle.saldo_apertura || 0,
-          saldo_cierre: detalle.saldo_cierre || 0,
-          conteo_fisico: detalle.conteo_fisico || 0,
-          billetes: detalle.billetes || 0,
-          monedas_fisicas: detalle.monedas || 0,
-          diferencia: (detalle.conteo_fisico || 0) - (detalle.saldo_cierre || 0),
-          movimientos_periodo: detalle.movimientos_periodo || 0,
-        },
-      })
-    );
+    const detalleInserts = detalles.map((detalle: any) => ({
+      cuadre_id: cuadre.id,
+      moneda_id: detalle.moneda_id,
+      saldo_apertura: detalle.saldo_apertura || 0,
+      saldo_cierre: detalle.saldo_cierre || 0,
+      conteo_fisico: detalle.conteo_fisico || 0,
+      billetes: detalle.billetes || 0,
+      monedas_fisicas: detalle.monedas || 0,
+      diferencia: (detalle.conteo_fisico || 0) - (detalle.saldo_cierre || 0),
+    }));
 
-    await Promise.all(detallePromises);
+    const { error: detallesError } = await supabase
+      .from('DetalleCuadreCaja')
+      .insert(detalleInserts);
+
+    if (detallesError) {
+      console.error('Error creando detalles:', detallesError);
+      return res.status(500).json({
+        success: false,
+        error: 'Error creando detalles de cuadre',
+      });
+    }
 
     // Obtener el cuadre completo
-    const cuadreCompleto = await prisma.cuadreCaja.findUnique({
-      where: { id: cuadre.id },
-      include: {
-        detalles: {
-          include: {
-            moneda: true,
-          },
-        },
-        usuario: {
-          select: {
-            nombre: true,
-            username: true,
-          },
-        },
-      },
-    });
+    const { data: cuadreCompleto, error: cuadreCompletoError } = await supabase
+      .from('CuadreCaja')
+      .select(`
+        *,
+        detalles:DetalleCuadreCaja(
+          *,
+          moneda:Moneda(*)
+        ),
+        usuario:Usuario(nombre, username)
+      `)
+      .eq('id', cuadre.id)
+      .single();
+
+    if (cuadreCompletoError) {
+      console.error('Error obteniendo cuadre completo:', cuadreCompletoError);
+    }
 
     logger.info("Cuadre de caja guardado exitosamente", {
       cuadreId: cuadre.id,
@@ -517,7 +477,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     res.status(201).json({
       success: true,
-      cuadre: cuadreCompleto,
+      cuadre: cuadreCompleto || cuadre,
       message: "Cuadre de caja guardado exitosamente",
     });
   } catch (error) {
