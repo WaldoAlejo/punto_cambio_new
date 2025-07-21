@@ -38,9 +38,11 @@ const PointSelection = ({
   }, [selectedPoint, navigate]);
 
   const handlePointSelect = async (point: PuntoAtencion) => {
+    console.log("🎯 handlePointSelect START", { user, point });
     setIsStartingShift(true);
     try {
       const ubicacion = await getLocation();
+      console.log("📍 Ubicación obtenida:", ubicacion);
       
       // Para operadores: crear o actualizar jornada automáticamente
       if (user.rol === "OPERADOR") {
@@ -50,10 +52,15 @@ const PointSelection = ({
           fecha_inicio: new Date().toISOString(),
           ubicacion_inicio: ubicacion,
         };
+        
+        console.log("📅 Creando jornada con datos:", scheduleData);
 
-        const { error } = await scheduleService.createOrUpdateSchedule(
+        const { schedule, error } = await scheduleService.createOrUpdateSchedule(
           scheduleData
         );
+        
+        console.log("📅 Resultado de crear jornada:", { schedule, error });
+        
         if (error) {
           toast({
             title: "Error",

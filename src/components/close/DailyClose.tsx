@@ -31,10 +31,12 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       try {
         const token = localStorage.getItem("token");
         if (!token) {
+          console.log("❌ No token found for jornada check");
           setHasActiveJornada(false);
           return;
         }
 
+        console.log("🔍 Checking active jornada for user:", user.rol);
         const response = await fetch("/api/schedules/active", {
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -42,22 +44,33 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           }
         });
         
+        console.log("🕒 Active jornada response status:", response.status);
+        
         if (response.ok) {
           const data = await response.json();
-          console.log("🕒 Active jornada check:", data);
-          setHasActiveJornada(data.success && data.jornada);
+          console.log("🕒 Active jornada response data:", data);
+          
+          // Verificar que tenga schedule y que esté ACTIVO
+          const hasJornada = data.success && data.schedule && 
+                           (data.schedule.estado === 'ACTIVO' || data.schedule.estado === 'ALMUERZO');
+          console.log("🕒 Has active jornada:", hasJornada);
+          setHasActiveJornada(hasJornada);
         } else {
           console.log("❌ No active jornada or error:", response.status);
           setHasActiveJornada(false);
         }
       } catch (error) {
-        console.error("Error checking active jornada:", error);
+        console.error("💥 Error checking active jornada:", error);
         setHasActiveJornada(false);
       }
     };
 
     if (user.rol === "OPERADOR") {
       checkActiveJornada();
+      
+      // Recheck jornada every 30 seconds when mounted
+      const interval = setInterval(checkActiveJornada, 30000);
+      return () => clearInterval(interval);
     } else {
       setHasActiveJornada(true); // Los admin siempre pueden
     }

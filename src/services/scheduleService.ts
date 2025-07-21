@@ -102,10 +102,14 @@ export const scheduleService = {
     ubicacion_salida?: { lat: number; lng: number; direccion?: string };
   }): Promise<{ schedule: Schedule | null; error: string | null }> {
     try {
+      console.log("📡 scheduleService.createOrUpdateSchedule - Enviando:", scheduleData);
+      
       const response = await apiService.post<ScheduleResponse>(
         "/schedules",
         scheduleData
       );
+      
+      console.log("📡 scheduleService.createOrUpdateSchedule - Respuesta:", response);
       if (!response) {
         return {
           schedule: null,
