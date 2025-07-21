@@ -41,9 +41,9 @@ router.get("/", authenticateToken, async (req, res) => {
                  )
                )
              ) FILTER (WHERE dc.id IS NOT NULL) as detalles
-      FROM "CuadreCaja" c
-      LEFT JOIN "DetalleCuadreCaja" dc ON c.id = dc.cuadre_id
-      LEFT JOIN "Moneda" m ON dc.moneda_id = m.id
+      FROM cuadrecaja c
+      LEFT JOIN detallecuadrecaja dc ON c.id = dc.cuadre_id
+      LEFT JOIN moneda m ON dc.moneda_id = m.id
       WHERE c.punto_atencion_id = $1 
         AND c.fecha >= $2 
         AND c.estado = 'ABIERTO'
@@ -51,12 +51,18 @@ router.get("/", authenticateToken, async (req, res) => {
       LIMIT 1
     `;
     
-    const cuadreResult = await pool.query(cuadreQuery, [usuario.punto_atencion_id, hoy.toISOString()]);
-    const cuadre = cuadreResult.rows[0] || null;
+    let cuadre = null;
+    try {
+      const cuadreResult = await pool.query(cuadreQuery, [usuario.punto_atencion_id, hoy.toISOString()]);
+      cuadre = cuadreResult.rows[0] || null;
+    } catch (cuadreError) {
+      console.error('Error obteniendo cuadre:', cuadreError);
+      // Continuar sin cuadre si hay error
+    }
 
     // Obtener jornada activa para calcular período
     const jornadaQuery = `
-      SELECT * FROM "Jornada" 
+      SELECT * FROM jornada 
       WHERE usuario_id = $1 
         AND punto_atencion_id = $2 
         AND estado = 'ACTIVO'
@@ -64,8 +70,14 @@ router.get("/", authenticateToken, async (req, res) => {
       LIMIT 1
     `;
     
-    const jornadaResult = await pool.query(jornadaQuery, [usuario.id, usuario.punto_atencion_id]);
-    const jornadaActiva = jornadaResult.rows[0] || null;
+    let jornadaActiva = null;
+    try {
+      const jornadaResult = await pool.query(jornadaQuery, [usuario.id, usuario.punto_atencion_id]);
+      jornadaActiva = jornadaResult.rows[0] || null;
+    } catch (jornadaError) {
+      console.error('Error obteniendo jornada:', jornadaError);
+      // Continuar sin jornada si hay error
+    }
 
     const fechaInicio = jornadaActiva?.fecha_inicio ? new Date(jornadaActiva.fecha_inicio) : hoy;
 
@@ -83,19 +95,25 @@ router.get("/", authenticateToken, async (req, res) => {
     // Obtener cambios realizados en el período
     const cambiosQuery = `
       SELECT id, moneda_origen_id, moneda_destino_id, monto_origen, monto_destino, fecha, estado
-      FROM "CambioDivisa"
+      FROM cambiodivisa
       WHERE punto_atencion_id = $1 
         AND fecha >= $2 
         AND estado = 'COMPLETADO'
     `;
     
-    const cambiosResult = await pool.query(cambiosQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
-    const cambiosHoy = cambiosResult.rows;
+    let cambiosHoy = [];
+    try {
+      const cambiosResult = await pool.query(cambiosQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
+      cambiosHoy = cambiosResult.rows;
+    } catch (cambiosError) {
+      console.error('Error obteniendo cambios:', cambiosError);
+      return res.status(500).json({ success: false, error: 'Error obteniendo cambios: ' + cambiosError.message });
+    }
 
     // Obtener transferencias del período
     const transferenciasEntradaQuery = `
       SELECT id, monto, moneda_id, tipo_transferencia
-      FROM "Transferencia"
+      FROM transferencia
       WHERE destino_id = $1 
         AND fecha >= $2 
         AND estado = 'APROBADA'
@@ -103,17 +121,24 @@ router.get("/", authenticateToken, async (req, res) => {
     
     const transferenciasSalidaQuery = `
       SELECT id, monto, moneda_id, tipo_transferencia
-      FROM "Transferencia"
+      FROM transferencia
       WHERE origen_id = $1 
         AND fecha >= $2 
         AND estado = 'APROBADA'
     `;
     
-    const transferenciasEntradaResult = await pool.query(transferenciasEntradaQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
-    const transferenciasSalidaResult = await pool.query(transferenciasSalidaQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
-    
-    const transferenciasEntrada = transferenciasEntradaResult.rows;
-    const transferenciasSalida = transferenciasSalidaResult.rows;
+    let transferenciasEntrada = [];
+    let transferenciasSalida = [];
+    try {
+      const transferenciasEntradaResult = await pool.query(transferenciasEntradaQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
+      const transferenciasSalidaResult = await pool.query(transferenciasSalidaQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
+      
+      transferenciasEntrada = transferenciasEntradaResult.rows;
+      transferenciasSalida = transferenciasSalidaResult.rows;
+    } catch (transferenciasError) {
+      console.error('Error obteniendo transferencias:', transferenciasError);
+      // Continuar con arrays vacíos si hay error
+    }
 
     console.log("💱 Cambios COMPLETADOS:", {
       total: cambiosHoy.length || 0,
@@ -161,14 +186,20 @@ router.get("/", authenticateToken, async (req, res) => {
 
     // Obtener información de las monedas utilizadas
     const monedasQuery = `
-      SELECT * FROM "Moneda"
+      SELECT * FROM moneda
       WHERE id = ANY($1::uuid[]) 
         AND activo = true
       ORDER BY orden_display ASC
     `;
     
-    const monedasResult = await pool.query(monedasQuery, [Array.from(monedasUsadas)]);
-    const monedas = monedasResult.rows;
+    let monedas = [];
+    try {
+      const monedasResult = await pool.query(monedasQuery, [Array.from(monedasUsadas)]);
+      monedas = monedasResult.rows;
+    } catch (monedasError) {
+      console.error('Error obteniendo monedas:', monedasError);
+      return res.status(500).json({ success: false, error: 'Error obteniendo monedas: ' + monedasError.message });
+    }
 
     // Calcular movimientos para cada moneda
     const detallesConValores = await Promise.all(
@@ -271,8 +302,8 @@ async function calcularSaldoApertura(
     console.log(`🔍 Buscando último cierre anterior...`);
     const ultimoCierreQuery = `
       SELECT dc.*, c.fecha as fecha_cuadre, c.estado as estado_cuadre
-      FROM "DetalleCuadreCaja" dc
-      INNER JOIN "CuadreCaja" c ON dc.cuadre_id = c.id
+      FROM detallecuadrecaja dc
+      INNER JOIN cuadrecaja c ON dc.cuadre_id = c.id
       WHERE dc.moneda_id = $1 
         AND c.punto_atencion_id = $2 
         AND c.estado IN ('CERRADO', 'PARCIAL')
@@ -281,8 +312,14 @@ async function calcularSaldoApertura(
       LIMIT 1
     `;
     
-    const ultimoCierreResult = await pool.query(ultimoCierreQuery, [monedaId, puntoAtencionId, fecha.toISOString()]);
-    const ultimoCierre = ultimoCierreResult.rows[0] || null;
+    let ultimoCierre = null;
+    try {
+      const ultimoCierreResult = await pool.query(ultimoCierreQuery, [monedaId, puntoAtencionId, fecha.toISOString()]);
+      ultimoCierre = ultimoCierreResult.rows[0] || null;
+    } catch (ultimoCierreError) {
+      console.error('Error buscando último cierre:', ultimoCierreError);
+      // Continuar sin último cierre si hay error
+    }
 
     console.log(`🔍 Resultado búsqueda último cierre:`, ultimoCierre ? {
       id: ultimoCierre.id,
@@ -302,13 +339,18 @@ async function calcularSaldoApertura(
     // Primero verificar todos los saldos del punto
     const todosSaldosQuery = `
       SELECT s.*, m.codigo as moneda_codigo
-      FROM "Saldo" s
-      INNER JOIN "Moneda" m ON s.moneda_id = m.id
+      FROM saldo s
+      INNER JOIN moneda m ON s.moneda_id = m.id
       WHERE s.punto_atencion_id = $1
     `;
     
-    const todosSaldosResult = await pool.query(todosSaldosQuery, [puntoAtencionId]);
-    const todosSaldos = todosSaldosResult.rows;
+    let todosSaldos = [];
+    try {
+      const todosSaldosResult = await pool.query(todosSaldosQuery, [puntoAtencionId]);
+      todosSaldos = todosSaldosResult.rows;
+    } catch (todosSaldosError) {
+      console.error('Error obteniendo todos los saldos:', todosSaldosError);
+    }
     
     console.log(`🔍 TODOS LOS SALDOS del punto ${puntoAtencionId}:`, todosSaldos.map(s => ({
       moneda_id: s.moneda_id,
@@ -318,13 +360,18 @@ async function calcularSaldoApertura(
 
     const saldoInicialQuery = `
       SELECT s.*, m.codigo as moneda_codigo
-      FROM "Saldo" s
-      INNER JOIN "Moneda" m ON s.moneda_id = m.id
+      FROM saldo s
+      INNER JOIN moneda m ON s.moneda_id = m.id
       WHERE s.punto_atencion_id = $1 AND s.moneda_id = $2
     `;
     
-    const saldoInicialResult = await pool.query(saldoInicialQuery, [puntoAtencionId, monedaId]);
-    const saldoInicial = saldoInicialResult.rows[0] || null;
+    let saldoInicial = null;
+    try {
+      const saldoInicialResult = await pool.query(saldoInicialQuery, [puntoAtencionId, monedaId]);
+      saldoInicial = saldoInicialResult.rows[0] || null;
+    } catch (saldoInicialError) {
+      console.error('Error obteniendo saldo inicial:', saldoInicialError);
+    }
 
     console.log(`🔍 SALDO INICIAL específico:`, saldoInicial ? {
       id: saldoInicial.id,
@@ -370,7 +417,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     // Obtener jornada activa para calcular período
     const jornadaQuery = `
-      SELECT * FROM "Jornada" 
+      SELECT * FROM jornada 
       WHERE usuario_id = $1 
         AND punto_atencion_id = $2 
         AND estado = 'ACTIVO'
@@ -386,21 +433,21 @@ router.post("/", authenticateToken, async (req, res) => {
 
     // Calcular totales del período
     const totalCambiosQuery = `
-      SELECT COUNT(*) FROM "CambioDivisa"
+      SELECT COUNT(*) FROM cambiodivisa
       WHERE punto_atencion_id = $1 
         AND fecha >= $2 
         AND estado = 'COMPLETADO'
     `;
     
     const totalTransferenciasEntradaQuery = `
-      SELECT COUNT(*) FROM "Transferencia"
+      SELECT COUNT(*) FROM transferencia
       WHERE destino_id = $1 
         AND fecha >= $2 
         AND estado = 'APROBADA'
     `;
     
     const totalTransferenciasSalidaQuery = `
-      SELECT COUNT(*) FROM "Transferencia"
+      SELECT COUNT(*) FROM transferencia
       WHERE origen_id = $1 
         AND fecha >= $2 
         AND estado = 'APROBADA'
@@ -416,7 +463,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     // Crear el cuadre principal
     const cuadreInsertQuery = `
-      INSERT INTO "CuadreCaja" (
+      INSERT INTO cuadrecaja (
         usuario_id, punto_atencion_id, estado, observaciones, 
         fecha_cierre, total_cambios, total_transferencias_entrada, total_transferencias_salida
       )
@@ -439,7 +486,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     // Crear los detalles del cuadre
     const detalleInsertQuery = `
-      INSERT INTO "DetalleCuadreCaja" (
+      INSERT INTO detallecuadrecaja (
         cuadre_id, moneda_id, saldo_apertura, saldo_cierre, 
         conteo_fisico, billetes, monedas_fisicas, diferencia
       )
@@ -481,10 +528,10 @@ router.post("/", authenticateToken, async (req, res) => {
                  )
                )
              ) FILTER (WHERE dc.id IS NOT NULL) as detalles
-      FROM "CuadreCaja" c
-      LEFT JOIN "Usuario" u ON c.usuario_id = u.id
-      LEFT JOIN "DetalleCuadreCaja" dc ON c.id = dc.cuadre_id
-      LEFT JOIN "Moneda" m ON dc.moneda_id = m.id
+      FROM cuadrecaja c
+      LEFT JOIN usuario u ON c.usuario_id = u.id
+      LEFT JOIN detallecuadrecaja dc ON c.id = dc.cuadre_id
+      LEFT JOIN moneda m ON dc.moneda_id = m.id
       WHERE c.id = $1
       GROUP BY c.id, u.nombre, u.username
     `;
