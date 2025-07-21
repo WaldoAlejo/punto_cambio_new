@@ -7,6 +7,7 @@ import {
 } from "react";
 import { authService, AuthUser } from "../services/authService";
 import { scheduleService } from "../services/scheduleService";
+import { pointService } from "../services/pointService";
 import { PuntoAtencion } from "../types";
 
 interface AuthContextType {
@@ -62,11 +63,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           const storedPoint = localStorage.getItem("puntoAtencionSeleccionado");
           if (!storedPoint) {
-            const res = await scheduleService.getActiveSchedule();
-            if (res?.schedule?.puntoAtencion) {
-              setSelectedPointState(
-                res.schedule.puntoAtencion as PuntoAtencion
-              ); // ✅ aquí
+            // Si es admin, conectar automáticamente al punto principal
+            if (verifiedUser.rol === "ADMIN" || verifiedUser.rol === "SUPER_USUARIO") {
+              if (verifiedUser.punto_atencion_id) {
+                const { points } = await pointService.getAllPoints();
+                const adminPoint = points.find(p => p.id === verifiedUser.punto_atencion_id);
+                if (adminPoint) {
+                  setSelectedPointState(adminPoint);
+                }
+              }
+            } else {
+              // Para operadores, usar la lógica existente de jornada activa
+              const res = await scheduleService.getActiveSchedule();
+              if (res?.schedule?.puntoAtencion) {
+                setSelectedPointState(
+                  res.schedule.puntoAtencion as PuntoAtencion
+                );
+              }
             }
           }
         } else {
@@ -93,9 +106,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (loggedUser && token) {
         setUser(loggedUser);
 
-        const res = await scheduleService.getActiveSchedule();
-        if (res?.schedule?.puntoAtencion) {
-          setSelectedPointState(res.schedule.puntoAtencion as PuntoAtencion); // ✅ aquí
+        // Si es admin, conectar automáticamente al punto principal
+        if (loggedUser.rol === "ADMIN" || loggedUser.rol === "SUPER_USUARIO") {
+          if (loggedUser.punto_atencion_id) {
+            // Cargar el punto de atención del admin desde su perfil
+            const { points } = await pointService.getAllPoints();
+            const adminPoint = points.find(p => p.id === loggedUser.punto_atencion_id);
+            if (adminPoint) {
+              setSelectedPointState(adminPoint);
+            }
+          }
+        } else {
+          // Para operadores, usar la lógica existente de jornada activa
+          const res = await scheduleService.getActiveSchedule();
+          if (res?.schedule?.puntoAtencion) {
+            setSelectedPointState(res.schedule.puntoAtencion as PuntoAtencion);
+          }
         }
 
         return { success: true };
