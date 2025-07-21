@@ -30,11 +30,15 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     const checkActiveJornada = async () => {
       try {
         const token = localStorage.getItem("token");
-        if (!token) return;
+        if (!token) {
+          setHasActiveJornada(false);
+          return;
+        }
 
         const response = await fetch("/api/schedules/active", {
           headers: {
-            "Authorization": `Bearer ${token}`
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
           }
         });
         
@@ -64,10 +68,25 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       try {
         console.log("🔄 Fetching currencies and balances...");
         
+        const token = localStorage.getItem("token");
+        if (!token) {
+          toast({
+            title: "Sesión Expirada",
+            description: "Por favor, inicie sesión nuevamente.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        const authHeaders = {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        };
+        
         // Primero obtener las monedas y luego filtrar por las que tienen saldo
         const [currenciesResponse, balancesResponse] = await Promise.all([
-          fetch("/api/currencies"),
-          fetch("/api/vista-saldos-puntos")
+          fetch("/api/currencies", { headers: authHeaders }),
+          fetch("/api/vista-saldos-puntos", { headers: authHeaders })
         ]);
         
         const currenciesData = await currenciesResponse.json();
