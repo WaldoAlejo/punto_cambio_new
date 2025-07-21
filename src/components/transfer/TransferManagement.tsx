@@ -95,10 +95,14 @@ const TransferManagement = ({ user }: TransferManagementProps) => {
         return;
       }
       await fetchTransfers();
+      
       toast({
         title: "✅ Transferencia aprobada",
         description: "La transferencia ha sido aprobada exitosamente",
       });
+      
+      // Disparar evento para actualizar saldos
+      window.dispatchEvent(new CustomEvent('transferApproved'));
     } catch {
       toast({
         title: "Error",

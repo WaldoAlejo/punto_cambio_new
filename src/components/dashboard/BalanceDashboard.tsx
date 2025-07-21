@@ -30,18 +30,25 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
     }
   }, [selectedPoint]);
 
-  // Escuchar eventos de cambios de divisas completados
+  // Escuchar eventos de cambios de divisas completados y transferencias aprobadas
   useEffect(() => {
     const handleExchangeCompleted = () => {
       console.log('🔄 Exchange completed, refreshing balances...');
       loadSaldos();
     };
 
-    // Escuchar evento personalizado
+    const handleTransferApproved = () => {
+      console.log('🔄 Transfer approved, refreshing balances...');
+      loadSaldos();
+    };
+
+    // Escuchar eventos personalizados
     window.addEventListener('exchangeCompleted', handleExchangeCompleted);
+    window.addEventListener('transferApproved', handleTransferApproved);
     
     return () => {
       window.removeEventListener('exchangeCompleted', handleExchangeCompleted);
+      window.removeEventListener('transferApproved', handleTransferApproved);
     };
   }, []);
 

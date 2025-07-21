@@ -133,50 +133,134 @@ router.patch(
         return;
       }
 
-      const updatedTransfer = await prisma.transferencia.update({
-        where: { id: transferId },
-        data: {
-          estado: "APROBADO",
-          aprobado_por: req.user?.id,
-          fecha_aprobacion: new Date(),
-          observaciones_aprobacion: observaciones,
-        },
-        include: {
-          origen: {
-            select: {
-              id: true,
-              nombre: true,
+      // Aprobar transferencia y actualizar saldos en una transacción
+      const updatedTransfer = await prisma.$transaction(async (tx) => {
+        // 1. Actualizar estado de la transferencia
+        const transferAprobada = await tx.transferencia.update({
+          where: { id: transferId },
+          data: {
+            estado: "APROBADO",
+            aprobado_por: req.user?.id,
+            fecha_aprobacion: new Date(),
+            observaciones_aprobacion: observaciones,
+          },
+          include: {
+            origen: {
+              select: {
+                id: true,
+                nombre: true,
+              },
+            },
+            destino: {
+              select: {
+                id: true,
+                nombre: true,
+              },
+            },
+            moneda: {
+              select: {
+                id: true,
+                codigo: true,
+                nombre: true,
+                simbolo: true,
+              },
+            },
+            usuarioSolicitante: {
+              select: {
+                id: true,
+                nombre: true,
+                username: true,
+              },
+            },
+            usuarioAprobador: {
+              select: {
+                id: true,
+                nombre: true,
+                username: true,
+              },
             },
           },
-          destino: {
-            select: {
-              id: true,
-              nombre: true,
+        });
+
+        // 2. Actualizar saldo del punto origen (restar) - solo si hay punto origen
+        if (transfer.origen_id) {
+          await tx.saldo.upsert({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: transfer.origen_id,
+                moneda_id: transfer.moneda_id,
+              },
+            },
+            update: {
+              cantidad: {
+                decrement: Number(transfer.monto),
+              },
+              updated_at: new Date(),
+            },
+            create: {
+              punto_atencion_id: transfer.origen_id,
+              moneda_id: transfer.moneda_id,
+              cantidad: -Number(transfer.monto),
+              billetes: 0,
+              monedas_fisicas: 0,
+            },
+          });
+
+          // Registrar movimiento de salida
+          await tx.historialSaldo.create({
+            data: {
+              punto_atencion_id: transfer.origen_id,
+              moneda_id: transfer.moneda_id,
+              usuario_id: req.user!.id,
+              cantidad_anterior: 0, // Se calculará después si es necesario
+              cantidad_incrementada: -Number(transfer.monto),
+              cantidad_nueva: 0, // Se calculará después si es necesario
+              tipo_movimiento: 'EGRESO',
+              descripcion: `Transferencia de salida a ${transferAprobada.destino?.nombre || 'Externa'} - ${transfer.monto}`,
+              numero_referencia: transfer.numero_recibo || transfer.id,
+            },
+          });
+        }
+
+        // 3. Actualizar saldo del punto destino (sumar)
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: transfer.destino_id,
+              moneda_id: transfer.moneda_id,
             },
           },
-          moneda: {
-            select: {
-              id: true,
-              codigo: true,
-              nombre: true,
-              simbolo: true,
+          update: {
+            cantidad: {
+              increment: Number(transfer.monto),
             },
+            updated_at: new Date(),
           },
-          usuarioSolicitante: {
-            select: {
-              id: true,
-              nombre: true,
-              username: true,
-            },
+          create: {
+            punto_atencion_id: transfer.destino_id,
+            moneda_id: transfer.moneda_id,
+            cantidad: Number(transfer.monto),
+            billetes: 0,
+            monedas_fisicas: 0,
           },
-          usuarioAprobador: {
-            select: {
-              id: true,
-              nombre: true,
-              username: true,
-            },
+        });
+
+        // Registrar movimiento de entrada
+        await tx.historialSaldo.create({
+          data: {
+            punto_atencion_id: transfer.destino_id,
+            moneda_id: transfer.moneda_id,
+            usuario_id: req.user!.id,
+            cantidad_anterior: 0, // Se calculará después si es necesario
+            cantidad_incrementada: Number(transfer.monto),
+            cantidad_nueva: 0, // Se calculará después si es necesario
+            tipo_movimiento: 'INGRESO',
+            descripcion: `Transferencia de entrada desde ${transferAprobada.origen?.nombre || 'Externa'} - ${transfer.monto}`,
+            numero_referencia: transfer.numero_recibo || transfer.id,
           },
-        },
+        });
+
+        return transferAprobada;
       });
 
       logger.info("Transferencia aprobada", {
