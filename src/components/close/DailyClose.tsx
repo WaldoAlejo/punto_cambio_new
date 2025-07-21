@@ -27,15 +27,41 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   useEffect(() => {
     const fetchCurrencies = async () => {
       try {
-        const response = await fetch("/api/currencies");
-        const data = await response.json();
-        if (data.success && Array.isArray(data.currencies)) {
-          setCurrencies(data.currencies);
+        console.log("🔄 Fetching currencies and balances...");
+        
+        // Primero obtener las monedas y luego filtrar por las que tienen saldo
+        const [currenciesResponse, balancesResponse] = await Promise.all([
+          fetch("/api/currencies"),
+          fetch("/api/vista-saldos-puntos")
+        ]);
+        
+        const currenciesData = await currenciesResponse.json();
+        const balancesData = await balancesResponse.json();
+        
+        console.log("💰 Currencies response:", currenciesData);
+        console.log("💰 Balances response:", balancesData);
+        
+        if (currenciesData.success && Array.isArray(currenciesData.currencies) && 
+            balancesData.success && Array.isArray(balancesData.saldos)) {
+          
+          // Filtrar solo las monedas que tienen saldo inicial > 0 en este punto
+          const pointBalances = balancesData.saldos.filter(s => 
+            s.punto_atencion_id === selectedPoint?.id && 
+            Number(s.saldo_inicial) > 0
+          );
+          
+          const activeCurrencyIds = pointBalances.map(b => b.moneda_id);
+          const filteredCurrencies = currenciesData.currencies.filter(c => 
+            activeCurrencyIds.includes(c.id)
+          );
+          
+          console.log("🎯 Filtered currencies with balance:", filteredCurrencies);
+          setCurrencies(filteredCurrencies);
 
           const initialBalances: {
             [key: string]: { bills: string; coins: string };
           } = {};
-          data.currencies.forEach((currency: Moneda) => {
+          filteredCurrencies.forEach((currency: Moneda) => {
             initialBalances[currency.id] = { bills: "", coins: "" };
           });
           setBalances(initialBalances);
@@ -46,7 +72,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         console.error("Error al obtener monedas:", error);
         toast({
           title: "Error",
-          description: "No se pudo cargar la lista de monedas.",
+          description: "No se pudo cargar la lista de monedas con saldo.",
           variant: "destructive",
         });
       }
@@ -79,7 +105,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   };
 
   const performDailyClose = async () => {
+    console.log("🔄 performDailyClose START");
     if (!selectedPoint) {
+      console.log("❌ No selectedPoint");
       toast({
         title: "Error",
         description: "Debe seleccionar un punto de atención",
@@ -94,6 +122,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     );
 
     if (incompleteBalances) {
+      console.log("❌ Incomplete balances:", balances);
       toast({
         title: "Error",
         description: "Debe completar todos los saldos antes del cierre",
@@ -111,22 +140,32 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       saldo_apertura: 0, // Se calculará en el backend
       saldo_cierre: 0, // Se calculará en el backend
     }));
+    
+    console.log("📊 Detalles prepared:", detalles);
 
     try {
       const token = localStorage.getItem("token");
+      console.log("🔑 Token exists:", !!token);
+      
+      const requestBody = {
+        detalles,
+        observaciones: ""
+      };
+      console.log("📡 Request body:", requestBody);
+      
       const res = await fetch("/api/cuadre-caja", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
           "Authorization": `Bearer ${token}`
         },
-        body: JSON.stringify({
-          detalles,
-          observaciones: ""
-        }),
+        body: JSON.stringify(requestBody),
       });
+      
+      console.log("📥 Response status:", res.status);
 
       const data = await res.json();
+      console.log("📄 Response data:", data);
 
       if (!data.success) {
         throw new Error(data.error || "Error inesperado");
@@ -139,6 +178,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         description: "El cierre diario se ha guardado correctamente",
       });
     } catch (error) {
+      console.error("💥 Error in performDailyClose:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "No se pudo guardar el cierre",
@@ -248,7 +288,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               ))}
 
               <Button
-                onClick={performDailyClose}
+                onClick={() => {
+                  console.log("🖱️ Button clicked - performDailyClose");
+                  performDailyClose();
+                }}
                 className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
                 size="lg"
               >
