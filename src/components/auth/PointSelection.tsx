@@ -41,31 +41,41 @@ const PointSelection = ({
     setIsStartingShift(true);
     try {
       const ubicacion = await getLocation();
-      const scheduleData = {
-        usuario_id: user.id,
-        punto_atencion_id: point.id,
-        fecha_inicio: new Date().toISOString(),
-        ubicacion_inicio: ubicacion,
-      };
+      
+      // Para operadores: crear o actualizar jornada automáticamente
+      if (user.rol === "OPERADOR") {
+        const scheduleData = {
+          usuario_id: user.id,
+          punto_atencion_id: point.id,
+          fecha_inicio: new Date().toISOString(),
+          ubicacion_inicio: ubicacion,
+        };
 
-      const { error } = await scheduleService.createOrUpdateSchedule(
-        scheduleData
-      );
-      if (error) {
+        const { error } = await scheduleService.createOrUpdateSchedule(
+          scheduleData
+        );
+        if (error) {
+          toast({
+            title: "Error",
+            description: `Error al iniciar jornada: ${error}`,
+            variant: "destructive",
+          });
+          return;
+        }
+
         toast({
-          title: "Error",
-          description: `Error al iniciar jornada: ${error}`,
-          variant: "destructive",
+          title: "¡Jornada iniciada automáticamente!",
+          description: `Conectado a ${point.nombre}. Tu jornada laboral ha comenzado.`,
         });
-        return;
+      } else {
+        // Para administradores: solo seleccionar punto sin crear jornada
+        toast({
+          title: "Punto seleccionado",
+          description: `Conectado a ${point.nombre}.`,
+        });
       }
 
       setSelectedPoint(point);
-
-      toast({
-        title: "Jornada iniciada",
-        description: `Conectado a ${point.nombre}. Jornada iniciada automáticamente.`,
-      });
 
       if (typeof onPointSelect === "function") {
         onPointSelect(point);

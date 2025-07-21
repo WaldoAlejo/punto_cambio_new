@@ -85,36 +85,59 @@ const ExchangeManagement = ({
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Cambio de Divisas</h1>
-        <div className="text-sm text-gray-500">
-          Punto: {selectedPoint?.nombre}
-        </div>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="space-y-6">
-          {isProcessing ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Procesando cambio...</p>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5">
+      <div className="container mx-auto p-6 space-y-8">
+        {/* Header mejorado */}
+        <div className="bg-card rounded-xl shadow-lg p-6 border border-border/50">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-primary mb-2">Cambio de Divisas</h1>
+              <p className="text-muted-foreground">Gestiona tus operaciones de cambio de forma eficiente</p>
             </div>
-          ) : (
-            <ExchangeSteps
-              ref={stepsRef}
-              currencies={currencies}
-              onComplete={processExchange}
-            />
-          )}
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">Punto de Atención</p>
+              <p className="text-lg font-semibold text-primary">{selectedPoint?.nombre}</p>
+            </div>
+          </div>
         </div>
 
-        <ExchangeList exchanges={exchanges || []} currencies={currencies} />
-        
-        <PendingExchangesList 
-          user={user}
-          selectedPoint={selectedPoint}
-        />
+        {/* Grid mejorado con mejor spacing */}
+        <div className="grid lg:grid-cols-12 gap-8">
+          {/* Formulario principal - más espacio */}
+          <div className="lg:col-span-5 space-y-6">
+            <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
+              {isProcessing ? (
+                <div className="text-center py-16 px-6">
+                  <div className="animate-spin rounded-full h-20 w-20 border-4 border-primary/20 border-t-primary mx-auto"></div>
+                  <p className="mt-6 text-lg text-muted-foreground">Procesando cambio...</p>
+                </div>
+              ) : (
+                <ExchangeSteps
+                  ref={stepsRef}
+                  currencies={currencies}
+                  onComplete={processExchange}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Lista de cambios */}
+          <div className="lg:col-span-4">
+            <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
+              <ExchangeList exchanges={exchanges || []} currencies={currencies} />
+            </div>
+          </div>
+          
+          {/* Cambios pendientes */}
+          <div className="lg:col-span-3">
+            <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
+              <PendingExchangesList 
+                user={user}
+                selectedPoint={selectedPoint}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
