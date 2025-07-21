@@ -5,9 +5,9 @@ import {
   useEffect,
   ReactNode,
 } from "react";
-import { authService, AuthUser } from "../services/authService";
+import { supabaseAuthService as authService, AuthUser } from "../services/supabaseAuthService";
 import { scheduleService } from "../services/scheduleService";
-import { pointService } from "../services/pointService";
+import { supabasePointService as pointService } from "../services/supabasePointService";
 import { PuntoAtencion } from "../types";
 
 interface AuthContextType {
