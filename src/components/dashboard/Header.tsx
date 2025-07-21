@@ -53,15 +53,14 @@ const Header = ({
           </h1>
           {selectedPoint && (
             <p className="text-xs sm:text-sm text-gray-500 truncate">
-              {selectedPoint.nombre} - {selectedPoint.ciudad}
+              📍 {selectedPoint.nombre} - {selectedPoint.ciudad}
             </p>
           )}
-          {!selectedPoint &&
-            (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") && (
-              <p className="text-xs sm:text-sm text-blue-600">
-                Panel Administrativo
-              </p>
-            )}
+          {!selectedPoint && (
+            <p className="text-xs sm:text-sm text-orange-600">
+              ⚠️ Sin punto seleccionado
+            </p>
+          )}
         </div>
       </div>
 

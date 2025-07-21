@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { User, PuntoAtencion } from "../../types";
+import { User, PuntoAtencion, SalidaEspontanea } from "../../types";
 import AutoTimeTracker from "./AutoTimeTracker";
+import TimeTracker from "./TimeTracker";
 import SpontaneousExitForm from "./SpontaneousExitForm";
 import SpontaneousExitHistory from "./SpontaneousExitHistory";
 import {
@@ -19,7 +20,7 @@ const OperatorTimeManagement = ({
   user,
   selectedPoint,
 }: OperatorTimeManagementProps) => {
-  const [spontaneousExits, setSpontaneousExits] = useState<SpontaneousExit[]>(
+  const [spontaneousExits, setSpontaneousExits] = useState<SalidaEspontanea[]>(
     []
   );
   const [isLoadingExits, setIsLoadingExits] = useState(true);
@@ -41,7 +42,35 @@ const OperatorTimeManagement = ({
           variant: "destructive",
         });
       } else {
-        setSpontaneousExits(exits);
+        // Convertir SpontaneousExit a SalidaEspontanea
+        const convertedExits: SalidaEspontanea[] = exits.map(exit => ({
+          id: exit.id,
+          usuario_id: exit.usuario_id,
+          punto_atencion_id: exit.punto_atencion_id,
+          motivo: exit.motivo,
+          descripcion: exit.descripcion,
+          fecha_salida: exit.fecha_salida,
+          fecha_regreso: exit.fecha_regreso,
+          ubicacion_salida: exit.ubicacion_salida,
+          ubicacion_regreso: exit.ubicacion_regreso,
+          duracion_minutos: exit.duracion_minutos,
+          aprobado_por: exit.aprobado_por,
+          created_at: exit.created_at,
+          updated_at: exit.updated_at,
+          estado: exit.estado,
+          usuario: {
+            id: exit.usuario.id,
+            username: exit.usuario.username || '',
+            nombre: exit.usuario.nombre,
+            correo: '',
+            telefono: '',
+            rol: 'OPERADOR' as const,
+            activo: true,
+            created_at: '',
+            updated_at: '',
+          },
+        }));
+        setSpontaneousExits(convertedExits);
       }
     } catch {
       toast({
@@ -54,7 +83,7 @@ const OperatorTimeManagement = ({
     }
   };
 
-  const handleExitRegistered = (exit: SpontaneousExit) => {
+  const handleExitRegistered = (exit: SalidaEspontanea) => {
     setSpontaneousExits((prev) => [exit, ...prev]);
     setShowExitForm(false);
     toast({
@@ -85,8 +114,37 @@ const OperatorTimeManagement = ({
       }
 
       if (updatedExit) {
+        // Convertir el exit actualizado
+        const convertedExit: SalidaEspontanea = {
+          id: updatedExit.id,
+          usuario_id: updatedExit.usuario_id,
+          punto_atencion_id: updatedExit.punto_atencion_id,
+          motivo: updatedExit.motivo,
+          descripcion: updatedExit.descripcion,
+          fecha_salida: updatedExit.fecha_salida,
+          fecha_regreso: updatedExit.fecha_regreso,
+          ubicacion_salida: updatedExit.ubicacion_salida,
+          ubicacion_regreso: updatedExit.ubicacion_regreso,
+          duracion_minutos: updatedExit.duracion_minutos,
+          aprobado_por: updatedExit.aprobado_por,
+          created_at: updatedExit.created_at,
+          updated_at: updatedExit.updated_at,
+          estado: updatedExit.estado,
+          usuario: {
+            id: updatedExit.usuario.id,
+            username: updatedExit.usuario.username || '',
+            nombre: updatedExit.usuario.nombre,
+            correo: '',
+            telefono: '',
+            rol: 'OPERADOR' as const,
+            activo: true,
+            created_at: '',
+            updated_at: '',
+          },
+        };
+        
         setSpontaneousExits((prev) =>
-          prev.map((exit) => (exit.id === exitId ? updatedExit : exit))
+          prev.map((exit) => (exit.id === exitId ? convertedExit : exit))
         );
 
         toast({
@@ -115,14 +173,23 @@ const OperatorTimeManagement = ({
       </div>
 
       <Tabs defaultValue="tracker" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="tracker">Mi Jornada</TabsTrigger>
+          <TabsTrigger value="lunch">Almuerzo</TabsTrigger>
           <TabsTrigger value="spontaneous">Salidas Espontáneas</TabsTrigger>
           <TabsTrigger value="history">Mi Historial</TabsTrigger>
         </TabsList>
 
         <TabsContent value="tracker">
           <AutoTimeTracker user={user} selectedPoint={selectedPoint} />
+        </TabsContent>
+
+        <TabsContent value="lunch">
+          <TimeTracker 
+            user={user} 
+            selectedPoint={selectedPoint} 
+            spontaneousExits={spontaneousExits}
+          />
         </TabsContent>
 
         <TabsContent value="spontaneous">

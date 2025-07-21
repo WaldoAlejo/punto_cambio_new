@@ -9,12 +9,12 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Clock, ArrowLeft } from "lucide-react";
-import { SpontaneousExit } from "../../services/spontaneousExitService";
+import { SalidaEspontanea } from "../../types";
 import { toast } from "@/hooks/use-toast";
 import { spontaneousExitService } from "../../services/spontaneousExitService";
 
 interface SpontaneousExitHistoryProps {
-  exits: SpontaneousExit[];
+  exits: SalidaEspontanea[];
   onExitReturn?: (
     exitId: string,
     returnData: { lat: number; lng: number; direccion?: string }
@@ -109,7 +109,7 @@ const SpontaneousExitHistory = ({
     }
   };
 
-  const getStatusBadge = (exit: SpontaneousExit) => {
+  const getStatusBadge = (exit: SalidaEspontanea) => {
     if (exit.fecha_regreso) {
       return <Badge className="bg-green-100 text-green-800">Completado</Badge>;
     }

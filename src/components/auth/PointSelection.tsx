@@ -117,6 +117,22 @@ const PointSelection = ({
     });
   };
 
+  // Filtrar puntos según el rol del usuario
+  const getAvailablePoints = () => {
+    if (user.rol === "OPERADOR") {
+      // Los operadores no pueden usar puntos que contengan palabras reservadas para administración
+      return points.filter((point) => {
+        const nombre = point.nombre.toLowerCase();
+        const reservedWords = ["principal", "administrativo", "central", "admin", "matriz"];
+        return !reservedWords.some(word => nombre.includes(word));
+      });
+    }
+    // Admins y super usuarios pueden usar todos los puntos
+    return points;
+  };
+
+  const availablePoints = getAvailablePoints();
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-2xl">
@@ -130,12 +146,15 @@ const PointSelection = ({
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {points.length === 0 ? (
+            {availablePoints.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                No hay puntos disponibles.
+                {user.rol === "OPERADOR" 
+                  ? "No hay puntos operativos disponibles para operadores."
+                  : "No hay puntos disponibles."
+                }
               </div>
             ) : (
-              points.map((point) => (
+              availablePoints.map((point) => (
                 <div
                   key={point.id}
                   className={`p-4 border rounded-lg transition-colors hover:bg-blue-50 cursor-pointer border-gray-200 ${

@@ -3,6 +3,7 @@ import { User, PuntoAtencion, Moneda, Transferencia } from "../../types";
 import { toast } from "@/hooks/use-toast";
 import { apiService } from "../../services/apiService";
 import { transferService } from "../../services/transferService";
+import { useAuth } from "@/hooks/useAuth";
 import TransferForm from "./TransferForm";
 import TransferList from "./TransferList";
 
@@ -24,8 +25,8 @@ const TransferManagement = ({ user }: TransferManagementProps) => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const selectedPoint =
-    points.find((p) => p.id === user.punto_atencion_id) || null;
+  // Para encontrar el punto seleccionado, usar el contexto de autenticación
+  const { selectedPoint } = useAuth();
 
   // Refresca solo transferencias
   const fetchTransfers = async () => {
