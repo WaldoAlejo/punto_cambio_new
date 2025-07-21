@@ -84,9 +84,42 @@ router.get("/", authenticateToken, async (req, res) => {
       },
     });
 
-    console.log("💱 Cambios encontrados:", {
+    // TEMPORAL: También obtener cambios pendientes para debug
+    const cambiosPendientes = await prisma.cambioDivisa.findMany({
+      where: {
+        punto_atencion_id: usuario.punto_atencion_id,
+        fecha: {
+          gte: fechaInicio,
+        },
+        estado: "PENDIENTE",
+      },
+      select: {
+        id: true,
+        moneda_origen_id: true,
+        moneda_destino_id: true,
+        monto_origen: true,
+        monto_destino: true,
+        fecha: true,
+        estado: true,
+      },
+    });
+
+    console.log("💱 Cambios COMPLETADOS:", {
       total: cambiosHoy.length,
       cambios: cambiosHoy.map(c => ({
+        id: c.id,
+        fecha: c.fecha,
+        estado: c.estado,
+        origen: c.moneda_origen_id,
+        destino: c.moneda_destino_id,
+        montoOrigen: c.monto_origen,
+        montoDestino: c.monto_destino
+      }))
+    });
+
+    console.log("⏳ Cambios PENDIENTES:", {
+      total: cambiosPendientes.length,
+      cambios: cambiosPendientes.map(c => ({
         id: c.id,
         fecha: c.fecha,
         estado: c.estado,
