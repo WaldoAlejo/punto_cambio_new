@@ -1,14 +1,10 @@
 
 import express from "express";
-import { createClient } from "@supabase/supabase-js";
+import { pool } from "../lib/database";
 import { authenticateToken } from "../middleware/auth";
 import logger from "../utils/logger.js";
 
 const router = express.Router();
-
-const supabaseUrl = "https://kmmkrrlmvijvntnarfmo.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttbWtycmxtdmlqdm50bmFyZm1vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk5MDYzNTIsImV4cCI6MjA2NTQ4MjM1Mn0.0Lj7RAlvwCh-xNpST8AEE_OHUNghqrljF5gkCfCvm4c";
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Obtener el cuadre actual y datos para cierre
 router.get("/", authenticateToken, async (req, res) => {
@@ -25,38 +21,51 @@ router.get("/", authenticateToken, async (req, res) => {
     hoy.setHours(0, 0, 0, 0);
 
     // Buscar cuadre abierto del día
-    const { data: cuadre, error: cuadreError } = await supabase
-      .from('CuadreCaja')
-      .select(`
-        *,
-        detalles:DetalleCuadreCaja(
-          *,
-          moneda:Moneda(*)
-        )
-      `)
-      .eq('punto_atencion_id', usuario.punto_atencion_id)
-      .gte('fecha', hoy.toISOString())
-      .eq('estado', 'ABIERTO')
-      .single();
-
-    if (cuadreError && cuadreError.code !== 'PGRST116') {
-      console.error('Error obteniendo cuadre:', cuadreError);
-    }
+    const cuadreQuery = `
+      SELECT c.*, 
+             json_agg(
+               json_build_object(
+                 'id', dc.id,
+                 'moneda_id', dc.moneda_id,
+                 'saldo_apertura', dc.saldo_apertura,
+                 'saldo_cierre', dc.saldo_cierre,
+                 'conteo_fisico', dc.conteo_fisico,
+                 'billetes', dc.billetes,
+                 'monedas_fisicas', dc.monedas_fisicas,
+                 'diferencia', dc.diferencia,
+                 'moneda', json_build_object(
+                   'id', m.id,
+                   'codigo', m.codigo,
+                   'nombre', m.nombre,
+                   'simbolo', m.simbolo
+                 )
+               )
+             ) FILTER (WHERE dc.id IS NOT NULL) as detalles
+      FROM "CuadreCaja" c
+      LEFT JOIN "DetalleCuadreCaja" dc ON c.id = dc.cuadre_id
+      LEFT JOIN "Moneda" m ON dc.moneda_id = m.id
+      WHERE c.punto_atencion_id = $1 
+        AND c.fecha >= $2 
+        AND c.estado = 'ABIERTO'
+      GROUP BY c.id
+      LIMIT 1
+    `;
+    
+    const cuadreResult = await pool.query(cuadreQuery, [usuario.punto_atencion_id, hoy.toISOString()]);
+    const cuadre = cuadreResult.rows[0] || null;
 
     // Obtener jornada activa para calcular período
-    const { data: jornadaActiva, error: jornadaError } = await supabase
-      .from('Jornada')
-      .select('*')
-      .eq('usuario_id', usuario.id)
-      .eq('punto_atencion_id', usuario.punto_atencion_id)
-      .eq('estado', 'ACTIVO')
-      .order('fecha_inicio', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (jornadaError && jornadaError.code !== 'PGRST116') {
-      console.error('Error obteniendo jornada:', jornadaError);
-    }
+    const jornadaQuery = `
+      SELECT * FROM "Jornada" 
+      WHERE usuario_id = $1 
+        AND punto_atencion_id = $2 
+        AND estado = 'ACTIVO'
+      ORDER BY fecha_inicio DESC 
+      LIMIT 1
+    `;
+    
+    const jornadaResult = await pool.query(jornadaQuery, [usuario.id, usuario.punto_atencion_id]);
+    const jornadaActiva = jornadaResult.rows[0] || null;
 
     const fechaInicio = jornadaActiva?.fecha_inicio ? new Date(jornadaActiva.fecha_inicio) : hoy;
 
@@ -72,40 +81,43 @@ router.get("/", authenticateToken, async (req, res) => {
     });
 
     // Obtener cambios realizados en el período
-    const { data: cambiosHoy, error: cambiosError } = await supabase
-      .from('CambioDivisa')
-      .select('id, moneda_origen_id, moneda_destino_id, monto_origen, monto_destino, fecha, estado')
-      .eq('punto_atencion_id', usuario.punto_atencion_id)
-      .gte('fecha', fechaInicio.toISOString())
-      .eq('estado', 'COMPLETADO');
-
-    if (cambiosError) {
-      console.error('Error obteniendo cambios:', cambiosError);
-      return res.status(500).json({ success: false, error: 'Error obteniendo cambios' });
-    }
+    const cambiosQuery = `
+      SELECT id, moneda_origen_id, moneda_destino_id, monto_origen, monto_destino, fecha, estado
+      FROM "CambioDivisa"
+      WHERE punto_atencion_id = $1 
+        AND fecha >= $2 
+        AND estado = 'COMPLETADO'
+    `;
+    
+    const cambiosResult = await pool.query(cambiosQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
+    const cambiosHoy = cambiosResult.rows;
 
     // Obtener transferencias del período
-    const { data: transferenciasEntrada, error: transferenciasEntradaError } = await supabase
-      .from('Transferencia')
-      .select('id, monto, moneda_id, tipo_transferencia')
-      .eq('destino_id', usuario.punto_atencion_id)
-      .gte('fecha', fechaInicio.toISOString())
-      .eq('estado', 'APROBADA');
-
-    const { data: transferenciasSalida, error: transferenciasSalidaError } = await supabase
-      .from('Transferencia')
-      .select('id, monto, moneda_id, tipo_transferencia')
-      .eq('origen_id', usuario.punto_atencion_id)
-      .gte('fecha', fechaInicio.toISOString())
-      .eq('estado', 'APROBADA');
-
-    if (transferenciasEntradaError || transferenciasSalidaError) {
-      console.error('Error obteniendo transferencias:', { transferenciasEntradaError, transferenciasSalidaError });
-    }
+    const transferenciasEntradaQuery = `
+      SELECT id, monto, moneda_id, tipo_transferencia
+      FROM "Transferencia"
+      WHERE destino_id = $1 
+        AND fecha >= $2 
+        AND estado = 'APROBADA'
+    `;
+    
+    const transferenciasSalidaQuery = `
+      SELECT id, monto, moneda_id, tipo_transferencia
+      FROM "Transferencia"
+      WHERE origen_id = $1 
+        AND fecha >= $2 
+        AND estado = 'APROBADA'
+    `;
+    
+    const transferenciasEntradaResult = await pool.query(transferenciasEntradaQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
+    const transferenciasSalidaResult = await pool.query(transferenciasSalidaQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
+    
+    const transferenciasEntrada = transferenciasEntradaResult.rows;
+    const transferenciasSalida = transferenciasSalidaResult.rows;
 
     console.log("💱 Cambios COMPLETADOS:", {
-      total: cambiosHoy?.length || 0,
-      cambios: cambiosHoy?.map(c => ({
+      total: cambiosHoy.length || 0,
+      cambios: cambiosHoy.map(c => ({
         id: c.id,
         fecha: c.fecha,
         estado: c.estado,
@@ -117,13 +129,13 @@ router.get("/", authenticateToken, async (req, res) => {
     });
 
     console.log("📈 Transferencias:", {
-      entrada: transferenciasEntrada?.length || 0,
-      salida: transferenciasSalida?.length || 0
+      entrada: transferenciasEntrada.length || 0,
+      salida: transferenciasSalida.length || 0
     });
 
     // Identificar monedas utilizadas
     const monedasUsadas = new Set<string>();
-    cambiosHoy?.forEach((cambio) => {
+    cambiosHoy.forEach((cambio) => {
       monedasUsadas.add(cambio.moneda_origen_id);
       monedasUsadas.add(cambio.moneda_destino_id);
     });
@@ -140,29 +152,27 @@ router.get("/", authenticateToken, async (req, res) => {
           mensaje: "No se han realizado cambios de divisa hoy",
           totales: {
             cambios: 0,
-            transferencias_entrada: transferenciasEntrada?.length || 0,
-            transferencias_salida: transferenciasSalida?.length || 0,
+            transferencias_entrada: transferenciasEntrada.length || 0,
+            transferencias_salida: transferenciasSalida.length || 0,
           },
         },
       });
     }
 
     // Obtener información de las monedas utilizadas
-    const { data: monedas, error: monedasError } = await supabase
-      .from('Moneda')
-      .select('*')
-      .in('id', Array.from(monedasUsadas))
-      .eq('activo', true)
-      .order('orden_display', { ascending: true });
-
-    if (monedasError) {
-      console.error('Error obteniendo monedas:', monedasError);
-      return res.status(500).json({ success: false, error: 'Error obteniendo monedas' });
-    }
+    const monedasQuery = `
+      SELECT * FROM "Moneda"
+      WHERE id = ANY($1::uuid[]) 
+        AND activo = true
+      ORDER BY orden_display ASC
+    `;
+    
+    const monedasResult = await pool.query(monedasQuery, [Array.from(monedasUsadas)]);
+    const monedas = monedasResult.rows;
 
     // Calcular movimientos para cada moneda
     const detallesConValores = await Promise.all(
-      (monedas || []).map(async (moneda) => {
+      monedas.map(async (moneda) => {
         const detalle = cuadre?.detalles?.find((d: any) => d.moneda_id === moneda.id);
         
         // Calcular saldo de apertura
@@ -174,7 +184,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
         console.log(`💰 Calculando movimientos para ${moneda.codigo}:`, {
           saldoApertura,
-          cambiosHoy: cambiosHoy?.filter(c => 
+          cambiosHoy: cambiosHoy.filter(c => 
             c.moneda_origen_id === moneda.id || c.moneda_destino_id === moneda.id
           )
         });
@@ -182,12 +192,12 @@ router.get("/", authenticateToken, async (req, res) => {
         // Calcular movimientos del período con mejor claridad
         // INGRESOS: cuando esta moneda es la que SE RECIBE (moneda_destino)
         const ingresos = cambiosHoy
-          ?.filter(c => c.moneda_destino_id === moneda.id)
+          .filter(c => c.moneda_destino_id === moneda.id)
           .reduce((sum, c) => sum + Number(c.monto_destino), 0) || 0;
 
         // EGRESOS: cuando esta moneda es la que SE ENTREGA (moneda_origen)
         const egresos = cambiosHoy
-          ?.filter(c => c.moneda_origen_id === moneda.id)
+          .filter(c => c.moneda_origen_id === moneda.id)
           .reduce((sum, c) => sum + Number(c.monto_origen), 0) || 0;
 
         const saldoCierre = saldoApertura + ingresos - egresos;
@@ -211,7 +221,7 @@ router.get("/", authenticateToken, async (req, res) => {
           monedas: detalle?.monedas_fisicas || 0,
           ingresos_periodo: ingresos,
           egresos_periodo: egresos,
-          movimientos_periodo: cambiosHoy?.filter(c => 
+          movimientos_periodo: cambiosHoy.filter(c => 
             c.moneda_origen_id === moneda.id || c.moneda_destino_id === moneda.id
           ).length || 0,
         };
@@ -226,9 +236,9 @@ router.get("/", authenticateToken, async (req, res) => {
         cuadre_id: cuadre?.id,
         periodo_inicio: fechaInicio,
         totales: {
-          cambios: cambiosHoy?.length || 0,
-          transferencias_entrada: transferenciasEntrada?.length || 0,
-          transferencias_salida: transferenciasSalida?.length || 0,
+          cambios: cambiosHoy.length || 0,
+          transferencias_entrada: transferenciasEntrada.length || 0,
+          transferencias_salida: transferenciasSalida.length || 0,
         },
       },
     });
@@ -259,29 +269,26 @@ async function calcularSaldoApertura(
     
     // 1. Buscar el último cierre anterior
     console.log(`🔍 Buscando último cierre anterior...`);
-    const { data: ultimoCierre, error: ultimoCierreError } = await supabase
-      .from('DetalleCuadreCaja')
-      .select(`
-        *,
-        cuadre:CuadreCaja(*)
-      `)
-      .eq('moneda_id', monedaId)
-      .eq('cuadre.punto_atencion_id', puntoAtencionId)
-      .in('cuadre.estado', ['CERRADO', 'PARCIAL'])
-      .lt('cuadre.fecha', fecha.toISOString())
-      .order('cuadre.fecha', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (ultimoCierreError && ultimoCierreError.code !== 'PGRST116') {
-      console.error('Error buscando último cierre:', ultimoCierreError);
-    }
+    const ultimoCierreQuery = `
+      SELECT dc.*, c.fecha as fecha_cuadre, c.estado as estado_cuadre
+      FROM "DetalleCuadreCaja" dc
+      INNER JOIN "CuadreCaja" c ON dc.cuadre_id = c.id
+      WHERE dc.moneda_id = $1 
+        AND c.punto_atencion_id = $2 
+        AND c.estado IN ('CERRADO', 'PARCIAL')
+        AND c.fecha < $3
+      ORDER BY c.fecha DESC 
+      LIMIT 1
+    `;
+    
+    const ultimoCierreResult = await pool.query(ultimoCierreQuery, [monedaId, puntoAtencionId, fecha.toISOString()]);
+    const ultimoCierre = ultimoCierreResult.rows[0] || null;
 
     console.log(`🔍 Resultado búsqueda último cierre:`, ultimoCierre ? {
       id: ultimoCierre.id,
       conteo_fisico: ultimoCierre.conteo_fisico,
-      fecha_cuadre: ultimoCierre.cuadre?.fecha,
-      estado_cuadre: ultimoCierre.cuadre?.estado
+      fecha_cuadre: ultimoCierre.fecha_cuadre,
+      estado_cuadre: ultimoCierre.estado_cuadre
     } : 'NO ENCONTRADO');
 
     if (ultimoCierre) {
@@ -293,43 +300,37 @@ async function calcularSaldoApertura(
     console.log(`🔍 No hay cierre anterior, buscando saldo inicial en tabla Saldo...`);
     
     // Primero verificar todos los saldos del punto
-    const { data: todosSaldos, error: todosSaldosError } = await supabase
-      .from('Saldo')
-      .select(`
-        *,
-        moneda:Moneda(codigo)
-      `)
-      .eq('punto_atencion_id', puntoAtencionId);
-
-    if (todosSaldosError) {
-      console.error('Error obteniendo todos los saldos:', todosSaldosError);
-    }
+    const todosSaldosQuery = `
+      SELECT s.*, m.codigo as moneda_codigo
+      FROM "Saldo" s
+      INNER JOIN "Moneda" m ON s.moneda_id = m.id
+      WHERE s.punto_atencion_id = $1
+    `;
     
-    console.log(`🔍 TODOS LOS SALDOS del punto ${puntoAtencionId}:`, todosSaldos?.map(s => ({
+    const todosSaldosResult = await pool.query(todosSaldosQuery, [puntoAtencionId]);
+    const todosSaldos = todosSaldosResult.rows;
+    
+    console.log(`🔍 TODOS LOS SALDOS del punto ${puntoAtencionId}:`, todosSaldos.map(s => ({
       moneda_id: s.moneda_id,
-      moneda_codigo: s.moneda?.codigo,
+      moneda_codigo: s.moneda_codigo,
       cantidad: s.cantidad
     })));
 
-    const { data: saldoInicial, error: saldoInicialError } = await supabase
-      .from('Saldo')
-      .select(`
-        *,
-        moneda:Moneda(codigo)
-      `)
-      .eq('punto_atencion_id', puntoAtencionId)
-      .eq('moneda_id', monedaId)
-      .single();
-
-    if (saldoInicialError && saldoInicialError.code !== 'PGRST116') {
-      console.error('Error obteniendo saldo inicial:', saldoInicialError);
-    }
+    const saldoInicialQuery = `
+      SELECT s.*, m.codigo as moneda_codigo
+      FROM "Saldo" s
+      INNER JOIN "Moneda" m ON s.moneda_id = m.id
+      WHERE s.punto_atencion_id = $1 AND s.moneda_id = $2
+    `;
+    
+    const saldoInicialResult = await pool.query(saldoInicialQuery, [puntoAtencionId, monedaId]);
+    const saldoInicial = saldoInicialResult.rows[0] || null;
 
     console.log(`🔍 SALDO INICIAL específico:`, saldoInicial ? {
       id: saldoInicial.id,
       punto_atencion_id: saldoInicial.punto_atencion_id,
       moneda_id: saldoInicial.moneda_id,
-      moneda_codigo: saldoInicial.moneda?.codigo,
+      moneda_codigo: saldoInicial.moneda_codigo,
       cantidad: saldoInicial.cantidad
     } : 'NO ENCONTRADO');
 
@@ -368,106 +369,128 @@ router.post("/", authenticateToken, async (req, res) => {
     }
 
     // Obtener jornada activa para calcular período
-    const { data: jornadaActiva, error: jornadaError } = await supabase
-      .from('Jornada')
-      .select('*')
-      .eq('usuario_id', usuario.id)
-      .eq('punto_atencion_id', usuario.punto_atencion_id)
-      .eq('estado', 'ACTIVO')
-      .order('fecha_inicio', { ascending: false })
-      .limit(1)
-      .single();
+    const jornadaQuery = `
+      SELECT * FROM "Jornada" 
+      WHERE usuario_id = $1 
+        AND punto_atencion_id = $2 
+        AND estado = 'ACTIVO'
+      ORDER BY fecha_inicio DESC 
+      LIMIT 1
+    `;
+    
+    const jornadaResult = await pool.query(jornadaQuery, [usuario.id, usuario.punto_atencion_id]);
+    const jornadaActiva = jornadaResult.rows[0] || null;
 
     const fechaInicio = jornadaActiva?.fecha_inicio ? new Date(jornadaActiva.fecha_inicio) : new Date();
     fechaInicio.setHours(0, 0, 0, 0);
 
     // Calcular totales del período
-    const { count: totalCambios } = await supabase
-      .from('CambioDivisa')
-      .select('*', { count: 'exact', head: true })
-      .eq('punto_atencion_id', usuario.punto_atencion_id)
-      .gte('fecha', fechaInicio.toISOString())
-      .eq('estado', 'COMPLETADO');
-
-    const { count: totalTransferenciasEntrada } = await supabase
-      .from('Transferencia')
-      .select('*', { count: 'exact', head: true })
-      .eq('destino_id', usuario.punto_atencion_id)
-      .gte('fecha', fechaInicio.toISOString())
-      .eq('estado', 'APROBADA');
-
-    const { count: totalTransferenciasSalida } = await supabase
-      .from('Transferencia')
-      .select('*', { count: 'exact', head: true })
-      .eq('origen_id', usuario.punto_atencion_id)
-      .gte('fecha', fechaInicio.toISOString())
-      .eq('estado', 'APROBADA');
+    const totalCambiosQuery = `
+      SELECT COUNT(*) FROM "CambioDivisa"
+      WHERE punto_atencion_id = $1 
+        AND fecha >= $2 
+        AND estado = 'COMPLETADO'
+    `;
+    
+    const totalTransferenciasEntradaQuery = `
+      SELECT COUNT(*) FROM "Transferencia"
+      WHERE destino_id = $1 
+        AND fecha >= $2 
+        AND estado = 'APROBADA'
+    `;
+    
+    const totalTransferenciasSalidaQuery = `
+      SELECT COUNT(*) FROM "Transferencia"
+      WHERE origen_id = $1 
+        AND fecha >= $2 
+        AND estado = 'APROBADA'
+    `;
+    
+    const totalCambiosResult = await pool.query(totalCambiosQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
+    const totalTransferenciasEntradaResult = await pool.query(totalTransferenciasEntradaQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
+    const totalTransferenciasSalidaResult = await pool.query(totalTransferenciasSalidaQuery, [usuario.punto_atencion_id, fechaInicio.toISOString()]);
+    
+    const totalCambios = parseInt(totalCambiosResult.rows[0].count);
+    const totalTransferenciasEntrada = parseInt(totalTransferenciasEntradaResult.rows[0].count);
+    const totalTransferenciasSalida = parseInt(totalTransferenciasSalidaResult.rows[0].count);
 
     // Crear el cuadre principal
-    const { data: cuadre, error: cuadreError } = await supabase
-      .from('CuadreCaja')
-      .insert({
-        usuario_id: usuario.id,
-        punto_atencion_id: usuario.punto_atencion_id,
-        estado: 'CERRADO',
-        observaciones: observaciones || null,
-        fecha_cierre: new Date().toISOString(),
-        total_cambios: totalCambios || 0,
-        total_transferencias_entrada: totalTransferenciasEntrada || 0,
-        total_transferencias_salida: totalTransferenciasSalida || 0,
-      })
-      .select()
-      .single();
-
-    if (cuadreError) {
-      console.error('Error creando cuadre:', cuadreError);
-      return res.status(500).json({
-        success: false,
-        error: 'Error creando cuadre de caja',
-      });
-    }
+    const cuadreInsertQuery = `
+      INSERT INTO "CuadreCaja" (
+        usuario_id, punto_atencion_id, estado, observaciones, 
+        fecha_cierre, total_cambios, total_transferencias_entrada, total_transferencias_salida
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `;
+    
+    const cuadreResult = await pool.query(cuadreInsertQuery, [
+      usuario.id,
+      usuario.punto_atencion_id,
+      'CERRADO',
+      observaciones || null,
+      new Date().toISOString(),
+      totalCambios || 0,
+      totalTransferenciasEntrada || 0,
+      totalTransferenciasSalida || 0,
+    ]);
+    
+    const cuadre = cuadreResult.rows[0];
 
     // Crear los detalles del cuadre
-    const detalleInserts = detalles.map((detalle: any) => ({
-      cuadre_id: cuadre.id,
-      moneda_id: detalle.moneda_id,
-      saldo_apertura: detalle.saldo_apertura || 0,
-      saldo_cierre: detalle.saldo_cierre || 0,
-      conteo_fisico: detalle.conteo_fisico || 0,
-      billetes: detalle.billetes || 0,
-      monedas_fisicas: detalle.monedas || 0,
-      diferencia: (detalle.conteo_fisico || 0) - (detalle.saldo_cierre || 0),
-    }));
-
-    const { error: detallesError } = await supabase
-      .from('DetalleCuadreCaja')
-      .insert(detalleInserts);
-
-    if (detallesError) {
-      console.error('Error creando detalles:', detallesError);
-      return res.status(500).json({
-        success: false,
-        error: 'Error creando detalles de cuadre',
-      });
+    const detalleInsertQuery = `
+      INSERT INTO "DetalleCuadreCaja" (
+        cuadre_id, moneda_id, saldo_apertura, saldo_cierre, 
+        conteo_fisico, billetes, monedas_fisicas, diferencia
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `;
+    
+    for (const detalle of detalles) {
+      await pool.query(detalleInsertQuery, [
+        cuadre.id,
+        detalle.moneda_id,
+        detalle.saldo_apertura || 0,
+        detalle.saldo_cierre || 0,
+        detalle.conteo_fisico || 0,
+        detalle.billetes || 0,
+        detalle.monedas || 0,
+        (detalle.conteo_fisico || 0) - (detalle.saldo_cierre || 0),
+      ]);
     }
 
     // Obtener el cuadre completo
-    const { data: cuadreCompleto, error: cuadreCompletoError } = await supabase
-      .from('CuadreCaja')
-      .select(`
-        *,
-        detalles:DetalleCuadreCaja(
-          *,
-          moneda:Moneda(*)
-        ),
-        usuario:Usuario(nombre, username)
-      `)
-      .eq('id', cuadre.id)
-      .single();
-
-    if (cuadreCompletoError) {
-      console.error('Error obteniendo cuadre completo:', cuadreCompletoError);
-    }
+    const cuadreCompletoQuery = `
+      SELECT c.*,
+             u.nombre as usuario_nombre, u.username as usuario_username,
+             json_agg(
+               json_build_object(
+                 'id', dc.id,
+                 'moneda_id', dc.moneda_id,
+                 'saldo_apertura', dc.saldo_apertura,
+                 'saldo_cierre', dc.saldo_cierre,
+                 'conteo_fisico', dc.conteo_fisico,
+                 'billetes', dc.billetes,
+                 'monedas_fisicas', dc.monedas_fisicas,
+                 'diferencia', dc.diferencia,
+                 'moneda', json_build_object(
+                   'id', m.id,
+                   'codigo', m.codigo,
+                   'nombre', m.nombre,
+                   'simbolo', m.simbolo
+                 )
+               )
+             ) FILTER (WHERE dc.id IS NOT NULL) as detalles
+      FROM "CuadreCaja" c
+      LEFT JOIN "Usuario" u ON c.usuario_id = u.id
+      LEFT JOIN "DetalleCuadreCaja" dc ON c.id = dc.cuadre_id
+      LEFT JOIN "Moneda" m ON dc.moneda_id = m.id
+      WHERE c.id = $1
+      GROUP BY c.id, u.nombre, u.username
+    `;
+    
+    const cuadreCompletoResult = await pool.query(cuadreCompletoQuery, [cuadre.id]);
+    const cuadreCompleto = cuadreCompletoResult.rows[0] || null;
 
     logger.info("Cuadre de caja guardado exitosamente", {
       cuadreId: cuadre.id,
