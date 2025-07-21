@@ -101,41 +101,35 @@ const ExchangeManagement = ({
           </div>
         </div>
 
-        {/* Grid mejorado con mejor spacing */}
-        <div className="grid lg:grid-cols-12 gap-8">
-          {/* Formulario principal - más espacio */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
-              {isProcessing ? (
-                <div className="text-center py-16 px-6">
-                  <div className="animate-spin rounded-full h-20 w-20 border-4 border-primary/20 border-t-primary mx-auto"></div>
-                  <p className="mt-6 text-lg text-muted-foreground">Procesando cambio...</p>
-                </div>
-              ) : (
-                <ExchangeSteps
-                  ref={stepsRef}
-                  currencies={currencies}
-                  onComplete={processExchange}
-                />
-              )}
+        {/* Formulario principal - Ocupa todo el ancho disponible */}
+        <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
+          {isProcessing ? (
+            <div className="text-center py-16 px-6">
+              <div className="animate-spin rounded-full h-20 w-20 border-4 border-primary/20 border-t-primary mx-auto"></div>
+              <p className="mt-6 text-lg text-muted-foreground">Procesando cambio...</p>
             </div>
-          </div>
+          ) : (
+            <ExchangeSteps
+              ref={stepsRef}
+              currencies={currencies}
+              onComplete={processExchange}
+            />
+          )}
+        </div>
 
-          {/* Lista de cambios */}
-          <div className="lg:col-span-4">
-            <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
-              <ExchangeList exchanges={exchanges || []} currencies={currencies} />
-            </div>
+        {/* Listas debajo del formulario - Grid de 2 columnas */}
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* Lista de cambios recientes */}
+          <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
+            <ExchangeList exchanges={exchanges || []} currencies={currencies} />
           </div>
           
           {/* Cambios pendientes */}
-          <div className="lg:col-span-3">
-            <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
-              <PendingExchangesList 
-                user={user}
-                selectedPoint={selectedPoint}
-              />
-            </div>
+          <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
+            <PendingExchangesList 
+              user={user}
+              selectedPoint={selectedPoint}
+            />
           </div>
         </div>
       </div>
