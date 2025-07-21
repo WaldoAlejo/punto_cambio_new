@@ -9,8 +9,16 @@ const router = express.Router();
 // Obtener el cuadre actual y datos para cierre
 router.get("/", authenticateToken, async (req, res) => {
   try {
+    console.log("🚀 GET /cuadre-caja - Iniciando endpoint");
     const usuario = req.user;
+    
+    console.log("👤 Usuario autenticado:", {
+      id: usuario?.id,
+      punto_atencion_id: usuario?.punto_atencion_id
+    });
+    
     if (!usuario || !usuario.punto_atencion_id) {
+      console.log("❌ Usuario no autenticado o sin punto de atención");
       return res.status(401).json({
         success: false,
         error: "Usuario no autenticado o sin punto de atención asignado",
