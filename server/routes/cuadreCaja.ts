@@ -234,6 +234,9 @@ async function calcularSaldoApertura(
   fecha: Date
 ): Promise<number> {
   try {
+    console.log(`🔍 Calculando saldo apertura para punto ${puntoAtencionId}, moneda ${monedaId}, fecha ${fecha}`);
+    
+    // 1. Buscar el último cierre anterior
     const ultimoCierre = await prisma.detalleCuadreCaja.findFirst({
       include: {
         cuadre: true,
@@ -257,7 +260,26 @@ async function calcularSaldoApertura(
       },
     });
 
-    return ultimoCierre ? Number(ultimoCierre.conteo_fisico) : 0;
+    if (ultimoCierre) {
+      console.log(`✅ Último cierre encontrado: ${ultimoCierre.conteo_fisico}`);
+      return Number(ultimoCierre.conteo_fisico);
+    }
+
+    // 2. Si no hay cierre anterior, buscar saldo inicial actual
+    const saldoInicial = await prisma.saldo.findFirst({
+      where: {
+        punto_atencion_id: puntoAtencionId,
+        moneda_id: monedaId,
+      },
+    });
+
+    if (saldoInicial) {
+      console.log(`✅ Saldo inicial encontrado: ${saldoInicial.cantidad}`);
+      return Number(saldoInicial.cantidad);
+    }
+
+    console.log(`⚠️ No se encontró saldo apertura, usando 0`);
+    return 0;
   } catch (error) {
     logger.error("Error calculando saldo apertura", { error });
     return 0;

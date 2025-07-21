@@ -173,10 +173,42 @@ const ExchangeDetailsForm = ({
         />
       )}
 
-      {/* === CAMPOS PARA ABONO PARCIAL (solo lectura para recibidoPor) === */}
-      {(onAbonoInicialMontoChange || onSaldoPendienteChange) && (
+      {/* === CHECKBOX PARA ACTIVAR CAMBIO PARCIAL === */}
+      <div className="border rounded-xl p-3 space-y-3 bg-blue-50">
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="cambio-parcial"
+            checked={abonoInicialMonto !== null || saldoPendiente !== null}
+            onChange={(e) => {
+              if (e.target.checked) {
+                // Activar modo parcial
+                onAbonoInicialMontoChange?.(0);
+                onSaldoPendienteChange?.(0);
+                onAbonoInicialFechaChange?.(new Date().toISOString().split('T')[0]);
+              } else {
+                // Desactivar modo parcial
+                onAbonoInicialMontoChange?.(null);
+                onSaldoPendienteChange?.(null);
+                onAbonoInicialFechaChange?.(null);
+                onReferenciaCambioPrincipalChange?.(null);
+              }
+            }}
+            className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+          />
+          <Label htmlFor="cambio-parcial" className="font-semibold text-blue-700 cursor-pointer">
+            ✅ Activar cambio parcial (con abono inicial)
+          </Label>
+        </div>
+        <p className="text-sm text-blue-600">
+          Active esta opción cuando el cliente haga un abono inicial y quede con saldo pendiente para completar más tarde.
+        </p>
+      </div>
+
+      {/* === CAMPOS PARA ABONO PARCIAL === */}
+      {(abonoInicialMonto !== null || saldoPendiente !== null) && (
         <div className="border rounded-xl p-3 space-y-2 bg-yellow-50">
-          <Label className="font-semibold">Flujo de cambio parcial</Label>
+          <Label className="font-semibold">📋 Detalles del cambio parcial</Label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {onAbonoInicialMontoChange && (
               <div>
