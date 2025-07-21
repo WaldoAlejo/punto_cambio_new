@@ -15,7 +15,7 @@
     "start:server": "node dist/index.js"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed-complete.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
