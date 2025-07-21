@@ -3,7 +3,7 @@ import { useAuth } from "../hooks/useAuth";
 import Dashboard from "../components/dashboard/Dashboard";
 import PointSelection from "../components/auth/PointSelection";
 import { PuntoAtencion } from "../types";
-import { supabasePointService as pointService } from "../services/supabasePointService";
+import { pointService } from "../services/pointService";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
