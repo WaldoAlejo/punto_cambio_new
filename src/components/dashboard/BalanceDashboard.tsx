@@ -153,7 +153,7 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
           <CardContent>
             <div className="text-2xl font-bold">
               {saldos.reduce((total, saldo) => total + Number(saldo.diferencia), 0) >= 0 ? '+' : ''}$
-              {saldos.reduce((total, saldo) => total + Number(saldo.diferencia), 0).toFixed(2)}
+              {Number(saldos.reduce((total, saldo) => total + Number(saldo.diferencia), 0)).toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground">
               Diferencia total vs inicial
