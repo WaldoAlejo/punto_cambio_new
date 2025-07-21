@@ -59,9 +59,9 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
   };
 
   const getBalanceStatus = (saldo: VistaSaldosPorPunto) => {
-    if (saldo.saldo_inicial === 0) return 'Sin configurar';
-    if (saldo.diferencia > 0) return 'Excedente';
-    if (saldo.diferencia < 0) return 'Déficit';
+    if (Number(saldo.saldo_inicial) === 0) return 'Sin configurar';
+    if (Number(saldo.diferencia) > 0) return 'Excedente';
+    if (Number(saldo.diferencia) < 0) return 'Déficit';
     return 'Equilibrado';
   };
 
@@ -148,12 +148,12 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Balance General</CardTitle>
-            {getBalanceIcon(saldos.reduce((total, saldo) => total + saldo.diferencia, 0))}
+            {getBalanceIcon(saldos.reduce((total, saldo) => total + Number(saldo.diferencia), 0))}
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {saldos.reduce((total, saldo) => total + saldo.diferencia, 0) >= 0 ? '+' : ''}$
-              {saldos.reduce((total, saldo) => total + saldo.diferencia, 0).toFixed(2)}
+              {saldos.reduce((total, saldo) => total + Number(saldo.diferencia), 0) >= 0 ? '+' : ''}$
+              {saldos.reduce((total, saldo) => total + Number(saldo.diferencia), 0).toFixed(2)}
             </div>
             <p className="text-xs text-muted-foreground">
               Diferencia total vs inicial
@@ -210,23 +210,23 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
                   <div className="bg-blue-50 p-3 rounded-lg">
                     <p className="text-sm text-blue-600 font-medium">Saldo Inicial</p>
                     <p className="text-lg font-bold text-blue-800">
-                      {saldo.moneda_simbolo}{saldo.saldo_inicial.toFixed(2)}
+                      {saldo.moneda_simbolo}{Number(saldo.saldo_inicial).toFixed(2)}
                     </p>
                   </div>
                   
                   <div className="bg-green-50 p-3 rounded-lg">
                     <p className="text-sm text-green-600 font-medium">Saldo Actual</p>
                     <p className="text-lg font-bold text-green-800">
-                      {saldo.moneda_simbolo}{saldo.saldo_actual.toFixed(2)}
+                      {saldo.moneda_simbolo}{Number(saldo.saldo_actual).toFixed(2)}
                     </p>
                   </div>
                   
-                  <div className={`p-3 rounded-lg ${saldo.diferencia >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
-                    <p className={`text-sm font-medium ${saldo.diferencia >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <div className={`p-3 rounded-lg ${Number(saldo.diferencia) >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                    <p className={`text-sm font-medium ${Number(saldo.diferencia) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       Diferencia
                     </p>
-                    <p className={`text-lg font-bold ${saldo.diferencia >= 0 ? 'text-green-800' : 'text-red-800'}`}>
-                      {saldo.diferencia >= 0 ? '+' : ''}{saldo.moneda_simbolo}{saldo.diferencia.toFixed(2)}
+                    <p className={`text-lg font-bold ${Number(saldo.diferencia) >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+                      {Number(saldo.diferencia) >= 0 ? '+' : ''}{saldo.moneda_simbolo}{Number(saldo.diferencia).toFixed(2)}
                     </p>
                   </div>
                   

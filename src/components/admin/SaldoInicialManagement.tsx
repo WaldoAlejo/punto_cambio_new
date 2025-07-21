@@ -321,24 +321,24 @@ const SaldoInicialManagement = () => {
                       
                       <div className="text-center">
                         <p className="text-sm text-gray-500">Saldo Inicial</p>
-                        <p className="font-semibold">{saldo.moneda_simbolo}{saldo.saldo_inicial.toFixed(2)}</p>
+                        <p className="font-semibold">{saldo.moneda_simbolo}{Number(saldo.saldo_inicial).toFixed(2)}</p>
                       </div>
                       
                       <div className="text-center">
                         <p className="text-sm text-gray-500">Saldo Actual</p>
-                        <p className="font-semibold">{saldo.moneda_simbolo}{saldo.saldo_actual.toFixed(2)}</p>
+                        <p className="font-semibold">{saldo.moneda_simbolo}{Number(saldo.saldo_actual).toFixed(2)}</p>
                       </div>
                       
                       <div className="text-center">
                         <p className="text-sm text-gray-500">Diferencia</p>
-                        <p className={`font-semibold ${getBalanceColor(saldo.diferencia)}`}>
-                          {saldo.diferencia >= 0 ? '+' : ''}{saldo.moneda_simbolo}{saldo.diferencia.toFixed(2)}
+                        <p className={`font-semibold ${getBalanceColor(Number(saldo.diferencia))}`}>
+                          {Number(saldo.diferencia) >= 0 ? '+' : ''}{saldo.moneda_simbolo}{Number(saldo.diferencia).toFixed(2)}
                         </p>
                       </div>
                       
                       <div className="text-center">
-                        <Badge variant={saldo.saldo_inicial > 0 ? "default" : "secondary"}>
-                          {saldo.saldo_inicial > 0 ? "Configurado" : "Sin configurar"}
+                        <Badge variant={Number(saldo.saldo_inicial) > 0 ? "default" : "secondary"}>
+                          {Number(saldo.saldo_inicial) > 0 ? "Configurado" : "Sin configurar"}
                         </Badge>
                       </div>
                     </div>
@@ -373,7 +373,7 @@ const SaldoInicialManagement = () => {
                       </div>
                       <div className="text-right">
                         <p className="font-semibold">
-                          {movimiento.moneda?.simbolo}{Math.abs(movimiento.monto).toFixed(2)}
+                          {movimiento.moneda?.simbolo}{Math.abs(Number(movimiento.monto)).toFixed(2)}
                         </p>
                         <p className="text-sm text-gray-500">
                           {new Date(movimiento.fecha).toLocaleString()}
@@ -383,17 +383,17 @@ const SaldoInicialManagement = () => {
                     <div className="mt-2 grid grid-cols-3 gap-4 text-sm">
                       <div>
                         <span className="text-gray-500">Saldo Anterior: </span>
-                        <span>{movimiento.moneda?.simbolo}{movimiento.saldo_anterior.toFixed(2)}</span>
+                        <span>{movimiento.moneda?.simbolo}{Number(movimiento.saldo_anterior).toFixed(2)}</span>
                       </div>
                       <div>
                         <span className="text-gray-500">Monto: </span>
-                        <span className={movimiento.monto >= 0 ? 'text-green-600' : 'text-red-600'}>
-                          {movimiento.monto >= 0 ? '+' : ''}{movimiento.moneda?.simbolo}{movimiento.monto.toFixed(2)}
+                        <span className={Number(movimiento.monto) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {Number(movimiento.monto) >= 0 ? '+' : ''}{movimiento.moneda?.simbolo}{Number(movimiento.monto).toFixed(2)}
                         </span>
                       </div>
                       <div>
                         <span className="text-gray-500">Saldo Nuevo: </span>
-                        <span>{movimiento.moneda?.simbolo}{movimiento.saldo_nuevo.toFixed(2)}</span>
+                        <span>{movimiento.moneda?.simbolo}{Number(movimiento.saldo_nuevo).toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
