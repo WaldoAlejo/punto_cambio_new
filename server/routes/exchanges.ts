@@ -441,4 +441,78 @@ router.patch(
   }
 );
 
+// Endpoint para obtener cambios pendientes
+router.get("/pending", authenticateToken, async (req, res) => {
+  try {
+    const { pointId } = req.query;
+    
+    if (!pointId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "Se requiere pointId" 
+      });
+    }
+
+    const exchanges = await prisma.cambioDivisa.findMany({
+      where: {
+        punto_atencion_id: pointId as string,
+        estado: {
+          in: ["PARCIAL", "PENDIENTE"]
+        }
+      },
+      include: {
+        moneda_origen: true,
+        moneda_destino: true,
+        usuario: true,
+        punto_atencion: true,
+      },
+      orderBy: {
+        fecha: "desc",
+      },
+    });
+
+    res.json({
+      success: true,
+      exchanges,
+    });
+  } catch (error: any) {
+    console.error("Error fetching pending exchanges:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Error interno del servidor",
+    });
+  }
+});
+
+// Endpoint para cerrar un cambio pendiente
+router.patch("/:id/cerrar", authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const exchange = await prisma.cambioDivisa.update({
+      where: { id },
+      data: {
+        estado: "COMPLETADO",
+      },
+      include: {
+        moneda_origen: true,
+        moneda_destino: true,
+        usuario: true,
+        punto_atencion: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      exchange,
+    });
+  } catch (error: any) {
+    console.error("Error closing exchange:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Error interno del servidor",
+    });
+  }
+});
+
 export default router;

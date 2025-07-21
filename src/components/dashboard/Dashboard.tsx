@@ -50,7 +50,6 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           <PendingExchangesList
             user={user}
             selectedPoint={selectedPoint}
-            onCloseSuccess={() => {}}
           />
         );
       case "transfers":

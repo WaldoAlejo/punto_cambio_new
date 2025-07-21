@@ -4,6 +4,7 @@ import { useExchangeData } from "../../hooks/useExchangeData";
 import { useExchangeProcess } from "../../hooks/useExchangeProcess";
 import ExchangeSteps, { ExchangeStepsRef } from "./ExchangeSteps";
 import ExchangeList from "./ExchangeList";
+import PendingExchangesList from "./PendingExchangesList";
 
 interface ExchangeManagementProps {
   user: User;
@@ -92,7 +93,7 @@ const ExchangeManagement = ({
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid lg:grid-cols-3 gap-6">
         <div className="space-y-6">
           {isProcessing ? (
             <div className="text-center py-8">
@@ -109,6 +110,11 @@ const ExchangeManagement = ({
         </div>
 
         <ExchangeList exchanges={exchanges || []} currencies={currencies} />
+        
+        <PendingExchangesList 
+          user={user}
+          selectedPoint={selectedPoint}
+        />
       </div>
     </div>
   );

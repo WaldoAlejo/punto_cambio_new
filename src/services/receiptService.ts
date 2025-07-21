@@ -65,10 +65,36 @@ export class ReceiptService {
 
   static generatePartialExchangeReceipt(
     exchange: CambioDivisa,
+    pointName: string,
+    operatorName: string,
+    partialData: {
+      initialPayment: number;
+      pendingBalance: number;
+      receivedBy: string;
+      observations: string;
+    }
+  ): ReceiptData;
+  static generatePartialExchangeReceipt(
+    exchange: CambioDivisa,
     puntoNombre: string,
     usuarioNombre: string,
-    isInitialPayment: boolean = false
+    isInitialPayment: boolean
+  ): ReceiptData;
+  static generatePartialExchangeReceipt(
+    exchange: CambioDivisa,
+    puntoNombre: string,
+    usuarioNombre: string,
+    isInitialPaymentOrPartialData: boolean | {
+      initialPayment: number;
+      pendingBalance: number;
+      receivedBy: string;
+      observations: string;
+    }
   ): ReceiptData {
+    const isInitialPayment = typeof isInitialPaymentOrPartialData === 'boolean' 
+      ? isInitialPaymentOrPartialData 
+      : true;
+    
     const tipo = isInitialPayment ? "CAMBIO PARCIAL - ABONO INICIAL" : "CAMBIO PARCIAL - CIERRE";
     
     return {
