@@ -147,12 +147,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             
             setCuadreData(data.data);
             
-            // Inicializar ajustes del usuario con valores calculados automáticamente
+            // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
             const initialAdjustments: { [key: string]: { bills: string; coins: string } } = {};
             data.data.detalles.forEach((detalle: CuadreDetalle) => {
+              // Inicializar con el saldo esperado dividido entre billetes y monedas
+              // Por defecto asumimos todo en billetes, pero el usuario puede ajustar
               initialAdjustments[detalle.moneda_id] = {
-                bills: detalle.billetes.toString(),
-                coins: detalle.monedas.toString()
+                bills: detalle.saldo_cierre.toFixed(2),
+                coins: "0.00"
               };
             });
             setUserAdjustments(initialAdjustments);
@@ -189,6 +191,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     type: "bills" | "coins",
     value: string
   ) => {
+    // No permitir valores negativos
+    const numValue = parseFloat(value);
+    if (numValue < 0) return;
+    
     setUserAdjustments((prev) => ({
       ...prev,
       [monedaId]: {
@@ -474,56 +480,76 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                          </div>
                       </div>
                       
-                      {/* Conteo físico del usuario */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <Label>Billetes Físicos</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={userAdjustments[detalle.moneda_id]?.bills || ""}
-                            onChange={(e) =>
-                              handleUserAdjustment(
-                                detalle.moneda_id,
-                                "bills",
-                                e.target.value
-                              )
-                            }
-                            placeholder="0.00"
-                            className={!isValid ? 'border-red-300' : ''}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Monedas Físicas</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={userAdjustments[detalle.moneda_id]?.coins || ""}
-                            onChange={(e) =>
-                              handleUserAdjustment(
-                                detalle.moneda_id,
-                                "coins",
-                                e.target.value
-                              )
-                            }
-                            placeholder="0.00"
-                            className={!isValid ? 'border-red-300' : ''}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Total Físico</Label>
-                          <div className={`h-10 px-3 py-2 border rounded-md flex items-center font-bold ${
-                            !isValid ? 'bg-red-50 border-red-300 text-red-700' : 'bg-gray-50'
-                          }`}>
-                            {userTotal.toFixed(2)}
-                            {!isValid && (
-                              <span className="ml-2 text-xs">
-                                (Diff: {(userTotal - detalle.saldo_cierre).toFixed(2)})
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                       {/* Instrucciones claras */}
+                       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                         <p className="text-sm text-yellow-800">
+                           <strong>📝 Instrucciones:</strong> Ingrese el total final que tiene físicamente. 
+                           Ejemplo: Si tenía {detalle.saldo_apertura.toFixed(2)} y los movimientos suman {(detalle.ingresos_periodo - detalle.egresos_periodo).toFixed(2)}, 
+                           debe tener {detalle.saldo_cierre.toFixed(2)} en total.
+                         </p>
+                       </div>
+                       
+                       {/* Conteo físico del usuario */}
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                         <div className="space-y-2">
+                           <Label className="text-sm font-medium">
+                             💵 Billetes Físicos
+                             <span className="text-xs text-gray-500 block">Valor total en billetes</span>
+                           </Label>
+                           <Input
+                             type="number"
+                             step="0.01"
+                             min="0"
+                             value={userAdjustments[detalle.moneda_id]?.bills || ""}
+                             onChange={(e) =>
+                               handleUserAdjustment(
+                                 detalle.moneda_id,
+                                 "bills",
+                                 e.target.value
+                               )
+                             }
+                             placeholder="0.00"
+                             className={!isValid ? 'border-red-300' : ''}
+                           />
+                         </div>
+                         <div className="space-y-2">
+                           <Label className="text-sm font-medium">
+                             🪙 Monedas Físicas
+                             <span className="text-xs text-gray-500 block">Valor total en monedas</span>
+                           </Label>
+                           <Input
+                             type="number"
+                             step="0.01"
+                             min="0"
+                             value={userAdjustments[detalle.moneda_id]?.coins || ""}
+                             onChange={(e) =>
+                               handleUserAdjustment(
+                                 detalle.moneda_id,
+                                 "coins",
+                                 e.target.value
+                               )
+                             }
+                             placeholder="0.00"
+                             className={!isValid ? 'border-red-300' : ''}
+                           />
+                         </div>
+                         <div className="space-y-2">
+                           <Label className="text-sm font-medium">
+                             💰 Total Final Físico
+                             <span className="text-xs text-gray-500 block">Billetes + Monedas</span>
+                           </Label>
+                           <div className={`h-10 px-3 py-2 border rounded-md flex items-center font-bold ${
+                             !isValid ? 'bg-red-50 border-red-300 text-red-700' : 'bg-gray-50'
+                           }`}>
+                             {userTotal.toFixed(2)}
+                             {!isValid && (
+                               <span className="ml-2 text-xs">
+                                 (Diff: {(userTotal - detalle.saldo_cierre).toFixed(2)})
+                               </span>
+                             )}
+                           </div>
+                         </div>
+                       </div>
                     </div>
                   );
                 })}
