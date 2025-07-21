@@ -105,18 +105,8 @@ const SaldoInicialManagement = () => {
       return;
     }
 
-    // Verificar si el punto seleccionado es el principal
-    const selectedPointData = points.find(p => p.id === selectedPoint);
-    const isPuntoPrincipal = selectedPointData?.nombre === "Casa de Cambios Principal";
-    
-    if (!isPuntoPrincipal) {
-      toast({
-        title: "Acceso Restringido",
-        description: "Solo se puede asignar/editar saldo inicial en la Casa de Cambios Principal. Los dueños pueden ingresar dinero en efectivo únicamente en este punto.",
-        variant: "destructive",
-      });
-      return;
-    }
+    // El administrador puede asignar saldo a todos los puntos
+    console.log('Asignando saldo para punto:', selectedPoint);
 
     setLoading(true);
     try {
@@ -136,7 +126,7 @@ const SaldoInicialManagement = () => {
       } else {
         toast({
           title: "Éxito",
-          description: "Saldo inicial asignado correctamente en Casa de Cambios Principal",
+          description: "Saldo inicial asignado correctamente",
         });
         setDialogOpen(false);
         resetForm();
@@ -231,12 +221,12 @@ const SaldoInicialManagement = () => {
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="h-4 w-4 mr-2" />
-              Asignar/Editar Saldo Inicial (Solo Punto Principal)
+              Asignar Saldo Inicial
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Asignar/Editar Saldo Inicial - Solo Casa de Cambios Principal</DialogTitle>
+              <DialogTitle>Asignar Saldo Inicial</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
@@ -246,14 +236,11 @@ const SaldoInicialManagement = () => {
                     <SelectValue placeholder="Seleccionar punto" />
                   </SelectTrigger>
                   <SelectContent>
-                    {points
-                      .filter(point => point.nombre === "Casa de Cambios Principal")
-                      .map((point) => (
-                        <SelectItem key={point.id} value={point.id}>
-                          {point.nombre} - {point.ciudad}
-                        </SelectItem>
-                      ))
-                    }
+                    {points.map((point) => (
+                      <SelectItem key={point.id} value={point.id}>
+                        {point.nombre} - {point.ciudad}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -353,9 +340,25 @@ const SaldoInicialManagement = () => {
                       </div>
                       
                       <div className="text-center">
-                        <Badge variant={Number(saldo.saldo_inicial) > 0 ? "default" : "secondary"}>
-                          {Number(saldo.saldo_inicial) > 0 ? "Configurado" : "Sin configurar"}
-                        </Badge>
+                        <div className="flex flex-col space-y-2">
+                          <Badge variant={Number(saldo.saldo_inicial) > 0 ? "default" : "secondary"}>
+                            {Number(saldo.saldo_inicial) > 0 ? "Configurado" : "Sin configurar"}
+                          </Badge>
+                          {punto.punto_nombre === "Casa de Cambios Principal" && Number(saldo.saldo_inicial) > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setSelectedPoint(punto.punto_atencion_id);
+                                setSelectedCurrency(saldo.moneda_id);
+                                setCantidad(String(saldo.saldo_inicial));
+                                setDialogOpen(true);
+                              }}
+                            >
+                              Editar
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

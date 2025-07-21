@@ -40,8 +40,11 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
           variant: "destructive",
         });
       } else {
-        // Filtrar solo los saldos del punto seleccionado
-        const saldosPunto = response.saldos.filter(s => s.punto_atencion_id === selectedPoint.id);
+        // Filtrar solo los saldos del punto seleccionado y que tengan saldo inicial > 0
+        const saldosPunto = response.saldos.filter(s => 
+          s.punto_atencion_id === selectedPoint.id && 
+          Number(s.saldo_inicial) > 0
+        );
         console.log('Filtered balances:', saldosPunto);
         setSaldos(saldosPunto);
         setLastUpdate(new Date());
