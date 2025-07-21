@@ -30,6 +30,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     const checkActiveJornada = async () => {
       try {
         const token = localStorage.getItem("token");
+        console.log("🔍 DailyClose - localStorage keys:", Object.keys(localStorage));
+        console.log("🔍 DailyClose - token check:", {
+          tokenExists: !!token,
+          tokenPreview: token ? token.substring(0, 30) + "..." : "No token",
+          userInfo: { id: user.id, rol: user.rol, nombre: user.nombre }
+        });
+        
         if (!token) {
           console.log("❌ No token found for jornada check");
           setHasActiveJornada(false);
@@ -82,6 +89,12 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         console.log("🔄 Fetching currencies and balances...");
         
         const token = localStorage.getItem("token");
+        console.log("🔍 DailyClose fetchCurrencies - token check:", {
+          tokenExists: !!token,
+          tokenPreview: token ? token.substring(0, 30) + "..." : "No token",
+          selectedPoint: selectedPoint ? selectedPoint.id : "No point"
+        });
+        
         if (!token) {
           toast({
             title: "Sesión Expirada",
