@@ -29,7 +29,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   useEffect(() => {
     const checkActiveJornada = async () => {
       try {
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem("authToken");
         console.log("🔍 DailyClose - localStorage keys:", Object.keys(localStorage));
         console.log("🔍 DailyClose - token check:", {
           tokenExists: !!token,
@@ -88,7 +88,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       try {
         console.log("🔄 Fetching currencies and balances...");
         
-        const token = localStorage.getItem("token");
+        const token = localStorage.getItem("authToken");
         console.log("🔍 DailyClose fetchCurrencies - token check:", {
           tokenExists: !!token,
           tokenPreview: token ? token.substring(0, 30) + "..." : "No token",
@@ -224,7 +224,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     console.log("📊 Detalles prepared:", detalles);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = localStorage.getItem("authToken");
       console.log("🔑 Token exists:", !!token);
       console.log("🔑 Token preview:", token ? token.substring(0, 50) + "..." : "No token");
       console.log("👤 Current user:", user);
