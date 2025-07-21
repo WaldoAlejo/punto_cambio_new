@@ -250,7 +250,20 @@ ${detalles.descripcion ? `Desc: ${detalles.descripcion}` : ""}
 
     receiptText += `
 ${separator}
+FIRMAS DE RESPONSABILIDAD:
+
+Cliente: ____________________
+${receipt.tipo === "CAMBIO DE DIVISA" ? 
+  `${(receipt.detalles as CurrencyExchangeDetails).cliente.nombre} ${(receipt.detalles as CurrencyExchangeDetails).cliente.apellido}
+Doc: ${(receipt.detalles as CurrencyExchangeDetails).cliente.cedula}` : ""}
+
+Operador: ___________________
+${receipt.usuario}
+
+${separator}
 Gracias por su preferencia
+Este comprobante es válido como
+evidencia de la operación realizada
 ${separator}
 
 `;

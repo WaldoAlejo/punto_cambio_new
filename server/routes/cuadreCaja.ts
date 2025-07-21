@@ -173,19 +173,35 @@ router.get("/", authenticateToken, async (req, res) => {
         const saldoApertura = await calcularSaldoApertura(
           usuario.punto_atencion_id as string,
           moneda.id,
-          hoy
+          fechaInicio
         );
 
-        // Calcular movimientos del período
+        console.log(`💰 Calculando movimientos para ${moneda.codigo}:`, {
+          saldoApertura,
+          cambiosHoy: cambiosHoy.filter(c => 
+            c.moneda_origen_id === moneda.id || c.moneda_destino_id === moneda.id
+          )
+        });
+
+        // Calcular movimientos del período con mejor claridad
+        // INGRESOS: cuando esta moneda es la que SE RECIBE (moneda_destino)
         const ingresos = cambiosHoy
           .filter(c => c.moneda_destino_id === moneda.id)
           .reduce((sum, c) => sum + Number(c.monto_destino), 0);
 
+        // EGRESOS: cuando esta moneda es la que SE ENTREGA (moneda_origen)
         const egresos = cambiosHoy
           .filter(c => c.moneda_origen_id === moneda.id)
           .reduce((sum, c) => sum + Number(c.monto_origen), 0);
 
         const saldoCierre = saldoApertura + ingresos - egresos;
+
+        console.log(`📊 Resultado para ${moneda.codigo}:`, {
+          saldoApertura,
+          ingresos: `+${ingresos}`,
+          egresos: `-${egresos}`,
+          saldoCierre
+        });
 
         return {
           moneda_id: moneda.id,

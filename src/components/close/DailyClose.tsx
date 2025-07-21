@@ -423,22 +423,26 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                       
                       {/* Información automática */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
-                        <div className="bg-blue-50 p-2 rounded">
-                          <label className="text-blue-700 font-medium">Saldo Apertura</label>
-                          <p className="text-blue-800 font-bold">{detalle.saldo_apertura.toFixed(2)}</p>
-                        </div>
-                        <div className="bg-green-50 p-2 rounded">
-                          <label className="text-green-700 font-medium">Ingresos</label>
-                          <p className="text-green-800 font-bold">+{detalle.ingresos_periodo.toFixed(2)}</p>
-                        </div>
-                        <div className="bg-red-50 p-2 rounded">
-                          <label className="text-red-700 font-medium">Egresos</label>
-                          <p className="text-red-800 font-bold">-{detalle.egresos_periodo.toFixed(2)}</p>
-                        </div>
-                        <div className="bg-purple-50 p-2 rounded">
-                          <label className="text-purple-700 font-medium">Saldo Esperado</label>
-                          <p className="text-purple-800 font-bold">{detalle.saldo_cierre.toFixed(2)}</p>
-                        </div>
+                         <div className="bg-blue-50 p-2 rounded">
+                           <label className="text-blue-700 font-medium">Saldo Apertura</label>
+                           <p className="text-blue-800 font-bold">{detalle.saldo_apertura.toFixed(2)}</p>
+                           <p className="text-xs text-blue-600">Dinero al inicio del día</p>
+                         </div>
+                         <div className="bg-green-50 p-2 rounded">
+                           <label className="text-green-700 font-medium">Ingresos (+)</label>
+                           <p className="text-green-800 font-bold">+{detalle.ingresos_periodo.toFixed(2)}</p>
+                           <p className="text-xs text-green-600">Divisas que recibimos</p>
+                         </div>
+                         <div className="bg-red-50 p-2 rounded">
+                           <label className="text-red-700 font-medium">Egresos (-)</label>
+                           <p className="text-red-800 font-bold">-{detalle.egresos_periodo.toFixed(2)}</p>
+                           <p className="text-xs text-red-600">Divisas que entregamos</p>
+                         </div>
+                         <div className="bg-purple-50 p-2 rounded">
+                           <label className="text-purple-700 font-medium">Saldo Esperado</label>
+                           <p className="text-purple-800 font-bold">{detalle.saldo_cierre.toFixed(2)}</p>
+                           <p className="text-xs text-purple-600">Lo que debe quedar</p>
+                         </div>
                       </div>
                       
                       {/* Conteo físico del usuario */}

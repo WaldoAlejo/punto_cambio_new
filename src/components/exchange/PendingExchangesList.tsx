@@ -171,9 +171,21 @@ const PendingExchangesList = ({
         return;
       }
 
+      // Generar e imprimir recibo final al completar el cambio
+      try {
+        const receiptData = ReceiptService.generateCurrencyExchangeReceipt(
+          exchange,
+          selectedPoint?.nombre || "N/A",
+          user.nombre
+        );
+        ReceiptService.printReceipt(receiptData, 2);
+      } catch (printError) {
+        console.warn("Error al imprimir recibo final:", printError);
+      }
+
       toast({
         title: "Cambio completado",
-        description: "El cambio de divisa ha sido completado",
+        description: "El cambio de divisa ha sido completado. Recibo generado.",
       });
 
       // Disparar evento para actualizar saldos
