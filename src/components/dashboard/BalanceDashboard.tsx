@@ -20,8 +20,30 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
   useEffect(() => {
     if (selectedPoint) {
       loadSaldos();
+      
+      // Configurar auto-refresh cada 30 segundos
+      const interval = setInterval(() => {
+        loadSaldos();
+      }, 30000);
+      
+      return () => clearInterval(interval);
     }
   }, [selectedPoint]);
+
+  // Escuchar eventos de cambios de divisas completados
+  useEffect(() => {
+    const handleExchangeCompleted = () => {
+      console.log('🔄 Exchange completed, refreshing balances...');
+      loadSaldos();
+    };
+
+    // Escuchar evento personalizado
+    window.addEventListener('exchangeCompleted', handleExchangeCompleted);
+    
+    return () => {
+      window.removeEventListener('exchangeCompleted', handleExchangeCompleted);
+    };
+  }, []);
 
   const loadSaldos = async () => {
     if (!selectedPoint) return;
@@ -120,17 +142,29 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Saldos por Moneda</h2>
-          <p className="text-gray-600">{selectedPoint.nombre} - {selectedPoint.ciudad}</p>
+          <div className="flex items-center gap-2 text-gray-600">
+            <span>{selectedPoint.nombre} - {selectedPoint.ciudad}</span>
+            {lastUpdate && (
+              <span className="text-xs text-gray-500">
+                • Actualizado: {lastUpdate.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
         </div>
-        <Button
-          onClick={loadSaldos}
-          disabled={loading}
-          variant="outline"
-          size="sm"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Actualizar
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+            🔄 Auto-actualización: 30s
+          </div>
+          <Button
+            onClick={loadSaldos}
+            disabled={loading}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Actualizar
+          </Button>
+        </div>
       </div>
 
       {/* Resumen General */}

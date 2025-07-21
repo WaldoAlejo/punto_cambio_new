@@ -176,6 +176,9 @@ const PendingExchangesList = ({
         description: "El cambio de divisa ha sido completado",
       });
 
+      // Disparar evento para actualizar saldos
+      window.dispatchEvent(new CustomEvent('exchangeCompleted'));
+      
       await loadPendingExchanges();
     } catch (error) {
       toast({

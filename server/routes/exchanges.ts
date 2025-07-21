@@ -395,11 +395,91 @@ router.patch(
         return;
       }
 
-      const updatedCambio = await prisma.cambioDivisa.update({
-        where: { id },
-        data: {
-          estado: EstadoTransaccion.COMPLETADO,
-        },
+      // Actualizar el cambio a completado y actualizar saldos
+      const updatedCambio = await prisma.$transaction(async (tx) => {
+        // 1. Actualizar estado del cambio
+        const cambioActualizado = await tx.cambioDivisa.update({
+          where: { id },
+          data: {
+            estado: EstadoTransaccion.COMPLETADO,
+          },
+        });
+
+        // 2. Actualizar saldo de moneda origen (restar)
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+            },
+          },
+          update: {
+            cantidad: {
+              decrement: Number(cambio.monto_origen),
+            },
+            updated_at: new Date(),
+          },
+          create: {
+            punto_atencion_id: cambio.punto_atencion_id,
+            moneda_id: cambio.moneda_origen_id,
+            cantidad: -Number(cambio.monto_origen),
+            billetes: 0,
+            monedas_fisicas: 0,
+          },
+        });
+
+        // 3. Actualizar saldo de moneda destino (sumar)
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_destino_id,
+            },
+          },
+          update: {
+            cantidad: {
+              increment: Number(cambio.monto_destino),
+            },
+            updated_at: new Date(),
+          },
+          create: {
+            punto_atencion_id: cambio.punto_atencion_id,
+            moneda_id: cambio.moneda_destino_id,
+            cantidad: Number(cambio.monto_destino),
+            billetes: 0,
+            monedas_fisicas: 0,
+          },
+        });
+
+        // 4. Registrar movimientos en historial
+        await tx.historialSaldo.createMany({
+          data: [
+            {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+              usuario_id: req.user!.id,
+              cantidad_anterior: 0, // Se calculará después si es necesario
+              cantidad_incrementada: -Number(cambio.monto_origen),
+              cantidad_nueva: 0, // Se calculará después si es necesario
+              tipo_movimiento: 'EGRESO',
+              descripcion: `Cambio de divisa - Egreso ${cambio.monto_origen}`,
+              numero_referencia: cambio.numero_recibo,
+            },
+            {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_destino_id,
+              usuario_id: req.user!.id,
+              cantidad_anterior: 0, // Se calculará después si es necesario
+              cantidad_incrementada: Number(cambio.monto_destino),
+              cantidad_nueva: 0, // Se calculará después si es necesario
+              tipo_movimiento: 'INGRESO',
+              descripcion: `Cambio de divisa - Ingreso ${cambio.monto_destino}`,
+              numero_referencia: cambio.numero_recibo,
+            },
+          ],
+        });
+
+        return cambioActualizado;
       });
 
       const numeroReciboCierre = `CIERRE-${new Date().getTime()}`;
