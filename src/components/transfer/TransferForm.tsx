@@ -59,7 +59,7 @@ const TransferForm = ({
   useEffect(() => {
     const loadData = async () => {
       try {
-        const { points } = await pointService.getAllPoints();
+        const { points } = await pointService.getActivePointsForTransfers();
         setAvailablePoints(
           points.filter((point) => point.id !== selectedPoint?.id)
         );

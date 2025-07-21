@@ -87,6 +87,74 @@ export const pointService = {
     }
   },
 
+  async getAllPointsForAdmin(): Promise<{ points: PuntoAtencion[]; error: string | null }> {
+    console.log('=== POINT SERVICE - getAllPointsForAdmin START ===');
+    try {
+      console.log('Calling apiService.get("/points/all")...');
+      const response = await apiService.get<PointsResponse>("/points/all");
+      console.log('getAllPointsForAdmin - Raw response:', response);
+
+      if (!response) {
+        console.error('getAllPointsForAdmin - No response received');
+        return {
+          points: [],
+          error: "No se pudo obtener la respuesta del servidor",
+        };
+      }
+
+      if (response.error || !response.success) {
+        console.error('getAllPointsForAdmin - Response error:', response.error);
+        return {
+          points: [],
+          error: response.error || "Error al obtener todos los puntos",
+        };
+      }
+
+      console.log('getAllPointsForAdmin - Success, points count:', response.points?.length || 0);
+      return { points: response.points || [], error: null };
+    } catch (error) {
+      console.error("=== getAllPointsForAdmin ERROR ===");
+      console.error("Error details:", error);
+      return { points: [], error: "Error de conexión con el servidor" };
+    } finally {
+      console.log('=== POINT SERVICE - getAllPointsForAdmin END ===');
+    }
+  },
+
+  async getActivePointsForTransfers(): Promise<{ points: PuntoAtencion[]; error: string | null }> {
+    console.log('=== POINT SERVICE - getActivePointsForTransfers START ===');
+    try {
+      console.log('Calling apiService.get("/points/active-for-transfers")...');
+      const response = await apiService.get<PointsResponse>("/points/active-for-transfers");
+      console.log('getActivePointsForTransfers - Raw response:', response);
+
+      if (!response) {
+        console.error('getActivePointsForTransfers - No response received');
+        return {
+          points: [],
+          error: "No se pudo obtener la respuesta del servidor",
+        };
+      }
+
+      if (response.error || !response.success) {
+        console.error('getActivePointsForTransfers - Response error:', response.error);
+        return {
+          points: [],
+          error: response.error || "Error al obtener puntos activos",
+        };
+      }
+
+      console.log('getActivePointsForTransfers - Success, points count:', response.points?.length || 0);
+      return { points: response.points || [], error: null };
+    } catch (error) {
+      console.error("=== getActivePointsForTransfers ERROR ===");
+      console.error("Error details:", error);
+      return { points: [], error: "Error de conexión con el servidor" };
+    } finally {
+      console.log('=== POINT SERVICE - getActivePointsForTransfers END ===');
+    }
+  },
+
   async createPoint(pointData: CreatePointData): Promise<{ point: PuntoAtencion | null; error: string | null }> {
     console.log('=== POINT SERVICE - createPoint START ===');
     console.log('Input data:', pointData);

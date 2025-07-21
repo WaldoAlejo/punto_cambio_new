@@ -42,7 +42,7 @@ export const PointManagement = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { points: fetchedPoints } = await pointService.getAllPoints();
+      const { points: fetchedPoints } = await pointService.getAllPointsForAdmin();
       setPoints(fetchedPoints);
     } catch {
       const errorMessage = "Error al cargar puntos de atención";
