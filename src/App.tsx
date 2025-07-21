@@ -32,7 +32,7 @@ function App() {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [verifyingJornada, setVerifyingJornada] = useState(false);
 
-  // Verifica si existe jornada activa
+  // Verifica si existe jornada activa para OPERADOR
   useEffect(() => {
     if (user && user.rol === "OPERADOR") {
       setVerifyingJornada(true);
@@ -71,7 +71,31 @@ function App() {
     // eslint-disable-next-line
   }, [user]);
 
-  // Carga los puntos de atención libres si corresponde
+  // Para ADMIN: preselecciona automáticamente el punto principal
+  useEffect(() => {
+    if (user && (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") && !selectedPoint) {
+      axiosInstance
+        .get<{ points: PuntoAtencion[] }>("/api/points/all")
+        .then((res) => {
+          const points = res.data.points || [];
+          // Buscar el punto principal (normalmente sería el primero o uno específico)
+          const puntoPrincipal = points.find(p => 
+            p.nombre.toLowerCase().includes("principal") || 
+            p.nombre.toLowerCase().includes("matriz") ||
+            p.nombre.toLowerCase().includes("central")
+          ) || points[0]; // Si no hay uno "principal", tomar el primero
+          
+          if (puntoPrincipal) {
+            setSelectedPoint(puntoPrincipal);
+          }
+        })
+        .catch((error) => {
+          console.error("Error al cargar punto principal para admin:", error);
+        });
+    }
+  }, [user, selectedPoint]);
+
+  // Carga los puntos de atención libres si corresponde (solo para OPERADOR)
   useEffect(() => {
     if (
       user &&
