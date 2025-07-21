@@ -133,6 +133,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           console.log("📊 Cuadre data received:", data);
           
           if (data.success && data.data) {
+            console.log("✅ Cuadre data details:", {
+              detallesCount: data.data.detalles?.length || 0,
+              detalles: data.data.detalles,
+              mensaje: data.data.mensaje,
+              periodoInicio: data.data.periodo_inicio
+            });
+            
             setCuadreData(data.data);
             
             // Inicializar ajustes del usuario con valores calculados automáticamente
@@ -146,10 +153,12 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             setUserAdjustments(initialAdjustments);
           } else if (data.data?.mensaje) {
             // No hay movimientos hoy
+            console.log("⚠️ No hay movimientos:", data.data.mensaje);
             setCuadreData({ detalles: [], observaciones: "" });
             setUserAdjustments({});
           }
         } else {
+          console.error("❌ Error response from cuadre API:", response.status, response.statusText);
           throw new Error("Error al obtener datos de cuadre");
         }
       } catch (error) {

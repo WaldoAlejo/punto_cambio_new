@@ -53,6 +53,17 @@ router.get("/", authenticateToken, async (req, res) => {
 
     const fechaInicio = jornadaActiva?.fecha_inicio || hoy;
 
+    console.log("📅 Cuadre debug info:", {
+      puntoAtencionId: usuario.punto_atencion_id,
+      fechaInicio: fechaInicio.toISOString(),
+      fechaHoy: hoy.toISOString(),
+      jornadaActiva: jornadaActiva ? {
+        id: jornadaActiva.id,
+        estado: jornadaActiva.estado,
+        fechaInicio: jornadaActiva.fecha_inicio
+      } : null
+    });
+
     // Obtener cambios realizados en el período
     const cambiosHoy = await prisma.cambioDivisa.findMany({
       where: {
@@ -63,11 +74,27 @@ router.get("/", authenticateToken, async (req, res) => {
         estado: "COMPLETADO",
       },
       select: {
+        id: true,
         moneda_origen_id: true,
         moneda_destino_id: true,
         monto_origen: true,
         monto_destino: true,
+        fecha: true,
+        estado: true,
       },
+    });
+
+    console.log("💱 Cambios encontrados:", {
+      total: cambiosHoy.length,
+      cambios: cambiosHoy.map(c => ({
+        id: c.id,
+        fecha: c.fecha,
+        estado: c.estado,
+        origen: c.moneda_origen_id,
+        destino: c.moneda_destino_id,
+        montoOrigen: c.monto_origen,
+        montoDestino: c.monto_destino
+      }))
     });
 
     // Identificar monedas utilizadas
@@ -77,7 +104,10 @@ router.get("/", authenticateToken, async (req, res) => {
       monedasUsadas.add(cambio.moneda_destino_id);
     });
 
+    console.log("🪙 Monedas utilizadas:", Array.from(monedasUsadas));
+
     if (monedasUsadas.size === 0) {
+      console.log("⚠️ No hay monedas utilizadas, retornando mensaje");
       return res.status(200).json({
         success: true,
         data: {

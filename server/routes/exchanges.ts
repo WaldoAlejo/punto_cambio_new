@@ -144,6 +144,19 @@ router.post(
       const timestamp = new Date().getTime();
       const numeroRecibo = `CAM-${timestamp}`;
 
+      console.log("💫 Creating exchange with data:", {
+        moneda_origen_id,
+        moneda_destino_id,
+        monto_origen,
+        monto_destino,
+        tasa_cambio,
+        tipo_operacion,
+        usuario_id: req.user.id,
+        punto_atencion_id,
+        numeroRecibo,
+        estado: EstadoTransaccion.PENDIENTE
+      });
+
       const exchange = await prisma.cambioDivisa.create({
         data: {
           moneda_origen_id,
@@ -206,6 +219,13 @@ router.post(
             },
           },
         },
+      });
+
+      console.log("✅ Exchange created successfully:", {
+        id: exchange.id,
+        estado: exchange.estado,
+        numero_recibo: exchange.numero_recibo,
+        fecha: exchange.fecha
       });
 
       await prisma.recibo.create({
