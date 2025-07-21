@@ -53,6 +53,57 @@ export interface Saldo {
   moneda?: Moneda;
 }
 
+export interface SaldoInicial {
+  id: string;
+  punto_atencion_id: string;
+  moneda_id: string;
+  cantidad_inicial: number;
+  fecha_asignacion: string;
+  asignado_por: string;
+  activo: boolean;
+  observaciones?: string;
+  created_at: string;
+  updated_at: string;
+  moneda?: Moneda;
+  puntoAtencion?: PuntoAtencion;
+}
+
+export interface MovimientoSaldo {
+  id: string;
+  punto_atencion_id: string;
+  moneda_id: string;
+  tipo_movimiento: 'VENTA' | 'COMPRA' | 'TRANSFERENCIA_ENTRADA' | 'TRANSFERENCIA_SALIDA' | 'AJUSTE' | 'SALDO_INICIAL';
+  monto: number;
+  saldo_anterior: number;
+  saldo_nuevo: number;
+  usuario_id: string;
+  referencia_id?: string;
+  tipo_referencia?: string;
+  descripcion?: string;
+  fecha: string;
+  created_at: string;
+  moneda?: Moneda;
+  usuario?: Usuario;
+  puntoAtencion?: PuntoAtencion;
+}
+
+export interface VistaSaldosPorPunto {
+  punto_atencion_id: string;
+  punto_nombre: string;
+  ciudad: string;
+  moneda_id: string;
+  moneda_nombre: string;
+  moneda_simbolo: string;
+  moneda_codigo: string;
+  saldo_inicial: number;
+  saldo_actual: number;
+  billetes: number;
+  monedas_fisicas: number;
+  diferencia: number;
+  ultima_actualizacion?: string;
+  fecha_saldo_inicial?: string;
+}
+
 export interface DetalleDivisasSimple {
   billetes: number;
   monedas: number;

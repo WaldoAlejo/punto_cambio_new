@@ -12,6 +12,8 @@ import { CurrencyManagement } from "../management/CurrencyManagement";
 import Reports from "../reports/Reports";
 import DailyClose from "../close/DailyClose";
 import TransferApprovals from "../admin/TransferApprovals";
+import SaldoInicialManagement from "../admin/SaldoInicialManagement";
+import BalanceDashboard from "./BalanceDashboard";
 import { User, PuntoAtencion } from "../../types";
 import { useNavigate } from "react-router-dom";
 
@@ -74,7 +76,13 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         return <Reports user={user} selectedPoint={selectedPoint} />;
       case "daily-close":
         return <DailyClose user={user} selectedPoint={selectedPoint} />;
+      case "balance-management":
+        return <SaldoInicialManagement />;
       default:
+        // Mostrar el dashboard de saldos para operadores, dashboard general para otros
+        if (user.rol === "OPERADOR" && selectedPoint) {
+          return <BalanceDashboard user={user} selectedPoint={selectedPoint} />;
+        }
         return (
           <div className="w-full h-full flex justify-center items-start">
             <div className="bg-white rounded-lg shadow p-4 sm:p-6 mx-auto max-w-4xl w-full">

@@ -19,6 +19,9 @@ import spontaneousExitRoutes from "./routes/spontaneous-exits.js";
 import reportRoutes from "./routes/reports.js";
 import cuadreCajaRoutes from "./routes/cuadreCaja";
 import activePointsRoutes from "./routes/activePoints.js";
+import saldosInicialesRoutes from "./routes/saldos-iniciales.js";
+import vistaSaldosRoutes from "./routes/vista-saldos-puntos.js";
+import movimientosSaldoRoutes from "./routes/movimientos-saldo.js";
 
 
 
@@ -81,6 +84,9 @@ app.use("/api/spontaneous-exits", spontaneousExitRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/cuadre-caja", cuadreCajaRoutes);
 app.use("/api/active-points", activePointsRoutes);
+app.use("/api/saldos-iniciales", saldosInicialesRoutes);
+app.use("/api/vista-saldos-puntos", vistaSaldosRoutes);
+app.use("/api/movimientos-saldo", movimientosSaldoRoutes);
 
 
 // Error handling middleware

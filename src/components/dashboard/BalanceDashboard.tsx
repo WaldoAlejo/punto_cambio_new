@@ -1,0 +1,235 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { RefreshCw, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { User, PuntoAtencion, VistaSaldosPorPunto } from '../../types';
+import { saldoInicialService } from '../../services/saldoInicialService';
+
+interface BalanceDashboardProps {
+  user: User;
+  selectedPoint: PuntoAtencion | null;
+}
+
+const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
+  const [saldos, setSaldos] = useState<VistaSaldosPorPunto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+
+  useEffect(() => {
+    if (selectedPoint) {
+      loadSaldos();
+    }
+  }, [selectedPoint]);
+
+  const loadSaldos = async () => {
+    if (!selectedPoint) return;
+    
+    setLoading(true);
+    try {
+      const response = await saldoInicialService.getVistaSaldosPorPunto();
+      
+      if (response.error) {
+        toast({
+          title: "Error",
+          description: response.error,
+          variant: "destructive",
+        });
+      } else {
+        // Filtrar solo los saldos del punto seleccionado
+        const saldosPunto = response.saldos.filter(s => s.punto_atencion_id === selectedPoint.id);
+        setSaldos(saldosPunto);
+        setLastUpdate(new Date());
+      }
+    } catch (error) {
+      console.error('Error loading balances:', error);
+      toast({
+        title: "Error",
+        description: "Error inesperado al cargar saldos",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getBalanceStatus = (saldo: VistaSaldosPorPunto) => {
+    if (saldo.saldo_inicial === 0) return 'Sin configurar';
+    if (saldo.diferencia > 0) return 'Excedente';
+    if (saldo.diferencia < 0) return 'Déficit';
+    return 'Equilibrado';
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Sin configurar': return 'secondary';
+      case 'Excedente': return 'default';
+      case 'Déficit': return 'destructive';
+      case 'Equilibrado': return 'outline';
+      default: return 'secondary';
+    }
+  };
+
+  const getBalanceIcon = (diferencia: number) => {
+    if (diferencia > 0) return <TrendingUp className="h-4 w-4 text-green-600" />;
+    if (diferencia < 0) return <TrendingDown className="h-4 w-4 text-red-600" />;
+    return <DollarSign className="h-4 w-4 text-gray-600" />;
+  };
+
+  if (!selectedPoint) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <p className="text-gray-500 text-lg">
+            Debe seleccionar un punto de atención para ver los saldos
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-800">Saldos por Moneda</h2>
+          <p className="text-gray-600">{selectedPoint.nombre} - {selectedPoint.ciudad}</p>
+        </div>
+        <Button
+          onClick={loadSaldos}
+          disabled={loading}
+          variant="outline"
+          size="sm"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Actualizar
+        </Button>
+      </div>
+
+      {/* Resumen General */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total de Monedas</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{saldos.length}</div>
+            <p className="text-xs text-muted-foreground">
+              Monedas configuradas
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Balance General</CardTitle>
+            {getBalanceIcon(saldos.reduce((total, saldo) => total + saldo.diferencia, 0))}
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {saldos.reduce((total, saldo) => total + saldo.diferencia, 0) >= 0 ? '+' : ''}$
+              {saldos.reduce((total, saldo) => total + saldo.diferencia, 0).toFixed(2)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Diferencia total vs inicial
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Última Actualización</CardTitle>
+            <RefreshCw className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {lastUpdate ? lastUpdate.toLocaleTimeString() : '--:--'}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {lastUpdate ? lastUpdate.toLocaleDateString() : 'No actualizado'}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Detalle por Moneda */}
+      <div className="grid gap-4">
+        {saldos.length === 0 ? (
+          <Card>
+            <CardContent className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg">No hay saldos configurados</p>
+                <p className="text-gray-400 text-sm">
+                  Contacte al administrador para configurar los saldos iniciales
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          saldos.map((saldo) => (
+            <Card key={`${saldo.punto_atencion_id}-${saldo.moneda_id}`} className="transition-all duration-200 hover:shadow-md">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">{saldo.moneda_codigo} - {saldo.moneda_nombre}</CardTitle>
+                    <p className="text-sm text-gray-500">Símbolo: {saldo.moneda_simbolo}</p>
+                  </div>
+                  <Badge variant={getStatusColor(getBalanceStatus(saldo))}>
+                    {getBalanceStatus(saldo)}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-blue-50 p-3 rounded-lg">
+                    <p className="text-sm text-blue-600 font-medium">Saldo Inicial</p>
+                    <p className="text-lg font-bold text-blue-800">
+                      {saldo.moneda_simbolo}{saldo.saldo_inicial.toFixed(2)}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-green-50 p-3 rounded-lg">
+                    <p className="text-sm text-green-600 font-medium">Saldo Actual</p>
+                    <p className="text-lg font-bold text-green-800">
+                      {saldo.moneda_simbolo}{saldo.saldo_actual.toFixed(2)}
+                    </p>
+                  </div>
+                  
+                  <div className={`p-3 rounded-lg ${saldo.diferencia >= 0 ? 'bg-green-50' : 'bg-red-50'}`}>
+                    <p className={`text-sm font-medium ${saldo.diferencia >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      Diferencia
+                    </p>
+                    <p className={`text-lg font-bold ${saldo.diferencia >= 0 ? 'text-green-800' : 'text-red-800'}`}>
+                      {saldo.diferencia >= 0 ? '+' : ''}{saldo.moneda_simbolo}{saldo.diferencia.toFixed(2)}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-600 font-medium">Físico</p>
+                    <p className="text-sm text-gray-800">
+                      {saldo.billetes} billetes
+                    </p>
+                    <p className="text-sm text-gray-800">
+                      {saldo.monedas_fisicas} monedas
+                    </p>
+                  </div>
+                </div>
+                
+                {saldo.ultima_actualizacion && (
+                  <div className="mt-3 pt-3 border-t text-xs text-gray-500">
+                    Última actualización: {new Date(saldo.ultima_actualizacion).toLocaleString()}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default BalanceDashboard;
