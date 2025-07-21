@@ -17,10 +17,19 @@ CREATE TYPE "EstadoTransferencia" AS ENUM ('PENDIENTE', 'APROBADO', 'RECHAZADO')
 CREATE TYPE "EstadoTransaccion" AS ENUM ('COMPLETADO', 'PENDIENTE', 'CANCELADO');
 
 -- CreateEnum
-CREATE TYPE "EstadoCierre" AS ENUM ('ABIERTO', 'CERRADO');
+CREATE TYPE "EstadoCierre" AS ENUM ('ABIERTO', 'CERRADO', 'PARCIAL');
 
 -- CreateEnum
 CREATE TYPE "TipoRecibo" AS ENUM ('CAMBIO_DIVISA', 'TRANSFERENCIA', 'MOVIMIENTO', 'DEPOSITO', 'RETIRO');
+
+-- CreateEnum
+CREATE TYPE "EstadoJornada" AS ENUM ('ACTIVO', 'ALMUERZO', 'COMPLETADO', 'CANCELADO');
+
+-- CreateEnum
+CREATE TYPE "MotivoSalida" AS ENUM ('BANCO', 'DILIGENCIA_PERSONAL', 'TRAMITE_GOBIERNO', 'EMERGENCIA_MEDICA', 'OTRO');
+
+-- CreateEnum
+CREATE TYPE "EstadoSalida" AS ENUM ('ACTIVO', 'COMPLETADO', 'CANCELADO');
 
 -- CreateTable
 CREATE TABLE "Usuario" (
@@ -114,6 +123,18 @@ CREATE TABLE "CambioDivisa" (
     "observacion" TEXT,
     "numero_recibo" TEXT,
     "estado" "EstadoTransaccion" NOT NULL DEFAULT 'COMPLETADO',
+    "metodo_entrega" TEXT NOT NULL,
+    "transferencia_numero" TEXT,
+    "transferencia_banco" TEXT,
+    "transferencia_imagen_url" TEXT,
+    "abono_inicial_monto" DECIMAL(15,2),
+    "abono_inicial_fecha" TIMESTAMP(3),
+    "abono_inicial_recibido_por" TEXT,
+    "saldo_pendiente" DECIMAL(15,2),
+    "fecha_compromiso" TIMESTAMP(3),
+    "observacion_parcial" TEXT,
+    "referencia_cambio_principal" TEXT,
+    "cliente" TEXT,
 
     CONSTRAINT "CambioDivisa_pkey" PRIMARY KEY ("id")
 );
@@ -129,10 +150,13 @@ CREATE TABLE "Transferencia" (
     "estado" "EstadoTransferencia" NOT NULL DEFAULT 'PENDIENTE',
     "solicitado_por" TEXT NOT NULL,
     "aprobado_por" TEXT,
+    "rechazado_por" TEXT,
     "fecha" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "fecha_aprobacion" TIMESTAMP(3),
+    "fecha_rechazo" TIMESTAMP(3),
     "descripcion" TEXT,
     "numero_recibo" TEXT,
+    "observaciones_aprobacion" TEXT,
 
     CONSTRAINT "Transferencia_pkey" PRIMARY KEY ("id")
 );
@@ -192,8 +216,31 @@ CREATE TABLE "Jornada" (
     "fecha_almuerzo" TIMESTAMP(3),
     "fecha_regreso" TIMESTAMP(3),
     "fecha_salida" TIMESTAMP(3),
+    "ubicacion_inicio" JSONB,
+    "ubicacion_salida" JSONB,
+    "estado" "EstadoJornada" NOT NULL DEFAULT 'ACTIVO',
 
     CONSTRAINT "Jornada_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SalidaEspontanea" (
+    "id" TEXT NOT NULL,
+    "usuario_id" TEXT NOT NULL,
+    "punto_atencion_id" TEXT NOT NULL,
+    "motivo" "MotivoSalida" NOT NULL,
+    "descripcion" TEXT,
+    "fecha_salida" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "fecha_regreso" TIMESTAMP(3),
+    "ubicacion_salida" JSONB,
+    "ubicacion_regreso" JSONB,
+    "duracion_minutos" INTEGER,
+    "aprobado_por" TEXT,
+    "estado" "EstadoSalida" NOT NULL DEFAULT 'ACTIVO',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "SalidaEspontanea_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -208,6 +255,10 @@ CREATE TABLE "CuadreCaja" (
     "total_transferencias_salida" INTEGER NOT NULL DEFAULT 0,
     "fecha_cierre" TIMESTAMP(3),
     "observaciones" TEXT,
+    "saldo_inicial_calculado" BOOLEAN NOT NULL DEFAULT false,
+    "total_ingresos" DECIMAL(15,2) NOT NULL DEFAULT 0,
+    "total_egresos" DECIMAL(15,2) NOT NULL DEFAULT 0,
+    "usuario_cierre_parcial" TEXT,
 
     CONSTRAINT "CuadreCaja_pkey" PRIMARY KEY ("id")
 );
@@ -223,6 +274,8 @@ CREATE TABLE "DetalleCuadreCaja" (
     "billetes" INTEGER NOT NULL DEFAULT 0,
     "monedas_fisicas" INTEGER NOT NULL DEFAULT 0,
     "diferencia" DECIMAL(15,2) NOT NULL DEFAULT 0,
+    "movimientos_periodo" INTEGER NOT NULL DEFAULT 0,
+    "observaciones_detalle" TEXT,
 
     CONSTRAINT "DetalleCuadreCaja_pkey" PRIMARY KEY ("id")
 );
@@ -330,10 +383,31 @@ CREATE INDEX "Jornada_usuario_id_idx" ON "Jornada"("usuario_id");
 CREATE INDEX "Jornada_fecha_inicio_idx" ON "Jornada"("fecha_inicio");
 
 -- CreateIndex
+CREATE INDEX "Jornada_punto_atencion_id_idx" ON "Jornada"("punto_atencion_id");
+
+-- CreateIndex
+CREATE INDEX "SalidaEspontanea_usuario_id_idx" ON "SalidaEspontanea"("usuario_id");
+
+-- CreateIndex
+CREATE INDEX "SalidaEspontanea_punto_atencion_id_idx" ON "SalidaEspontanea"("punto_atencion_id");
+
+-- CreateIndex
+CREATE INDEX "SalidaEspontanea_fecha_salida_idx" ON "SalidaEspontanea"("fecha_salida");
+
+-- CreateIndex
+CREATE INDEX "SalidaEspontanea_estado_idx" ON "SalidaEspontanea"("estado");
+
+-- CreateIndex
 CREATE INDEX "CuadreCaja_fecha_idx" ON "CuadreCaja"("fecha");
 
 -- CreateIndex
 CREATE INDEX "CuadreCaja_punto_atencion_id_idx" ON "CuadreCaja"("punto_atencion_id");
+
+-- CreateIndex
+CREATE INDEX "CuadreCaja_estado_idx" ON "CuadreCaja"("estado");
+
+-- CreateIndex
+CREATE INDEX "DetalleCuadreCaja_moneda_id_idx" ON "DetalleCuadreCaja"("moneda_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "DetalleCuadreCaja_cuadre_id_moneda_id_key" ON "DetalleCuadreCaja"("cuadre_id", "moneda_id");
@@ -384,6 +458,9 @@ ALTER TABLE "Transferencia" ADD CONSTRAINT "Transferencia_solicitado_por_fkey" F
 ALTER TABLE "Transferencia" ADD CONSTRAINT "Transferencia_aprobado_por_fkey" FOREIGN KEY ("aprobado_por") REFERENCES "Usuario"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Transferencia" ADD CONSTRAINT "Transferencia_rechazado_por_fkey" FOREIGN KEY ("rechazado_por") REFERENCES "Usuario"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Movimiento" ADD CONSTRAINT "Movimiento_moneda_id_fkey" FOREIGN KEY ("moneda_id") REFERENCES "Moneda"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -414,10 +491,22 @@ ALTER TABLE "Jornada" ADD CONSTRAINT "Jornada_usuario_id_fkey" FOREIGN KEY ("usu
 ALTER TABLE "Jornada" ADD CONSTRAINT "Jornada_punto_atencion_id_fkey" FOREIGN KEY ("punto_atencion_id") REFERENCES "PuntoAtencion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "SalidaEspontanea" ADD CONSTRAINT "SalidaEspontanea_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "Usuario"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SalidaEspontanea" ADD CONSTRAINT "SalidaEspontanea_punto_atencion_id_fkey" FOREIGN KEY ("punto_atencion_id") REFERENCES "PuntoAtencion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SalidaEspontanea" ADD CONSTRAINT "SalidaEspontanea_aprobado_por_fkey" FOREIGN KEY ("aprobado_por") REFERENCES "Usuario"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "CuadreCaja" ADD CONSTRAINT "CuadreCaja_usuario_id_fkey" FOREIGN KEY ("usuario_id") REFERENCES "Usuario"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "CuadreCaja" ADD CONSTRAINT "CuadreCaja_punto_atencion_id_fkey" FOREIGN KEY ("punto_atencion_id") REFERENCES "PuntoAtencion"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CuadreCaja" ADD CONSTRAINT "CuadreCaja_usuario_cierre_parcial_fkey" FOREIGN KEY ("usuario_cierre_parcial") REFERENCES "Usuario"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "DetalleCuadreCaja" ADD CONSTRAINT "DetalleCuadreCaja_cuadre_id_fkey" FOREIGN KEY ("cuadre_id") REFERENCES "CuadreCaja"("id") ON DELETE CASCADE ON UPDATE CASCADE;
