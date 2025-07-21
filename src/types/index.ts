@@ -185,6 +185,24 @@ export interface SalidaEspontanea {
   usuarioAprobador?: Usuario;
 }
 
+export interface HistorialAsignacionPunto {
+  id: string;
+  usuario_id: string;
+  punto_atencion_anterior_id?: string | null;
+  punto_atencion_nuevo_id: string;
+  fecha_asignacion: string;
+  motivo_cambio?: string | null;
+  autorizado_por?: string | null;
+  tipo_asignacion: "MANUAL" | "AUTO_LOGIN" | "JORNADA_INICIO" | "JORNADA_FIN" | "AUTO_UPDATE";
+  observaciones?: string | null;
+  created_at: string;
+  // Relaciones opcionales
+  usuario?: Usuario;
+  punto_anterior?: PuntoAtencion;
+  punto_nuevo?: PuntoAtencion;
+  usuario_autorizador?: Usuario;
+}
+
 export interface CuadreCaja {
   id: string;
   usuario_id: string;
