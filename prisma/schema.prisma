@@ -75,6 +75,7 @@ model PuntoAtencion {
   salidasEspontaneas    SalidaEspontanea[]
   historialAsignacionesAnteriores HistorialAsignacionPunto[] @relation("PuntoAnterior")
   historialAsignacionesNuevas     HistorialAsignacionPunto[] @relation("PuntoNuevo")
+  saldosServientrega ServientregaSaldo[]
 
   @@index([ciudad])
   @@index([activo])
@@ -453,6 +454,60 @@ model HistorialAsignacionPunto {
   @@index([punto_atencion_nuevo_id, fecha_asignacion])
   @@index([tipo_asignacion, fecha_asignacion])
 }
+// ============================
+// Nuevas tablas para Servientrega
+// ============================
+
+model ServientregaRemitente {
+  id             String   @id @default(uuid())
+  cedula         String
+  nombre         String
+  direccion      String
+  telefono       String
+  codigo_postal  String?
+  email          String?
+  guias          ServientregaGuia[]
+}
+
+model ServientregaDestinatario {
+  id             String   @id @default(uuid())
+  cedula         String
+  nombre         String
+  direccion      String
+  ciudad         String
+  pais           String
+  telefono       String
+  codigo_postal  String?
+  guias          ServientregaGuia[]
+}
+
+model ServientregaGuia {
+  id               String   @id @default(uuid())
+  numero_guia      String   @unique
+  proceso          String
+  base64_response  String?
+  remitente_id     String
+  destinatario_id  String
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  remitente    ServientregaRemitente   @relation(fields: [remitente_id], references: [id])
+  destinatario ServientregaDestinatario @relation(fields: [destinatario_id], references: [id])
+
+  @@index([numero_guia])
+}
+
+model ServientregaSaldo {
+  id                String          @id @default(uuid())
+  monto_total       Decimal         @db.Decimal(15, 2)
+  monto_usado       Decimal         @default(0) @db.Decimal(15, 2)
+  creado_por        String
+  punto_atencion_id String          @unique
+  punto_atencion    PuntoAtencion   @relation(fields: [punto_atencion_id], references: [id])
+  created_at        DateTime        @default(now())
+  updated_at        DateTime        @updatedAt
+}
+
 
 // ============================
 // Enums

@@ -12,7 +12,9 @@
     "seed": "npx tsx prisma/seed.ts",
     "dev:server": "tsx server/index.ts",
     "build:server": "tsc --project tsconfig.server.json",
-    "start:server": "node dist/index.js"
+    "start:server": "nodemon dist/index.js",
+    "audit": "npm audit",
+    "audit:fix": "npm audit fix"
   },
   "prisma": {
     "seed": "tsx prisma/seed-casa-cambios.ts"
@@ -61,7 +63,7 @@
     "cors": "^2.8.5",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.3.0",
-    "express": "4.18.2",
+    "express": "^4.21.2",
     "express-rate-limit": "^7.5.1",
     "file-saver": "^2.0.5",
     "helmet": "^8.1.0",
@@ -72,7 +74,6 @@
     "next-themes": "^0.3.0",
     "nodemon": "^3.1.10",
     "pg": "^8.16.3",
-    "pm2": "^6.0.8",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
@@ -86,7 +87,6 @@
     "ts-node": "^10.9.2",
     "vaul": "^0.9.3",
     "winston": "^3.17.0",
-    "xlsx": "^0.18.5",
     "zod": "^3.25.67"
   },
   "devDependencies": {
@@ -106,7 +106,6 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
-    "lovable-tagger": "^1.1.7",
     "postcss": "^8.4.47",
     "prisma": "^6.9.0",
     "tailwindcss": "^3.4.11",

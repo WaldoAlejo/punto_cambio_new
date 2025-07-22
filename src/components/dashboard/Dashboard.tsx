@@ -14,6 +14,7 @@ import DailyClose from "../close/DailyClose";
 import TransferApprovals from "../admin/TransferApprovals";
 import SaldoInicialManagement from "../admin/SaldoInicialManagement";
 import BalanceDashboard from "./BalanceDashboard";
+import GenerarGuia from "../servientrega/GenerarGuia";
 import { User, PuntoAtencion } from "../../types";
 import { useNavigate } from "react-router-dom";
 
@@ -28,7 +29,6 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
   const navigate = useNavigate();
 
-  // 🚫 Protege contra acceso sin punto asignado
   useEffect(() => {
     if (user.rol === "OPERADOR" && !selectedPoint) {
       navigate("/seleccionar-punto", { replace: true });
@@ -49,10 +49,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         return <ExchangeManagement user={user} selectedPoint={selectedPoint} />;
       case "pending-exchanges":
         return (
-          <PendingExchangesList
-            user={user}
-            selectedPoint={selectedPoint}
-          />
+          <PendingExchangesList user={user} selectedPoint={selectedPoint} />
         );
       case "transfers":
         return <TransferManagement user={user} />;
@@ -78,8 +75,9 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         return <DailyClose user={user} selectedPoint={selectedPoint} />;
       case "balance-management":
         return <SaldoInicialManagement />;
+      case "servientrega":
+        return <GenerarGuia user={user} selectedPoint={selectedPoint} />;
       default:
-        // Mostrar el dashboard de saldos para operadores, dashboard general para otros
         if (user.rol === "OPERADOR" && selectedPoint) {
           return <BalanceDashboard user={user} selectedPoint={selectedPoint} />;
         }

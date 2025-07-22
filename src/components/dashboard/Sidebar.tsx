@@ -17,6 +17,7 @@ import {
   X,
   ChevronDown,
   ChevronRight,
+  Truck,
 } from "lucide-react";
 import { User, PuntoAtencion } from "../../types";
 
@@ -94,6 +95,13 @@ const Sidebar = ({
       icon: Calculator,
       color: "text-orange-600",
       roles: ["OPERADOR"],
+    },
+    {
+      id: "servientrega",
+      label: "Guía Servientrega",
+      icon: Truck,
+      color: "text-cyan-600",
+      roles: ["OPERADOR", "ADMIN"],
     },
   ];
 

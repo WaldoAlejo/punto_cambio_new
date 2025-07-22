@@ -22,6 +22,8 @@ import activePointsRoutes from "./routes/activePoints";
 import saldosInicialesRoutes from "./routes/saldos-iniciales";
 import vistaSaldosRoutes from "./routes/vista-saldos-puntos";
 import movimientosSaldoRoutes from "./routes/movimientos-saldo";
+import servientregaRoutes from "./routes/servientrega";
+
 
 
 
@@ -87,6 +89,8 @@ app.use("/api/active-points", activePointsRoutes);
 app.use("/api/saldos-iniciales", saldosInicialesRoutes);
 app.use("/api/vista-saldos-puntos", vistaSaldosRoutes);
 app.use("/api/movimientos-saldo", movimientosSaldoRoutes);
+app.use("/api/servientrega", servientregaRoutes);
+
 
 
 // Error handling middleware
