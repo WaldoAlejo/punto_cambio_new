@@ -5,10 +5,14 @@ import path from "path";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
-    port: 8080,
+    host: "0.0.0.0", // permite conexiones externas (desde cualquier IP)
+    port: 8080, // puerto accesible públicamente
     proxy: {
-      "/api": "http://localhost:3001",
+      "/api": {
+        target: "http://localhost:3001", // backend corriendo en el mismo servidor
+        changeOrigin: true,
+        secure: false,
+      },
     },
     watch: {
       usePolling: true,

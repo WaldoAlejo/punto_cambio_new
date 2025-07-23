@@ -1,4 +1,5 @@
-const API_BASE_URL = "http://localhost:3001/api";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
 
 export interface LoginCredentials {
   username: string;
@@ -92,7 +93,7 @@ export const authService = {
           user: null,
           token: null,
           error:
-            "Error de conexión con el servidor. Verifique que el servidor esté ejecutándose en http://localhost:3001",
+            "Error de conexión con el servidor. Verifique que el servidor esté ejecutándose correctamente.",
         };
       }
       return {
@@ -130,7 +131,7 @@ export const authService = {
 
       const data = await response.json();
       return { user: data.user, valid: true };
-    } catch  {
+    } catch {
       return { user: null, valid: false, error: "Network error" };
     }
   },
