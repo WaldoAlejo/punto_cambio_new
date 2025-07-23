@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { useUser } from "@/shared/hooks/use-user";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,13 +36,14 @@ interface HistorialAsignacion {
   creado_en: string;
 }
 
+
 interface PuntosResponse {
   success: boolean;
   puntos: PuntoAtencion[];
 }
 
 export default function SaldoServientregaAdmin() {
-  const { user } = useUser();
+  const { user } = useAuth();
   const esAdmin = user?.rol === "ADMIN";
 
   const [puntos, setPuntos] = useState<PuntoAtencion[]>([]);
@@ -87,12 +88,15 @@ export default function SaldoServientregaAdmin() {
 
   const obtenerHistorial = async () => {
     try {
-      const { data } = await axios.get<HistorialAsignacion[]>(
-        "/api/servientrega/saldo/historial"
-      );
-      setHistorial(data);
+      const { data } = await axios.get("/api/servientrega/saldo/historial");
+      if (Array.isArray(data)) {
+        setHistorial(data);
+      } else {
+        setHistorial([]);
+      }
     } catch (error) {
       console.error("❌ Error al obtener historial:", error);
+      setHistorial([]);
     }
   };
 
@@ -104,7 +108,7 @@ export default function SaldoServientregaAdmin() {
     setMensaje(null);
 
     try {
-      await axios.post("/api/servientrega/saldo/add", {
+      await axios.post("/api/servientrega/saldo", {
         monto_total: monto,
         creado_por: user?.nombre ?? "admin",
         punto_atencion_id: puntoSeleccionado,
@@ -130,17 +134,18 @@ export default function SaldoServientregaAdmin() {
   const saldoActual = Number(saldos[puntoSeleccionado] ?? 0);
   const saldoBajo = saldoActual < UMBRAL_SALDO_BAJO;
 
-  const historialFiltrado = historial.filter((h) => {
-    const coincidePunto = filtroPunto
-      ? h.punto_atencion_nombre
-          .toLowerCase()
-          .includes(filtroPunto.toLowerCase())
-      : true;
-    const coincideFecha = filtroFecha
-      ? h.creado_en.startsWith(filtroFecha)
-      : true;
-    return coincidePunto && coincideFecha;
-  });
+const historialFiltrado = historial.filter((h) => {
+  const coincidePunto =
+    !filtroPunto ||
+    puntos.find((p) => p.id === filtroPunto)?.nombre ===
+      h.punto_atencion_nombre;
+
+  const coincideFecha =
+    !filtroFecha ||
+    new Date(h.creado_en).toISOString().slice(0, 10) === filtroFecha;
+
+  return coincidePunto && coincideFecha;
+});
 
   return (
     <div className="max-w-6xl mx-auto mt-10 space-y-6">
@@ -258,44 +263,77 @@ export default function SaldoServientregaAdmin() {
             <CardTitle className="text-lg">Historial de asignaciones</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-4">
               <Input
                 type="date"
                 value={filtroFecha}
                 onChange={(e) => setFiltroFecha(e.target.value)}
                 className="max-w-xs"
               />
-              <Input
-                type="text"
-                placeholder="Buscar por punto"
-                value={filtroPunto}
-                onChange={(e) => setFiltroPunto(e.target.value)}
-                className="max-w-xs"
-              />
-            </div>
-            <ul className="space-y-2">
-              {historialFiltrado.map((h) => (
-                <li
-                  key={h.id}
-                  className="text-sm border p-2 rounded-md flex flex-col sm:flex-row sm:justify-between sm:items-center"
+              <Select
+                value={filtroPunto || "__ALL__"}
+                onValueChange={(val) =>
+                  setFiltroPunto(val === "__ALL__" ? "" : val)
+                }
+              >
+                <SelectTrigger className="max-w-xs">
+                  <SelectValue placeholder="Filtrar por punto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__ALL__">Todos los puntos</SelectItem>
+                  {puntos.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(filtroFecha || filtroPunto) && (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setFiltroFecha("");
+                    setFiltroPunto("");
+                  }}
                 >
-                  <div className="flex-1">
-                    <p className="font-medium">{h.punto_atencion_nombre}</p>
-                    <p className="text-xs text-gray-500">
-                      Asignado por: {h.creado_por}
-                    </p>
-                  </div>
-                  <div className="flex flex-col sm:items-end mt-2 sm:mt-0">
-                    <span className="text-blue-600 font-semibold">
-                      +${h.monto_total.toFixed(2)}
-                    </span>
-                    <span className="text-gray-500 text-xs">
-                      {new Date(h.creado_en).toLocaleString()}
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  Mostrar todo
+                </Button>
+              )}
+            </div>
+
+            {historialFiltrado.length === 0 ? (
+              <p className="text-sm text-gray-500 italic mt-4">
+                No hay asignaciones registradas para los filtros seleccionados.
+              </p>
+            ) : (
+              <ul className="space-y-2 max-h-[400px] overflow-auto pr-2">
+                {historialFiltrado.map((h) => (
+                  <li
+                    key={h.id}
+                    className="border p-3 rounded-md bg-gray-50 hover:bg-gray-100 transition"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
+                      <div className="flex-1 space-y-1">
+                        <p className="text-base font-medium text-gray-800">
+                          {h.punto_atencion_nombre}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Asignado por: {h.creado_por}
+                        </p>
+                      </div>
+                      <div className="flex flex-col sm:items-end mt-2 sm:mt-0">
+                        <span className="text-green-700 font-bold">
+                          +${h.monto_total.toFixed(2)}
+                        </span>
+                        <span className="text-gray-500 text-xs">
+                          {new Date(h.creado_en).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       )}

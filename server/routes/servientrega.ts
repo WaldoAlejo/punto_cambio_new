@@ -240,7 +240,44 @@ router.get("/remitente/puntos", async (_, res) => {
   }
 });
 
-// 💲 Obtener saldo por punto de atención
+// 🕒 Obtener historial de asignaciones de saldo Servientrega
+router.get("/saldo/historial", async (_, res) => {
+  try {
+    const historial = await prisma.servientregaSaldo.findMany({
+      select: {
+        id: true,
+        punto_atencion_id: true,
+        monto_total: true,
+        creado_por: true,
+        created_at: true,
+        punto_atencion: {
+          select: {
+            nombre: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: "desc",
+      },
+    });
+
+    const data = historial.map((h) => ({
+      id: h.id,
+      punto_atencion_id: h.punto_atencion_id,
+      punto_atencion_nombre: h.punto_atencion.nombre,
+      monto_total: Number(h.monto_total),
+      creado_por: h.creado_por,
+      creado_en: h.created_at,
+    }));
+
+    res.json(data);
+  } catch (error) {
+    console.error("❌ Error al obtener historial Servientrega:", error);
+    res.status(500).json({ error: "Error al obtener historial" });
+  }
+});
+
+// 💲 Obtener saldo por punto de atención (⚠️ ESTA DEBE IR DESPUÉS DE /saldo/historial)
 router.get("/saldo/:puntoAtencionId", async (req, res) => {
   try {
     const { puntoAtencionId } = req.params;
@@ -261,21 +298,35 @@ router.get("/saldo/:puntoAtencionId", async (req, res) => {
   }
 });
 
-// 💲 Crear o actualizar saldo por punto
+// 💲 Crear o actualizar saldo por punto (SUMANDO saldo si ya existe)
 router.post("/saldo", async (req, res) => {
   try {
     const { monto_total, creado_por, punto_atencion_id } = req.body;
 
-    const actualizado = await prisma.servientregaSaldo.upsert({
+    const saldoExistente = await prisma.servientregaSaldo.findUnique({
       where: { punto_atencion_id },
-      update: { monto_total, creado_por },
-      create: {
-        punto_atencion_id,
-        monto_total,
-        monto_usado: 0,
-        creado_por,
-      },
     });
+
+    let actualizado;
+
+    if (saldoExistente) {
+      actualizado = await prisma.servientregaSaldo.update({
+        where: { punto_atencion_id },
+        data: {
+          monto_total: saldoExistente.monto_total.plus(monto_total),
+          creado_por,
+        },
+      });
+    } else {
+      actualizado = await prisma.servientregaSaldo.create({
+        data: {
+          punto_atencion_id,
+          monto_total,
+          monto_usado: 0,
+          creado_por,
+        },
+      });
+    }
 
     res.json(actualizado);
   } catch (error) {
