@@ -9,13 +9,13 @@ import { Loader2 } from "lucide-react";
 interface PasoConfirmarEnvioProps {
   formData: any;
   onReset: () => void;
-  onSuccess?: () => void; // ✅ Nuevo prop opcional
+  onSuccess?: () => void;
 }
 
 interface GenerarGuiaResponse {
   guia: string;
   base64: string;
-  [key: string]: any;
+  proceso?: string;
 }
 
 export default function PasoConfirmarEnvio({
@@ -34,29 +34,26 @@ export default function PasoConfirmarEnvio({
 
     try {
       const payload = {
-        ...formData,
         tipo: "GeneracionGuia",
+        ...formData,
       };
 
-      const { data }: { data: GenerarGuiaResponse } = await axios.post(
+      const res = await axios.post<GenerarGuiaResponse>(
         "/api/servientrega/generar-guia",
         payload
       );
+      const data = res.data;
 
-      if (data.guia && data.base64) {
+      if (data?.guia && data?.base64) {
         setGuia(data.guia);
         setBase64(data.base64);
-
-        // ✅ Ejecutar callback de éxito si se pasa como prop
-        if (onSuccess) {
-          onSuccess();
-        }
+        if (onSuccess) onSuccess();
       } else {
         setError("No se pudo generar la guía.");
       }
     } catch (err: any) {
       console.error("Error al generar guía:", err);
-      setError("Error al generar la guía.");
+      setError("Ocurrió un error al generar la guía. Intenta nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -64,11 +61,11 @@ export default function PasoConfirmarEnvio({
 
   const handleVerPDF = () => {
     if (base64) {
-      const linkSource = `data:application/pdf;base64,${base64}`;
-      const pdfWindow = window.open();
-      if (pdfWindow) {
-        pdfWindow.document.write(
-          `<iframe width='100%' height='100%' src='${linkSource}'></iframe>`
+      const pdfURL = `data:application/pdf;base64,${base64}`;
+      const win = window.open();
+      if (win) {
+        win.document.write(
+          `<iframe width="100%" height="100%" src="${pdfURL}"></iframe>`
         );
       }
     }
@@ -77,7 +74,7 @@ export default function PasoConfirmarEnvio({
   return (
     <Card className="w-full max-w-2xl mx-auto mt-6">
       <CardHeader>
-        <CardTitle>Confirmación y envío</CardTitle>
+        <CardTitle>Confirmar y generar guía</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {!guia ? (

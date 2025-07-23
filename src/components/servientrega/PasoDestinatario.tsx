@@ -13,6 +13,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -28,39 +29,24 @@ interface Ciudad {
   provincia: string;
 }
 
+interface Agencia {
+  nombre: string;
+  tipo_cs: string;
+  direccion: string;
+  ciudad: string;
+}
+
 interface PasoDestinatarioProps {
   onNext: (destinatario: any) => void;
-}
-
-function esCedulaValida(cedula: string): boolean {
-  if (!/^[0-9]{10}$/.test(cedula)) return false;
-  const digits = cedula.split("").map(Number);
-  const provinceCode = parseInt(cedula.substring(0, 2));
-  const thirdDigit = digits[2];
-  if (provinceCode < 1 || provinceCode > 24 || thirdDigit >= 6) return false;
-
-  let sum = 0;
-  for (let i = 0; i < 9; i++) {
-    let value = digits[i];
-    if (i % 2 === 0) {
-      value *= 2;
-      if (value > 9) value -= 9;
-    }
-    sum += value;
-  }
-  const verifier = (10 - (sum % 10)) % 10;
-  return verifier === digits[9];
-}
-
-function esTelefonoValido(numero: string): boolean {
-  const celularRegex = /^(09)[0-9]{8}$/;
-  const convencionalRegex = /^(0[2-7])[0-9]{6,7}$/;
-  return celularRegex.test(numero) || convencionalRegex.test(numero);
 }
 
 export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [paises, setPaises] = useState<Pais[]>([]);
   const [ciudades, setCiudades] = useState<Ciudad[]>([]);
+  const [agencias, setAgencias] = useState<Agencia[]>([]);
+  const [mostrarAgencias, setMostrarAgencias] = useState(false);
+  const [agenciaSeleccionada, setAgenciaSeleccionada] = useState<string>("");
+
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     nombre: "",
@@ -77,33 +63,65 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     axios
       .post("/api/servientrega/paises")
       .then((res) => {
-        setPaises((res.data as { fetch: Pais[] }).fetch || []);
+        const data = res.data as { fetch: Pais[] };
+        setPaises(data.fetch || []);
       })
-      .catch((err) => {
-        console.error("Error al obtener países:", err);
-      });
+      .catch((err) => console.error("Error al obtener países:", err));
   }, []);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
 
   const handlePaisChange = (value: string) => {
     const codpais = parseInt(value);
     setForm((prev) => ({ ...prev, codpais, ciudad: "", provincia: "" }));
+
     axios
       .post("/api/servientrega/ciudades", { codpais })
       .then((res) => {
-        setCiudades((res.data as { fetch: Ciudad[] }).fetch || []);
+        const data = res.data as { fetch: { city: string }[] };
+        const lista = Array.isArray(data.fetch) ? data.fetch : [];
+        const transformadas: Ciudad[] = lista.map((item) => {
+          const [ciudad, provincia] = item.city.split("-");
+          return {
+            ciudad: ciudad?.trim() ?? "",
+            provincia: provincia?.trim() ?? "",
+          };
+        });
+        setCiudades(transformadas);
       })
-      .catch((err) => {
-        console.error("Error al obtener ciudades:", err);
-      });
+      .catch((err) => console.error("Error al obtener ciudades:", err));
   };
 
   const handleCiudadChange = (value: string) => {
     const [ciudad, provincia] = value.split("|");
     setForm((prev) => ({ ...prev, ciudad, provincia }));
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleCheckboxChange = async (checked: boolean) => {
+    setMostrarAgencias(checked);
+    if (checked && agencias.length === 0) {
+      try {
+        const res = await axios.post("/api/servientrega/agencias", {
+          tipo: "obtener_agencias_aliadas",
+          usuingreso: "PRUEBA",
+          contrasenha: "s12345ABCDe",
+        });
+
+        const data = res.data as { fetch: any[] };
+        const lista = Array.isArray(data.fetch) ? data.fetch : [];
+        const transformadas: Agencia[] = lista.map((a: any) => ({
+          nombre: String(Object.values(a)[0] ?? ""),
+          tipo_cs: String(a.tipo_cs?.trim() ?? ""),
+          direccion: String(a.direccion?.trim() ?? ""),
+          ciudad: String(a.ciudad?.trim() ?? ""),
+        }));
+        setAgencias(transformadas);
+      } catch (error) {
+        console.error("Error al cargar agencias:", error);
+      }
+    }
   };
 
   const handleContinue = () => {
@@ -118,24 +136,28 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       return;
     }
 
-    if (!esTelefonoValido(form.telefono)) {
-      toast.error(
-        "Número de teléfono inválido. Debe ser un celular o convencional válido."
-      );
+    if (!/^(09\d{8}|0[2-7]\d{7,8})$/.test(form.telefono)) {
+      toast.error("Número de teléfono inválido.");
       return;
     }
 
     if (
       form.codpais === 593 &&
       form.identificacion &&
-      !esCedulaValida(form.identificacion)
+      !/^[0-9]{10}$/.test(form.identificacion)
     ) {
-      toast.error("Cédula ecuatoriana inválida.");
+      toast.error("Cédula inválida.");
       return;
     }
 
+    const destinatarioFinal = {
+      ...form,
+      entrega_en_oficina: mostrarAgencias,
+      agencia_seleccionada: mostrarAgencias ? agenciaSeleccionada : null,
+    };
+
     setLoading(true);
-    onNext(form);
+    onNext(destinatarioFinal);
   };
 
   return (
@@ -144,55 +166,53 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         <CardTitle>Datos del Destinatario</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div>
-          <Label>Nombre</Label>
-          <Input name="nombre" value={form.nombre} onChange={handleChange} />
-        </div>
-        <div>
-          <Label>Dirección</Label>
-          <Input
-            name="direccion"
-            value={form.direccion}
-            onChange={handleChange}
-          />
-        </div>
-        <div>
-          <Label>Teléfono</Label>
-          <Input
-            name="telefono"
-            value={form.telefono}
-            onChange={handleChange}
-          />
-        </div>
-        <div>
-          <Label>Email</Label>
-          <Input name="email" value={form.email} onChange={handleChange} />
-        </div>
-        <div>
-          <Label>Identificación (Cédula o Pasaporte)</Label>
-          <Input
-            name="identificacion"
-            value={form.identificacion}
-            onChange={handleChange}
-          />
-        </div>
-        <div>
-          <Label>País</Label>
-          <Select onValueChange={handlePaisChange}>
-            <SelectTrigger>
-              <SelectValue placeholder="Seleccionar país" />
-            </SelectTrigger>
-            <SelectContent>
-              {paises.map((p) => (
-                <SelectItem key={p.codpais} value={p.codpais.toString()}>
-                  {p.pais}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <Input
+          name="nombre"
+          placeholder="Nombre"
+          value={form.nombre}
+          onChange={handleChange}
+        />
+        <Input
+          name="direccion"
+          placeholder="Dirección"
+          value={form.direccion}
+          onChange={handleChange}
+        />
+        <Input
+          name="telefono"
+          placeholder="Teléfono"
+          value={form.telefono}
+          onChange={handleChange}
+        />
+        <Input
+          name="email"
+          placeholder="Email"
+          value={form.email}
+          onChange={handleChange}
+        />
+        <Input
+          name="identificacion"
+          placeholder="Identificación"
+          value={form.identificacion}
+          onChange={handleChange}
+        />
+
+        <Label>País</Label>
+        <Select onValueChange={handlePaisChange}>
+          <SelectTrigger>
+            <SelectValue placeholder="Seleccionar país" />
+          </SelectTrigger>
+          <SelectContent>
+            {paises.map((p) => (
+              <SelectItem key={p.codpais} value={p.codpais.toString()}>
+                {p.pais}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         {form.codpais > 0 && (
-          <div>
+          <>
             <Label>Ciudad y Provincia</Label>
             <Select onValueChange={handleCiudadChange}>
               <SelectTrigger>
@@ -202,6 +222,32 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
                 {ciudades.map((c, i) => (
                   <SelectItem key={i} value={`${c.ciudad}|${c.provincia}`}>
                     {c.ciudad} - {c.provincia}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        )}
+
+        <div className="flex items-center gap-2 mt-2">
+          <Checkbox
+            checked={mostrarAgencias}
+            onCheckedChange={handleCheckboxChange}
+          />
+          <Label>¿Entrega en oficina?</Label>
+        </div>
+
+        {mostrarAgencias && (
+          <div>
+            <Label>Seleccionar agencia</Label>
+            <Select onValueChange={setAgenciaSeleccionada}>
+              <SelectTrigger>
+                <SelectValue placeholder="Agencia de retiro" />
+              </SelectTrigger>
+              <SelectContent>
+                {agencias.map((a, i) => (
+                  <SelectItem key={i} value={a.nombre}>
+                    {a.nombre} - {a.ciudad} ({a.tipo_cs})
                   </SelectItem>
                 ))}
               </SelectContent>

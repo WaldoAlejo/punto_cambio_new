@@ -87,16 +87,56 @@ export default function PasoRemitente({
     axios
       .get("/api/servientrega/remitente/puntos")
       .then((res) => {
-        setPuntos((res.data as { puntos: Punto[] }).puntos || []);
+        const data = res.data as { puntos: Punto[] };
+        const ciudadesUnicas = new Map<string, Punto>();
+        for (const punto of data.puntos) {
+          const clave = `${punto.ciudad},${punto.provincia}`;
+          if (!ciudadesUnicas.has(clave)) {
+            ciudadesUnicas.set(clave, punto);
+          }
+        }
+        setPuntos(Array.from(ciudadesUnicas.values()));
       })
       .catch((err) => {
         console.error("Error al obtener puntos:", err);
       });
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const buscarRemitentePorCedula = async (cedula: string) => {
+    try {
+      const res = await axios.get(
+        `/api/servientrega/remitente/buscar/${cedula}`
+      );
+      const data = res.data as { remitente?: any };
+
+      if (data?.remitente) {
+        const r = data.remitente;
+        setFormData({
+          identificacion: r.cedula,
+          nombre: r.nombre,
+          direccion: r.direccion,
+          telefono: r.telefono,
+          email: r.email || "",
+          ciudad: r.ciudad,
+          provincia: r.provincia || "",
+          codpais: 63,
+          pais: "Ecuador",
+          pais_iso: "EC",
+        });
+        setSelectedPunto(`${r.ciudad},${r.provincia}`);
+      }
+    } catch (error) {
+      console.log("Remitente no encontrado, se creará nuevo");
+    }
+  };
+
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "identificacion" && value.length >= 10) {
+      await buscarRemitentePorCedula(value);
+    }
   };
 
   const handleSelectPunto = (value: string) => {
@@ -124,7 +164,6 @@ export default function PasoRemitente({
       return;
     }
 
-    // Validar identificación ecuatoriana o pasaporte
     if (
       formData.codpais === 63 &&
       !validarCedulaEcuatoriana(formData.identificacion)
@@ -133,7 +172,6 @@ export default function PasoRemitente({
       return;
     }
 
-    // Validar número de teléfono
     if (!validarTelefonoEcuatoriano(formData.telefono)) {
       toast.error("Número de teléfono inválido.");
       return;
@@ -180,7 +218,7 @@ export default function PasoRemitente({
           onChange={handleChange}
         />
 
-        <Select onValueChange={handleSelectPunto}>
+        <Select value={selectedPunto} onValueChange={handleSelectPunto}>
           <SelectTrigger>
             <SelectValue placeholder="Seleccionar ciudad y provincia" />
           </SelectTrigger>

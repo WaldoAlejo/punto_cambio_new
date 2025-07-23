@@ -1,3 +1,5 @@
+// src/api/routes/servientrega.ts
+
 import express from "express";
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
@@ -37,96 +39,58 @@ async function callServientregaAPI(payload: any) {
   }
 }
 
-// 📦 Productos
+// =============================
+// 📦 Productos, 🏙 Ciudades, 🌎 Países, 🏢 Agencias, 📦 Empaques
+// =============================
+
 router.post("/productos", async (_, res) => {
   const payload = { tipo: "obtener_producto", ...AUTH };
-  const data = await callServientregaAPI(payload);
-  res.json(data);
+  res.json(await callServientregaAPI(payload));
 });
 
-// 🌎 Países
 router.post("/paises", async (_, res) => {
   const payload = { tipo: "obtener_paises", ...AUTH };
-  const data = await callServientregaAPI(payload);
-  res.json(data);
+  res.json(await callServientregaAPI(payload));
 });
 
-// 🏙 Ciudades
 router.post("/ciudades", async (req, res) => {
   const { codpais } = req.body;
   const payload = { tipo: "obtener_ciudades", codpais, ...AUTH };
-  const data = await callServientregaAPI(payload);
-  res.json(data);
+  res.json(await callServientregaAPI(payload));
 });
 
-// 🏢 Agencias
 router.post("/agencias", async (_, res) => {
   const payload = { tipo: "obtener_agencias_aliadas", ...AUTH };
-  const data = await callServientregaAPI(payload);
-  res.json(data);
+  res.json(await callServientregaAPI(payload));
 });
 
-// 📦 Empaques
 router.post("/empaques", async (_, res) => {
   const payload = { tipo: "obtener_empaqueyembalaje", ...AUTH };
-  const data = await callServientregaAPI(payload);
-  res.json(data);
+  res.json(await callServientregaAPI(payload));
 });
 
-// 💰 Tarifa
-router.post("/tarifa", async (req, res) => {
-  const {
-    ciu_ori,
-    provincia_ori,
-    ciu_des,
-    provincia_des,
-    valor_seguro,
-    valor_declarado,
-    peso,
-    alto,
-    ancho,
-    largo,
-    recoleccion,
-    nombre_producto,
-    empaque,
-  } = req.body;
+// =============================
+// 💰 Calcular tarifa
+// =============================
 
+router.post("/tarifa", async (req, res) => {
   const payload = {
     tipo: "obtener_tarifa_nacional",
-    ciu_ori,
-    provincia_ori,
-    ciu_des,
-    provincia_des,
-    valor_seguro,
-    valor_declarado,
-    peso,
-    alto,
-    ancho,
-    largo,
-    recoleccion,
-    nombre_producto,
-    empaque,
-    ...AUTH,
-  };
-
-  const data = await callServientregaAPI(payload);
-  res.json(data);
-});
-
-// 📄 Generar guía y descontar saldo del punto
-router.post("/generar-guia", async (req, res) => {
-  const payload = {
-    tipo: "GeneracionGuia",
     ...req.body,
     ...AUTH,
   };
+  res.json(await callServientregaAPI(payload));
+});
 
+// =============================
+// 📄 Generar Guía
+// =============================
+
+router.post("/generar-guia", async (req, res) => {
+  const payload = { tipo: "GeneracionGuia", ...req.body, ...AUTH };
   const response = (await callServientregaAPI(payload)) as GenerarGuiaResponse;
 
-  if (
-    typeof response.guia === "string" &&
-    typeof response.base64 === "string"
-  ) {
+  if (response?.guia && response?.base64) {
     const { remitente, destinatario, valor_declarado, punto_atencion_id } =
       req.body;
 
@@ -151,7 +115,6 @@ router.post("/generar-guia", async (req, res) => {
       const saldo = await prisma.servientregaSaldo.findUnique({
         where: { punto_atencion_id },
       });
-
       if (saldo) {
         await prisma.servientregaSaldo.update({
           where: { punto_atencion_id },
@@ -166,17 +129,18 @@ router.post("/generar-guia", async (req, res) => {
   res.json(response);
 });
 
-// ❌ Anular guía
+// =============================
+// ❌ Anular Guía
+// =============================
+
 router.post("/anular-guia", async (req, res) => {
   const { guia } = req.body;
-
   const payload = {
     tipo: "ActualizaEstadoGuia",
     guia,
     estado: "Anulada",
     ...AUTH,
   };
-
   const response = (await callServientregaAPI(payload)) as AnularGuiaResponse;
 
   if (response?.fetch?.proceso === "Guia Actualizada") {
@@ -189,7 +153,10 @@ router.post("/anular-guia", async (req, res) => {
   res.json(response);
 });
 
-// 📅 Obtener guías por fecha
+// =============================
+// 📅 Listar guías
+// =============================
+
 router.get("/guias", async (req, res) => {
   try {
     const { desde, hasta } = req.query;
@@ -204,9 +171,7 @@ router.get("/guias", async (req, res) => {
         remitente: true,
         destinatario: true,
       },
-      orderBy: {
-        created_at: "desc",
-      },
+      orderBy: { created_at: "desc" },
     });
 
     res.json(guias);
@@ -216,31 +181,33 @@ router.get("/guias", async (req, res) => {
   }
 });
 
-// 🏢 Obtener puntos de atención
+// =============================
+// 🏢 Puntos de atención
+// =============================
+
 router.get("/remitente/puntos", async (_, res) => {
   try {
     const puntos = await prisma.puntoAtencion.findMany({
       where: { activo: true },
-      select: {
-        id: true,
-        nombre: true,
-        ciudad: true,
-        provincia: true,
-      },
+      select: { id: true, nombre: true, ciudad: true, provincia: true },
       orderBy: { ciudad: "asc" },
     });
-
     res.json({ success: true, puntos });
   } catch (error) {
     console.error("❌ Error al obtener puntos de atención:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error al consultar puntos de atención",
-    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Error al consultar puntos de atención",
+      });
   }
 });
 
-// 🕒 Obtener historial de asignaciones de saldo Servientrega
+// =============================
+// 💲 Saldo
+// =============================
+
 router.get("/saldo/historial", async (_, res) => {
   try {
     const historial = await prisma.servientregaSaldo.findMany({
@@ -250,15 +217,9 @@ router.get("/saldo/historial", async (_, res) => {
         monto_total: true,
         creado_por: true,
         created_at: true,
-        punto_atencion: {
-          select: {
-            nombre: true,
-          },
-        },
+        punto_atencion: { select: { nombre: true } },
       },
-      orderBy: {
-        created_at: "desc",
-      },
+      orderBy: { created_at: "desc" },
     });
 
     const data = historial.map((h) => ({
@@ -277,28 +238,22 @@ router.get("/saldo/historial", async (_, res) => {
   }
 });
 
-// 💲 Obtener saldo por punto de atención (⚠️ ESTA DEBE IR DESPUÉS DE /saldo/historial)
 router.get("/saldo/:puntoAtencionId", async (req, res) => {
   try {
     const { puntoAtencionId } = req.params;
-
     const saldo = await prisma.servientregaSaldo.findUnique({
       where: { punto_atencion_id: puntoAtencionId },
     });
 
-    if (!saldo) {
-      return res.json({ disponible: 0 });
-    }
-
-    const disponible = saldo.monto_total.minus(saldo.monto_usado);
-    res.json({ disponible });
+    res.json({
+      disponible: saldo ? saldo.monto_total.minus(saldo.monto_usado) : 0,
+    });
   } catch (error) {
     console.error("❌ Error al obtener saldo:", error);
     res.status(500).json({ error: "Error al obtener saldo" });
   }
 });
 
-// 💲 Crear o actualizar saldo por punto (SUMANDO saldo si ya existe)
 router.post("/saldo", async (req, res) => {
   try {
     const { monto_total, creado_por, punto_atencion_id } = req.body;
@@ -307,26 +262,22 @@ router.post("/saldo", async (req, res) => {
       where: { punto_atencion_id },
     });
 
-    let actualizado;
-
-    if (saldoExistente) {
-      actualizado = await prisma.servientregaSaldo.update({
-        where: { punto_atencion_id },
-        data: {
-          monto_total: saldoExistente.monto_total.plus(monto_total),
-          creado_por,
-        },
-      });
-    } else {
-      actualizado = await prisma.servientregaSaldo.create({
-        data: {
-          punto_atencion_id,
-          monto_total,
-          monto_usado: 0,
-          creado_por,
-        },
-      });
-    }
+    const actualizado = saldoExistente
+      ? await prisma.servientregaSaldo.update({
+          where: { punto_atencion_id },
+          data: {
+            monto_total: saldoExistente.monto_total.plus(monto_total),
+            creado_por,
+          },
+        })
+      : await prisma.servientregaSaldo.create({
+          data: {
+            punto_atencion_id,
+            monto_total,
+            monto_usado: 0,
+            creado_por,
+          },
+        });
 
     res.json(actualizado);
   } catch (error) {

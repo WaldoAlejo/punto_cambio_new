@@ -9,10 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 interface Guia {
-  id: number;
-  guia: string;
-  base64: string;
-  fecha_creacion: string;
+  id: string;
+  numero_guia: string;
+  base64_response: string;
+  created_at: string;
 }
 
 export default function ListadoGuias() {
@@ -46,6 +46,16 @@ export default function ListadoGuias() {
     } catch (err) {
       console.error("Error al anular guía:", err);
       alert("No se pudo anular la guía");
+    }
+  };
+
+  const handleVerPDF = (base64: string) => {
+    const pdfURL = `data:application/pdf;base64,${base64}`;
+    const win = window.open();
+    if (win) {
+      win.document.write(
+        `<iframe width="100%" height="100%" src="${pdfURL}"></iframe>`
+      );
     }
   };
 
@@ -85,30 +95,38 @@ export default function ListadoGuias() {
             {guias.map((guia) => (
               <div
                 key={guia.id}
-                className="border p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center"
+                className="border p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center gap-2"
               >
                 <div>
                   <p>
-                    <strong>Guía:</strong> {guia.guia}
+                    <strong>Guía:</strong> {guia.numero_guia}
                   </p>
                   <p>
                     <strong>Fecha:</strong>{" "}
-                    {format(parseISO(guia.fecha_creacion), "yyyy-MM-dd HH:mm")}
+                    {format(parseISO(guia.created_at), "yyyy-MM-dd HH:mm")}
                   </p>
                 </div>
-                {isToday(parseISO(guia.fecha_creacion)) ? (
+                <div className="flex gap-2 flex-wrap">
                   <Button
-                    onClick={() => handleAnular(guia.guia)}
-                    variant="destructive"
-                    className="mt-2 md:mt-0"
+                    onClick={() => handleVerPDF(guia.base64_response)}
+                    variant="secondary"
                   >
-                    Anular Guía
+                    Ver PDF
                   </Button>
-                ) : (
-                  <p className="text-sm text-gray-500 mt-2 md:mt-0">
-                    No se puede anular
-                  </p>
-                )}
+
+                  {isToday(parseISO(guia.created_at)) ? (
+                    <Button
+                      onClick={() => handleAnular(guia.numero_guia)}
+                      variant="destructive"
+                    >
+                      Anular
+                    </Button>
+                  ) : (
+                    <p className="text-sm text-gray-500 mt-2 md:mt-0">
+                      No se puede anular
+                    </p>
+                  )}
+                </div>
               </div>
             ))}
           </div>

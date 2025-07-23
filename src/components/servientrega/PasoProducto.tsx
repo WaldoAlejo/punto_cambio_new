@@ -13,8 +13,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 
+interface ProductoSeleccionado {
+  nombre: string;
+  esDocumento: boolean;
+}
+
 interface PasoProductoProps {
-  onNext: (producto: string) => void;
+  onNext: (producto: ProductoSeleccionado) => void;
 }
 
 export default function PasoProducto({ onNext }: PasoProductoProps) {
@@ -25,10 +30,14 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
   useEffect(() => {
     const fetchProductos = async () => {
       try {
-        const response = await axios.post<{ producto: string }[]>(
-          "/api/servientrega/productos"
-        );
-        const lista = response.data;
+        const response = await axios.post<{
+          fetch: { producto: string }[];
+        }>("/api/servientrega/productos");
+
+        const lista = Array.isArray(response.data.fetch)
+          ? response.data.fetch
+          : [];
+
         const nombres = lista.map((p) => p.producto?.trim()).filter(Boolean);
         setProductos(nombres);
       } catch (err) {
@@ -41,7 +50,11 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
 
   const handleContinue = () => {
     if (selectedProducto) {
-      onNext(selectedProducto);
+      const producto: ProductoSeleccionado = {
+        nombre: selectedProducto,
+        esDocumento: selectedProducto.toUpperCase().includes("DOCUMENTO"),
+      };
+      onNext(producto);
     }
   };
 
