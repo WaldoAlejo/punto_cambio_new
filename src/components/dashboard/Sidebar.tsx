@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   Truck,
+  DollarSign,
 } from "lucide-react";
 import { User, PuntoAtencion } from "../../types";
 
@@ -137,6 +138,12 @@ const Sidebar = ({
       color: "text-blue-600",
     },
     {
+      id: "servientrega-saldo",
+      label: "Saldo Servientrega",
+      icon: DollarSign,
+      color: "text-cyan-600",
+    },
+    {
       id: "reports",
       label: "Reportes",
       icon: BarChart3,
@@ -185,10 +192,6 @@ const Sidebar = ({
           ${isMobile ? "shadow-xl" : ""}
           lg:relative lg:z-auto
         `}
-        style={{
-          transitionProperty: "width",
-          transitionDuration: "300ms",
-        }}
       >
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           {isOpen && (

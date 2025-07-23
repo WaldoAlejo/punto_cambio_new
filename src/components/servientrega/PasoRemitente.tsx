@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Usuario, PuntoAtencion } from "../../types";
 
 interface PasoRemitenteProps {
@@ -29,6 +30,7 @@ interface Punto {
 }
 
 interface RemitenteFormData {
+  identificacion: string;
   nombre: string;
   direccion: string;
   telefono: string;
@@ -40,6 +42,26 @@ interface RemitenteFormData {
   pais_iso: string;
 }
 
+function validarCedulaEcuatoriana(cedula: string): boolean {
+  if (!/^\d{10}$/.test(cedula)) return false;
+  const digitos = cedula.split("").map(Number);
+  const provincia = parseInt(cedula.substring(0, 2), 10);
+  if (provincia < 1 || provincia > 24) return false;
+  const verificador = digitos[9];
+  let suma = 0;
+  for (let i = 0; i < 9; i++) {
+    let mult = digitos[i] * (i % 2 === 0 ? 2 : 1);
+    if (mult > 9) mult -= 9;
+    suma += mult;
+  }
+  const resultado = (10 - (suma % 10)) % 10;
+  return resultado === verificador;
+}
+
+function validarTelefonoEcuatoriano(telefono: string): boolean {
+  return /^09\d{8}$/.test(telefono) || /^0[2-7]\d{7,8}$/.test(telefono);
+}
+
 export default function PasoRemitente({
   user,
   selectedPoint,
@@ -48,6 +70,7 @@ export default function PasoRemitente({
   const [puntos, setPuntos] = useState<Punto[]>([]);
   const [selectedPunto, setSelectedPunto] = useState<string>("");
   const [formData, setFormData] = useState<RemitenteFormData>({
+    identificacion: "",
     nombre: "",
     direccion: "",
     telefono: "",
@@ -90,15 +113,34 @@ export default function PasoRemitente({
 
   const handleContinue = () => {
     if (
-      formData.nombre &&
-      formData.direccion &&
-      formData.telefono &&
-      formData.email &&
-      selectedPunto
+      !formData.identificacion ||
+      !formData.nombre ||
+      !formData.direccion ||
+      !formData.telefono ||
+      !formData.email ||
+      !selectedPunto
     ) {
-      setLoading(true);
-      onNext(formData);
+      toast.error("Por favor completa todos los campos obligatorios.");
+      return;
     }
+
+    // Validar identificación ecuatoriana o pasaporte
+    if (
+      formData.codpais === 63 &&
+      !validarCedulaEcuatoriana(formData.identificacion)
+    ) {
+      toast.error("Cédula ecuatoriana inválida.");
+      return;
+    }
+
+    // Validar número de teléfono
+    if (!validarTelefonoEcuatoriano(formData.telefono)) {
+      toast.error("Número de teléfono inválido.");
+      return;
+    }
+
+    setLoading(true);
+    onNext(formData);
   };
 
   return (
@@ -107,6 +149,12 @@ export default function PasoRemitente({
         <CardTitle>Información del Remitente</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <Input
+          name="identificacion"
+          placeholder="Cédula o Pasaporte"
+          value={formData.identificacion}
+          onChange={handleChange}
+        />
         <Input
           name="nombre"
           placeholder="Nombre completo"
@@ -145,18 +193,7 @@ export default function PasoRemitente({
           </SelectContent>
         </Select>
 
-        <Button
-          disabled={
-            !formData.nombre ||
-            !formData.direccion ||
-            !formData.telefono ||
-            !formData.email ||
-            !selectedPunto ||
-            loading
-          }
-          onClick={handleContinue}
-          className="w-full"
-        >
+        <Button disabled={loading} onClick={handleContinue} className="w-full">
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

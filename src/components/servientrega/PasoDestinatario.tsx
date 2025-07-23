@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 interface Pais {
   codpais: number;
@@ -31,6 +32,32 @@ interface PasoDestinatarioProps {
   onNext: (destinatario: any) => void;
 }
 
+function esCedulaValida(cedula: string): boolean {
+  if (!/^[0-9]{10}$/.test(cedula)) return false;
+  const digits = cedula.split("").map(Number);
+  const provinceCode = parseInt(cedula.substring(0, 2));
+  const thirdDigit = digits[2];
+  if (provinceCode < 1 || provinceCode > 24 || thirdDigit >= 6) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    let value = digits[i];
+    if (i % 2 === 0) {
+      value *= 2;
+      if (value > 9) value -= 9;
+    }
+    sum += value;
+  }
+  const verifier = (10 - (sum % 10)) % 10;
+  return verifier === digits[9];
+}
+
+function esTelefonoValido(numero: string): boolean {
+  const celularRegex = /^(09)[0-9]{8}$/;
+  const convencionalRegex = /^(0[2-7])[0-9]{6,7}$/;
+  return celularRegex.test(numero) || convencionalRegex.test(numero);
+}
+
 export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [paises, setPaises] = useState<Pais[]>([]);
   const [ciudades, setCiudades] = useState<Ciudad[]>([]);
@@ -40,6 +67,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     direccion: "",
     telefono: "",
     email: "",
+    identificacion: "",
     codpais: 0,
     ciudad: "",
     provincia: "",
@@ -80,15 +108,34 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
   const handleContinue = () => {
     if (
-      form.nombre &&
-      form.direccion &&
-      form.telefono &&
-      form.codpais &&
-      form.ciudad
+      !form.nombre ||
+      !form.direccion ||
+      !form.telefono ||
+      !form.codpais ||
+      !form.ciudad
     ) {
-      setLoading(true);
-      onNext(form);
+      toast.error("Por favor, completa todos los campos obligatorios.");
+      return;
     }
+
+    if (!esTelefonoValido(form.telefono)) {
+      toast.error(
+        "Número de teléfono inválido. Debe ser un celular o convencional válido."
+      );
+      return;
+    }
+
+    if (
+      form.codpais === 593 &&
+      form.identificacion &&
+      !esCedulaValida(form.identificacion)
+    ) {
+      toast.error("Cédula ecuatoriana inválida.");
+      return;
+    }
+
+    setLoading(true);
+    onNext(form);
   };
 
   return (
@@ -120,6 +167,14 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         <div>
           <Label>Email</Label>
           <Input name="email" value={form.email} onChange={handleChange} />
+        </div>
+        <div>
+          <Label>Identificación (Cédula o Pasaporte)</Label>
+          <Input
+            name="identificacion"
+            value={form.identificacion}
+            onChange={handleChange}
+          />
         </div>
         <div>
           <Label>País</Label>

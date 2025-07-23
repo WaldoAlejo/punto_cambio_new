@@ -9,6 +9,7 @@ import { Loader2 } from "lucide-react";
 interface PasoConfirmarEnvioProps {
   formData: any;
   onReset: () => void;
+  onSuccess?: () => void; // ✅ Nuevo prop opcional
 }
 
 interface GenerarGuiaResponse {
@@ -20,6 +21,7 @@ interface GenerarGuiaResponse {
 export default function PasoConfirmarEnvio({
   formData,
   onReset,
+  onSuccess,
 }: PasoConfirmarEnvioProps) {
   const [loading, setLoading] = useState(false);
   const [guia, setGuia] = useState<string | null>(null);
@@ -44,6 +46,11 @@ export default function PasoConfirmarEnvio({
       if (data.guia && data.base64) {
         setGuia(data.guia);
         setBase64(data.base64);
+
+        // ✅ Ejecutar callback de éxito si se pasa como prop
+        if (onSuccess) {
+          onSuccess();
+        }
       } else {
         setError("No se pudo generar la guía.");
       }

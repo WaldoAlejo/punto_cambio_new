@@ -15,6 +15,7 @@ import TransferApprovals from "../admin/TransferApprovals";
 import SaldoInicialManagement from "../admin/SaldoInicialManagement";
 import BalanceDashboard from "./BalanceDashboard";
 import GenerarGuia from "../servientrega/GenerarGuia";
+import SaldoServientregaAdmin from "../admin/SaldoServientregaAdmin";
 import { User, PuntoAtencion } from "../../types";
 import { useNavigate } from "react-router-dom";
 
@@ -77,6 +78,8 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         return <SaldoInicialManagement />;
       case "servientrega":
         return <GenerarGuia user={user} selectedPoint={selectedPoint} />;
+      case "servientrega-saldo":
+        return <SaldoServientregaAdmin />;
       default:
         if (user.rol === "OPERADOR" && selectedPoint) {
           return <BalanceDashboard user={user} selectedPoint={selectedPoint} />;
