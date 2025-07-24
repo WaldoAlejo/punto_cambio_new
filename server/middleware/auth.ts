@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { pool } from "../lib/database.js";
 import { Request, Response, NextFunction, RequestHandler } from "express";
-import logger from "../utils/logger";
+import logger from "../utils/logger.js";
 
 interface AuthenticatedUser {
   id: string;
