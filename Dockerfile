@@ -1,40 +1,47 @@
+# Etapa 1: Build
+FROM node:18-alpine AS builder
 
-FROM node:18-alpine
+# Instalar openssl y cliente de PostgreSQL (necesario para prisma)
+RUN apk add --no-cache openssl postgresql-client
 
-# Instalar dependencias del sistema
-RUN apk add --no-cache \
-    openssl \
-    postgresql-client
-
-# Crear directorio de la aplicación
 WORKDIR /app
 
-# Copiar archivos de dependencias
+# Copiar todo para instalación y compilación
 COPY package*.json ./
 COPY package-server.json ./
+COPY tsconfig*.json ./
+COPY . .
 
-# Instalar dependencias
-RUN npm ci --only=production && npm cache clean --force
+# Instalar todas las dependencias (incluye dev)
+RUN npm install
+
+# Compilar TypeScript
+RUN npm run build
+
+# Etapa 2: Producción
+FROM node:18-alpine
+
+RUN apk add --no-cache openssl postgresql-client
+
+WORKDIR /app
 
 # Crear usuario no-root
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
-# Copiar código fuente
-COPY --chown=nodejs:nodejs . .
+# Copiar solo lo necesario desde build
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/.env .env
 
-# Crear directorio de logs
+# Crear logs
 RUN mkdir -p logs && chown nodejs:nodejs logs
 
-# Cambiar a usuario no-root
 USER nodejs
 
-# Exponer puerto
 EXPOSE 3001
-
-# Variables de entorno por defecto
 ENV NODE_ENV=production
 ENV PORT=3001
 
-# Comando de inicio
-CMD ["npm", "run", "server"]
+CMD ["node", "dist/server.js"]

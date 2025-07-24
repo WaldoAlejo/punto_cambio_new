@@ -24,7 +24,7 @@ router.get('/:pointId', authenticateToken, async (req, res) => {
       LIMIT $2
     `;
 
-    const result = await pool.query(query, [pointId, parseInt(limit)]);
+    const result = await pool.query(query, [pointId, parseInt(limit as string)]);
 
     // Formatear los resultados para incluir los objetos anidados
     const movimientos = result.rows.map(row => ({

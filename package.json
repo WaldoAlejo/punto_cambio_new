@@ -96,6 +96,7 @@
     "@tailwindcss/typography": "^0.5.15",
     "@types/axios": "^0.9.36",
     "@types/dotenv": "^6.1.1",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/next": "^8.0.7",
     "@types/node": "^24.0.10",
     "@types/react": "^18.3.23",
