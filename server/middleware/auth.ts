@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import { pool } from "../lib/database";
+import { pool } from "../lib/database.js";
 import { Request, Response, NextFunction, RequestHandler } from "express";
 import logger from "../utils/logger";
 

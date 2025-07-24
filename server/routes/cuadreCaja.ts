@@ -1,6 +1,6 @@
 // server/routes/cuadreCaja.ts
 import express from "express";
-import { pool } from "../lib/database";
+import { pool } from "../lib/database.js";
 import { authenticateToken } from "../middleware/auth";
 import logger from "../utils/logger.js";
 

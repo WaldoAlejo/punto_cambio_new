@@ -1,6 +1,6 @@
 import express from "express";
 import { authenticateToken, requireRole } from "../middleware/auth";
-import { pool } from "../lib/database";
+import { pool } from "../lib/database.js";
 
 const router = express.Router();
 
