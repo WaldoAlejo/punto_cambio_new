@@ -23,7 +23,7 @@ import movimientosSaldoRoutes from "./routes/movimientos-saldo.js";
 import servientregaRoutes from "./routes/servientrega.js";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT: number = Number(process.env.PORT) || 3001;
 
 // Rate limiting
 const limiter = rateLimit({
@@ -40,7 +40,7 @@ app.use(
       "http://localhost:5173",
       "http://localhost:3000",
       "http://localhost:8080",
-      "http://34.19.23.163:5173", // <-- IP pública del frontend
+      "http://34.19.23.163:5173", // IP pública frontend
     ],
     credentials: true,
   })
@@ -122,7 +122,8 @@ app.use("*", (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
+// Start server
+app.listen(PORT, "0.0.0.0", () => {
   logger.info(`Server running on port ${PORT}`);
 });
 
