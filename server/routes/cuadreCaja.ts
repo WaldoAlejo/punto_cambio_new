@@ -1,7 +1,7 @@
 // server/routes/cuadreCaja.ts
 import express from "express";
 import { pool } from "../lib/database.js";
-import { authenticateToken } from "../middleware/auth";
+import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 
 const router = express.Router();
