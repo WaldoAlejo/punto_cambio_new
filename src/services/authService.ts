@@ -1,5 +1,5 @@
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
+  import.meta.env.VITE_API_URL || "http://34.132.200.84:3001/api";
 
 export interface LoginCredentials {
   username: string;
