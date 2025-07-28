@@ -2,6 +2,7 @@
 
 import express from "express";
 import axios from "axios";
+import https from "https"; // 👈 Necesario para ignorar certificado inseguro
 import { PrismaClient } from "@prisma/client";
 
 const router = express.Router();
@@ -27,10 +28,15 @@ interface AnularGuiaResponse {
   };
 }
 
+// =============================
+// 🔧 Función central para llamar a la API de Servientrega
+// =============================
 async function callServientregaAPI(payload: any) {
   try {
     const { data } = await axios.post(BASE_URL, payload, {
       headers: { "Content-Type": "application/json" },
+      timeout: 15000, // 15s de timeout para evitar bloqueos
+      httpsAgent: new https.Agent({ rejectUnauthorized: false }), // 👈 Ignora el certificado inseguro
     });
     return data;
   } catch (error: any) {
@@ -74,11 +80,7 @@ router.post("/empaques", async (_, res) => {
 // =============================
 
 router.post("/tarifa", async (req, res) => {
-  const payload = {
-    tipo: "obtener_tarifa_nacional",
-    ...req.body,
-    ...AUTH,
-  };
+  const payload = { tipo: "obtener_tarifa_nacional", ...req.body, ...AUTH };
   res.json(await callServientregaAPI(payload));
 });
 
@@ -118,9 +120,7 @@ router.post("/generar-guia", async (req, res) => {
       if (saldo) {
         await prisma.servientregaSaldo.update({
           where: { punto_atencion_id },
-          data: {
-            monto_usado: saldo.monto_usado.plus(valor_declarado ?? 0),
-          },
+          data: { monto_usado: saldo.monto_usado.plus(valor_declarado ?? 0) },
         });
       }
     }
@@ -167,10 +167,7 @@ router.get("/guias", async (req, res) => {
           lte: new Date(hasta as string),
         },
       },
-      include: {
-        remitente: true,
-        destinatario: true,
-      },
+      include: { remitente: true, destinatario: true },
       orderBy: { created_at: "desc" },
     });
 
@@ -271,12 +268,7 @@ router.post("/saldo", async (req, res) => {
           },
         })
       : await prisma.servientregaSaldo.create({
-          data: {
-            punto_atencion_id,
-            monto_total,
-            monto_usado: 0,
-            creado_por,
-          },
+          data: { punto_atencion_id, monto_total, monto_usado: 0, creado_por },
         });
 
     res.json(actualizado);
