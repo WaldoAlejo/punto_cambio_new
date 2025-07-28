@@ -12,13 +12,11 @@ router.get(
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
-      // Obtener fecha de hoy (00:00:00) y mañana (00:00:00)
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
       const manana = new Date(hoy);
       manana.setDate(manana.getDate() + 1);
 
-      // Buscar puntos activos que NO tengan jornada ACTIVO o ALMUERZO hoy
       const puntosLibres = await prisma.puntoAtencion.findMany({
         where: {
           activo: true,
@@ -34,7 +32,6 @@ router.get(
         orderBy: { nombre: "asc" },
       });
 
-      // Formatear respuesta
       const formatted = puntosLibres.map((punto) => ({
         id: punto.id,
         nombre: punto.nombre,
@@ -131,6 +128,135 @@ router.post(
   }
 );
 
+// Actualizar un punto de atención (solo admins/superusuarios)
+router.put(
+  "/:id",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    try {
+      const pointId = req.params.id;
+      const {
+        nombre,
+        direccion,
+        ciudad,
+        provincia,
+        codigo_postal,
+        telefono,
+        activo,
+      } = req.body;
+
+      const existingPoint = await prisma.puntoAtencion.findUnique({
+        where: { id: pointId },
+      });
+
+      if (!existingPoint) {
+        res.status(404).json({
+          error: "Punto de atención no encontrado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      if (!nombre || !direccion || !ciudad) {
+        res.status(400).json({
+          error: "Los campos nombre, dirección y ciudad son obligatorios",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const updatedPoint = await prisma.puntoAtencion.update({
+        where: { id: pointId },
+        data: {
+          nombre,
+          direccion,
+          ciudad,
+          provincia: provincia || "",
+          codigo_postal: codigo_postal || null,
+          telefono: telefono || null,
+          activo: activo !== undefined ? activo : existingPoint.activo,
+        },
+      });
+
+      logger.info("Punto de atención actualizado", {
+        pointId: updatedPoint.id,
+        updatedBy: req.user?.id,
+      });
+
+      res.status(200).json({
+        point: updatedPoint,
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error al actualizar punto de atención", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id,
+      });
+      res.status(500).json({
+        error: "Error al actualizar el punto de atención",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
+// Eliminar un punto de atención (solo admins/superusuarios)
+router.delete(
+  "/:id",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    try {
+      const pointId = req.params.id;
+
+      const existingPoint = await prisma.puntoAtencion.findUnique({
+        where: { id: pointId },
+      });
+
+      if (!existingPoint) {
+        res.status(404).json({
+          error: "Punto de atención no encontrado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      await prisma.puntoAtencion.delete({
+        where: { id: pointId },
+      });
+
+      logger.info("Punto de atención eliminado", {
+        pointId,
+        deletedBy: req.user?.id,
+      });
+
+      res.status(200).json({
+        message: "Punto de atención eliminado correctamente",
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error al eliminar punto de atención", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id,
+      });
+      res.status(500).json({
+        error: "Error al eliminar el punto de atención",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
 // Cambiar el estado de un punto (activar/inactivar)
 router.patch(
   "/:id/toggle",
@@ -194,7 +320,6 @@ router.get(
         orderBy: { nombre: "asc" },
       });
 
-      // Formatear respuesta
       const formatted = todosPuntos.map((punto) => ({
         id: punto.id,
         nombre: punto.nombre,
@@ -245,7 +370,6 @@ router.get(
         orderBy: { nombre: "asc" },
       });
 
-      // Formatear respuesta
       const formatted = puntosActivos.map((punto) => ({
         id: punto.id,
         nombre: punto.nombre,

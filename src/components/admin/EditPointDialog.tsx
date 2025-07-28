@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -36,11 +36,22 @@ const EditPointDialog = ({
   });
   const [loading, setLoading] = useState(false);
 
+  // ✅ Resetear formulario al cambiar de punto o abrir modal
+  useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        nombre: point.nombre,
+        direccion: point.direccion,
+        ciudad: point.ciudad,
+        provincia: point.provincia,
+        codigo_postal: point.codigo_postal || "",
+        telefono: point.telefono || "",
+      });
+    }
+  }, [point, isOpen]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,10 +83,10 @@ const EditPointDialog = ({
 
       toast({
         title: "Punto actualizado",
-        description: `Punto de atención ${updated.nombre} actualizado correctamente`,
+        description: `Punto ${updated.nombre} actualizado correctamente`,
       });
-      onClose();
       onPointUpdated();
+      onClose();
     } catch {
       toast({
         title: "Error",
@@ -94,42 +105,17 @@ const EditPointDialog = ({
           <DialogTitle>Editar Punto de Atención</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Nombre *</Label>
-            <Input
-              name="nombre"
-              value={formData.nombre}
-              onChange={handleChange}
-              disabled={loading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Dirección *</Label>
-            <Input
-              name="direccion"
-              value={formData.direccion}
-              onChange={handleChange}
-              disabled={loading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Ciudad *</Label>
-            <Input
-              name="ciudad"
-              value={formData.ciudad}
-              onChange={handleChange}
-              disabled={loading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Provincia *</Label>
-            <Input
-              name="provincia"
-              value={formData.provincia}
-              onChange={handleChange}
-              disabled={loading}
-            />
-          </div>
+          {["nombre", "direccion", "ciudad", "provincia"].map((field) => (
+            <div key={field} className="space-y-2">
+              <Label className="capitalize">{field} *</Label>
+              <Input
+                name={field}
+                value={(formData as any)[field]}
+                onChange={handleChange}
+                disabled={loading}
+              />
+            </div>
+          ))}
           <div className="space-y-2">
             <Label>Código Postal</Label>
             <Input
