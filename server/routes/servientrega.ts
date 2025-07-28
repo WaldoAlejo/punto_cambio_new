@@ -1,7 +1,5 @@
-// src/api/routes/servientrega.ts
-
 import express from "express";
-import axios, { AxiosRequestConfig } from "axios";
+import axios from "axios";
 import https from "https";
 import { PrismaClient } from "@prisma/client";
 
@@ -15,6 +13,8 @@ const AUTH = {
   usuingreso: "PRUEBA",
   contrasenha: "s12345ABCDe",
 };
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 interface GenerarGuiaResponse {
   guia: string;
@@ -30,13 +30,11 @@ interface AnularGuiaResponse {
 
 async function callServientregaAPI(payload: any) {
   try {
-    const config: AxiosRequestConfig = {
+    const { data } = await axios.post(BASE_URL, payload, {
       headers: { "Content-Type": "application/json" },
-      timeout: 15000,
-      httpsAgent: new https.Agent({ rejectUnauthorized: false }), // Permite certificados inseguros
-    };
-
-    const { data } = await axios.post(BASE_URL, payload, config);
+      httpsAgent,
+      timeout: 20000,
+    });
     return data;
   } catch (error: any) {
     console.error("❌ Error al consumir API Servientrega:", error.message);
