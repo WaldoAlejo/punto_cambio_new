@@ -94,7 +94,6 @@ router.post("/codigos-postales", async (req, res) => {
       });
     }
 
-    // Internacional: fallback a Zippopotam
     if (codpais !== 63) {
       const response = await axios.get(`https://api.zippopotam.us/${codpais}`);
       const codes = response.data?.places || [];
@@ -200,7 +199,6 @@ router.post("/tarifa", async (req, res) => {
 // =============================
 // 👤 Remitente
 // =============================
-
 router.get("/remitente/buscar/:query", async (req, res) => {
   try {
     const { query } = req.params;
@@ -271,7 +269,6 @@ router.put("/remitente/actualizar/:identificacion", async (req, res) => {
 // =============================
 // 👤 Destinatario
 // =============================
-
 router.get("/destinatario/buscar/:query", async (req, res) => {
   try {
     const { query } = req.params;
@@ -348,20 +345,17 @@ router.post("/generar-guia", async (req, res) => {
     const { remitente, destinatario, valor_declarado, punto_atencion_id } =
       req.body;
 
-    // Reutilizar remitente
     const remitenteDB =
       (await prisma.servientregaRemitente.findFirst({
         where: { cedula: remitente.cedula },
       })) || (await prisma.servientregaRemitente.create({ data: remitente }));
 
-    // Reutilizar destinatario
     const destinatarioDB =
       (await prisma.servientregaDestinatario.findFirst({
         where: { cedula: destinatario.cedula },
       })) ||
       (await prisma.servientregaDestinatario.create({ data: destinatario }));
 
-    // Generar guía en Servientrega
     const payload = { tipo: "GeneracionGuia", ...req.body, ...AUTH };
     const response = (await callServientregaAPI(
       payload
@@ -569,6 +563,7 @@ router.get("/validar-ciudad/:puntoAtencionId", async (req, res) => {
     const existe = data.fetch.find(
       (c: any) => c.city.toUpperCase() === ciudadCompleta
     );
+
     if (!existe) {
       return res.status(400).json({
         valido: false,
@@ -576,7 +571,12 @@ router.get("/validar-ciudad/:puntoAtencionId", async (req, res) => {
       });
     }
 
-    res.json({ valido: true, ciudad: ciudadCompleta });
+    res.json({
+      valido: true,
+      ciudad: punto.ciudad,
+      provincia: punto.provincia,
+      ciudadCompleta,
+    });
   } catch {
     res.status(500).json({ error: "Error validando ciudad" });
   }
