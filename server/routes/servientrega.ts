@@ -29,14 +29,14 @@ interface AnularGuiaResponse {
 }
 
 async function callServientregaAPI(payload: any) {
-  console.log("📤 [Servientrega] Request Payload:", payload);
+  console.log("[Servientrega] Request Payload:", payload);
   try {
     const { data } = await axios.post(BASE_URL, payload, {
       headers: { "Content-Type": "application/json" },
       httpsAgent,
       timeout: 20000,
     });
-    console.log("📥 [Servientrega] Response:", data);
+    console.log("[Servientrega] Response:", data);
     return data;
   } catch (error: any) {
     console.error("❌ Error al consumir API Servientrega:", error.message);
@@ -48,9 +48,8 @@ async function callServientregaAPI(payload: any) {
 }
 
 // =============================
-// 📦 Productos, 🏙 Ciudades, 🌎 Países, 🏢 Agencias, 📦 Empaques
+// 📦 Productos
 // =============================
-
 router.post("/productos", async (_, res) => {
   try {
     const payload = { tipo: "obtener_producto", ...AUTH };
@@ -60,6 +59,9 @@ router.post("/productos", async (_, res) => {
   }
 });
 
+// =============================
+// 🌎 Paises
+// =============================
 router.post("/paises", async (_, res) => {
   try {
     const payload = { tipo: "obtener_paises", ...AUTH };
@@ -69,6 +71,9 @@ router.post("/paises", async (_, res) => {
   }
 });
 
+// =============================
+// 🏙 Ciudades
+// =============================
 router.post("/ciudades", async (req, res) => {
   try {
     const { codpais } = req.body;
@@ -79,6 +84,36 @@ router.post("/ciudades", async (req, res) => {
   }
 });
 
+// =============================
+// 📮 Códigos Postales (NUEVO)
+// =============================
+router.post("/codigos-postales", async (req, res) => {
+  try {
+    const { codpais } = req.body;
+    const payload = { tipo: "obtener_codigos_postales", codpais, ...AUTH };
+    const data = await callServientregaAPI(payload);
+
+    if (!data || !data.fetch) {
+      return res
+        .status(404)
+        .json({ error: "No se encontraron códigos postales" });
+    }
+
+    res.json({
+      fetch: data.fetch.map((item: any) => ({
+        ciudad: item.city,
+        codigo_postal: item.codigo_postal,
+      })),
+    });
+  } catch (err: any) {
+    console.error("❌ Error al obtener códigos postales:", err);
+    res.status(500).json({ error: "Error al obtener códigos postales" });
+  }
+});
+
+// =============================
+// 🏢 Agencias
+// =============================
 router.post("/agencias", async (_, res) => {
   try {
     const payload = { tipo: "obtener_agencias_aliadas", ...AUTH };
@@ -88,6 +123,9 @@ router.post("/agencias", async (_, res) => {
   }
 });
 
+// =============================
+// 📦 Empaques
+// =============================
 router.post("/empaques", async (_, res) => {
   try {
     const payload = { tipo: "obtener_empaqueyembalaje", ...AUTH };
@@ -98,89 +136,75 @@ router.post("/empaques", async (_, res) => {
 });
 
 // =============================
-// 💰 Calcular tarifa
+// 💰 Calcular tarifa nacional/internacional
 // =============================
-
 router.post("/tarifa", async (req, res) => {
   try {
-    const esInternacional = req.body.pais_des?.toUpperCase() !== "ECUADOR";
-    const tipo = esInternacional
-      ? "obtener_tarifa_internacional"
-      : "obtener_tarifa_nacional";
+    const {
+      pais_ori,
+      ciu_ori,
+      provincia_ori,
+      pais_des,
+      ciu_des,
+      provincia_des,
+      valor_seguro,
+      valor_declarado,
+      peso,
+      alto,
+      ancho,
+      largo,
+      recoleccion,
+      nombre_producto,
+      empaque,
+      codigo_postal_ori,
+      codigo_postal_des,
+    } = req.body;
 
-    console.log(`🔍 Calculando tarifa (${tipo})...`);
+    const tipo =
+      pais_des?.toUpperCase() !== "ECUADOR"
+        ? "obtener_tarifa_internacional"
+        : "obtener_tarifa_nacional";
 
-    // Validación de ciudades solo para nacional
-    if (!esInternacional) {
-      const ciudadesData = await callServientregaAPI({
-        tipo: "obtener_ciudades",
-        codpais: 63,
-        ...AUTH,
-      });
-
-      const ciudadesValidas = ciudadesData.fetch.map((c: any) =>
-        c.city.toUpperCase()
-      );
-
-      const ciudadOrigen =
-        `${req.body.ciu_ori}-${req.body.provincia_ori}`.toUpperCase();
-      const ciudadDestino =
-        `${req.body.ciu_des}-${req.body.provincia_des}`.toUpperCase();
-
-      if (!ciudadesValidas.includes(ciudadOrigen)) {
-        return res
-          .status(400)
-          .json({ error: `Ciudad de origen inválida: ${ciudadOrigen}` });
-      }
-      if (!ciudadesValidas.includes(ciudadDestino)) {
-        return res
-          .status(400)
-          .json({ error: `Ciudad de destino inválida: ${ciudadDestino}` });
-      }
-    }
-
-    // Autocompletar código postal en internacional
-    let cod_postal_des = req.body.cod_postal_des || "";
-    if (esInternacional && !cod_postal_des) {
-      cod_postal_des = "00000"; // Código postal genérico en caso de no proporcionarse
-    }
-
-    // Construcción del payload
-    const payload = {
+    const payload: any = {
       tipo,
-      pais_ori: req.body.pais_ori?.toUpperCase(),
-      ciu_ori: req.body.ciu_ori?.toUpperCase(),
-      provincia_ori: req.body.provincia_ori?.toUpperCase(),
-      pais_des: req.body.pais_des?.toUpperCase(),
-      ciu_des: req.body.ciu_des?.toUpperCase(),
-      provincia_des: req.body.provincia_des?.toUpperCase(),
-      cod_postal_des,
-      valor_seguro: req.body.valor_seguro?.toString() || "0",
-      valor_declarado: req.body.valor_declarado?.toString() || "0",
-      peso: req.body.peso?.toString() || "0",
-      alto: req.body.alto?.toString() || "0",
-      ancho: req.body.ancho?.toString() || "0",
-      largo: req.body.largo?.toString() || "0",
-      recoleccion: req.body.recoleccion || "NO",
-      nombre_producto: req.body.nombre_producto?.toUpperCase(),
-      empaque: req.body.empaque || "",
+      pais_ori: pais_ori?.toUpperCase(),
+      ciu_ori: ciu_ori?.toUpperCase(),
+      provincia_ori: provincia_ori?.toUpperCase(),
+      pais_des: pais_des?.toUpperCase(),
+      ciu_des: ciu_des?.toUpperCase(),
+      provincia_des: provincia_des?.toUpperCase(),
+      valor_seguro: String(valor_seguro || "0"),
+      valor_declarado: String(valor_declarado || "0"),
+      peso: String(peso || "0"),
+      alto: String(alto || "0"),
+      ancho: String(ancho || "0"),
+      largo: String(largo || "0"),
+      recoleccion: recoleccion || "NO",
+      nombre_producto: nombre_producto || "",
+      empaque: empaque || "",
       ...AUTH,
     };
 
-    console.log("🚀 [Tarifa] Payload final:", payload);
+    // ✅ Para internacional, se agregan códigos postales
+    if (tipo === "obtener_tarifa_internacional") {
+      payload.codigo_postal_ori = codigo_postal_ori || "170150";
+      payload.codigo_postal_des = codigo_postal_des || "110111";
+    }
 
-    const response = await callServientregaAPI(payload);
-    res.json(response);
+    console.log("🔍 Payload enviado a Servientrega:", payload);
+    const data = await callServientregaAPI(payload);
+    console.log("📥 Respuesta Servientrega:", data);
+
+    res.json(data);
   } catch (err: any) {
-    console.error("❌ Error en /tarifa:", err.message);
-    res.status(500).json({ error: "Error al calcular tarifa" });
+    console.error("❌ Error al calcular tarifa:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
 // =============================
-// 📄 Generar Guía
+// 📄 Generar guía
 // =============================
-
 router.post("/generar-guia", async (req, res) => {
   try {
     const payload = { tipo: "GeneracionGuia", ...req.body, ...AUTH };
@@ -216,9 +240,7 @@ router.post("/generar-guia", async (req, res) => {
         if (saldo) {
           await prisma.servientregaSaldo.update({
             where: { punto_atencion_id },
-            data: {
-              monto_usado: saldo.monto_usado.plus(valor_declarado ?? 0),
-            },
+            data: { monto_usado: saldo.monto_usado.plus(valor_declarado ?? 0) },
           });
         }
       }
@@ -230,9 +252,8 @@ router.post("/generar-guia", async (req, res) => {
 });
 
 // =============================
-// ❌ Anular Guía
+// ❌ Anular guía
 // =============================
-
 router.post("/anular-guia", async (req, res) => {
   try {
     const { guia } = req.body;
@@ -259,7 +280,6 @@ router.post("/anular-guia", async (req, res) => {
 // =============================
 // 📅 Listar guías
 // =============================
-
 router.get("/guias", async (req, res) => {
   try {
     const { desde, hasta } = req.query;
@@ -283,7 +303,6 @@ router.get("/guias", async (req, res) => {
 // =============================
 // 🏢 Puntos de atención
 // =============================
-
 router.get("/remitente/puntos", async (_, res) => {
   try {
     const puntos = await prisma.puntoAtencion.findMany({
@@ -294,17 +313,18 @@ router.get("/remitente/puntos", async (_, res) => {
     res.json({ success: true, puntos });
   } catch (err) {
     console.error("❌ Error al obtener puntos de atención:", err);
-    res.status(500).json({
-      success: false,
-      message: "Error al consultar puntos de atención",
-    });
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Error al consultar puntos de atención",
+      });
   }
 });
 
 // =============================
-// 💲 Saldo
+// 💲 Saldos
 // =============================
-
 router.get("/saldo/historial", async (_, res) => {
   try {
     const historial = await prisma.servientregaSaldo.findMany({
@@ -319,18 +339,18 @@ router.get("/saldo/historial", async (_, res) => {
       orderBy: { created_at: "desc" },
     });
 
-    const data = historial.map((h) => ({
-      id: h.id,
-      punto_atencion_id: h.punto_atencion_id,
-      punto_atencion_nombre: h.punto_atencion.nombre,
-      monto_total: Number(h.monto_total),
-      creado_por: h.creado_por,
-      creado_en: h.created_at,
-    }));
-
-    res.json(data);
+    res.json(
+      historial.map((h) => ({
+        id: h.id,
+        punto_atencion_id: h.punto_atencion_id,
+        punto_atencion_nombre: h.punto_atencion.nombre,
+        monto_total: Number(h.monto_total),
+        creado_por: h.creado_por,
+        creado_en: h.created_at,
+      }))
+    );
   } catch (err) {
-    console.error("❌ Error al obtener historial Servientrega:", err);
+    console.error("❌ Error al obtener historial:", err);
     res.status(500).json({ error: "Error al obtener historial" });
   }
 });
@@ -354,7 +374,6 @@ router.get("/saldo/:puntoAtencionId", async (req, res) => {
 router.post("/saldo", async (req, res) => {
   try {
     const { monto_total, creado_por, punto_atencion_id } = req.body;
-
     const saldoExistente = await prisma.servientregaSaldo.findUnique({
       where: { punto_atencion_id },
     });
@@ -368,12 +387,7 @@ router.post("/saldo", async (req, res) => {
           },
         })
       : await prisma.servientregaSaldo.create({
-          data: {
-            punto_atencion_id,
-            monto_total,
-            monto_usado: 0,
-            creado_por,
-          },
+          data: { punto_atencion_id, monto_total, monto_usado: 0, creado_por },
         });
 
     res.json(actualizado);
@@ -387,38 +401,23 @@ router.post("/saldo", async (req, res) => {
 // 🌎 País fijo
 // =============================
 router.get("/pais", async (_, res) => {
-  try {
-    res.json({
-      codpais: 63,
-      nombrecorto: "EC",
-      pais: "Ecuador",
-      phone_code: "593",
-    });
-  } catch (err: any) {
-    console.error("❌ Error al obtener país:", err);
-    res.status(500).json({ error: "Error al obtener país" });
-  }
+  res.json({
+    codpais: 63,
+    nombrecorto: "EC",
+    pais: "Ecuador",
+    phone_code: "593",
+  });
 });
 
 // =============================
-// 🏙 Ciudades Ecuador
+// 🏙 Ciudades (formato oficial)
 // =============================
 router.get("/ciudades", async (_, res) => {
   try {
     const payload = { tipo: "obtener_ciudades", codpais: 63, ...AUTH };
     const data = await callServientregaAPI(payload);
 
-    if (!data || !data.fetch) {
-      return res
-        .status(500)
-        .json({ error: "No se obtuvo la lista de ciudades" });
-    }
-
-    res.json({
-      fetch: data.fetch.map((item: any) => ({
-        city: item.city,
-      })),
-    });
+    res.json({ fetch: data.fetch.map((item: any) => ({ city: item.city })) });
   } catch (err: any) {
     console.error("❌ Error al obtener ciudades:", err);
     res.status(500).json({ error: "Error al obtener ciudades" });
@@ -426,7 +425,7 @@ router.get("/ciudades", async (_, res) => {
 });
 
 // =============================
-// ✅ Validar ciudad desde punto de atención
+// ✅ Validar ciudad por punto de atención
 // =============================
 router.get("/validar-ciudad/:puntoAtencionId", async (req, res) => {
   try {
@@ -435,9 +434,8 @@ router.get("/validar-ciudad/:puntoAtencionId", async (req, res) => {
       where: { id: puntoAtencionId },
     });
 
-    if (!punto) {
+    if (!punto)
       return res.status(404).json({ error: "Punto de atención no encontrado" });
-    }
 
     const ciudadCompleta = `${punto.ciudad.toUpperCase()}-${punto.provincia.toUpperCase()}`;
     const payload = { tipo: "obtener_ciudades", codpais: 63, ...AUTH };
@@ -446,12 +444,13 @@ router.get("/validar-ciudad/:puntoAtencionId", async (req, res) => {
     const existe = data.fetch.find(
       (c: any) => c.city.toUpperCase() === ciudadCompleta
     );
-
     if (!existe) {
-      return res.status(400).json({
-        valido: false,
-        mensaje: `La ciudad ${ciudadCompleta} no está registrada en Servientrega`,
-      });
+      return res
+        .status(400)
+        .json({
+          valido: false,
+          mensaje: `La ciudad ${ciudadCompleta} no está en Servientrega`,
+        });
     }
 
     res.json({ valido: true, ciudad: ciudadCompleta });
