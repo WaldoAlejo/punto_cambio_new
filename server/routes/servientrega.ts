@@ -14,6 +14,10 @@ const AUTH = {
   contrasenha: "s12345ABCDe",
 };
 
+const DEFAULT_EMPAQUE = "AISLANTE DE HUMEDAD";
+const DEFAULT_CP_ORI = "170150";
+const DEFAULT_CP_DES = "110111";
+
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 interface GenerarGuiaResponse {
@@ -161,13 +165,13 @@ router.post("/tarifa", async (req, res) => {
       largo: String(largo || "0"),
       recoleccion: recoleccion || "NO",
       nombre_producto: nombre_producto || "",
-      empaque: empaque || "",
+      empaque: empaque || DEFAULT_EMPAQUE,
       ...AUTH,
     };
 
     if (tipo === "obtener_tarifa_internacional") {
-      payload.codigo_postal_ori = codigo_postal_ori || "170150";
-      payload.codigo_postal_des = codigo_postal_des || "110111";
+      payload.codigo_postal_ori = codigo_postal_ori || DEFAULT_CP_ORI;
+      payload.codigo_postal_des = codigo_postal_des || DEFAULT_CP_DES;
     }
 
     const data = await callServientregaAPI(payload);

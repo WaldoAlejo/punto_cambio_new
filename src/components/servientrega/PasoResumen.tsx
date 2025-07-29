@@ -15,9 +15,13 @@ interface PasoResumenProps {
 interface TarifaResponse {
   flete: number;
   valor_declarado: string;
-  tiempo: string;
+  tiempo: string | null;
   valor_empaque: string;
 }
+
+const DEFAULT_EMPAQUE = "AISLANTE DE HUMEDAD";
+const DEFAULT_CP_ORI = "170150";
+const DEFAULT_CP_DES = "110111";
 
 const Campo = ({
   label,
@@ -64,7 +68,7 @@ export default function PasoResumen({
           tipo: isInternacional
             ? "obtener_tarifa_internacional"
             : "obtener_tarifa_nacional",
-          pais_ori: "ECUADOR",
+          pais_ori: remitente.pais || "ECUADOR",
           ciu_ori: remitente.ciudad || "",
           provincia_ori: remitente.provincia || "",
           pais_des: destinatario.pais || "ECUADOR",
@@ -79,8 +83,12 @@ export default function PasoResumen({
           recoleccion: "NO",
           nombre_producto: formData.nombre_producto || "",
           empaque: formData.requiere_empaque
-            ? formData.empaque?.detalle || ""
-            : "",
+            ? formData.empaque?.detalle || DEFAULT_EMPAQUE
+            : DEFAULT_EMPAQUE,
+          ...(isInternacional && {
+            codigo_postal_ori: remitente.codigo_postal || DEFAULT_CP_ORI,
+            codigo_postal_des: destinatario.codigo_postal || DEFAULT_CP_DES,
+          }),
         };
 
         const res = await axios.post("/api/servientrega/tarifa", payload);
@@ -109,6 +117,7 @@ export default function PasoResumen({
         <CardTitle>Resumen de la Guía</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Producto */}
         <Seccion titulo="📦 Producto">
           <Campo label="Nombre del producto" value={formData.nombre_producto} />
           <Campo
@@ -117,6 +126,7 @@ export default function PasoResumen({
           />
         </Seccion>
 
+        {/* Remitente */}
         <Seccion titulo="🧍 Remitente">
           <Campo label="Nombre" value={remitente?.nombre} />
           <Campo label="Cédula" value={remitente?.identificacion} />
@@ -129,6 +139,7 @@ export default function PasoResumen({
           <Campo label="Email" value={remitente?.email} />
         </Seccion>
 
+        {/* Destinatario */}
         <Seccion titulo="🎯 Destinatario">
           <Campo label="Nombre" value={destinatario?.nombre} />
           <Campo label="Cédula" value={destinatario?.identificacion} />
@@ -147,6 +158,7 @@ export default function PasoResumen({
           )}
         </Seccion>
 
+        {/* Medidas */}
         <Seccion titulo="📐 Medidas y valores">
           <Campo
             label="Valor declarado"
@@ -160,6 +172,7 @@ export default function PasoResumen({
           <Campo label="Largo (cm)" value={medidas?.largo} />
         </Seccion>
 
+        {/* Tarifa */}
         {tarifa && (
           <>
             <Separator />
@@ -178,7 +191,7 @@ export default function PasoResumen({
               />
               <Campo
                 label="Tiempo estimado"
-                value={`${tarifa.tiempo} día(s)`}
+                value={tarifa.tiempo ? `${tarifa.tiempo} día(s)` : "N/A"}
               />
               <Campo
                 label="Total estimado a pagar"
@@ -192,6 +205,7 @@ export default function PasoResumen({
           <p className="text-sm text-gray-500">Calculando tarifa...</p>
         )}
 
+        {/* Botones */}
         <div className="flex justify-between mt-8">
           <Button variant="outline" onClick={onBack}>
             ← Atrás
