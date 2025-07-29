@@ -83,18 +83,17 @@ export default function PasoEmpaqueYMedidas({
 
   const esInternacional = paisDestino?.toUpperCase() !== "ECUADOR";
 
-  useEffect(() => {
-    if (esInternacional) setRequiereEmpaque(true);
-  }, [esInternacional]);
-
   // 📦 Cargar empaques disponibles
   useEffect(() => {
     const fetchEmpaques = async () => {
       try {
         setLoadingEmpaques(true);
         const { data } = await axios.post("/api/servientrega/empaques", {});
-        if (data?.fetch) setEmpaques(data.fetch);
-        else toast.error("No se pudieron cargar los empaques.");
+        if (data?.fetch) {
+          setEmpaques(data.fetch);
+        } else {
+          toast.error("No se pudieron cargar los empaques.");
+        }
       } catch {
         toast.error("Error al obtener la lista de empaques.");
       } finally {
@@ -104,10 +103,37 @@ export default function PasoEmpaqueYMedidas({
     fetchEmpaques();
   }, []);
 
+  // ✅ Forzar empaque en internacional y mostrar toast
+  useEffect(() => {
+    if (esInternacional && empaques.length > 0) {
+      toast.info(
+        "En envíos internacionales debes seleccionar un empaque. Se aplicará el empaque por defecto si no eliges uno."
+      );
+      const defaultEmpaque =
+        empaques.find((emp) => emp.articulo.toUpperCase().includes("SOBRE")) ||
+        empaques[0];
+      if (defaultEmpaque) {
+        const costoUnitario = parseFloat(defaultEmpaque.valorventa) || 0;
+        setEmpaque({
+          tipo_empaque: defaultEmpaque.articulo,
+          cantidad: 1,
+          descripcion: `${defaultEmpaque.articulo} ($${costoUnitario.toFixed(
+            2
+          )})`,
+          costo_unitario: costoUnitario,
+          costo_total: costoUnitario,
+        });
+      }
+      setRequiereEmpaque(true);
+    }
+  }, [esInternacional, empaques]);
+
   // 📐 Calcular costo total de empaque
   useEffect(() => {
-    const costoTotal = empaque.costo_unitario * empaque.cantidad;
-    setEmpaque((prev) => ({ ...prev, costo_total: costoTotal }));
+    setEmpaque((prev) => ({
+      ...prev,
+      costo_total: prev.costo_unitario * prev.cantidad,
+    }));
   }, [empaque.cantidad, empaque.costo_unitario]);
 
   // 🚚 Calcular flete automáticamente
@@ -170,11 +196,14 @@ export default function PasoEmpaqueYMedidas({
     requiereEmpaque,
   ]);
 
+  // ✏️ Manejo de inputs
   const handleMedidaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    if (["alto", "ancho", "largo", "peso", "valor_declarado"].includes(name)) {
-      if (!/^\d*\.?\d*$/.test(value)) return;
-    }
+    if (
+      ["alto", "ancho", "largo", "peso", "valor_declarado"].includes(name) &&
+      !/^\d*\.?\d*$/.test(value)
+    )
+      return;
     setMedidas((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -183,12 +212,13 @@ export default function PasoEmpaqueYMedidas({
     const empaqueData = empaques.find((emp) => emp.articulo === selected);
     if (empaqueData) {
       const costoUnitario = parseFloat(empaqueData.valorventa) || 0;
-      setEmpaque((prev) => ({
-        ...prev,
-        tipo_empaque: selected,
+      setEmpaque({
+        tipo_empaque: empaqueData.articulo,
+        cantidad: 1,
         descripcion: `${empaqueData.articulo} ($${costoUnitario.toFixed(2)})`,
         costo_unitario: costoUnitario,
-      }));
+        costo_total: costoUnitario,
+      });
     }
   };
 
@@ -227,14 +257,6 @@ export default function PasoEmpaqueYMedidas({
     }
     if (!esDocumento && (!alto || !ancho || !largo || !peso)) {
       toast.error("Debes ingresar todas las medidas y el peso.");
-      return;
-    }
-    if (requiereEmpaque && (!empaque.tipo_empaque || empaque.cantidad <= 0)) {
-      toast.error(
-        esInternacional
-          ? "Para envíos internacionales debes seleccionar un empaque válido."
-          : "Debes completar la información del empaque."
-      );
       return;
     }
 

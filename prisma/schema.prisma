@@ -460,23 +460,27 @@ model HistorialAsignacionPunto {
 
 model ServientregaRemitente {
   id             String   @id @default(uuid())
-  cedula         String
+  cedula         String   @unique
   nombre         String
   direccion      String
   telefono       String
+  ciudad         String?       // ✅ Agregado
+  provincia      String?       // ✅ Agregado
   codigo_postal  String?
-  email          String?
+  email          String?       // ✅ Ya estaba bien
   guias          ServientregaGuia[]
 }
 
 model ServientregaDestinatario {
   id             String   @id @default(uuid())
-  cedula         String
+  cedula         String   @unique
   nombre         String
   direccion      String
   ciudad         String
+  provincia      String?       // ✅ Agregado
   pais           String
   telefono       String
+  email          String?       // ✅ Agregado
   codigo_postal  String?
   guias          ServientregaGuia[]
 }

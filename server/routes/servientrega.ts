@@ -14,10 +14,6 @@ const AUTH = {
   contrasenha: "s12345ABCDe",
 };
 
-const DEFAULT_EMPAQUE = "AISLANTE DE HUMEDAD";
-const DEFAULT_CP_ORI = "170150";
-const DEFAULT_CP_DES = "110111";
-
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 interface GenerarGuiaResponse {
@@ -82,20 +78,38 @@ router.post("/ciudades", async (req, res) => {
 router.post("/codigos-postales", async (req, res) => {
   try {
     const { codpais } = req.body;
+
     const data = await callServientregaAPI({
       tipo: "obtener_codigos_postales",
       codpais,
       ...AUTH,
     });
 
-    res.json({
-      fetch: data.fetch.map((c: any) => ({
-        ciudad: c.city,
-        codigo_postal: c.codigo_postal,
-      })),
-    });
+    if (data?.fetch?.length > 0) {
+      return res.json({
+        fetch: data.fetch.map((c: any) => ({
+          ciudad: c.city,
+          codigo_postal: c.codigo_postal,
+        })),
+      });
+    }
+
+    // Internacional: fallback a Zippopotam
+    if (codpais !== 63) {
+      const response = await axios.get(`https://api.zippopotam.us/${codpais}`);
+      const codes = response.data?.places || [];
+      return res.json({
+        fetch: codes.map((c: any) => ({
+          ciudad: c["place name"],
+          codigo_postal: c["post code"],
+        })),
+      });
+    }
+
+    return res.json({ fetch: [] });
   } catch (err: any) {
-    res.status(500).json({ error: "Error al obtener códigos postales" });
+    console.warn("⚠️ No se pudieron obtener códigos postales:", err.message);
+    return res.json({ fetch: [] });
   }
 });
 
@@ -121,7 +135,7 @@ router.post("/empaques", async (_, res) => {
   }
 });
 
-// 💰 Calcular Tarifa Nacional / Internacional
+// 💰 Tarifa
 router.post("/tarifa", async (req, res) => {
   try {
     const {
@@ -165,41 +179,195 @@ router.post("/tarifa", async (req, res) => {
       largo: String(largo || "0"),
       recoleccion: recoleccion || "NO",
       nombre_producto: nombre_producto || "",
-      empaque: empaque || DEFAULT_EMPAQUE,
       ...AUTH,
     };
 
     if (tipo === "obtener_tarifa_internacional") {
-      payload.codigo_postal_ori = codigo_postal_ori || DEFAULT_CP_ORI;
-      payload.codigo_postal_des = codigo_postal_des || DEFAULT_CP_DES;
+      payload.codigo_postal_ori = codigo_postal_ori || "170150";
+      payload.codigo_postal_des = codigo_postal_des || "000000";
+      payload.empaque = empaque || "SOBRE TAMAÑO A4";
+    } else {
+      payload.empaque = empaque || "";
     }
 
     const data = await callServientregaAPI(payload);
     res.json(data);
-  } catch (err: any) {
+  } catch {
     res.status(500).json({ error: "Error al calcular tarifa" });
   }
 });
 
+// =============================
+// 👤 Remitente
+// =============================
+
+router.get("/remitente/buscar/:query", async (req, res) => {
+  try {
+    const { query } = req.params;
+    const remitentes = await prisma.servientregaRemitente.findMany({
+      where: {
+        OR: [
+          { cedula: { contains: query, mode: "insensitive" } },
+          { nombre: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      take: 10,
+    });
+    res.json({ remitentes });
+  } catch {
+    res.status(500).json({ error: "Error buscando remitentes" });
+  }
+});
+
+router.post("/remitente/guardar", async (req, res) => {
+  try {
+    const data = req.body;
+    const existente = await prisma.servientregaRemitente.findFirst({
+      where: { cedula: data.identificacion },
+    });
+
+    if (existente) return res.json({ success: true, remitente: existente });
+
+    const remitente = await prisma.servientregaRemitente.create({
+      data: {
+        cedula: data.identificacion,
+        nombre: data.nombre,
+        direccion: data.direccion,
+        telefono: data.telefono,
+        email: data.email,
+        ciudad: data.ciudad,
+        provincia: data.provincia,
+      },
+    });
+
+    res.json({ success: true, remitente });
+  } catch {
+    res.status(500).json({ error: "Error guardando remitente" });
+  }
+});
+
+router.put("/remitente/actualizar/:identificacion", async (req, res) => {
+  try {
+    const { identificacion } = req.params;
+    const data = req.body;
+    const existente = await prisma.servientregaRemitente.findFirst({
+      where: { cedula: identificacion },
+    });
+
+    if (!existente)
+      return res.status(404).json({ error: "Remitente no encontrado" });
+
+    const actualizado = await prisma.servientregaRemitente.update({
+      where: { id: existente.id },
+      data,
+    });
+
+    res.json({ success: true, remitente: actualizado });
+  } catch {
+    res.status(500).json({ error: "Error actualizando remitente" });
+  }
+});
+
+// =============================
+// 👤 Destinatario
+// =============================
+
+router.get("/destinatario/buscar/:query", async (req, res) => {
+  try {
+    const { query } = req.params;
+    const destinatarios = await prisma.servientregaDestinatario.findMany({
+      where: {
+        OR: [
+          { cedula: { contains: query, mode: "insensitive" } },
+          { nombre: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      take: 10,
+    });
+    res.json({ destinatarios });
+  } catch {
+    res.status(500).json({ error: "Error buscando destinatarios" });
+  }
+});
+
+router.post("/destinatario/guardar", async (req, res) => {
+  try {
+    const data = req.body;
+    const existente = await prisma.servientregaDestinatario.findFirst({
+      where: { cedula: data.identificacion },
+    });
+
+    if (existente) return res.json({ success: true, destinatario: existente });
+
+    const destinatario = await prisma.servientregaDestinatario.create({
+      data: {
+        cedula: data.identificacion,
+        nombre: data.nombre,
+        direccion: data.direccion,
+        telefono: data.telefono,
+        email: data.email,
+        ciudad: data.ciudad,
+        provincia: data.provincia,
+        pais: data.codpais ? String(data.codpais) : "63",
+      },
+    });
+
+    res.json({ success: true, destinatario });
+  } catch {
+    res.status(500).json({ error: "Error guardando destinatario" });
+  }
+});
+
+router.put("/destinatario/actualizar/:identificacion", async (req, res) => {
+  try {
+    const { identificacion } = req.params;
+    const data = req.body;
+    const existente = await prisma.servientregaDestinatario.findFirst({
+      where: { cedula: identificacion },
+    });
+
+    if (!existente)
+      return res.status(404).json({ error: "Destinatario no encontrado" });
+
+    const actualizado = await prisma.servientregaDestinatario.update({
+      where: { id: existente.id },
+      data,
+    });
+
+    res.json({ success: true, destinatario: actualizado });
+  } catch {
+    res.status(500).json({ error: "Error actualizando destinatario" });
+  }
+});
+
+// =============================
 // 📄 Generar Guía
+// =============================
 router.post("/generar-guia", async (req, res) => {
   try {
+    const { remitente, destinatario, valor_declarado, punto_atencion_id } =
+      req.body;
+
+    // Reutilizar remitente
+    const remitenteDB =
+      (await prisma.servientregaRemitente.findFirst({
+        where: { cedula: remitente.cedula },
+      })) || (await prisma.servientregaRemitente.create({ data: remitente }));
+
+    // Reutilizar destinatario
+    const destinatarioDB =
+      (await prisma.servientregaDestinatario.findFirst({
+        where: { cedula: destinatario.cedula },
+      })) ||
+      (await prisma.servientregaDestinatario.create({ data: destinatario }));
+
+    // Generar guía en Servientrega
     const payload = { tipo: "GeneracionGuia", ...req.body, ...AUTH };
     const response = (await callServientregaAPI(
       payload
     )) as GenerarGuiaResponse;
 
     if (response?.guia && response?.base64) {
-      const { remitente, destinatario, valor_declarado, punto_atencion_id } =
-        req.body;
-
-      const remitenteDB = await prisma.servientregaRemitente.create({
-        data: remitente,
-      });
-      const destinatarioDB = await prisma.servientregaDestinatario.create({
-        data: destinatario,
-      });
-
       await prisma.servientregaGuia.create({
         data: {
           numero_guia: response.guia,
@@ -224,13 +392,16 @@ router.post("/generar-guia", async (req, res) => {
         }
       }
     }
+
     res.json(response);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// =============================
 // ❌ Anular Guía
+// =============================
 router.post("/anular-guia", async (req, res) => {
   try {
     const { guia } = req.body;
@@ -248,12 +419,14 @@ router.post("/anular-guia", async (req, res) => {
       });
     }
     res.json(response);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch {
+    res.status(500).json({ error: "Error anulando guía" });
   }
 });
 
+// =============================
 // 📅 Listar Guías
+// =============================
 router.get("/guias", async (req, res) => {
   try {
     const { desde, hasta } = req.query;
@@ -268,12 +441,14 @@ router.get("/guias", async (req, res) => {
       orderBy: { created_at: "desc" },
     });
     res.json(guias);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Error al obtener guías" });
   }
 });
 
+// =============================
 // 🏢 Puntos de Atención
+// =============================
 router.get("/remitente/puntos", async (_, res) => {
   try {
     const puntos = await prisma.puntoAtencion.findMany({
@@ -282,12 +457,14 @@ router.get("/remitente/puntos", async (_, res) => {
       orderBy: { ciudad: "asc" },
     });
     res.json({ success: true, puntos });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Error al consultar puntos de atención" });
   }
 });
 
+// =============================
 // 💲 Saldos
+// =============================
 router.get("/saldo/historial", async (_, res) => {
   try {
     const historial = await prisma.servientregaSaldo.findMany({
@@ -312,7 +489,7 @@ router.get("/saldo/historial", async (_, res) => {
         creado_en: h.created_at,
       }))
     );
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Error al obtener historial" });
   }
 });
@@ -327,7 +504,7 @@ router.get("/saldo/:puntoAtencionId", async (req, res) => {
     res.json({
       disponible: saldo ? saldo.monto_total.minus(saldo.monto_usado) : 0,
     });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Error al obtener saldo" });
   }
 });
@@ -352,12 +529,14 @@ router.post("/saldo", async (req, res) => {
         });
 
     res.json(actualizado);
-  } catch (err: any) {
+  } catch {
     res.status(500).json({ error: "Error al asignar saldo" });
   }
 });
 
+// =============================
 // 🌎 País fijo
+// =============================
 router.get("/pais", async (_, res) => {
   res.json({
     codpais: 63,
@@ -367,21 +546,9 @@ router.get("/pais", async (_, res) => {
   });
 });
 
-// 🏙 Ciudades (formato oficial)
-router.get("/ciudades", async (_, res) => {
-  try {
-    const data = await callServientregaAPI({
-      tipo: "obtener_ciudades",
-      codpais: 63,
-      ...AUTH,
-    });
-    res.json({ fetch: data.fetch.map((c: any) => ({ city: c.city })) });
-  } catch (err: any) {
-    res.status(500).json({ error: "Error al obtener ciudades" });
-  }
-});
-
-// ✅ Validar ciudad por punto de atención
+// =============================
+// ✅ Validar ciudad por punto
+// =============================
 router.get("/validar-ciudad/:puntoAtencionId", async (req, res) => {
   try {
     const { puntoAtencionId } = req.params;
@@ -410,7 +577,7 @@ router.get("/validar-ciudad/:puntoAtencionId", async (req, res) => {
     }
 
     res.json({ valido: true, ciudad: ciudadCompleta });
-  } catch (err: any) {
+  } catch {
     res.status(500).json({ error: "Error validando ciudad" });
   }
 });

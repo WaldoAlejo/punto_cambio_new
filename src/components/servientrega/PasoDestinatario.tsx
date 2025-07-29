@@ -75,19 +75,20 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     codpais: 0,
     ciudad: "",
     provincia: "",
+    codigo_postal: "", // ✅ Nuevo campo
   });
 
+  const esInternacional = form.codpais !== 63; // Ecuador = 63
+
+  // 📥 Cargar países
   useEffect(() => {
     axios
       .post("/api/servientrega/paises")
-      .then((res) => {
-        const data = res.data as { fetch: Pais[] };
-        setPaises(data.fetch || []);
-      })
+      .then((res) => setPaises(res.data.fetch || []))
       .catch((err) => console.error("Error al obtener países:", err));
   }, []);
 
-  // ✅ Debounce para búsqueda de cédula
+  // 🔍 Debounce para búsqueda de cédula
   useEffect(() => {
     if (debounceTimer) clearTimeout(debounceTimer);
 
@@ -107,7 +108,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   }, [cedulaQuery]);
 
   const seleccionarDestinatario = (dest: Destinatario) => {
-    setForm({
+    setForm((prev) => ({
+      ...prev,
       nombre: dest.nombre,
       direccion: dest.direccion,
       telefono: dest.telefono,
@@ -116,34 +118,26 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       codpais: dest.codpais,
       ciudad: dest.ciudad,
       provincia: dest.provincia,
-    });
+    }));
     setCedulaResultados([]);
-  };
-
-  const highlightMatch = (text: string, query: string) => {
-    const regex = new RegExp(`(${query})`, "gi");
-    return text.split(regex).map((part, index) =>
-      regex.test(part) ? (
-        <span key={index} className="bg-yellow-200 font-semibold">
-          {part}
-        </span>
-      ) : (
-        part
-      )
-    );
   };
 
   const handlePaisChange = (value: string) => {
     const codpais = parseInt(value);
-    setForm((prev) => ({ ...prev, codpais, ciudad: "", provincia: "" }));
+    setForm((prev) => ({
+      ...prev,
+      codpais,
+      ciudad: "",
+      provincia: "",
+      codigo_postal: "",
+    }));
 
     axios
       .post("/api/servientrega/ciudades", { codpais })
       .then((res) => {
-        const data = res.data as { fetch: { city: string }[] };
-        const lista = Array.isArray(data.fetch) ? data.fetch : [];
+        const lista = res.data.fetch || [];
         setCiudades(
-          lista.map((item) => {
+          lista.map((item: { city: string }) => {
             const [ciudad, provincia] = item.city.split("-");
             return {
               ciudad: ciudad?.trim() ?? "",
@@ -169,9 +163,9 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     if (checked && agencias.length === 0) {
       try {
         const res = await axios.post("/api/servientrega/agencias");
-        const data = res.data as { fetch: any[] };
+        const data = res.data.fetch || [];
         setAgencias(
-          (data.fetch || []).map((a: any) => ({
+          data.map((a: any) => ({
             nombre: String(Object.values(a)[0] ?? ""),
             tipo_cs: String(a.tipo_cs?.trim() ?? ""),
             direccion: String(a.direccion?.trim() ?? ""),
@@ -184,7 +178,35 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
   };
 
-  const handleContinue = () => {
+  // ✅ Validar código postal internacional con Zippopotam
+  const validarCodigoPostal = async (): Promise<boolean> => {
+    if (!esInternacional) return true; // No aplica en Ecuador
+    if (!form.codigo_postal) {
+      toast.error(
+        "El código postal es obligatorio para envíos internacionales."
+      );
+      return false;
+    }
+    try {
+      const country = paises.find(
+        (p) => p.codpais === form.codpais
+      )?.nombrecorto;
+      if (!country) return true;
+      const res = await fetch(
+        `https://api.zippopotam.us/${country}/${form.codigo_postal}`
+      );
+      if (!res.ok) {
+        toast.error("Código postal inválido o no encontrado.");
+        return false;
+      }
+      return true;
+    } catch {
+      toast.error("Error al validar el código postal.");
+      return false;
+    }
+  };
+
+  const handleContinue = async () => {
     if (
       !form.nombre ||
       !form.direccion ||
@@ -210,6 +232,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       return;
     }
 
+    if (!(await validarCodigoPostal())) return;
+
     const destinatarioFinal = {
       ...form,
       entrega_en_oficina: mostrarAgencias,
@@ -226,35 +250,32 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         <CardTitle>Datos del Destinatario</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* 🔍 Identificación con búsqueda predictiva */}
-        <div className="relative">
-          <Input
-            name="identificacion"
-            placeholder="Cédula o Pasaporte"
-            value={form.identificacion}
-            onChange={(e) => {
-              handleChange(e);
-              setCedulaQuery(e.target.value);
-            }}
-          />
-          {buscandoCedula && (
-            <Loader2 className="absolute right-2 top-2 h-5 w-5 animate-spin text-gray-400" />
-          )}
-          {cedulaResultados.length > 0 && (
-            <div className="absolute bg-white border rounded-md shadow-md w-full max-h-40 overflow-y-auto z-10">
-              {cedulaResultados.map((d, idx) => (
-                <div
-                  key={idx}
-                  className="p-2 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => seleccionarDestinatario(d)}
-                >
-                  {highlightMatch(d.identificacion, cedulaQuery)} -{" "}
-                  {highlightMatch(d.nombre, cedulaQuery)}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {/* Identificación */}
+        <Input
+          name="identificacion"
+          placeholder="Cédula o Pasaporte"
+          value={form.identificacion}
+          onChange={(e) => {
+            handleChange(e);
+            setCedulaQuery(e.target.value);
+          }}
+        />
+        {buscandoCedula && (
+          <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+        )}
+        {cedulaResultados.length > 0 && (
+          <div className="absolute bg-white border rounded-md shadow-md w-full max-h-40 overflow-y-auto z-10">
+            {cedulaResultados.map((d, idx) => (
+              <div
+                key={idx}
+                className="p-2 hover:bg-gray-100 cursor-pointer"
+                onClick={() => seleccionarDestinatario(d)}
+              >
+                {d.identificacion} - {d.nombre}
+              </div>
+            ))}
+          </div>
+        )}
 
         <Input
           name="nombre"
@@ -281,7 +302,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           onChange={handleChange}
         />
 
-        {/* 🌍 País */}
+        {/* País */}
         <Label>País</Label>
         <Select onValueChange={handlePaisChange}>
           <SelectTrigger>
@@ -296,7 +317,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           </SelectContent>
         </Select>
 
-        {/* 🏙 Ciudad */}
+        {/* Ciudad */}
         {form.codpais > 0 && (
           <>
             <Label>Ciudad y Provincia</Label>
@@ -315,7 +336,20 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           </>
         )}
 
-        {/* 🏢 Agencias */}
+        {/* Código postal internacional */}
+        {esInternacional && (
+          <div>
+            <Label>Código Postal (Obligatorio en envíos internacionales)</Label>
+            <Input
+              name="codigo_postal"
+              placeholder="Ej: 110111"
+              value={form.codigo_postal}
+              onChange={handleChange}
+            />
+          </div>
+        )}
+
+        {/* Agencias */}
         <div className="flex items-center gap-2 mt-2">
           <Checkbox
             checked={mostrarAgencias}
@@ -347,9 +381,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           className="w-full mt-4"
         >
           {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...
-            </>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             "Continuar"
           )}
