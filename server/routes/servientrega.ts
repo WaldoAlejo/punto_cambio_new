@@ -23,26 +23,21 @@ interface GenerarGuiaResponse {
 }
 
 interface AnularGuiaResponse {
-  fetch?: {
-    proceso?: string;
-  };
+  fetch?: { proceso?: string };
 }
 
 async function callServientregaAPI(payload: any) {
-  console.log("[Servientrega] Request Payload:", payload);
+  console.log("📤 [Servientrega] Request:", payload);
   try {
     const { data } = await axios.post(BASE_URL, payload, {
       headers: { "Content-Type": "application/json" },
       httpsAgent,
       timeout: 20000,
     });
-    console.log("[Servientrega] Response:", data);
+    console.log("📥 [Servientrega] Response:", data);
     return data;
   } catch (error: any) {
-    console.error("❌ Error al consumir API Servientrega:", error.message);
-    if (error.code === "ETIMEDOUT") {
-      console.error("⏳ Timeout al conectar con Servientrega.");
-    }
+    console.error("❌ Error Servientrega:", error.message);
     throw new Error("Error al conectar con Servientrega");
   }
 }
@@ -52,92 +47,77 @@ async function callServientregaAPI(payload: any) {
 // =============================
 router.post("/productos", async (_, res) => {
   try {
-    const payload = { tipo: "obtener_producto", ...AUTH };
-    res.json(await callServientregaAPI(payload));
+    res.json(await callServientregaAPI({ tipo: "obtener_producto", ...AUTH }));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =============================
 // 🌎 Paises
-// =============================
 router.post("/paises", async (_, res) => {
   try {
-    const payload = { tipo: "obtener_paises", ...AUTH };
-    res.json(await callServientregaAPI(payload));
+    res.json(await callServientregaAPI({ tipo: "obtener_paises", ...AUTH }));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =============================
 // 🏙 Ciudades
-// =============================
 router.post("/ciudades", async (req, res) => {
   try {
     const { codpais } = req.body;
-    const payload = { tipo: "obtener_ciudades", codpais, ...AUTH };
-    res.json(await callServientregaAPI(payload));
+    res.json(
+      await callServientregaAPI({ tipo: "obtener_ciudades", codpais, ...AUTH })
+    );
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =============================
-// 📮 Códigos Postales (NUEVO)
-// =============================
+// 📮 Códigos Postales
 router.post("/codigos-postales", async (req, res) => {
   try {
     const { codpais } = req.body;
-    const payload = { tipo: "obtener_codigos_postales", codpais, ...AUTH };
-    const data = await callServientregaAPI(payload);
-
-    if (!data || !data.fetch) {
-      return res
-        .status(404)
-        .json({ error: "No se encontraron códigos postales" });
-    }
+    const data = await callServientregaAPI({
+      tipo: "obtener_codigos_postales",
+      codpais,
+      ...AUTH,
+    });
 
     res.json({
-      fetch: data.fetch.map((item: any) => ({
-        ciudad: item.city,
-        codigo_postal: item.codigo_postal,
+      fetch: data.fetch.map((c: any) => ({
+        ciudad: c.city,
+        codigo_postal: c.codigo_postal,
       })),
     });
   } catch (err: any) {
-    console.error("❌ Error al obtener códigos postales:", err);
     res.status(500).json({ error: "Error al obtener códigos postales" });
   }
 });
 
-// =============================
 // 🏢 Agencias
-// =============================
 router.post("/agencias", async (_, res) => {
   try {
-    const payload = { tipo: "obtener_agencias_aliadas", ...AUTH };
-    res.json(await callServientregaAPI(payload));
+    res.json(
+      await callServientregaAPI({ tipo: "obtener_agencias_aliadas", ...AUTH })
+    );
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =============================
 // 📦 Empaques
-// =============================
 router.post("/empaques", async (_, res) => {
   try {
-    const payload = { tipo: "obtener_empaqueyembalaje", ...AUTH };
-    res.json(await callServientregaAPI(payload));
+    res.json(
+      await callServientregaAPI({ tipo: "obtener_empaqueyembalaje", ...AUTH })
+    );
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// =============================
-// 💰 Calcular tarifa nacional/internacional
-// =============================
+// 💰 Calcular Tarifa Nacional / Internacional
 router.post("/tarifa", async (req, res) => {
   try {
     const {
@@ -185,26 +165,19 @@ router.post("/tarifa", async (req, res) => {
       ...AUTH,
     };
 
-    // ✅ Para internacional, se agregan códigos postales
     if (tipo === "obtener_tarifa_internacional") {
       payload.codigo_postal_ori = codigo_postal_ori || "170150";
       payload.codigo_postal_des = codigo_postal_des || "110111";
     }
 
-    console.log("🔍 Payload enviado a Servientrega:", payload);
     const data = await callServientregaAPI(payload);
-    console.log("📥 Respuesta Servientrega:", data);
-
     res.json(data);
   } catch (err: any) {
-    console.error("❌ Error al calcular tarifa:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Error al calcular tarifa" });
   }
 });
 
-// =============================
-// 📄 Generar guía
-// =============================
+// 📄 Generar Guía
 router.post("/generar-guia", async (req, res) => {
   try {
     const payload = { tipo: "GeneracionGuia", ...req.body, ...AUTH };
@@ -240,7 +213,9 @@ router.post("/generar-guia", async (req, res) => {
         if (saldo) {
           await prisma.servientregaSaldo.update({
             where: { punto_atencion_id },
-            data: { monto_usado: saldo.monto_usado.plus(valor_declarado ?? 0) },
+            data: {
+              monto_usado: saldo.monto_usado.plus(valor_declarado ?? 0),
+            },
           });
         }
       }
@@ -251,19 +226,16 @@ router.post("/generar-guia", async (req, res) => {
   }
 });
 
-// =============================
-// ❌ Anular guía
-// =============================
+// ❌ Anular Guía
 router.post("/anular-guia", async (req, res) => {
   try {
     const { guia } = req.body;
-    const payload = {
+    const response = (await callServientregaAPI({
       tipo: "ActualizaEstadoGuia",
       guia,
       estado: "Anulada",
       ...AUTH,
-    };
-    const response = (await callServientregaAPI(payload)) as AnularGuiaResponse;
+    })) as AnularGuiaResponse;
 
     if (response?.fetch?.proceso === "Guia Actualizada") {
       await prisma.servientregaGuia.updateMany({
@@ -277,9 +249,7 @@ router.post("/anular-guia", async (req, res) => {
   }
 });
 
-// =============================
-// 📅 Listar guías
-// =============================
+// 📅 Listar Guías
 router.get("/guias", async (req, res) => {
   try {
     const { desde, hasta } = req.query;
@@ -295,14 +265,11 @@ router.get("/guias", async (req, res) => {
     });
     res.json(guias);
   } catch (err) {
-    console.error("❌ Error al obtener guías:", err);
     res.status(500).json({ error: "Error al obtener guías" });
   }
 });
 
-// =============================
-// 🏢 Puntos de atención
-// =============================
+// 🏢 Puntos de Atención
 router.get("/remitente/puntos", async (_, res) => {
   try {
     const puntos = await prisma.puntoAtencion.findMany({
@@ -312,19 +279,11 @@ router.get("/remitente/puntos", async (_, res) => {
     });
     res.json({ success: true, puntos });
   } catch (err) {
-    console.error("❌ Error al obtener puntos de atención:", err);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Error al consultar puntos de atención",
-      });
+    res.status(500).json({ error: "Error al consultar puntos de atención" });
   }
 });
 
-// =============================
 // 💲 Saldos
-// =============================
 router.get("/saldo/historial", async (_, res) => {
   try {
     const historial = await prisma.servientregaSaldo.findMany({
@@ -350,7 +309,6 @@ router.get("/saldo/historial", async (_, res) => {
       }))
     );
   } catch (err) {
-    console.error("❌ Error al obtener historial:", err);
     res.status(500).json({ error: "Error al obtener historial" });
   }
 });
@@ -366,7 +324,6 @@ router.get("/saldo/:puntoAtencionId", async (req, res) => {
       disponible: saldo ? saldo.monto_total.minus(saldo.monto_usado) : 0,
     });
   } catch (err) {
-    console.error("❌ Error al obtener saldo:", err);
     res.status(500).json({ error: "Error al obtener saldo" });
   }
 });
@@ -392,14 +349,11 @@ router.post("/saldo", async (req, res) => {
 
     res.json(actualizado);
   } catch (err: any) {
-    console.error("❌ Error al asignar saldo:", err);
     res.status(500).json({ error: "Error al asignar saldo" });
   }
 });
 
-// =============================
 // 🌎 País fijo
-// =============================
 router.get("/pais", async (_, res) => {
   res.json({
     codpais: 63,
@@ -409,24 +363,21 @@ router.get("/pais", async (_, res) => {
   });
 });
 
-// =============================
 // 🏙 Ciudades (formato oficial)
-// =============================
 router.get("/ciudades", async (_, res) => {
   try {
-    const payload = { tipo: "obtener_ciudades", codpais: 63, ...AUTH };
-    const data = await callServientregaAPI(payload);
-
-    res.json({ fetch: data.fetch.map((item: any) => ({ city: item.city })) });
+    const data = await callServientregaAPI({
+      tipo: "obtener_ciudades",
+      codpais: 63,
+      ...AUTH,
+    });
+    res.json({ fetch: data.fetch.map((c: any) => ({ city: c.city })) });
   } catch (err: any) {
-    console.error("❌ Error al obtener ciudades:", err);
     res.status(500).json({ error: "Error al obtener ciudades" });
   }
 });
 
-// =============================
 // ✅ Validar ciudad por punto de atención
-// =============================
 router.get("/validar-ciudad/:puntoAtencionId", async (req, res) => {
   try {
     const { puntoAtencionId } = req.params;
@@ -438,24 +389,24 @@ router.get("/validar-ciudad/:puntoAtencionId", async (req, res) => {
       return res.status(404).json({ error: "Punto de atención no encontrado" });
 
     const ciudadCompleta = `${punto.ciudad.toUpperCase()}-${punto.provincia.toUpperCase()}`;
-    const payload = { tipo: "obtener_ciudades", codpais: 63, ...AUTH };
-    const data = await callServientregaAPI(payload);
+    const data = await callServientregaAPI({
+      tipo: "obtener_ciudades",
+      codpais: 63,
+      ...AUTH,
+    });
 
     const existe = data.fetch.find(
       (c: any) => c.city.toUpperCase() === ciudadCompleta
     );
     if (!existe) {
-      return res
-        .status(400)
-        .json({
-          valido: false,
-          mensaje: `La ciudad ${ciudadCompleta} no está en Servientrega`,
-        });
+      return res.status(400).json({
+        valido: false,
+        mensaje: `La ciudad ${ciudadCompleta} no está en Servientrega`,
+      });
     }
 
     res.json({ valido: true, ciudad: ciudadCompleta });
   } catch (err: any) {
-    console.error("❌ Error validando ciudad:", err);
     res.status(500).json({ error: "Error validando ciudad" });
   }
 });
