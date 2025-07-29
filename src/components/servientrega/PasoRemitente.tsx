@@ -18,13 +18,12 @@ interface PasoRemitenteProps {
 interface RemitenteFormData {
   identificacion: string;
   nombre: string;
-  direccion: string; // Dirección concatenada
+  direccion: string;
   telefono: string;
   email: string;
   ciudad: string;
   provincia: string;
   codpais: number;
-  pais: string;
   pais_iso: string;
   phone_code: string;
 }
@@ -42,8 +41,7 @@ export default function PasoRemitente({
     email: "",
     ciudad: "",
     provincia: "",
-    codpais: 63,
-    pais: "Ecuador",
+    codpais: 63, // Ecuador implícito
     pais_iso: "EC",
     phone_code: "593",
   });
@@ -71,37 +69,15 @@ export default function PasoRemitente({
   const [remitenteExistente, setRemitenteExistente] =
     useState<RemitenteFormData | null>(null);
 
-  // ✅ Validar ciudad desde backend
+  // ✅ Autocompletar ciudad/provincia según punto de atención
   useEffect(() => {
-    if (selectedPoint?.id) {
-      setValidatingCity(true);
-      axios
-        .get(`/api/servientrega/validar-ciudad/${selectedPoint.id}`)
-        .then((res) => {
-          if (res.data.valido) {
-            const [ciudad, provincia] = res.data.ciudad.split("-");
-            setFormData((prev) => ({
-              ...prev,
-              ciudad: ciudad.trim(),
-              provincia: provincia.trim(),
-              codpais: 63,
-              pais: "Ecuador",
-              pais_iso: "EC",
-              phone_code: "593",
-            }));
-            setCiudadValida(true);
-          } else {
-            setCiudadValida(false);
-            toast.error(
-              res.data.mensaje || "La ciudad no es válida en Servientrega"
-            );
-          }
-        })
-        .catch(() => {
-          setCiudadValida(false);
-          toast.error("Error al validar la ciudad del punto de atención");
-        })
-        .finally(() => setValidatingCity(false));
+    if (selectedPoint?.ciudad && selectedPoint?.provincia) {
+      setFormData((prev) => ({
+        ...prev,
+        ciudad: selectedPoint.ciudad,
+        provincia: selectedPoint.provincia,
+      }));
+      setCiudadValida(true);
     }
   }, [selectedPoint]);
 
@@ -125,7 +101,14 @@ export default function PasoRemitente({
   }, [cedulaQuery]);
 
   const seleccionarRemitente = (rem: RemitenteFormData) => {
-    setFormData(rem);
+    setFormData((prev) => ({
+      ...prev,
+      identificacion: rem.identificacion,
+      nombre: rem.nombre,
+      telefono: rem.telefono,
+      email: rem.email,
+      direccion: rem.direccion,
+    }));
     setRemitenteExistente(rem);
     setCedulaResultados([]);
   };
@@ -133,16 +116,12 @@ export default function PasoRemitente({
   // ✅ Validación de cédula, RUC y pasaporte
   const validarIdentificacion = (id: string): boolean => {
     if (!id) return false;
-
-    // Cédula ecuatoriana (10 dígitos)
     if (/^\d{10}$/.test(id)) {
       const provincia = parseInt(id.substring(0, 2));
       if (provincia < 1 || provincia > 24) return false;
-
       const digitoVerificador = parseInt(id[9]);
       const coeficientes = [2, 1, 2, 1, 2, 1, 2, 1, 2];
       let suma = 0;
-
       for (let i = 0; i < 9; i++) {
         let valor = parseInt(id[i]) * coeficientes[i];
         if (valor >= 10) valor -= 9;
@@ -151,15 +130,8 @@ export default function PasoRemitente({
       const digitoCalculado = (10 - (suma % 10)) % 10;
       return digitoCalculado === digitoVerificador;
     }
-
-    // RUC ecuatoriano (13 dígitos)
-    if (/^\d{13}$/.test(id)) {
-      return validarIdentificacion(id.substring(0, 10)); // Primeros 10 como cédula
-    }
-
-    // Pasaporte: alfanumérico mínimo 6 caracteres
+    if (/^\d{13}$/.test(id)) return validarIdentificacion(id.substring(0, 10));
     if (/^[A-Za-z0-9]{6,}$/.test(id)) return true;
-
     return false;
   };
 
@@ -177,12 +149,10 @@ export default function PasoRemitente({
 
   const handleContinue = async () => {
     const { identificacion, nombre, telefono, email, ciudad } = formData;
-
     if (!identificacion || !nombre || !telefono || !email || !ciudad) {
       toast.error("Por favor completa todos los campos obligatorios.");
       return;
     }
-
     if (!validarIdentificacion(identificacion)) {
       toast.error(
         "Número de identificación inválido (Cédula, RUC o Pasaporte)."
@@ -190,14 +160,6 @@ export default function PasoRemitente({
       return;
     }
 
-    if (!ciudadValida) {
-      toast.error(
-        "No puedes continuar: La ciudad no ha sido validada correctamente."
-      );
-      return;
-    }
-
-    // ✅ Concatenar dirección final
     const direccionFinal = [
       extraDireccion.callePrincipal,
       `#${extraDireccion.numeracion}`,
@@ -210,19 +172,15 @@ export default function PasoRemitente({
     const remitenteFinal = { ...formData, direccion: direccionFinal };
 
     try {
-      // ✅ Guardar o actualizar remitente
       if (remitenteExistente) {
         await axios.put(
           `/api/servientrega/remitente/actualizar/${formData.identificacion}`,
           remitenteFinal
         );
-        toast.success("Remitente actualizado correctamente.");
       } else {
         await axios.post("/api/servientrega/remitente/guardar", remitenteFinal);
-        toast.success("Remitente guardado correctamente.");
       }
-    } catch (error) {
-      console.warn("Error al guardar/actualizar remitente:", error);
+    } catch {
       toast.error("Hubo un problema al guardar el remitente.");
     }
 
@@ -236,14 +194,7 @@ export default function PasoRemitente({
         <CardTitle>Información del Remitente</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {validatingCity && (
-          <div className="flex items-center justify-center text-sm text-gray-600 mb-2">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Validando ciudad del punto de atención...
-          </div>
-        )}
-
-        {/* Búsqueda predictiva */}
+        {/* Identificación */}
         <div className="relative">
           <Input
             name="identificacion"
@@ -291,7 +242,7 @@ export default function PasoRemitente({
           onChange={handleChange}
         />
 
-        {/* Dirección detallada */}
+        {/* Dirección */}
         <Input
           name="callePrincipal"
           placeholder="Calle principal"
@@ -317,11 +268,7 @@ export default function PasoRemitente({
           onChange={handleExtraDireccionChange}
         />
 
-        <Input
-          name="pais"
-          value={`${formData.pais} (+${formData.phone_code})`}
-          readOnly
-        />
+        {/* Ciudad y Provincia bloqueadas */}
         <Input
           name="ciudad"
           value={`${formData.ciudad} - ${formData.provincia}`}
@@ -329,7 +276,7 @@ export default function PasoRemitente({
         />
 
         <Button
-          disabled={loading || !ciudadValida || validatingCity}
+          disabled={loading || !ciudadValida}
           onClick={handleContinue}
           className="w-full"
         >
