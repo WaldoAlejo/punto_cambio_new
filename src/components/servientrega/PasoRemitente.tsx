@@ -2,13 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,15 +11,8 @@ import { Usuario, PuntoAtencion } from "../../types";
 
 interface PasoRemitenteProps {
   user: Usuario;
-  selectedPoint: PuntoAtencion;
+  selectedPoint: PuntoAtencion; // Punto de atención con sesión iniciada
   onNext: (remitente: RemitenteFormData) => void;
-}
-
-interface Punto {
-  id: number;
-  nombre: string;
-  ciudad: string;
-  provincia: string;
 }
 
 interface RemitenteFormData {
@@ -40,26 +26,7 @@ interface RemitenteFormData {
   codpais: number;
   pais: string;
   pais_iso: string;
-}
-
-function validarCedulaEcuatoriana(cedula: string): boolean {
-  if (!/^\d{10}$/.test(cedula)) return false;
-  const digitos = cedula.split("").map(Number);
-  const provincia = parseInt(cedula.substring(0, 2), 10);
-  if (provincia < 1 || provincia > 24) return false;
-  const verificador = digitos[9];
-  let suma = 0;
-  for (let i = 0; i < 9; i++) {
-    let mult = digitos[i] * (i % 2 === 0 ? 2 : 1);
-    if (mult > 9) mult -= 9;
-    suma += mult;
-  }
-  const resultado = (10 - (suma % 10)) % 10;
-  return resultado === verificador;
-}
-
-function validarTelefonoEcuatoriano(telefono: string): boolean {
-  return /^09\d{8}$/.test(telefono) || /^0[2-7]\d{7,8}$/.test(telefono);
+  phone_code: string;
 }
 
 export default function PasoRemitente({
@@ -67,8 +34,6 @@ export default function PasoRemitente({
   selectedPoint,
   onNext,
 }: PasoRemitenteProps) {
-  const [puntos, setPuntos] = useState<Punto[]>([]);
-  const [selectedPunto, setSelectedPunto] = useState<string>("");
   const [formData, setFormData] = useState<RemitenteFormData>({
     identificacion: "",
     nombre: "",
@@ -80,100 +45,74 @@ export default function PasoRemitente({
     codpais: 63,
     pais: "Ecuador",
     pais_iso: "EC",
+    phone_code: "593",
   });
+
   const [loading, setLoading] = useState(false);
+  const [validatingCity, setValidatingCity] = useState(false); // ✅ Estado para mostrar loader de validación
+  const [ciudadValida, setCiudadValida] = useState(false); // ✅ Estado para habilitar botón
 
+  // ✅ Validar ciudad desde backend al cargar el componente
   useEffect(() => {
-    axios
-      .get("/api/servientrega/remitente/puntos")
-      .then((res) => {
-        const data = res.data as { puntos: Punto[] };
-        const ciudadesUnicas = new Map<string, Punto>();
-        for (const punto of data.puntos) {
-          const clave = `${punto.ciudad},${punto.provincia}`;
-          if (!ciudadesUnicas.has(clave)) {
-            ciudadesUnicas.set(clave, punto);
+    if (selectedPoint?.id) {
+      setValidatingCity(true); // 🔄 Mostrar loader de validación
+      axios
+        .get(`/api/servientrega/validar-ciudad/${selectedPoint.id}`)
+        .then((res) => {
+          if (res.data.valido) {
+            const [ciudad, provincia] = res.data.ciudad.split("-");
+            setFormData((prev) => ({
+              ...prev,
+              ciudad: ciudad,
+              provincia: provincia,
+              codpais: 63,
+              pais: "Ecuador",
+              pais_iso: "EC",
+              phone_code: "593",
+            }));
+            setCiudadValida(true);
+          } else {
+            setCiudadValida(false);
+            toast.error(
+              res.data.mensaje || "La ciudad no es válida en Servientrega"
+            );
           }
-        }
-        setPuntos(Array.from(ciudadesUnicas.values()));
-      })
-      .catch((err) => {
-        console.error("Error al obtener puntos:", err);
-      });
-  }, []);
-
-  const buscarRemitentePorCedula = async (cedula: string) => {
-    try {
-      const res = await axios.get(
-        `/api/servientrega/remitente/buscar/${cedula}`
-      );
-      const data = res.data as { remitente?: any };
-
-      if (data?.remitente) {
-        const r = data.remitente;
-        setFormData({
-          identificacion: r.cedula,
-          nombre: r.nombre,
-          direccion: r.direccion,
-          telefono: r.telefono,
-          email: r.email || "",
-          ciudad: r.ciudad,
-          provincia: r.provincia || "",
-          codpais: 63,
-          pais: "Ecuador",
-          pais_iso: "EC",
+        })
+        .catch(() => {
+          setCiudadValida(false);
+          toast.error("Error al validar la ciudad del punto de atención");
+        })
+        .finally(() => {
+          setValidatingCity(false); // 🔄 Ocultar loader de validación
         });
-        setSelectedPunto(`${r.ciudad},${r.provincia}`);
-      }
-    } catch (error) {
-      console.log("Remitente no encontrado, se creará nuevo");
     }
-  };
+  }, [selectedPoint]);
 
-  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    if (name === "identificacion" && value.length >= 10) {
-      await buscarRemitentePorCedula(value);
-    }
-  };
-
-  const handleSelectPunto = (value: string) => {
-    setSelectedPunto(value);
-    const punto = puntos.find((p) => `${p.ciudad},${p.provincia}` === value);
-    if (punto) {
-      setFormData((prev) => ({
-        ...prev,
-        ciudad: punto.ciudad,
-        provincia: punto.provincia,
-      }));
-    }
   };
 
   const handleContinue = () => {
+    const { identificacion, nombre, direccion, telefono, email, ciudad } =
+      formData;
+
     if (
-      !formData.identificacion ||
-      !formData.nombre ||
-      !formData.direccion ||
-      !formData.telefono ||
-      !formData.email ||
-      !selectedPunto
+      !identificacion ||
+      !nombre ||
+      !direccion ||
+      !telefono ||
+      !email ||
+      !ciudad
     ) {
       toast.error("Por favor completa todos los campos obligatorios.");
       return;
     }
 
-    if (
-      formData.codpais === 63 &&
-      !validarCedulaEcuatoriana(formData.identificacion)
-    ) {
-      toast.error("Cédula ecuatoriana inválida.");
-      return;
-    }
-
-    if (!validarTelefonoEcuatoriano(formData.telefono)) {
-      toast.error("Número de teléfono inválido.");
+    if (!ciudadValida) {
+      toast.error(
+        "No puedes continuar: La ciudad no ha sido validada correctamente."
+      );
       return;
     }
 
@@ -187,6 +126,13 @@ export default function PasoRemitente({
         <CardTitle>Información del Remitente</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {validatingCity && (
+          <div className="flex items-center justify-center text-sm text-gray-600 mb-2">
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Validando ciudad del punto de atención...
+          </div>
+        )}
+
         <Input
           name="identificacion"
           placeholder="Cédula o Pasaporte"
@@ -218,24 +164,28 @@ export default function PasoRemitente({
           onChange={handleChange}
         />
 
-        <Select value={selectedPunto} onValueChange={handleSelectPunto}>
-          <SelectTrigger>
-            <SelectValue placeholder="Seleccionar ciudad y provincia" />
-          </SelectTrigger>
-          <SelectContent>
-            {puntos.map((p, i) => (
-              <SelectItem key={i} value={`${p.ciudad},${p.provincia}`}>
-                {p.ciudad} - {p.provincia}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* País fijo */}
+        <Input
+          name="pais"
+          value={`${formData.pais} (+${formData.phone_code})`}
+          readOnly
+        />
 
-        <Button disabled={loading} onClick={handleContinue} className="w-full">
+        {/* Ciudad y provincia desde validación backend */}
+        <Input
+          name="ciudad"
+          value={`${formData.ciudad} - ${formData.provincia}`}
+          readOnly
+        />
+
+        <Button
+          disabled={loading || !ciudadValida || validatingCity} // ✅ Bloqueado si ciudad inválida o en validación
+          onClick={handleContinue}
+          className="w-full"
+        >
           {loading ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Cargando...
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Cargando...
             </>
           ) : (
             "Continuar"

@@ -36,6 +36,17 @@ interface Agencia {
   ciudad: string;
 }
 
+interface Destinatario {
+  identificacion: string;
+  nombre: string;
+  direccion: string;
+  telefono: string;
+  email: string;
+  ciudad: string;
+  provincia: string;
+  codpais: number;
+}
+
 interface PasoDestinatarioProps {
   onNext: (destinatario: any) => void;
 }
@@ -46,8 +57,15 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [agencias, setAgencias] = useState<Agencia[]>([]);
   const [mostrarAgencias, setMostrarAgencias] = useState(false);
   const [agenciaSeleccionada, setAgenciaSeleccionada] = useState<string>("");
-
   const [loading, setLoading] = useState(false);
+
+  const [cedulaQuery, setCedulaQuery] = useState("");
+  const [cedulaResultados, setCedulaResultados] = useState<Destinatario[]>([]);
+  const [buscandoCedula, setBuscandoCedula] = useState(false);
+  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(
+    null
+  );
+
   const [form, setForm] = useState({
     nombre: "",
     direccion: "",
@@ -69,6 +87,52 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       .catch((err) => console.error("Error al obtener países:", err));
   }, []);
 
+  // ✅ Debounce para búsqueda de cédula
+  useEffect(() => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+
+    if (cedulaQuery.length >= 3) {
+      const timer = setTimeout(() => {
+        setBuscandoCedula(true);
+        axios
+          .get(`/api/servientrega/destinatario/buscar/${cedulaQuery}`)
+          .then((res) => setCedulaResultados(res.data.destinatarios || []))
+          .catch(() => setCedulaResultados([]))
+          .finally(() => setBuscandoCedula(false));
+      }, 400);
+      setDebounceTimer(timer);
+    } else {
+      setCedulaResultados([]);
+    }
+  }, [cedulaQuery]);
+
+  const seleccionarDestinatario = (dest: Destinatario) => {
+    setForm({
+      nombre: dest.nombre,
+      direccion: dest.direccion,
+      telefono: dest.telefono,
+      email: dest.email,
+      identificacion: dest.identificacion,
+      codpais: dest.codpais,
+      ciudad: dest.ciudad,
+      provincia: dest.provincia,
+    });
+    setCedulaResultados([]);
+  };
+
+  const highlightMatch = (text: string, query: string) => {
+    const regex = new RegExp(`(${query})`, "gi");
+    return text.split(regex).map((part, index) =>
+      regex.test(part) ? (
+        <span key={index} className="bg-yellow-200 font-semibold">
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
+  };
+
   const handlePaisChange = (value: string) => {
     const codpais = parseInt(value);
     setForm((prev) => ({ ...prev, codpais, ciudad: "", provincia: "" }));
@@ -78,14 +142,15 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       .then((res) => {
         const data = res.data as { fetch: { city: string }[] };
         const lista = Array.isArray(data.fetch) ? data.fetch : [];
-        const transformadas: Ciudad[] = lista.map((item) => {
-          const [ciudad, provincia] = item.city.split("-");
-          return {
-            ciudad: ciudad?.trim() ?? "",
-            provincia: provincia?.trim() ?? "",
-          };
-        });
-        setCiudades(transformadas);
+        setCiudades(
+          lista.map((item) => {
+            const [ciudad, provincia] = item.city.split("-");
+            return {
+              ciudad: ciudad?.trim() ?? "",
+              provincia: provincia?.trim() ?? "",
+            };
+          })
+        );
       })
       .catch((err) => console.error("Error al obtener ciudades:", err));
   };
@@ -103,21 +168,16 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     setMostrarAgencias(checked);
     if (checked && agencias.length === 0) {
       try {
-        const res = await axios.post("/api/servientrega/agencias", {
-          tipo: "obtener_agencias_aliadas",
-          usuingreso: "PRUEBA",
-          contrasenha: "s12345ABCDe",
-        });
-
+        const res = await axios.post("/api/servientrega/agencias");
         const data = res.data as { fetch: any[] };
-        const lista = Array.isArray(data.fetch) ? data.fetch : [];
-        const transformadas: Agencia[] = lista.map((a: any) => ({
-          nombre: String(Object.values(a)[0] ?? ""),
-          tipo_cs: String(a.tipo_cs?.trim() ?? ""),
-          direccion: String(a.direccion?.trim() ?? ""),
-          ciudad: String(a.ciudad?.trim() ?? ""),
-        }));
-        setAgencias(transformadas);
+        setAgencias(
+          (data.fetch || []).map((a: any) => ({
+            nombre: String(Object.values(a)[0] ?? ""),
+            tipo_cs: String(a.tipo_cs?.trim() ?? ""),
+            direccion: String(a.direccion?.trim() ?? ""),
+            ciudad: String(a.ciudad?.trim() ?? ""),
+          }))
+        );
       } catch (error) {
         console.error("Error al cargar agencias:", error);
       }
@@ -142,7 +202,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
 
     if (
-      form.codpais === 593 &&
+      form.codpais === 63 &&
       form.identificacion &&
       !/^[0-9]{10}$/.test(form.identificacion)
     ) {
@@ -161,14 +221,44 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto mt-6">
+    <Card className="w-full max-w-lg mx-auto mt-6 shadow-lg border rounded-xl">
       <CardHeader>
         <CardTitle>Datos del Destinatario</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* 🔍 Identificación con búsqueda predictiva */}
+        <div className="relative">
+          <Input
+            name="identificacion"
+            placeholder="Cédula o Pasaporte"
+            value={form.identificacion}
+            onChange={(e) => {
+              handleChange(e);
+              setCedulaQuery(e.target.value);
+            }}
+          />
+          {buscandoCedula && (
+            <Loader2 className="absolute right-2 top-2 h-5 w-5 animate-spin text-gray-400" />
+          )}
+          {cedulaResultados.length > 0 && (
+            <div className="absolute bg-white border rounded-md shadow-md w-full max-h-40 overflow-y-auto z-10">
+              {cedulaResultados.map((d, idx) => (
+                <div
+                  key={idx}
+                  className="p-2 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => seleccionarDestinatario(d)}
+                >
+                  {highlightMatch(d.identificacion, cedulaQuery)} -{" "}
+                  {highlightMatch(d.nombre, cedulaQuery)}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <Input
           name="nombre"
-          placeholder="Nombre"
+          placeholder="Nombre completo"
           value={form.nombre}
           onChange={handleChange}
         />
@@ -186,37 +276,33 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         />
         <Input
           name="email"
-          placeholder="Email"
+          placeholder="Correo electrónico"
           value={form.email}
           onChange={handleChange}
         />
-        <Input
-          name="identificacion"
-          placeholder="Identificación"
-          value={form.identificacion}
-          onChange={handleChange}
-        />
 
+        {/* 🌍 País */}
         <Label>País</Label>
         <Select onValueChange={handlePaisChange}>
           <SelectTrigger>
-            <SelectValue placeholder="Seleccionar país" />
+            <SelectValue placeholder="Buscar o seleccionar país" />
           </SelectTrigger>
           <SelectContent>
             {paises.map((p) => (
               <SelectItem key={p.codpais} value={p.codpais.toString()}>
-                {p.pais}
+                {p.pais} (+{p.phone_code})
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
+        {/* 🏙 Ciudad */}
         {form.codpais > 0 && (
           <>
             <Label>Ciudad y Provincia</Label>
             <Select onValueChange={handleCiudadChange}>
               <SelectTrigger>
-                <SelectValue placeholder="Seleccionar ciudad" />
+                <SelectValue placeholder="Buscar o seleccionar ciudad" />
               </SelectTrigger>
               <SelectContent>
                 {ciudades.map((c, i) => (
@@ -229,6 +315,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           </>
         )}
 
+        {/* 🏢 Agencias */}
         <div className="flex items-center gap-2 mt-2">
           <Checkbox
             checked={mostrarAgencias}
@@ -236,13 +323,12 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           />
           <Label>¿Entrega en oficina?</Label>
         </div>
-
         {mostrarAgencias && (
           <div>
             <Label>Seleccionar agencia</Label>
             <Select onValueChange={setAgenciaSeleccionada}>
               <SelectTrigger>
-                <SelectValue placeholder="Agencia de retiro" />
+                <SelectValue placeholder="Buscar o seleccionar agencia" />
               </SelectTrigger>
               <SelectContent>
                 {agencias.map((a, i) => (
@@ -258,12 +344,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         <Button
           onClick={handleContinue}
           disabled={loading || !form.ciudad}
-          className="w-full"
+          className="w-full mt-4"
         >
           {loading ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Procesando...
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...
             </>
           ) : (
             "Continuar"
