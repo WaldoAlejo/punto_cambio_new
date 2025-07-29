@@ -29,15 +29,22 @@ interface AnularGuiaResponse {
 }
 
 async function callServientregaAPI(payload: any) {
+  console.log("[Servientrega] Request Payload:", payload);
   try {
     const { data } = await axios.post(BASE_URL, payload, {
       headers: { "Content-Type": "application/json" },
       httpsAgent,
       timeout: 20000,
     });
+    console.log("[Servientrega] Response:", data);
     return data;
   } catch (error: any) {
     console.error("❌ Error al consumir API Servientrega:", error.message);
+    if (error.code === "ETIMEDOUT") {
+      console.error(
+        "⏳ Timeout al conectar con Servientrega. Revisa conectividad o firewall."
+      );
+    }
     throw new Error("Error al conectar con Servientrega");
   }
 }
@@ -47,29 +54,49 @@ async function callServientregaAPI(payload: any) {
 // =============================
 
 router.post("/productos", async (_, res) => {
-  const payload = { tipo: "obtener_producto", ...AUTH };
-  res.json(await callServientregaAPI(payload));
+  try {
+    const payload = { tipo: "obtener_producto", ...AUTH };
+    res.json(await callServientregaAPI(payload));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.post("/paises", async (_, res) => {
-  const payload = { tipo: "obtener_paises", ...AUTH };
-  res.json(await callServientregaAPI(payload));
+  try {
+    const payload = { tipo: "obtener_paises", ...AUTH };
+    res.json(await callServientregaAPI(payload));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.post("/ciudades", async (req, res) => {
-  const { codpais } = req.body;
-  const payload = { tipo: "obtener_ciudades", codpais, ...AUTH };
-  res.json(await callServientregaAPI(payload));
+  try {
+    const { codpais } = req.body;
+    const payload = { tipo: "obtener_ciudades", codpais, ...AUTH };
+    res.json(await callServientregaAPI(payload));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.post("/agencias", async (_, res) => {
-  const payload = { tipo: "obtener_agencias_aliadas", ...AUTH };
-  res.json(await callServientregaAPI(payload));
+  try {
+    const payload = { tipo: "obtener_agencias_aliadas", ...AUTH };
+    res.json(await callServientregaAPI(payload));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.post("/empaques", async (_, res) => {
-  const payload = { tipo: "obtener_empaqueyembalaje", ...AUTH };
-  res.json(await callServientregaAPI(payload));
+  try {
+    const payload = { tipo: "obtener_empaqueyembalaje", ...AUTH };
+    res.json(await callServientregaAPI(payload));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // =============================
@@ -77,12 +104,16 @@ router.post("/empaques", async (_, res) => {
 // =============================
 
 router.post("/tarifa", async (req, res) => {
-  const payload = {
-    tipo: "obtener_tarifa_nacional",
-    ...req.body,
-    ...AUTH,
-  };
-  res.json(await callServientregaAPI(payload));
+  try {
+    const payload = {
+      tipo: "obtener_tarifa_nacional",
+      ...req.body,
+      ...AUTH,
+    };
+    res.json(await callServientregaAPI(payload));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // =============================
@@ -90,46 +121,51 @@ router.post("/tarifa", async (req, res) => {
 // =============================
 
 router.post("/generar-guia", async (req, res) => {
-  const payload = { tipo: "GeneracionGuia", ...req.body, ...AUTH };
-  const response = (await callServientregaAPI(payload)) as GenerarGuiaResponse;
+  try {
+    const payload = { tipo: "GeneracionGuia", ...req.body, ...AUTH };
+    const response = (await callServientregaAPI(
+      payload
+    )) as GenerarGuiaResponse;
 
-  if (response?.guia && response?.base64) {
-    const { remitente, destinatario, valor_declarado, punto_atencion_id } =
-      req.body;
+    if (response?.guia && response?.base64) {
+      const { remitente, destinatario, valor_declarado, punto_atencion_id } =
+        req.body;
 
-    const remitenteDB = await prisma.servientregaRemitente.create({
-      data: remitente,
-    });
-    const destinatarioDB = await prisma.servientregaDestinatario.create({
-      data: destinatario,
-    });
-
-    await prisma.servientregaGuia.create({
-      data: {
-        numero_guia: response.guia,
-        proceso: response.proceso ?? "Generado",
-        base64_response: response.base64,
-        remitente_id: remitenteDB.id,
-        destinatario_id: destinatarioDB.id,
-      },
-    });
-
-    if (punto_atencion_id) {
-      const saldo = await prisma.servientregaSaldo.findUnique({
-        where: { punto_atencion_id },
+      const remitenteDB = await prisma.servientregaRemitente.create({
+        data: remitente,
       });
-      if (saldo) {
-        await prisma.servientregaSaldo.update({
+      const destinatarioDB = await prisma.servientregaDestinatario.create({
+        data: destinatario,
+      });
+
+      await prisma.servientregaGuia.create({
+        data: {
+          numero_guia: response.guia,
+          proceso: response.proceso ?? "Generado",
+          base64_response: response.base64,
+          remitente_id: remitenteDB.id,
+          destinatario_id: destinatarioDB.id,
+        },
+      });
+
+      if (punto_atencion_id) {
+        const saldo = await prisma.servientregaSaldo.findUnique({
           where: { punto_atencion_id },
-          data: {
-            monto_usado: saldo.monto_usado.plus(valor_declarado ?? 0),
-          },
         });
+        if (saldo) {
+          await prisma.servientregaSaldo.update({
+            where: { punto_atencion_id },
+            data: {
+              monto_usado: saldo.monto_usado.plus(valor_declarado ?? 0),
+            },
+          });
+        }
       }
     }
+    res.json(response);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-
-  res.json(response);
 });
 
 // =============================
@@ -137,23 +173,26 @@ router.post("/generar-guia", async (req, res) => {
 // =============================
 
 router.post("/anular-guia", async (req, res) => {
-  const { guia } = req.body;
-  const payload = {
-    tipo: "ActualizaEstadoGuia",
-    guia,
-    estado: "Anulada",
-    ...AUTH,
-  };
-  const response = (await callServientregaAPI(payload)) as AnularGuiaResponse;
+  try {
+    const { guia } = req.body;
+    const payload = {
+      tipo: "ActualizaEstadoGuia",
+      guia,
+      estado: "Anulada",
+      ...AUTH,
+    };
+    const response = (await callServientregaAPI(payload)) as AnularGuiaResponse;
 
-  if (response?.fetch?.proceso === "Guia Actualizada") {
-    await prisma.servientregaGuia.updateMany({
-      where: { numero_guia: guia },
-      data: { proceso: "Anulada" },
-    });
+    if (response?.fetch?.proceso === "Guia Actualizada") {
+      await prisma.servientregaGuia.updateMany({
+        where: { numero_guia: guia },
+        data: { proceso: "Anulada" },
+      });
+    }
+    res.json(response);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-
-  res.json(response);
 });
 
 // =============================
@@ -170,16 +209,12 @@ router.get("/guias", async (req, res) => {
           lte: new Date(hasta as string),
         },
       },
-      include: {
-        remitente: true,
-        destinatario: true,
-      },
+      include: { remitente: true, destinatario: true },
       orderBy: { created_at: "desc" },
     });
-
     res.json(guias);
-  } catch (error) {
-    console.error("❌ Error al obtener guías:", error);
+  } catch (err) {
+    console.error("❌ Error al obtener guías:", err);
     res.status(500).json({ error: "Error al obtener guías" });
   }
 });
@@ -196,12 +231,14 @@ router.get("/remitente/puntos", async (_, res) => {
       orderBy: { ciudad: "asc" },
     });
     res.json({ success: true, puntos });
-  } catch (error) {
-    console.error("❌ Error al obtener puntos de atención:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error al consultar puntos de atención",
-    });
+  } catch (err) {
+    console.error("❌ Error al obtener puntos de atención:", err);
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Error al consultar puntos de atención",
+      });
   }
 });
 
@@ -233,8 +270,8 @@ router.get("/saldo/historial", async (_, res) => {
     }));
 
     res.json(data);
-  } catch (error) {
-    console.error("❌ Error al obtener historial Servientrega:", error);
+  } catch (err) {
+    console.error("❌ Error al obtener historial Servientrega:", err);
     res.status(500).json({ error: "Error al obtener historial" });
   }
 });
@@ -249,8 +286,8 @@ router.get("/saldo/:puntoAtencionId", async (req, res) => {
     res.json({
       disponible: saldo ? saldo.monto_total.minus(saldo.monto_usado) : 0,
     });
-  } catch (error) {
-    console.error("❌ Error al obtener saldo:", error);
+  } catch (err) {
+    console.error("❌ Error al obtener saldo:", err);
     res.status(500).json({ error: "Error al obtener saldo" });
   }
 });
@@ -281,8 +318,8 @@ router.post("/saldo", async (req, res) => {
         });
 
     res.json(actualizado);
-  } catch (error) {
-    console.error("❌ Error al asignar saldo:", error);
+  } catch (err) {
+    console.error("❌ Error al asignar saldo:", err);
     res.status(500).json({ error: "Error al asignar saldo" });
   }
 });
