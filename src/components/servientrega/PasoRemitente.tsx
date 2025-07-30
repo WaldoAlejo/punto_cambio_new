@@ -203,7 +203,7 @@ export default function PasoRemitente({
             value={formData.identificacion}
             onChange={(e) => {
               const value = e.target.value.trimStart();
-              handleChange({ ...e, target: { ...e.target, value } });
+              setFormData((prev) => ({ ...prev, identificacion: value }));
               setCedulaQuery(value);
             }}
           />
