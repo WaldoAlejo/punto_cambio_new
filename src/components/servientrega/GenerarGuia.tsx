@@ -1,227 +1,337 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import axios from "axios";
-import PasoProducto from "./PasoProducto";
-import PasoDestinatario from "./PasoDestinatario";
-import PasoRemitente from "./PasoRemitente";
-import PasoEmpaqueYMedidas from "./PasoEmpaqueYMedidas";
-import PasoConfirmarEnvio from "./PasoConfirmarEnvio";
-import PasoResumen from "./PasoResumen";
-import { Usuario, PuntoAtencion } from "../../types";
-import { useToast } from "@/components/ui/use-toast";
-import { FormDataGuia } from "./PasoConfirmarEnvio"; // ✅ Importar tipo correcto
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-interface GenerarGuiaProps {
-  user: Usuario;
-  selectedPoint: PuntoAtencion;
+export interface Remitente {
+  identificacion: string;
+  nombre: string;
+  direccion: string;
+  telefono: string;
+  email?: string;
+  ciudad: string;
+  provincia: string;
+  codigo_postal: string;
+  pais?: string;
 }
 
-type Step =
-  | "producto"
-  | "remitente"
-  | "destinatario"
-  | "empaque-medidas"
-  | "resumen"
-  | "confirmar-envio";
-
-interface SaldoResponse {
-  disponible: number;
+export interface Destinatario {
+  identificacion: string;
+  nombre: string;
+  direccion: string;
+  telefono: string;
+  email?: string;
+  ciudad: string;
+  provincia: string;
+  codigo_postal: string;
+  pais: string;
 }
 
-const UMBRAL_SALDO_BAJO = 5;
+export interface Medidas {
+  alto: number;
+  ancho: number;
+  largo: number;
+  peso: number;
+  valor_declarado: number;
+  valor_seguro: number;
+  recoleccion: boolean;
+}
 
-export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
-  const { toast } = useToast();
+export interface Empaque {
+  tipo_empaque: string;
+  cantidad: number;
+  descripcion: string;
+  costo_unitario: number;
+  costo_total: number;
+}
 
-  const [step, setStep] = useState<Step>("producto");
-  const [formData, setFormData] = useState<FormDataGuia>({
-    nombre_producto: "",
-    contenido: "",
-    retiro_oficina: false,
-    punto_atencion_id: selectedPoint.id,
-    remitente: {} as any,
-    destinatario: {} as any,
-    medidas: {} as any,
-    requiere_empaque: false,
-    resumen_costos: {
-      costo_empaque: 0,
-      valor_seguro: 0,
-      flete: 0,
-      total: 0,
-    },
-  });
+export interface ResumenCostos {
+  costo_empaque: number;
+  valor_seguro: number;
+  flete: number;
+  total: number;
+}
 
-  const [saldo, setSaldo] = useState<number | null>(null);
-  const [cargandoSaldo, setCargandoSaldo] = useState(false);
+export interface FormDataGuia {
+  nombre_producto: string;
+  contenido: string;
+  retiro_oficina: boolean;
+  nombre_agencia_retiro_oficina?: string;
+  pedido?: string;
+  factura?: string;
+  punto_atencion_id: string;
+  remitente: Remitente;
+  destinatario: Destinatario;
+  medidas: Medidas;
+  empaque?: Empaque;
+  requiere_empaque: boolean;
+  resumen_costos: ResumenCostos;
+}
 
-  // ========================
-  // 💰 Obtener saldo actual
-  // ========================
-  const obtenerSaldo = async () => {
+interface PasoConfirmarEnvioProps {
+  formData: FormDataGuia;
+  onReset: () => void;
+  onSuccess?: () => void;
+}
+
+interface GenerarGuiaResponse {
+  guia: string;
+  base64: string;
+  proceso?: string;
+}
+
+export default function PasoConfirmarEnvio({
+  formData,
+  onReset,
+  onSuccess,
+}: PasoConfirmarEnvioProps) {
+  const [loading, setLoading] = useState(false);
+  const [guia, setGuia] = useState<string | null>(null);
+  const [base64, setBase64] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saldoDisponible, setSaldoDisponible] = useState<number | null>(null);
+
+  const validarSaldo = async () => {
     try {
-      setCargandoSaldo(true);
-      const res = await axios.get<SaldoResponse>(
-        `/api/servientrega/saldo/${selectedPoint.id}`
+      const { data } = await axios.get(
+        `/api/servientrega/saldo/validar/${formData.punto_atencion_id}`
       );
-      setSaldo(res.data.disponible ?? 0);
-    } catch (error) {
-      console.error("Error al obtener saldo:", error);
-      toast({
-        title: "Error",
-        description: "No se pudo cargar el saldo actual.",
-        variant: "destructive",
-      });
+      setSaldoDisponible(data?.saldo_disponible || 0);
+      if (!data?.suficiente) {
+        toast.error("Saldo insuficiente para generar la guía.");
+        return false;
+      }
+      return true;
+    } catch {
+      toast.error("No se pudo validar el saldo.");
+      return false;
+    }
+  };
+
+  const abrirModalConfirmacion = async () => {
+    const valido = await validarSaldo();
+    if (valido) setConfirmOpen(true);
+  };
+
+  const handleGenerarGuia = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const payload: FormDataGuia = {
+        ...formData,
+        contenido: formData.contenido || formData.nombre_producto,
+        retiro_oficina: formData.retiro_oficina,
+        nombre_agencia_retiro_oficina: formData.retiro_oficina
+          ? formData.nombre_agencia_retiro_oficina
+          : "",
+        pedido: formData.pedido || "PRUEBA",
+        factura: formData.factura || "PRUEBA",
+      };
+
+      const res = await axios.post<GenerarGuiaResponse>(
+        "/api/servientrega/generar-guia",
+        payload
+      );
+
+      const data = res.data;
+      if (data?.guia && data?.base64) {
+        setGuia(data.guia);
+        setBase64(data.base64);
+        toast.success(`✅ Guía generada: ${data.guia}`);
+        if (onSuccess) onSuccess();
+      } else {
+        setError("No se pudo generar la guía. Verifica los datos.");
+        toast.error("No se pudo generar la guía.");
+      }
+    } catch (err: any) {
+      console.error("Error al generar guía:", err);
+      setError("Ocurrió un error al generar la guía.");
+      toast.error("Error al generar la guía. Intenta nuevamente.");
     } finally {
-      setCargandoSaldo(false);
+      setLoading(false);
+      setConfirmOpen(false);
     }
   };
 
-  useEffect(() => {
-    obtenerSaldo();
-  }, [selectedPoint.id]);
-
-  const puedeGenerarGuia = () => typeof saldo === "number" && saldo > 0;
-
-  // ========================
-  // 📦 Flujo de pasos
-  // ========================
-  const handleProductoNext = (producto: {
-    nombre: string;
-    esDocumento: boolean;
-  }) => {
-    setFormData((prev) => ({
-      ...prev,
-      nombre_producto: producto.nombre,
-      contenido: producto.nombre,
-      requiere_empaque: !producto.esDocumento,
-    }));
-    setStep("remitente");
+  const handleVerPDF = () => {
+    if (base64) {
+      const pdfURL = `data:application/pdf;base64,${base64}`;
+      window.open(pdfURL, "_blank");
+    }
   };
 
-  const handleRemitenteNext = (remitente: any) => {
-    setFormData((prev) => ({ ...prev, remitente }));
-    setStep("destinatario");
-  };
-
-  const handleDestinatarioNext = (
-    destinatario: any,
-    retiroOficina: boolean
-  ) => {
-    setFormData((prev) => ({
-      ...prev,
-      destinatario,
-      retiro_oficina: retiroOficina,
-    }));
-    setStep("empaque-medidas");
-  };
-
-  const handleEmpaqueYMedidasNext = (data: {
-    medidas: any;
-    empaque?: any;
-    resumen_costos: any;
-  }) => {
-    setFormData((prev) => ({
-      ...prev,
-      empaque: data.empaque || null,
-      medidas: data.medidas,
-      resumen_costos: data.resumen_costos, // ✅ Ahora siempre está presente
-    }));
-    setStep("resumen");
-  };
-
-  const handleResumenNext = () => {
-    if (!puedeGenerarGuia()) {
-      toast({
-        title: "Saldo insuficiente",
-        description:
-          "No se puede generar la guía. El saldo del punto de atención es 0 o negativo.",
-        variant: "destructive",
+  const handleSolicitarSaldo = async () => {
+    try {
+      await axios.post("/api/servientrega/solicitar-saldo", {
+        punto_atencion_id: formData.punto_atencion_id,
+        monto_requerido: formData.resumen_costos.total,
       });
-      return;
+      toast.success("Solicitud de saldo enviada al administrador.");
+    } catch (err) {
+      console.error("Error al solicitar saldo:", err);
+      toast.error("No se pudo enviar la solicitud de saldo.");
     }
-    setStep("confirmar-envio");
   };
 
-  const handleReset = () => {
-    setFormData({
-      nombre_producto: "",
-      contenido: "",
-      retiro_oficina: false,
-      punto_atencion_id: selectedPoint.id,
-      remitente: {} as any,
-      destinatario: {} as any,
-      medidas: {} as any,
-      requiere_empaque: false,
-      resumen_costos: {
-        costo_empaque: 0,
-        valor_seguro: 0,
-        flete: 0,
-        total: 0,
-      },
-    });
-    setStep("producto");
-    obtenerSaldo();
-  };
+  const saldoRestante =
+    saldoDisponible !== null
+      ? saldoDisponible - formData.resumen_costos.total
+      : null;
 
-  // ========================
-  // 🎨 Renderizado
-  // ========================
   return (
-    <div className="w-full max-w-3xl mx-auto p-4 space-y-4">
-      {/* Saldo */}
-      <div className="text-right">
-        <span
-          className={`text-sm font-medium ${
-            saldo !== null && saldo < UMBRAL_SALDO_BAJO
-              ? "text-red-600"
-              : "text-green-700"
-          }`}
-        >
-          {cargandoSaldo
-            ? "Cargando saldo..."
-            : saldo !== null
-            ? `Saldo disponible: $${Number(saldo).toFixed(2)}`
-            : "Saldo no disponible"}
-        </span>
-      </div>
+    <Card className="w-full max-w-2xl mx-auto mt-6 shadow-lg border rounded-xl">
+      <CardHeader>
+        <CardTitle>Confirmar y generar guía</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!guia ? (
+          <>
+            <p className="text-gray-700">
+              Revisa el resumen antes de confirmar. Esta acción descontará saldo
+              del punto de atención.
+            </p>
 
-      {/* Pasos */}
-      {step === "producto" && <PasoProducto onNext={handleProductoNext} />}
-      {step === "remitente" && (
-        <PasoRemitente
-          user={user}
-          selectedPoint={selectedPoint}
-          onNext={handleRemitenteNext}
-        />
-      )}
-      {step === "destinatario" && (
-        <PasoDestinatario onNext={handleDestinatarioNext} />
-      )}
-      {step === "empaque-medidas" && (
-        <PasoEmpaqueYMedidas
-          nombreProducto={formData.nombre_producto}
-          esDocumento={!formData.requiere_empaque}
-          paisDestino={formData.destinatario?.pais || "ECUADOR"}
-          ciudadDestino={formData.destinatario?.ciudad || ""}
-          provinciaDestino={formData.destinatario?.provincia || ""}
-          onNext={handleEmpaqueYMedidasNext}
-        />
-      )}
-      {step === "resumen" && (
-        <PasoResumen
-          formData={formData}
-          onConfirm={handleResumenNext}
-          onBack={() => setStep("empaque-medidas")}
-        />
-      )}
-      {step === "confirmar-envio" && (
-        <PasoConfirmarEnvio
-          formData={formData}
-          onReset={handleReset}
-          onSuccess={obtenerSaldo}
-        />
-      )}
-    </div>
+            <div className="border rounded-md p-3 bg-gray-50 text-sm space-y-2">
+              <p>
+                <strong>Producto:</strong> {formData.nombre_producto}
+              </p>
+              <p>
+                <strong>Valor declarado:</strong> $
+                {formData.medidas.valor_declarado.toFixed(2)}
+              </p>
+              <p>
+                <strong>Flete estimado:</strong> $
+                {formData.resumen_costos.flete.toFixed(2)}
+              </p>
+              <p>
+                <strong>Total estimado:</strong>{" "}
+                <span className="text-green-700 font-semibold">
+                  ${formData.resumen_costos.total.toFixed(2)}
+                </span>
+              </p>
+            </div>
+
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+
+            <Button
+              className="w-full bg-green-600 text-white hover:bg-green-700"
+              disabled={loading}
+              onClick={abrirModalConfirmacion}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Validando saldo...
+                </>
+              ) : (
+                "Confirmar y generar guía"
+              )}
+            </Button>
+
+            {/* Modal de confirmación */}
+            <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Confirmar generación de la guía
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <div className="space-y-3 mt-3 text-sm">
+                      <p>
+                        <strong>Saldo disponible:</strong>{" "}
+                        <span className="text-blue-600">
+                          ${saldoDisponible?.toFixed(2)}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>Saldo requerido:</strong>{" "}
+                        <span className="text-green-600">
+                          ${formData.resumen_costos.total.toFixed(2)}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>Saldo restante:</strong>{" "}
+                        <span
+                          className={`${
+                            saldoRestante !== null && saldoRestante < 0
+                              ? "text-red-600"
+                              : "text-gray-800"
+                          } font-semibold`}
+                        >
+                          $
+                          {saldoRestante !== null
+                            ? saldoRestante.toFixed(2)
+                            : "-"}
+                        </span>
+                      </p>
+                      {saldoRestante !== null && saldoRestante < 0 && (
+                        <div className="mt-2 text-red-600 text-sm">
+                          ❌ No puedes generar esta guía, saldo insuficiente.
+                        </div>
+                      )}
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  {saldoRestante !== null && saldoRestante < 0 ? (
+                    <Button
+                      onClick={handleSolicitarSaldo}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white w-full"
+                    >
+                      Solicitar saldo al administrador
+                    </Button>
+                  ) : (
+                    <AlertDialogAction
+                      onClick={handleGenerarGuia}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Sí, generar guía
+                    </AlertDialogAction>
+                  )}
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
+        ) : (
+          <>
+            <p className="text-green-600 font-semibold text-center">
+              ✅ Guía generada exitosamente: {guia}
+            </p>
+            <div className="flex flex-col gap-3 mt-4">
+              <Button
+                onClick={handleVerPDF}
+                disabled={!base64}
+                className="w-full bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Ver PDF de la guía
+              </Button>
+              <Button
+                onClick={onReset}
+                className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200"
+                variant="secondary"
+              >
+                Generar otra guía
+              </Button>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

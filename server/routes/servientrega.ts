@@ -16,6 +16,7 @@ const AUTH = {
 };
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+const UMBRAL_MINIMO_SALDO = new Prisma.Decimal(5);
 
 async function callServientregaAPI(payload: any) {
   try {
@@ -111,8 +112,10 @@ router.post("/remitente/guardar", async (req, res) => {
     const data = req.body;
     const remitente = await prisma.servientregaRemitente.create({ data });
     res.json(remitente);
-  } catch {
-    res.status(500).json({ error: "Error al guardar remitente" });
+  } catch (err: any) {
+    res
+      .status(500)
+      .json({ error: "Error al guardar remitente", detalle: err.message });
   }
 });
 
@@ -179,6 +182,175 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
 });
 
 // =============================
+// 💰 Saldo Servientrega
+// =============================
+
+// Obtener saldo
+router.get("/saldo/:punto_id", async (req, res) => {
+  try {
+    const { punto_id } = req.params;
+    const saldo = await prisma.servientregaSaldo.findUnique({
+      where: { punto_atencion_id: punto_id },
+    });
+    res.json({
+      disponible: saldo
+        ? saldo.monto_total.minus(saldo.monto_usado).toFixed(2)
+        : 0,
+    });
+  } catch {
+    res.status(404).json({ error: "No se encontró el saldo para el punto." });
+  }
+});
+
+// Validar saldo mínimo
+router.get("/saldo/validar/:punto_id", async (req, res) => {
+  try {
+    const { punto_id } = req.params;
+    const saldo = await prisma.servientregaSaldo.findUnique({
+      where: { punto_atencion_id: punto_id },
+    });
+
+    const disponible = saldo
+      ? saldo.monto_total.minus(saldo.monto_usado)
+      : new Prisma.Decimal(0);
+
+    if (disponible.lt(UMBRAL_MINIMO_SALDO)) {
+      return res.status(400).json({
+        estado: "SALDO_BAJO",
+        disponible: disponible.toFixed(2),
+        mensaje: `El saldo disponible ($${disponible.toFixed(
+          2
+        )}) está por debajo del mínimo requerido ($${UMBRAL_MINIMO_SALDO.toFixed(
+          2
+        )}).`,
+      });
+    }
+
+    res.json({ estado: "OK", disponible: disponible.toFixed(2) });
+  } catch (err: any) {
+    res
+      .status(500)
+      .json({ error: "Error al validar saldo", detalle: err.message });
+  }
+});
+
+// Asignar saldo (Admin)
+router.post("/saldo", async (req, res) => {
+  try {
+    const { monto_total, creado_por, punto_atencion_id } = req.body;
+
+    const saldo = await prisma.servientregaSaldo.upsert({
+      where: { punto_atencion_id },
+      update: { monto_total: new Prisma.Decimal(monto_total) },
+      create: {
+        monto_total: new Prisma.Decimal(monto_total),
+        monto_usado: new Prisma.Decimal(0),
+        creado_por,
+        punto_atencion_id,
+      },
+    });
+
+    const punto = await prisma.puntoAtencion.findUnique({
+      where: { id: punto_atencion_id },
+    });
+
+    await prisma.servientregaHistorialSaldo.create({
+      data: {
+        punto_atencion_id,
+        punto_atencion_nombre: punto?.nombre || "Desconocido",
+        monto_total: new Prisma.Decimal(monto_total),
+        creado_por,
+      },
+    });
+
+    res.json(saldo);
+  } catch (err: any) {
+    res
+      .status(500)
+      .json({ error: "Error al asignar saldo", detalle: err.message });
+  }
+});
+
+// Historial saldo
+router.get("/saldo/historial", async (_, res) => {
+  try {
+    const historial = await prisma.servientregaHistorialSaldo.findMany({
+      orderBy: { creado_en: "desc" },
+    });
+    res.json(historial);
+  } catch {
+    res.status(500).json({ error: "Error al obtener historial de saldo" });
+  }
+});
+
+// =============================
+// 🔔 Solicitudes de saldo
+// =============================
+router.post("/solicitar-saldo", async (req, res) => {
+  try {
+    const { punto_atencion_id, monto_requerido } = req.body;
+
+    const punto = await prisma.puntoAtencion.findUnique({
+      where: { id: punto_atencion_id },
+    });
+    if (!punto)
+      return res.status(404).json({ error: "Punto de atención no encontrado" });
+
+    const solicitud = await prisma.servientregaSolicitudSaldo.create({
+      data: {
+        punto_atencion_id,
+        punto_atencion_nombre: punto.nombre,
+        monto_requerido: new Prisma.Decimal(monto_requerido),
+        estado: "PENDIENTE",
+      },
+    });
+
+    res.json({
+      message: "Solicitud registrada y enviada al administrador",
+      solicitud,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Error al registrar solicitud de saldo" });
+  }
+});
+
+router.get("/solicitar-saldo/listar", async (_, res) => {
+  try {
+    const solicitudes = await prisma.servientregaSolicitudSaldo.findMany({
+      orderBy: { creado_en: "desc" },
+    });
+    res.json(solicitudes);
+  } catch {
+    res.status(500).json({ error: "Error al listar solicitudes" });
+  }
+});
+
+router.post("/solicitar-saldo/responder", async (req, res) => {
+  try {
+    const { solicitud_id, estado, aprobado_por } = req.body;
+    if (!["APROBADA", "RECHAZADA"].includes(estado)) {
+      return res.status(400).json({ error: "Estado inválido" });
+    }
+
+    const solicitud = await prisma.servientregaSolicitudSaldo.update({
+      where: { id: solicitud_id },
+      data: {
+        estado,
+        aprobado_por: estado === "APROBADA" ? aprobado_por : null,
+        aprobado_en: new Date(),
+      },
+    });
+
+    res.json({
+      message: `Solicitud ${estado.toLowerCase()} correctamente`,
+      solicitud,
+    });
+  } catch {
+    res.status(500).json({ error: "Error al responder solicitud" });
+  }
+});
+
+// =============================
 // 📄 Listar guías generadas
 // =============================
 router.get("/guias", async (req, res) => {
@@ -193,12 +365,8 @@ router.get("/guias", async (req, res) => {
       : endOfDay(new Date());
 
     const guias = await prisma.servientregaGuia.findMany({
-      where: {
-        created_at: {
-          gte: fechaDesde,
-          lte: fechaHasta,
-        },
-      },
+      where: { created_at: { gte: fechaDesde, lte: fechaHasta } },
+      include: { remitente: true, destinatario: true },
       orderBy: { created_at: "desc" },
     });
 
@@ -282,8 +450,7 @@ router.post("/tarifa", async (req, res) => {
       ...AUTH,
     };
 
-    const data = await callServientregaAPI(payload);
-    res.json(data);
+    res.json(await callServientregaAPI(payload));
   } catch {
     res.status(500).json({ error: "Error al calcular tarifa" });
   }
@@ -307,6 +474,24 @@ router.post("/generar-guia", async (req, res) => {
       resumen_costos,
       punto_atencion_id,
     } = req.body;
+
+    if (punto_atencion_id) {
+      const saldo = await prisma.servientregaSaldo.findUnique({
+        where: { punto_atencion_id },
+      });
+      const disponible = saldo
+        ? saldo.monto_total.minus(saldo.monto_usado)
+        : new Prisma.Decimal(0);
+      const costo = new Prisma.Decimal(resumen_costos?.total || 0);
+
+      if (disponible.lt(costo)) {
+        return res.status(400).json({
+          error: `Saldo insuficiente. Disponible: $${disponible.toFixed(
+            2
+          )}, requerido: $${costo.toFixed(2)}.`,
+        });
+      }
+    }
 
     const pesoVol =
       (Number(medidas.alto) * Number(medidas.ancho) * Number(medidas.largo)) /
@@ -405,7 +590,6 @@ router.post("/generar-guia", async (req, res) => {
       .status(400)
       .json({ error: "No se pudo generar la guía", detalle: response });
   } catch (err: any) {
-    console.error("Error al generar guía:", err);
     res
       .status(500)
       .json({ error: "Error al generar guía", detalle: err.message });

@@ -35,7 +35,7 @@ const Campo = ({
   value: string | number | undefined;
   highlight?: boolean;
 }) => (
-  <div className="flex justify-between border-b py-1 text-sm">
+  <div className="flex justify-between py-1 text-sm border-b last:border-0">
     <span className="font-medium text-gray-600">{label}</span>
     <span
       className={`text-right ${
@@ -54,9 +54,11 @@ const Seccion = ({
   titulo: string;
   children: React.ReactNode;
 }) => (
-  <div className="mb-4">
-    <h3 className="text-md font-semibold text-primary mb-2">{titulo}</h3>
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">{children}</div>
+  <div className="mb-6 border rounded-lg p-4 bg-gray-50">
+    <h3 className="text-md font-semibold text-primary mb-3">{titulo}</h3>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+      {children}
+    </div>
   </div>
 );
 
@@ -65,7 +67,7 @@ export default function PasoResumen({
   onBack,
   onConfirm,
 }: PasoResumenProps) {
-  const { remitente, destinatario, medidas } = formData;
+  const { remitente, destinatario, medidas, punto_atencion_id } = formData;
   const [tarifa, setTarifa] = useState<TarifaResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -108,7 +110,6 @@ export default function PasoResumen({
       setLoading(true);
       try {
         const isInternacional = destinatario.pais?.toUpperCase() !== "ECUADOR";
-
         const payload = {
           tipo: isInternacional
             ? "obtener_tarifa_internacional"
@@ -138,16 +139,13 @@ export default function PasoResumen({
 
         const res = await axios.post("/api/servientrega/tarifa", payload);
         const resultado = Array.isArray(res.data) ? res.data[0] : res.data;
-
         if (!resultado || resultado.flete === undefined) {
           toast.error("No se pudo calcular la tarifa. Verifica los datos.");
           return;
         }
-
         if (!resultado.peso_vol) {
           resultado.peso_vol = calcularPesoVolumetrico().toFixed(2);
         }
-
         setTarifa(resultado);
       } catch (err) {
         console.error("Error al obtener tarifa:", err);
@@ -167,18 +165,37 @@ export default function PasoResumen({
     return (flete + empaque).toFixed(2);
   };
 
+  const validarSaldoAntesConfirmar = async () => {
+    if (!punto_atencion_id) {
+      toast.error("No se ha identificado el punto de atención.");
+      return;
+    }
+    try {
+      const { data } = await axios.get(
+        `/api/servientrega/saldo/validar/${punto_atencion_id}`
+      );
+      if (data?.suficiente) {
+        onConfirm();
+      } else {
+        toast.error("Saldo insuficiente para generar esta guía.");
+      }
+    } catch (err) {
+      console.error("Error al validar saldo:", err);
+      toast.error("No se pudo validar el saldo disponible.");
+    }
+  };
+
   const direccionRemitente = descomponerDireccion(remitente?.direccion || "");
   const direccionDestinatario = descomponerDireccion(
     destinatario?.direccion || ""
   );
 
   return (
-    <Card className="w-full max-w-3xl mx-auto mt-6">
+    <Card className="w-full max-w-4xl mx-auto mt-6 shadow-lg border rounded-xl">
       <CardHeader>
-        <CardTitle>Resumen de la Guía</CardTitle>
+        <CardTitle className="text-xl">Resumen de la Guía</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Producto */}
         <Seccion titulo="📦 Producto">
           <Campo label="Nombre del producto" value={formData.nombre_producto} />
           <Campo
@@ -187,42 +204,21 @@ export default function PasoResumen({
           />
         </Seccion>
 
-        {/* Remitente */}
         <Seccion titulo="🧍 Remitente">
           <Campo label="Nombre" value={remitente?.nombre} />
           <Campo label="Cédula" value={remitente?.identificacion} />
-          <Campo
-            label="Calle principal"
-            value={direccionRemitente.callePrincipal}
-          />
-          <Campo label="Numeración" value={direccionRemitente.numeracion} />
-          <Campo
-            label="Calle secundaria"
-            value={direccionRemitente.calleSecundaria}
-          />
-          <Campo label="Referencia" value={direccionRemitente.referencia} />
           <Campo
             label="Ciudad"
             value={`${remitente?.ciudad} - ${remitente?.provincia}`}
           />
           <Campo label="Teléfono" value={remitente?.telefono} />
           <Campo label="Email" value={remitente?.email} />
+          <Campo label="Dirección" value={remitente?.direccion} />
         </Seccion>
 
-        {/* Destinatario */}
         <Seccion titulo="🎯 Destinatario">
           <Campo label="Nombre" value={destinatario?.nombre} />
           <Campo label="Cédula" value={destinatario?.identificacion} />
-          <Campo
-            label="Calle principal"
-            value={direccionDestinatario.callePrincipal}
-          />
-          <Campo label="Numeración" value={direccionDestinatario.numeracion} />
-          <Campo
-            label="Calle secundaria"
-            value={direccionDestinatario.calleSecundaria}
-          />
-          <Campo label="Referencia" value={direccionDestinatario.referencia} />
           <Campo
             label="Ciudad"
             value={`${destinatario?.ciudad} - ${destinatario?.provincia}`}
@@ -235,9 +231,9 @@ export default function PasoResumen({
               value={formData.nombre_agencia_retiro_oficina}
             />
           )}
+          <Campo label="Dirección" value={destinatario?.direccion} />
         </Seccion>
 
-        {/* Medidas */}
         <Seccion titulo="📐 Medidas y valores">
           <Campo
             label="Valor declarado"
@@ -259,55 +255,52 @@ export default function PasoResumen({
               pesoFacturable === pesoVolumetrico && pesoVolumetrico > pesoFisico
             }
           />
-          <Campo label="Alto (cm)" value={medidas?.alto} />
-          <Campo label="Ancho (cm)" value={medidas?.ancho} />
-          <Campo label="Largo (cm)" value={medidas?.largo} />
+          <Campo
+            label="Medidas (cm)"
+            value={`${medidas?.alto} x ${medidas?.ancho} x ${medidas?.largo}`}
+          />
         </Seccion>
 
-        {/* Tarifa */}
         {tarifa && (
-          <>
-            <Separator />
-            <Seccion titulo="💰 Tarifa estimada">
-              <Campo
-                label="Flete"
-                value={`$${Number(tarifa.flete).toFixed(2)}`}
-              />
-              <Campo
-                label="Valor Empaque"
-                value={`$${Number(tarifa.valor_empaque).toFixed(2)}`}
-              />
-              <Campo
-                label="Valor Declarado"
-                value={`$${tarifa.valor_declarado}`}
-              />
-              <Campo
-                label="Seguro calculado"
-                value={`$${tarifa.seguro || medidas?.valor_seguro}`}
-              />
-              <Campo
-                label="Tiempo estimado"
-                value={tarifa.tiempo ? `${tarifa.tiempo} día(s)` : "N/A"}
-              />
-              <Campo
-                label="Total estimado a pagar"
-                value={`$${calcularTotal()}`}
-              />
-            </Seccion>
-          </>
+          <Seccion titulo="💰 Tarifa estimada">
+            <Campo
+              label="Flete"
+              value={`$${Number(tarifa.flete).toFixed(2)}`}
+            />
+            <Campo
+              label="Valor Empaque"
+              value={`$${Number(tarifa.valor_empaque).toFixed(2)}`}
+            />
+            <Campo
+              label="Valor Declarado"
+              value={`$${tarifa.valor_declarado}`}
+            />
+            <Campo
+              label="Seguro calculado"
+              value={`$${tarifa.seguro || medidas?.valor_seguro}`}
+            />
+            <Campo
+              label="Tiempo estimado"
+              value={tarifa.tiempo ? `${tarifa.tiempo} día(s)` : "N/A"}
+            />
+            <Campo
+              label="Total estimado a pagar"
+              value={`$${calcularTotal()}`}
+              highlight
+            />
+          </Seccion>
         )}
 
         {loading && (
           <p className="text-sm text-gray-500">Calculando tarifa...</p>
         )}
 
-        {/* Botones */}
-        <div className="flex justify-between mt-8">
+        <div className="flex justify-between mt-6">
           <Button variant="outline" onClick={onBack}>
             ← Atrás
           </Button>
           <Button
-            onClick={onConfirm}
+            onClick={validarSaldoAntesConfirmar}
             className="bg-green-600 text-white hover:bg-green-700"
             disabled={loading || !tarifa}
           >

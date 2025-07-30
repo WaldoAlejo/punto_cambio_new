@@ -16,16 +16,14 @@ interface PasoRemitenteProps {
 }
 
 export interface RemitenteFormData {
-  identificacion: string;
+  cedula: string;
   nombre: string;
   direccion: string;
   telefono: string;
   email: string;
   ciudad: string;
   provincia: string;
-  codpais: number;
-  pais_iso: string;
-  phone_code: string;
+  codigo_postal?: string;
 }
 
 export default function PasoRemitente({
@@ -33,16 +31,14 @@ export default function PasoRemitente({
   onNext,
 }: PasoRemitenteProps) {
   const [formData, setFormData] = useState<RemitenteFormData>({
-    identificacion: "",
+    cedula: "",
     nombre: "",
     direccion: "",
     telefono: "",
     email: "",
     ciudad: "",
     provincia: "",
-    codpais: 63,
-    pais_iso: "EC",
-    phone_code: "593",
+    codigo_postal: "170150",
   });
 
   const [extraDireccion, setExtraDireccion] = useState({
@@ -54,7 +50,6 @@ export default function PasoRemitente({
 
   const [loading, setLoading] = useState(false);
   const [ciudadValida, setCiudadValida] = useState(false);
-
   const [cedulaQuery, setCedulaQuery] = useState("");
   const [cedulaResultados, setCedulaResultados] = useState<any[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
@@ -90,19 +85,16 @@ export default function PasoRemitente({
 
   const seleccionarRemitente = (rem: any) => {
     setFormData({
-      identificacion: rem.cedula,
+      cedula: rem.cedula,
       nombre: rem.nombre,
       telefono: rem.telefono,
       email: rem.email || "",
       direccion: rem.direccion || "",
       ciudad: rem.ciudad || "",
       provincia: rem.provincia || "",
-      codpais: 63,
-      pais_iso: "EC",
-      phone_code: "593",
+      codigo_postal: rem.codigo_postal || "170150",
     });
 
-    // ✅ Descomponer dirección
     if (rem.direccion) {
       const partes = rem.direccion.split(",").map((p: string) => p.trim());
       setExtraDireccion({
@@ -147,17 +139,16 @@ export default function PasoRemitente({
     setExtraDireccion((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleContinue = async () => {
-    const { identificacion, nombre, telefono, email, ciudad } = formData;
-    if (!identificacion || !nombre || !telefono || !email || !ciudad) {
+    const { cedula, nombre, telefono, email, ciudad } = formData;
+    if (!cedula || !nombre || !telefono || !email || !ciudad) {
       toast.error("Completa todos los campos obligatorios.");
       return;
     }
-    if (!validarIdentificacion(identificacion)) {
+    if (!validarIdentificacion(cedula)) {
       toast.error("Número de identificación inválido.");
       return;
     }
 
-    // ✅ Reconstruir dirección final
     const direccionFinal = [
       extraDireccion.callePrincipal.trim(),
       extraDireccion.numeracion && `#${extraDireccion.numeracion.trim()}`,
@@ -174,7 +165,7 @@ export default function PasoRemitente({
     try {
       if (remitenteExistente) {
         await axios.put(
-          `/api/servientrega/remitente/actualizar/${formData.identificacion.trim()}`,
+          `/api/servientrega/remitente/actualizar/${formData.cedula.trim()}`,
           remitenteFinal
         );
       } else {
@@ -182,7 +173,8 @@ export default function PasoRemitente({
       }
       toast.success("Remitente guardado correctamente.");
       onNext(remitenteFinal);
-    } catch {
+    } catch (err) {
+      console.error("❌ Error al guardar remitente:", err);
       toast.error("Hubo un problema al guardar el remitente.");
     } finally {
       setLoading(false);
@@ -198,12 +190,12 @@ export default function PasoRemitente({
         {/* Identificación */}
         <div className="relative">
           <Input
-            name="identificacion"
+            name="cedula"
             placeholder="Cédula, RUC o Pasaporte"
-            value={formData.identificacion}
+            value={formData.cedula}
             onChange={(e) => {
               const value = e.target.value.trimStart();
-              setFormData((prev) => ({ ...prev, identificacion: value }));
+              setFormData((prev) => ({ ...prev, cedula: value }));
               setCedulaQuery(value);
             }}
           />

@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
-import toast from "react-hot-toast";
+import { toast } from "sonner";
 
 interface Pais {
   codpais: number;
@@ -37,19 +37,20 @@ interface Agencia {
 }
 
 interface Destinatario {
-  identificacion: string;
+  cedula: string;
   nombre: string;
   direccion: string;
   telefono: string;
   email: string;
   ciudad: string;
   provincia: string;
+  codigo_postal?: string;
   codpais: number;
 }
 
 interface PasoDestinatarioProps {
   onNext: (
-    destinatario: any,
+    destinatario: Destinatario,
     retiro_oficina: boolean,
     nombre_agencia?: string
   ) => void;
@@ -66,19 +67,19 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [cedulaQuery, setCedulaQuery] = useState("");
   const [cedulaResultados, setCedulaResultados] = useState<Destinatario[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(
-    null
-  );
+  const [destinatarioExistente, setDestinatarioExistente] =
+    useState<Destinatario | null>(null);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<Destinatario>({
+    cedula: "",
     nombre: "",
+    direccion: "",
     telefono: "",
     email: "",
-    identificacion: "",
-    codpais: 0,
     ciudad: "",
     provincia: "",
     codigo_postal: "",
+    codpais: 63, // Ecuador por defecto
   });
 
   const [extraDireccion, setExtraDireccion] = useState({
@@ -90,48 +91,36 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
   const esInternacional = form.codpais !== 63; // Ecuador = 63
 
-  // 📥 Cargar países
+  // 📥 Cargar países y ciudades de Ecuador por defecto
   useEffect(() => {
     axios
       .post("/api/servientrega/paises")
-      .then((res) => setPaises(res.data.fetch || []))
+      .then((res) => {
+        const lista = res.data.fetch || [];
+        setPaises(lista);
+        const ecuador = lista.find((p: Pais) => p.codpais === 63);
+        if (ecuador) handlePaisChange("63"); // Autocargar Ecuador
+      })
       .catch((err) => console.error("Error al obtener países:", err));
   }, []);
 
-  // 🔍 Debounce búsqueda destinatario
+  // 🔍 Búsqueda predictiva de destinatario
   useEffect(() => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    const query = cedulaQuery.trim();
-    if (query.length >= 3) {
-      const timer = setTimeout(() => {
-        setBuscandoCedula(true);
-        axios
-          .get(
-            `/api/servientrega/destinatario/buscar/${encodeURIComponent(query)}`
-          )
-          .then((res) => setCedulaResultados(res.data.destinatarios || []))
-          .catch(() => setCedulaResultados([]))
-          .finally(() => setBuscandoCedula(false));
-      }, 400);
-      setDebounceTimer(timer);
+    if (cedulaQuery.trim().length >= 3) {
+      setBuscandoCedula(true);
+      axios
+        .get(`/api/servientrega/destinatario/buscar/${cedulaQuery.trim()}`)
+        .then((res) => setCedulaResultados(res.data.destinatarios || []))
+        .catch(() => setCedulaResultados([]))
+        .finally(() => setBuscandoCedula(false));
     } else {
       setCedulaResultados([]);
     }
   }, [cedulaQuery]);
 
-  // ✅ Seleccionar destinatario y descomponer dirección
+  // ✅ Seleccionar destinatario encontrado
   const seleccionarDestinatario = (dest: Destinatario) => {
-    setForm((prev) => ({
-      ...prev,
-      nombre: dest.nombre,
-      telefono: dest.telefono,
-      email: dest.email || "",
-      identificacion: dest.identificacion,
-      codpais: dest.codpais,
-      ciudad: dest.ciudad,
-      provincia: dest.provincia,
-    }));
-
+    setForm({ ...dest });
     if (dest.direccion) {
       const partes = dest.direccion.split(",").map((p) => p.trim());
       setExtraDireccion({
@@ -143,6 +132,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         referencia: partes[2]?.replace(/^Ref:\s*/i, "").trim() || "",
       });
     }
+    setDestinatarioExistente(dest);
     setCedulaResultados([]);
   };
 
@@ -153,7 +143,6 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       codpais,
       ciudad: "",
       provincia: "",
-      codigo_postal: "",
     }));
     axios
       .post("/api/servientrega/ciudades", { codpais })
@@ -188,7 +177,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
   const handleCheckboxChange = async (checked: boolean) => {
     setMostrarAgencias(checked);
-    if (checked && agencias.length === 0) {
+    if (checked) {
       try {
         const res = await axios.post("/api/servientrega/agencias");
         const data = res.data.fetch || [];
@@ -214,222 +203,222 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       );
       return false;
     }
-    try {
-      const country = paises.find(
-        (p) => p.codpais === form.codpais
-      )?.nombrecorto;
-      if (!country) return true;
-      const res = await fetch(
-        `https://api.zippopotam.us/${country}/${form.codigo_postal.trim()}`
-      );
-      if (!res.ok) {
-        toast.error("Código postal inválido o no encontrado.");
-        return false;
-      }
-      return true;
-    } catch {
-      toast.error("Error al validar el código postal.");
-      return false;
-    }
+    return true;
   };
 
   const handleContinue = async () => {
-    if (
-      !form.nombre.trim() ||
-      !form.telefono.trim() ||
-      !form.codpais ||
-      !form.ciudad.trim()
-    ) {
-      toast.error("Por favor completa todos los campos obligatorios.");
-      return;
-    }
-    if (!/^(09\d{8}|0[2-7]\d{7,8})$/.test(form.telefono)) {
-      toast.error("Número de teléfono inválido.");
-      return;
-    }
-    if (
-      form.codpais === 63 &&
-      form.identificacion.trim() &&
-      !/^[0-9]{10}$/.test(form.identificacion.trim())
-    ) {
-      toast.error("Cédula inválida.");
+    if (!form.nombre || !form.telefono || !form.codpais || !form.ciudad) {
+      toast.error("Completa todos los campos obligatorios.");
       return;
     }
     if (!(await validarCodigoPostal())) return;
 
-    const direccionFinal = [
-      extraDireccion.callePrincipal.trim(),
-      extraDireccion.numeracion && `#${extraDireccion.numeracion.trim()}`,
-      extraDireccion.calleSecundaria &&
-        `y ${extraDireccion.calleSecundaria.trim()}`,
-      extraDireccion.referencia && `Ref: ${extraDireccion.referencia.trim()}`,
-    ]
-      .filter(Boolean)
-      .join(", ");
+    let direccionFinal = "";
+    if (mostrarAgencias) {
+      const agencia = agencias.find((a) => a.nombre === agenciaSeleccionada);
+      if (!agencia) {
+        toast.error("Debes seleccionar una agencia.");
+        return;
+      }
+      direccionFinal = agencia.direccion;
+    } else {
+      direccionFinal = [
+        extraDireccion.callePrincipal.trim(),
+        extraDireccion.numeracion && `#${extraDireccion.numeracion.trim()}`,
+        extraDireccion.calleSecundaria &&
+          `y ${extraDireccion.calleSecundaria.trim()}`,
+        extraDireccion.referencia && `Ref: ${extraDireccion.referencia.trim()}`,
+      ]
+        .filter(Boolean)
+        .join(", ");
+    }
 
     const destinatarioFinal = { ...form, direccion: direccionFinal.trim() };
 
     setLoading(true);
-    onNext(
-      destinatarioFinal,
-      mostrarAgencias,
-      agenciaSeleccionada.trim() || ""
-    );
-    setLoading(false);
+    try {
+      if (destinatarioExistente) {
+        await axios.put(
+          `/api/servientrega/destinatario/actualizar/${form.cedula.trim()}`,
+          destinatarioFinal
+        );
+      } else {
+        await axios.post(
+          "/api/servientrega/destinatario/guardar",
+          destinatarioFinal
+        );
+      }
+      toast.success("Destinatario guardado correctamente.");
+      onNext(destinatarioFinal, mostrarAgencias, agenciaSeleccionada.trim());
+    } catch (err) {
+      console.error("❌ Error al guardar destinatario:", err);
+      toast.error("Hubo un problema al guardar el destinatario.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Card className="w-full max-w-lg mx-auto mt-6 shadow-lg border rounded-xl">
+    <Card className="w-full max-w-2xl mx-auto mt-6 shadow-lg border rounded-xl">
       <CardHeader>
         <CardTitle>Datos del Destinatario</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Identificación */}
-        <Input
-          name="identificacion"
-          placeholder="Cédula o Pasaporte"
-          value={form.identificacion}
-          onChange={(e) => {
-            const value = e.target.value.trimStart();
-            handleChange({ ...e, target: { ...e.target, value } });
-            setCedulaQuery(value);
-          }}
-        />
-        {buscandoCedula && (
-          <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-        )}
-        {cedulaResultados.length > 0 && (
-          <div className="absolute bg-white border rounded-md shadow-md w-full max-h-40 overflow-y-auto z-10">
-            {cedulaResultados.map((d, idx) => (
-              <div
-                key={idx}
-                className="p-2 hover:bg-gray-100 cursor-pointer"
-                onClick={() => seleccionarDestinatario(d)}
-              >
-                {d.identificacion} - {d.nombre}
-              </div>
-            ))}
-          </div>
-        )}
+      <CardContent className="space-y-6">
+        {/* 🔹 SECCIÓN UBICACIÓN */}
+        <div className="p-4 border rounded-md bg-gray-50">
+          <h4 className="font-semibold mb-2">📍 Ubicación</h4>
+          <Label>País</Label>
+          <Select
+            value={form.codpais.toString()}
+            onValueChange={handlePaisChange}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccionar país" />
+            </SelectTrigger>
+            <SelectContent>
+              {paises.map((p) => (
+                <SelectItem key={p.codpais} value={p.codpais.toString()}>
+                  {p.pais} (+{p.phone_code})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        <Input
-          name="nombre"
-          placeholder="Nombre completo"
-          value={form.nombre}
-          onChange={handleChange}
-        />
+          <Label className="mt-3">Ciudad y Provincia</Label>
+          <Select onValueChange={handleCiudadChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccionar ciudad" />
+            </SelectTrigger>
+            <SelectContent>
+              {ciudades.map((c, i) => (
+                <SelectItem key={i} value={`${c.ciudad}|${c.provincia}`}>
+                  {c.ciudad} - {c.provincia}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-        {/* Dirección desglosada */}
-        <Input
-          name="callePrincipal"
-          placeholder="Calle principal"
-          value={extraDireccion.callePrincipal}
-          onChange={handleExtraDireccionChange}
-        />
-        <Input
-          name="numeracion"
-          placeholder="Numeración"
-          value={extraDireccion.numeracion}
-          onChange={handleExtraDireccionChange}
-        />
-        <Input
-          name="calleSecundaria"
-          placeholder="Calle secundaria"
-          value={extraDireccion.calleSecundaria}
-          onChange={handleExtraDireccionChange}
-        />
-        <Input
-          name="referencia"
-          placeholder="Referencia"
-          value={extraDireccion.referencia}
-          onChange={handleExtraDireccionChange}
-        />
-
-        <Input
-          name="telefono"
-          placeholder="Teléfono"
-          value={form.telefono}
-          onChange={handleChange}
-        />
-        <Input
-          name="email"
-          placeholder="Correo electrónico"
-          value={form.email}
-          onChange={handleChange}
-        />
-
-        {/* País */}
-        <Label>País</Label>
-        <Select onValueChange={handlePaisChange}>
-          <SelectTrigger>
-            <SelectValue placeholder="Buscar o seleccionar país" />
-          </SelectTrigger>
-          <SelectContent>
-            {paises.map((p) => (
-              <SelectItem key={p.codpais} value={p.codpais.toString()}>
-                {p.pais} (+{p.phone_code})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* Ciudad */}
-        {form.codpais > 0 && (
-          <>
-            <Label>Ciudad y Provincia</Label>
-            <Select onValueChange={handleCiudadChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Buscar o seleccionar ciudad" />
-              </SelectTrigger>
-              <SelectContent>
-                {ciudades.map((c, i) => (
-                  <SelectItem key={i} value={`${c.ciudad}|${c.provincia}`}>
-                    {c.ciudad} - {c.provincia}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </>
-        )}
-
-        {/* Código postal internacional */}
-        {esInternacional && (
-          <div>
-            <Label>Código Postal (Obligatorio en internacionales)</Label>
-            <Input
-              name="codigo_postal"
-              placeholder="Ej: 110111"
-              value={form.codigo_postal}
-              onChange={handleChange}
-            />
-          </div>
-        )}
-
-        {/* Agencias */}
-        <div className="flex items-center gap-2 mt-2">
-          <Checkbox
-            checked={mostrarAgencias}
-            onCheckedChange={handleCheckboxChange}
-          />
-          <Label>¿Entrega en oficina?</Label>
+          {esInternacional && (
+            <>
+              <Label className="mt-3">Código Postal (Obligatorio)</Label>
+              <Input
+                name="codigo_postal"
+                placeholder="Ej: 110111"
+                value={form.codigo_postal}
+                onChange={handleChange}
+              />
+            </>
+          )}
         </div>
-        {mostrarAgencias && (
-          <div>
-            <Label>Seleccionar agencia</Label>
-            <Select onValueChange={setAgenciaSeleccionada}>
-              <SelectTrigger>
-                <SelectValue placeholder="Buscar o seleccionar agencia" />
-              </SelectTrigger>
-              <SelectContent>
-                {agencias.map((a, i) => (
-                  <SelectItem key={i} value={a.nombre}>
-                    {a.nombre} - {a.ciudad} ({a.tipo_cs})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+
+        {/* 🔹 SECCIÓN RETIRO EN OFICINA */}
+        <div className="p-4 border rounded-md bg-gray-50">
+          <h4 className="font-semibold mb-2">🏢 Entrega</h4>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={mostrarAgencias}
+              onCheckedChange={handleCheckboxChange}
+            />
+            <Label>¿Retiro en oficina Servientrega?</Label>
           </div>
-        )}
+          {mostrarAgencias && (
+            <div className="mt-2">
+              <Label>Seleccionar agencia</Label>
+              <Select onValueChange={setAgenciaSeleccionada}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar agencia" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agencias.map((a, i) => (
+                    <SelectItem key={i} value={a.nombre}>
+                      {a.nombre} - {a.ciudad} ({a.tipo_cs})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
+        {/* 🔹 SECCIÓN DATOS PERSONALES */}
+        <div className="p-4 border rounded-md bg-white">
+          <h4 className="font-semibold mb-2">👤 Datos Personales</h4>
+          <Input
+            name="cedula"
+            placeholder="Cédula o Pasaporte"
+            value={form.cedula}
+            onChange={(e) => {
+              const value = e.target.value.trimStart();
+              setForm((prev) => ({ ...prev, cedula: value }));
+              setCedulaQuery(value);
+            }}
+          />
+          {buscandoCedula && (
+            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+          )}
+          {cedulaResultados.length > 0 && (
+            <div className="absolute bg-white border rounded-md shadow-md w-full max-h-40 overflow-y-auto z-10">
+              {cedulaResultados.map((d, idx) => (
+                <div
+                  key={idx}
+                  className="p-2 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => seleccionarDestinatario(d)}
+                >
+                  {d.cedula} - {d.nombre}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Input
+            name="nombre"
+            placeholder="Nombre completo"
+            value={form.nombre}
+            onChange={handleChange}
+          />
+          <Input
+            name="telefono"
+            placeholder="Teléfono"
+            value={form.telefono}
+            onChange={handleChange}
+          />
+          <Input
+            name="email"
+            placeholder="Correo electrónico"
+            value={form.email}
+            onChange={handleChange}
+          />
+
+          {!mostrarAgencias && (
+            <>
+              <h4 className="font-semibold mt-4">🏠 Dirección</h4>
+              <Input
+                name="callePrincipal"
+                placeholder="Calle principal"
+                value={extraDireccion.callePrincipal}
+                onChange={handleExtraDireccionChange}
+              />
+              <Input
+                name="numeracion"
+                placeholder="Numeración"
+                value={extraDireccion.numeracion}
+                onChange={handleExtraDireccionChange}
+              />
+              <Input
+                name="calleSecundaria"
+                placeholder="Calle secundaria"
+                value={extraDireccion.calleSecundaria}
+                onChange={handleExtraDireccionChange}
+              />
+              <Input
+                name="referencia"
+                placeholder="Referencia"
+                value={extraDireccion.referencia}
+                onChange={handleExtraDireccionChange}
+              />
+            </>
+          )}
+        </div>
 
         <Button
           onClick={handleContinue}

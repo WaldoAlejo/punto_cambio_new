@@ -6,6 +6,16 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // ==========================
 // 📌 Tipado de datos
@@ -99,19 +109,42 @@ export default function PasoConfirmarEnvio({
   const [guia, setGuia] = useState<string | null>(null);
   const [base64, setBase64] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saldoDisponible, setSaldoDisponible] = useState<number | null>(null);
 
-  const handleGenerarGuia = async () => {
-    // ✅ Validación previa
-    if (!formData.remitente || !formData.destinatario || !formData.medidas) {
-      toast.error("Faltan datos obligatorios para generar la guía.");
-      return;
+  // ==========================
+  // 🔍 Validar saldo disponible
+  // ==========================
+  const validarSaldo = async () => {
+    try {
+      const { data } = await axios.get(
+        `/api/servientrega/saldo/validar/${formData.punto_atencion_id}`
+      );
+      setSaldoDisponible(Number(data?.disponible) || 0);
+
+      if (data?.estado !== "OK") {
+        toast.error("Saldo insuficiente para generar la guía.");
+        return false;
+      }
+      return true;
+    } catch {
+      toast.error("No se pudo validar el saldo.");
+      return false;
     }
+  };
 
+  const abrirModalConfirmacion = async () => {
+    const valido = await validarSaldo();
+    if (valido) setConfirmOpen(true);
+  };
+
+  // ==========================
+  // 📄 Generar guía
+  // ==========================
+  const handleGenerarGuia = async () => {
     setLoading(true);
     setError(null);
-
     try {
-      // ✅ Construcción del payload según API Servientrega
       const payload: FormDataGuia = {
         ...formData,
         contenido: formData.contenido || formData.nombre_producto,
@@ -144,9 +177,13 @@ export default function PasoConfirmarEnvio({
       toast.error("Error al generar la guía. Intenta nuevamente.");
     } finally {
       setLoading(false);
+      setConfirmOpen(false);
     }
   };
 
+  // ==========================
+  // 📄 Ver PDF de la guía
+  // ==========================
   const handleVerPDF = () => {
     if (base64) {
       const pdfURL = `data:application/pdf;base64,${base64}`;
@@ -154,6 +191,30 @@ export default function PasoConfirmarEnvio({
     }
   };
 
+  // ==========================
+  // 🔔 Solicitar saldo
+  // ==========================
+  const handleSolicitarSaldo = async () => {
+    try {
+      await axios.post("/api/servientrega/solicitar-saldo", {
+        punto_atencion_id: formData.punto_atencion_id,
+        monto_requerido: formData.resumen_costos.total,
+      });
+      toast.success("Solicitud de saldo enviada al administrador.");
+    } catch (err) {
+      console.error("Error al solicitar saldo:", err);
+      toast.error("No se pudo enviar la solicitud de saldo.");
+    }
+  };
+
+  const saldoRestante =
+    saldoDisponible !== null
+      ? saldoDisponible - formData.resumen_costos.total
+      : null;
+
+  // ==========================
+  // 🎨 Render
+  // ==========================
   return (
     <Card className="w-full max-w-2xl mx-auto mt-6 shadow-lg border rounded-xl">
       <CardHeader>
@@ -163,24 +224,111 @@ export default function PasoConfirmarEnvio({
         {!guia ? (
           <>
             <p className="text-gray-700">
-              ¿Deseas generar la guía con la información ingresada? Esta acción
-              descontará saldo del punto de atención.
+              Revisa el resumen antes de confirmar. Esta acción descontará saldo
+              del punto de atención.
             </p>
+
+            <div className="border rounded-md p-3 bg-gray-50 text-sm space-y-2">
+              <p>
+                <strong>Producto:</strong> {formData.nombre_producto}
+              </p>
+              <p>
+                <strong>Valor declarado:</strong> $
+                {formData.medidas.valor_declarado.toFixed(2)}
+              </p>
+              <p>
+                <strong>Flete estimado:</strong> $
+                {formData.resumen_costos.flete.toFixed(2)}
+              </p>
+              <p>
+                <strong>Total estimado:</strong>{" "}
+                <span className="text-green-700 font-semibold">
+                  ${formData.resumen_costos.total.toFixed(2)}
+                </span>
+              </p>
+            </div>
+
             {error && <p className="text-red-500 text-sm">{error}</p>}
+
             <Button
               className="w-full bg-green-600 text-white hover:bg-green-700"
-              onClick={handleGenerarGuia}
               disabled={loading}
+              onClick={abrirModalConfirmacion}
             >
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Generando guía...
+                  Validando saldo...
                 </>
               ) : (
-                "Generar guía"
+                "Confirmar y generar guía"
               )}
             </Button>
+
+            {/* Modal de confirmación */}
+            <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Confirmar generación de la guía
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <div className="space-y-3 mt-3 text-sm">
+                      <p>
+                        <strong>Saldo disponible:</strong>{" "}
+                        <span className="text-blue-600">
+                          ${saldoDisponible?.toFixed(2)}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>Saldo requerido:</strong>{" "}
+                        <span className="text-green-600">
+                          ${formData.resumen_costos.total.toFixed(2)}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>Saldo restante:</strong>{" "}
+                        <span
+                          className={`${
+                            saldoRestante !== null && saldoRestante < 0
+                              ? "text-red-600"
+                              : "text-gray-800"
+                          } font-semibold`}
+                        >
+                          $
+                          {saldoRestante !== null
+                            ? saldoRestante.toFixed(2)
+                            : "-"}
+                        </span>
+                      </p>
+                      {saldoRestante !== null && saldoRestante < 0 && (
+                        <div className="mt-2 text-red-600 text-sm">
+                          ❌ No puedes generar esta guía, saldo insuficiente.
+                        </div>
+                      )}
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  {saldoRestante !== null && saldoRestante < 0 ? (
+                    <Button
+                      onClick={handleSolicitarSaldo}
+                      className="bg-yellow-500 hover:bg-yellow-600 text-white w-full"
+                    >
+                      Solicitar saldo al administrador
+                    </Button>
+                  ) : (
+                    <AlertDialogAction
+                      onClick={handleGenerarGuia}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Sí, generar guía
+                    </AlertDialogAction>
+                  )}
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </>
         ) : (
           <>
@@ -190,6 +338,7 @@ export default function PasoConfirmarEnvio({
             <div className="flex flex-col gap-3 mt-4">
               <Button
                 onClick={handleVerPDF}
+                disabled={!base64}
                 className="w-full bg-blue-600 text-white hover:bg-blue-700"
               >
                 Ver PDF de la guía

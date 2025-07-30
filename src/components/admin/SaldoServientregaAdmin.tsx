@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { toast } from "sonner";
 
 const UMBRAL_SALDO_BAJO = 5;
 
@@ -36,6 +37,14 @@ interface HistorialAsignacion {
   creado_en: string;
 }
 
+interface SolicitudSaldo {
+  id: string;
+  punto_atencion_id: string;
+  punto_atencion_nombre: string;
+  monto_requerido: number;
+  estado: string;
+  creado_en: string;
+}
 
 interface PuntosResponse {
   success: boolean;
@@ -53,9 +62,11 @@ export default function SaldoServientregaAdmin() {
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [historial, setHistorial] = useState<HistorialAsignacion[]>([]);
+  const [solicitudes, setSolicitudes] = useState<SolicitudSaldo[]>([]);
   const [filtroFecha, setFiltroFecha] = useState<string>("");
   const [filtroPunto, setFiltroPunto] = useState<string>("");
 
+  // ✅ Obtener puntos y saldos
   const obtenerPuntosYSaldo = async () => {
     try {
       const { data } = await axios.get<PuntosResponse>(
@@ -86,40 +97,79 @@ export default function SaldoServientregaAdmin() {
     }
   };
 
+  // ✅ Obtener historial de asignaciones
   const obtenerHistorial = async () => {
     try {
       const { data } = await axios.get("/api/servientrega/saldo/historial");
-      if (Array.isArray(data)) {
-        setHistorial(data);
-      } else {
-        setHistorial([]);
-      }
+      if (Array.isArray(data)) setHistorial(data);
     } catch (error) {
       console.error("❌ Error al obtener historial:", error);
-      setHistorial([]);
     }
   };
 
+  // ✅ Obtener solicitudes de saldo
+  const obtenerSolicitudes = async () => {
+    try {
+      const { data } = await axios.get(
+        "/api/servientrega/solicitar-saldo/listar"
+      );
+      setSolicitudes(data || []);
+    } catch (error) {
+      console.error("❌ Error al obtener solicitudes de saldo:", error);
+    }
+  };
+
+  // ✅ Aprobar/Rechazar solicitud
+  const responderSolicitud = async (
+    id: string,
+    estado: "APROBADA" | "RECHAZADA",
+    monto: number,
+    punto_id: string
+  ) => {
+    try {
+      await axios.post("/api/servientrega/solicitar-saldo/responder", {
+        solicitud_id: id,
+        estado,
+        aprobado_por: user?.nombre || "admin",
+      });
+
+      if (estado === "APROBADA") {
+        // Actualiza el saldo automáticamente
+        await axios.post("/api/servientrega/saldo", {
+          monto_total: monto,
+          creado_por: user?.nombre || "admin",
+          punto_atencion_id: punto_id,
+        });
+        toast.success("✅ Solicitud aprobada y saldo actualizado.");
+        obtenerPuntosYSaldo();
+        obtenerHistorial();
+      } else {
+        toast.success("❌ Solicitud rechazada correctamente.");
+      }
+
+      obtenerSolicitudes();
+    } catch {
+      toast.error("❌ Error al responder la solicitud.");
+    }
+  };
+
+  // ✅ Asignar saldo (admin)
   const asignarSaldo = async () => {
     const monto = parseFloat(nuevoMonto);
     if (isNaN(monto) || monto <= 0 || !puntoSeleccionado) return;
-
     setLoading(true);
     setMensaje(null);
-
     try {
       await axios.post("/api/servientrega/saldo", {
         monto_total: monto,
         creado_por: user?.nombre ?? "admin",
         punto_atencion_id: puntoSeleccionado,
       });
-
       setMensaje("✅ Saldo asignado correctamente.");
       setNuevoMonto("");
       obtenerPuntosYSaldo();
       obtenerHistorial();
-    } catch (error) {
-      console.error("❌ Error al asignar saldo:", error);
+    } catch {
       setMensaje("❌ Error al asignar saldo.");
     } finally {
       setLoading(false);
@@ -129,26 +179,29 @@ export default function SaldoServientregaAdmin() {
   useEffect(() => {
     obtenerPuntosYSaldo();
     obtenerHistorial();
+    if (esAdmin) obtenerSolicitudes();
   }, []);
+
+  // ✅ Filtrar historial
+  const historialFiltrado = historial.filter((h) => {
+    const coincidePunto =
+      !filtroPunto ||
+      puntos.find((p) => p.id === filtroPunto)?.nombre ===
+        h.punto_atencion_nombre;
+
+    const coincideFecha =
+      !filtroFecha ||
+      new Date(h.creado_en).toISOString().slice(0, 10) === filtroFecha;
+
+    return coincidePunto && coincideFecha;
+  });
 
   const saldoActual = Number(saldos[puntoSeleccionado] ?? 0);
   const saldoBajo = saldoActual < UMBRAL_SALDO_BAJO;
 
-const historialFiltrado = historial.filter((h) => {
-  const coincidePunto =
-    !filtroPunto ||
-    puntos.find((p) => p.id === filtroPunto)?.nombre ===
-      h.punto_atencion_nombre;
-
-  const coincideFecha =
-    !filtroFecha ||
-    new Date(h.creado_en).toISOString().slice(0, 10) === filtroFecha;
-
-  return coincidePunto && coincideFecha;
-});
-
   return (
     <div className="max-w-6xl mx-auto mt-10 space-y-6">
+      {/* Panel principal */}
       <Card className="p-4">
         <CardHeader>
           <CardTitle className="text-xl">
@@ -156,11 +209,12 @@ const historialFiltrado = historial.filter((h) => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Selección punto */}
           <div className="space-y-2">
             <Label>Punto de atención</Label>
             <Select
               value={puntoSeleccionado}
-              onValueChange={(val) => setPuntoSeleccionado(val)}
+              onValueChange={setPuntoSeleccionado}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Seleccionar punto" />
@@ -175,23 +229,18 @@ const historialFiltrado = historial.filter((h) => {
             </Select>
           </div>
 
+          {/* Saldo */}
           {puntoSeleccionado && (
-            <div className="text-sm font-semibold">
-              <p
-                className={`text-base ${
-                  saldoBajo ? "text-red-600" : "text-green-700"
-                }`}
-              >
-                Saldo disponible: ${saldoActual.toFixed(2)}
-              </p>
-              {saldoBajo && (
-                <p className="text-red-500 text-sm mt-1">
-                  ⚠️ Saldo bajo, considera recargar pronto.
-                </p>
-              )}
-            </div>
+            <p
+              className={`text-base font-semibold ${
+                saldoBajo ? "text-red-600" : "text-green-700"
+              }`}
+            >
+              Saldo disponible: ${saldoActual.toFixed(2)}
+            </p>
           )}
 
+          {/* Asignación saldo */}
           {esAdmin && (
             <>
               <div className="space-y-2">
@@ -204,20 +253,16 @@ const historialFiltrado = historial.filter((h) => {
                   min={0}
                 />
               </div>
-
               <Button
                 onClick={asignarSaldo}
-                disabled={loading || !puntoSeleccionado || !nuevoMonto.trim()}
+                disabled={loading || !nuevoMonto.trim()}
               >
                 {loading ? "Asignando..." : "Agregar saldo"}
               </Button>
-
               {mensaje && (
                 <p
                   className={`text-sm mt-2 ${
-                    mensaje.includes("correctamente")
-                      ? "text-green-600"
-                      : "text-red-600"
+                    mensaje.includes("✅") ? "text-green-600" : "text-red-600"
                   }`}
                 >
                   {mensaje}
@@ -228,82 +273,85 @@ const historialFiltrado = historial.filter((h) => {
         </CardContent>
       </Card>
 
-      <Card className="p-4">
-        <CardHeader>
-          <CardTitle className="text-lg">Saldos por punto</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="space-y-2">
-            {puntos.map((p) => {
-              const saldo = Number(saldos[p.id] ?? 0);
-              const isLow = saldo < UMBRAL_SALDO_BAJO;
-              return (
-                <li
-                  key={p.id}
-                  className={`text-sm font-medium flex justify-between items-center px-2 py-1 rounded-md border ${
-                    isLow
-                      ? "bg-red-50 text-red-700"
-                      : "bg-green-50 text-green-700"
-                  }`}
-                >
-                  <span>
-                    {p.nombre} - {p.ciudad}, {p.provincia}
-                  </span>
-                  <span className="font-semibold">${saldo.toFixed(2)}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </CardContent>
-      </Card>
+      {/* Solicitudes de saldo */}
+      {esAdmin && (
+        <Card className="p-4">
+          <CardHeader>
+            <CardTitle className="text-lg">Solicitudes de saldo</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {solicitudes.length === 0 ? (
+              <p className="text-sm text-gray-500 italic">
+                No hay solicitudes pendientes.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {solicitudes.map((sol) => (
+                  <li
+                    key={sol.id}
+                    className="border rounded p-3 flex justify-between items-center bg-gray-50"
+                  >
+                    <div>
+                      <p className="font-semibold">
+                        {sol.punto_atencion_nombre}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        Monto solicitado: ${sol.monto_requerido.toFixed(2)} -
+                        Estado:{" "}
+                        <span className="font-medium">{sol.estado}</span>
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Fecha: {new Date(sol.creado_en).toLocaleString()}
+                      </p>
+                    </div>
+                    {sol.estado === "PENDIENTE" && (
+                      <div className="flex gap-2">
+                        <Button
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() =>
+                            responderSolicitud(
+                              sol.id,
+                              "APROBADA",
+                              sol.monto_requerido,
+                              sol.punto_atencion_id
+                            )
+                          }
+                        >
+                          Aprobar
+                        </Button>
+                        <Button
+                          className="bg-red-600 hover:bg-red-700 text-white"
+                          onClick={() =>
+                            responderSolicitud(
+                              sol.id,
+                              "RECHAZADA",
+                              sol.monto_requerido,
+                              sol.punto_atencion_id
+                            )
+                          }
+                        >
+                          Rechazar
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
+      {/* Historial de asignaciones */}
       {esAdmin && (
         <Card className="p-4">
           <CardHeader>
             <CardTitle className="text-lg">Historial de asignaciones</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-4">
-              <Input
-                type="date"
-                value={filtroFecha}
-                onChange={(e) => setFiltroFecha(e.target.value)}
-                className="max-w-xs"
-              />
-              <Select
-                value={filtroPunto || "__ALL__"}
-                onValueChange={(val) =>
-                  setFiltroPunto(val === "__ALL__" ? "" : val)
-                }
-              >
-                <SelectTrigger className="max-w-xs">
-                  <SelectValue placeholder="Filtrar por punto" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__ALL__">Todos los puntos</SelectItem>
-                  {puntos.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.nombre}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {(filtroFecha || filtroPunto) && (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setFiltroFecha("");
-                    setFiltroPunto("");
-                  }}
-                >
-                  Mostrar todo
-                </Button>
-              )}
-            </div>
-
+          <CardContent>
             {historialFiltrado.length === 0 ? (
-              <p className="text-sm text-gray-500 italic mt-4">
-                No hay asignaciones registradas para los filtros seleccionados.
+              <p className="text-sm text-gray-500 italic">
+                No hay asignaciones registradas.
               </p>
             ) : (
               <ul className="space-y-2 max-h-[400px] overflow-auto pr-2">
