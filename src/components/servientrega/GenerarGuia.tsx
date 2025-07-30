@@ -55,6 +55,9 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
   const [saldo, setSaldo] = useState<number | null>(null);
   const [cargandoSaldo, setCargandoSaldo] = useState(false);
 
+  // ========================
+  // 💰 Obtener saldo actual
+  // ========================
   const obtenerSaldo = async () => {
     try {
       setCargandoSaldo(true);
@@ -64,6 +67,11 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
       setSaldo(res.data.disponible ?? 0);
     } catch (error) {
       console.error("Error al obtener saldo:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo cargar el saldo actual.",
+        variant: "destructive",
+      });
     } finally {
       setCargandoSaldo(false);
     }
@@ -73,8 +81,11 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
     obtenerSaldo();
   }, [selectedPoint.id]);
 
-  const puedeGenerarGuia = () => saldo !== null && saldo > 0;
+  const puedeGenerarGuia = () => typeof saldo === "number" && saldo > 0;
 
+  // ========================
+  // 📦 Flujo de pasos
+  // ========================
   const handleProductoNext = (producto: {
     nombre: string;
     esDocumento: boolean;
@@ -112,16 +123,16 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
   };
 
   const handleResumenNext = () => {
-    if (puedeGenerarGuia()) {
-      setStep("confirmar-envio");
-    } else {
+    if (!puedeGenerarGuia()) {
       toast({
         title: "Saldo insuficiente",
         description:
           "No se puede generar la guía. El saldo del punto de atención es 0 o negativo.",
         variant: "destructive",
       });
+      return;
     }
+    setStep("confirmar-envio");
   };
 
   const handleReset = () => {
@@ -137,8 +148,12 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
     obtenerSaldo();
   };
 
+  // ========================
+  // 🎨 Renderizado
+  // ========================
   return (
     <div className="w-full max-w-3xl mx-auto p-4 space-y-4">
+      {/* Saldo */}
       <div className="text-right">
         <span
           className={`text-sm font-medium ${
@@ -155,6 +170,7 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
         </span>
       </div>
 
+      {/* Pasos */}
       {step === "producto" && <PasoProducto onNext={handleProductoNext} />}
       {step === "remitente" && (
         <PasoRemitente
@@ -170,6 +186,9 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
         <PasoEmpaqueYMedidas
           nombreProducto={formData.nombre_producto}
           esDocumento={!formData.requiere_empaque}
+          paisDestino={formData.destinatario?.pais || "ECUADOR"}
+          ciudadDestino={formData.destinatario?.ciudad || ""}
+          provinciaDestino={formData.destinatario?.provincia || ""}
           onNext={handleEmpaqueYMedidasNext}
         />
       )}
@@ -177,7 +196,7 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
         <PasoResumen
           formData={formData}
           onConfirm={handleResumenNext}
-          onBack={handleReset}
+          onBack={() => setStep("empaque-medidas")}
         />
       )}
       {step === "confirmar-envio" && (

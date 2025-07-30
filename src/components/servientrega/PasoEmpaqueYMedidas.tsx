@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -62,6 +61,9 @@ export default function PasoEmpaqueYMedidas({
   const [loadingEmpaques, setLoadingEmpaques] = useState(true);
   const [flete, setFlete] = useState<number>(0);
   const [loadingFlete, setLoadingFlete] = useState(false);
+  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(
+    null
+  );
 
   const [medidas, setMedidas] = useState({
     alto: "",
@@ -107,7 +109,7 @@ export default function PasoEmpaqueYMedidas({
   useEffect(() => {
     if (esInternacional && empaques.length > 0) {
       toast.info(
-        "En envíos internacionales debes seleccionar un empaque. Se aplicará el empaque por defecto si no eliges uno."
+        "En envíos internacionales se aplicará un empaque por defecto si no eliges uno."
       );
       const defaultEmpaque =
         empaques.find((emp) => emp.articulo.toUpperCase().includes("SOBRE")) ||
@@ -136,52 +138,45 @@ export default function PasoEmpaqueYMedidas({
     }));
   }, [empaque.cantidad, empaque.costo_unitario]);
 
-  // 🚚 Calcular flete automáticamente
-  useEffect(() => {
-    const calcularFlete = async () => {
-      if (!medidas.peso || !ciudadDestino || !provinciaDestino) return;
-      setLoadingFlete(true);
+  // 🚚 Debounced cálculo de flete
+  const calcularFlete = useCallback(() => {
+    if (!medidas.peso || !ciudadDestino || !provinciaDestino) return;
+    setLoadingFlete(true);
 
-      try {
-        const payload = {
-          tipo: esInternacional
-            ? "obtener_tarifa_internacional"
-            : "obtener_tarifa_nacional",
-          pais_ori: "ECUADOR",
-          ciu_ori: "QUITO",
-          provincia_ori: "PICHINCHA",
-          pais_des: paisDestino,
-          ciu_des: ciudadDestino,
-          provincia_des: provinciaDestino,
-          valor_seguro: medidas.valor_declarado || "0",
-          valor_declarado: medidas.valor_declarado || "0",
-          peso: medidas.peso,
-          alto: medidas.alto || "0",
-          ancho: medidas.ancho || "0",
-          largo: medidas.largo || "0",
-          recoleccion: medidas.recoleccion ? "SI" : "NO",
-          nombre_producto: nombreProducto || "",
-          empaque: requiereEmpaque ? empaque.tipo_empaque : "",
-        };
-
-        const res = await axios.post("/api/servientrega/tarifa", payload);
+    axios
+      .post("/api/servientrega/tarifa", {
+        tipo: esInternacional
+          ? "obtener_tarifa_internacional"
+          : "obtener_tarifa_nacional",
+        pais_ori: "ECUADOR",
+        ciu_ori: "QUITO",
+        provincia_ori: "PICHINCHA",
+        pais_des: paisDestino,
+        ciu_des: ciudadDestino,
+        provincia_des: provinciaDestino,
+        valor_seguro: medidas.valor_declarado || "0",
+        valor_declarado: medidas.valor_declarado || "0",
+        peso: medidas.peso,
+        alto: medidas.alto || "0",
+        ancho: medidas.ancho || "0",
+        largo: medidas.largo || "0",
+        recoleccion: medidas.recoleccion ? "SI" : "NO",
+        nombre_producto: nombreProducto || "",
+        empaque: requiereEmpaque ? empaque.tipo_empaque : "",
+      })
+      .then((res) => {
         if (Array.isArray(res.data) && res.data[0]?.flete !== undefined) {
           const fleteValor = parseFloat(res.data[0].flete) || 0;
           setFlete(fleteValor);
-
           if (fleteValor <= 0) {
-            toast.error("No se pudo calcular el flete. Verifica los datos.");
+            toast.warning("El flete calculado es 0. Revisa los datos.");
           }
         } else {
-          toast.error("Error al calcular el flete. Intenta nuevamente.");
+          toast.error("Error al calcular el flete.");
         }
-      } catch {
-        toast.error("Error al calcular el flete.");
-      } finally {
-        setLoadingFlete(false);
-      }
-    };
-    calcularFlete();
+      })
+      .catch(() => toast.error("Error al calcular el flete."))
+      .finally(() => setLoadingFlete(false));
   }, [
     medidas.peso,
     medidas.alto,
@@ -194,6 +189,22 @@ export default function PasoEmpaqueYMedidas({
     paisDestino,
     empaque.tipo_empaque,
     requiereEmpaque,
+  ]);
+
+  useEffect(() => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    const timer = setTimeout(() => calcularFlete(), 600); // ⏱️ Debounce 600ms
+    setDebounceTimer(timer);
+  }, [
+    medidas.peso,
+    medidas.alto,
+    medidas.ancho,
+    medidas.largo,
+    medidas.valor_declarado,
+    medidas.recoleccion,
+    empaque.tipo_empaque,
+    requiereEmpaque,
+    calcularFlete,
   ]);
 
   // ✏️ Manejo de inputs
@@ -227,10 +238,6 @@ export default function PasoEmpaqueYMedidas({
     setEmpaque((prev) => ({ ...prev, cantidad: value }));
   };
 
-  const toggleRecoleccion = () => {
-    setMedidas((prev) => ({ ...prev, recoleccion: !prev.recoleccion }));
-  };
-
   const calcularResumenCostos = () => {
     const valorSeguro = parseFloat(medidas.valor_declarado || "0");
     const costoEmpaque = requiereEmpaque ? empaque.costo_total : 0;
@@ -243,13 +250,7 @@ export default function PasoEmpaqueYMedidas({
   };
 
   const handleContinue = () => {
-    if (flete <= 0) {
-      toast.error("No puedes continuar sin un flete válido.");
-      return;
-    }
-
     const { alto, ancho, largo, peso, valor_declarado, recoleccion } = medidas;
-    const resumenCostos = calcularResumenCostos();
 
     if (!valor_declarado || parseFloat(valor_declarado) <= 0) {
       toast.error("Debes ingresar un valor declarado válido.");
@@ -260,6 +261,7 @@ export default function PasoEmpaqueYMedidas({
       return;
     }
 
+    const resumenCostos = calcularResumenCostos();
     const payload = {
       medidas: {
         alto: esDocumento ? 0 : parseFloat(alto),
@@ -282,8 +284,15 @@ export default function PasoEmpaqueYMedidas({
       resumen_costos: resumenCostos,
     };
 
+    if (flete <= 0) {
+      toast.warning(
+        "Continuarás sin un flete válido. Verifica antes de confirmar."
+      );
+    }
+
     setLoading(true);
     onNext(payload);
+    setLoading(false);
   };
 
   const resumenCostos = calcularResumenCostos();
@@ -342,6 +351,19 @@ export default function PasoEmpaqueYMedidas({
             </span>
           </div>
         )}
+
+        {/* Recolección */}
+        <div className="flex items-center justify-between mt-4 p-3 border rounded-lg">
+          <Label className="font-medium">
+            ¿Deseas que recojan el paquete en tu dirección?
+          </Label>
+          <Switch
+            checked={medidas.recoleccion}
+            onCheckedChange={(checked) =>
+              setMedidas((prev) => ({ ...prev, recoleccion: checked }))
+            }
+          />
+        </div>
 
         {/* Empaque */}
         <div className="flex items-center justify-between mt-4">
@@ -445,7 +467,7 @@ export default function PasoEmpaqueYMedidas({
         <Button
           className="w-full mt-5"
           onClick={handleContinue}
-          disabled={loading || loadingFlete || flete <= 0}
+          disabled={loading || loadingFlete}
         >
           {loading ? (
             <>

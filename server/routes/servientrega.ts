@@ -27,17 +27,14 @@ interface AnularGuiaResponse {
 }
 
 async function callServientregaAPI(payload: any) {
-  console.log("📤 [Servientrega] Request:", payload);
   try {
     const { data } = await axios.post(BASE_URL, payload, {
       headers: { "Content-Type": "application/json" },
       httpsAgent,
       timeout: 20000,
     });
-    console.log("📥 [Servientrega] Response:", data);
     return data;
   } catch (error: any) {
-    console.error("❌ Error Servientrega:", error.message);
     throw new Error("Error al conectar con Servientrega");
   }
 }
@@ -78,7 +75,6 @@ router.post("/ciudades", async (req, res) => {
 router.post("/codigos-postales", async (req, res) => {
   try {
     const { codpais } = req.body;
-
     const data = await callServientregaAPI({
       tipo: "obtener_codigos_postales",
       codpais,
@@ -104,10 +100,8 @@ router.post("/codigos-postales", async (req, res) => {
         })),
       });
     }
-
     return res.json({ fetch: [] });
-  } catch (err: any) {
-    console.warn("⚠️ No se pudieron obtener códigos postales:", err.message);
+  } catch {
     return res.json({ fetch: [] });
   }
 });
@@ -220,6 +214,13 @@ router.get("/remitente/buscar/:query", async (req, res) => {
 router.post("/remitente/guardar", async (req, res) => {
   try {
     const data = req.body;
+
+    if (!data.identificacion) {
+      return res
+        .status(400)
+        .json({ error: "El campo 'identificacion' es obligatorio" });
+    }
+
     const existente = await prisma.servientregaRemitente.findFirst({
       where: { cedula: data.identificacion },
     });
@@ -232,7 +233,7 @@ router.post("/remitente/guardar", async (req, res) => {
         nombre: data.nombre,
         direccion: data.direccion,
         telefono: data.telefono,
-        email: data.email,
+        email: data.email || null,
         ciudad: data.ciudad,
         provincia: data.provincia,
       },
@@ -248,16 +249,26 @@ router.put("/remitente/actualizar/:identificacion", async (req, res) => {
   try {
     const { identificacion } = req.params;
     const data = req.body;
+
     const existente = await prisma.servientregaRemitente.findFirst({
       where: { cedula: identificacion },
     });
 
-    if (!existente)
+    if (!existente) {
       return res.status(404).json({ error: "Remitente no encontrado" });
+    }
 
     const actualizado = await prisma.servientregaRemitente.update({
       where: { id: existente.id },
-      data,
+      data: {
+        cedula: data.identificacion || existente.cedula,
+        nombre: data.nombre,
+        direccion: data.direccion,
+        telefono: data.telefono,
+        email: data.email || null,
+        ciudad: data.ciudad,
+        provincia: data.provincia,
+      },
     });
 
     res.json({ success: true, remitente: actualizado });
@@ -315,28 +326,6 @@ router.post("/destinatario/guardar", async (req, res) => {
   }
 });
 
-router.put("/destinatario/actualizar/:identificacion", async (req, res) => {
-  try {
-    const { identificacion } = req.params;
-    const data = req.body;
-    const existente = await prisma.servientregaDestinatario.findFirst({
-      where: { cedula: identificacion },
-    });
-
-    if (!existente)
-      return res.status(404).json({ error: "Destinatario no encontrado" });
-
-    const actualizado = await prisma.servientregaDestinatario.update({
-      where: { id: existente.id },
-      data,
-    });
-
-    res.json({ success: true, destinatario: actualizado });
-  } catch {
-    res.status(500).json({ error: "Error actualizando destinatario" });
-  }
-});
-
 // =============================
 // 📄 Generar Guía
 // =============================
@@ -379,9 +368,7 @@ router.post("/generar-guia", async (req, res) => {
         if (saldo) {
           await prisma.servientregaSaldo.update({
             where: { punto_atencion_id },
-            data: {
-              monto_usado: saldo.monto_usado.plus(valor_declarado ?? 0),
-            },
+            data: { monto_usado: saldo.monto_usado.plus(valor_declarado ?? 0) },
           });
         }
       }

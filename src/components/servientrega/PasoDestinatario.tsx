@@ -68,14 +68,20 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
   const [form, setForm] = useState({
     nombre: "",
-    direccion: "",
     telefono: "",
     email: "",
     identificacion: "",
     codpais: 0,
     ciudad: "",
     provincia: "",
-    codigo_postal: "", // ✅ Nuevo campo
+    codigo_postal: "",
+  });
+
+  const [extraDireccion, setExtraDireccion] = useState({
+    callePrincipal: "",
+    numeracion: "",
+    calleSecundaria: "",
+    referencia: "",
   });
 
   const esInternacional = form.codpais !== 63; // Ecuador = 63
@@ -88,10 +94,9 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       .catch((err) => console.error("Error al obtener países:", err));
   }, []);
 
-  // 🔍 Debounce para búsqueda de cédula
+  // 🔍 Debounce búsqueda destinatario
   useEffect(() => {
     if (debounceTimer) clearTimeout(debounceTimer);
-
     if (cedulaQuery.length >= 3) {
       const timer = setTimeout(() => {
         setBuscandoCedula(true);
@@ -107,18 +112,31 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
   }, [cedulaQuery]);
 
+  // ✅ Seleccionar destinatario y descomponer dirección
   const seleccionarDestinatario = (dest: Destinatario) => {
     setForm((prev) => ({
       ...prev,
       nombre: dest.nombre,
-      direccion: dest.direccion,
       telefono: dest.telefono,
-      email: dest.email,
+      email: dest.email || "",
       identificacion: dest.identificacion,
       codpais: dest.codpais,
       ciudad: dest.ciudad,
       provincia: dest.provincia,
     }));
+
+    // Descomponer dirección en campos
+    if (dest.direccion) {
+      const partes = dest.direccion.split(",").map((p) => p.trim());
+      setExtraDireccion({
+        callePrincipal: partes[0]?.split("#")[0]?.trim() || "",
+        numeracion: partes[0]?.includes("#")
+          ? partes[0].split("#")[1]?.trim() || ""
+          : "",
+        calleSecundaria: partes[1]?.replace(/^y\s*/i, "").trim() || "",
+        referencia: partes[2]?.replace(/^Ref:\s*/i, "").trim() || "",
+      });
+    }
     setCedulaResultados([]);
   };
 
@@ -131,7 +149,6 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       provincia: "",
       codigo_postal: "",
     }));
-
     axios
       .post("/api/servientrega/ciudades", { codpais })
       .then((res) => {
@@ -154,9 +171,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     setForm((prev) => ({ ...prev, ciudad, provincia }));
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value });
-  };
+
+  const handleExtraDireccionChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setExtraDireccion((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleCheckboxChange = async (checked: boolean) => {
     setMostrarAgencias(checked);
@@ -178,9 +197,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
   };
 
-  // ✅ Validar código postal internacional con Zippopotam
   const validarCodigoPostal = async (): Promise<boolean> => {
-    if (!esInternacional) return true; // No aplica en Ecuador
+    if (!esInternacional) return true;
     if (!form.codigo_postal) {
       toast.error(
         "El código postal es obligatorio para envíos internacionales."
@@ -207,22 +225,14 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   };
 
   const handleContinue = async () => {
-    if (
-      !form.nombre ||
-      !form.direccion ||
-      !form.telefono ||
-      !form.codpais ||
-      !form.ciudad
-    ) {
-      toast.error("Por favor, completa todos los campos obligatorios.");
+    if (!form.nombre || !form.telefono || !form.codpais || !form.ciudad) {
+      toast.error("Por favor completa todos los campos obligatorios.");
       return;
     }
-
     if (!/^(09\d{8}|0[2-7]\d{7,8})$/.test(form.telefono)) {
       toast.error("Número de teléfono inválido.");
       return;
     }
-
     if (
       form.codpais === 63 &&
       form.identificacion &&
@@ -231,17 +241,28 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       toast.error("Cédula inválida.");
       return;
     }
-
     if (!(await validarCodigoPostal())) return;
+
+    // ✅ Construir dirección final antes de enviar
+    const direccionFinal = [
+      extraDireccion.callePrincipal,
+      extraDireccion.numeracion && `#${extraDireccion.numeracion}`,
+      extraDireccion.calleSecundaria && `y ${extraDireccion.calleSecundaria}`,
+      extraDireccion.referencia && `Ref: ${extraDireccion.referencia}`,
+    ]
+      .filter(Boolean)
+      .join(", ");
 
     const destinatarioFinal = {
       ...form,
+      direccion: direccionFinal, // 🔥 Solo un campo en la BD
       entrega_en_oficina: mostrarAgencias,
       agencia_seleccionada: mostrarAgencias ? agenciaSeleccionada : null,
     };
 
     setLoading(true);
     onNext(destinatarioFinal);
+    setLoading(false);
   };
 
   return (
@@ -283,12 +304,33 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           value={form.nombre}
           onChange={handleChange}
         />
+
+        {/* Dirección desglosada */}
         <Input
-          name="direccion"
-          placeholder="Dirección"
-          value={form.direccion}
-          onChange={handleChange}
+          name="callePrincipal"
+          placeholder="Calle principal"
+          value={extraDireccion.callePrincipal}
+          onChange={handleExtraDireccionChange}
         />
+        <Input
+          name="numeracion"
+          placeholder="Numeración"
+          value={extraDireccion.numeracion}
+          onChange={handleExtraDireccionChange}
+        />
+        <Input
+          name="calleSecundaria"
+          placeholder="Calle secundaria"
+          value={extraDireccion.calleSecundaria}
+          onChange={handleExtraDireccionChange}
+        />
+        <Input
+          name="referencia"
+          placeholder="Referencia"
+          value={extraDireccion.referencia}
+          onChange={handleExtraDireccionChange}
+        />
+
         <Input
           name="telefono"
           placeholder="Teléfono"
@@ -339,7 +381,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         {/* Código postal internacional */}
         {esInternacional && (
           <div>
-            <Label>Código Postal (Obligatorio en envíos internacionales)</Label>
+            <Label>Código Postal (Obligatorio en internacionales)</Label>
             <Input
               name="codigo_postal"
               placeholder="Ej: 110111"

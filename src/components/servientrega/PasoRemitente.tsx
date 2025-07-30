@@ -29,7 +29,6 @@ interface RemitenteFormData {
 }
 
 export default function PasoRemitente({
-  user,
   selectedPoint,
   onNext,
 }: PasoRemitenteProps) {
@@ -41,7 +40,7 @@ export default function PasoRemitente({
     email: "",
     ciudad: "",
     provincia: "",
-    codpais: 63, // Ecuador implícito
+    codpais: 63,
     pais_iso: "EC",
     phone_code: "593",
   });
@@ -54,22 +53,15 @@ export default function PasoRemitente({
   });
 
   const [loading, setLoading] = useState(false);
-  const [validatingCity, setValidatingCity] = useState(false);
   const [ciudadValida, setCiudadValida] = useState(false);
 
   const [cedulaQuery, setCedulaQuery] = useState("");
-  const [cedulaResultados, setCedulaResultados] = useState<RemitenteFormData[]>(
-    []
-  );
+  const [cedulaResultados, setCedulaResultados] = useState<any[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(
-    null
-  );
-
   const [remitenteExistente, setRemitenteExistente] =
     useState<RemitenteFormData | null>(null);
 
-  // ✅ Autocompletar ciudad/provincia según punto de atención
+  // ✅ Autocompletar ciudad/provincia desde el punto seleccionado
   useEffect(() => {
     if (selectedPoint?.ciudad && selectedPoint?.provincia) {
       setFormData((prev) => ({
@@ -83,93 +75,97 @@ export default function PasoRemitente({
 
   // 🔍 Búsqueda predictiva de remitente
   useEffect(() => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-
     if (cedulaQuery.length >= 3) {
-      const timer = setTimeout(() => {
-        setBuscandoCedula(true);
-        axios
-          .get(`/api/servientrega/remitente/buscar/${cedulaQuery}`)
-          .then((res) => setCedulaResultados(res.data.remitentes || []))
-          .catch(() => setCedulaResultados([]))
-          .finally(() => setBuscandoCedula(false));
-      }, 400);
-      setDebounceTimer(timer);
+      setBuscandoCedula(true);
+      axios
+        .get(`/api/servientrega/remitente/buscar/${cedulaQuery}`)
+        .then((res) => setCedulaResultados(res.data.remitentes || []))
+        .catch(() => setCedulaResultados([]))
+        .finally(() => setBuscandoCedula(false));
     } else {
       setCedulaResultados([]);
     }
   }, [cedulaQuery]);
 
-  const seleccionarRemitente = (rem: RemitenteFormData) => {
-    setFormData((prev) => ({
-      ...prev,
-      identificacion: rem.identificacion,
+  const seleccionarRemitente = (rem: any) => {
+    setFormData({
+      identificacion: rem.cedula,
       nombre: rem.nombre,
       telefono: rem.telefono,
-      email: rem.email,
-      direccion: rem.direccion,
-    }));
+      email: rem.email || "",
+      direccion: rem.direccion || "",
+      ciudad: rem.ciudad || "",
+      provincia: rem.provincia || "",
+      codpais: 63,
+      pais_iso: "EC",
+      phone_code: "593",
+    });
+
+    // ✅ Descomponer dirección
+    if (rem.direccion) {
+      const partes = rem.direccion.split(",").map((p: string) => p.trim());
+      setExtraDireccion({
+        callePrincipal: partes[0]?.split("#")[0]?.trim() || "",
+        numeracion: partes[0]?.includes("#")
+          ? partes[0].split("#")[1]?.trim() || ""
+          : "",
+        calleSecundaria: partes[1]?.replace(/^y\s*/i, "").trim() || "",
+        referencia: partes[2]?.replace(/^Ref:\s*/i, "").trim() || "",
+      });
+    }
+
     setRemitenteExistente(rem);
     setCedulaResultados([]);
   };
 
-  // ✅ Validación de cédula, RUC y pasaporte
   const validarIdentificacion = (id: string): boolean => {
     if (!id) return false;
     if (/^\d{10}$/.test(id)) {
       const provincia = parseInt(id.substring(0, 2));
       if (provincia < 1 || provincia > 24) return false;
       const digitoVerificador = parseInt(id[9]);
-      const coeficientes = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+      const coef = [2, 1, 2, 1, 2, 1, 2, 1, 2];
       let suma = 0;
       for (let i = 0; i < 9; i++) {
-        let valor = parseInt(id[i]) * coeficientes[i];
-        if (valor >= 10) valor -= 9;
-        suma += valor;
+        let val = parseInt(id[i]) * coef[i];
+        if (val >= 10) val -= 9;
+        suma += val;
       }
-      const digitoCalculado = (10 - (suma % 10)) % 10;
-      return digitoCalculado === digitoVerificador;
+      return digitoVerificador === (10 - (suma % 10)) % 10;
     }
     if (/^\d{13}$/.test(id)) return validarIdentificacion(id.substring(0, 10));
-    if (/^[A-Za-z0-9]{6,}$/.test(id)) return true;
-    return false;
+    return /^[A-Za-z0-9]{6,}$/.test(id);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const handleExtraDireccionChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const { name, value } = e.target;
-    setExtraDireccion((prev) => ({ ...prev, [name]: value }));
-  };
+  const handleExtraDireccionChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setExtraDireccion((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleContinue = async () => {
     const { identificacion, nombre, telefono, email, ciudad } = formData;
     if (!identificacion || !nombre || !telefono || !email || !ciudad) {
-      toast.error("Por favor completa todos los campos obligatorios.");
+      toast.error("Completa todos los campos obligatorios.");
       return;
     }
     if (!validarIdentificacion(identificacion)) {
-      toast.error(
-        "Número de identificación inválido (Cédula, RUC o Pasaporte)."
-      );
+      toast.error("Número de identificación inválido.");
       return;
     }
 
+    // ✅ Reconstruir dirección final
     const direccionFinal = [
       extraDireccion.callePrincipal,
-      `#${extraDireccion.numeracion}`,
-      `y ${extraDireccion.calleSecundaria}`,
-      `Ref: ${extraDireccion.referencia}`,
+      extraDireccion.numeracion && `#${extraDireccion.numeracion}`,
+      extraDireccion.calleSecundaria && `y ${extraDireccion.calleSecundaria}`,
+      extraDireccion.referencia && `Ref: ${extraDireccion.referencia}`,
     ]
-      .filter((item) => item && item.trim() !== "")
+      .filter(Boolean)
       .join(", ");
 
     const remitenteFinal = { ...formData, direccion: direccionFinal };
+    setLoading(true);
 
     try {
       if (remitenteExistente) {
@@ -180,12 +176,13 @@ export default function PasoRemitente({
       } else {
         await axios.post("/api/servientrega/remitente/guardar", remitenteFinal);
       }
+      toast.success("Remitente guardado correctamente.");
+      onNext(remitenteFinal);
     } catch {
       toast.error("Hubo un problema al guardar el remitente.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(true);
-    onNext(remitenteFinal);
   };
 
   return (
@@ -216,7 +213,7 @@ export default function PasoRemitente({
                   className="p-2 hover:bg-gray-100 cursor-pointer"
                   onClick={() => seleccionarRemitente(r)}
                 >
-                  {r.identificacion} - {r.nombre}
+                  {r.cedula} - {r.nombre}
                 </div>
               ))}
             </div>
@@ -242,7 +239,7 @@ export default function PasoRemitente({
           onChange={handleChange}
         />
 
-        {/* Dirección */}
+        {/* Dirección desglosada */}
         <Input
           name="callePrincipal"
           placeholder="Calle principal"
@@ -268,7 +265,7 @@ export default function PasoRemitente({
           onChange={handleExtraDireccionChange}
         />
 
-        {/* Ciudad y Provincia bloqueadas */}
+        {/* Ciudad y Provincia */}
         <Input
           name="ciudad"
           value={`${formData.ciudad} - ${formData.provincia}`}
@@ -281,9 +278,7 @@ export default function PasoRemitente({
           className="w-full"
         >
           {loading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Cargando...
-            </>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
             "Continuar"
           )}
