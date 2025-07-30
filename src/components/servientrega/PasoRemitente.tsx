@@ -15,7 +15,7 @@ interface PasoRemitenteProps {
   onNext: (remitente: RemitenteFormData) => void;
 }
 
-interface RemitenteFormData {
+export interface RemitenteFormData {
   identificacion: string;
   nombre: string;
   direccion: string;

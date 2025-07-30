@@ -2,11 +2,13 @@
 
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { format, isToday, parseISO } from "date-fns";
+import { format, isToday, parseISO, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 interface Guia {
   id: string;
@@ -16,11 +18,14 @@ interface Guia {
 }
 
 export default function ListadoGuias() {
+  const hoy = new Date();
   const [guias, setGuias] = useState<Guia[]>([]);
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
+  const [desde, setDesde] = useState(format(subDays(hoy, 7), "yyyy-MM-dd"));
+  const [hasta, setHasta] = useState(format(hoy, "yyyy-MM-dd"));
+  const [loading, setLoading] = useState(false);
 
   const fetchGuias = async () => {
+    setLoading(true);
     try {
       const response = await axios.get<Guia[]>("/api/servientrega/guias", {
         params: { desde, hasta },
@@ -34,18 +39,21 @@ export default function ListadoGuias() {
       }
     } catch (err) {
       console.error("Error al cargar guías:", err);
+      toast.error("No se pudieron cargar las guías.");
       setGuias([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleAnular = async (guia: string) => {
     try {
       await axios.post("/api/servientrega/anular-guia", { guia });
-      alert("Guía anulada exitosamente");
+      toast.success("✅ Guía anulada exitosamente.");
       fetchGuias();
     } catch (err) {
       console.error("Error al anular guía:", err);
-      alert("No se pudo anular la guía");
+      toast.error("No se pudo anular la guía.");
     }
   };
 
@@ -54,21 +62,22 @@ export default function ListadoGuias() {
     const win = window.open();
     if (win) {
       win.document.write(
-        `<iframe width="100%" height="100%" src="${pdfURL}"></iframe>`
+        `<iframe width="100%" height="100%" style="border:none;" src="${pdfURL}"></iframe>`
       );
     }
   };
 
   useEffect(() => {
-    if (desde && hasta) fetchGuias();
+    fetchGuias();
   }, [desde, hasta]);
 
   return (
     <Card className="w-full max-w-4xl mx-auto mt-6">
       <CardHeader>
-        <CardTitle>Guías generadas</CardTitle>
+        <CardTitle>📦 Guías generadas</CardTitle>
       </CardHeader>
       <CardContent>
+        {/* Filtros */}
         <div className="flex gap-4 mb-4">
           <div>
             <Label>Desde</Label>
@@ -86,10 +95,18 @@ export default function ListadoGuias() {
               onChange={(e) => setHasta(e.target.value)}
             />
           </div>
+          <Button onClick={fetchGuias} className="self-end">
+            Buscar
+          </Button>
         </div>
 
-        {guias.length === 0 ? (
-          <p>No hay guías en este periodo.</p>
+        {/* Listado de guías */}
+        {loading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+          </div>
+        ) : guias.length === 0 ? (
+          <p className="text-gray-600">No hay guías en este periodo.</p>
         ) : (
           <div className="space-y-4">
             {guias.map((guia) => (

@@ -48,7 +48,11 @@ interface Destinatario {
 }
 
 interface PasoDestinatarioProps {
-  onNext: (destinatario: any) => void;
+  onNext: (
+    destinatario: any,
+    retiro_oficina: boolean,
+    nombre_agencia?: string
+  ) => void;
 }
 
 export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
@@ -243,7 +247,6 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
     if (!(await validarCodigoPostal())) return;
 
-    // ✅ Construir dirección final antes de enviar
     const direccionFinal = [
       extraDireccion.callePrincipal,
       extraDireccion.numeracion && `#${extraDireccion.numeracion}`,
@@ -255,13 +258,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
     const destinatarioFinal = {
       ...form,
-      direccion: direccionFinal, // 🔥 Solo un campo en la BD
-      entrega_en_oficina: mostrarAgencias,
-      agencia_seleccionada: mostrarAgencias ? agenciaSeleccionada : null,
+      direccion: direccionFinal,
     };
 
     setLoading(true);
-    onNext(destinatarioFinal);
+    onNext(destinatarioFinal, mostrarAgencias, agenciaSeleccionada || "");
     setLoading(false);
   };
 

@@ -42,7 +42,7 @@ const Campo = ({
         highlight ? "text-red-600 font-bold" : "text-gray-900"
       }`}
     >
-      {value || "-"}
+      {value !== undefined && value !== null && value !== "" ? value : "-"}
     </span>
   </div>
 );
@@ -69,7 +69,6 @@ export default function PasoResumen({
   const [tarifa, setTarifa] = useState<TarifaResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // 📌 Descomponer dirección
   const descomponerDireccion = (direccion: string) => {
     if (!direccion)
       return {
@@ -89,20 +88,17 @@ export default function PasoResumen({
     };
   };
 
-  // 📌 Calcular peso volumétrico (cm³ / 5000)
   const calcularPesoVolumetrico = () => {
-    const alto = parseFloat(medidas?.alto || "0");
-    const ancho = parseFloat(medidas?.ancho || "0");
-    const largo = parseFloat(medidas?.largo || "0");
-    if (alto > 0 && ancho > 0 && largo > 0) {
-      return (alto * ancho * largo) / 5000;
-    }
-    return 0;
+    const alto = Number(medidas?.alto || 0);
+    const ancho = Number(medidas?.ancho || 0);
+    const largo = Number(medidas?.largo || 0);
+    return alto > 0 && ancho > 0 && largo > 0
+      ? (alto * ancho * largo) / 5000
+      : 0;
   };
 
-  // 📌 Peso a facturar: el mayor entre físico y volumétrico
-  const pesoFisico = parseFloat(medidas?.peso || "0");
-  const pesoVolumetrico = parseFloat(
+  const pesoFisico = Number(medidas?.peso || 0);
+  const pesoVolumetrico = Number(
     tarifa?.peso_vol || calcularPesoVolumetrico().toFixed(2)
   );
   const pesoFacturable = Math.max(pesoFisico, pesoVolumetrico);
@@ -125,14 +121,14 @@ export default function PasoResumen({
           provincia_des: destinatario.provincia || "",
           valor_seguro: medidas?.valor_seguro?.toString() || "0",
           valor_declarado: medidas?.valor_declarado?.toString() || "0",
-          peso: pesoFacturable.toString(), // 🔥 Usamos el peso mayor
+          peso: pesoFacturable.toString(),
           alto: medidas?.alto?.toString() || "0",
           ancho: medidas?.ancho?.toString() || "0",
           largo: medidas?.largo?.toString() || "0",
           recoleccion: "NO",
           nombre_producto: formData.nombre_producto || "",
           empaque: formData.requiere_empaque
-            ? formData.empaque?.detalle || DEFAULT_EMPAQUE
+            ? formData.empaque?.tipo_empaque || DEFAULT_EMPAQUE
             : DEFAULT_EMPAQUE,
           ...(isInternacional && {
             codigo_postal_ori: remitente.codigo_postal || DEFAULT_CP_ORI,
@@ -148,7 +144,6 @@ export default function PasoResumen({
           return;
         }
 
-        // Agregar cálculo de peso volumétrico si la API no lo devuelve
         if (!resultado.peso_vol) {
           resultado.peso_vol = calcularPesoVolumetrico().toFixed(2);
         }
@@ -166,7 +161,7 @@ export default function PasoResumen({
   }, [formData]);
 
   const calcularTotal = (): string => {
-    if (!tarifa) return "";
+    if (!tarifa) return "0.00";
     const flete = Number(tarifa.flete) || 0;
     const empaque = parseFloat(tarifa.valor_empaque) || 0;
     return (flete + empaque).toFixed(2);

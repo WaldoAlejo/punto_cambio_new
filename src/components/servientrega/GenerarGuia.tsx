@@ -10,6 +10,7 @@ import PasoConfirmarEnvio from "./PasoConfirmarEnvio";
 import PasoResumen from "./PasoResumen";
 import { Usuario, PuntoAtencion } from "../../types";
 import { useToast } from "@/components/ui/use-toast";
+import { FormDataGuia } from "./PasoConfirmarEnvio"; // ✅ Importar tipo correcto
 
 interface GenerarGuiaProps {
   user: Usuario;
@@ -24,15 +25,6 @@ type Step =
   | "resumen"
   | "confirmar-envio";
 
-interface GuiaFormData {
-  nombre_producto: string;
-  remitente: any;
-  destinatario: any;
-  requiere_empaque: boolean | null;
-  empaque: any;
-  medidas: any;
-}
-
 interface SaldoResponse {
   disponible: number;
 }
@@ -43,13 +35,21 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
   const { toast } = useToast();
 
   const [step, setStep] = useState<Step>("producto");
-  const [formData, setFormData] = useState<GuiaFormData>({
+  const [formData, setFormData] = useState<FormDataGuia>({
     nombre_producto: "",
-    remitente: null,
-    destinatario: null,
-    requiere_empaque: null,
-    empaque: null,
-    medidas: null,
+    contenido: "",
+    retiro_oficina: false,
+    punto_atencion_id: selectedPoint.id,
+    remitente: {} as any,
+    destinatario: {} as any,
+    medidas: {} as any,
+    requiere_empaque: false,
+    resumen_costos: {
+      costo_empaque: 0,
+      valor_seguro: 0,
+      flete: 0,
+      total: 0,
+    },
   });
 
   const [saldo, setSaldo] = useState<number | null>(null);
@@ -93,6 +93,7 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
     setFormData((prev) => ({
       ...prev,
       nombre_producto: producto.nombre,
+      contenido: producto.nombre,
       requiere_empaque: !producto.esDocumento,
     }));
     setStep("remitente");
@@ -103,21 +104,28 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
     setStep("destinatario");
   };
 
-  const handleDestinatarioNext = (destinatario: any) => {
-    setFormData((prev) => ({ ...prev, destinatario }));
+  const handleDestinatarioNext = (
+    destinatario: any,
+    retiroOficina: boolean
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      destinatario,
+      retiro_oficina: retiroOficina,
+    }));
     setStep("empaque-medidas");
   };
 
   const handleEmpaqueYMedidasNext = (data: {
-    requiere_empaque: boolean;
-    empaque: any;
     medidas: any;
+    empaque?: any;
+    resumen_costos: any;
   }) => {
     setFormData((prev) => ({
       ...prev,
-      requiere_empaque: data.requiere_empaque,
-      empaque: data.empaque,
+      empaque: data.empaque || null,
       medidas: data.medidas,
+      resumen_costos: data.resumen_costos, // ✅ Ahora siempre está presente
     }));
     setStep("resumen");
   };
@@ -138,11 +146,19 @@ export default function GenerarGuia({ user, selectedPoint }: GenerarGuiaProps) {
   const handleReset = () => {
     setFormData({
       nombre_producto: "",
-      remitente: null,
-      destinatario: null,
-      requiere_empaque: null,
-      empaque: null,
-      medidas: null,
+      contenido: "",
+      retiro_oficina: false,
+      punto_atencion_id: selectedPoint.id,
+      remitente: {} as any,
+      destinatario: {} as any,
+      medidas: {} as any,
+      requiere_empaque: false,
+      resumen_costos: {
+        costo_empaque: 0,
+        valor_seguro: 0,
+        flete: 0,
+        total: 0,
+      },
     });
     setStep("producto");
     obtenerSaldo();
