@@ -101,11 +101,14 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   // 🔍 Debounce búsqueda destinatario
   useEffect(() => {
     if (debounceTimer) clearTimeout(debounceTimer);
-    if (cedulaQuery.length >= 3) {
+    const query = cedulaQuery.trim();
+    if (query.length >= 3) {
       const timer = setTimeout(() => {
         setBuscandoCedula(true);
         axios
-          .get(`/api/servientrega/destinatario/buscar/${cedulaQuery}`)
+          .get(
+            `/api/servientrega/destinatario/buscar/${encodeURIComponent(query)}`
+          )
           .then((res) => setCedulaResultados(res.data.destinatarios || []))
           .catch(() => setCedulaResultados([]))
           .finally(() => setBuscandoCedula(false));
@@ -129,7 +132,6 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       provincia: dest.provincia,
     }));
 
-    // Descomponer dirección en campos
     if (dest.direccion) {
       const partes = dest.direccion.split(",").map((p) => p.trim());
       setExtraDireccion({
@@ -176,10 +178,13 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+    setForm({ ...form, [e.target.name]: e.target.value.trimStart() });
 
   const handleExtraDireccionChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setExtraDireccion((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setExtraDireccion((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value.trimStart(),
+    }));
 
   const handleCheckboxChange = async (checked: boolean) => {
     setMostrarAgencias(checked);
@@ -189,7 +194,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         const data = res.data.fetch || [];
         setAgencias(
           data.map((a: any) => ({
-            nombre: String(Object.values(a)[0] ?? ""),
+            nombre: String(Object.values(a)[0] ?? "").trim(),
             tipo_cs: String(a.tipo_cs?.trim() ?? ""),
             direccion: String(a.direccion?.trim() ?? ""),
             ciudad: String(a.ciudad?.trim() ?? ""),
@@ -203,7 +208,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
   const validarCodigoPostal = async (): Promise<boolean> => {
     if (!esInternacional) return true;
-    if (!form.codigo_postal) {
+    if (!form.codigo_postal.trim()) {
       toast.error(
         "El código postal es obligatorio para envíos internacionales."
       );
@@ -215,7 +220,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       )?.nombrecorto;
       if (!country) return true;
       const res = await fetch(
-        `https://api.zippopotam.us/${country}/${form.codigo_postal}`
+        `https://api.zippopotam.us/${country}/${form.codigo_postal.trim()}`
       );
       if (!res.ok) {
         toast.error("Código postal inválido o no encontrado.");
@@ -229,7 +234,12 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   };
 
   const handleContinue = async () => {
-    if (!form.nombre || !form.telefono || !form.codpais || !form.ciudad) {
+    if (
+      !form.nombre.trim() ||
+      !form.telefono.trim() ||
+      !form.codpais ||
+      !form.ciudad.trim()
+    ) {
       toast.error("Por favor completa todos los campos obligatorios.");
       return;
     }
@@ -239,8 +249,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
     if (
       form.codpais === 63 &&
-      form.identificacion &&
-      !/^[0-9]{10}$/.test(form.identificacion)
+      form.identificacion.trim() &&
+      !/^[0-9]{10}$/.test(form.identificacion.trim())
     ) {
       toast.error("Cédula inválida.");
       return;
@@ -248,21 +258,23 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     if (!(await validarCodigoPostal())) return;
 
     const direccionFinal = [
-      extraDireccion.callePrincipal,
-      extraDireccion.numeracion && `#${extraDireccion.numeracion}`,
-      extraDireccion.calleSecundaria && `y ${extraDireccion.calleSecundaria}`,
-      extraDireccion.referencia && `Ref: ${extraDireccion.referencia}`,
+      extraDireccion.callePrincipal.trim(),
+      extraDireccion.numeracion && `#${extraDireccion.numeracion.trim()}`,
+      extraDireccion.calleSecundaria &&
+        `y ${extraDireccion.calleSecundaria.trim()}`,
+      extraDireccion.referencia && `Ref: ${extraDireccion.referencia.trim()}`,
     ]
       .filter(Boolean)
       .join(", ");
 
-    const destinatarioFinal = {
-      ...form,
-      direccion: direccionFinal,
-    };
+    const destinatarioFinal = { ...form, direccion: direccionFinal.trim() };
 
     setLoading(true);
-    onNext(destinatarioFinal, mostrarAgencias, agenciaSeleccionada || "");
+    onNext(
+      destinatarioFinal,
+      mostrarAgencias,
+      agenciaSeleccionada.trim() || ""
+    );
     setLoading(false);
   };
 
@@ -278,8 +290,9 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           placeholder="Cédula o Pasaporte"
           value={form.identificacion}
           onChange={(e) => {
-            handleChange(e);
-            setCedulaQuery(e.target.value);
+            const value = e.target.value.trimStart();
+            handleChange({ ...e, target: { ...e.target, value } });
+            setCedulaQuery(value);
           }}
         />
         {buscandoCedula && (

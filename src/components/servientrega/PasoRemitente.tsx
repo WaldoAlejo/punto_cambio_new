@@ -75,10 +75,11 @@ export default function PasoRemitente({
 
   // 🔍 Búsqueda predictiva de remitente
   useEffect(() => {
-    if (cedulaQuery.length >= 3) {
+    const query = cedulaQuery.trim();
+    if (query.length >= 3) {
       setBuscandoCedula(true);
       axios
-        .get(`/api/servientrega/remitente/buscar/${cedulaQuery}`)
+        .get(`/api/servientrega/remitente/buscar/${encodeURIComponent(query)}`)
         .then((res) => setCedulaResultados(res.data.remitentes || []))
         .catch(() => setCedulaResultados([]))
         .finally(() => setBuscandoCedula(false));
@@ -119,22 +120,24 @@ export default function PasoRemitente({
   };
 
   const validarIdentificacion = (id: string): boolean => {
-    if (!id) return false;
-    if (/^\d{10}$/.test(id)) {
-      const provincia = parseInt(id.substring(0, 2));
+    const cleanId = id.trim();
+    if (!cleanId) return false;
+    if (/^\d{10}$/.test(cleanId)) {
+      const provincia = parseInt(cleanId.substring(0, 2));
       if (provincia < 1 || provincia > 24) return false;
-      const digitoVerificador = parseInt(id[9]);
+      const digitoVerificador = parseInt(cleanId[9]);
       const coef = [2, 1, 2, 1, 2, 1, 2, 1, 2];
       let suma = 0;
       for (let i = 0; i < 9; i++) {
-        let val = parseInt(id[i]) * coef[i];
+        let val = parseInt(cleanId[i]) * coef[i];
         if (val >= 10) val -= 9;
         suma += val;
       }
       return digitoVerificador === (10 - (suma % 10)) % 10;
     }
-    if (/^\d{13}$/.test(id)) return validarIdentificacion(id.substring(0, 10));
-    return /^[A-Za-z0-9]{6,}$/.test(id);
+    if (/^\d{13}$/.test(cleanId))
+      return validarIdentificacion(cleanId.substring(0, 10));
+    return /^[A-Za-z0-9]{6,}$/.test(cleanId);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -156,21 +159,22 @@ export default function PasoRemitente({
 
     // ✅ Reconstruir dirección final
     const direccionFinal = [
-      extraDireccion.callePrincipal,
-      extraDireccion.numeracion && `#${extraDireccion.numeracion}`,
-      extraDireccion.calleSecundaria && `y ${extraDireccion.calleSecundaria}`,
-      extraDireccion.referencia && `Ref: ${extraDireccion.referencia}`,
+      extraDireccion.callePrincipal.trim(),
+      extraDireccion.numeracion && `#${extraDireccion.numeracion.trim()}`,
+      extraDireccion.calleSecundaria &&
+        `y ${extraDireccion.calleSecundaria.trim()}`,
+      extraDireccion.referencia && `Ref: ${extraDireccion.referencia.trim()}`,
     ]
       .filter(Boolean)
       .join(", ");
 
-    const remitenteFinal = { ...formData, direccion: direccionFinal };
+    const remitenteFinal = { ...formData, direccion: direccionFinal.trim() };
     setLoading(true);
 
     try {
       if (remitenteExistente) {
         await axios.put(
-          `/api/servientrega/remitente/actualizar/${formData.identificacion}`,
+          `/api/servientrega/remitente/actualizar/${formData.identificacion.trim()}`,
           remitenteFinal
         );
       } else {
@@ -198,8 +202,9 @@ export default function PasoRemitente({
             placeholder="Cédula, RUC o Pasaporte"
             value={formData.identificacion}
             onChange={(e) => {
-              handleChange(e);
-              setCedulaQuery(e.target.value);
+              const value = e.target.value.trimStart();
+              handleChange({ ...e, target: { ...e.target, value } });
+              setCedulaQuery(value);
             }}
           />
           {buscandoCedula && (

@@ -2,6 +2,7 @@ import express from "express";
 import axios from "axios";
 import https from "https";
 import { PrismaClient, Prisma } from "@prisma/client";
+import { subDays, startOfDay, endOfDay } from "date-fns";
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -61,41 +62,6 @@ router.post("/ciudades", async (req, res) => {
   }
 });
 
-// 📮 Códigos Postales
-router.post("/codigos-postales", async (req, res) => {
-  try {
-    const { codpais } = req.body;
-    const data = await callServientregaAPI({
-      tipo: "obtener_codigos_postales",
-      codpais,
-      ...AUTH,
-    });
-
-    if (data?.fetch?.length > 0) {
-      return res.json({
-        fetch: data.fetch.map((c: any) => ({
-          ciudad: c.city,
-          codigo_postal: c.codigo_postal,
-        })),
-      });
-    }
-
-    if (codpais !== 63) {
-      const response = await axios.get(`https://api.zippopotam.us/${codpais}`);
-      const codes = response.data?.places || [];
-      return res.json({
-        fetch: codes.map((c: any) => ({
-          ciudad: c["place name"],
-          codigo_postal: c["post code"],
-        })),
-      });
-    }
-    return res.json({ fetch: [] });
-  } catch {
-    return res.json({ fetch: [] });
-  }
-});
-
 // 🏢 Agencias
 router.post("/agencias", async (_, res) => {
   try {
@@ -118,7 +84,159 @@ router.post("/empaques", async (_, res) => {
   }
 });
 
+// =============================
+// 🔍 Buscar remitente
+// =============================
+router.get("/remitente/buscar/:query", async (req, res) => {
+  try {
+    const { query } = req.params;
+    const remitentes = await prisma.servientregaRemitente.findMany({
+      where: {
+        OR: [
+          { cedula: { contains: query, mode: "insensitive" } },
+          { nombre: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      take: 10,
+    });
+    res.json({ remitentes });
+  } catch {
+    res.status(500).json({ error: "Error al buscar remitentes" });
+  }
+});
+
+// 💾 Guardar remitente
+router.post("/remitente/guardar", async (req, res) => {
+  try {
+    const data = req.body;
+    const remitente = await prisma.servientregaRemitente.create({ data });
+    res.json(remitente);
+  } catch {
+    res.status(500).json({ error: "Error al guardar remitente" });
+  }
+});
+
+// ✏️ Actualizar remitente
+router.put("/remitente/actualizar/:cedula", async (req, res) => {
+  try {
+    const { cedula } = req.params;
+    const data = req.body;
+    const remitente = await prisma.servientregaRemitente.update({
+      where: { cedula },
+      data,
+    });
+    res.json(remitente);
+  } catch {
+    res.status(500).json({ error: "Error al actualizar remitente" });
+  }
+});
+
+// =============================
+// 🔍 Buscar destinatario
+// =============================
+router.get("/destinatario/buscar/:query", async (req, res) => {
+  try {
+    const { query } = req.params;
+    const destinatarios = await prisma.servientregaDestinatario.findMany({
+      where: {
+        OR: [
+          { cedula: { contains: query, mode: "insensitive" } },
+          { nombre: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      take: 10,
+    });
+    res.json({ destinatarios });
+  } catch {
+    res.status(500).json({ error: "Error al buscar destinatarios" });
+  }
+});
+
+// 💾 Guardar destinatario
+router.post("/destinatario/guardar", async (req, res) => {
+  try {
+    const data = req.body;
+    const destinatario = await prisma.servientregaDestinatario.create({ data });
+    res.json(destinatario);
+  } catch {
+    res.status(500).json({ error: "Error al guardar destinatario" });
+  }
+});
+
+// ✏️ Actualizar destinatario
+router.put("/destinatario/actualizar/:cedula", async (req, res) => {
+  try {
+    const { cedula } = req.params;
+    const data = req.body;
+    const destinatario = await prisma.servientregaDestinatario.update({
+      where: { cedula },
+      data,
+    });
+    res.json(destinatario);
+  } catch {
+    res.status(500).json({ error: "Error al actualizar destinatario" });
+  }
+});
+
+// =============================
+// 📄 Listar guías generadas
+// =============================
+router.get("/guias", async (req, res) => {
+  try {
+    const { desde, hasta } = req.query;
+
+    const fechaDesde = desde
+      ? startOfDay(new Date(desde as string))
+      : subDays(new Date(), 7);
+    const fechaHasta = hasta
+      ? endOfDay(new Date(hasta as string))
+      : endOfDay(new Date());
+
+    const guias = await prisma.servientregaGuia.findMany({
+      where: {
+        created_at: {
+          gte: fechaDesde,
+          lte: fechaHasta,
+        },
+      },
+      orderBy: { created_at: "desc" },
+    });
+
+    res.json(guias);
+  } catch {
+    res.status(500).json({ error: "Error al listar guías" });
+  }
+});
+
+// =============================
+// ❌ Anular guía
+// =============================
+router.post("/anular-guia", async (req, res) => {
+  try {
+    const { guia } = req.body;
+
+    const response = await callServientregaAPI({
+      tipo: "ActualizaEstadoGuia",
+      guia,
+      estado: "Anulada",
+      ...AUTH,
+    });
+
+    if (response?.fetch?.proceso === "Guia Actualizada") {
+      return res.json({ message: "Guía anulada correctamente" });
+    }
+
+    res
+      .status(400)
+      .json({ error: "No se pudo anular la guía", detalle: response });
+  } catch {
+    res.status(500).json({ error: "Error al anular guía" });
+  }
+});
+
+// =============================
 // 💰 Tarifa
+// =============================
 router.post("/tarifa", async (req, res) => {
   try {
     const {
@@ -137,8 +255,6 @@ router.post("/tarifa", async (req, res) => {
       recoleccion,
       nombre_producto,
       empaque,
-      codigo_postal_ori,
-      codigo_postal_des,
     } = req.body;
 
     const tipo =
@@ -162,16 +278,9 @@ router.post("/tarifa", async (req, res) => {
       largo: String(largo || "0"),
       recoleccion: recoleccion || "NO",
       nombre_producto: nombre_producto || "",
+      empaque: empaque || "",
       ...AUTH,
     };
-
-    if (tipo === "obtener_tarifa_internacional") {
-      payload.codigo_postal_ori = codigo_postal_ori || "170150";
-      payload.codigo_postal_des = codigo_postal_des || "000000";
-      payload.empaque = empaque || "SOBRE TAMAÑO A4";
-    } else {
-      payload.empaque = empaque || "";
-    }
 
     const data = await callServientregaAPI(payload);
     res.json(data);
@@ -181,7 +290,7 @@ router.post("/tarifa", async (req, res) => {
 });
 
 // =============================
-// 📄 Generar Guía (CORRECTO SEGÚN DOCUMENTACIÓN)
+// 📄 Generar Guía
 // =============================
 router.post("/generar-guia", async (req, res) => {
   try {
