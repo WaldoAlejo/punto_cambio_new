@@ -142,11 +142,7 @@ const TransferForm = ({
       setDescription("");
       onTransferCreated();
     } catch {
-      toast({
-        title: "Error",
-        description: "Error al crear la transferencia",
-        variant: "destructive",
-      });
+      toast.error("Error al crear la transferencia");
     } finally {
       setIsLoading(false);
     }

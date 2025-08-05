@@ -76,7 +76,24 @@ export class ReceiptService {
   ): ReceiptData {
     const tipo = isInitialPayment
       ? "CAMBIO PARCIAL - ABONO INICIAL"
-      : "CAMBIO PARCIAL - COMPLETADO";
+      : "CAMBIO COMPLETADO";
+
+    // Para abonos parciales, mostrar el monto del abono
+    const montoMostrar =
+      isInitialPayment && partialData
+        ? partialData.initialPayment
+        : exchange.monto_destino;
+
+    const observacionCompleta =
+      isInitialPayment && partialData
+        ? `ABONO PARCIAL: ${partialData.initialPayment.toLocaleString()} ${
+            exchange.monedaDestino?.codigo
+          }. Pendiente: ${partialData.pendingBalance.toLocaleString()}. Recibido por: ${
+            partialData.receivedBy
+          }. ${
+            partialData.observations ? `Obs: ${partialData.observations}` : ""
+          }`
+        : `CAMBIO COMPLETADO. ${exchange.observacion || ""}`;
 
     return {
       numeroRecibo:
@@ -89,10 +106,10 @@ export class ReceiptService {
         tipoOperacion: exchange.tipo_operacion,
         montoOrigen: exchange.monto_origen,
         monedaOrigen: exchange.monedaOrigen?.codigo || "",
-        montoDestino: exchange.monto_destino,
+        montoDestino: montoMostrar,
         monedaDestino: exchange.monedaDestino?.codigo || "",
         tasaCambio: exchange.tasa_cambio,
-        observacion: exchange.observacion,
+        observacion: observacionCompleta,
         cliente: {
           nombre: exchange.datos_cliente?.nombre || "",
           apellido: exchange.datos_cliente?.apellido || "",
@@ -107,7 +124,7 @@ export class ReceiptService {
         divisasRecibidas: {
           billetes: 0,
           monedas: 0,
-          total: exchange.monto_destino,
+          total: montoMostrar,
         },
       },
     };

@@ -125,7 +125,13 @@ const PendingExchangesList = ({
         selectedExchange,
         selectedPoint?.nombre || "N/A",
         user.nombre,
-        true
+        true,
+        {
+          initialPayment: partialPayment.initialPayment,
+          pendingBalance: partialPayment.pendingBalance,
+          receivedBy: partialPayment.receivedBy,
+          observations: partialPayment.observations,
+        }
       );
 
       try {

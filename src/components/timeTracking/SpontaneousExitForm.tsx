@@ -23,7 +23,7 @@ import {
   spontaneousExitService,
   SpontaneousExit,
 } from "../../services/spontaneousExitService";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface SpontaneousExitFormProps {
   user: User;
@@ -111,25 +111,16 @@ const SpontaneousExitForm = ({
   >("");
   const [descripcion, setDescripcion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!motivo) {
-      toast({
-        title: "Error",
-        description: "Por favor seleccione el motivo",
-        variant: "destructive",
-      });
+      toast.error("Por favor seleccione el motivo");
       return;
     }
     if (!selectedPoint) {
-      toast({
-        title: "Error",
-        description: "No hay punto de atención seleccionado",
-        variant: "destructive",
-      });
+      toast.error("No hay punto de atención seleccionado");
       return;
     }
 
@@ -147,10 +138,7 @@ const SpontaneousExitForm = ({
         throw new Error(error || "Error desconocido al registrar salida");
       }
 
-      toast({
-        title: "Salida registrada",
-        description: `Salida espontánea registrada exitosamente`,
-      });
+      toast.success("✅ Salida espontánea registrada exitosamente");
 
       setMotivo("");
       setDescripcion("");
@@ -158,11 +146,7 @@ const SpontaneousExitForm = ({
       onExitRegistered(adaptExitToSalidaEspontanea(exit, user, selectedPoint));
     } catch (error) {
       console.error("Error registering spontaneous exit:", error);
-      toast({
-        title: "Error",
-        description: "Error al registrar la salida espontánea",
-        variant: "destructive",
-      });
+      toast.error("Error al registrar la salida espontánea");
     } finally {
       setIsLoading(false);
     }
