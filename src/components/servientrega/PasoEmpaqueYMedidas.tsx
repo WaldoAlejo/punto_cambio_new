@@ -241,7 +241,7 @@ export default function PasoEmpaqueYMedidas({
   return (
     <Card className="w-full max-w-xl mx-auto mt-6 shadow-lg border rounded-xl">
       <CardHeader>
-        <CardTitle>Detalles del paquete - {nombre_producto}</CardTitle>
+        <CardTitle>Detalles del paquete - {nombre_producto || "N/A"}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Switch empaque */}

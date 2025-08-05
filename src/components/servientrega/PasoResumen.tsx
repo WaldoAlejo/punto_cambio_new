@@ -129,7 +129,7 @@ export default function PasoResumen({
           ancho: (medidas?.ancho ?? 0).toString(),
           largo: (medidas?.largo ?? 0).toString(),
           recoleccion: "NO",
-          nombre_producto: formData.nombre_producto || "",
+          nombre_producto: formData?.nombre_producto || "",
           empaque: formData.requiere_empaque
             ? formData.empaque?.tipo_empaque || DEFAULT_EMPAQUE
             : DEFAULT_EMPAQUE,
@@ -209,10 +209,13 @@ export default function PasoResumen({
       </CardHeader>
       <CardContent className="space-y-6">
         <Seccion titulo="📦 Producto">
-          <Campo label="Nombre del producto" value={formData.nombre_producto} />
+          <Campo
+            label="Nombre del producto"
+            value={formData?.nombre_producto || "N/A"}
+          />
           <Campo
             label="Contenido"
-            value={formData.contenido || formData.nombre_producto}
+            value={formData?.contenido || formData?.nombre_producto || "N/A"}
           />
         </Seccion>
 

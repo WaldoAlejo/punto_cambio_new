@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import axiosInstance from "@/services/axiosInstance";
 import {
   Select,
   SelectContent,
@@ -34,7 +34,7 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
   const fetchProductos = async () => {
     try {
       setCargandoProductos(true);
-      const response = await axios.post<{
+      const response = await axiosInstance.post<{
         productos: { nombre_producto: string }[];
       }>("/api/servientrega/productos");
       setProductos(
@@ -61,12 +61,12 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
 
     // Busca el objeto seleccionado para enviar el nombre_producto correcto
     const producto = productos.find(
-      (p) => p.nombre_producto === selectedProducto
+      (p) => p?.nombre_producto === selectedProducto
     );
 
     const resultado: ProductoSeleccionado = {
       nombre_producto: producto?.nombre_producto || selectedProducto,
-      esDocumento: selectedProducto.toUpperCase().includes("DOCUMENTO"),
+      esDocumento: (selectedProducto || "").toUpperCase().includes("DOCUMENTO"),
     };
 
     // Simulación de carga breve para UX
@@ -97,8 +97,11 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
               </SelectTrigger>
               <SelectContent>
                 {productos.map((p, i) => (
-                  <SelectItem key={i} value={p.nombre_producto}>
-                    {p.nombre_producto}
+                  <SelectItem
+                    key={i}
+                    value={p?.nombre_producto || `producto-${i}`}
+                  >
+                    {p?.nombre_producto || `Producto ${i + 1}`}
                   </SelectItem>
                 ))}
               </SelectContent>

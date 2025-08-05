@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import axios from "axios";
+import axiosInstance from "@/services/axiosInstance";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -55,8 +55,8 @@ export default function PasoConfirmarEnvio({
   // ==========================
   const validarSaldo = async () => {
     try {
-      const { data } = await axios.get(
-        `/api/servientrega/saldo/validar/${formData.punto_atencion_id}`
+      const { data } = await axiosInstance.get(
+        `/api/servientrega/saldo/validar/${formData?.punto_atencion_id || ""}`
       );
       setSaldoDisponible(Number(data?.disponible) || 0);
       setSaldoEstado(data?.estado);
@@ -89,7 +89,7 @@ export default function PasoConfirmarEnvio({
     try {
       const payload: FormDataGuia = {
         ...formData,
-        contenido: formData.contenido || formData.nombre_producto,
+        contenido: formData?.contenido || formData?.nombre_producto || "",
         retiro_oficina: formData.retiro_oficina,
         nombre_agencia_retiro_oficina: formData.retiro_oficina
           ? formData.nombre_agencia_retiro_oficina
@@ -98,7 +98,7 @@ export default function PasoConfirmarEnvio({
         factura: formData.factura || "PRUEBA",
       };
 
-      const res = await axios.post<GenerarGuiaResponse>(
+      const res = await axiosInstance.post<GenerarGuiaResponse>(
         "/api/servientrega/generar-guia",
         payload
       );
@@ -140,9 +140,9 @@ export default function PasoConfirmarEnvio({
   // ==========================
   const handleSolicitarSaldo = async () => {
     try {
-      await axios.post("/api/servientrega/solicitar-saldo", {
-        punto_atencion_id: formData.punto_atencion_id,
-        monto_requerido: formData.resumen_costos.total,
+      await axiosInstance.post("/api/servientrega/solicitar-saldo", {
+        punto_atencion_id: formData?.punto_atencion_id || "",
+        monto_requerido: formData?.resumen_costos?.total || 0,
       });
       toast.success("Solicitud de saldo enviada al administrador.");
     } catch (err) {
@@ -173,20 +173,20 @@ export default function PasoConfirmarEnvio({
 
             <div className="border rounded-md p-3 bg-gray-50 text-sm space-y-2">
               <p>
-                <strong>Producto:</strong> {formData.nombre_producto}
+                <strong>Producto:</strong> {formData?.nombre_producto || "N/A"}
               </p>
               <p>
                 <strong>Valor declarado:</strong> $
-                {Number(formData.medidas.valor_declarado).toFixed(2)}
+                {Number(formData?.medidas?.valor_declarado || 0).toFixed(2)}
               </p>
               <p>
                 <strong>Flete estimado:</strong> $
-                {Number(formData.resumen_costos.flete).toFixed(2)}
+                {Number(formData?.resumen_costos?.flete || 0).toFixed(2)}
               </p>
               <p>
                 <strong>Total estimado:</strong>{" "}
                 <span className="text-green-700 font-semibold">
-                  ${Number(formData.resumen_costos.total).toFixed(2)}
+                  ${Number(formData?.resumen_costos?.total || 0).toFixed(2)}
                 </span>
               </p>
             </div>
