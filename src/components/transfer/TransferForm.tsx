@@ -22,7 +22,7 @@ import { User, PuntoAtencion, Moneda } from "../../types";
 import { transferService } from "../../services/transferService";
 import { currencyService } from "../../services/currencyService";
 import { pointService } from "../../services/pointService";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface TransferFormProps {
   user: User;
@@ -54,7 +54,6 @@ const TransferForm = ({
   const [availablePoints, setAvailablePoints] = useState<PuntoAtencion[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [errors, setErrors] = useState(initialErrorState);
-  const { toast } = useToast();
 
   useEffect(() => {
     const loadData = async () => {
@@ -68,16 +67,12 @@ const TransferForm = ({
           await currencyService.getAllCurrencies();
         setCurrencies(fetchedCurrencies.filter((currency) => currency.activo));
       } catch {
-        toast({
-          title: "Error",
-          description: "Error al cargar datos necesarios",
-          variant: "destructive",
-        });
+        toast.error("Error al cargar datos necesarios");
       }
     };
 
     loadData();
-  }, [selectedPoint, toast]);
+  }, [selectedPoint]);
 
   // Validación en tiempo real
   useEffect(() => {
@@ -106,20 +101,12 @@ const TransferForm = ({
       !description.trim() ||
       parseFloat(amount) <= 0
     ) {
-      toast({
-        title: "Error",
-        description: "Completa todos los campos requeridos correctamente",
-        variant: "destructive",
-      });
+      toast.error("Completa todos los campos requeridos correctamente");
       return;
     }
 
     if (!selectedPoint) {
-      toast({
-        title: "Error",
-        description: "No hay punto de origen seleccionado",
-        variant: "destructive",
-      });
+      toast.error("No hay punto de origen seleccionado");
       return;
     }
 
@@ -141,18 +128,13 @@ const TransferForm = ({
       );
 
       if (error || !transfer) {
-        toast({
-          title: "Error",
-          description: error || "Error al crear la transferencia",
-          variant: "destructive",
-        });
+        toast.error(error || "Error al crear la transferencia");
         return;
       }
 
-      toast({
-        title: "Transferencia registrada",
-        description: `Solicitud de transferencia por ${transfer.monto} creada con éxito.`,
-      });
+      toast.success(
+        `✅ Solicitud de transferencia por ${transfer.monto.toLocaleString()} creada con éxito.`
+      );
 
       setDestinationPointId("");
       setCurrencyId("");
@@ -165,7 +147,7 @@ const TransferForm = ({
         description: "Error al crear la transferencia",
         variant: "destructive",
       });
-    }finally {
+    } finally {
       setIsLoading(false);
     }
   };

@@ -1,15 +1,18 @@
-// Tipos base del sistema
+// Tipos base del sistema alineados con Prisma Schema
 export interface Usuario {
   id: string;
   username: string;
   nombre: string;
-  correo?: string;
-  telefono?: string;
+  correo?: string | null;
+  telefono?: string | null;
   rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION";
   activo: boolean;
-  punto_atencion_id?: string;
+  punto_atencion_id?: string | null;
   created_at: string;
   updated_at: string;
+  // Campos adicionales del login
+  jornada_id?: string | null;
+  hasActiveJornada?: boolean;
 }
 
 // Alias para compatibilidad
@@ -72,7 +75,12 @@ export interface MovimientoSaldo {
   id: string;
   punto_atencion_id: string;
   moneda_id: string;
-  tipo_movimiento: 'VENTA' | 'COMPRA' | 'TRANSFERENCIA_ENTRADA' | 'TRANSFERENCIA_SALIDA' | 'AJUSTE' | 'SALDO_INICIAL';
+  tipo_movimiento:
+    | "INGRESO"
+    | "EGRESO"
+    | "TRANSFERENCIA_ENTRANTE"
+    | "TRANSFERENCIA_SALIENTE"
+    | "CAMBIO_DIVISA";
   monto: number;
   saldo_anterior: number;
   saldo_nuevo: number;
@@ -134,13 +142,13 @@ export interface CambioDivisa {
   datos_cliente?: DatosCliente;
   divisas_entregadas?: DetalleDivisasSimple;
   divisas_recibidas?: DetalleDivisasSimple;
-  
+
   // Campos para método de entrega
   metodo_entrega?: "efectivo" | "transferencia";
   transferencia_numero?: string | null;
   transferencia_banco?: string | null;
   transferencia_imagen_url?: string | null;
-  
+
   // Campos para cambios parciales
   abono_inicial_monto?: number | null;
   abono_inicial_fecha?: string | null;
@@ -150,7 +158,7 @@ export interface CambioDivisa {
   observacion_parcial?: string | null;
   referencia_cambio_principal?: string | null;
   cliente?: string | null;
-  
+
   // Relaciones
   monedaOrigen?: Moneda;
   monedaDestino?: Moneda;
@@ -167,7 +175,11 @@ export interface Transferencia {
   descripcion?: string | null;
   numero_recibo?: string | null;
   estado: "PENDIENTE" | "APROBADO" | "RECHAZADO";
-  tipo_transferencia: "ENTRADA" | "SALIDA" | "INTERNA" | "ENTRE_PUNTOS" | "DEPOSITO_MATRIZ" | "RETIRO_GERENCIA" | "DEPOSITO_GERENCIA";
+  tipo_transferencia:
+    | "ENTRE_PUNTOS"
+    | "DEPOSITO_MATRIZ"
+    | "RETIRO_GERENCIA"
+    | "DEPOSITO_GERENCIA";
   solicitado_por: string;
   aprobado_por?: string | null;
   rechazado_por?: string | null;
@@ -212,7 +224,12 @@ export interface SalidaEspontanea {
   id: string;
   usuario_id: string;
   punto_atencion_id: string;
-  motivo: "BANCO" | "DILIGENCIA_PERSONAL" | "TRAMITE_GOBIERNO" | "EMERGENCIA_MEDICA" | "OTRO";
+  motivo:
+    | "BANCO"
+    | "DILIGENCIA_PERSONAL"
+    | "TRAMITE_GOBIERNO"
+    | "EMERGENCIA_MEDICA"
+    | "OTRO";
   descripcion?: string | null;
   fecha_salida: string;
   fecha_regreso?: string | null;
@@ -244,7 +261,12 @@ export interface HistorialAsignacionPunto {
   fecha_asignacion: string;
   motivo_cambio?: string | null;
   autorizado_por?: string | null;
-  tipo_asignacion: "MANUAL" | "AUTO_LOGIN" | "JORNADA_INICIO" | "JORNADA_FIN" | "AUTO_UPDATE";
+  tipo_asignacion:
+    | "MANUAL"
+    | "AUTO_LOGIN"
+    | "JORNADA_INICIO"
+    | "JORNADA_FIN"
+    | "AUTO_UPDATE";
   observaciones?: string | null;
   created_at: string;
   // Relaciones opcionales
@@ -339,7 +361,11 @@ export interface CreateTransferData {
   moneda_id: string;
   monto: number;
   descripcion?: string;
-  tipo_transferencia: "ENTRADA" | "SALIDA" | "INTERNA" | "ENTRE_PUNTOS" | "DEPOSITO_MATRIZ" | "RETIRO_GERENCIA" | "DEPOSITO_GERENCIA";
+  tipo_transferencia:
+    | "ENTRE_PUNTOS"
+    | "DEPOSITO_MATRIZ"
+    | "RETIRO_GERENCIA"
+    | "DEPOSITO_GERENCIA";
   origen_id?: string;
 }
 

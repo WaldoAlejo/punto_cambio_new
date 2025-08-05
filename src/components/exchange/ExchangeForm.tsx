@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Moneda } from "../../types";
 import { useExchangeCalculations } from "../../hooks/useExchangeCalculations";
 import ExchangeFormFields from "./ExchangeFormFields";
@@ -63,27 +63,27 @@ const ExchangeForm = ({
 
   const handleSubmit = () => {
     if (!fromCurrency || !toCurrency) {
-      toast({
-        title: "Error",
-        description: "Debe seleccionar las monedas de origen y destino",
-        variant: "destructive",
-      });
+      toast.error("Debe seleccionar las monedas de origen y destino");
       return;
     }
     if (!rate) {
-      toast({
-        title: "Error",
-        description: "Debe ingresar la tasa de cambio",
-        variant: "destructive",
-      });
+      toast.error("Debe ingresar la tasa de cambio");
       return;
     }
     if (!amount) {
-      toast({
-        title: "Error",
-        description: "Debe ingresar el monto a cambiar",
-        variant: "destructive",
-      });
+      toast.error("Debe ingresar el monto a cambiar");
+      return;
+    }
+
+    const amountNum = parseFloat(amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      toast.error("El monto debe ser un número positivo");
+      return;
+    }
+
+    const rateNum = parseFloat(rate);
+    if (isNaN(rateNum) || rateNum <= 0) {
+      toast.error("La tasa de cambio debe ser un número positivo");
       return;
     }
 

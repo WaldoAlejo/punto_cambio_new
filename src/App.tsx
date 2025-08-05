@@ -37,7 +37,7 @@ function App() {
     if (user && user.rol === "OPERADOR") {
       setVerifyingJornada(true);
       axiosInstance
-        .get<JornadaActiveResponse>("/api/jornada/active")
+        .get<JornadaActiveResponse>("/api/schedules/active")
         .then((res) => {
           const active = res.data?.schedule;
           if (!active) {
@@ -73,18 +73,24 @@ function App() {
 
   // Para ADMIN: preselecciona automáticamente el punto principal
   useEffect(() => {
-    if (user && (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") && !selectedPoint) {
+    if (
+      user &&
+      (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") &&
+      !selectedPoint
+    ) {
       axiosInstance
         .get<{ points: PuntoAtencion[] }>("/api/points/all")
         .then((res) => {
           const points = res.data.points || [];
           // Buscar el punto principal (normalmente sería el primero o uno específico)
-          const puntoPrincipal = points.find(p => 
-            p.nombre.toLowerCase().includes("principal") || 
-            p.nombre.toLowerCase().includes("matriz") ||
-            p.nombre.toLowerCase().includes("central")
-          ) || points[0]; // Si no hay uno "principal", tomar el primero
-          
+          const puntoPrincipal =
+            points.find(
+              (p) =>
+                p.nombre.toLowerCase().includes("principal") ||
+                p.nombre.toLowerCase().includes("matriz") ||
+                p.nombre.toLowerCase().includes("central")
+            ) || points[0]; // Si no hay uno "principal", tomar el primero
+
           if (puntoPrincipal) {
             setSelectedPoint(puntoPrincipal);
           }

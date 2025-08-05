@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import axios from "axios";
+import axiosInstance from "@/services/axiosInstance";
 import { useAuth } from "@/hooks/useAuth";
+import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ interface PuntosResponse {
 
 export default function SaldoServientregaAdmin() {
   const { user } = useAuth();
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
   const esAdmin = user?.rol === "ADMIN";
 
   const [puntos, setPuntos] = useState<PuntoAtencion[]>([]);
@@ -69,7 +71,7 @@ export default function SaldoServientregaAdmin() {
   // ✅ Obtener puntos y saldos
   const obtenerPuntosYSaldo = async () => {
     try {
-      const { data } = await axios.get<PuntosResponse>(
+      const { data } = await axiosInstance.get<PuntosResponse>(
         "/api/servientrega/remitente/puntos"
       );
       const puntosActivos = data.puntos || [];
@@ -82,7 +84,7 @@ export default function SaldoServientregaAdmin() {
       await Promise.all(
         puntosActivos.map(async (p) => {
           try {
-            const res = await axios.get<SaldoResponse>(
+            const res = await axiosInstance.get<SaldoResponse>(
               `/api/servientrega/saldo/${p.id}`
             );
             saldosTemp[p.id] = res.data?.disponible ?? 0;
@@ -93,14 +95,17 @@ export default function SaldoServientregaAdmin() {
       );
       setSaldos(saldosTemp);
     } catch (error) {
-      console.error("❌ Error al obtener puntos o saldos:", error);
+      console.error("Error al obtener puntos o saldos:", error);
+      toast.error("Error al cargar información de puntos y saldos");
     }
   };
 
   // ✅ Obtener historial de asignaciones
   const obtenerHistorial = async () => {
     try {
-      const { data } = await axios.get("/api/servientrega/saldo/historial");
+      const { data } = await axiosInstance.get(
+        "/api/servientrega/saldo/historial"
+      );
       if (Array.isArray(data)) setHistorial(data);
     } catch (error) {
       console.error("❌ Error al obtener historial:", error);
@@ -110,7 +115,7 @@ export default function SaldoServientregaAdmin() {
   // ✅ Obtener solicitudes de saldo
   const obtenerSolicitudes = async () => {
     try {
-      const { data } = await axios.get(
+      const { data } = await axiosInstance.get(
         "/api/servientrega/solicitar-saldo/listar"
       );
       setSolicitudes(data || []);
@@ -127,7 +132,7 @@ export default function SaldoServientregaAdmin() {
     punto_id: string
   ) => {
     try {
-      await axios.post("/api/servientrega/solicitar-saldo/responder", {
+      await axiosInstance.post("/api/servientrega/solicitar-saldo/responder", {
         solicitud_id: id,
         estado,
         aprobado_por: user?.nombre || "admin",
@@ -135,7 +140,7 @@ export default function SaldoServientregaAdmin() {
 
       if (estado === "APROBADA") {
         // Actualiza el saldo automáticamente
-        await axios.post("/api/servientrega/saldo", {
+        await axiosInstance.post("/api/servientrega/saldo", {
           monto_total: monto,
           creado_por: user?.nombre || "admin",
           punto_atencion_id: punto_id,
@@ -154,26 +159,44 @@ export default function SaldoServientregaAdmin() {
   };
 
   // ✅ Asignar saldo (admin)
-  const asignarSaldo = async () => {
+  const handleAsignarSaldo = () => {
     const monto = parseFloat(nuevoMonto);
-    if (isNaN(monto) || monto <= 0 || !puntoSeleccionado) return;
-    setLoading(true);
-    setMensaje(null);
-    try {
-      await axios.post("/api/servientrega/saldo", {
-        monto_total: monto,
-        creado_por: user?.nombre ?? "admin",
-        punto_atencion_id: puntoSeleccionado,
-      });
-      setMensaje("✅ Saldo asignado correctamente.");
-      setNuevoMonto("");
-      obtenerPuntosYSaldo();
-      obtenerHistorial();
-    } catch {
-      setMensaje("❌ Error al asignar saldo.");
-    } finally {
-      setLoading(false);
+    if (isNaN(monto) || monto <= 0) {
+      toast.error("Ingrese un monto válido mayor a 0");
+      return;
     }
+    if (!puntoSeleccionado) {
+      toast.error("Seleccione un punto de atención");
+      return;
+    }
+
+    const punto = puntos.find((p) => p.id === puntoSeleccionado);
+    showConfirmation(
+      "Confirmar asignación de saldo",
+      `¿Está seguro de asignar $${monto.toLocaleString()} al punto "${
+        punto?.nombre
+      }"?`,
+      async () => {
+        setLoading(true);
+        try {
+          await axiosInstance.post("/api/servientrega/saldo", {
+            monto_total: monto,
+            creado_por: user?.nombre ?? "admin",
+            punto_atencion_id: puntoSeleccionado,
+          });
+          toast.success(
+            `✅ Saldo de $${monto.toLocaleString()} asignado correctamente`
+          );
+          setNuevoMonto("");
+          obtenerPuntosYSaldo();
+          obtenerHistorial();
+        } catch {
+          toast.error("Error al asignar saldo");
+        } finally {
+          setLoading(false);
+        }
+      }
+    );
   };
 
   useEffect(() => {
@@ -254,7 +277,7 @@ export default function SaldoServientregaAdmin() {
                 />
               </div>
               <Button
-                onClick={asignarSaldo}
+                onClick={handleAsignarSaldo}
                 disabled={loading || !nuevoMonto.trim()}
               >
                 {loading ? "Asignando..." : "Agregar saldo"}
@@ -385,6 +408,8 @@ export default function SaldoServientregaAdmin() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmationDialog />
     </div>
   );
 }

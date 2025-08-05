@@ -8,13 +8,20 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "type-check": "tsc --noEmit",
     "preview": "vite preview",
     "seed": "npx tsx prisma/seed.ts",
     "dev:server": "tsx server/index.ts",
     "build:server": "tsc --project tsconfig.server.json",
     "start:server": "nodemon dist/index.js",
     "audit": "npm audit",
-    "audit:fix": "npm audit fix"
+    "audit:fix": "npm audit fix",
+    "clean": "rm -rf dist node_modules/.cache",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
+    "test:types": "tsc --noEmit --skipLibCheck",
+    "analyze": "npm run build && npx vite-bundle-analyzer dist"
   },
   "prisma": {
     "seed": "tsx prisma/seed-casa-cambios.ts"

@@ -10,19 +10,24 @@ export interface AuthUser {
   id: string;
   username: string;
   nombre: string;
-  correo?: string;
-  telefono?: string;
+  correo?: string | null;
+  telefono?: string | null;
   rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION";
   activo: boolean;
   punto_atencion_id?: string | null;
   created_at: string;
   updated_at: string;
+  // Campos adicionales del login
+  jornada_id?: string | null;
+  hasActiveJornada?: boolean;
 }
 
 interface LoginResponse {
   user: AuthUser;
   token: string;
   success: boolean;
+  hasActiveJornada?: boolean;
+  timestamp?: string;
   error?: string;
 }
 

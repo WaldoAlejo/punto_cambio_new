@@ -24,32 +24,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { toast } from "@/hooks/use-toast";
-import { Usuario } from "../../types";
+import { toast } from "sonner";
+import { Usuario, PuntoAtencion } from "../../types";
 import { userService } from "../../services/userService";
+import { pointService } from "../../services/pointService";
 import EditUserDialog from "../../components/admin/EditUserDialog";
 import ResetPasswordDialog from "../../components/admin/ResetPasswordDialog";
-import { Edit, Key } from "lucide-react";
-
-// MOCK de usuario actual con rol ADMIN (sustituye esto por el contexto real de tu auth)
-const currentUser: Usuario = {
-  id: "1",
-  username: "admin",
-  correo: "admin@demo.com",
-  nombre: "Admin Principal",
-  rol: "ADMIN",
-  activo: true,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
+import { Edit, Key, UserPlus, UserX, UserCheck } from "lucide-react";
+import { useAuth } from "../../hooks/useAuth";
+import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
 export const UserManagement = () => {
+  const { user: currentUser } = useAuth();
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
   const [users, setUsers] = useState<Usuario[]>([]);
+  const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<Usuario | null>(null);
-  const [resetPasswordUser, setResetPasswordUser] = useState<Usuario | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<Usuario | null>(
+    null
+  );
   const [formData, setFormData] = useState({
     username: "",
     correo: "",
@@ -62,17 +58,18 @@ export const UserManagement = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { users: fetchedUsers } = await userService.getAllUsers();
-      setUsers(fetchedUsers);
+      const [usersResult, pointsResult] = await Promise.all([
+        userService.getAllUsers(),
+        pointService.getAllPoints(),
+      ]);
+
+      setUsers(usersResult.users);
+      setPoints(pointsResult.points);
     } catch (err) {
-      console.error("Error loading users:", err);
-      const errorMessage = "Error al cargar usuarios";
+      console.error("Error loading data:", err);
+      const errorMessage = "Error al cargar datos";
       setError(errorMessage);
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -85,17 +82,13 @@ export const UserManagement = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (
-      !formData.username ||
-      !formData.correo ||
-      !formData.nombre ||
-      !formData.password
-    ) {
-      toast({
-        title: "Error",
-        description: "Todos los campos son obligatorios",
-        variant: "destructive",
-      });
+    if (!formData.username || !formData.nombre || !formData.password) {
+      toast.error("Los campos usuario, nombre y contraseña son obligatorios");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast.error("La contraseña debe tener al menos 6 caracteres");
       return;
     }
 
@@ -109,11 +102,7 @@ export const UserManagement = () => {
       });
 
       if (!newUser) {
-        toast({
-          title: "Error",
-          description: "Error al crear usuario",
-          variant: "destructive",
-        });
+        toast.error("Error al crear usuario");
         return;
       }
 
@@ -127,39 +116,40 @@ export const UserManagement = () => {
       });
       setShowForm(false);
 
-      toast({
-        title: "Usuario creado",
-        description: `Usuario ${newUser.nombre} creado exitosamente`,
-      });
+      toast.success(`✅ Usuario ${newUser.nombre} creado exitosamente`);
     } catch (err) {
       console.error("Error creating user:", err);
-      toast({
-        title: "Error",
-        description: "Error interno del servidor",
-        variant: "destructive",
-      });
+      toast.error(
+        "Error al crear usuario. Verifique que el nombre de usuario no esté en uso."
+      );
     }
   };
 
-  const toggleUserStatus = async (userId: string) => {
-    try {
-      await userService.toggleUserStatus(userId);
-      await loadData();
-      const targetUser = users.find((u) => u.id === userId);
-      toast({
-        title: "Estado actualizado",
-        description: `Usuario ${targetUser?.nombre} ${
-          targetUser?.activo ? "desactivado" : "activado"
-        }`,
-      });
-    } catch (err) {
-      console.error("Error toggling user status:", err);
-      toast({
-        title: "Error",
-        description: "Error interno del servidor",
-        variant: "destructive",
-      });
+  const handleToggleUserStatus = (user: Usuario) => {
+    if (user.id === currentUser?.id) {
+      toast.error("No puedes desactivar tu propio usuario");
+      return;
     }
+
+    const action = user.activo ? "desactivar" : "activar";
+    showConfirmation(
+      `Confirmar ${action} usuario`,
+      `¿Está seguro de que desea ${action} al usuario ${user.nombre}?`,
+      async () => {
+        try {
+          await userService.toggleUserStatus(user.id);
+          await loadData();
+          toast.success(
+            `✅ Usuario ${user.nombre} ${
+              user.activo ? "desactivado" : "activado"
+            } exitosamente`
+          );
+        } catch (err) {
+          console.error("Error toggling user status:", err);
+          toast.error("Error al cambiar el estado del usuario");
+        }
+      }
+    );
   };
 
   const getRoleLabel = (rol: string) => {
@@ -405,9 +395,20 @@ export const UserManagement = () => {
                         <Button
                           size="sm"
                           variant={userItem.activo ? "destructive" : "default"}
-                          onClick={() => toggleUserStatus(userItem.id)}
+                          onClick={() => handleToggleUserStatus(userItem)}
+                          disabled={userItem.id === currentUser?.id}
                         >
-                          {userItem.activo ? "Desactivar" : "Activar"}
+                          {userItem.activo ? (
+                            <>
+                              <UserX className="h-4 w-4 mr-1" />
+                              Desactivar
+                            </>
+                          ) : (
+                            <>
+                              <UserCheck className="h-4 w-4 mr-1" />
+                              Activar
+                            </>
+                          )}
                         </Button>
                       </div>
                     </TableCell>
@@ -436,6 +437,8 @@ export const UserManagement = () => {
           onClose={() => setResetPasswordUser(null)}
         />
       )}
+
+      <ConfirmationDialog />
     </div>
   );
 };

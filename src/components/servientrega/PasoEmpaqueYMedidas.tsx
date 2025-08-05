@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,59 +10,42 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import axios from "axios";
 import { Separator } from "@/components/ui/separator";
+import type { Empaque, Medidas, ResumenCostos } from "@/types/servientrega";
 
-interface Empaque {
-  articulo: string;
-  valorventa: string;
-}
-
-interface Props {
-  nombreProducto: string;
+// Tipado del prop
+interface PasoEmpaqueYMedidasProps {
+  nombre_producto: string;
   esDocumento: boolean;
   paisDestino: string;
   ciudadDestino: string;
   provinciaDestino: string;
   onNext: (data: {
-    medidas: {
-      alto: number;
-      ancho: number;
-      largo: number;
-      peso: number;
-      valor_declarado: number;
-      valor_seguro: number;
-      recoleccion: boolean;
-    };
-    empaque?: {
-      tipo_empaque: string;
-      cantidad: number;
-      descripcion: string;
-      costo_unitario: number;
-      costo_total: number;
-    };
-    resumen_costos: {
-      costo_empaque: number;
-      valor_seguro: number;
-      flete: number;
-      total: number;
-    };
+    medidas: Medidas;
+    empaque?: Empaque;
+    resumen_costos: ResumenCostos;
   }) => void;
 }
 
+interface EmpaqueApi {
+  articulo: string;
+  valorventa: string;
+}
+
 export default function PasoEmpaqueYMedidas({
-  nombreProducto,
+  nombre_producto,
   esDocumento,
   paisDestino,
   ciudadDestino,
   provinciaDestino,
   onNext,
-}: Props) {
+}: PasoEmpaqueYMedidasProps) {
   const [loading, setLoading] = useState(false);
-  const [empaques, setEmpaques] = useState<Empaque[]>([]);
+  const [empaques, setEmpaques] = useState<EmpaqueApi[]>([]);
   const [loadingEmpaques, setLoadingEmpaques] = useState(true);
   const [flete, setFlete] = useState<number>(0);
   const [loadingFlete, setLoadingFlete] = useState(false);
 
-  const [medidas, setMedidas] = useState({
+  const [medidas, setMedidas] = useState<Medidas>({
     alto: 0,
     ancho: 0,
     largo: 0,
@@ -72,10 +55,11 @@ export default function PasoEmpaqueYMedidas({
     recoleccion: false,
   });
 
-  const [requiereEmpaque, setRequiereEmpaque] = useState(true);
+  // Para documentos: forzar requerir empaque en falso
+  const [requiereEmpaque, setRequiereEmpaque] = useState(!esDocumento);
   const [manualSeguro, setManualSeguro] = useState(false);
 
-  const [empaque, setEmpaque] = useState({
+  const [empaque, setEmpaque] = useState<Empaque>({
     tipo_empaque: "",
     cantidad: 1,
     descripcion: "",
@@ -85,7 +69,7 @@ export default function PasoEmpaqueYMedidas({
 
   const esInternacional = paisDestino?.toUpperCase() !== "ECUADOR";
 
-  // 📦 Cargar empaques disponibles
+  // Cargar empaques disponibles
   useEffect(() => {
     const fetchEmpaques = async () => {
       try {
@@ -101,9 +85,27 @@ export default function PasoEmpaqueYMedidas({
     fetchEmpaques();
   }, []);
 
-  // ✅ Forzar empaque obligatorio para internacional
+  // Lógica por tipo producto/internacional
   useEffect(() => {
-    if (esInternacional && empaques.length > 0) {
+    if (esDocumento) {
+      setRequiereEmpaque(false);
+      setEmpaque({
+        tipo_empaque: "",
+        cantidad: 0,
+        descripcion: "",
+        costo_unitario: 0,
+        costo_total: 0,
+      });
+      setMedidas((prev) => ({
+        ...prev,
+        alto: 0,
+        ancho: 0,
+        largo: 0,
+        peso: 0,
+      }));
+    } else if (esInternacional && empaques.length > 0) {
+      // Empaque obligatorio internacional
+      setRequiereEmpaque(true);
       const defaultEmpaque =
         empaques.find((emp) => emp.articulo.toUpperCase().includes("SOBRE")) ||
         empaques[0];
@@ -119,11 +121,10 @@ export default function PasoEmpaqueYMedidas({
           costo_total: costoUnitario,
         });
       }
-      setRequiereEmpaque(true);
     }
-  }, [esInternacional, empaques]);
+  }, [esDocumento, esInternacional, empaques]);
 
-  // 📐 Cálculo dinámico del empaque
+  // Cálculo dinámico del empaque
   useEffect(() => {
     setEmpaque((prev) => ({
       ...prev,
@@ -131,61 +132,54 @@ export default function PasoEmpaqueYMedidas({
     }));
   }, [empaque.cantidad, empaque.costo_unitario]);
 
-  // 🚚 Calcular flete
-  const calcularFlete = useCallback(() => {
-    if (!ciudadDestino || !provinciaDestino) return;
-
-    setLoadingFlete(true);
-    axios
-      .post("/api/servientrega/tarifa", {
-        tipo: esInternacional
-          ? "obtener_tarifa_internacional"
-          : "obtener_tarifa_nacional",
-        pais_ori: "ECUADOR",
-        ciu_ori: "QUITO",
-        provincia_ori: "PICHINCHA",
-        pais_des: paisDestino,
-        ciu_des: ciudadDestino,
-        provincia_des: provinciaDestino,
-        valor_seguro: medidas.valor_seguro || 0,
-        valor_declarado: medidas.valor_declarado || 0,
-        peso: medidas.peso || 0,
-        alto: medidas.alto || 0,
-        ancho: medidas.ancho || 0,
-        largo: medidas.largo || 0,
-        recoleccion: medidas.recoleccion ? "SI" : "NO",
-        nombre_producto: nombreProducto,
-        empaque: requiereEmpaque ? empaque.tipo_empaque : "",
-      })
-      .then((res) => {
-        if (!res.data || !Array.isArray(res.data) || !res.data[0]?.flete) {
-          setFlete(0);
-          toast.error("Error al calcular el flete.");
-          return;
-        }
-        setFlete(parseFloat(res.data[0].flete) || 0);
-      })
-      .catch(() => toast.error("Error al calcular el flete."))
-      .finally(() => setLoadingFlete(false));
-  }, [
-    ciudadDestino,
-    provinciaDestino,
-    paisDestino,
-    medidas,
-    requiereEmpaque,
-    empaque.tipo_empaque,
-    esInternacional,
-    nombreProducto,
-  ]);
-
+  // Calcular flete solo cuando se tienen todos los datos mínimos
   useEffect(() => {
+    const calcularFlete = async () => {
+      if (!ciudadDestino || !provinciaDestino || !nombre_producto) return;
+      if (!esDocumento && !requiereEmpaque) {
+        if (!medidas.alto || !medidas.ancho || !medidas.largo || !medidas.peso)
+          return;
+      }
+
+      setLoadingFlete(true);
+      try {
+        const { data } = await axios.post("/api/servientrega/tarifa", {
+          tipo: esInternacional
+            ? "obtener_tarifa_internacional"
+            : "obtener_tarifa_nacional",
+          pais_ori: "ECUADOR",
+          ciu_ori: "QUITO",
+          provincia_ori: "PICHINCHA",
+          pais_des: paisDestino,
+          ciu_des: ciudadDestino,
+          provincia_des: provinciaDestino,
+          valor_seguro: medidas.valor_seguro || 0,
+          valor_declarado: medidas.valor_declarado || 0,
+          peso: esDocumento || requiereEmpaque ? 0 : medidas.peso || 0,
+          alto: esDocumento || requiereEmpaque ? 0 : medidas.alto || 0,
+          ancho: esDocumento || requiereEmpaque ? 0 : medidas.ancho || 0,
+          largo: esDocumento || requiereEmpaque ? 0 : medidas.largo || 0,
+          recoleccion: medidas.recoleccion ? "SI" : "NO",
+          nombre_producto,
+          empaque: requiereEmpaque ? empaque.tipo_empaque : "",
+        });
+        const tarifa = Array.isArray(data) ? data[0] : data;
+        setFlete(parseFloat(tarifa?.flete || "0"));
+      } catch {
+        toast.error("Error al calcular el flete.");
+        setFlete(0);
+      } finally {
+        setLoadingFlete(false);
+      }
+    };
     calcularFlete();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medidas, requiereEmpaque, empaque.tipo_empaque]);
 
-  // ✏️ Inputs
+  // Inputs
   const handleMedidaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    const numericValue = parseFloat(value) || 0;
+    const { name, value, type } = e.target;
+    const numericValue = type === "number" ? parseFloat(value) || 0 : value;
     setMedidas((prev) => ({ ...prev, [name]: numericValue }));
   };
 
@@ -204,75 +198,73 @@ export default function PasoEmpaqueYMedidas({
     }
   };
 
-  const resumenCostos = useMemo(() => {
+  const resumenCostos = useMemo<ResumenCostos>(() => {
     return {
       costo_empaque: requiereEmpaque ? empaque.costo_total : 0,
-      valor_seguro: medidas.valor_seguro || 0,
-      flete,
+      valor_seguro: manualSeguro ? medidas.valor_seguro : 0,
+      flete: flete || 0,
       total:
         (requiereEmpaque ? empaque.costo_total : 0) +
-        (medidas.valor_seguro || 0) +
-        flete,
+        (manualSeguro ? medidas.valor_seguro : 0) +
+        (flete || 0),
     };
-  }, [flete, empaque, medidas.valor_seguro, requiereEmpaque]);
+  }, [flete, empaque, medidas.valor_seguro, manualSeguro, requiereEmpaque]);
 
   const handleContinue = () => {
     if (!medidas.valor_declarado || medidas.valor_declarado <= 0) {
       toast.error("Debes ingresar un valor declarado válido.");
       return;
     }
-    if (
-      !requiereEmpaque &&
-      (!medidas.alto || !medidas.ancho || !medidas.largo || !medidas.peso)
-    ) {
-      toast.error("Debes ingresar todas las medidas y el peso.");
-      return;
+    if (!esDocumento && !requiereEmpaque) {
+      if (!medidas.alto || !medidas.ancho || !medidas.largo || !medidas.peso) {
+        toast.error("Debes ingresar todas las medidas y el peso.");
+        return;
+      }
     }
-
-    const payload = {
+    setLoading(true);
+    onNext({
       medidas: {
-        alto: requiereEmpaque ? 0 : medidas.alto,
-        ancho: requiereEmpaque ? 0 : medidas.ancho,
-        largo: requiereEmpaque ? 0 : medidas.largo,
-        peso: requiereEmpaque ? 0 : medidas.peso,
+        alto: esDocumento || requiereEmpaque ? 0 : medidas.alto,
+        ancho: esDocumento || requiereEmpaque ? 0 : medidas.ancho,
+        largo: esDocumento || requiereEmpaque ? 0 : medidas.largo,
+        peso: esDocumento || requiereEmpaque ? 0 : medidas.peso,
         valor_declarado: medidas.valor_declarado,
         valor_seguro: manualSeguro ? medidas.valor_seguro : 0,
-        recoleccion: medidas.recoleccion,
+        recoleccion: !!medidas.recoleccion,
       },
       empaque: requiereEmpaque ? empaque : undefined,
       resumen_costos: resumenCostos,
-    };
-
-    setLoading(true);
-    onNext(payload);
+    });
     setLoading(false);
   };
 
   return (
     <Card className="w-full max-w-xl mx-auto mt-6 shadow-lg border rounded-xl">
       <CardHeader>
-        <CardTitle>Detalles del paquete - {nombreProducto}</CardTitle>
+        <CardTitle>Detalles del paquete - {nombre_producto}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Switch empaque */}
-        <div className="flex items-center justify-between">
-          <Label className="font-medium">
-            ¿Requiere empaque y embalaje?
-            {esInternacional && (
-              <span className="text-red-500 ml-1">
-                (Obligatorio internacional)
-              </span>
-            )}
-          </Label>
-          <Switch
-            checked={requiereEmpaque}
-            onCheckedChange={setRequiereEmpaque}
-            disabled={esInternacional}
-          />
-        </div>
+        {!esDocumento && (
+          <div className="flex items-center justify-between">
+            <Label className="font-medium">
+              ¿Requiere empaque y embalaje?
+              {esInternacional && (
+                <span className="text-red-500 ml-1">
+                  (Obligatorio internacional)
+                </span>
+              )}
+            </Label>
+            <Switch
+              checked={requiereEmpaque}
+              onCheckedChange={setRequiereEmpaque}
+              disabled={esInternacional}
+            />
+          </div>
+        )}
 
         {/* Empaque */}
-        {requiereEmpaque && (
+        {requiereEmpaque && !esDocumento && (
           <>
             <div>
               <Label>Tipo de empaque</Label>
@@ -315,8 +307,8 @@ export default function PasoEmpaqueYMedidas({
           </>
         )}
 
-        {/* Medidas solo si no hay empaque */}
-        {!requiereEmpaque && (
+        {/* Medidas solo si no hay empaque y no es documento */}
+        {!requiereEmpaque && !esDocumento && (
           <div className="grid grid-cols-2 gap-4">
             {["alto", "ancho", "largo", "peso"].map((campo) => (
               <div key={campo}>

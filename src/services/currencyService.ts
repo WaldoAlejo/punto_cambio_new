@@ -21,14 +21,10 @@ export const currencyService = {
     currencies: Moneda[];
     error: string | null;
   }> {
-    console.warn("=== CURRENCY SERVICE - getAllCurrencies START ===");
     try {
-      console.warn('Calling apiService.get("/currencies")...');
       const response = await apiService.get<CurrenciesResponse>("/currencies");
-      console.warn("getAllCurrencies - Raw response:", response);
 
       if (!response) {
-        console.error("getAllCurrencies - No response received");
         return {
           currencies: [],
           error: "No se pudo obtener la respuesta del servidor",
@@ -36,24 +32,16 @@ export const currencyService = {
       }
 
       if (response.error || !response.success) {
-        console.error("getAllCurrencies - Response error:", response.error);
         return {
           currencies: [],
           error: response.error || "Error al obtener monedas",
         };
       }
 
-      console.warn(
-        "getAllCurrencies - Success, currencies count:",
-        response.currencies?.length || 0
-      );
       return { currencies: response.currencies || [], error: null };
     } catch (error) {
-      console.error("=== getAllCurrencies ERROR ===");
-      console.error("Error details:", error);
+      console.error("Error en getAllCurrencies:", error);
       return { currencies: [], error: "Error de conexión con el servidor" };
-    } finally {
-      console.warn("=== CURRENCY SERVICE - getAllCurrencies END ===");
     }
   },
 

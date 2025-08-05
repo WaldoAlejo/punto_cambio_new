@@ -10,11 +10,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { transferApprovalService } from "../../services/transferApprovalService";
 import { Transferencia } from "../../types";
 
 const TransferApprovals = () => {
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
   const [pendingTransfers, setPendingTransfers] = useState<Transferencia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
@@ -33,21 +35,13 @@ const TransferApprovals = () => {
         await transferApprovalService.getPendingTransfers();
 
       if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
+        toast.error(`Error al cargar transferencias: ${error}`);
       } else {
         setPendingTransfers(transfers);
       }
     } catch (error) {
       console.error("Error loading pending transfers:", error);
-      toast({
-        title: "Error",
-        description: "Error al cargar las transferencias pendientes",
-        variant: "destructive",
-      });
+      toast.error("Error al cargar las transferencias pendientes");
     } finally {
       setIsLoading(false);
     }
@@ -63,103 +57,102 @@ const TransferApprovals = () => {
     return types[type as keyof typeof types] || type;
   };
 
-  const handleApprove = async (transferId: string) => {
-    if (processingIds.has(transferId)) return;
+  const handleApprove = (transfer: Transferencia) => {
+    if (processingIds.has(transfer.id)) return;
 
-    try {
-      setProcessingIds((prev) => new Set(prev).add(transferId));
+    showConfirmation(
+      "Confirmar aprobación",
+      `¿Está seguro de aprobar la transferencia de ${transfer.monto.toLocaleString()} ${
+        transfer.moneda?.codigo
+      } desde ${transfer.puntoOrigen?.nombre} hacia ${
+        transfer.puntoDestino?.nombre || "Matriz"
+      }?`,
+      async () => {
+        try {
+          setProcessingIds((prev) => new Set(prev).add(transfer.id));
 
-      const { error } = await transferApprovalService.approveTransfer(
-        transferId,
-        {
-          observaciones: observaciones[transferId] || undefined,
+          const { error } = await transferApprovalService.approveTransfer(
+            transfer.id,
+            {
+              observaciones: observaciones[transfer.id] || undefined,
+            }
+          );
+
+          if (error) {
+            toast.error(`Error al aprobar transferencia: ${error}`);
+          } else {
+            setPendingTransfers((prev) =>
+              prev.filter((t) => t.id !== transfer.id)
+            );
+            toast.success("✅ Transferencia aprobada exitosamente");
+
+            // Disparar evento para actualizar saldos
+            window.dispatchEvent(new CustomEvent("transferApproved"));
+
+            setObservaciones((prev) => {
+              const newObs = { ...prev };
+              delete newObs[transfer.id];
+              return newObs;
+            });
+          }
+        } catch (error) {
+          console.error("Error approving transfer:", error);
+          toast.error("Error al aprobar la transferencia");
+        } finally {
+          setProcessingIds((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(transfer.id);
+            return newSet;
+          });
         }
-      );
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
-      } else {
-        setPendingTransfers((prev) => prev.filter((t) => t.id !== transferId));
-        toast({
-          title: "Transferencia aprobada",
-          description: "La transferencia ha sido aprobada exitosamente",
-        });
-        
-        // Disparar evento para actualizar saldos
-        window.dispatchEvent(new CustomEvent('transferApproved'));
-        
-        setObservaciones((prev) => {
-          const newObs = { ...prev };
-          delete newObs[transferId];
-          return newObs;
-        });
       }
-    } catch (error) {
-      console.error("Error approving transfer:", error);
-      toast({
-        title: "Error",
-        description: "Error al aprobar la transferencia",
-        variant: "destructive",
-      });
-    } finally {
-      setProcessingIds((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(transferId);
-        return newSet;
-      });
-    }
+    );
   };
 
-  const handleReject = async (transferId: string) => {
-    if (processingIds.has(transferId)) return;
+  const handleReject = (transfer: Transferencia) => {
+    if (processingIds.has(transfer.id)) return;
 
-    try {
-      setProcessingIds((prev) => new Set(prev).add(transferId));
+    showConfirmation(
+      "Confirmar rechazo",
+      `¿Está seguro de rechazar la transferencia de ${transfer.monto.toLocaleString()} ${
+        transfer.moneda?.codigo
+      }? Esta acción no se puede deshacer.`,
+      async () => {
+        try {
+          setProcessingIds((prev) => new Set(prev).add(transfer.id));
 
-      const { error } = await transferApprovalService.rejectTransfer(
-        transferId,
-        {
-          observaciones: observaciones[transferId] || undefined,
+          const { error } = await transferApprovalService.rejectTransfer(
+            transfer.id,
+            {
+              observaciones: observaciones[transfer.id] || undefined,
+            }
+          );
+
+          if (error) {
+            toast.error(`Error al rechazar transferencia: ${error}`);
+          } else {
+            setPendingTransfers((prev) =>
+              prev.filter((t) => t.id !== transfer.id)
+            );
+            toast.success("Transferencia rechazada");
+            setObservaciones((prev) => {
+              const newObs = { ...prev };
+              delete newObs[transfer.id];
+              return newObs;
+            });
+          }
+        } catch (error) {
+          console.error("Error rejecting transfer:", error);
+          toast.error("Error al rechazar la transferencia");
+        } finally {
+          setProcessingIds((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(transfer.id);
+            return newSet;
+          });
         }
-      );
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
-      } else {
-        setPendingTransfers((prev) => prev.filter((t) => t.id !== transferId));
-        toast({
-          title: "Transferencia rechazada",
-          description: "La transferencia ha sido rechazada",
-          variant: "destructive",
-        });
-        setObservaciones((prev) => {
-          const newObs = { ...prev };
-          delete newObs[transferId];
-          return newObs;
-        });
       }
-    } catch (error) {
-      console.error("Error rejecting transfer:", error);
-      toast({
-        title: "Error",
-        description: "Error al rechazar la transferencia",
-        variant: "destructive",
-      });
-    } finally {
-      setProcessingIds((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(transferId);
-        return newSet;
-      });
-    }
+    );
   };
 
   if (isLoading) {
@@ -286,7 +279,7 @@ const TransferApprovals = () => {
 
                   <div className="flex gap-2 pt-2 border-t">
                     <Button
-                      onClick={() => handleApprove(transfer.id)}
+                      onClick={() => handleApprove(transfer)}
                       disabled={processingIds.has(transfer.id)}
                       className="bg-green-600 hover:bg-green-700"
                     >
@@ -296,7 +289,7 @@ const TransferApprovals = () => {
                     </Button>
                     <Button
                       variant="destructive"
-                      onClick={() => handleReject(transfer.id)}
+                      onClick={() => handleReject(transfer)}
                       disabled={processingIds.has(transfer.id)}
                     >
                       {processingIds.has(transfer.id)
@@ -310,6 +303,8 @@ const TransferApprovals = () => {
           ))}
         </div>
       )}
+
+      <ConfirmationDialog />
     </div>
   );
 };

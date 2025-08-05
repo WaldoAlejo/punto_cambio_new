@@ -15,7 +15,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface ProductoSeleccionado {
-  nombre: string;
+  nombre_producto: string; // <- Usar SIEMPRE este campo
   esDocumento: boolean;
 }
 
@@ -24,28 +24,22 @@ interface PasoProductoProps {
 }
 
 export default function PasoProducto({ onNext }: PasoProductoProps) {
-  const [productos, setProductos] = useState<string[]>([]);
-  const [selectedProducto, setSelectedProducto] = useState("");
+  // productos es array de objetos { nombre_producto }
+  const [productos, setProductos] = useState<{ nombre_producto: string }[]>([]);
+  const [selectedProducto, setSelectedProducto] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [cargandoProductos, setCargandoProductos] = useState(true);
 
-  // 🔄 Cargar productos desde el backend Servientrega
+  // Cargar productos desde el backend Servientrega (ya devuelve productos: [{nombre_producto: string}])
   const fetchProductos = async () => {
     try {
       setCargandoProductos(true);
-      const response = await axios.post<{ fetch: { producto: string }[] }>(
-        "/api/servientrega/productos"
+      const response = await axios.post<{
+        productos: { nombre_producto: string }[];
+      }>("/api/servientrega/productos");
+      setProductos(
+        Array.isArray(response.data.productos) ? response.data.productos : []
       );
-
-      const lista = Array.isArray(response.data.fetch)
-        ? response.data.fetch
-        : [];
-
-      const nombres = lista
-        .map((p) => p.producto?.trim())
-        .filter((p) => p && p.length > 0);
-
-      setProductos(nombres);
     } catch (err) {
       console.error("❌ Error al cargar productos:", err);
       toast.error("No se pudieron cargar los productos. Intenta nuevamente.");
@@ -65,15 +59,20 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
     }
     setLoading(true);
 
-    const producto: ProductoSeleccionado = {
-      nombre: selectedProducto,
+    // Busca el objeto seleccionado para enviar el nombre_producto correcto
+    const producto = productos.find(
+      (p) => p.nombre_producto === selectedProducto
+    );
+
+    const resultado: ProductoSeleccionado = {
+      nombre_producto: producto?.nombre_producto || selectedProducto,
       esDocumento: selectedProducto.toUpperCase().includes("DOCUMENTO"),
     };
 
     // Simulación de carga breve para UX
     setTimeout(() => {
       setLoading(false);
-      onNext(producto);
+      onNext(resultado);
     }, 300);
   };
 
@@ -98,8 +97,8 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
               </SelectTrigger>
               <SelectContent>
                 {productos.map((p, i) => (
-                  <SelectItem key={i} value={p}>
-                    {p}
+                  <SelectItem key={i} value={p.nombre_producto}>
+                    {p.nombre_producto}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -14,12 +14,12 @@ interface PasoResumenProps {
 }
 
 interface TarifaResponse {
-  flete: number;
-  valor_declarado: string;
-  valor_empaque: string;
-  seguro?: string;
+  flete: number | string;
+  valor_declarado: number | string;
+  valor_empaque: number | string;
+  seguro?: number | string;
   tiempo: string | null;
-  peso_vol?: string;
+  peso_vol?: string | number;
 }
 
 const DEFAULT_EMPAQUE = "AISLANTE DE HUMEDAD";
@@ -71,6 +71,7 @@ export default function PasoResumen({
   const [tarifa, setTarifa] = useState<TarifaResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Desglose dirección para presentación más clara
   const descomponerDireccion = (direccion: string) => {
     if (!direccion)
       return {
@@ -90,6 +91,7 @@ export default function PasoResumen({
     };
   };
 
+  // Calcula peso volumétrico
   const calcularPesoVolumetrico = () => {
     const alto = Number(medidas?.alto || 0);
     const ancho = Number(medidas?.ancho || 0);
@@ -100,40 +102,40 @@ export default function PasoResumen({
   };
 
   const pesoFisico = Number(medidas?.peso || 0);
-  const pesoVolumetrico = Number(
-    tarifa?.peso_vol || calcularPesoVolumetrico().toFixed(2)
-  );
+  const pesoVolumetrico = Number(tarifa?.peso_vol || calcularPesoVolumetrico());
   const pesoFacturable = Math.max(pesoFisico, pesoVolumetrico);
 
+  // Calcula tarifa usando backend
   useEffect(() => {
     const fetchTarifa = async () => {
       setLoading(true);
       try {
-        const isInternacional = destinatario.pais?.toUpperCase() !== "ECUADOR";
+        const isInternacional =
+          (destinatario?.pais || "").toUpperCase() !== "ECUADOR";
         const payload = {
           tipo: isInternacional
             ? "obtener_tarifa_internacional"
             : "obtener_tarifa_nacional",
-          pais_ori: remitente.pais || "ECUADOR",
-          ciu_ori: remitente.ciudad || "",
-          provincia_ori: remitente.provincia || "",
-          pais_des: destinatario.pais || "ECUADOR",
-          ciu_des: destinatario.ciudad || "",
-          provincia_des: destinatario.provincia || "",
-          valor_seguro: medidas?.valor_seguro?.toString() || "0",
-          valor_declarado: medidas?.valor_declarado?.toString() || "0",
+          pais_ori: remitente?.pais || "ECUADOR",
+          ciu_ori: remitente?.ciudad || "",
+          provincia_ori: remitente?.provincia || "",
+          pais_des: destinatario?.pais || "ECUADOR",
+          ciu_des: destinatario?.ciudad || "",
+          provincia_des: destinatario?.provincia || "",
+          valor_seguro: (medidas?.valor_seguro ?? "0").toString(),
+          valor_declarado: (medidas?.valor_declarado ?? "0").toString(),
           peso: pesoFacturable.toString(),
-          alto: medidas?.alto?.toString() || "0",
-          ancho: medidas?.ancho?.toString() || "0",
-          largo: medidas?.largo?.toString() || "0",
+          alto: (medidas?.alto ?? 0).toString(),
+          ancho: (medidas?.ancho ?? 0).toString(),
+          largo: (medidas?.largo ?? 0).toString(),
           recoleccion: "NO",
           nombre_producto: formData.nombre_producto || "",
           empaque: formData.requiere_empaque
             ? formData.empaque?.tipo_empaque || DEFAULT_EMPAQUE
             : DEFAULT_EMPAQUE,
           ...(isInternacional && {
-            codigo_postal_ori: remitente.codigo_postal || DEFAULT_CP_ORI,
-            codigo_postal_des: destinatario.codigo_postal || DEFAULT_CP_DES,
+            codigo_postal_ori: remitente?.codigo_postal || DEFAULT_CP_ORI,
+            codigo_postal_des: destinatario?.codigo_postal || DEFAULT_CP_DES,
           }),
         };
 
@@ -141,30 +143,43 @@ export default function PasoResumen({
         const resultado = Array.isArray(res.data) ? res.data[0] : res.data;
         if (!resultado || resultado.flete === undefined) {
           toast.error("No se pudo calcular la tarifa. Verifica los datos.");
+          setTarifa(null);
           return;
         }
-        if (!resultado.peso_vol) {
-          resultado.peso_vol = calcularPesoVolumetrico().toFixed(2);
-        }
-        setTarifa(resultado);
+        setTarifa({
+          ...resultado,
+          flete: Number(resultado.flete) || 0,
+          valor_empaque: Number(resultado.valor_empaque) || 0,
+          valor_declarado: Number(resultado.valor_declarado) || 0,
+          seguro: resultado.seguro
+            ? Number(resultado.seguro)
+            : medidas?.valor_seguro || 0,
+          peso_vol: resultado.peso_vol
+            ? Number(resultado.peso_vol)
+            : calcularPesoVolumetrico(),
+        });
       } catch (err) {
         console.error("Error al obtener tarifa:", err);
         toast.error("Error al calcular la tarifa. Intenta nuevamente.");
+        setTarifa(null);
       } finally {
         setLoading(false);
       }
     };
 
     fetchTarifa();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
 
+  // Total calculado
   const calcularTotal = (): string => {
     if (!tarifa) return "0.00";
     const flete = Number(tarifa.flete) || 0;
-    const empaque = parseFloat(tarifa.valor_empaque) || 0;
+    const empaque = Number(tarifa.valor_empaque) || 0;
     return (flete + empaque).toFixed(2);
   };
 
+  // Valida saldo antes de permitir confirmar
   const validarSaldoAntesConfirmar = async () => {
     if (!punto_atencion_id) {
       toast.error("No se ha identificado el punto de atención.");
@@ -174,21 +189,18 @@ export default function PasoResumen({
       const { data } = await axios.get(
         `/api/servientrega/saldo/validar/${punto_atencion_id}`
       );
-      if (data?.suficiente) {
+      if (data?.estado === "OK") {
         onConfirm();
       } else {
-        toast.error("Saldo insuficiente para generar esta guía.");
+        toast.error(
+          data?.mensaje || "Saldo insuficiente para generar esta guía."
+        );
       }
     } catch (err) {
       console.error("Error al validar saldo:", err);
       toast.error("No se pudo validar el saldo disponible.");
     }
   };
-
-  const direccionRemitente = descomponerDireccion(remitente?.direccion || "");
-  const direccionDestinatario = descomponerDireccion(
-    destinatario?.direccion || ""
-  );
 
   return (
     <Card className="w-full max-w-4xl mx-auto mt-6 shadow-lg border rounded-xl">
@@ -206,7 +218,10 @@ export default function PasoResumen({
 
         <Seccion titulo="🧍 Remitente">
           <Campo label="Nombre" value={remitente?.nombre} />
-          <Campo label="Cédula" value={remitente?.identificacion} />
+          <Campo
+            label="Cédula"
+            value={remitente?.identificacion || remitente?.cedula}
+          />
           <Campo
             label="Ciudad"
             value={`${remitente?.ciudad} - ${remitente?.provincia}`}
@@ -218,7 +233,10 @@ export default function PasoResumen({
 
         <Seccion titulo="🎯 Destinatario">
           <Campo label="Nombre" value={destinatario?.nombre} />
-          <Campo label="Cédula" value={destinatario?.identificacion} />
+          <Campo
+            label="Cédula"
+            value={destinatario?.identificacion || destinatario?.cedula}
+          />
           <Campo
             label="Ciudad"
             value={`${destinatario?.ciudad} - ${destinatario?.provincia}`}
@@ -241,7 +259,7 @@ export default function PasoResumen({
           />
           <Campo
             label="Valor asegurado"
-            value={`$${tarifa?.seguro || medidas?.valor_seguro}`}
+            value={`$${tarifa?.seguro ?? medidas?.valor_seguro ?? 0}`}
           />
           <Campo label="Peso físico (kg)" value={pesoFisico} />
           <Campo
@@ -273,11 +291,11 @@ export default function PasoResumen({
             />
             <Campo
               label="Valor Declarado"
-              value={`$${tarifa.valor_declarado}`}
+              value={`$${Number(tarifa.valor_declarado).toFixed(2)}`}
             />
             <Campo
               label="Seguro calculado"
-              value={`$${tarifa.seguro || medidas?.valor_seguro}`}
+              value={`$${tarifa.seguro ?? medidas?.valor_seguro ?? 0}`}
             />
             <Campo
               label="Tiempo estimado"

@@ -16,38 +16,25 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Destinatario } from "@/types/servientrega"; // Asegúrate de la ruta
 
+// ----- TIPADOS AUXILIARES -----
 interface Pais {
   codpais: number;
   pais: string;
   nombrecorto: string;
   phone_code: string;
 }
-
 interface Ciudad {
   ciudad: string;
   provincia: string;
 }
-
 interface Agencia {
   nombre: string;
   tipo_cs: string;
   direccion: string;
   ciudad: string;
 }
-
-interface Destinatario {
-  cedula: string;
-  nombre: string;
-  direccion: string;
-  telefono: string;
-  email: string;
-  ciudad: string;
-  provincia: string;
-  codigo_postal?: string;
-  codpais: number;
-}
-
 interface PasoDestinatarioProps {
   onNext: (
     destinatario: Destinatario,
@@ -56,6 +43,7 @@ interface PasoDestinatarioProps {
   ) => void;
 }
 
+// ----------- COMPONENTE PRINCIPAL -----------
 export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [paises, setPaises] = useState<Pais[]>([]);
   const [ciudades, setCiudades] = useState<Ciudad[]>([]);
@@ -65,13 +53,14 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [loading, setLoading] = useState(false);
 
   const [cedulaQuery, setCedulaQuery] = useState("");
-  const [cedulaResultados, setCedulaResultados] = useState<Destinatario[]>([]);
+  const [cedulaResultados, setCedulaResultados] = useState<any[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
   const [destinatarioExistente, setDestinatarioExistente] =
     useState<Destinatario | null>(null);
 
+  // Incluye pais y codpais
   const [form, setForm] = useState<Destinatario>({
-    cedula: "",
+    identificacion: "",
     nombre: "",
     direccion: "",
     telefono: "",
@@ -79,7 +68,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     ciudad: "",
     provincia: "",
     codigo_postal: "",
-    codpais: 63, // Ecuador por defecto
+    pais: "ECUADOR",
+    codpais: 63,
   });
 
   const [extraDireccion, setExtraDireccion] = useState({
@@ -89,22 +79,27 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     referencia: "",
   });
 
-  const esInternacional = form.codpais !== 63; // Ecuador = 63
+  const esInternacional = form.codpais !== 63;
 
-  // 📥 Cargar países y ciudades de Ecuador por defecto
+  // ===============================
+  // 1. Cargar países y Ecuador por defecto
+  // ===============================
   useEffect(() => {
     axios
       .post("/api/servientrega/paises")
       .then((res) => {
-        const lista = res.data.fetch || [];
+        const lista: Pais[] = res.data.fetch || [];
         setPaises(lista);
-        const ecuador = lista.find((p: Pais) => p.codpais === 63);
-        if (ecuador) handlePaisChange("63"); // Autocargar Ecuador
+        const ecuador = lista.find((p) => p.codpais === 63);
+        if (ecuador) handlePaisChange("63");
       })
       .catch((err) => console.error("Error al obtener países:", err));
+    // eslint-disable-next-line
   }, []);
 
-  // 🔍 Búsqueda predictiva de destinatario
+  // ===============================
+  // 2. Búsqueda predictiva de destinatario
+  // ===============================
   useEffect(() => {
     if (cedulaQuery.trim().length >= 3) {
       setBuscandoCedula(true);
@@ -118,11 +113,24 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
   }, [cedulaQuery]);
 
-  // ✅ Seleccionar destinatario encontrado
-  const seleccionarDestinatario = (dest: Destinatario) => {
-    setForm({ ...dest });
+  // ===============================
+  // 3. Seleccionar destinatario existente
+  // ===============================
+  const seleccionarDestinatario = (dest: any) => {
+    setForm({
+      identificacion: dest.cedula || dest.identificacion,
+      nombre: dest.nombre,
+      telefono: dest.telefono,
+      email: dest.email || "",
+      direccion: dest.direccion || "",
+      ciudad: dest.ciudad || "",
+      provincia: dest.provincia || "",
+      codigo_postal: dest.codigo_postal || "",
+      pais: dest.pais || "ECUADOR",
+      codpais: dest.codpais ?? 63,
+    });
     if (dest.direccion) {
-      const partes = dest.direccion.split(",").map((p) => p.trim());
+      const partes = dest.direccion.split(",").map((p: string) => p.trim());
       setExtraDireccion({
         callePrincipal: partes[0]?.split("#")[0]?.trim() || "",
         numeracion: partes[0]?.includes("#")
@@ -136,11 +144,16 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     setCedulaResultados([]);
   };
 
+  // ===============================
+  // 4. Cambio de país (siempre guarda pais y codpais)
+  // ===============================
   const handlePaisChange = (value: string) => {
     const codpais = parseInt(value);
+    const paisSeleccionado = paises.find((p) => p.codpais === codpais);
     setForm((prev) => ({
       ...prev,
       codpais,
+      pais: paisSeleccionado ? paisSeleccionado.pais : "",
       ciudad: "",
       provincia: "",
     }));
@@ -161,11 +174,17 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       .catch((err) => console.error("Error al obtener ciudades:", err));
   };
 
+  // ===============================
+  // 5. Cambio de ciudad/provincia
+  // ===============================
   const handleCiudadChange = (value: string) => {
     const [ciudad, provincia] = value.split("|");
     setForm((prev) => ({ ...prev, ciudad, provincia }));
   };
 
+  // ===============================
+  // 6. Cambios generales del form
+  // ===============================
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value.trimStart() });
 
@@ -175,6 +194,9 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       [e.target.name]: e.target.value.trimStart(),
     }));
 
+  // ===============================
+  // 7. Retiro en agencia
+  // ===============================
   const handleCheckboxChange = async (checked: boolean) => {
     setMostrarAgencias(checked);
     if (checked) {
@@ -195,9 +217,12 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
   };
 
+  // ===============================
+  // 8. Validar código postal (internacional)
+  // ===============================
   const validarCodigoPostal = async (): Promise<boolean> => {
     if (!esInternacional) return true;
-    if (!form.codigo_postal.trim()) {
+    if (!form.codigo_postal?.trim()) {
       toast.error(
         "El código postal es obligatorio para envíos internacionales."
       );
@@ -206,8 +231,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     return true;
   };
 
+  // ===============================
+  // 9. Guardar/actualizar y continuar
+  // ===============================
   const handleContinue = async () => {
-    if (!form.nombre || !form.telefono || !form.codpais || !form.ciudad) {
+    if (!form.nombre || !form.telefono || !form.pais || !form.ciudad) {
       toast.error("Completa todos los campos obligatorios.");
       return;
     }
@@ -233,23 +261,32 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         .join(", ");
     }
 
-    const destinatarioFinal = { ...form, direccion: direccionFinal.trim() };
+    // Objeto preparado para el backend y flujo interno
+    const destinatarioFinal: Destinatario = {
+      ...form,
+      direccion: direccionFinal.trim(),
+    };
 
     setLoading(true);
     try {
       if (destinatarioExistente) {
         await axios.put(
-          `/api/servientrega/destinatario/actualizar/${form.cedula.trim()}`,
-          destinatarioFinal
+          `/api/servientrega/destinatario/actualizar/${form.identificacion.trim()}`,
+          { ...destinatarioFinal, cedula: form.identificacion }
         );
       } else {
-        await axios.post(
-          "/api/servientrega/destinatario/guardar",
-          destinatarioFinal
-        );
+        await axios.post("/api/servientrega/destinatario/guardar", {
+          ...destinatarioFinal,
+          cedula: form.identificacion,
+        });
       }
       toast.success("Destinatario guardado correctamente.");
-      onNext(destinatarioFinal, mostrarAgencias, agenciaSeleccionada.trim());
+      // Para el flujo, solo se pasa la versión con identificacion (sin cedula extra)
+      onNext(
+        { ...destinatarioFinal },
+        mostrarAgencias,
+        agenciaSeleccionada.trim()
+      );
     } catch (err) {
       console.error("❌ Error al guardar destinatario:", err);
       toast.error("Hubo un problema al guardar el destinatario.");
@@ -258,13 +295,16 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
   };
 
+  // ===============================
+  // ----------- RENDER ------------
+  // ===============================
   return (
     <Card className="w-full max-w-2xl mx-auto mt-6 shadow-lg border rounded-xl">
       <CardHeader>
         <CardTitle>Datos del Destinatario</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* 🔹 SECCIÓN UBICACIÓN */}
+        {/* --- UBICACIÓN --- */}
         <div className="p-4 border rounded-md bg-gray-50">
           <h4 className="font-semibold mb-2">📍 Ubicación</h4>
           <Label>País</Label>
@@ -283,9 +323,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
               ))}
             </SelectContent>
           </Select>
-
           <Label className="mt-3">Ciudad y Provincia</Label>
-          <Select onValueChange={handleCiudadChange}>
+          <Select
+            onValueChange={handleCiudadChange}
+            value={`${form.ciudad}|${form.provincia}`}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Seleccionar ciudad" />
             </SelectTrigger>
@@ -297,7 +339,6 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
               ))}
             </SelectContent>
           </Select>
-
           {esInternacional && (
             <>
               <Label className="mt-3">Código Postal (Obligatorio)</Label>
@@ -310,8 +351,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             </>
           )}
         </div>
-
-        {/* 🔹 SECCIÓN RETIRO EN OFICINA */}
+        {/* --- RETIRO EN OFICINA --- */}
         <div className="p-4 border rounded-md bg-gray-50">
           <h4 className="font-semibold mb-2">🏢 Entrega</h4>
           <div className="flex items-center gap-2">
@@ -324,7 +364,10 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           {mostrarAgencias && (
             <div className="mt-2">
               <Label>Seleccionar agencia</Label>
-              <Select onValueChange={setAgenciaSeleccionada}>
+              <Select
+                onValueChange={setAgenciaSeleccionada}
+                value={agenciaSeleccionada}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar agencia" />
                 </SelectTrigger>
@@ -339,17 +382,16 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             </div>
           )}
         </div>
-
-        {/* 🔹 SECCIÓN DATOS PERSONALES */}
+        {/* --- DATOS PERSONALES --- */}
         <div className="p-4 border rounded-md bg-white">
           <h4 className="font-semibold mb-2">👤 Datos Personales</h4>
           <Input
-            name="cedula"
+            name="identificacion"
             placeholder="Cédula o Pasaporte"
-            value={form.cedula}
+            value={form.identificacion}
             onChange={(e) => {
               const value = e.target.value.trimStart();
-              setForm((prev) => ({ ...prev, cedula: value }));
+              setForm((prev) => ({ ...prev, identificacion: value }));
               setCedulaQuery(value);
             }}
           />
@@ -364,12 +406,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
                   className="p-2 hover:bg-gray-100 cursor-pointer"
                   onClick={() => seleccionarDestinatario(d)}
                 >
-                  {d.cedula} - {d.nombre}
+                  {(d.cedula || d.identificacion) + " - " + d.nombre}
                 </div>
               ))}
             </div>
           )}
-
           <Input
             name="nombre"
             placeholder="Nombre completo"
@@ -388,7 +429,6 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             value={form.email}
             onChange={handleChange}
           />
-
           {!mostrarAgencias && (
             <>
               <h4 className="font-semibold mt-4">🏠 Dirección</h4>
@@ -419,7 +459,6 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             </>
           )}
         </div>
-
         <Button
           onClick={handleContinue}
           disabled={loading || !form.ciudad}

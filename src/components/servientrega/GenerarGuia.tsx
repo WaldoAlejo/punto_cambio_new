@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import axios from "axios";
+import axiosInstance from "@/services/axiosInstance";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
@@ -108,7 +108,7 @@ export default function PasoConfirmarEnvio({
 
   const validarSaldo = async () => {
     try {
-      const { data } = await axios.get(
+      const { data } = await axiosInstance.get(
         `/api/servientrega/saldo/validar/${formData.punto_atencion_id}`
       );
       setSaldoDisponible(data?.saldo_disponible || 0);
@@ -143,7 +143,7 @@ export default function PasoConfirmarEnvio({
         factura: formData.factura || "PRUEBA",
       };
 
-      const res = await axios.post<GenerarGuiaResponse>(
+      const res = await axiosInstance.post<GenerarGuiaResponse>(
         "/api/servientrega/generar-guia",
         payload
       );
@@ -177,7 +177,7 @@ export default function PasoConfirmarEnvio({
 
   const handleSolicitarSaldo = async () => {
     try {
-      await axios.post("/api/servientrega/solicitar-saldo", {
+      await axiosInstance.post("/api/servientrega/solicitar-saldo", {
         punto_atencion_id: formData.punto_atencion_id,
         monto_requerido: formData.resumen_costos.total,
       });

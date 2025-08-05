@@ -8,30 +8,21 @@ import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Usuario, PuntoAtencion } from "../../types";
+import { Remitente } from "@/types/servientrega"; // Usa tu tipado global
 
 interface PasoRemitenteProps {
   user: Usuario;
   selectedPoint: PuntoAtencion;
-  onNext: (remitente: RemitenteFormData) => void;
-}
-
-export interface RemitenteFormData {
-  cedula: string;
-  nombre: string;
-  direccion: string;
-  telefono: string;
-  email: string;
-  ciudad: string;
-  provincia: string;
-  codigo_postal?: string;
+  onNext: (remitente: Remitente) => void;
 }
 
 export default function PasoRemitente({
   selectedPoint,
   onNext,
 }: PasoRemitenteProps) {
-  const [formData, setFormData] = useState<RemitenteFormData>({
-    cedula: "",
+  // Considera Ecuador como default para país, pero puedes escalarlo fácilmente
+  const [formData, setFormData] = useState<Remitente>({
+    identificacion: "",
     nombre: "",
     direccion: "",
     telefono: "",
@@ -39,6 +30,7 @@ export default function PasoRemitente({
     ciudad: "",
     provincia: "",
     codigo_postal: "170150",
+    pais: "ECUADOR",
   });
 
   const [extraDireccion, setExtraDireccion] = useState({
@@ -54,21 +46,22 @@ export default function PasoRemitente({
   const [cedulaResultados, setCedulaResultados] = useState<any[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
   const [remitenteExistente, setRemitenteExistente] =
-    useState<RemitenteFormData | null>(null);
+    useState<Remitente | null>(null);
 
-  // ✅ Autocompletar ciudad/provincia desde el punto seleccionado
+  // Autocompletar ciudad/provincia/país desde el punto seleccionado
   useEffect(() => {
     if (selectedPoint?.ciudad && selectedPoint?.provincia) {
       setFormData((prev) => ({
         ...prev,
         ciudad: selectedPoint.ciudad,
         provincia: selectedPoint.provincia,
+        pais: "ECUADOR", // Default
       }));
       setCiudadValida(true);
     }
   }, [selectedPoint]);
 
-  // 🔍 Búsqueda predictiva de remitente
+  // Búsqueda predictiva de remitente
   useEffect(() => {
     const query = cedulaQuery.trim();
     if (query.length >= 3) {
@@ -85,7 +78,7 @@ export default function PasoRemitente({
 
   const seleccionarRemitente = (rem: any) => {
     setFormData({
-      cedula: rem.cedula,
+      identificacion: rem.cedula || rem.identificacion,
       nombre: rem.nombre,
       telefono: rem.telefono,
       email: rem.email || "",
@@ -93,6 +86,7 @@ export default function PasoRemitente({
       ciudad: rem.ciudad || "",
       provincia: rem.provincia || "",
       codigo_postal: rem.codigo_postal || "170150",
+      pais: rem.pais || "ECUADOR",
     });
 
     if (rem.direccion) {
@@ -139,12 +133,12 @@ export default function PasoRemitente({
     setExtraDireccion((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleContinue = async () => {
-    const { cedula, nombre, telefono, email, ciudad } = formData;
-    if (!cedula || !nombre || !telefono || !email || !ciudad) {
+    const { identificacion, nombre, telefono, email, ciudad, pais } = formData;
+    if (!identificacion || !nombre || !telefono || !email || !ciudad || !pais) {
       toast.error("Completa todos los campos obligatorios.");
       return;
     }
-    if (!validarIdentificacion(cedula)) {
+    if (!validarIdentificacion(identificacion)) {
       toast.error("Número de identificación inválido.");
       return;
     }
@@ -159,20 +153,29 @@ export default function PasoRemitente({
       .filter(Boolean)
       .join(", ");
 
-    const remitenteFinal = { ...formData, direccion: direccionFinal.trim() };
+    // Prepara objeto para el backend (usa identificacion y pais)
+    const remitenteFinal: Remitente = {
+      ...formData,
+      direccion: direccionFinal.trim(),
+      pais: formData.pais || "ECUADOR",
+      // El backend puede seguir usando 'cedula', pero tu modelo de front es robusto
+    };
     setLoading(true);
 
     try {
       if (remitenteExistente) {
         await axios.put(
-          `/api/servientrega/remitente/actualizar/${formData.cedula.trim()}`,
-          remitenteFinal
+          `/api/servientrega/remitente/actualizar/${formData.identificacion.trim()}`,
+          { ...remitenteFinal, cedula: formData.identificacion }
         );
       } else {
-        await axios.post("/api/servientrega/remitente/guardar", remitenteFinal);
+        await axios.post("/api/servientrega/remitente/guardar", {
+          ...remitenteFinal,
+          cedula: formData.identificacion,
+        });
       }
       toast.success("Remitente guardado correctamente.");
-      onNext(remitenteFinal);
+      onNext({ ...remitenteFinal, direccion: direccionFinal.trim() });
     } catch (err) {
       console.error("❌ Error al guardar remitente:", err);
       toast.error("Hubo un problema al guardar el remitente.");
@@ -190,12 +193,12 @@ export default function PasoRemitente({
         {/* Identificación */}
         <div className="relative">
           <Input
-            name="cedula"
+            name="identificacion"
             placeholder="Cédula, RUC o Pasaporte"
-            value={formData.cedula}
+            value={formData.identificacion}
             onChange={(e) => {
               const value = e.target.value.trimStart();
-              setFormData((prev) => ({ ...prev, cedula: value }));
+              setFormData((prev) => ({ ...prev, identificacion: value }));
               setCedulaQuery(value);
             }}
           />
@@ -210,7 +213,7 @@ export default function PasoRemitente({
                   className="p-2 hover:bg-gray-100 cursor-pointer"
                   onClick={() => seleccionarRemitente(r)}
                 >
-                  {r.cedula} - {r.nombre}
+                  {(r.cedula || r.identificacion) + " - " + r.nombre}
                 </div>
               ))}
             </div>
@@ -268,6 +271,9 @@ export default function PasoRemitente({
           value={`${formData.ciudad} - ${formData.provincia}`}
           readOnly
         />
+
+        {/* País (opcional en este flujo, pero preparado para el futuro) */}
+        <Input name="pais" placeholder="País" value={formData.pais} readOnly />
 
         <Button
           disabled={loading || !ciudadValida}

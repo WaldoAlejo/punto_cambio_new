@@ -11,7 +11,8 @@ import {
   ArrowRight,
   MapPin,
 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, SalidaEspontanea } from "../../types";
 
 interface TimeTrackerProps {
@@ -93,6 +94,7 @@ const TimeTracker = ({
   selectedPoint,
   spontaneousExits,
 }: TimeTrackerProps) => {
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
   const [jornadaActual, setJornadaActual] = useState<JornadaEstado>({
     estado: "NO_INICIADO",
   });
@@ -122,11 +124,7 @@ const TimeTracker = ({
           setJornadaActual({ estado: "NO_INICIADO" });
         }
       } catch {
-        toast({
-          title: "Error",
-          description: "No se pudo cargar la jornada activa",
-          variant: "destructive",
-        });
+        toast.error("No se pudo cargar la jornada activa");
       }
     };
     cargarJornadaActual();
@@ -182,11 +180,7 @@ const TimeTracker = ({
         throw new Error("Error guardando jornada");
       }
     } catch {
-      toast({
-        title: "Error",
-        description: "Error al guardar la jornada en backend",
-        variant: "destructive",
-      });
+      toast.error("Error al guardar la jornada en backend");
       throw new Error("Error guardando jornada");
     }
   };
@@ -208,12 +202,11 @@ const TimeTracker = ({
         ubicacion_inicio: ubicacion,
       });
 
-      toast({
-        title: "Jornada iniciada",
-        description: `Inicio a las ${formatearHora(ahora)}${
+      toast.success(
+        `✅ Jornada iniciada a las ${formatearHora(ahora)}${
           ubicacion ? " con ubicación" : ""
-        }`,
-      });
+        }`
+      );
     } catch {
       // El error ya fue manejado en guardarJornadaBackend
     }
@@ -228,10 +221,7 @@ const TimeTracker = ({
         punto_atencion_id: selectedPoint?.id,
         fecha_almuerzo: ahora,
       });
-      toast({
-        title: "Salida a almuerzo",
-        description: `A las ${formatearHora(ahora)}`,
-      });
+      toast.success(`🍽️ Salida a almuerzo a las ${formatearHora(ahora)}`);
     } catch {
       // Error manejado en guardarJornadaBackend
     }
@@ -246,31 +236,32 @@ const TimeTracker = ({
         punto_atencion_id: selectedPoint?.id,
         fecha_regreso: ahora,
       });
-      toast({
-        title: "Regreso de almuerzo",
-        description: `A las ${formatearHora(ahora)}`,
-      });
+      toast.success(`🔄 Regreso de almuerzo a las ${formatearHora(ahora)}`);
     } catch {
       // Error manejado en guardarJornadaBackend
     }
   };
 
-  const finalizarJornada = async () => {
+  const handleFinalizarJornada = () => {
     if (jornadaActual.estado !== "TRABAJANDO") return;
-    const ahora = new Date().toISOString();
-    try {
-      await guardarJornadaBackend({
-        usuario_id: user.id,
-        punto_atencion_id: selectedPoint?.id,
-        fecha_salida: ahora,
-      });
-      toast({
-        title: "Jornada finalizada",
-        description: `Salida a las ${formatearHora(ahora)}`,
-      });
-    } catch {
-      // Error manejado en guardarJornadaBackend
-    }
+
+    showConfirmation(
+      "Confirmar finalización de jornada",
+      "¿Está seguro de finalizar su jornada laboral? Esta acción no se puede deshacer.",
+      async () => {
+        const ahora = new Date().toISOString();
+        try {
+          await guardarJornadaBackend({
+            usuario_id: user.id,
+            punto_atencion_id: selectedPoint?.id,
+            fecha_salida: ahora,
+          });
+          toast.success(`🏁 Jornada finalizada a las ${formatearHora(ahora)}`);
+        } catch {
+          // Error manejado en guardarJornadaBackend
+        }
+      }
+    );
   };
 
   const calcularTiempoTrabajado = () => {
@@ -441,7 +432,7 @@ const TimeTracker = ({
               Regresar de Almuerzo
             </Button>
             <Button
-              onClick={finalizarJornada}
+              onClick={handleFinalizarJornada}
               disabled={jornadaActual.estado !== "TRABAJANDO"}
               variant="destructive"
               className="w-full"
@@ -452,6 +443,8 @@ const TimeTracker = ({
           </CardContent>
         </Card>
       </div>
+
+      <ConfirmationDialog />
     </div>
   );
 };

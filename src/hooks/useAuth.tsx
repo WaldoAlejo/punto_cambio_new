@@ -9,6 +9,11 @@ import { authService, AuthUser } from "../services/authService";
 import { scheduleService } from "../services/scheduleService";
 import { pointService } from "../services/pointService";
 import { PuntoAtencion } from "../types";
+import {
+  validateAndTransformUser,
+  validateAndTransformPuntoAtencion,
+} from "../utils/typeValidation";
+import { ErrorHandler } from "../utils/errorHandler";
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -64,10 +69,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const storedPoint = localStorage.getItem("puntoAtencionSeleccionado");
           if (!storedPoint) {
             // Si es admin, conectar automáticamente al punto principal
-            if (verifiedUser.rol === "ADMIN" || verifiedUser.rol === "SUPER_USUARIO") {
+            if (
+              verifiedUser.rol === "ADMIN" ||
+              verifiedUser.rol === "SUPER_USUARIO"
+            ) {
               if (verifiedUser.punto_atencion_id) {
                 const { points } = await pointService.getAllPoints();
-                const adminPoint = points.find(p => p.id === verifiedUser.punto_atencion_id);
+                const adminPoint = points.find(
+                  (p) => p.id === verifiedUser.punto_atencion_id
+                );
                 if (adminPoint) {
                   setSelectedPointState(adminPoint);
                 }
@@ -111,7 +121,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (loggedUser.punto_atencion_id) {
             // Cargar el punto de atención del admin desde su perfil
             const { points } = await pointService.getAllPoints();
-            const adminPoint = points.find(p => p.id === loggedUser.punto_atencion_id);
+            const adminPoint = points.find(
+              (p) => p.id === loggedUser.punto_atencion_id
+            );
             if (adminPoint) {
               setSelectedPointState(adminPoint);
             }

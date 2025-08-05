@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import axiosInstance from "@/services/axiosInstance";
 import { format, isToday, parseISO, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Loading } from "@/components/ui/loading";
 
 interface Guia {
   id: string;
@@ -23,22 +25,33 @@ export default function ListadoGuias() {
   const [desde, setDesde] = useState(format(subDays(hoy, 7), "yyyy-MM-dd"));
   const [hasta, setHasta] = useState(format(hoy, "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
 
   const fetchGuias = async () => {
     setLoading(true);
+    setError(null);
+
     try {
-      const response = await axios.get<Guia[]>("/api/servientrega/guias", {
-        params: { desde, hasta },
-      });
+      const response = await axiosInstance.get<Guia[]>(
+        "/api/servientrega/guias",
+        {
+          params: { desde, hasta },
+        }
+      );
 
       if (Array.isArray(response.data)) {
         setGuias(response.data);
+        if (response.data.length === 0) {
+          toast.info("No se encontraron guías en el período seleccionado.");
+        }
       } else {
-        console.error("Respuesta inesperada:", response.data);
-        setGuias([]);
+        throw new Error("Formato de respuesta inválido");
       }
     } catch (err) {
-      console.error("Error al cargar guías:", err);
+      const errorMessage =
+        err instanceof Error ? err.message : "Error desconocido";
+      setError(`Error al cargar guías: ${errorMessage}`);
       toast.error("No se pudieron cargar las guías.");
       setGuias([]);
     } finally {
@@ -46,24 +59,42 @@ export default function ListadoGuias() {
     }
   };
 
-  const handleAnular = async (guia: string) => {
-    try {
-      await axios.post("/api/servientrega/anular-guia", { guia });
-      toast.success("✅ Guía anulada exitosamente.");
-      fetchGuias();
-    } catch (err) {
-      console.error("Error al anular guía:", err);
-      toast.error("No se pudo anular la guía.");
-    }
+  const handleAnular = (guia: string) => {
+    showConfirmation(
+      "Confirmar anulación",
+      `¿Está seguro de que desea anular la guía ${guia}? Esta acción no se puede deshacer.`,
+      async () => {
+        try {
+          await axiosInstance.post("/api/servientrega/anular-guia", { guia });
+          toast.success("✅ Guía anulada exitosamente.");
+          fetchGuias();
+        } catch (err) {
+          const errorMessage =
+            err instanceof Error ? err.message : "Error desconocido";
+          console.error("Error al anular guía:", err);
+          toast.error(`No se pudo anular la guía: ${errorMessage}`);
+        }
+      },
+      "destructive"
+    );
   };
 
   const handleVerPDF = (base64: string) => {
-    const pdfURL = `data:application/pdf;base64,${base64}`;
-    const win = window.open();
-    if (win) {
-      win.document.write(
-        `<iframe width="100%" height="100%" style="border:none;" src="${pdfURL}"></iframe>`
-      );
+    try {
+      const pdfURL = `data:application/pdf;base64,${base64}`;
+      const win = window.open();
+      if (win) {
+        win.document.write(
+          `<iframe width="100%" height="100%" style="border:none;" src="${pdfURL}"></iframe>`
+        );
+      } else {
+        toast.error(
+          "No se pudo abrir la ventana del PDF. Verifique que no esté bloqueada por el navegador."
+        );
+      }
+    } catch (err) {
+      console.error("Error al abrir PDF:", err);
+      toast.error("Error al mostrar el PDF.");
     }
   };
 
@@ -102,11 +133,18 @@ export default function ListadoGuias() {
 
         {/* Listado de guías */}
         {loading ? (
-          <div className="flex justify-center py-6">
-            <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+          <Loading text="Cargando guías..." className="py-6" />
+        ) : error ? (
+          <div className="text-center py-6">
+            <p className="text-red-600 mb-2">{error}</p>
+            <Button onClick={fetchGuias} variant="outline" size="sm">
+              Reintentar
+            </Button>
           </div>
         ) : guias.length === 0 ? (
-          <p className="text-gray-600">No hay guías en este periodo.</p>
+          <p className="text-gray-600 text-center py-6">
+            No hay guías en este periodo.
+          </p>
         ) : (
           <div className="space-y-4">
             {guias.map((guia) => (
@@ -149,6 +187,7 @@ export default function ListadoGuias() {
           </div>
         )}
       </CardContent>
+      <ConfirmationDialog />
     </Card>
   );
 }

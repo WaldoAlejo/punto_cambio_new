@@ -71,6 +71,57 @@ router.get(
   }
 );
 
+// Obtener TODOS los puntos (para admins)
+router.get(
+  "/all",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    try {
+      const todosPuntos = await prisma.puntoAtencion.findMany({
+        where: { activo: true },
+        orderBy: { nombre: "asc" },
+      });
+
+      const formatted = todosPuntos.map((punto) => ({
+        id: punto.id,
+        nombre: punto.nombre,
+        direccion: punto.direccion,
+        ciudad: punto.ciudad,
+        provincia: punto.provincia,
+        codigo_postal: punto.codigo_postal,
+        telefono: punto.telefono,
+        activo: punto.activo,
+        created_at: punto.created_at.toISOString(),
+        updated_at: punto.updated_at.toISOString(),
+      }));
+
+      logger.info("Todos los puntos obtenidos", {
+        count: formatted.length,
+        requestedBy: req.user?.id,
+      });
+
+      res.status(200).json({
+        points: formatted,
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error al obtener todos los puntos", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id,
+      });
+
+      res.status(500).json({
+        error: "Error al obtener puntos",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
 // Crear punto (solo admins/superusuario)
 router.post(
   "/",

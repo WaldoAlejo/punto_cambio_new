@@ -32,13 +32,24 @@ async function callServientregaAPI(payload: any) {
 }
 
 // =============================
-// 📦 Productos
+// 📦 Productos (Devuelve siempre [{ nombre_producto }])
 // =============================
 router.post("/productos", async (_, res) => {
   try {
-    res.json(await callServientregaAPI({ tipo: "obtener_producto", ...AUTH }));
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    const result = await callServientregaAPI({
+      tipo: "obtener_producto",
+      ...AUTH,
+    });
+    const productos = Array.isArray(result?.fetch)
+      ? result.fetch
+          .map((p) => ({
+            nombre_producto: (p.producto || "").trim(),
+          }))
+          .filter((p) => p.nombre_producto.length > 0)
+      : [];
+    res.json({ productos });
+  } catch {
+    res.status(500).json({ error: "No se pudieron cargar los productos" });
   }
 });
 
@@ -86,7 +97,7 @@ router.post("/empaques", async (_, res) => {
 });
 
 // =============================
-// 🔍 Buscar remitente
+// 🔍 Buscar remitente/destinatario (tolera cedula o identificacion)
 // =============================
 router.get("/remitente/buscar/:query", async (req, res) => {
   try {
@@ -106,11 +117,16 @@ router.get("/remitente/buscar/:query", async (req, res) => {
   }
 });
 
-// 💾 Guardar remitente
 router.post("/remitente/guardar", async (req, res) => {
   try {
     const data = req.body;
-    const remitente = await prisma.servientregaRemitente.create({ data });
+    // Normaliza nombre identificador
+    const remitente = await prisma.servientregaRemitente.create({
+      data: {
+        ...data,
+        cedula: data.identificacion || data.cedula,
+      },
+    });
     res.json(remitente);
   } catch (err: any) {
     res
@@ -119,7 +135,6 @@ router.post("/remitente/guardar", async (req, res) => {
   }
 });
 
-// ✏️ Actualizar remitente
 router.put("/remitente/actualizar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
@@ -134,9 +149,6 @@ router.put("/remitente/actualizar/:cedula", async (req, res) => {
   }
 });
 
-// =============================
-// 🔍 Buscar destinatario
-// =============================
 router.get("/destinatario/buscar/:query", async (req, res) => {
   try {
     const { query } = req.params;
@@ -155,18 +167,21 @@ router.get("/destinatario/buscar/:query", async (req, res) => {
   }
 });
 
-// 💾 Guardar destinatario
 router.post("/destinatario/guardar", async (req, res) => {
   try {
     const data = req.body;
-    const destinatario = await prisma.servientregaDestinatario.create({ data });
+    const destinatario = await prisma.servientregaDestinatario.create({
+      data: {
+        ...data,
+        cedula: data.identificacion || data.cedula,
+      },
+    });
     res.json(destinatario);
   } catch {
     res.status(500).json({ error: "Error al guardar destinatario" });
   }
 });
 
-// ✏️ Actualizar destinatario
 router.put("/destinatario/actualizar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
@@ -185,7 +200,6 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
 // 💰 Saldo Servientrega
 // =============================
 
-// Obtener saldo
 router.get("/saldo/:punto_id", async (req, res) => {
   try {
     const { punto_id } = req.params;
@@ -202,7 +216,6 @@ router.get("/saldo/:punto_id", async (req, res) => {
   }
 });
 
-// Validar saldo mínimo
 router.get("/saldo/validar/:punto_id", async (req, res) => {
   try {
     const { punto_id } = req.params;
@@ -234,7 +247,6 @@ router.get("/saldo/validar/:punto_id", async (req, res) => {
   }
 });
 
-// Asignar saldo (Admin)
 router.post("/saldo", async (req, res) => {
   try {
     const { monto_total, creado_por, punto_atencion_id } = req.body;
@@ -271,7 +283,6 @@ router.post("/saldo", async (req, res) => {
   }
 });
 
-// Historial saldo
 router.get("/saldo/historial", async (_, res) => {
   try {
     const historial = await prisma.servientregaHistorialSaldo.findMany({
@@ -457,7 +468,7 @@ router.post("/tarifa", async (req, res) => {
 });
 
 // =============================
-// 📄 Generar Guía
+// 📄 Generar Guía (100% robusto con normalización)
 // =============================
 router.post("/generar-guia", async (req, res) => {
   try {
@@ -473,7 +484,13 @@ router.post("/generar-guia", async (req, res) => {
       medidas,
       resumen_costos,
       punto_atencion_id,
+      empaque = {},
     } = req.body;
+
+    // Normaliza campos de identificador para tolerar "cedula" o "identificacion"
+    const remitente_id = remitente?.identificacion || remitente?.cedula;
+    const destinatario_id =
+      destinatario?.identificacion || destinatario?.cedula;
 
     if (punto_atencion_id) {
       const saldo = await prisma.servientregaSaldo.findUnique({
@@ -501,12 +518,12 @@ router.post("/generar-guia", async (req, res) => {
       tipo: "GeneracionGuia",
       nombre_producto,
       ciudad_origen: `${remitente.ciudad?.toUpperCase()}-${remitente.provincia?.toUpperCase()}`,
-      cedula_remitente: remitente.identificacion,
+      cedula_remitente: remitente_id,
       nombre_remitente: remitente.nombre,
       direccion_remitente: remitente.direccion,
       telefono_remitente: remitente.telefono,
       codigo_postal_remitente: remitente.codigo_postal || "170150",
-      cedula_destinatario: destinatario.identificacion,
+      cedula_destinatario: destinatario_id,
       nombre_destinatario: destinatario.nombre,
       direccion_destinatario:
         retiro_oficina === "SI"
@@ -534,6 +551,7 @@ router.post("/generar-guia", async (req, res) => {
       alianza: "PRUEBAS",
       alianza_oficina: "OFICINA_PRUEBA",
       mail_remite: remitente.email || "correo@ejemplo.com",
+      empaque,
       ...AUTH,
     };
 
@@ -544,14 +562,19 @@ router.post("/generar-guia", async (req, res) => {
 
       const remitenteDB =
         (await prisma.servientregaRemitente.findFirst({
-          where: { cedula: remitente.identificacion },
-        })) || (await prisma.servientregaRemitente.create({ data: remitente }));
+          where: { cedula: remitente_id },
+        })) ||
+        (await prisma.servientregaRemitente.create({
+          data: { ...remitente, cedula: remitente_id },
+        }));
 
       const destinatarioDB =
         (await prisma.servientregaDestinatario.findFirst({
-          where: { cedula: destinatario.identificacion },
+          where: { cedula: destinatario_id },
         })) ||
-        (await prisma.servientregaDestinatario.create({ data: destinatario }));
+        (await prisma.servientregaDestinatario.create({
+          data: { ...destinatario, cedula: destinatario_id },
+        }));
 
       await prisma.servientregaGuia.create({
         data: {

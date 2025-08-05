@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   User,
   PuntoAtencion,
@@ -71,31 +71,20 @@ export const useExchangeProcess = ({
       ReceiptService.printReceipt(receiptData, 2);
     } catch (error) {
       console.warn("Error al imprimir recibo:", error);
-      toast({
-        title: "Advertencia",
-        description:
-          "El recibo se generó correctamente pero hubo un problema con la impresión",
-        variant: "default",
-      });
+      toast.warning(
+        "El recibo se generó correctamente pero hubo un problema con la impresión"
+      );
     }
   };
 
   const processExchange = async (data: ExchangeCompleteDataExtend) => {
     if (isProcessing) return;
     if (!user) {
-      toast({
-        title: "Error",
-        description: "Usuario no válido, reintente sesión.",
-        variant: "destructive",
-      });
+      toast.error("Usuario no válido, reintente sesión.");
       return;
     }
     if (!selectedPoint) {
-      toast({
-        title: "Error",
-        description: "Debe seleccionar un punto de atención",
-        variant: "destructive",
-      });
+      toast.error("Debe seleccionar un punto de atención");
       return;
     }
 
@@ -112,11 +101,7 @@ export const useExchangeProcess = ({
         isNaN(montoOrigen) ||
         !data.exchangeData.operationType
       ) {
-        toast({
-          title: "Error",
-          description: "Datos incompletos o inválidos para procesar el cambio.",
-          variant: "destructive",
-        });
+        toast.error("Datos incompletos o inválidos para procesar el cambio.");
         setIsProcessing(false);
         return;
       }
@@ -124,12 +109,9 @@ export const useExchangeProcess = ({
       let transferenciaImagenUrl: string | null = null;
       if (data.metodoEntrega === "transferencia" && data.transferenciaImagen) {
         // Aquí podrías implementar la subida del archivo y obtener la URL
-        toast({
-          title: "Nota",
-          description:
-            "El archivo de comprobante de transferencia se debe subir manualmente (integra S3/Cloudinary si deseas).",
-          variant: "default",
-        });
+        toast.info(
+          "El archivo de comprobante de transferencia se debe subir manualmente"
+        );
       }
 
       const exchangePayload: ExchangePayload = {
@@ -165,25 +147,17 @@ export const useExchangeProcess = ({
         await exchangeService.createExchange(exchangePayload);
 
       if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
+        toast.error(`Error al crear cambio: ${error}`);
         return;
       }
 
       if (!createdExchange) {
-        toast({
-          title: "Error",
-          description: "No se pudo crear el cambio de divisa",
-          variant: "destructive",
-        });
+        toast.error("No se pudo crear el cambio de divisa");
         return;
       }
 
       // 🎯 LÓGICA MEJORADA: Decidir si auto-completar o quedar pendiente
-      const shouldAutoComplete = 
+      const shouldAutoComplete =
         data.metodoEntrega === "efectivo" && // Solo efectivo se completa automáticamente
         !data.saldoPendiente && // No hay saldo pendiente
         !data.abonoInicialMonto; // No es un abono parcial
@@ -191,51 +165,49 @@ export const useExchangeProcess = ({
       if (shouldAutoComplete) {
         // Auto-completar el cambio inmediatamente
         console.log("🚀 Auto-completing exchange for cash transaction");
-        const { error: closeError } = await exchangeService.closePendingExchange(createdExchange.id);
-        
+        const { error: closeError } =
+          await exchangeService.closePendingExchange(createdExchange.id);
+
         if (closeError) {
-          toast({
-            title: "⚠️ Cambio creado pero pendiente",
-            description: `El cambio se creó correctamente pero no se pudo completar automáticamente. Debe completarlo manualmente desde "Cambios Pendientes". Error: ${closeError}`,
-            variant: "default",
-          });
+          toast.warning(
+            `⚠️ Cambio creado pero pendiente. Debe completarlo manualmente desde "Cambios Pendientes". Error: ${closeError}`
+          );
         } else {
           // Disparar evento para actualizar saldos
-          window.dispatchEvent(new CustomEvent('exchangeCompleted'));
-          
-          toast({
-            title: "✅ Cambio completado",
-            description: `Cambio completado automáticamente. Los saldos se han actualizado. Recibo: ${createdExchange.numero_recibo}`,
-          });
+          window.dispatchEvent(new CustomEvent("exchangeCompleted"));
+          toast.success(
+            `✅ Cambio completado automáticamente. Los saldos se han actualizado. Recibo: ${createdExchange.numero_recibo}`
+          );
         }
       } else {
         // Quedar pendiente y mostrar explicación
-        const reason = data.metodoEntrega === "transferencia" 
-          ? "transferencia bancaria" 
-          : data.saldoPendiente 
-          ? "tiene saldo pendiente" 
-          : "requiere abono parcial";
-          
-        toast({
-          title: "⏳ Cambio pendiente",
-          description: `El cambio quedó pendiente porque es por ${reason}. Debe completarlo desde "Cambios Pendientes" cuando esté listo.`,
-          variant: "default",
-        });
+        const reason =
+          data.metodoEntrega === "transferencia"
+            ? "transferencia bancaria"
+            : data.saldoPendiente
+            ? "tiene saldo pendiente"
+            : "requiere abono parcial";
+
+        toast.info(
+          `⏳ Cambio pendiente porque es por ${reason}. Debe completarlo desde "Cambios Pendientes" cuando esté listo.`
+        );
       }
 
       onExchangeCreated(createdExchange);
-      onResetForm();
 
+      // Generar e imprimir recibos
       setTimeout(() => {
         generateReceiptAndPrint(createdExchange);
+
+        // Después de imprimir, resetear formulario y regresar al dashboard
+        setTimeout(() => {
+          onResetForm();
+          toast.success("🎉 Operación completada. Regresando al dashboard...");
+        }, 1500);
       }, 100);
     } catch (error) {
       console.error("Error al procesar cambio:", error);
-      toast({
-        title: "Error",
-        description: "Error inesperado al procesar el cambio",
-        variant: "destructive",
-      });
+      toast.error("Error inesperado al procesar el cambio");
     } finally {
       setIsProcessing(false);
     }

@@ -10,20 +10,10 @@ export const validate = (
   property: RequestProperty = "body"
 ): RequestHandler => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    logger.info("=== VALIDATION MIDDLEWARE START ===", {
-      method: req.method,
-      path: req.path,
-      property,
-      data: req[property],
-    });
-
     try {
       const data = req[property];
       const validatedData = schema.parse(data);
-
-      logger.info("✅ Validación exitosa", { validatedData });
       (req as unknown as Record<string, unknown>)[property] = validatedData;
-
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -32,9 +22,10 @@ export const validate = (
           message: err.message,
         }));
 
-        logger.warn("❌ Validación fallida", {
+        logger.warn("Validación fallida", {
+          method: req.method,
+          path: req.path,
           errors,
-          data: req[property],
           ip: req.ip,
         });
 
@@ -47,9 +38,10 @@ export const validate = (
         return;
       }
 
-      logger.error("❌ Error inesperado durante validación", {
+      logger.error("Error inesperado durante validación", {
         error: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
+        method: req.method,
+        path: req.path,
         ip: req.ip,
       });
 
@@ -58,8 +50,6 @@ export const validate = (
         success: false,
         timestamp: new Date().toISOString(),
       });
-    } finally {
-      logger.info("=== VALIDATION MIDDLEWARE END ===");
     }
   };
 };

@@ -16,78 +16,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import type {
+  Remitente,
+  Destinatario,
+  Medidas,
+  Empaque,
+  ResumenCostos,
+  FormDataGuia,
+} from "@/types/servientrega";
 
-// ==========================
-// 📌 Tipado de datos
-// ==========================
-export interface Remitente {
-  identificacion: string;
-  nombre: string;
-  direccion: string;
-  telefono: string;
-  email?: string;
-  ciudad: string;
-  provincia: string;
-  codigo_postal: string;
-  pais?: string;
-}
-
-export interface Destinatario {
-  identificacion: string;
-  nombre: string;
-  direccion: string;
-  telefono: string;
-  email?: string;
-  ciudad: string;
-  provincia: string;
-  codigo_postal: string;
-  pais: string;
-}
-
-export interface Medidas {
-  alto: number;
-  ancho: number;
-  largo: number;
-  peso: number;
-  valor_declarado: number;
-  valor_seguro: number;
-  recoleccion: boolean;
-}
-
-export interface Empaque {
-  tipo_empaque: string;
-  cantidad: number;
-  descripcion: string;
-  costo_unitario: number;
-  costo_total: number;
-}
-
-export interface ResumenCostos {
-  costo_empaque: number;
-  valor_seguro: number;
-  flete: number;
-  total: number;
-}
-
-export interface FormDataGuia {
-  nombre_producto: string;
-  contenido: string;
-  retiro_oficina: boolean;
-  nombre_agencia_retiro_oficina?: string;
-  pedido?: string;
-  factura?: string;
-  punto_atencion_id: string;
-  remitente: Remitente;
-  destinatario: Destinatario;
-  medidas: Medidas;
-  empaque?: Empaque;
-  requiere_empaque: boolean;
-  resumen_costos: ResumenCostos;
-}
-
-// ==========================
-// 📌 Props del componente
-// ==========================
 interface PasoConfirmarEnvioProps {
   formData: FormDataGuia;
   onReset: () => void;
@@ -111,6 +48,7 @@ export default function PasoConfirmarEnvio({
   const [error, setError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saldoDisponible, setSaldoDisponible] = useState<number | null>(null);
+  const [saldoEstado, setSaldoEstado] = useState<string | null>(null);
 
   // ==========================
   // 🔍 Validar saldo disponible
@@ -121,14 +59,18 @@ export default function PasoConfirmarEnvio({
         `/api/servientrega/saldo/validar/${formData.punto_atencion_id}`
       );
       setSaldoDisponible(Number(data?.disponible) || 0);
+      setSaldoEstado(data?.estado);
 
       if (data?.estado !== "OK") {
-        toast.error("Saldo insuficiente para generar la guía.");
+        toast.error(
+          data?.mensaje || "Saldo insuficiente para generar la guía."
+        );
         return false;
       }
       return true;
-    } catch {
+    } catch (err) {
       toast.error("No se pudo validar el saldo.");
+      setSaldoEstado("ERROR");
       return false;
     }
   };
@@ -172,9 +114,11 @@ export default function PasoConfirmarEnvio({
         toast.error("No se pudo generar la guía.");
       }
     } catch (err: any) {
-      console.error("Error al generar guía:", err);
       setError("Ocurrió un error al generar la guía.");
-      toast.error("Error al generar la guía. Intenta nuevamente.");
+      toast.error(
+        err?.response?.data?.error ||
+          "Error al generar la guía. Intenta nuevamente."
+      );
     } finally {
       setLoading(false);
       setConfirmOpen(false);
@@ -202,7 +146,6 @@ export default function PasoConfirmarEnvio({
       });
       toast.success("Solicitud de saldo enviada al administrador.");
     } catch (err) {
-      console.error("Error al solicitar saldo:", err);
       toast.error("No se pudo enviar la solicitud de saldo.");
     }
   };
@@ -234,16 +177,16 @@ export default function PasoConfirmarEnvio({
               </p>
               <p>
                 <strong>Valor declarado:</strong> $
-                {formData.medidas.valor_declarado.toFixed(2)}
+                {Number(formData.medidas.valor_declarado).toFixed(2)}
               </p>
               <p>
                 <strong>Flete estimado:</strong> $
-                {formData.resumen_costos.flete.toFixed(2)}
+                {Number(formData.resumen_costos.flete).toFixed(2)}
               </p>
               <p>
                 <strong>Total estimado:</strong>{" "}
                 <span className="text-green-700 font-semibold">
-                  ${formData.resumen_costos.total.toFixed(2)}
+                  ${Number(formData.resumen_costos.total).toFixed(2)}
                 </span>
               </p>
             </div>
@@ -277,13 +220,16 @@ export default function PasoConfirmarEnvio({
                       <p>
                         <strong>Saldo disponible:</strong>{" "}
                         <span className="text-blue-600">
-                          ${saldoDisponible?.toFixed(2)}
+                          $
+                          {saldoDisponible !== null
+                            ? saldoDisponible.toFixed(2)
+                            : "-"}
                         </span>
                       </p>
                       <p>
                         <strong>Saldo requerido:</strong>{" "}
                         <span className="text-green-600">
-                          ${formData.resumen_costos.total.toFixed(2)}
+                          ${Number(formData.resumen_costos.total).toFixed(2)}
                         </span>
                       </p>
                       <p>
@@ -301,17 +247,19 @@ export default function PasoConfirmarEnvio({
                             : "-"}
                         </span>
                       </p>
-                      {saldoRestante !== null && saldoRestante < 0 && (
+                      {saldoEstado !== "OK" ||
+                      (saldoRestante !== null && saldoRestante < 0) ? (
                         <div className="mt-2 text-red-600 text-sm">
                           ❌ No puedes generar esta guía, saldo insuficiente.
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  {saldoRestante !== null && saldoRestante < 0 ? (
+                  {saldoEstado !== "OK" ||
+                  (saldoRestante !== null && saldoRestante < 0) ? (
                     <Button
                       onClick={handleSolicitarSaldo}
                       className="bg-yellow-500 hover:bg-yellow-600 text-white w-full"
@@ -322,6 +270,7 @@ export default function PasoConfirmarEnvio({
                     <AlertDialogAction
                       onClick={handleGenerarGuia}
                       className="bg-green-600 hover:bg-green-700 text-white"
+                      disabled={loading}
                     >
                       Sí, generar guía
                     </AlertDialogAction>

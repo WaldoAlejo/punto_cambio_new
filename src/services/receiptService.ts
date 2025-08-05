@@ -1,4 +1,3 @@
-
 import { CambioDivisa, Transferencia } from "../types";
 
 type CurrencyExchangeDetails = {
@@ -65,40 +64,23 @@ export class ReceiptService {
 
   static generatePartialExchangeReceipt(
     exchange: CambioDivisa,
-    pointName: string,
-    operatorName: string,
-    partialData: {
-      initialPayment: number;
-      pendingBalance: number;
-      receivedBy: string;
-      observations: string;
-    }
-  ): ReceiptData;
-  static generatePartialExchangeReceipt(
-    exchange: CambioDivisa,
     puntoNombre: string,
     usuarioNombre: string,
-    isInitialPayment: boolean
-  ): ReceiptData;
-  static generatePartialExchangeReceipt(
-    exchange: CambioDivisa,
-    puntoNombre: string,
-    usuarioNombre: string,
-    isInitialPaymentOrPartialData: boolean | {
+    isInitialPayment: boolean,
+    partialData?: {
       initialPayment: number;
       pendingBalance: number;
       receivedBy: string;
       observations: string;
     }
   ): ReceiptData {
-    const isInitialPayment = typeof isInitialPaymentOrPartialData === 'boolean' 
-      ? isInitialPaymentOrPartialData 
-      : true;
-    
-    const tipo = isInitialPayment ? "CAMBIO PARCIAL - ABONO INICIAL" : "CAMBIO PARCIAL - CIERRE";
-    
+    const tipo = isInitialPayment
+      ? "CAMBIO PARCIAL - ABONO INICIAL"
+      : "CAMBIO PARCIAL - COMPLETADO";
+
     return {
-      numeroRecibo: exchange.numero_recibo || this.generateReceiptNumber("CAMBIO_DIVISA"),
+      numeroRecibo:
+        exchange.numero_recibo || this.generateReceiptNumber("CAMBIO_DIVISA"),
       fecha: new Date().toLocaleString(),
       tipo,
       puntoAtencion: puntoNombre,
@@ -212,7 +194,7 @@ Operador: ${receipt.usuario}
 ${halfSeparator}
 `;
 
-    if (receipt.tipo === "CAMBIO DE DIVISA") {
+    if (receipt.tipo.includes("CAMBIO")) {
       const detalles = receipt.detalles as CurrencyExchangeDetails;
       receiptText += `
 DATOS DEL CLIENTE:
@@ -221,30 +203,82 @@ Cédula: ${detalles.cliente.cedula}
 Teléfono: ${detalles.cliente.telefono}
 ${halfSeparator}
 OPERACIÓN: ${detalles.tipoOperacion}
-Entrega: ${detalles.montoOrigen} ${detalles.monedaOrigen}
-Recibe: ${detalles.montoDestino} ${detalles.monedaDestino}
+${receipt.tipo.includes("PARCIAL") ? "*** CAMBIO PARCIAL ***" : ""}
+Entrega: ${detalles.montoOrigen.toLocaleString()} ${detalles.monedaOrigen}
+Recibe: ${detalles.montoDestino.toLocaleString()} ${detalles.monedaDestino}
 Tasa: ${detalles.tasaCambio}
-${halfSeparator}
+${halfSeparator}`;
+
+      if (receipt.tipo.includes("ABONO INICIAL")) {
+        receiptText += `
+ABONO INICIAL RECIBIDO
+Monto entregado por cliente: ${detalles.montoOrigen.toLocaleString()} ${
+          detalles.monedaOrigen
+        }
+Pendiente por entregar: ${detalles.montoDestino.toLocaleString()} ${
+          detalles.monedaDestino
+        }
+
+*** CLIENTE DEBE REGRESAR PARA ***
+*** COMPLETAR LA OPERACIÓN ***
+`;
+      } else if (receipt.tipo.includes("COMPLETADO")) {
+        receiptText += `
+OPERACIÓN COMPLETADA
+Monto final entregado: ${detalles.montoDestino.toLocaleString()} ${
+          detalles.monedaDestino
+        }
+
+*** OPERACIÓN FINALIZADA ***
+`;
+      } else {
+        receiptText += `
 DETALLE DIVISAS ENTREGADAS:
-Billetes: ${detalles.divisasEntregadas.billetes} ${detalles.monedaOrigen}
-Monedas: ${detalles.divisasEntregadas.monedas} ${detalles.monedaOrigen}
-Total: ${detalles.divisasEntregadas.total} ${detalles.monedaOrigen}
+Billetes: ${detalles.divisasEntregadas.billetes.toLocaleString()} ${
+          detalles.monedaOrigen
+        }
+Monedas: ${detalles.divisasEntregadas.monedas.toLocaleString()} ${
+          detalles.monedaOrigen
+        }
+Total: ${detalles.divisasEntregadas.total.toLocaleString()} ${
+          detalles.monedaOrigen
+        }
 ${halfSeparator}
 DETALLE DIVISAS RECIBIDAS:
-Billetes: ${detalles.divisasRecibidas.billetes} ${detalles.monedaDestino}
-Monedas: ${detalles.divisasRecibidas.monedas} ${detalles.monedaDestino}
-Total: ${detalles.divisasRecibidas.total} ${detalles.monedaDestino}
-${detalles.observacion ? `${halfSeparator}\nObs: ${detalles.observacion}` : ""}
+Billetes: ${detalles.divisasRecibidas.billetes.toLocaleString()} ${
+          detalles.monedaDestino
+        }
+Monedas: ${detalles.divisasRecibidas.monedas.toLocaleString()} ${
+          detalles.monedaDestino
+        }
+Total: ${detalles.divisasRecibidas.total.toLocaleString()} ${
+          detalles.monedaDestino
+        }
+`;
+      }
+
+      receiptText += `${
+        detalles.observacion
+          ? `${halfSeparator}\nObservaciones: ${detalles.observacion}`
+          : ""
+      }
 `;
     } else if (receipt.tipo === "TRANSFERENCIA") {
       const detalles = receipt.detalles as TransferDetails;
       receiptText += `
-Tipo: ${detalles.tipoTransferencia}
-Monto: ${detalles.monto} ${detalles.moneda}
-${detalles.origen !== "Matriz" ? `Origen: ${detalles.origen}` : ""}
-Destino: ${detalles.destino}
-Estado: ${detalles.estado}
-${detalles.descripcion ? `Desc: ${detalles.descripcion}` : ""}
+TIPO DE TRANSFERENCIA: ${detalles.tipoTransferencia}
+${halfSeparator}
+MONTO: ${detalles.monto.toLocaleString()} ${detalles.moneda}
+${
+  detalles.origen !== "Matriz" ? `ORIGEN: ${detalles.origen}` : "ORIGEN: Matriz"
+}
+DESTINO: ${detalles.destino}
+ESTADO: ${detalles.estado}
+${
+  detalles.descripcion
+    ? `${halfSeparator}\nDESCRIPCIÓN: ${detalles.descripcion}`
+    : ""
+}
 `;
     }
 
@@ -253,9 +287,14 @@ ${separator}
 FIRMAS DE RESPONSABILIDAD:
 
 Cliente: ____________________
-${receipt.tipo === "CAMBIO DE DIVISA" ? 
-  `${(receipt.detalles as CurrencyExchangeDetails).cliente.nombre} ${(receipt.detalles as CurrencyExchangeDetails).cliente.apellido}
-Doc: ${(receipt.detalles as CurrencyExchangeDetails).cliente.cedula}` : ""}
+${
+  receipt.tipo === "CAMBIO DE DIVISA"
+    ? `${(receipt.detalles as CurrencyExchangeDetails).cliente.nombre} ${
+        (receipt.detalles as CurrencyExchangeDetails).cliente.apellido
+      }
+Doc: ${(receipt.detalles as CurrencyExchangeDetails).cliente.cedula}`
+    : ""
+}
 
 Operador: ___________________
 ${receipt.usuario}

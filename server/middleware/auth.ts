@@ -29,19 +29,9 @@ export const authenticateToken: RequestHandler = async (
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  logger.info("=== AUTHENTICATE TOKEN MIDDLEWARE START ===", {
-    method: req.method,
-    path: req.path,
-    authorization: req.headers.authorization,
-  });
-
   try {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
-
-    logger.info("Extracted token:", {
-      token: token ? `${token.substring(0, 20)}...` : "No token",
-    });
 
     if (!token) {
       logger.warn("Acceso sin token", { ip: req.ip, url: req.originalUrl });

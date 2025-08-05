@@ -10,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { LogIn } from "lucide-react";
 
 const LoginForm = () => {
@@ -18,17 +18,12 @@ const LoginForm = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
-  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!username || !password) {
-      toast({
-        title: "Error",
-        description: "Por favor ingrese usuario y contraseña",
-        variant: "destructive",
-      });
+      toast.error("Por favor ingrese usuario y contraseña");
       return;
     }
 
@@ -37,23 +32,12 @@ const LoginForm = () => {
       const result = await login(username, password);
 
       if (result?.success) {
-        toast({
-          title: "Bienvenido",
-          description: "Inicio de sesión exitoso",
-        });
+        toast.success("¡Bienvenido! Inicio de sesión exitoso");
       } else {
-        toast({
-          title: "Error de autenticación",
-          description: result?.error || "Credenciales incorrectas",
-          variant: "destructive",
-        });
+        toast.error(result?.error || "Usuario o contraseña incorrectos");
       }
     } catch {
-      toast({
-        title: "Error de red",
-        description: "No se pudo conectar al servidor. Intente de nuevo.",
-        variant: "destructive",
-      });
+      toast.error("No se pudo conectar al servidor. Intente de nuevo.");
     } finally {
       setIsLoading(false);
     }

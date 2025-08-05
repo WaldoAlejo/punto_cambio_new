@@ -11,8 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { toast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, CambioDivisa } from "../../types";
 import { exchangeService } from "../../services/exchangeService";
 import { ReceiptService } from "../../services/receiptService";
@@ -33,9 +39,12 @@ const PendingExchangesList = ({
   user,
   selectedPoint,
 }: PendingExchangesListProps) => {
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
   const [pendingExchanges, setPendingExchanges] = useState<CambioDivisa[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedExchange, setSelectedExchange] = useState<CambioDivisa | null>(null);
+  const [selectedExchange, setSelectedExchange] = useState<CambioDivisa | null>(
+    null
+  );
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [partialPayment, setPartialPayment] = useState<PartialPaymentData>({
     initialPayment: 0,
@@ -51,25 +60,18 @@ const PendingExchangesList = ({
 
   const loadPendingExchanges = async () => {
     if (!selectedPoint) return;
-    
+
     setIsLoading(true);
     try {
-      const { exchanges, error } = await exchangeService.getPendingExchangesByPoint(selectedPoint.id);
+      const { exchanges, error } =
+        await exchangeService.getPendingExchangesByPoint(selectedPoint.id);
       if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
+        toast.error(`Error al cargar cambios pendientes: ${error}`);
         return;
       }
       setPendingExchanges(exchanges || []);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al cargar cambios pendientes",
-        variant: "destructive",
-      });
+      toast.error("Error al cargar cambios pendientes");
     } finally {
       setIsLoading(false);
     }
@@ -89,7 +91,7 @@ const PendingExchangesList = ({
   const updatePendingBalance = (payment: number) => {
     if (selectedExchange) {
       const pending = selectedExchange.monto_destino - payment;
-      setPartialPayment(prev => ({
+      setPartialPayment((prev) => ({
         ...prev,
         pendingBalance: pending > 0 ? pending : 0,
       }));
@@ -97,30 +99,22 @@ const PendingExchangesList = ({
   };
 
   const handleSubmitPartialPayment = async () => {
-    if (!selectedExchange || !partialPayment.initialPayment || partialPayment.initialPayment <= 0) {
-      toast({
-        title: "Error",
-        description: "Debe ingresar un abono válido",
-        variant: "destructive",
-      });
+    if (
+      !selectedExchange ||
+      !partialPayment.initialPayment ||
+      partialPayment.initialPayment <= 0
+    ) {
+      toast.error("Debe ingresar un abono válido");
       return;
     }
 
     if (partialPayment.initialPayment >= selectedExchange.monto_destino) {
-      toast({
-        title: "Error",
-        description: "El abono no puede ser mayor o igual al monto total",
-        variant: "destructive",
-      });
+      toast.error("El abono no puede ser mayor o igual al monto total");
       return;
     }
 
     if (!partialPayment.receivedBy.trim()) {
-      toast({
-        title: "Error",
-        description: "Debe especificar quién recibe el abono",
-        variant: "destructive",
-      });
+      toast.error("Debe especificar quién recibe el abono");
       return;
     }
 
@@ -140,65 +134,63 @@ const PendingExchangesList = ({
         console.warn("Error al imprimir recibo:", printError);
       }
 
-      toast({
-        title: "Abono registrado",
-        description: `Abono de ${partialPayment.initialPayment} registrado exitosamente`,
-      });
+      toast.success(
+        `✅ Abono de ${partialPayment.initialPayment.toLocaleString()} registrado exitosamente`
+      );
 
       setIsDialogOpen(false);
       await loadPendingExchanges();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al procesar el abono parcial",
-        variant: "destructive",
-      });
+      toast.error("Error al procesar el abono parcial");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const completeExchange = async (exchange: CambioDivisa) => {
-    try {
-      const { error } = await exchangeService.closePendingExchange(exchange.id);
+  const handleCompleteExchange = (exchange: CambioDivisa) => {
+    showConfirmation(
+      "Confirmar completar cambio",
+      `¿Está seguro de completar el cambio para ${exchange.datos_cliente?.nombre} ${exchange.datos_cliente?.apellido}? Se entregará el monto restante de ${exchange.monto_destino} ${exchange.monedaDestino?.codigo}.`,
+      async () => {
+        try {
+          const { error } = await exchangeService.closePendingExchange(
+            exchange.id
+          );
 
-      if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
-        return;
+          if (error) {
+            toast.error(`Error al completar el cambio: ${error}`);
+            return;
+          }
+
+          // Generar e imprimir recibo de cambio completado
+          try {
+            const receiptData = ReceiptService.generatePartialExchangeReceipt(
+              exchange,
+              selectedPoint?.nombre || "N/A",
+              user.nombre,
+              false // false = cambio completado
+            );
+            ReceiptService.printReceipt(receiptData, 2);
+          } catch (printError) {
+            console.warn("Error al imprimir recibo final:", printError);
+            toast.warning(
+              "Cambio completado pero hubo un problema al imprimir el recibo"
+            );
+          }
+
+          toast.success(
+            "✅ Cambio de divisa completado exitosamente. Recibo generado."
+          );
+
+          // Disparar evento para actualizar saldos
+          window.dispatchEvent(new CustomEvent("exchangeCompleted"));
+
+          await loadPendingExchanges();
+        } catch (error) {
+          toast.error("Error al completar el cambio");
+        }
       }
-
-      // Generar e imprimir recibo final al completar el cambio
-      try {
-        const receiptData = ReceiptService.generateCurrencyExchangeReceipt(
-          exchange,
-          selectedPoint?.nombre || "N/A",
-          user.nombre
-        );
-        ReceiptService.printReceipt(receiptData, 2);
-      } catch (printError) {
-        console.warn("Error al imprimir recibo final:", printError);
-      }
-
-      toast({
-        title: "Cambio completado",
-        description: "El cambio de divisa ha sido completado. Recibo generado.",
-      });
-
-      // Disparar evento para actualizar saldos
-      window.dispatchEvent(new CustomEvent('exchangeCompleted'));
-      
-      await loadPendingExchanges();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Error al completar el cambio",
-        variant: "destructive",
-      });
-    }
+    );
   };
 
   if (isLoading) {
@@ -238,30 +230,37 @@ const PendingExchangesList = ({
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <h4 className="font-medium">
-                      Cliente: {exchange.datos_cliente?.nombre} {exchange.datos_cliente?.apellido}
+                      Cliente: {exchange.datos_cliente?.nombre}{" "}
+                      {exchange.datos_cliente?.apellido}
                     </h4>
                     <p className="text-sm text-gray-600">
                       Documento: {exchange.datos_cliente?.documento}
                     </p>
                   </div>
-                  <Badge variant="outline" className="bg-yellow-50 text-yellow-800">
+                  <Badge
+                    variant="outline"
+                    className="bg-yellow-50 text-yellow-800"
+                  >
                     {exchange.estado}
                   </Badge>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4 text-sm mb-3">
                   <div>
-                    <strong>Cambio:</strong> {exchange.monto_origen} {exchange.monedaOrigen?.codigo} 
-                    → {exchange.monto_destino} {exchange.monedaDestino?.codigo}
+                    <strong>Cambio:</strong> {exchange.monto_origen}{" "}
+                    {exchange.monedaOrigen?.codigo}→ {exchange.monto_destino}{" "}
+                    {exchange.monedaDestino?.codigo}
                   </div>
                   <div>
                     <strong>Recibo:</strong> {exchange.numero_recibo}
                   </div>
                   <div>
-                    <strong>Fecha:</strong> {new Date(exchange.fecha).toLocaleDateString("es-ES")}
+                    <strong>Fecha:</strong>{" "}
+                    {new Date(exchange.fecha).toLocaleDateString("es-ES")}
                   </div>
                   <div>
-                    <strong>Saldo Pendiente:</strong> {exchange.monto_destino} {exchange.monedaDestino?.codigo}
+                    <strong>Saldo Pendiente:</strong> {exchange.monto_destino}{" "}
+                    {exchange.monedaDestino?.codigo}
                   </div>
                 </div>
 
@@ -276,7 +275,7 @@ const PendingExchangesList = ({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => completeExchange(exchange)}
+                    onClick={() => handleCompleteExchange(exchange)}
                     className="border-green-300 text-green-700 hover:bg-green-50"
                   >
                     Completar Pago
@@ -296,8 +295,15 @@ const PendingExchangesList = ({
           {selectedExchange && (
             <div className="space-y-4">
               <div className="bg-gray-50 p-3 rounded">
-                <p><strong>Cliente:</strong> {selectedExchange.datos_cliente?.nombre} {selectedExchange.datos_cliente?.apellido}</p>
-                <p><strong>Monto Total:</strong> {selectedExchange.monto_destino} {selectedExchange.monedaDestino?.codigo}</p>
+                <p>
+                  <strong>Cliente:</strong>{" "}
+                  {selectedExchange.datos_cliente?.nombre}{" "}
+                  {selectedExchange.datos_cliente?.apellido}
+                </p>
+                <p>
+                  <strong>Monto Total:</strong> {selectedExchange.monto_destino}{" "}
+                  {selectedExchange.monedaDestino?.codigo}
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -311,7 +317,10 @@ const PendingExchangesList = ({
                   value={partialPayment.initialPayment}
                   onChange={(e) => {
                     const payment = parseFloat(e.target.value) || 0;
-                    setPartialPayment(prev => ({ ...prev, initialPayment: payment }));
+                    setPartialPayment((prev) => ({
+                      ...prev,
+                      initialPayment: payment,
+                    }));
                     updatePendingBalance(payment);
                   }}
                   placeholder="0.00"
@@ -323,14 +332,21 @@ const PendingExchangesList = ({
                 <Input
                   id="receivedBy"
                   value={partialPayment.receivedBy}
-                  onChange={(e) => setPartialPayment(prev => ({ ...prev, receivedBy: e.target.value }))}
+                  onChange={(e) =>
+                    setPartialPayment((prev) => ({
+                      ...prev,
+                      receivedBy: e.target.value,
+                    }))
+                  }
                   placeholder="Nombre del responsable"
                 />
               </div>
 
               <div className="bg-blue-50 p-3 rounded">
                 <p className="text-sm">
-                  <strong>Saldo Pendiente:</strong> {partialPayment.pendingBalance.toFixed(2)} {selectedExchange.monedaDestino?.codigo}
+                  <strong>Saldo Pendiente:</strong>{" "}
+                  {partialPayment.pendingBalance.toFixed(2)}{" "}
+                  {selectedExchange.monedaDestino?.codigo}
                 </p>
               </div>
 
@@ -339,7 +355,12 @@ const PendingExchangesList = ({
                 <Textarea
                   id="observations"
                   value={partialPayment.observations}
-                  onChange={(e) => setPartialPayment(prev => ({ ...prev, observations: e.target.value }))}
+                  onChange={(e) =>
+                    setPartialPayment((prev) => ({
+                      ...prev,
+                      observations: e.target.value,
+                    }))
+                  }
                   placeholder="Observaciones adicionales..."
                   rows={3}
                 />
@@ -366,6 +387,8 @@ const PendingExchangesList = ({
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmationDialog />
     </>
   );
 };
