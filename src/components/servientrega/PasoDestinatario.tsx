@@ -50,6 +50,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [agencias, setAgencias] = useState<Agencia[]>([]);
   const [mostrarAgencias, setMostrarAgencias] = useState(false);
   const [agenciaSeleccionada, setAgenciaSeleccionada] = useState<string>("");
+  const [ciudadEstablecidaPorAgencia, setCiudadEstablecidaPorAgencia] =
+    useState(false);
   const [loading, setLoading] = useState(false);
 
   const [cedulaQuery, setCedulaQuery] = useState("");
@@ -316,7 +318,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         const data = res.data.fetch || [];
         setAgencias(
           data.map((a: any) => ({
-            nombre: String(Object.values(a)[0] ?? "").trim(),
+            nombre: String(a.agencia ?? Object.values(a)[0] ?? "").trim(),
             tipo_cs: String(a.tipo_cs?.trim() ?? ""),
             direccion: String(a.direccion?.trim() ?? ""),
             ciudad: String(a.ciudad?.trim() ?? ""),
@@ -324,6 +326,70 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         );
       } catch (error) {
         console.error("Error al cargar agencias:", error);
+      }
+    } else {
+      setAgenciaSeleccionada("");
+      // Si la ciudad fue establecida por una agencia, limpiarla
+      if (ciudadEstablecidaPorAgencia) {
+        setForm((prev) => ({
+          ...prev,
+          ciudad: "",
+          provincia: "",
+        }));
+        setCiudadEstablecidaPorAgencia(false);
+        toast.info(
+          "Ciudad y provincia limpiadas al deseleccionar retiro en oficina"
+        );
+      }
+    }
+  };
+
+  // Manejar selección de agencia y actualizar ciudad automáticamente
+  const handleAgenciaChange = async (nombreAgencia: string) => {
+    setAgenciaSeleccionada(nombreAgencia);
+
+    // Buscar la agencia seleccionada para obtener su ciudad
+    const agenciaEncontrada = agencias.find((a) => a.nombre === nombreAgencia);
+    if (agenciaEncontrada) {
+      const ciudadAgencia = agenciaEncontrada.ciudad.trim();
+
+      // Buscar la provincia correspondiente a esta ciudad
+      try {
+        const ciudadEncontrada = ciudades.find(
+          (c) => c.ciudad.trim().toUpperCase() === ciudadAgencia.toUpperCase()
+        );
+
+        const provinciaAgencia = ciudadEncontrada?.provincia || "";
+
+        // Actualizar la ciudad y provincia del formulario
+        setForm((prev) => ({
+          ...prev,
+          ciudad: ciudadAgencia,
+          provincia: provinciaAgencia,
+        }));
+
+        // Marcar que la ciudad fue establecida por una agencia
+        setCiudadEstablecidaPorAgencia(true);
+
+        console.log(`🏢 Agencia seleccionada: ${nombreAgencia}`);
+        console.log(`🏙️ Ciudad actualizada a: ${ciudadAgencia}`);
+        console.log(`🗺️ Provincia actualizada a: ${provinciaAgencia}`);
+
+        // Mostrar toast informativo
+        toast.success(
+          `Ubicación actualizada: ${ciudadAgencia}${
+            provinciaAgencia ? `, ${provinciaAgencia}` : ""
+          }`
+        );
+      } catch (error) {
+        console.error("Error al buscar provincia:", error);
+        // Solo actualizar ciudad si hay error con provincia
+        setForm((prev) => ({
+          ...prev,
+          ciudad: ciudadAgencia,
+        }));
+        setCiudadEstablecidaPorAgencia(true);
+        toast.success(`Ciudad actualizada a: ${ciudadAgencia}`);
       }
     }
   };
@@ -423,7 +489,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       }
       toast.success("Destinatario guardado correctamente.");
 
-      // Preparar datos limpios para el siguiente paso (sin campos extra como codpais)
+      // Preparar datos limpios para el siguiente paso
       const destinatarioLimpio: Destinatario = {
         identificacion: form.identificacion,
         nombre: form.nombre,
@@ -431,6 +497,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         ciudad: form.ciudad,
         provincia: form.provincia,
         pais: form.pais,
+        codpais: form.codpais,
         telefono: form.telefono,
         email: form.email,
         codigo_postal: form.codigo_postal,
@@ -524,7 +591,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             <div className="mt-2">
               <Label>Seleccionar agencia</Label>
               <Select
-                onValueChange={setAgenciaSeleccionada}
+                onValueChange={handleAgenciaChange}
                 value={agenciaSeleccionada}
               >
                 <SelectTrigger>
