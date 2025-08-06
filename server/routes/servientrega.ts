@@ -149,6 +149,35 @@ router.put("/remitente/actualizar/:cedula", async (req, res) => {
   }
 });
 
+// =============================
+// 📍 Obtener puntos de atención para Servientrega
+// =============================
+router.get("/remitente/puntos", async (req, res) => {
+  try {
+    const puntos = await prisma.puntoAtencion.findMany({
+      where: { activo: true },
+      select: {
+        id: true,
+        nombre: true,
+        ciudad: true,
+        provincia: true,
+      },
+      orderBy: { nombre: "asc" },
+    });
+
+    res.json({
+      success: true,
+      puntos: puntos,
+    });
+  } catch (error) {
+    console.error("Error al obtener puntos de atención:", error);
+    res.status(500).json({
+      success: false,
+      error: "Error al obtener puntos de atención",
+    });
+  }
+});
+
 router.get("/destinatario/buscar/:query", async (req, res) => {
   try {
     const { query } = req.params;
