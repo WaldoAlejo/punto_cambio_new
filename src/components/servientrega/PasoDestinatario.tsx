@@ -352,12 +352,26 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         );
       }
       toast.success("Destinatario guardado correctamente.");
-      // Para el flujo, solo se pasa la versión con identificacion (sin cedula extra)
-      onNext(
-        { ...destinatarioFinal },
-        mostrarAgencias,
-        agenciaSeleccionada.trim()
+
+      // Preparar datos limpios para el siguiente paso (sin campos extra como codpais)
+      const destinatarioLimpio: Destinatario = {
+        identificacion: form.identificacion,
+        nombre: form.nombre,
+        direccion: direccionFinal.trim(),
+        ciudad: form.ciudad,
+        provincia: form.provincia,
+        pais: form.pais,
+        telefono: form.telefono,
+        email: form.email,
+        codigo_postal: form.codigo_postal,
+      };
+
+      console.log(
+        "🧹 Datos limpios para el siguiente paso:",
+        destinatarioLimpio
       );
+
+      onNext(destinatarioLimpio, mostrarAgencias, agenciaSeleccionada.trim());
     } catch (err) {
       console.error("❌ Error al guardar destinatario:", err);
       toast.error("Hubo un problema al guardar el destinatario.");

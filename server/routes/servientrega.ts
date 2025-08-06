@@ -202,12 +202,31 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
     const data = req.body;
+    console.log("📥 Datos recibidos para actualizar:", data);
+
+    // Filtrar solo los campos que existen en el modelo ServientregaDestinatario
+    const destinatarioData = {
+      cedula: data.identificacion || data.cedula,
+      nombre: data.nombre,
+      direccion: data.direccion,
+      ciudad: data.ciudad,
+      provincia: data.provincia,
+      pais: data.pais,
+      telefono: data.telefono,
+      email: data.email,
+      codigo_postal: data.codigo_postal || null,
+    };
+
+    console.log("🔄 Datos filtrados para actualizar:", destinatarioData);
+
     const destinatario = await prisma.servientregaDestinatario.update({
       where: { cedula },
-      data,
+      data: destinatarioData,
     });
+    console.log("✅ Destinatario actualizado:", destinatario);
     res.json(destinatario);
-  } catch {
+  } catch (error) {
+    console.error("❌ Error al actualizar destinatario:", error);
     res.status(500).json({ error: "Error al actualizar destinatario" });
   }
 });
