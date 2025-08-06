@@ -172,11 +172,23 @@ router.post("/destinatario/guardar", async (req, res) => {
     const data = req.body;
     console.log("📥 Datos recibidos en el backend:", data);
 
+    // Filtrar solo los campos que existen en el modelo ServientregaDestinatario
+    const destinatarioData = {
+      cedula: data.identificacion || data.cedula,
+      nombre: data.nombre,
+      direccion: data.direccion,
+      ciudad: data.ciudad,
+      provincia: data.provincia,
+      pais: data.pais,
+      telefono: data.telefono,
+      email: data.email,
+      codigo_postal: data.codigo_postal || null,
+    };
+
+    console.log("🔄 Datos filtrados para Prisma:", destinatarioData);
+
     const destinatario = await prisma.servientregaDestinatario.create({
-      data: {
-        ...data,
-        cedula: data.identificacion || data.cedula,
-      },
+      data: destinatarioData,
     });
     console.log("✅ Destinatario creado:", destinatario);
     res.json(destinatario);
