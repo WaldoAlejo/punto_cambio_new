@@ -161,15 +161,16 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       .post("/servientrega/ciudades", { codpais })
       .then((res) => {
         const lista = res.data.fetch || [];
-        setCiudades(
-          lista.map((item: { city: string }) => {
-            const [ciudad, provincia] = item.city.split("-");
-            return {
-              ciudad: ciudad?.trim() ?? "",
-              provincia: provincia?.trim() ?? "",
-            };
-          })
-        );
+        console.log("🌍 Ciudades recibidas de la API:", lista);
+        const ciudadesProcesadas = lista.map((item: { city: string }) => {
+          const [ciudad, provincia] = item.city.split("-");
+          return {
+            ciudad: ciudad?.trim() ?? "",
+            provincia: provincia?.trim() ?? "",
+          };
+        });
+        console.log("🏙️ Ciudades procesadas:", ciudadesProcesadas);
+        setCiudades(ciudadesProcesadas);
       })
       .catch((err) => console.error("Error al obtener ciudades:", err));
   };
@@ -178,7 +179,9 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   // 5. Cambio de ciudad/provincia
   // ===============================
   const handleCiudadChange = (value: string) => {
+    console.log("🏙️ Valor seleccionado:", value);
     const [ciudad, provincia] = value.split("|");
+    console.log("🏙️ Ciudad:", ciudad, "Provincia:", provincia);
     setForm((prev) => ({ ...prev, ciudad, provincia }));
   };
 
@@ -235,7 +238,28 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   // 9. Guardar/actualizar y continuar
   // ===============================
   const handleContinue = async () => {
-    if (!form.nombre || !form.telefono || !form.pais || !form.ciudad) {
+    console.log("🔍 Validando formulario:", {
+      nombre: form.nombre,
+      telefono: form.telefono,
+      pais: form.pais,
+      ciudad: form.ciudad,
+      provincia: form.provincia,
+    });
+
+    if (
+      !form.identificacion ||
+      !form.nombre ||
+      !form.telefono ||
+      !form.pais ||
+      !form.ciudad
+    ) {
+      console.log("❌ Campos faltantes:", {
+        identificacion: !form.identificacion,
+        nombre: !form.nombre,
+        telefono: !form.telefono,
+        pais: !form.pais,
+        ciudad: !form.ciudad,
+      });
       toast.error("Completa todos los campos obligatorios.");
       return;
     }
@@ -326,7 +350,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           <Label className="mt-3">Ciudad y Provincia</Label>
           <Select
             onValueChange={handleCiudadChange}
-            value={`${form.ciudad}|${form.provincia}`}
+            value={
+              form.ciudad && form.provincia
+                ? `${form.ciudad}|${form.provincia}`
+                : ""
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Seleccionar ciudad" />
