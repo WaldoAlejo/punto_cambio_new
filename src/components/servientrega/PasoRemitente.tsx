@@ -66,10 +66,17 @@ export default function PasoRemitente({
     const query = cedulaQuery.trim();
     if (query.length >= 3) {
       setBuscandoCedula(true);
+      console.log("🔍 Buscando remitente con cédula:", query);
       axiosInstance
         .get(`/servientrega/remitente/buscar/${encodeURIComponent(query)}`)
-        .then((res) => setCedulaResultados(res.data.remitentes || []))
-        .catch(() => setCedulaResultados([]))
+        .then((res) => {
+          console.log("✅ Resultados de búsqueda:", res.data);
+          setCedulaResultados(res.data.remitentes || []);
+        })
+        .catch((err) => {
+          console.error("❌ Error en búsqueda de remitente:", err);
+          setCedulaResultados([]);
+        })
         .finally(() => setBuscandoCedula(false));
     } else {
       setCedulaResultados([]);
@@ -153,31 +160,69 @@ export default function PasoRemitente({
       .filter(Boolean)
       .join(", ");
 
+    // Validar campos requeridos
+    if (!formData.identificacion?.trim()) {
+      toast.error("La identificación es requerida");
+      return;
+    }
+
+    // Validar formato de cédula (básico)
+    const cedula = formData.identificacion.trim();
+    if (cedula.length < 10 || !/^\d+$/.test(cedula)) {
+      toast.error("La identificación debe tener al menos 10 dígitos");
+      return;
+    }
+    if (!formData.nombre?.trim()) {
+      toast.error("El nombre es requerido");
+      return;
+    }
+    if (!formData.telefono?.trim()) {
+      toast.error("El teléfono es requerido");
+      return;
+    }
+    if (!direccionFinal.trim()) {
+      toast.error("La dirección es requerida");
+      return;
+    }
+
     // Prepara objeto para el backend (usa identificacion y pais)
     const remitenteFinal: Remitente = {
-      ...formData,
+      identificacion: formData.identificacion.trim(),
+      nombre: formData.nombre.trim(),
       direccion: direccionFinal.trim(),
-      pais: formData.pais || "ECUADOR",
-      // El backend puede seguir usando 'cedula', pero tu modelo de front es robusto
+      telefono: formData.telefono.trim(),
+      email: formData.email?.trim() || "",
+      ciudad: formData.ciudad?.trim() || "",
+      provincia: formData.provincia?.trim() || "",
+      codigo_postal: formData.codigo_postal?.trim() || "170150",
+      pais: formData.pais?.trim() || "ECUADOR",
     };
     setLoading(true);
 
     try {
+      const payload = {
+        ...remitenteFinal,
+        cedula: formData.identificacion,
+      };
+
+      console.log("📤 Enviando datos del remitente:", payload);
+
       if (remitenteExistente) {
         await axiosInstance.put(
           `/servientrega/remitente/actualizar/${formData.identificacion.trim()}`,
-          { ...remitenteFinal, cedula: formData.identificacion }
+          payload
         );
       } else {
-        await axiosInstance.post("/servientrega/remitente/guardar", {
-          ...remitenteFinal,
-          cedula: formData.identificacion,
-        });
+        await axiosInstance.post("/servientrega/remitente/guardar", payload);
       }
       toast.success("Remitente guardado correctamente.");
       onNext({ ...remitenteFinal, direccion: direccionFinal.trim() });
     } catch (err) {
       console.error("❌ Error al guardar remitente:", err);
+      console.error("❌ Datos que se intentaron enviar:", {
+        ...remitenteFinal,
+        cedula: formData.identificacion,
+      });
       toast.error("Hubo un problema al guardar el remitente.");
     } finally {
       setLoading(false);
