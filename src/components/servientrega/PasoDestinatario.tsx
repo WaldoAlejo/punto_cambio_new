@@ -148,15 +148,20 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   // 4. Cambio de país (siempre guarda pais y codpais)
   // ===============================
   const handlePaisChange = (value: string) => {
+    console.log("🌍 País seleccionado - valor:", value);
     const codpais = parseInt(value);
     const paisSeleccionado = paises.find((p) => p.codpais === codpais);
-    setForm((prev) => ({
-      ...prev,
+    console.log("🌍 País encontrado:", paisSeleccionado);
+
+    const nuevoForm = {
+      ...form,
       codpais,
       pais: paisSeleccionado ? paisSeleccionado.pais : "",
       ciudad: "",
       provincia: "",
-    }));
+    };
+    console.log("🌍 Nuevo form después de seleccionar país:", nuevoForm);
+    setForm(nuevoForm);
     axiosInstance
       .post("/servientrega/ciudades", { codpais })
       .then((res) => {
