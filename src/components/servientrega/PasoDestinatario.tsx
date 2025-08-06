@@ -163,13 +163,59 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     });
     if (dest.direccion) {
       const partes = dest.direccion.split(",").map((p: string) => p.trim());
+      console.log("🏠 Parseando dirección:", dest.direccion);
+      console.log("🏠 Partes divididas:", partes);
+
+      // Buscar numeración en cualquier parte que contenga #
+      let numeracion = "";
+      let calleSecundaria = "";
+
+      // Buscar la parte que contiene #
+      const parteConNumeracion = partes.find((p) => p.includes("#"));
+      if (parteConNumeracion) {
+        numeracion = parteConNumeracion.trim();
+      }
+
+      // La calle secundaria es la parte que empieza con "y" (sin el "y")
+      const parteCalleSecundaria = partes.find((p) =>
+        p.toLowerCase().startsWith("y ")
+      );
+      if (parteCalleSecundaria) {
+        calleSecundaria = parteCalleSecundaria.replace(/^y\s*/i, "").trim();
+      }
+
       setExtraDireccion({
-        callePrincipal: partes[0]?.split("#")[0]?.trim() || "",
-        numeracion: partes[0]?.includes("#")
-          ? partes[0].split("#")[1]?.trim() || ""
-          : "",
-        calleSecundaria: partes[1]?.replace(/^y\s*/i, "").trim() || "",
-        referencia: partes[2]?.replace(/^Ref:\s*/i, "").trim() || "",
+        callePrincipal: partes[0] || "",
+        numeracion: numeracion,
+        calleSecundaria: calleSecundaria,
+        referencia:
+          partes
+            .find(
+              (p) =>
+                p.toLowerCase().startsWith("ref:") ||
+                (!p.includes("#") &&
+                  !p.toLowerCase().startsWith("y ") &&
+                  p !== partes[0])
+            )
+            ?.replace(/^Ref:\s*/i, "")
+            .trim() || "",
+      });
+
+      console.log("🏠 Dirección parseada:", {
+        callePrincipal: partes[0] || "",
+        numeracion: numeracion,
+        calleSecundaria: calleSecundaria,
+        referencia:
+          partes
+            .find(
+              (p) =>
+                p.toLowerCase().startsWith("ref:") ||
+                (!p.includes("#") &&
+                  !p.toLowerCase().startsWith("y ") &&
+                  p !== partes[0])
+            )
+            ?.replace(/^Ref:\s*/i, "")
+            .trim() || "",
       });
     }
     setDestinatarioExistente(dest);
