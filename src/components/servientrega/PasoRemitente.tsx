@@ -202,11 +202,14 @@ export default function PasoRemitente({
       nombre: formData.nombre.trim(),
       direccion: direccionFinal.trim(),
       telefono: formData.telefono.trim(),
-      email: formData.email?.trim() || "",
-      ciudad: formData.ciudad?.trim() || "",
-      provincia: formData.provincia?.trim() || "",
-      codigo_postal: formData.codigo_postal?.trim() || "170150",
-      pais: formData.pais?.trim() || "ECUADOR",
+      ...(formData.email?.trim() && { email: formData.email.trim() }),
+      ...(formData.ciudad?.trim() && { ciudad: formData.ciudad.trim() }),
+      ...(formData.provincia?.trim() && {
+        provincia: formData.provincia.trim(),
+      }),
+      ...(formData.codigo_postal?.trim() && {
+        codigo_postal: formData.codigo_postal.trim(),
+      }),
     };
 
     console.log("📤 Enviando datos del remitente:", payload);
