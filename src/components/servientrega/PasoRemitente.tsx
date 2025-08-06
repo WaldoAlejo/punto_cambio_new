@@ -197,20 +197,35 @@ export default function PasoRemitente({
       codigo_postal: formData.codigo_postal?.trim() || "170150",
       pais: formData.pais?.trim() || "ECUADOR",
     };
-    const payload = {
+    // Intentar con todos los campos, si falla usar solo campos básicos
+    const payloadCompleto = {
       cedula: formData.identificacion.trim(),
       nombre: formData.nombre.trim(),
       direccion: direccionFinal.trim(),
       telefono: formData.telefono.trim(),
       ...(formData.email?.trim() && { email: formData.email.trim() }),
+      ...(formData.codigo_postal?.trim() && {
+        codigo_postal: formData.codigo_postal.trim(),
+      }),
       ...(formData.ciudad?.trim() && { ciudad: formData.ciudad.trim() }),
       ...(formData.provincia?.trim() && {
         provincia: formData.provincia.trim(),
       }),
+    };
+
+    // Payload básico como respaldo
+    const payloadBasico = {
+      cedula: formData.identificacion.trim(),
+      nombre: formData.nombre.trim(),
+      direccion: direccionFinal.trim(),
+      telefono: formData.telefono.trim(),
+      ...(formData.email?.trim() && { email: formData.email.trim() }),
       ...(formData.codigo_postal?.trim() && {
         codigo_postal: formData.codigo_postal.trim(),
       }),
     };
+
+    const payload = payloadCompleto;
 
     console.log("📤 Enviando datos del remitente:", payload);
     setLoading(true);
