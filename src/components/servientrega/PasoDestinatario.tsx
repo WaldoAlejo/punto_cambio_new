@@ -94,8 +94,35 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         const ecuador = lista.find((p) => p.codpais === 63);
         console.log("🇪🇨 Ecuador encontrado:", ecuador);
         if (ecuador) {
-          console.log("🇪🇨 Estableciendo Ecuador por defecto");
-          handlePaisChange("63");
+          console.log("🇪🇨 Estableciendo Ecuador por defecto directamente");
+          // Establecer Ecuador directamente en el form
+          setForm((prev) => ({
+            ...prev,
+            codpais: 63,
+            pais: ecuador.pais,
+          }));
+          // Cargar ciudades de Ecuador
+          axiosInstance
+            .post("/servientrega/ciudades", { codpais: 63 })
+            .then((res) => {
+              const lista = res.data.fetch || [];
+              console.log("🌍 Ciudades de Ecuador cargadas:", lista);
+              const ciudadesProcesadas = lista.map((item: { city: string }) => {
+                const [ciudad, provincia] = item.city.split("-");
+                return {
+                  ciudad: ciudad?.trim() ?? "",
+                  provincia: provincia?.trim() ?? "",
+                };
+              });
+              console.log(
+                "🏙️ Ciudades de Ecuador procesadas:",
+                ciudadesProcesadas
+              );
+              setCiudades(ciudadesProcesadas);
+            })
+            .catch((err) =>
+              console.error("Error al obtener ciudades de Ecuador:", err)
+            );
         }
       })
       .catch((err) => console.error("Error al obtener países:", err));
