@@ -89,9 +89,14 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       .post("/servientrega/paises")
       .then((res) => {
         const lista: Pais[] = res.data.fetch || [];
+        console.log("🌍 Países cargados de la API:", lista);
         setPaises(lista);
         const ecuador = lista.find((p) => p.codpais === 63);
-        if (ecuador) handlePaisChange("63");
+        console.log("🇪🇨 Ecuador encontrado:", ecuador);
+        if (ecuador) {
+          console.log("🇪🇨 Estableciendo Ecuador por defecto");
+          handlePaisChange("63");
+        }
       })
       .catch((err) => console.error("Error al obtener países:", err));
     // eslint-disable-next-line
@@ -149,6 +154,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   // ===============================
   const handlePaisChange = (value: string) => {
     console.log("🌍 País seleccionado - valor:", value);
+    console.log("🌍 Array de países disponible:", paises.length, paises);
     const codpais = parseInt(value);
     const paisSeleccionado = paises.find((p) => p.codpais === codpais);
     console.log("🌍 País encontrado:", paisSeleccionado);
