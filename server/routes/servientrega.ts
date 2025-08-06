@@ -170,14 +170,18 @@ router.get("/destinatario/buscar/:query", async (req, res) => {
 router.post("/destinatario/guardar", async (req, res) => {
   try {
     const data = req.body;
+    console.log("📥 Datos recibidos en el backend:", data);
+
     const destinatario = await prisma.servientregaDestinatario.create({
       data: {
         ...data,
         cedula: data.identificacion || data.cedula,
       },
     });
+    console.log("✅ Destinatario creado:", destinatario);
     res.json(destinatario);
-  } catch {
+  } catch (error) {
+    console.error("❌ Error al guardar destinatario:", error);
     res.status(500).json({ error: "Error al guardar destinatario" });
   }
 });
