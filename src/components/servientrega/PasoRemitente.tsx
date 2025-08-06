@@ -84,27 +84,68 @@ export default function PasoRemitente({
   }, [cedulaQuery]);
 
   const seleccionarRemitente = (rem: any) => {
+    console.log("🔍 Remitente encontrado:", rem);
+
     setFormData({
       identificacion: rem.cedula || rem.identificacion,
-      nombre: rem.nombre,
-      telefono: rem.telefono,
+      nombre: rem.nombre || "",
+      telefono: rem.telefono || "",
       email: rem.email || "",
       direccion: rem.direccion || "",
+      // Campos que no existen en BD actual - usar valores por defecto
       ciudad: rem.ciudad || "",
       provincia: rem.provincia || "",
-      codigo_postal: rem.codigo_postal || "170150",
-      pais: rem.pais || "ECUADOR",
+      codigo_postal: rem.codigo_postal || "",
+      pais: "ECUADOR", // Valor fijo por defecto
     });
 
     if (rem.direccion) {
-      const partes = rem.direccion.split(",").map((p: string) => p.trim());
+      console.log("📍 Parseando dirección:", rem.direccion);
+
+      // Parsear la dirección completa
+      const direccionCompleta = rem.direccion;
+      const partes = direccionCompleta.split(",").map((p: string) => p.trim());
+
+      // Buscar la referencia (parte que empieza con "Ref:")
+      const referenciaIndex = partes.findIndex((p) =>
+        p.toLowerCase().startsWith("ref:")
+      );
+      const referencia =
+        referenciaIndex >= 0
+          ? partes
+              .slice(referenciaIndex)
+              .join(", ")
+              .replace(/^Ref:\s*/i, "")
+              .trim()
+          : "";
+
+      // Las partes antes de la referencia
+      const partesAntes =
+        referenciaIndex >= 0 ? partes.slice(0, referenciaIndex) : partes;
+
+      // Primera parte: calle principal y numeración
+      const primeraParte = partesAntes[0] || "";
+      const callePrincipal = primeraParte.split("#")[0]?.trim() || "";
+      const numeracion = primeraParte.includes("#")
+        ? primeraParte.split("#")[1]?.trim() || ""
+        : "";
+
+      // Segunda parte: calle secundaria (quitar "y" del inicio)
+      const calleSecundaria =
+        partesAntes[1]?.replace(/^y\s*/i, "").trim() || "";
+
       setExtraDireccion({
-        callePrincipal: partes[0]?.split("#")[0]?.trim() || "",
-        numeracion: partes[0]?.includes("#")
-          ? partes[0].split("#")[1]?.trim() || ""
-          : "",
-        calleSecundaria: partes[1]?.replace(/^y\s*/i, "").trim() || "",
-        referencia: partes[2]?.replace(/^Ref:\s*/i, "").trim() || "",
+        callePrincipal,
+        numeracion,
+        calleSecundaria,
+        referencia,
+      });
+
+      console.log("📍 Dirección parseada:", {
+        callePrincipal,
+        numeracion,
+        calleSecundaria,
+        referencia,
       });
     }
 
