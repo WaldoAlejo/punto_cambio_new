@@ -10,7 +10,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import axiosInstance from "@/services/axiosInstance";
 import { Separator } from "@/components/ui/separator";
-import type { Empaque, Medidas, ResumenCostos } from "@/types/servientrega";
+import type { Empaque, Medidas } from "@/types/servientrega";
 
 // Tipado del prop
 interface PasoEmpaqueYMedidasProps {
@@ -23,11 +23,7 @@ interface PasoEmpaqueYMedidasProps {
   paisOrigen: string;
   ciudadOrigen: string;
   provinciaOrigen: string;
-  onNext: (data: {
-    medidas: Medidas;
-    empaque?: Empaque;
-    resumen_costos: ResumenCostos;
-  }) => void;
+  onNext: (data: { medidas: Medidas; empaque?: Empaque }) => void;
 }
 
 interface EmpaqueApi {
@@ -49,8 +45,6 @@ export default function PasoEmpaqueYMedidas({
   const [loading, setLoading] = useState(false);
   const [empaques, setEmpaques] = useState<EmpaqueApi[]>([]);
   const [loadingEmpaques, setLoadingEmpaques] = useState(true);
-  const [flete, setFlete] = useState<number>(0);
-  const [loadingFlete, setLoadingFlete] = useState(false);
 
   const [medidas, setMedidas] = useState<Medidas>({
     alto: 0,
@@ -139,50 +133,6 @@ export default function PasoEmpaqueYMedidas({
     }));
   }, [empaque.cantidad, empaque.costo_unitario]);
 
-  // Calcular flete solo cuando se tienen todos los datos mínimos
-  useEffect(() => {
-    const calcularFlete = async () => {
-      if (!ciudadDestino || !provinciaDestino || !nombre_producto) return;
-      if (!esDocumento && !requiereEmpaque) {
-        if (!medidas.alto || !medidas.ancho || !medidas.largo || !medidas.peso)
-          return;
-      }
-
-      setLoadingFlete(true);
-      try {
-        const { data } = await axiosInstance.post("/servientrega/tarifa", {
-          tipo: esInternacional
-            ? "obtener_tarifa_internacional"
-            : "obtener_tarifa_nacional",
-          pais_ori: paisOrigen,
-          ciu_ori: ciudadOrigen,
-          provincia_ori: provinciaOrigen,
-          pais_des: paisDestino,
-          ciu_des: ciudadDestino,
-          provincia_des: provinciaDestino,
-          valor_seguro: medidas.valor_seguro || 0,
-          valor_declarado: medidas.valor_declarado || 0,
-          peso: esDocumento || requiereEmpaque ? 0 : medidas.peso || 0,
-          alto: esDocumento || requiereEmpaque ? 0 : medidas.alto || 0,
-          ancho: esDocumento || requiereEmpaque ? 0 : medidas.ancho || 0,
-          largo: esDocumento || requiereEmpaque ? 0 : medidas.largo || 0,
-          recoleccion: medidas.recoleccion ? "SI" : "NO",
-          nombre_producto,
-          empaque: requiereEmpaque ? empaque.tipo_empaque : "",
-        });
-        const tarifa = Array.isArray(data) ? data[0] : data;
-        setFlete(parseFloat(tarifa?.flete || "0"));
-      } catch {
-        toast.error("Error al calcular el flete.");
-        setFlete(0);
-      } finally {
-        setLoadingFlete(false);
-      }
-    };
-    calcularFlete();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [medidas, requiereEmpaque, empaque.tipo_empaque]);
-
   // Inputs
   const handleMedidaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
@@ -204,18 +154,6 @@ export default function PasoEmpaqueYMedidas({
       });
     }
   };
-
-  const resumenCostos = useMemo<ResumenCostos>(() => {
-    return {
-      costo_empaque: requiereEmpaque ? empaque.costo_total : 0,
-      valor_seguro: manualSeguro ? medidas.valor_seguro : 0,
-      flete: flete || 0,
-      total:
-        (requiereEmpaque ? empaque.costo_total : 0) +
-        (manualSeguro ? medidas.valor_seguro : 0) +
-        (flete || 0),
-    };
-  }, [flete, empaque, medidas.valor_seguro, manualSeguro, requiereEmpaque]);
 
   const handleContinue = () => {
     if (!medidas.valor_declarado || medidas.valor_declarado <= 0) {
@@ -240,7 +178,6 @@ export default function PasoEmpaqueYMedidas({
         recoleccion: !!medidas.recoleccion,
       },
       empaque: requiereEmpaque ? empaque : undefined,
-      resumen_costos: resumenCostos,
     });
     setLoading(false);
   };
@@ -361,37 +298,11 @@ export default function PasoEmpaqueYMedidas({
           </div>
         )}
 
-        {/* Resumen */}
-        <Separator />
-        <div>
-          <h4 className="font-semibold">💰 Resumen de costos</h4>
-          <div className="flex justify-between text-sm">
-            <span>Costo de empaque:</span>
-            <span>${resumenCostos.costo_empaque.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span>Seguro:</span>
-            <span>${resumenCostos.valor_seguro.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span>Flete estimado:</span>
-            <span>
-              {loadingFlete ? "Calculando..." : `$${flete.toFixed(2)}`}
-            </span>
-          </div>
-          <div className="flex justify-between font-bold text-lg mt-2">
-            <span>Total estimado:</span>
-            <span className="text-green-700">
-              ${resumenCostos.total.toFixed(2)}
-            </span>
-          </div>
-        </div>
-
         {/* Botón */}
         <Button
           className="w-full mt-4"
           onClick={handleContinue}
-          disabled={loading || loadingFlete}
+          disabled={loading}
         >
           {loading ? (
             <Loader2 className="h-4 w-4 animate-spin mr-2" />

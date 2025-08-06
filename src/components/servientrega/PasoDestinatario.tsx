@@ -521,7 +521,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         <div className="p-4 border rounded-md bg-white">
           <h4 className="font-semibold mb-4">👤 Datos Personales</h4>
           <div className="space-y-4">
-            <div>
+            <div className="relative">
               <Label htmlFor="identificacion">Cédula o Pasaporte</Label>
               <Input
                 id="identificacion"
@@ -535,17 +535,23 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
                 }}
               />
               {buscandoCedula && (
-                <Loader2 className="h-5 w-5 animate-spin text-gray-400 mt-2" />
+                <div className="flex items-center mt-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-500">Buscando...</span>
+                </div>
               )}
               {cedulaResultados.length > 0 && (
-                <div className="absolute bg-white border rounded-md shadow-md w-full max-h-40 overflow-y-auto z-10 mt-1">
+                <div className="absolute top-full left-0 right-0 bg-white border rounded-md shadow-lg max-h-40 overflow-y-auto z-50 mt-1">
                   {cedulaResultados.map((d, idx) => (
                     <div
                       key={idx}
-                      className="p-2 hover:bg-gray-100 cursor-pointer"
+                      className="p-3 hover:bg-gray-100 cursor-pointer border-b last:border-b-0 text-sm"
                       onClick={() => seleccionarDestinatario(d)}
                     >
-                      {(d.cedula || d.identificacion) + " - " + d.nombre}
+                      <div className="font-medium text-gray-900">
+                        {d.cedula || d.identificacion}
+                      </div>
+                      <div className="text-gray-600">{d.nombre}</div>
                     </div>
                   ))}
                 </div>

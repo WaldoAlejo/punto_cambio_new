@@ -15,7 +15,6 @@ import type {
   Destinatario,
   Medidas,
   Empaque,
-  ResumenCostos,
   FormDataGuia as FormDataGuiaType,
 } from "@/types/servientrega";
 
@@ -103,18 +102,12 @@ export default function ServientregaMain({
     setPasoActual("empaque");
   };
 
-  const handleEmpaqueNext = (data: {
-    medidas: Medidas;
-    empaque?: Empaque;
-    requiere_empaque: boolean;
-    resumen_costos: ResumenCostos;
-  }) => {
+  const handleEmpaqueNext = (data: { medidas: Medidas; empaque?: Empaque }) => {
     setFormData((prev) => ({
       ...prev,
       medidas: data.medidas,
       empaque: data.empaque,
-      requiere_empaque: data.requiere_empaque,
-      resumen_costos: data.resumen_costos,
+      requiere_empaque: !!data.empaque,
     }));
     setPasoActual("resumen");
   };
