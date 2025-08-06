@@ -225,7 +225,8 @@ export default function PasoRemitente({
       }),
     };
 
-    const payload = payloadCompleto;
+    // Usar payload básico hasta que se ejecuten las migraciones en producción
+    const payload = payloadBasico;
 
     console.log("📤 Enviando datos del remitente:", payload);
     setLoading(true);
