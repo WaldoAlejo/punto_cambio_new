@@ -167,6 +167,23 @@ router.get("/destinatario/buscar/:query", async (req, res) => {
   }
 });
 
+// Endpoint específico para búsqueda por nombre
+router.get("/destinatario/buscar-nombre/:query", async (req, res) => {
+  try {
+    const { query } = req.params;
+    const destinatarios = await prisma.servientregaDestinatario.findMany({
+      where: {
+        nombre: { contains: query, mode: "insensitive" },
+      },
+      take: 10,
+      orderBy: { nombre: "asc" },
+    });
+    res.json({ destinatarios });
+  } catch {
+    res.status(500).json({ error: "Error al buscar destinatarios por nombre" });
+  }
+});
+
 router.post("/destinatario/guardar", async (req, res) => {
   try {
     const data = req.body;

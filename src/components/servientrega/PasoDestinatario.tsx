@@ -55,6 +55,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [cedulaQuery, setCedulaQuery] = useState("");
   const [cedulaResultados, setCedulaResultados] = useState<any[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
+
+  const [nombreQuery, setNombreQuery] = useState("");
+  const [nombreResultados, setNombreResultados] = useState<any[]>([]);
+  const [buscandoNombre, setBuscandoNombre] = useState(false);
+
   const [destinatarioExistente, setDestinatarioExistente] =
     useState<Destinatario | null>(null);
 
@@ -130,7 +135,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   }, []);
 
   // ===============================
-  // 2. Búsqueda predictiva de destinatario
+  // 2. Búsqueda predictiva de destinatario por cédula
   // ===============================
   useEffect(() => {
     if (cedulaQuery.trim().length >= 3) {
@@ -144,6 +149,22 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       setCedulaResultados([]);
     }
   }, [cedulaQuery]);
+
+  // ===============================
+  // 2.1. Búsqueda predictiva de destinatario por nombre
+  // ===============================
+  useEffect(() => {
+    if (nombreQuery.trim().length >= 3) {
+      setBuscandoNombre(true);
+      axiosInstance
+        .get(`/servientrega/destinatario/buscar-nombre/${nombreQuery.trim()}`)
+        .then((res) => setNombreResultados(res.data.destinatarios || []))
+        .catch(() => setNombreResultados([]))
+        .finally(() => setBuscandoNombre(false));
+    } else {
+      setNombreResultados([]);
+    }
+  }, [nombreQuery]);
 
   // ===============================
   // 3. Seleccionar destinatario existente
@@ -220,6 +241,9 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
     setDestinatarioExistente(dest);
     setCedulaResultados([]);
+    setNombreResultados([]);
+    setCedulaQuery("");
+    setNombreQuery("");
   };
 
   // ===============================
@@ -558,15 +582,43 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
               )}
             </div>
 
-            <div>
+            <div className="relative">
               <Label htmlFor="nombre">Nombre completo</Label>
               <Input
                 id="nombre"
                 name="nombre"
                 placeholder="Ingrese nombre completo"
                 value={form.nombre}
-                onChange={handleChange}
+                onChange={(e) => {
+                  const value = e.target.value.trimStart();
+                  setForm((prev) => ({ ...prev, nombre: value }));
+                  setNombreQuery(value);
+                }}
               />
+              {buscandoNombre && (
+                <div className="flex items-center mt-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-500">Buscando...</span>
+                </div>
+              )}
+              {nombreResultados.length > 0 && (
+                <div className="absolute top-full left-0 right-0 bg-white border rounded-md shadow-lg max-h-40 overflow-y-auto z-50 mt-1">
+                  {nombreResultados.map((d, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 hover:bg-gray-100 cursor-pointer border-b last:border-b-0 text-sm"
+                      onClick={() => seleccionarDestinatario(d)}
+                    >
+                      <div className="font-medium text-gray-900">
+                        {d.nombre}
+                      </div>
+                      <div className="text-gray-600">
+                        {d.cedula || d.identificacion}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div>

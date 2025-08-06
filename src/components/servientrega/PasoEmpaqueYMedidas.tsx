@@ -56,8 +56,8 @@ export default function PasoEmpaqueYMedidas({
     recoleccion: false,
   });
 
-  // Para documentos: forzar requerir empaque en falso
-  const [requiereEmpaque, setRequiereEmpaque] = useState(!esDocumento);
+  // Empaque desactivado por defecto
+  const [requiereEmpaque, setRequiereEmpaque] = useState(false);
   const [manualSeguro, setManualSeguro] = useState(false);
 
   const [empaque, setEmpaque] = useState<Empaque>({
@@ -133,11 +133,27 @@ export default function PasoEmpaqueYMedidas({
     }));
   }, [empaque.cantidad, empaque.costo_unitario]);
 
+  // Helper para mostrar valores en inputs (vacío si es 0)
+  const getDisplayValue = (value: number): string => {
+    return value === 0 ? "" : value.toString();
+  };
+
   // Inputs
   const handleMedidaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
-    const numericValue = type === "number" ? parseFloat(value) || 0 : value;
-    setMedidas((prev) => ({ ...prev, [name]: numericValue }));
+    if (type === "number") {
+      // Si el campo está vacío, mantenerlo como 0 internamente
+      if (value === "") {
+        setMedidas((prev) => ({ ...prev, [name]: 0 }));
+      } else {
+        const numericValue = parseFloat(value);
+        if (!isNaN(numericValue)) {
+          setMedidas((prev) => ({ ...prev, [name]: numericValue }));
+        }
+      }
+    } else {
+      setMedidas((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleEmpaqueSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -262,8 +278,9 @@ export default function PasoEmpaqueYMedidas({
                 <Input
                   name={campo}
                   type="number"
-                  value={(medidas as any)[campo]}
+                  value={getDisplayValue((medidas as any)[campo])}
                   onChange={handleMedidaChange}
+                  placeholder="0"
                 />
               </div>
             ))}
@@ -277,8 +294,9 @@ export default function PasoEmpaqueYMedidas({
           <Input
             name="valor_declarado"
             type="number"
-            value={medidas.valor_declarado}
+            value={getDisplayValue(medidas.valor_declarado)}
             onChange={handleMedidaChange}
+            placeholder="0.00"
           />
         </div>
 
@@ -292,8 +310,9 @@ export default function PasoEmpaqueYMedidas({
             <Input
               name="valor_seguro"
               type="number"
-              value={medidas.valor_seguro}
+              value={getDisplayValue(medidas.valor_seguro)}
               onChange={handleMedidaChange}
+              placeholder="0.00"
             />
           </div>
         )}
