@@ -466,10 +466,8 @@ model ServientregaRemitente {
   nombre        String
   direccion     String
   telefono      String
-  ciudad        String? // ✅ Agregado
-  provincia     String? // ✅ Agregado
   codigo_postal String?
-  email         String? // ✅ Ya estaba bien
+  email         String?
   guias         ServientregaGuia[]
 }
 

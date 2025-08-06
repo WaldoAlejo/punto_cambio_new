@@ -191,6 +191,9 @@ export default function ServientregaMain({
             paisDestino={formData.destinatario?.pais || ""}
             ciudadDestino={formData.destinatario?.ciudad || ""}
             provinciaDestino={formData.destinatario?.provincia || ""}
+            paisOrigen={formData.remitente?.pais || "ECUADOR"}
+            ciudadOrigen={formData.remitente?.ciudad || ""}
+            provinciaOrigen={formData.remitente?.provincia || ""}
             onNext={handleEmpaqueNext}
           />
         );

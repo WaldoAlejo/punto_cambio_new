@@ -19,6 +19,10 @@ interface PasoEmpaqueYMedidasProps {
   paisDestino: string;
   ciudadDestino: string;
   provinciaDestino: string;
+  // Datos del remitente (origen)
+  paisOrigen: string;
+  ciudadOrigen: string;
+  provinciaOrigen: string;
   onNext: (data: {
     medidas: Medidas;
     empaque?: Empaque;
@@ -37,6 +41,9 @@ export default function PasoEmpaqueYMedidas({
   paisDestino,
   ciudadDestino,
   provinciaDestino,
+  paisOrigen,
+  ciudadOrigen,
+  provinciaOrigen,
   onNext,
 }: PasoEmpaqueYMedidasProps) {
   const [loading, setLoading] = useState(false);
@@ -147,9 +154,9 @@ export default function PasoEmpaqueYMedidas({
           tipo: esInternacional
             ? "obtener_tarifa_internacional"
             : "obtener_tarifa_nacional",
-          pais_ori: "ECUADOR",
-          ciu_ori: "QUITO",
-          provincia_ori: "PICHINCHA",
+          pais_ori: paisOrigen,
+          ciu_ori: ciudadOrigen,
+          provincia_ori: provinciaOrigen,
           pais_des: paisDestino,
           ciu_des: ciudadDestino,
           provincia_des: provinciaDestino,

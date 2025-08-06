@@ -20,16 +20,16 @@ export default function PasoRemitente({
   selectedPoint,
   onNext,
 }: PasoRemitenteProps) {
-  // Considera Ecuador como default para país, pero puedes escalarlo fácilmente
+  // Usa ciudad y provincia del punto de atención seleccionado
   const [formData, setFormData] = useState<Remitente>({
     identificacion: "",
     nombre: "",
     direccion: "",
     telefono: "",
     email: "",
-    ciudad: "",
-    provincia: "",
-    codigo_postal: "170150",
+    ciudad: selectedPoint?.ciudad || "Quito",
+    provincia: selectedPoint?.provincia || "Pichincha",
+    codigo_postal: selectedPoint?.codigo_postal || "170150",
     pais: "ECUADOR",
   });
 
@@ -92,11 +92,12 @@ export default function PasoRemitente({
       telefono: rem.telefono || "",
       email: rem.email || "",
       direccion: rem.direccion || "",
-      // Campos que no existen en BD actual - usar valores por defecto
-      ciudad: rem.ciudad || "",
-      provincia: rem.provincia || "",
-      codigo_postal: rem.codigo_postal || "",
-      pais: "ECUADOR", // Valor fijo por defecto
+      codigo_postal:
+        rem.codigo_postal || selectedPoint?.codigo_postal || "170150",
+      // Usa ciudad y provincia del punto de atención seleccionado
+      ciudad: selectedPoint?.ciudad || "Quito",
+      provincia: selectedPoint?.provincia || "Pichincha",
+      pais: "ECUADOR", // Valor fijo para la API
     });
 
     if (rem.direccion) {
@@ -123,16 +124,23 @@ export default function PasoRemitente({
       const partesAntes =
         referenciaIndex >= 0 ? partes.slice(0, referenciaIndex) : partes;
 
-      // Primera parte: calle principal y numeración
-      const primeraParte = partesAntes[0] || "";
-      const callePrincipal = primeraParte.split("#")[0]?.trim() || "";
-      const numeracion = primeraParte.includes("#")
-        ? primeraParte.split("#")[1]?.trim() || ""
-        : "";
+      // Primera parte: calle principal
+      const callePrincipal = partesAntes[0]?.trim() || "";
 
-      // Segunda parte: calle secundaria (quitar "y" del inicio)
-      const calleSecundaria =
-        partesAntes[1]?.replace(/^y\s*/i, "").trim() || "";
+      // Segunda parte: puede ser numeración (si empieza con #) o calle secundaria
+      const segundaParte = partesAntes[1]?.trim() || "";
+      let numeracion = "";
+      let calleSecundaria = "";
+
+      if (segundaParte.startsWith("#")) {
+        // La segunda parte es la numeración
+        numeracion = segundaParte.replace("#", "").trim();
+        // La tercera parte sería la calle secundaria
+        calleSecundaria = partesAntes[2]?.replace(/^y\s*/i, "").trim() || "";
+      } else {
+        // La segunda parte es la calle secundaria
+        calleSecundaria = segundaParte.replace(/^y\s*/i, "").trim();
+      }
 
       setExtraDireccion({
         callePrincipal,
