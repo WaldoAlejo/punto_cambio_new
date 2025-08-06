@@ -197,16 +197,22 @@ export default function PasoRemitente({
       codigo_postal: formData.codigo_postal?.trim() || "170150",
       pais: formData.pais?.trim() || "ECUADOR",
     };
+    const payload = {
+      cedula: formData.identificacion.trim(),
+      nombre: formData.nombre.trim(),
+      direccion: direccionFinal.trim(),
+      telefono: formData.telefono.trim(),
+      email: formData.email?.trim() || "",
+      ciudad: formData.ciudad?.trim() || "",
+      provincia: formData.provincia?.trim() || "",
+      codigo_postal: formData.codigo_postal?.trim() || "170150",
+      pais: formData.pais?.trim() || "ECUADOR",
+    };
+
+    console.log("📤 Enviando datos del remitente:", payload);
     setLoading(true);
 
     try {
-      const payload = {
-        ...remitenteFinal,
-        cedula: formData.identificacion,
-      };
-
-      console.log("📤 Enviando datos del remitente:", payload);
-
       if (remitenteExistente) {
         await axiosInstance.put(
           `/servientrega/remitente/actualizar/${formData.identificacion.trim()}`,
@@ -219,10 +225,7 @@ export default function PasoRemitente({
       onNext({ ...remitenteFinal, direccion: direccionFinal.trim() });
     } catch (err) {
       console.error("❌ Error al guardar remitente:", err);
-      console.error("❌ Datos que se intentaron enviar:", {
-        ...remitenteFinal,
-        cedula: formData.identificacion,
-      });
+      console.error("❌ Datos que se intentaron enviar:", payload);
       toast.error("Hubo un problema al guardar el remitente.");
     } finally {
       setLoading(false);
