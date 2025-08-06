@@ -329,18 +329,27 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       direccion: direccionFinal.trim(),
     };
 
+    const datosParaEnviar = {
+      ...destinatarioFinal,
+      cedula: form.identificacion,
+    };
+
+    console.log("📤 Enviando datos del destinatario:", datosParaEnviar);
+
     setLoading(true);
     try {
       if (destinatarioExistente) {
+        console.log("🔄 Actualizando destinatario existente");
         await axiosInstance.put(
           `/servientrega/destinatario/actualizar/${form.identificacion.trim()}`,
-          { ...destinatarioFinal, cedula: form.identificacion }
+          datosParaEnviar
         );
       } else {
-        await axiosInstance.post("/servientrega/destinatario/guardar", {
-          ...destinatarioFinal,
-          cedula: form.identificacion,
-        });
+        console.log("➕ Creando nuevo destinatario");
+        await axiosInstance.post(
+          "/servientrega/destinatario/guardar",
+          datosParaEnviar
+        );
       }
       toast.success("Destinatario guardado correctamente.");
       // Para el flujo, solo se pasa la versión con identificacion (sin cedula extra)
