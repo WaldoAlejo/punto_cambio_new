@@ -178,7 +178,7 @@ export class HealthCheckService {
     // Verificar Servientrega
     try {
       const response = await axiosInstance.post(
-        "/api/servientrega/productos",
+        "/servientrega/productos",
         {},
         { timeout: 10000 }
       );

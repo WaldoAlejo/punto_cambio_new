@@ -14,7 +14,7 @@ import DailyClose from "../close/DailyClose";
 import TransferApprovals from "../admin/TransferApprovals";
 import SaldoInicialManagement from "../admin/SaldoInicialManagement";
 import BalanceDashboard from "./BalanceDashboard";
-import ServientregaSimple from "../servientrega/ServientregaSimple";
+import ServientregaMain from "../servientrega/ServientregaMain";
 import SaldoServientregaAdmin from "../admin/SaldoServientregaAdmin";
 import { User, PuntoAtencion } from "../../types";
 import { useNavigate } from "react-router-dom";
@@ -77,7 +77,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
       case "balance-management":
         return <SaldoInicialManagement />;
       case "servientrega":
-        return <ServientregaSimple user={user} selectedPoint={selectedPoint} />;
+        return <ServientregaMain user={user} selectedPoint={selectedPoint} />;
       case "servientrega-saldo":
         return <SaldoServientregaAdmin />;
       default:

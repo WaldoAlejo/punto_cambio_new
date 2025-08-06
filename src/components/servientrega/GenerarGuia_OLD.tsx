@@ -109,7 +109,7 @@ export default function PasoConfirmarEnvio({
   const validarSaldo = async () => {
     try {
       const { data } = await axiosInstance.get(
-        `/api/servientrega/saldo/validar/${formData.punto_atencion_id}`
+        `/servientrega/saldo/validar/${formData.punto_atencion_id}`
       );
       setSaldoDisponible(data?.saldo_disponible || 0);
       if (!data?.suficiente) {
@@ -144,7 +144,7 @@ export default function PasoConfirmarEnvio({
       };
 
       const res = await axiosInstance.post<GenerarGuiaResponse>(
-        "/api/servientrega/generar-guia",
+        "/servientrega/generar-guia",
         payload
       );
 
@@ -177,7 +177,7 @@ export default function PasoConfirmarEnvio({
 
   const handleSolicitarSaldo = async () => {
     try {
-      await axiosInstance.post("/api/servientrega/solicitar-saldo", {
+      await axiosInstance.post("/servientrega/solicitar-saldo", {
         punto_atencion_id: formData.punto_atencion_id,
         monto_requerido: formData.resumen_costos.total,
       });

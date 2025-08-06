@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import axiosInstance from "@/services/axiosInstance";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,8 +85,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   // 1. Cargar países y Ecuador por defecto
   // ===============================
   useEffect(() => {
-    axios
-      .post("/api/servientrega/paises")
+    axiosInstance
+      .post("/servientrega/paises")
       .then((res) => {
         const lista: Pais[] = res.data.fetch || [];
         setPaises(lista);
@@ -103,8 +103,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   useEffect(() => {
     if (cedulaQuery.trim().length >= 3) {
       setBuscandoCedula(true);
-      axios
-        .get(`/api/servientrega/destinatario/buscar/${cedulaQuery.trim()}`)
+      axiosInstance
+        .get(`/servientrega/destinatario/buscar/${cedulaQuery.trim()}`)
         .then((res) => setCedulaResultados(res.data.destinatarios || []))
         .catch(() => setCedulaResultados([]))
         .finally(() => setBuscandoCedula(false));
@@ -157,8 +157,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       ciudad: "",
       provincia: "",
     }));
-    axios
-      .post("/api/servientrega/ciudades", { codpais })
+    axiosInstance
+      .post("/servientrega/ciudades", { codpais })
       .then((res) => {
         const lista = res.data.fetch || [];
         setCiudades(
@@ -201,7 +201,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     setMostrarAgencias(checked);
     if (checked) {
       try {
-        const res = await axios.post("/api/servientrega/agencias");
+        const res = await axiosInstance.post("/servientrega/agencias");
         const data = res.data.fetch || [];
         setAgencias(
           data.map((a: any) => ({
@@ -270,12 +270,12 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     setLoading(true);
     try {
       if (destinatarioExistente) {
-        await axios.put(
-          `/api/servientrega/destinatario/actualizar/${form.identificacion.trim()}`,
+        await axiosInstance.put(
+          `/servientrega/destinatario/actualizar/${form.identificacion.trim()}`,
           { ...destinatarioFinal, cedula: form.identificacion }
         );
       } else {
-        await axios.post("/api/servientrega/destinatario/guardar", {
+        await axiosInstance.post("/servientrega/destinatario/guardar", {
           ...destinatarioFinal,
           cedula: form.identificacion,
         });

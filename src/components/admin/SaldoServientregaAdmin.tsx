@@ -72,7 +72,7 @@ export default function SaldoServientregaAdmin() {
   const obtenerPuntosYSaldo = async () => {
     try {
       const { data } = await axiosInstance.get<PuntosResponse>(
-        "/api/servientrega/remitente/puntos"
+        "/servientrega/remitente/puntos"
       );
       const puntosActivos = data.puntos || [];
       setPuntos(puntosActivos);
@@ -85,7 +85,7 @@ export default function SaldoServientregaAdmin() {
         puntosActivos.map(async (p) => {
           try {
             const res = await axiosInstance.get<SaldoResponse>(
-              `/api/servientrega/saldo/${p.id}`
+              `/servientrega/saldo/${p.id}`
             );
             saldosTemp[p.id] = res.data?.disponible ?? 0;
           } catch {
@@ -103,9 +103,7 @@ export default function SaldoServientregaAdmin() {
   // ✅ Obtener historial de asignaciones
   const obtenerHistorial = async () => {
     try {
-      const { data } = await axiosInstance.get(
-        "/api/servientrega/saldo/historial"
-      );
+      const { data } = await axiosInstance.get("/servientrega/saldo/historial");
       if (Array.isArray(data)) setHistorial(data);
     } catch (error) {
       console.error("❌ Error al obtener historial:", error);
@@ -116,7 +114,7 @@ export default function SaldoServientregaAdmin() {
   const obtenerSolicitudes = async () => {
     try {
       const { data } = await axiosInstance.get(
-        "/api/servientrega/solicitar-saldo/listar"
+        "/servientrega/solicitar-saldo/listar"
       );
       setSolicitudes(data || []);
     } catch (error) {
@@ -132,7 +130,7 @@ export default function SaldoServientregaAdmin() {
     punto_id: string
   ) => {
     try {
-      await axiosInstance.post("/api/servientrega/solicitar-saldo/responder", {
+      await axiosInstance.post("/servientrega/solicitar-saldo/responder", {
         solicitud_id: id,
         estado,
         aprobado_por: user?.nombre || "admin",
@@ -140,7 +138,7 @@ export default function SaldoServientregaAdmin() {
 
       if (estado === "APROBADA") {
         // Actualiza el saldo automáticamente
-        await axiosInstance.post("/api/servientrega/saldo", {
+        await axiosInstance.post("/servientrega/saldo", {
           monto_total: monto,
           creado_por: user?.nombre || "admin",
           punto_atencion_id: punto_id,
@@ -179,7 +177,7 @@ export default function SaldoServientregaAdmin() {
       async () => {
         setLoading(true);
         try {
-          await axiosInstance.post("/api/servientrega/saldo", {
+          await axiosInstance.post("/servientrega/saldo", {
             monto_total: monto,
             creado_por: user?.nombre ?? "admin",
             punto_atencion_id: puntoSeleccionado,

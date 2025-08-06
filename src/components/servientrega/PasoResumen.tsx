@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import axiosInstance from "@/services/axiosInstance";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -139,7 +139,7 @@ export default function PasoResumen({
           }),
         };
 
-        const res = await axios.post("/api/servientrega/tarifa", payload);
+        const res = await axiosInstance.post("/servientrega/tarifa", payload);
         const resultado = Array.isArray(res.data) ? res.data[0] : res.data;
         if (!resultado || resultado.flete === undefined) {
           toast.error("No se pudo calcular la tarifa. Verifica los datos.");
@@ -186,8 +186,8 @@ export default function PasoResumen({
       return;
     }
     try {
-      const { data } = await axios.get(
-        `/api/servientrega/saldo/validar/${punto_atencion_id}`
+      const { data } = await axiosInstance.get(
+        `/servientrega/saldo/validar/${punto_atencion_id}`
       );
       if (data?.estado === "OK") {
         onConfirm();

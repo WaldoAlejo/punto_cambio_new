@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
+import axiosInstance from "@/services/axiosInstance";
 import { Separator } from "@/components/ui/separator";
 import type { Empaque, Medidas, ResumenCostos } from "@/types/servientrega";
 
@@ -74,7 +74,7 @@ export default function PasoEmpaqueYMedidas({
     const fetchEmpaques = async () => {
       try {
         setLoadingEmpaques(true);
-        const { data } = await axios.post("/api/servientrega/empaques", {});
+        const { data } = await axiosInstance.post("/servientrega/empaques", {});
         setEmpaques(data?.fetch || []);
       } catch {
         toast.error("Error al obtener la lista de empaques.");
@@ -143,7 +143,7 @@ export default function PasoEmpaqueYMedidas({
 
       setLoadingFlete(true);
       try {
-        const { data } = await axios.post("/api/servientrega/tarifa", {
+        const { data } = await axiosInstance.post("/servientrega/tarifa", {
           tipo: esInternacional
             ? "obtener_tarifa_internacional"
             : "obtener_tarifa_nacional",

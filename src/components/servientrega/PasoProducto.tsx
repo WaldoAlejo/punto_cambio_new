@@ -36,7 +36,7 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
       setCargandoProductos(true);
       const response = await axiosInstance.post<{
         productos: { nombre_producto: string }[];
-      }>("/api/servientrega/productos");
+      }>("/servientrega/productos");
       setProductos(
         Array.isArray(response.data.productos) ? response.data.productos : []
       );

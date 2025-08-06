@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import axios from "axios";
+import axiosInstance from "@/services/axiosInstance";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -66,8 +66,8 @@ export default function PasoRemitente({
     const query = cedulaQuery.trim();
     if (query.length >= 3) {
       setBuscandoCedula(true);
-      axios
-        .get(`/api/servientrega/remitente/buscar/${encodeURIComponent(query)}`)
+      axiosInstance
+        .get(`/servientrega/remitente/buscar/${encodeURIComponent(query)}`)
         .then((res) => setCedulaResultados(res.data.remitentes || []))
         .catch(() => setCedulaResultados([]))
         .finally(() => setBuscandoCedula(false));
@@ -164,12 +164,12 @@ export default function PasoRemitente({
 
     try {
       if (remitenteExistente) {
-        await axios.put(
-          `/api/servientrega/remitente/actualizar/${formData.identificacion.trim()}`,
+        await axiosInstance.put(
+          `/servientrega/remitente/actualizar/${formData.identificacion.trim()}`,
           { ...remitenteFinal, cedula: formData.identificacion }
         );
       } else {
-        await axios.post("/api/servientrega/remitente/guardar", {
+        await axiosInstance.post("/servientrega/remitente/guardar", {
           ...remitenteFinal,
           cedula: formData.identificacion,
         });

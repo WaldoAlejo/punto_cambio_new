@@ -33,12 +33,9 @@ export default function ListadoGuias() {
     setError(null);
 
     try {
-      const response = await axiosInstance.get<Guia[]>(
-        "/api/servientrega/guias",
-        {
-          params: { desde, hasta },
-        }
-      );
+      const response = await axiosInstance.get<Guia[]>("/servientrega/guias", {
+        params: { desde, hasta },
+      });
 
       if (Array.isArray(response.data)) {
         setGuias(response.data);
@@ -65,7 +62,7 @@ export default function ListadoGuias() {
       `¿Está seguro de que desea anular la guía ${guia}? Esta acción no se puede deshacer.`,
       async () => {
         try {
-          await axiosInstance.post("/api/servientrega/anular-guia", { guia });
+          await axiosInstance.post("/servientrega/anular-guia", { guia });
           toast.success("✅ Guía anulada exitosamente.");
           fetchGuias();
         } catch (err) {
