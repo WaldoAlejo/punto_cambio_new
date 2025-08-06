@@ -473,79 +473,121 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         </div>
         {/* --- DATOS PERSONALES --- */}
         <div className="p-4 border rounded-md bg-white">
-          <h4 className="font-semibold mb-2">👤 Datos Personales</h4>
-          <Input
-            name="identificacion"
-            placeholder="Cédula o Pasaporte"
-            value={form.identificacion}
-            onChange={(e) => {
-              const value = e.target.value.trimStart();
-              setForm((prev) => ({ ...prev, identificacion: value }));
-              setCedulaQuery(value);
-            }}
-          />
-          {buscandoCedula && (
-            <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-          )}
-          {cedulaResultados.length > 0 && (
-            <div className="absolute bg-white border rounded-md shadow-md w-full max-h-40 overflow-y-auto z-10">
-              {cedulaResultados.map((d, idx) => (
-                <div
-                  key={idx}
-                  className="p-2 hover:bg-gray-100 cursor-pointer"
-                  onClick={() => seleccionarDestinatario(d)}
-                >
-                  {(d.cedula || d.identificacion) + " - " + d.nombre}
+          <h4 className="font-semibold mb-4">👤 Datos Personales</h4>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="identificacion">Cédula o Pasaporte</Label>
+              <Input
+                id="identificacion"
+                name="identificacion"
+                placeholder="Ingrese cédula o pasaporte"
+                value={form.identificacion}
+                onChange={(e) => {
+                  const value = e.target.value.trimStart();
+                  setForm((prev) => ({ ...prev, identificacion: value }));
+                  setCedulaQuery(value);
+                }}
+              />
+              {buscandoCedula && (
+                <Loader2 className="h-5 w-5 animate-spin text-gray-400 mt-2" />
+              )}
+              {cedulaResultados.length > 0 && (
+                <div className="absolute bg-white border rounded-md shadow-md w-full max-h-40 overflow-y-auto z-10 mt-1">
+                  {cedulaResultados.map((d, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => seleccionarDestinatario(d)}
+                    >
+                      {(d.cedula || d.identificacion) + " - " + d.nombre}
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-          <Input
-            name="nombre"
-            placeholder="Nombre completo"
-            value={form.nombre}
-            onChange={handleChange}
-          />
-          <Input
-            name="telefono"
-            placeholder="Teléfono"
-            value={form.telefono}
-            onChange={handleChange}
-          />
-          <Input
-            name="email"
-            placeholder="Correo electrónico"
-            value={form.email}
-            onChange={handleChange}
-          />
+
+            <div>
+              <Label htmlFor="nombre">Nombre completo</Label>
+              <Input
+                id="nombre"
+                name="nombre"
+                placeholder="Ingrese nombre completo"
+                value={form.nombre}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="telefono">Teléfono</Label>
+              <Input
+                id="telefono"
+                name="telefono"
+                placeholder="Ingrese número de teléfono"
+                value={form.telefono}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="email">Correo electrónico</Label>
+              <Input
+                id="email"
+                name="email"
+                placeholder="Ingrese correo electrónico"
+                value={form.email}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
           {!mostrarAgencias && (
-            <>
-              <h4 className="font-semibold mt-4">🏠 Dirección</h4>
-              <Input
-                name="callePrincipal"
-                placeholder="Calle principal"
-                value={extraDireccion.callePrincipal}
-                onChange={handleExtraDireccionChange}
-              />
-              <Input
-                name="numeracion"
-                placeholder="Numeración"
-                value={extraDireccion.numeracion}
-                onChange={handleExtraDireccionChange}
-              />
-              <Input
-                name="calleSecundaria"
-                placeholder="Calle secundaria"
-                value={extraDireccion.calleSecundaria}
-                onChange={handleExtraDireccionChange}
-              />
-              <Input
-                name="referencia"
-                placeholder="Referencia"
-                value={extraDireccion.referencia}
-                onChange={handleExtraDireccionChange}
-              />
-            </>
+            <div className="mt-6">
+              <h4 className="font-semibold mb-4">🏠 Dirección</h4>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="callePrincipal">Calle principal</Label>
+                  <Input
+                    id="callePrincipal"
+                    name="callePrincipal"
+                    placeholder="Ingrese calle principal"
+                    value={extraDireccion.callePrincipal}
+                    onChange={handleExtraDireccionChange}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="numeracion">Numeración</Label>
+                  <Input
+                    id="numeracion"
+                    name="numeracion"
+                    placeholder="Ej: #123, Lote 35 A"
+                    value={extraDireccion.numeracion}
+                    onChange={handleExtraDireccionChange}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="calleSecundaria">Calle secundaria</Label>
+                  <Input
+                    id="calleSecundaria"
+                    name="calleSecundaria"
+                    placeholder="Ingrese calle secundaria"
+                    value={extraDireccion.calleSecundaria}
+                    onChange={handleExtraDireccionChange}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="referencia">Referencia</Label>
+                  <Input
+                    id="referencia"
+                    name="referencia"
+                    placeholder="Punto de referencia"
+                    value={extraDireccion.referencia}
+                    onChange={handleExtraDireccionChange}
+                  />
+                </div>
+              </div>
+            </div>
           )}
         </div>
         <Button
