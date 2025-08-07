@@ -16,6 +16,7 @@ import SaldoInicialManagement from "../admin/SaldoInicialManagement";
 import BalanceDashboard from "./BalanceDashboard";
 import ServientregaMain from "../servientrega/ServientregaMain";
 import SaldoServientregaAdmin from "../admin/SaldoServientregaAdmin";
+import { Unauthorized } from "../ui/unauthorized";
 import { User, PuntoAtencion } from "../../types";
 import { useNavigate } from "react-router-dom";
 
@@ -45,45 +46,80 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   };
 
   const renderContent = () => {
+    // Verificar permisos por rol
+    const isAdmin = user.rol === "ADMIN" || user.rol === "SUPER_USUARIO";
+    const isOperador = user.rol === "OPERADOR";
+    const isConcesion = user.rol === "CONCESION";
+
     switch (activeView) {
       case "exchanges":
+        if (!isOperador)
+          return (
+            <Unauthorized
+              message="Solo los operadores pueden acceder al cambio de divisas"
+              onGoBack={() => setActiveView("dashboard")}
+            />
+          );
         return <ExchangeManagement user={user} selectedPoint={selectedPoint} />;
       case "pending-exchanges":
+        if (!isOperador) return <div>Sin permisos</div>;
         return (
           <PendingExchangesList user={user} selectedPoint={selectedPoint} />
         );
       case "transfers":
+        if (!isOperador) return <div>Sin permisos</div>;
         return <TransferManagement user={user} />;
       case "operator-time-management":
+        if (!isOperador) return <div>Sin permisos</div>;
         return (
           <OperatorTimeManagement user={user} selectedPoint={selectedPoint} />
         );
+      case "daily-close":
+        if (!isOperador) return <div>Sin permisos</div>;
+        return <DailyClose user={user} selectedPoint={selectedPoint} />;
+      case "servientrega":
+        if (!isOperador && !isConcesion) return <div>Sin permisos</div>;
+        return <ServientregaMain user={user} selectedPoint={selectedPoint} />;
+
+      // Secciones de administrador
       case "admin-time-management":
+        if (!isAdmin) return <div>Sin permisos</div>;
         return (
           <AdminTimeManagement user={user} selectedPoint={selectedPoint} />
         );
       case "transfer-approvals":
+        if (!isAdmin) return <div>Sin permisos</div>;
         return <TransferApprovals />;
       case "users":
+        if (!isAdmin) return <div>Sin permisos</div>;
         return <UserManagement />;
       case "points":
+        if (!isAdmin) return <div>Sin permisos</div>;
         return <PointManagement />;
       case "currencies":
+        if (!isAdmin) return <div>Sin permisos</div>;
         return <CurrencyManagement />;
       case "reports":
+        if (!isAdmin) return <div>Sin permisos</div>;
         return <Reports user={user} selectedPoint={selectedPoint} />;
-      case "daily-close":
-        return <DailyClose user={user} selectedPoint={selectedPoint} />;
       case "balance-management":
+        if (!isAdmin) return <div>Sin permisos</div>;
         return <SaldoInicialManagement />;
-      case "servientrega":
-        return <ServientregaMain user={user} selectedPoint={selectedPoint} />;
       case "servientrega-saldo":
+        if (!isAdmin) return <div>Sin permisos</div>;
         return <SaldoServientregaAdmin />;
+
       default:
-        if (user.rol === "OPERADOR" && selectedPoint) {
+        // Dashboard por defecto según rol
+        if (isOperador && selectedPoint) {
           return <BalanceDashboard user={user} selectedPoint={selectedPoint} />;
         }
+
+        if (isConcesion) {
+          // Para concesión, mostrar directamente Servientrega
+          return <ServientregaMain user={user} selectedPoint={selectedPoint} />;
+        }
+
         return (
           <div className="w-full h-full flex justify-center items-start">
             <div className="bg-white rounded-lg shadow p-4 sm:p-6 mx-auto max-w-4xl w-full">

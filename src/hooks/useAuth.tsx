@@ -82,13 +82,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                   setSelectedPointState(adminPoint);
                 }
               }
-            } else {
+            } else if (verifiedUser.rol === "OPERADOR") {
               // Para operadores, usar la lógica existente de jornada activa
               const res = await scheduleService.getActiveSchedule();
               if (res?.schedule?.puntoAtencion) {
                 setSelectedPointState(
                   res.schedule.puntoAtencion as PuntoAtencion
                 );
+              }
+            } else if (verifiedUser.rol === "CONCESION") {
+              // Para concesión, usar el punto asignado en su perfil si existe
+              if (verifiedUser.punto_atencion_id) {
+                const { points } = await pointService.getAllPoints();
+                const concesionPoint = points.find(
+                  (p) => p.id === verifiedUser.punto_atencion_id
+                );
+                if (concesionPoint) {
+                  setSelectedPointState(concesionPoint);
+                }
               }
             }
           }
@@ -128,11 +139,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               setSelectedPointState(adminPoint);
             }
           }
-        } else {
+        } else if (loggedUser.rol === "OPERADOR") {
           // Para operadores, usar la lógica existente de jornada activa
           const res = await scheduleService.getActiveSchedule();
           if (res?.schedule?.puntoAtencion) {
             setSelectedPointState(res.schedule.puntoAtencion as PuntoAtencion);
+          }
+        } else if (loggedUser.rol === "CONCESION") {
+          // Para concesión, usar el punto asignado en su perfil si existe
+          if (loggedUser.punto_atencion_id) {
+            const { points } = await pointService.getAllPoints();
+            const concesionPoint = points.find(
+              (p) => p.id === loggedUser.punto_atencion_id
+            );
+            if (concesionPoint) {
+              setSelectedPointState(concesionPoint);
+            }
           }
         }
 

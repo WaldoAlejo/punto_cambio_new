@@ -115,6 +115,25 @@ export const authenticateToken: RequestHandler = async (
         user.punto_atencion_id = null;
       }
     }
+
+    // --- VALIDACIÓN PARA ADMIN ---
+    if (
+      (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") &&
+      !user.punto_atencion_id
+    ) {
+      logger.warn("Admin sin punto de atención asignado en middleware", {
+        userId: user.id,
+        rol: user.rol,
+        ip: req.ip,
+      });
+      res.status(403).json({
+        error:
+          "Administrador debe estar asociado a un punto de atención principal",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     // --- FIN CORRECCIÓN ---
 
     req.user = user;

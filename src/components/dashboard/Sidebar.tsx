@@ -60,6 +60,7 @@ const Sidebar = ({
   }, []);
 
   const isAdmin = user.rol === "ADMIN" || user.rol === "SUPER_USUARIO";
+  const isConcesion = user.rol === "CONCESION";
 
   const menuItems: MenuItem[] = [
     {
@@ -81,7 +82,7 @@ const Sidebar = ({
       label: "Transferencias",
       icon: Send,
       color: "text-green-600",
-      roles: ["OPERADOR", "ADMIN", "SUPER_USUARIO"],
+      roles: ["OPERADOR"],
     },
     {
       id: "operator-time-management",
@@ -102,7 +103,7 @@ const Sidebar = ({
       label: "Guía Servientrega",
       icon: Truck,
       color: "text-cyan-600",
-      roles: ["OPERADOR", "ADMIN"],
+      roles: ["OPERADOR", "CONCESION"],
     },
   ];
 

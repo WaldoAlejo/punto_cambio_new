@@ -67,22 +67,48 @@ router.post(
         return;
       }
 
-      // Buscar si tiene jornada activa (sin fecha_salida)
-      const jornadaActiva = await prisma.jornada.findFirst({
-        where: {
-          usuario_id: user.id,
-          fecha_salida: null,
-        },
-        select: {
-          id: true,
-          punto_atencion_id: true,
-        },
-      });
+      // Validar permisos según rol
+      if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
+        // ADMIN debe tener punto_atencion_id asignado
+        if (!user.punto_atencion_id) {
+          logger.warn("Admin sin punto de atención asignado", {
+            username,
+            ip: req.ip,
+          });
+          res.status(403).json({
+            error:
+              "Administrador debe estar asociado a un punto de atención principal",
+            success: false,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
+      // Buscar si tiene jornada activa (solo para OPERADOR)
+      let jornadaActiva = null;
+      if (user.rol === "OPERADOR") {
+        jornadaActiva = await prisma.jornada.findFirst({
+          where: {
+            usuario_id: user.id,
+            fecha_salida: null,
+          },
+          select: {
+            id: true,
+            punto_atencion_id: true,
+          },
+        });
+      }
 
       const token = generateToken(user.id);
       const { password: _, ...userWithoutPassword } = user;
 
-      logger.info("Login exitoso", { userId: user.id, username, ip: req.ip });
+      logger.info("Login exitoso", {
+        userId: user.id,
+        username,
+        rol: user.rol,
+        ip: req.ip,
+      });
 
       res.status(200).json({
         user: {
@@ -90,7 +116,10 @@ router.post(
           created_at: user.created_at.toISOString(),
           updated_at: user.updated_at.toISOString(),
           jornada_id: jornadaActiva?.id || null,
-          punto_atencion_id: jornadaActiva?.punto_atencion_id || null,
+          punto_atencion_id:
+            user.rol === "ADMIN" || user.rol === "SUPER_USUARIO"
+              ? user.punto_atencion_id
+              : jornadaActiva?.punto_atencion_id || null,
         },
         token,
         success: true,
