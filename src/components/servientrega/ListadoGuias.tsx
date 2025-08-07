@@ -11,6 +11,8 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Loading } from "@/components/ui/loading";
+import SaldoCompacto from "./SaldoCompacto";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Guia {
   id: string;
@@ -27,6 +29,7 @@ export default function ListadoGuias() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
+  const { user } = useAuth();
 
   const fetchGuias = async () => {
     setLoading(true);
@@ -100,91 +103,101 @@ export default function ListadoGuias() {
   }, [desde, hasta]);
 
   return (
-    <Card className="w-full max-w-4xl mx-auto mt-6">
-      <CardHeader>
-        <CardTitle>📦 Guías generadas</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {/* Filtros */}
-        <div className="flex gap-4 mb-4">
-          <div>
-            <Label>Desde</Label>
-            <Input
-              type="date"
-              value={desde}
-              onChange={(e) => setDesde(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>Hasta</Label>
-            <Input
-              type="date"
-              value={hasta}
-              onChange={(e) => setHasta(e.target.value)}
-            />
-          </div>
-          <Button onClick={fetchGuias} className="self-end">
-            Buscar
-          </Button>
-        </div>
+    <div className="w-full max-w-4xl mx-auto mt-6 space-y-4">
+      {/* Información del saldo */}
+      {user?.punto_atencion_id && (
+        <SaldoCompacto
+          puntoAtencionId={user.punto_atencion_id}
+          showSolicitar={true}
+        />
+      )}
 
-        {/* Listado de guías */}
-        {loading ? (
-          <Loading text="Cargando guías..." className="py-6" />
-        ) : error ? (
-          <div className="text-center py-6">
-            <p className="text-red-600 mb-2">{error}</p>
-            <Button onClick={fetchGuias} variant="outline" size="sm">
-              Reintentar
+      <Card>
+        <CardHeader>
+          <CardTitle>📦 Guías generadas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {/* Filtros */}
+          <div className="flex gap-4 mb-4">
+            <div>
+              <Label>Desde</Label>
+              <Input
+                type="date"
+                value={desde}
+                onChange={(e) => setDesde(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Hasta</Label>
+              <Input
+                type="date"
+                value={hasta}
+                onChange={(e) => setHasta(e.target.value)}
+              />
+            </div>
+            <Button onClick={fetchGuias} className="self-end">
+              Buscar
             </Button>
           </div>
-        ) : guias.length === 0 ? (
-          <p className="text-gray-600 text-center py-6">
-            No hay guías en este periodo.
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {guias.map((guia) => (
-              <div
-                key={guia.id}
-                className="border p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center gap-2"
-              >
-                <div>
-                  <p>
-                    <strong>Guía:</strong> {guia.numero_guia}
-                  </p>
-                  <p>
-                    <strong>Fecha:</strong>{" "}
-                    {format(parseISO(guia.created_at), "yyyy-MM-dd HH:mm")}
-                  </p>
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                  <Button
-                    onClick={() => handleVerPDF(guia.base64_response)}
-                    variant="secondary"
-                  >
-                    Ver PDF
-                  </Button>
 
-                  {isToday(parseISO(guia.created_at)) ? (
-                    <Button
-                      onClick={() => handleAnular(guia.numero_guia)}
-                      variant="destructive"
-                    >
-                      Anular
-                    </Button>
-                  ) : (
-                    <p className="text-sm text-gray-500 mt-2 md:mt-0">
-                      No se puede anular
+          {/* Listado de guías */}
+          {loading ? (
+            <Loading text="Cargando guías..." className="py-6" />
+          ) : error ? (
+            <div className="text-center py-6">
+              <p className="text-red-600 mb-2">{error}</p>
+              <Button onClick={fetchGuias} variant="outline" size="sm">
+                Reintentar
+              </Button>
+            </div>
+          ) : guias.length === 0 ? (
+            <p className="text-gray-600 text-center py-6">
+              No hay guías en este periodo.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {guias.map((guia) => (
+                <div
+                  key={guia.id}
+                  className="border p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center gap-2"
+                >
+                  <div>
+                    <p>
+                      <strong>Guía:</strong> {guia.numero_guia}
                     </p>
-                  )}
+                    <p>
+                      <strong>Fecha:</strong>{" "}
+                      {format(parseISO(guia.created_at), "yyyy-MM-dd HH:mm")}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      onClick={() => handleVerPDF(guia.base64_response)}
+                      variant="secondary"
+                    >
+                      Ver PDF
+                    </Button>
+
+                    {isToday(parseISO(guia.created_at)) ? (
+                      <Button
+                        onClick={() => handleAnular(guia.numero_guia)}
+                        variant="destructive"
+                      >
+                        Anular
+                      </Button>
+                    ) : (
+                      <p className="text-sm text-gray-500 mt-2 md:mt-0">
+                        No se puede anular
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-      <ConfirmationDialog />
-    </Card>
+              ))}
+            </div>
+          )}
+        </CardContent>
+        <ConfirmationDialog />
+      </Card>
+    </div>
   );
 }

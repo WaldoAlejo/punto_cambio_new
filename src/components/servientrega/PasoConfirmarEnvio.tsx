@@ -140,11 +140,20 @@ export default function PasoConfirmarEnvio({
   // ==========================
   const handleSolicitarSaldo = async () => {
     try {
+      const montoRequerido = Math.max(
+        formData?.resumen_costos?.total || 0,
+        50 // Monto mínimo sugerido
+      );
+
       await axiosInstance.post("/servientrega/solicitar-saldo", {
         punto_atencion_id: formData?.punto_atencion_id || "",
-        monto_requerido: formData?.resumen_costos?.total || 0,
+        monto_requerido: montoRequerido,
+        observaciones: `Solicitud automática para generar guía. Costo estimado: $${formData?.resumen_costos?.total?.toFixed(
+          2
+        )}`,
       });
       toast.success("Solicitud de saldo enviada al administrador.");
+      setConfirmOpen(false);
     } catch (err) {
       toast.error("No se pudo enviar la solicitud de saldo.");
     }

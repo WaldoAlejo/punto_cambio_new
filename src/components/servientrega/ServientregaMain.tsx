@@ -4,9 +4,10 @@ import PasoProducto from "./PasoProducto";
 import PasoRemitente from "./PasoRemitente";
 import PasoDestinatario from "./PasoDestinatario";
 import PasoEmpaqueYMedidas from "./PasoEmpaqueYMedidas";
-import PasoResumen from "./PasoResumen";
+import PasoResumenNuevo from "./PasoResumenNuevo";
 import PasoConfirmarEnvio from "./PasoConfirmarEnvio";
 import ListadoGuias from "./ListadoGuias";
+import SaldoOperador from "./SaldoOperador";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Package, FileText } from "lucide-react";
@@ -134,29 +135,42 @@ export default function ServientregaMain({
     switch (pasoActual) {
       case "menu":
         return (
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle className="text-center">Servientrega</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button
-                onClick={() => setPasoActual("producto")}
-                className="w-full h-16 text-lg"
-                variant="outline"
-              >
-                <Package className="mr-3 h-6 w-6" />
-                Generar Nueva Guía
-              </Button>
-              <Button
-                onClick={() => setPasoActual("listado")}
-                className="w-full h-16 text-lg"
-                variant="outline"
-              >
-                <FileText className="mr-3 h-6 w-6" />
-                Ver Guías Generadas
-              </Button>
-            </CardContent>
-          </Card>
+          <div className="max-w-4xl mx-auto space-y-6">
+            {/* Información del saldo */}
+            {selectedPoint && (
+              <div className="max-w-md mx-auto">
+                <SaldoOperador
+                  puntoAtencionId={selectedPoint.id}
+                  puntoAtencionNombre={selectedPoint.nombre}
+                />
+              </div>
+            )}
+
+            {/* Menú principal */}
+            <Card className="w-full max-w-md mx-auto">
+              <CardHeader>
+                <CardTitle className="text-center">Servientrega</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button
+                  onClick={() => setPasoActual("producto")}
+                  className="w-full h-16 text-lg"
+                  variant="outline"
+                >
+                  <Package className="mr-3 h-6 w-6" />
+                  Generar Nueva Guía
+                </Button>
+                <Button
+                  onClick={() => setPasoActual("listado")}
+                  className="w-full h-16 text-lg"
+                  variant="outline"
+                >
+                  <FileText className="mr-3 h-6 w-6" />
+                  Ver Guías Generadas
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         );
 
       case "producto":
@@ -193,7 +207,7 @@ export default function ServientregaMain({
 
       case "resumen":
         return (
-          <PasoResumen
+          <PasoResumenNuevo
             formData={formData as FormDataGuia}
             onNext={handleResumenNext}
           />

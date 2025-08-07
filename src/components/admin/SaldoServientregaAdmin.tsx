@@ -229,7 +229,19 @@ export default function SaldoServientregaAdmin() {
     obtenerPuntosYSaldo();
     obtenerHistorial();
     if (esAdmin) obtenerSolicitudes();
-  }, []);
+
+    // Auto-actualizar solicitudes cada 30 segundos para el admin
+    let interval: NodeJS.Timeout;
+    if (esAdmin) {
+      interval = setInterval(() => {
+        obtenerSolicitudes();
+      }, 30000); // 30 segundos
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [esAdmin]);
 
   // ✅ Filtrar historial
   const historialFiltrado = historial.filter((h) => {
@@ -293,8 +305,29 @@ export default function SaldoServientregaAdmin() {
       {/* Panel principal */}
       <Card className="p-4">
         <CardHeader>
-          <CardTitle className="text-xl">
-            Administrar saldos Servientrega
+          <CardTitle className="flex items-center justify-between text-xl">
+            <div className="flex items-center gap-3">
+              <span>💰 Administrar saldos Servientrega</span>
+              {esAdmin &&
+                solicitudes.filter((s) => s.estado === "PENDIENTE").length >
+                  0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="animate-pulse bg-red-500 text-white text-xs px-3 py-1 rounded-full font-medium">
+                      🔔{" "}
+                      {
+                        solicitudes.filter((s) => s.estado === "PENDIENTE")
+                          .length
+                      }{" "}
+                      solicitudes pendientes
+                    </span>
+                  </div>
+                )}
+            </div>
+            {esAdmin && (
+              <div className="text-sm text-gray-500">
+                Auto-actualización cada 30s
+              </div>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -366,66 +399,218 @@ export default function SaldoServientregaAdmin() {
       {esAdmin && (
         <Card className="p-4">
           <CardHeader>
-            <CardTitle className="text-lg">Solicitudes de saldo</CardTitle>
+            <CardTitle className="flex items-center justify-between text-lg">
+              <div className="flex items-center gap-2">
+                <span>📋 Solicitudes de saldo</span>
+                {solicitudes.filter((s) => s.estado === "PENDIENTE").length >
+                  0 && (
+                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                    {solicitudes.filter((s) => s.estado === "PENDIENTE").length}{" "}
+                    pendientes
+                  </span>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={obtenerSolicitudes}
+                className="text-xs"
+              >
+                🔄 Actualizar
+              </Button>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {solicitudes.length === 0 ? (
-              <p className="text-sm text-gray-500 italic">
-                No hay solicitudes pendientes.
-              </p>
+              <div className="text-center py-8">
+                <p className="text-gray-500 mb-2">
+                  📭 No hay solicitudes de saldo
+                </p>
+                <p className="text-sm text-gray-400">
+                  Las solicitudes aparecerán aquí cuando los operadores las
+                  envíen
+                </p>
+              </div>
             ) : (
-              <ul className="space-y-3">
-                {solicitudes.map((sol) => (
-                  <li
-                    key={sol.id}
-                    className="border rounded p-3 flex justify-between items-center bg-gray-50"
-                  >
-                    <div>
-                      <p className="font-semibold">
-                        {sol.punto_atencion_nombre}
-                      </p>
-                      <p className="text-sm text-gray-600">
-                        Monto solicitado: ${sol.monto_requerido.toFixed(2)} -
-                        Estado:{" "}
-                        <span className="font-medium">{sol.estado}</span>
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Fecha: {new Date(sol.creado_en).toLocaleString()}
-                      </p>
-                    </div>
-                    {sol.estado === "PENDIENTE" && (
-                      <div className="flex gap-2">
-                        <Button
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() =>
-                            responderSolicitud(
-                              sol.id,
-                              "APROBADA",
-                              sol.monto_requerido,
-                              sol.punto_atencion_id
-                            )
-                          }
-                        >
-                          Aprobar
-                        </Button>
-                        <Button
-                          className="bg-red-600 hover:bg-red-700 text-white"
-                          onClick={() =>
-                            responderSolicitud(
-                              sol.id,
-                              "RECHAZADA",
-                              sol.monto_requerido,
-                              sol.punto_atencion_id
-                            )
-                          }
-                        >
-                          Rechazar
-                        </Button>
+              <div className="space-y-4">
+                {/* Solicitudes pendientes primero */}
+                {solicitudes
+                  .filter((sol) => sol.estado === "PENDIENTE")
+                  .map((sol) => (
+                    <div
+                      key={sol.id}
+                      className="border-2 border-yellow-300 rounded-lg p-4 bg-yellow-50"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="font-semibold text-lg text-gray-800">
+                              {sol.punto_atencion_nombre}
+                            </h3>
+                            <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full">
+                              PENDIENTE
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                            <div>
+                              <p className="text-sm text-gray-600">
+                                <strong>💰 Monto solicitado:</strong>
+                              </p>
+                              <p className="text-xl font-bold text-green-600">
+                                ${sol.monto_requerido.toFixed(2)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-600">
+                                <strong>📅 Fecha de solicitud:</strong>
+                              </p>
+                              <p className="text-sm">
+                                {new Date(sol.creado_en).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+
+                          {sol.observaciones && (
+                            <div className="mb-3">
+                              <p className="text-sm text-gray-600">
+                                <strong>📝 Observaciones:</strong>
+                              </p>
+                              <p className="text-sm bg-white p-2 rounded border">
+                                {sol.observaciones}
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="text-xs text-gray-500">
+                            <strong>ID:</strong> {sol.id}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2 ml-4">
+                          <Button
+                            className="bg-green-600 hover:bg-green-700 text-white px-6"
+                            onClick={() =>
+                              responderSolicitud(
+                                sol.id,
+                                "APROBADA",
+                                sol.monto_requerido,
+                                sol.punto_atencion_id
+                              )
+                            }
+                          >
+                            ✅ Aprobar
+                          </Button>
+                          <Button
+                            className="bg-red-600 hover:bg-red-700 text-white px-6"
+                            onClick={() =>
+                              responderSolicitud(
+                                sol.id,
+                                "RECHAZADA",
+                                sol.monto_requerido,
+                                sol.punto_atencion_id
+                              )
+                            }
+                          >
+                            ❌ Rechazar
+                          </Button>
+                        </div>
                       </div>
+                    </div>
+                  ))}
+
+                {/* Solicitudes procesadas */}
+                {solicitudes.filter((sol) => sol.estado !== "PENDIENTE")
+                  .length > 0 && (
+                  <div className="mt-6">
+                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      📋 Historial de solicitudes procesadas
+                      <span className="text-xs bg-gray-200 px-2 py-1 rounded">
+                        {
+                          solicitudes.filter(
+                            (sol) => sol.estado !== "PENDIENTE"
+                          ).length
+                        }
+                      </span>
+                    </h4>
+
+                    <div className="space-y-3">
+                      {solicitudes
+                        .filter((sol) => sol.estado !== "PENDIENTE")
+                        .sort(
+                          (a, b) =>
+                            new Date(b.creado_en).getTime() -
+                            new Date(a.creado_en).getTime()
+                        )
+                        .slice(0, 5) // Mostrar solo las últimas 5
+                        .map((sol) => (
+                          <div
+                            key={sol.id}
+                            className={`border rounded-lg p-3 ${
+                              sol.estado === "APROBADA"
+                                ? "bg-green-50 border-green-200"
+                                : "bg-red-50 border-red-200"
+                            }`}
+                          >
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium text-gray-800">
+                                    {sol.punto_atencion_nombre}
+                                  </span>
+                                  <span
+                                    className={`text-xs px-2 py-1 rounded-full ${
+                                      sol.estado === "APROBADA"
+                                        ? "bg-green-500 text-white"
+                                        : "bg-red-500 text-white"
+                                    }`}
+                                  >
+                                    {sol.estado}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                  <strong>Monto:</strong> $
+                                  {sol.monto_requerido.toFixed(2)} |
+                                  <strong> Fecha:</strong>{" "}
+                                  {new Date(sol.creado_en).toLocaleDateString()}
+                                  {sol.aprobado_por && (
+                                    <span>
+                                      {" "}
+                                      | <strong>Por:</strong> {sol.aprobado_por}
+                                    </span>
+                                  )}
+                                </p>
+                                {sol.observaciones && (
+                                  <p className="text-xs text-gray-500 mt-1">
+                                    <strong>Obs:</strong> {sol.observaciones}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <span
+                                  className={`text-2xl ${
+                                    sol.estado === "APROBADA"
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
+                                >
+                                  {sol.estado === "APROBADA" ? "✅" : "❌"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+
+                    {solicitudes.filter((sol) => sol.estado !== "PENDIENTE")
+                      .length > 5 && (
+                      <p className="text-xs text-gray-500 text-center mt-2">
+                        Mostrando las últimas 5 solicitudes procesadas
+                      </p>
                     )}
-                  </li>
-                ))}
-              </ul>
+                  </div>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
