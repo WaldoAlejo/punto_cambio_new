@@ -11,6 +11,10 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Loader2, Calculator, Wallet, AlertTriangle } from "lucide-react";
 import type { FormDataGuia } from "@/types/servientrega";
+import {
+  formatearPayloadTarifa,
+  procesarRespuestaTarifa,
+} from "@/config/servientrega";
 
 interface PasoResumenProps {
   formData: FormDataGuia;
@@ -30,6 +34,11 @@ interface TarifaResponse {
   seguro?: number;
   tiempo: string | null;
   peso_vol?: number;
+  // Campos adicionales de Servientrega
+  gtotal?: number;
+  peso_cobrar?: number;
+  tiva?: number;
+  prima?: number;
 }
 
 interface SaldoInfo {
@@ -99,29 +108,32 @@ export default function PasoResumenNuevo({
   const calcularTarifa = async () => {
     setLoading(true);
     try {
-      const payload = {
+      // Usar función centralizada para formatear payload
+      const payload = formatearPayloadTarifa({
         remitente: formData.remitente,
         destinatario: formData.destinatario,
         medidas: formData.medidas,
         empaque: formData.empaque,
-        punto_atencion_id: formData.punto_atencion_id,
-      };
+        nombre_producto: formData.nombre_producto,
+        recoleccion: formData.medidas.recoleccion,
+      });
+
+      console.log("📤 Payload para tarifa:", payload);
 
       const res = await axiosInstance.post("/servientrega/tarifa", payload);
       const data = res.data;
 
-      const tarifaCalculada: TarifaResponse = {
-        flete: Number(data.flete || 0),
-        valor_declarado: Number(
-          data.valor_declarado || formData.medidas?.valor_declarado || 0
-        ),
-        valor_empaque: Number(data.valor_empaque || 0),
-        seguro: Number(data.seguro || 0),
-        tiempo: data.tiempo || null,
-        peso_vol: Number(data.peso_vol || 0),
-      };
+      console.log("📥 Respuesta de tarifa:", data);
 
-      setTarifa(tarifaCalculada);
+      // Usar función centralizada para procesar respuesta
+      const tarifaCalculada = procesarRespuestaTarifa(data);
+
+      // Agregar el seguro del formData si no viene en la respuesta
+      if (!tarifaCalculada.seguro && formData.medidas.valor_seguro) {
+        tarifaCalculada.seguro = Number(formData.medidas.valor_seguro);
+      }
+
+      setTarifa(tarifaCalculada as TarifaResponse);
 
       // Actualizar formData con los costos calculados
       const total =
@@ -177,8 +189,13 @@ export default function PasoResumenNuevo({
     });
   };
 
+  // Usar gtotal de Servientrega si está disponible, sino calcular manualmente
   const total = tarifa
-    ? tarifa.flete + tarifa.valor_empaque + (tarifa.seguro || 0)
+    ? tarifa.gtotal ||
+      tarifa.flete +
+        tarifa.valor_empaque +
+        (tarifa.seguro || 0) +
+        (tarifa.tiva || 0)
     : 0;
   const saldoSuficiente = saldo ? saldo.disponible >= total : false;
   const saldoBajo = saldo?.estado === "SALDO_BAJO";
@@ -352,11 +369,33 @@ export default function PasoResumenNuevo({
                     <span>${tarifa.seguro.toFixed(2)}</span>
                   </div>
                 )}
+                {tarifa.tiva && tarifa.tiva > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span>IVA:</span>
+                    <span>${tarifa.tiva.toFixed(2)}</span>
+                  </div>
+                )}
                 <Separator />
                 <div className="flex justify-between font-semibold text-lg">
                   <span>Total:</span>
                   <span className="text-blue-600">${total.toFixed(2)}</span>
                 </div>
+                {tarifa.gtotal && tarifa.gtotal !== total && (
+                  <div className="flex justify-between text-xs text-orange-600 mt-1">
+                    <span>Total Servientrega:</span>
+                    <span>${tarifa.gtotal.toFixed(2)}</span>
+                  </div>
+                )}
+                {tarifa.peso_vol && tarifa.peso_vol > 0 && (
+                  <div className="text-xs text-gray-500 text-center mt-2">
+                    Peso volumétrico: {tarifa.peso_vol} kg
+                  </div>
+                )}
+                {tarifa.tiempo && (
+                  <div className="text-xs text-gray-500 text-center">
+                    Tiempo estimado: {tarifa.tiempo}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -380,28 +419,54 @@ export default function PasoResumenNuevo({
               />
             </div>
 
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="retiro-oficina"
-                checked={retiroOficina}
-                onCheckedChange={(checked) =>
-                  setRetiroOficina(checked as boolean)
-                }
-              />
-              <Label htmlFor="retiro-oficina">Retiro en oficina</Label>
-            </div>
+            {/* Mostrar información de retiro de oficina si ya se seleccionó */}
+            {formData.retiro_oficina &&
+              formData.nombre_agencia_retiro_oficina && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-blue-600 font-medium">
+                      📍 Retiro en oficina
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700">
+                    <strong>Agencia:</strong>{" "}
+                    {formData.nombre_agencia_retiro_oficina}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    El paquete será entregado en la agencia seleccionada
+                  </p>
+                </div>
+              )}
 
-            {retiroOficina && (
-              <div className="space-y-2">
-                <Label htmlFor="nombre-agencia">Nombre de la agencia *</Label>
-                <Input
-                  id="nombre-agencia"
-                  value={nombreAgencia}
-                  onChange={(e) => setNombreAgencia(e.target.value)}
-                  placeholder="Nombre de la agencia para retiro"
-                  required
-                />
-              </div>
+            {/* Solo mostrar checkbox si no se ha seleccionado agencia previamente */}
+            {!formData.retiro_oficina && (
+              <>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="retiro-oficina"
+                    checked={retiroOficina}
+                    onCheckedChange={(checked) =>
+                      setRetiroOficina(checked as boolean)
+                    }
+                  />
+                  <Label htmlFor="retiro-oficina">Retiro en oficina</Label>
+                </div>
+
+                {retiroOficina && (
+                  <div className="space-y-2">
+                    <Label htmlFor="nombre-agencia">
+                      Nombre de la agencia *
+                    </Label>
+                    <Input
+                      id="nombre-agencia"
+                      value={nombreAgencia}
+                      onChange={(e) => setNombreAgencia(e.target.value)}
+                      placeholder="Nombre de la agencia para retiro"
+                      required
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

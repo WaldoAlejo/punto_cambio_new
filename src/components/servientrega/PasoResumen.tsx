@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { getCredenciales, SERVIENTREGA_CONFIG } from "@/config/servientrega";
 
 interface PasoResumenProps {
   formData: any;
@@ -22,9 +23,8 @@ interface TarifaResponse {
   peso_vol?: string | number;
 }
 
-const DEFAULT_EMPAQUE = "AISLANTE DE HUMEDAD";
-const DEFAULT_CP_ORI = "170150";
-const DEFAULT_CP_DES = "110111";
+// Usar configuración centralizada
+const { DEFAULT_EMPAQUE, DEFAULT_CP_ORI, DEFAULT_CP_DES } = SERVIENTREGA_CONFIG;
 
 const Campo = ({
   label,
@@ -112,16 +112,18 @@ export default function PasoResumen({
       try {
         const isInternacional =
           (destinatario?.pais || "").toUpperCase() !== "ECUADOR";
+        const credenciales = getCredenciales();
+
         const payload = {
           tipo: isInternacional
             ? "obtener_tarifa_internacional"
             : "obtener_tarifa_nacional",
           pais_ori: remitente?.pais || "ECUADOR",
-          ciu_ori: remitente?.ciudad || "",
-          provincia_ori: remitente?.provincia || "",
+          ciu_ori: (remitente?.ciudad || "").toUpperCase(),
+          provincia_ori: (remitente?.provincia || "").toUpperCase(),
           pais_des: destinatario?.pais || "ECUADOR",
-          ciu_des: destinatario?.ciudad || "",
-          provincia_des: destinatario?.provincia || "",
+          ciu_des: (destinatario?.ciudad || "").toUpperCase(),
+          provincia_des: (destinatario?.provincia || "").toUpperCase(),
           valor_seguro: (medidas?.valor_seguro ?? "0").toString(),
           valor_declarado: (medidas?.valor_declarado ?? "0").toString(),
           peso: pesoFacturable.toString(),
@@ -129,18 +131,25 @@ export default function PasoResumen({
           ancho: (medidas?.ancho ?? 0).toString(),
           largo: (medidas?.largo ?? 0).toString(),
           recoleccion: "NO",
-          nombre_producto: formData?.nombre_producto || "",
+          nombre_producto:
+            formData?.nombre_producto || SERVIENTREGA_CONFIG.DEFAULT_PRODUCTO,
           empaque: formData.requiere_empaque
             ? formData.empaque?.tipo_empaque || DEFAULT_EMPAQUE
             : DEFAULT_EMPAQUE,
+          usuingreso: credenciales.usuingreso,
+          contrasenha: credenciales.contrasenha,
           ...(isInternacional && {
             codigo_postal_ori: remitente?.codigo_postal || DEFAULT_CP_ORI,
             codigo_postal_des: destinatario?.codigo_postal || DEFAULT_CP_DES,
           }),
         };
 
+        console.log("📤 Payload para tarifa (PasoResumen):", payload);
+
         const res = await axiosInstance.post("/servientrega/tarifa", payload);
         const resultado = Array.isArray(res.data) ? res.data[0] : res.data;
+
+        console.log("📥 Respuesta de tarifa (PasoResumen):", res.data);
         if (!resultado || resultado.flete === undefined) {
           toast.error("No se pudo calcular la tarifa. Verifica los datos.");
           setTarifa(null);
