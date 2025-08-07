@@ -31,6 +31,7 @@ export interface Medidas {
   valor_declarado: number;
   valor_seguro: number;
   recoleccion: boolean;
+  contenido: string;
 }
 
 export interface Empaque {

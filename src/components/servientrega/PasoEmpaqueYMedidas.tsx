@@ -54,6 +54,7 @@ export default function PasoEmpaqueYMedidas({
     valor_declarado: 0,
     valor_seguro: 0,
     recoleccion: false,
+    contenido: "",
   });
 
   // Empaque desactivado por defecto
@@ -316,6 +317,22 @@ export default function PasoEmpaqueYMedidas({
             />
           </div>
         )}
+
+        {/* Contenido del paquete */}
+        <Separator />
+        <div>
+          <Label>Contenido del paquete *</Label>
+          <Input
+            name="contenido"
+            type="text"
+            value={medidas.contenido}
+            onChange={(e) =>
+              setMedidas((prev) => ({ ...prev, contenido: e.target.value }))
+            }
+            placeholder="Describe el contenido del paquete"
+            required
+          />
+        </div>
 
         {/* Botón */}
         <Button

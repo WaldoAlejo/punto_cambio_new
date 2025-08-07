@@ -104,7 +104,13 @@ export default function SaldoServientregaAdmin() {
   const obtenerHistorial = async () => {
     try {
       const { data } = await axiosInstance.get("/servientrega/saldo/historial");
-      if (Array.isArray(data)) setHistorial(data);
+      console.log("📊 Datos del historial recibidos:", data);
+      if (Array.isArray(data)) {
+        setHistorial(data);
+        console.log("📊 Historial establecido:", data.length, "registros");
+      } else {
+        console.log("❌ Los datos del historial no son un array:", data);
+      }
     } catch (error) {
       console.error("❌ Error al obtener historial:", error);
     }
@@ -216,6 +222,31 @@ export default function SaldoServientregaAdmin() {
 
     return coincidePunto && coincideFecha;
   });
+
+  // Debug logging
+  console.log("🔍 Estado del historial:", {
+    historialTotal: historial.length,
+    historialFiltrado: historialFiltrado.length,
+    filtroFecha,
+    filtroPunto,
+    esAdmin,
+  });
+
+  // ✅ Función de debug para verificar datos
+  const debugHistorial = async () => {
+    try {
+      const { data } = await axiosInstance.get(
+        "/servientrega/saldo/historial/debug"
+      );
+      console.log("🔧 Debug del historial:", data);
+      toast.success(
+        `Debug completado. Ver consola. Total registros: ${data.totalRegistros}`
+      );
+    } catch (error) {
+      console.error("❌ Error en debug:", error);
+      toast.error("Error al ejecutar debug");
+    }
+  };
 
   const saldoActual = Number(saldos[puntoSeleccionado] ?? 0);
   const saldoBajo = saldoActual < UMBRAL_SALDO_BAJO;
@@ -367,13 +398,83 @@ export default function SaldoServientregaAdmin() {
       {esAdmin && (
         <Card className="p-4">
           <CardHeader>
-            <CardTitle className="text-lg">Historial de asignaciones</CardTitle>
+            <CardTitle className="text-lg flex justify-between items-center">
+              <span>
+                Historial de asignaciones ({historial.length} total,{" "}
+                {historialFiltrado.length} mostrados)
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={debugHistorial}
+                className="text-xs"
+              >
+                🔧 Debug
+              </Button>
+            </CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Controles de filtro */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+              <div className="space-y-2">
+                <Label>Filtrar por punto</Label>
+                <Select value={filtroPunto} onValueChange={setFiltroPunto}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los puntos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Todos los puntos</SelectItem>
+                    {puntos.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Filtrar por fecha</Label>
+                <Input
+                  type="date"
+                  value={filtroFecha}
+                  onChange={(e) => setFiltroFecha(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>&nbsp;</Label>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setFiltroPunto("");
+                    setFiltroFecha("");
+                  }}
+                  className="w-full"
+                >
+                  Limpiar filtros
+                </Button>
+              </div>
+            </div>
+
             {historialFiltrado.length === 0 ? (
-              <p className="text-sm text-gray-500 italic">
-                No hay asignaciones registradas.
-              </p>
+              <div className="text-center py-8">
+                <p className="text-sm text-gray-500 italic">
+                  {historial.length === 0
+                    ? "No hay asignaciones registradas."
+                    : "No hay asignaciones que coincidan con los filtros aplicados."}
+                </p>
+                {historial.length > 0 && (filtroFecha || filtroPunto) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setFiltroPunto("");
+                      setFiltroFecha("");
+                    }}
+                    className="mt-2"
+                  >
+                    Ver todas las asignaciones
+                  </Button>
+                )}
+              </div>
             ) : (
               <ul className="space-y-2 max-h-[400px] overflow-auto pr-2">
                 {historialFiltrado.map((h) => (
