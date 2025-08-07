@@ -281,6 +281,98 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
 // 💰 Saldo Servientrega
 // =============================
 
+// IMPORTANTE: Las rutas específicas deben ir ANTES que las rutas con parámetros
+router.get("/saldo/historial", async (_, res) => {
+  try {
+    console.log("🔍 Consultando historial de saldos Servientrega...");
+
+    const historial = await prisma.servientregaHistorialSaldo.findMany({
+      include: {
+        puntoAtencion: {
+          select: {
+            nombre: true,
+          },
+        },
+      },
+      orderBy: { creado_en: "desc" },
+    });
+
+    console.log(`📊 Registros encontrados en historial: ${historial.length}`);
+
+    if (historial.length > 0) {
+      console.log(
+        "📋 Primeros 3 registros:",
+        historial.slice(0, 3).map((h) => ({
+          id: h.id,
+          punto: h.puntoAtencion?.nombre || h.punto_atencion_nombre,
+          monto: h.monto_total.toString(),
+          creado_por: h.creado_por,
+          fecha: h.creado_en,
+        }))
+      );
+    }
+
+    // Formatear datos para el frontend
+    const historialFormateado = historial.map((item) => ({
+      id: item.id,
+      punto_atencion_nombre:
+        item.puntoAtencion?.nombre || item.punto_atencion_nombre,
+      monto_total: Number(item.monto_total),
+      creado_por: item.creado_por,
+      creado_en: item.creado_en.toISOString(),
+    }));
+
+    console.log(
+      `✅ Enviando ${historialFormateado.length} registros formateados al frontend`
+    );
+    console.log(
+      "📤 Datos que se envían:",
+      JSON.stringify(historialFormateado, null, 2)
+    );
+    res.json(historialFormateado);
+  } catch (error) {
+    console.error("❌ Error al obtener historial de saldo:", error);
+    res.status(500).json({ error: "Error al obtener historial de saldo" });
+  }
+});
+
+// Endpoint de debug para verificar datos en la tabla
+router.get("/saldo/historial/debug", async (_, res) => {
+  try {
+    console.log("🔧 DEBUG: Verificando tabla ServientregaHistorialSaldo...");
+
+    // Contar registros totales
+    const count = await prisma.servientregaHistorialSaldo.count();
+    console.log(`📊 Total de registros en historial: ${count}`);
+
+    // Obtener todos los registros sin include para verificar datos raw
+    const historialRaw = await prisma.servientregaHistorialSaldo.findMany({
+      orderBy: { creado_en: "desc" },
+      take: 10,
+    });
+
+    console.log("📋 Registros raw (primeros 10):", historialRaw);
+
+    // Verificar puntos de atención disponibles
+    const puntos = await prisma.puntoAtencion.findMany({
+      where: { activo: true },
+      select: { id: true, nombre: true },
+    });
+
+    console.log("📍 Puntos de atención activos:", puntos);
+
+    res.json({
+      totalRegistros: count,
+      registrosRaw: historialRaw,
+      puntosActivos: puntos,
+    });
+  } catch (error) {
+    console.error("❌ Error en debug:", error);
+    res.status(500).json({ error: "Error en debug" });
+  }
+});
+
+// Ruta con parámetro - debe ir DESPUÉS de las rutas específicas
 router.get("/saldo/:punto_id", async (req, res) => {
   try {
     const { punto_id } = req.params;
@@ -370,96 +462,6 @@ router.post("/saldo", async (req, res) => {
     res
       .status(500)
       .json({ error: "Error al asignar saldo", detalle: err.message });
-  }
-});
-
-// Endpoint de debug para verificar datos en la tabla
-router.get("/saldo/historial/debug", async (_, res) => {
-  try {
-    console.log("🔧 DEBUG: Verificando tabla ServientregaHistorialSaldo...");
-
-    // Contar registros totales
-    const count = await prisma.servientregaHistorialSaldo.count();
-    console.log(`📊 Total de registros en historial: ${count}`);
-
-    // Obtener todos los registros sin include para verificar datos raw
-    const historialRaw = await prisma.servientregaHistorialSaldo.findMany({
-      orderBy: { creado_en: "desc" },
-      take: 10,
-    });
-
-    console.log("📋 Registros raw (primeros 10):", historialRaw);
-
-    // Verificar puntos de atención disponibles
-    const puntos = await prisma.puntoAtencion.findMany({
-      where: { activo: true },
-      select: { id: true, nombre: true },
-    });
-
-    console.log("📍 Puntos de atención activos:", puntos);
-
-    res.json({
-      totalRegistros: count,
-      registrosRaw: historialRaw,
-      puntosActivos: puntos,
-    });
-  } catch (error) {
-    console.error("❌ Error en debug:", error);
-    res.status(500).json({ error: "Error en debug" });
-  }
-});
-
-router.get("/saldo/historial", async (_, res) => {
-  try {
-    console.log("🔍 Consultando historial de saldos Servientrega...");
-
-    const historial = await prisma.servientregaHistorialSaldo.findMany({
-      include: {
-        puntoAtencion: {
-          select: {
-            nombre: true,
-          },
-        },
-      },
-      orderBy: { creado_en: "desc" },
-    });
-
-    console.log(`📊 Registros encontrados en historial: ${historial.length}`);
-
-    if (historial.length > 0) {
-      console.log(
-        "📋 Primeros 3 registros:",
-        historial.slice(0, 3).map((h) => ({
-          id: h.id,
-          punto: h.puntoAtencion?.nombre || h.punto_atencion_nombre,
-          monto: h.monto_total.toString(),
-          creado_por: h.creado_por,
-          fecha: h.creado_en,
-        }))
-      );
-    }
-
-    // Formatear datos para el frontend
-    const historialFormateado = historial.map((item) => ({
-      id: item.id,
-      punto_atencion_nombre:
-        item.puntoAtencion?.nombre || item.punto_atencion_nombre,
-      monto_total: Number(item.monto_total),
-      creado_por: item.creado_por,
-      creado_en: item.creado_en.toISOString(),
-    }));
-
-    console.log(
-      `✅ Enviando ${historialFormateado.length} registros formateados al frontend`
-    );
-    console.log(
-      "📤 Datos que se envían:",
-      JSON.stringify(historialFormateado, null, 2)
-    );
-    res.json(historialFormateado);
-  } catch (error) {
-    console.error("❌ Error al obtener historial de saldo:", error);
-    res.status(500).json({ error: "Error al obtener historial de saldo" });
   }
 });
 
