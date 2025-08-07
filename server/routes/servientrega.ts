@@ -286,30 +286,44 @@ router.get("/saldo/historial", async (_, res) => {
   try {
     console.log("🔍 Consultando historial de saldos Servientrega...");
 
-    const historial = await prisma.servientregaHistorialSaldo.findMany({
-      include: {
-        puntoAtencion: {
-          select: {
-            nombre: true,
-          },
-        },
-      },
+    // Primero intentar consulta simple sin include
+    console.log("🔧 Intentando consulta simple sin include...");
+    const historialSimple = await prisma.servientregaHistorialSaldo.findMany({
       orderBy: { creado_en: "desc" },
     });
 
-    console.log(`📊 Registros encontrados en historial: ${historial.length}`);
+    console.log(
+      `📊 Registros encontrados (consulta simple): ${historialSimple.length}`
+    );
 
-    if (historial.length > 0) {
+    if (historialSimple.length > 0) {
       console.log(
-        "📋 Primeros 3 registros:",
-        historial.slice(0, 3).map((h) => ({
-          id: h.id,
-          punto: h.puntoAtencion?.nombre || h.punto_atencion_nombre,
-          monto: h.monto_total.toString(),
-          creado_por: h.creado_por,
-          fecha: h.creado_en,
-        }))
+        "📋 Primeros 3 registros (simple):",
+        historialSimple.slice(0, 3)
       );
+    }
+
+    // Intentar consulta con include
+    let historial = [];
+    try {
+      console.log("🔧 Intentando consulta con include...");
+      historial = await prisma.servientregaHistorialSaldo.findMany({
+        include: {
+          puntoAtencion: {
+            select: {
+              nombre: true,
+            },
+          },
+        },
+        orderBy: { creado_en: "desc" },
+      });
+      console.log(
+        `📊 Registros encontrados (con include): ${historial.length}`
+      );
+    } catch (includeError) {
+      console.error("❌ Error en consulta con include:", includeError);
+      console.log("🔄 Usando consulta simple como fallback...");
+      historial = historialSimple;
     }
 
     // Formatear datos para el frontend
@@ -327,12 +341,49 @@ router.get("/saldo/historial", async (_, res) => {
     );
     console.log(
       "📤 Datos que se envían:",
-      JSON.stringify(historialFormateado, null, 2)
+      JSON.stringify(historialFormateado.slice(0, 2), null, 2)
     );
     res.json(historialFormateado);
   } catch (error) {
     console.error("❌ Error al obtener historial de saldo:", error);
-    res.status(500).json({ error: "Error al obtener historial de saldo" });
+    console.error("❌ Stack trace:", error.stack);
+    res.status(500).json({
+      error: "Error al obtener historial de saldo",
+      detalle: error.message,
+    });
+  }
+});
+
+// Endpoint para verificar conexión a la base de datos
+router.get("/saldo/historial/test-db", async (_, res) => {
+  try {
+    console.log("🔧 TEST: Verificando conexión a la base de datos...");
+
+    // Probar consulta simple
+    const result = await prisma.$queryRaw`SELECT 1 as test`;
+    console.log("✅ Conexión a DB exitosa:", result);
+
+    // Verificar si la tabla existe
+    const tableExists = await prisma.$queryRaw`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'ServientregaHistorialSaldo'
+      );
+    `;
+    console.log("🔍 ¿Tabla ServientregaHistorialSaldo existe?:", tableExists);
+
+    res.json({
+      conexionDB: "OK",
+      tablaExiste: tableExists,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("❌ Error en test de DB:", error);
+    res.status(500).json({
+      error: "Error en test de DB",
+      detalle: error.message,
+    });
   }
 });
 
@@ -341,34 +392,76 @@ router.get("/saldo/historial/debug", async (_, res) => {
   try {
     console.log("🔧 DEBUG: Verificando tabla ServientregaHistorialSaldo...");
 
-    // Contar registros totales
-    const count = await prisma.servientregaHistorialSaldo.count();
-    console.log(`📊 Total de registros en historial: ${count}`);
+    // Verificar si la tabla existe
+    let count = 0;
+    let historialRaw = [];
+    let puntos = [];
+    let errorDetails = null;
 
-    // Obtener todos los registros sin include para verificar datos raw
-    const historialRaw = await prisma.servientregaHistorialSaldo.findMany({
-      orderBy: { creado_en: "desc" },
-      take: 10,
-    });
+    try {
+      count = await prisma.servientregaHistorialSaldo.count();
+      console.log(`📊 Total de registros en historial: ${count}`);
+    } catch (countError) {
+      console.error("❌ Error al contar registros:", countError);
+      errorDetails = { countError: countError.message };
+    }
 
-    console.log("📋 Registros raw (primeros 10):", historialRaw);
+    try {
+      historialRaw = await prisma.servientregaHistorialSaldo.findMany({
+        orderBy: { creado_en: "desc" },
+        take: 10,
+      });
+      console.log("📋 Registros raw (primeros 10):", historialRaw);
+    } catch (findError) {
+      console.error("❌ Error al obtener registros:", findError);
+      errorDetails = { ...errorDetails, findError: findError.message };
+    }
 
-    // Verificar puntos de atención disponibles
-    const puntos = await prisma.puntoAtencion.findMany({
-      where: { activo: true },
-      select: { id: true, nombre: true },
-    });
+    try {
+      puntos = await prisma.puntoAtencion.findMany({
+        where: { activo: true },
+        select: { id: true, nombre: true },
+      });
+      console.log("📍 Puntos de atención activos:", puntos);
+    } catch (puntosError) {
+      console.error("❌ Error al obtener puntos:", puntosError);
+      errorDetails = { ...errorDetails, puntosError: puntosError.message };
+    }
 
-    console.log("📍 Puntos de atención activos:", puntos);
+    // Verificar también la tabla de saldos
+    let saldos = [];
+    try {
+      saldos = await prisma.servientregaSaldo.findMany({
+        select: {
+          id: true,
+          punto_atencion_id: true,
+          monto_total: true,
+          monto_usado: true,
+        },
+        take: 5,
+      });
+      console.log("💰 Saldos existentes:", saldos);
+    } catch (saldosError) {
+      console.error("❌ Error al obtener saldos:", saldosError);
+      errorDetails = { ...errorDetails, saldosError: saldosError.message };
+    }
 
     res.json({
       totalRegistros: count,
       registrosRaw: historialRaw,
       puntosActivos: puntos,
+      saldosExistentes: saldos,
+      errores: errorDetails,
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("❌ Error en debug:", error);
-    res.status(500).json({ error: "Error en debug" });
+    console.error("❌ Error general en debug:", error);
+    console.error("❌ Stack trace:", error.stack);
+    res.status(500).json({
+      error: "Error en debug",
+      detalle: error.message,
+      stack: error.stack,
+    });
   }
 });
 

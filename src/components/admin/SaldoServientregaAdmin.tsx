@@ -271,6 +271,20 @@ export default function SaldoServientregaAdmin() {
     }
   };
 
+  // ✅ Función para probar conexión a la base de datos
+  const testDB = async () => {
+    try {
+      const { data } = await axiosInstance.get(
+        "/servientrega/saldo/historial/test-db"
+      );
+      console.log("🔧 Test de DB:", data);
+      toast.success("Test de DB completado. Ver consola.");
+    } catch (error) {
+      console.error("❌ Error en test de DB:", error);
+      toast.error("Error al probar conexión a DB");
+    }
+  };
+
   const saldoActual = Number(saldos[puntoSeleccionado] ?? 0);
   const saldoBajo = saldoActual < UMBRAL_SALDO_BAJO;
 
@@ -426,14 +440,24 @@ export default function SaldoServientregaAdmin() {
                 Historial de asignaciones ({historial.length} total,{" "}
                 {historialFiltrado.length} mostrados)
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={debugHistorial}
-                className="text-xs"
-              >
-                🔧 Debug
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testDB}
+                  className="text-xs"
+                >
+                  🔌 Test DB
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={debugHistorial}
+                  className="text-xs"
+                >
+                  🔧 Debug
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
