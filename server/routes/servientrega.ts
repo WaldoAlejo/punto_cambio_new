@@ -736,6 +736,37 @@ router.post("/tarifa", async (req, res) => {
 // =============================
 router.post("/generar-guia", async (req, res) => {
   try {
+    console.log(
+      "📥 Datos recibidos para generar guía:",
+      JSON.stringify(req.body, null, 2)
+    );
+
+    // Detectar si es el formato nuevo (directo) o el formato antiguo (anidado)
+    const esFormatoNuevo = req.body.tipo === "GeneracionGuia";
+
+    if (esFormatoNuevo) {
+      // Formato nuevo: usar directamente el payload
+      console.log("🔄 Usando formato nuevo de generación de guía");
+      const payload = req.body;
+
+      const response = await callServientregaAPI(payload);
+      console.log(
+        "📥 Respuesta de Servientrega:",
+        JSON.stringify(response, null, 2)
+      );
+
+      // Procesar respuesta
+      if (response?.fetch?.proceso === "Guia Generada Correctamente") {
+        return res.json(response);
+      } else {
+        return res.status(400).json({
+          error: "No se pudo generar la guía",
+          detalle: response,
+        });
+      }
+    }
+
+    // Formato antiguo (mantener compatibilidad)
     const {
       nombre_producto,
       remitente,
