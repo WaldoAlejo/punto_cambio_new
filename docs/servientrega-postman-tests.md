@@ -28,6 +28,14 @@
 POST {{base_url}}/servientrega/tarifa
 ```
 
+## 🎯 Endpoint de Generación de Guías
+
+### URL:
+
+```
+POST {{base_url}}/servientrega/generar-guia
+```
+
 ## 📦 Casos de Prueba
 
 ### 1. ✅ Envío Básico Quito → Guayaquil
@@ -204,6 +212,121 @@ POST {{base_url}}/servientrega/tarifa
 }
 ```
 
+## 📋 Casos de Prueba - Generación de Guías
+
+### 11. 📦 Generar Guía Nacional Básica
+
+```json
+{
+  "tipo": "GeneracionGuia",
+  "nombre_producto": "PREMIER",
+  "ciudad_origen": "GUAYAQUIL-GUAYAS",
+  "cedula_remitente": "0123456789",
+  "nombre_remitente": "Juan Pérez",
+  "direccion_remitente": "Av. 9 de Octubre 123",
+  "telefono_remitente": "0987654321",
+  "codigo_postal_remitente": "090101",
+  "cedula_destinatario": "0987654321",
+  "nombre_destinatario": "María García",
+  "direccion_destinatario": "Av. Amazonas 456",
+  "telefono_destinatario": "0912345678",
+  "ciudad_destinatario": "QUITO-PICHINCHA",
+  "pais_destinatario": "ECUADOR",
+  "codigo_postal_destinatario": "170101",
+  "contenido": "Documentos importantes",
+  "retiro_oficina": "NO",
+  "nombre_agencia_retiro_oficina": "",
+  "pedido": "PED001",
+  "factura": "FAC001",
+  "valor_declarado": 100,
+  "valor_asegurado": 10,
+  "peso_fisico": 2,
+  "peso_volumentrico": 0,
+  "piezas": 1,
+  "alto": 15,
+  "ancho": 20,
+  "largo": 25,
+  "tipo_guia": "1",
+  "alianza": "PUNTO_CAMBIO",
+  "alianza_oficina": "PUNTO_CAMBIO_INICIAL_XR",
+  "mail_remite": "remitente@email.com",
+  "usuingreso": "PRUEBA",
+  "contrasenha": "s12345ABCDe"
+}
+```
+
+### 12. 📦 Generar Guía con Retiro en Oficina
+
+```json
+{
+  "tipo": "GeneracionGuia",
+  "nombre_producto": "PREMIER",
+  "ciudad_origen": "CUENCA-AZUAY",
+  "cedula_remitente": "0123456789",
+  "nombre_remitente": "Carlos López",
+  "direccion_remitente": "Calle Larga 789",
+  "telefono_remitente": "0987654321",
+  "codigo_postal_remitente": "010101",
+  "cedula_destinatario": "0987654321",
+  "nombre_destinatario": "Ana Rodríguez",
+  "direccion_destinatario": "Av. 6 de Diciembre 321",
+  "telefono_destinatario": "0912345678",
+  "ciudad_destinatario": "QUITO-PICHINCHA",
+  "pais_destinatario": "ECUADOR",
+  "codigo_postal_destinatario": "170101",
+  "contenido": "Productos electrónicos",
+  "retiro_oficina": "SI",
+  "nombre_agencia_retiro_oficina": "QUITO_CENTRO_HISTORICO",
+  "pedido": "PED002",
+  "factura": "FAC002",
+  "valor_declarado": 500,
+  "valor_asegurado": 50,
+  "peso_fisico": 5,
+  "peso_volumentrico": 0,
+  "piezas": 1,
+  "alto": 25,
+  "ancho": 30,
+  "largo": 35,
+  "tipo_guia": "1",
+  "alianza": "PUNTO_CAMBIO",
+  "alianza_oficina": "PUNTO_CAMBIO_INICIAL_XR",
+  "mail_remite": "remitente@email.com",
+  "usuingreso": "PRUEBA",
+  "contrasenha": "s12345ABCDe"
+}
+```
+
+**Respuesta Esperada de Generación de Guía:**
+
+```json
+[
+  {
+    "flete": 2.64,
+    "valor_declarado": 150,
+    "tiempo": "1",
+    "valor_empaque": 0.336,
+    "trayecto": "LOCAL",
+    "prima": 1.5,
+    "peso": 2,
+    "volumen": 1,
+    "peso_cobrar": 2,
+    "descuento": 0,
+    "tarifa0": 0,
+    "tarifa12": 5.93,
+    "tiva": 0.7116,
+    "gtotal": 6.9776
+  }
+]
+{
+  "fetch": {
+    "proceso": "Guia Generada Correctamente",
+    "guia": "1010000155",
+    "guia_pdf": "https://servientrega-ecuador-prueba.appsiscore.com/app/ws/aliados/autoscan/1010000155.pdf",
+    "guia_64": "JVBERi0xLjMKMyAwIG9iago8PC9UeXBlIC9QYWdlCi9QYXJlbnQgMSAwIFIKL1Jlc291cmNlcyAyIDAgUgovQ29udGVudHMgNCAwIFI+PgplbmRvYmoK..."
+  }
+}
+```
+
 ## 🌍 Casos de Prueba Internacionales
 
 ### 8. 🇨🇴 Envío Ecuador → Colombia
@@ -360,6 +483,43 @@ POST {{base_url}}/servientrega/tarifa
 - `codigo_postal_ori`: Código postal origen
 - `codigo_postal_des`: Código postal destino
 - Todos los campos nacionales también aplican
+
+### ✅ Campos Requeridos (Generación de Guía):
+
+- `tipo`: "GeneracionGuia"
+- `nombre_producto`: Tipo de producto
+- `ciudad_origen`: "CIUDAD-PROVINCIA" (formato específico)
+- `cedula_remitente`: Cédula del remitente
+- `nombre_remitente`: Nombre completo del remitente
+- `direccion_remitente`: Dirección del remitente
+- `telefono_remitente`: Teléfono del remitente
+- `codigo_postal_remitente`: Código postal del remitente
+- `cedula_destinatario`: Cédula del destinatario
+- `nombre_destinatario`: Nombre completo del destinatario
+- `direccion_destinatario`: Dirección del destinatario
+- `telefono_destinatario`: Teléfono del destinatario
+- `ciudad_destinatario`: "CIUDAD-PROVINCIA" (formato específico)
+- `pais_destinatario`: País del destinatario
+- `codigo_postal_destinatario`: Código postal del destinatario
+- `contenido`: Descripción del contenido
+- `retiro_oficina`: "SI" o "NO"
+- `nombre_agencia_retiro_oficina`: Nombre de la agencia (si aplica)
+- `pedido`: Número de pedido
+- `factura`: Número de factura
+- `valor_declarado`: Valor declarado (número)
+- `valor_asegurado`: Valor asegurado (número)
+- `peso_fisico`: Peso físico (número)
+- `peso_volumentrico`: Peso volumétrico (número, 0 para auto-cálculo)
+- `piezas`: Número de piezas
+- `alto`: Alto en cm (número)
+- `ancho`: Ancho en cm (número)
+- `largo`: Largo en cm (número)
+- `tipo_guia`: "1" (valor fijo)
+- `alianza`: Nombre de la alianza
+- `alianza_oficina`: Código de la oficina
+- `mail_remite`: Email del remitente
+- `usuingreso`: Usuario de prueba
+- `contrasenha`: Contraseña de prueba
 
 ### 📦 Tipos de Empaque Válidos:
 

@@ -24,6 +24,10 @@ import type {
   ResumenCostos,
   FormDataGuia,
 } from "@/types/servientrega";
+import {
+  formatearPayloadGuia,
+  procesarRespuestaGuia,
+} from "@/config/servientrega";
 
 interface PasoConfirmarEnvioProps {
   formData: FormDataGuia;
@@ -32,9 +36,23 @@ interface PasoConfirmarEnvioProps {
 }
 
 interface GenerarGuiaResponse {
+  // Datos de tarifa
+  flete: number;
+  valor_declarado: number;
+  tiempo: string;
+  valor_empaque: number;
+  trayecto: string;
+  prima: number;
+  peso: number;
+  volumen: number;
+  peso_cobrar: number;
+  gtotal: number;
+
+  // Datos de la guía generada
+  proceso: string;
   guia: string;
-  base64: string;
-  proceso?: string;
+  guia_pdf: string;
+  guia_64: string;
 }
 
 export default function PasoConfirmarEnvio({
@@ -87,8 +105,9 @@ export default function PasoConfirmarEnvio({
     setLoading(true);
     setError(null);
     try {
-      const payload: FormDataGuia = {
-        ...formData,
+      // Usar función centralizada para formatear payload
+      const payload = formatearPayloadGuia({
+        formData,
         contenido: formData?.contenido || formData?.nombre_producto || "",
         retiro_oficina: formData.retiro_oficina,
         nombre_agencia_retiro_oficina: formData.retiro_oficina
@@ -96,17 +115,23 @@ export default function PasoConfirmarEnvio({
           : "",
         pedido: formData.pedido || "PRUEBA",
         factura: formData.factura || "PRUEBA",
-      };
+      });
 
-      const res = await axiosInstance.post<GenerarGuiaResponse>(
+      console.log("📤 Payload para generar guía:", payload);
+
+      const res = await axiosInstance.post(
         "/servientrega/generar-guia",
         payload
       );
 
-      const data = res.data;
-      if (data?.guia && data?.base64) {
+      console.log("📥 Respuesta de generar guía:", res.data);
+
+      // Procesar respuesta usando función centralizada
+      const data = procesarRespuestaGuia(res.data);
+
+      if (data?.guia && data?.guia_64) {
         setGuia(data.guia);
-        setBase64(data.base64);
+        setBase64(data.guia_64);
         toast.success(`✅ Guía generada: ${data.guia}`);
         if (onSuccess) onSuccess();
       } else {

@@ -120,3 +120,87 @@ export const procesarRespuestaTarifa = (data: any) => {
     prima: Number(tarifaData.prima || 0),
   };
 };
+
+// Función para formatear payload de generación de guía
+export const formatearPayloadGuia = (data: {
+  formData: any;
+  contenido: string;
+  retiro_oficina: boolean;
+  nombre_agencia_retiro_oficina?: string;
+  pedido?: string;
+  factura?: string;
+}) => {
+  const credenciales = getCredenciales();
+  const { formData } = data;
+
+  // Formatear ciudad con provincia
+  const ciudadOrigen = `${formData.remitente.ciudad.toUpperCase()}-${formData.remitente.provincia.toUpperCase()}`;
+  const ciudadDestino = `${formData.destinatario.ciudad.toUpperCase()}-${formData.destinatario.provincia.toUpperCase()}`;
+
+  return {
+    tipo: "GeneracionGuia",
+    nombre_producto:
+      formData.nombre_producto || SERVIENTREGA_CONFIG.DEFAULT_PRODUCTO,
+    ciudad_origen: ciudadOrigen,
+    cedula_remitente: formData.remitente.cedula || "PRUEBA",
+    nombre_remitente: formData.remitente.nombre || "PRUEBA",
+    direccion_remitente: formData.remitente.direccion || "PRUEBA",
+    telefono_remitente: formData.remitente.telefono || "PRUEBA",
+    codigo_postal_remitente: formData.remitente.codigo_postal || "PRUEBA",
+    cedula_destinatario: formData.destinatario.cedula || "PRUEBA",
+    nombre_destinatario: formData.destinatario.nombre || "PRUEBA",
+    direccion_destinatario: formData.destinatario.direccion || "PRUEBA",
+    telefono_destinatario: formData.destinatario.telefono || "PRUEBA",
+    ciudad_destinatario: ciudadDestino,
+    pais_destinatario: formData.destinatario.pais || "ECUADOR",
+    codigo_postal_destinatario: formData.destinatario.codigo_postal || "PRUEBA",
+    contenido: data.contenido,
+    retiro_oficina: data.retiro_oficina ? "SI" : "NO",
+    nombre_agencia_retiro_oficina: data.nombre_agencia_retiro_oficina || "",
+    pedido: data.pedido || "PRUEBA",
+    factura: data.factura || "PRUEBA",
+    valor_declarado: Number(formData.medidas.valor_declarado || 0),
+    valor_asegurado: Number(formData.medidas.valor_seguro || 0),
+    peso_fisico: Number(formData.medidas.peso || 0),
+    peso_volumentrico: 0, // Se calcula automáticamente
+    piezas: 1,
+    alto: Number(formData.medidas.alto || 0),
+    ancho: Number(formData.medidas.ancho || 0),
+    largo: Number(formData.medidas.largo || 0),
+    tipo_guia: "1",
+    alianza: formData.punto_atencion_nombre || "PRUEBAS",
+    alianza_oficina: formData.punto_atencion_nombre || "PRUEBA_INICIAL_XR",
+    mail_remite: formData.remitente.email || "correoremitente@gmail.com",
+    usuingreso: credenciales.usuingreso,
+    contrasenha: credenciales.contrasenha,
+  };
+};
+
+// Función para procesar respuesta de generación de guía
+export const procesarRespuestaGuia = (data: any) => {
+  console.log("🔍 Procesando respuesta de guía:", data);
+
+  // La respuesta tiene dos partes: tarifa y fetch
+  const tarifaData = Array.isArray(data) ? data[0] : data;
+  const fetchData = data.fetch || {};
+
+  return {
+    // Datos de tarifa
+    flete: Number(tarifaData.flete || 0),
+    valor_declarado: Number(tarifaData.valor_declarado || 0),
+    tiempo: tarifaData.tiempo || "1-2 días",
+    valor_empaque: Number(tarifaData.valor_empaque || 0),
+    trayecto: tarifaData.trayecto || "",
+    prima: Number(tarifaData.prima || 0),
+    peso: Number(tarifaData.peso || 0),
+    volumen: Number(tarifaData.volumen || 0),
+    peso_cobrar: Number(tarifaData.peso_cobrar || 0),
+    gtotal: Number(tarifaData.gtotal || 0),
+
+    // Datos de la guía generada
+    proceso: fetchData.proceso || "",
+    guia: fetchData.guia || "",
+    guia_pdf: fetchData.guia_pdf || "",
+    guia_64: fetchData.guia_64 || "",
+  };
+};
