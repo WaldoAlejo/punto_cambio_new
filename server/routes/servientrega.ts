@@ -452,6 +452,10 @@ router.get("/saldo/historial", async (_, res) => {
     console.log(
       `✅ Enviando ${historialFormateado.length} registros formateados al frontend`
     );
+    console.log(
+      "📤 Datos que se envían:",
+      JSON.stringify(historialFormateado, null, 2)
+    );
     res.json(historialFormateado);
   } catch (error) {
     console.error("❌ Error al obtener historial de saldo:", error);

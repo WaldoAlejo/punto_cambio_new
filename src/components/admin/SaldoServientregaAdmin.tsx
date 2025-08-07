@@ -66,7 +66,7 @@ export default function SaldoServientregaAdmin() {
   const [historial, setHistorial] = useState<HistorialAsignacion[]>([]);
   const [solicitudes, setSolicitudes] = useState<SolicitudSaldo[]>([]);
   const [filtroFecha, setFiltroFecha] = useState<string>("");
-  const [filtroPunto, setFiltroPunto] = useState<string>("");
+  const [filtroPunto, setFiltroPunto] = useState<string>("todos");
 
   // ✅ Obtener puntos y saldos
   const obtenerPuntosYSaldo = async () => {
@@ -103,16 +103,38 @@ export default function SaldoServientregaAdmin() {
   // ✅ Obtener historial de asignaciones
   const obtenerHistorial = async () => {
     try {
-      const { data } = await axiosInstance.get("/servientrega/saldo/historial");
-      console.log("📊 Datos del historial recibidos:", data);
-      if (Array.isArray(data)) {
-        setHistorial(data);
-        console.log("📊 Historial establecido:", data.length, "registros");
+      const response = await axiosInstance.get("/servientrega/saldo/historial");
+      console.log("📊 Respuesta completa del historial:", response);
+      console.log("📊 Datos del historial recibidos:", response.data);
+
+      if (Array.isArray(response.data)) {
+        setHistorial(response.data);
+        console.log(
+          "📊 Historial establecido:",
+          response.data.length,
+          "registros"
+        );
       } else {
-        console.log("❌ Los datos del historial no son un array:", data);
+        console.log(
+          "❌ Los datos del historial no son un array:",
+          response.data
+        );
+        console.log("❌ Tipo de datos recibidos:", typeof response.data);
+        // Intentar extraer datos si están anidados
+        if (response.data && Array.isArray(response.data.data)) {
+          setHistorial(response.data.data);
+          console.log(
+            "📊 Historial establecido desde data.data:",
+            response.data.data.length,
+            "registros"
+          );
+        } else {
+          setHistorial([]);
+        }
       }
     } catch (error) {
       console.error("❌ Error al obtener historial:", error);
+      setHistorial([]);
     }
   };
 
@@ -213,6 +235,7 @@ export default function SaldoServientregaAdmin() {
   const historialFiltrado = historial.filter((h) => {
     const coincidePunto =
       !filtroPunto ||
+      filtroPunto === "todos" ||
       puntos.find((p) => p.id === filtroPunto)?.nombre ===
         h.punto_atencion_nombre;
 
@@ -423,7 +446,7 @@ export default function SaldoServientregaAdmin() {
                     <SelectValue placeholder="Todos los puntos" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos los puntos</SelectItem>
+                    <SelectItem value="todos">Todos los puntos</SelectItem>
                     {puntos.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.nombre}
@@ -445,7 +468,7 @@ export default function SaldoServientregaAdmin() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    setFiltroPunto("");
+                    setFiltroPunto("todos");
                     setFiltroFecha("");
                   }}
                   className="w-full"
@@ -462,18 +485,19 @@ export default function SaldoServientregaAdmin() {
                     ? "No hay asignaciones registradas."
                     : "No hay asignaciones que coincidan con los filtros aplicados."}
                 </p>
-                {historial.length > 0 && (filtroFecha || filtroPunto) && (
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setFiltroPunto("");
-                      setFiltroFecha("");
-                    }}
-                    className="mt-2"
-                  >
-                    Ver todas las asignaciones
-                  </Button>
-                )}
+                {historial.length > 0 &&
+                  (filtroFecha || (filtroPunto && filtroPunto !== "todos")) && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setFiltroPunto("todos");
+                        setFiltroFecha("");
+                      }}
+                      className="mt-2"
+                    >
+                      Ver todas las asignaciones
+                    </Button>
+                  )}
               </div>
             ) : (
               <ul className="space-y-2 max-h-[400px] overflow-auto pr-2">
