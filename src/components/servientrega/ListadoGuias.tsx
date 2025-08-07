@@ -12,7 +12,7 @@ import { Loader2 } from "lucide-react";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Loading } from "@/components/ui/loading";
 import SaldoCompacto from "./SaldoCompacto";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Guia {
   id: string;
