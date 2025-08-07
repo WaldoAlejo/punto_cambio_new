@@ -304,12 +304,12 @@ router.get("/saldo/historial", async (_, res) => {
     }
 
     // Intentar consulta con include
-    let historial = [];
+    let historial: any[] = [];
     try {
       console.log("🔧 Intentando consulta con include...");
       historial = await prisma.servientregaHistorialSaldo.findMany({
         include: {
-          puntoAtencion: {
+          punto_atencion: {
             select: {
               nombre: true,
             },
@@ -327,10 +327,10 @@ router.get("/saldo/historial", async (_, res) => {
     }
 
     // Formatear datos para el frontend
-    const historialFormateado = historial.map((item) => ({
+    const historialFormateado = historial.map((item: any) => ({
       id: item.id,
       punto_atencion_nombre:
-        item.puntoAtencion?.nombre || item.punto_atencion_nombre,
+        item.punto_atencion?.nombre || item.punto_atencion_nombre,
       monto_total: Number(item.monto_total),
       creado_por: item.creado_por,
       creado_en: item.creado_en.toISOString(),
@@ -394,16 +394,16 @@ router.get("/saldo/historial/debug", async (_, res) => {
 
     // Verificar si la tabla existe
     let count = 0;
-    let historialRaw = [];
-    let puntos = [];
-    let errorDetails = null;
+    let historialRaw: any[] = [];
+    let puntos: any[] = [];
+    let errorDetails: any = null;
 
     try {
       count = await prisma.servientregaHistorialSaldo.count();
       console.log(`📊 Total de registros en historial: ${count}`);
     } catch (countError) {
       console.error("❌ Error al contar registros:", countError);
-      errorDetails = { countError: countError.message };
+      errorDetails = { countError: (countError as any).message };
     }
 
     try {
@@ -414,7 +414,7 @@ router.get("/saldo/historial/debug", async (_, res) => {
       console.log("📋 Registros raw (primeros 10):", historialRaw);
     } catch (findError) {
       console.error("❌ Error al obtener registros:", findError);
-      errorDetails = { ...errorDetails, findError: findError.message };
+      errorDetails = { ...errorDetails, findError: (findError as any).message };
     }
 
     try {
@@ -425,11 +425,14 @@ router.get("/saldo/historial/debug", async (_, res) => {
       console.log("📍 Puntos de atención activos:", puntos);
     } catch (puntosError) {
       console.error("❌ Error al obtener puntos:", puntosError);
-      errorDetails = { ...errorDetails, puntosError: puntosError.message };
+      errorDetails = {
+        ...errorDetails,
+        puntosError: (puntosError as any).message,
+      };
     }
 
     // Verificar también la tabla de saldos
-    let saldos = [];
+    let saldos: any[] = [];
     try {
       saldos = await prisma.servientregaSaldo.findMany({
         select: {
@@ -443,7 +446,10 @@ router.get("/saldo/historial/debug", async (_, res) => {
       console.log("💰 Saldos existentes:", saldos);
     } catch (saldosError) {
       console.error("❌ Error al obtener saldos:", saldosError);
-      errorDetails = { ...errorDetails, saldosError: saldosError.message };
+      errorDetails = {
+        ...errorDetails,
+        saldosError: (saldosError as any).message,
+      };
     }
 
     res.json({
@@ -836,15 +842,19 @@ router.post("/generar-guia", async (req, res) => {
       factura: factura || "PRUEBA",
       valor_declarado: Number(medidas.valor_declarado) || 0,
       valor_asegurado: Number(medidas.valor_seguro) || 0,
-      peso_fisico: Number(medidas.peso) || 0,
+      peso_fisico: Math.max(Number(medidas.peso) || 1, 1),
       peso_volumentrico: pesoVol || 0,
       piezas: 1,
-      alto: Number(medidas.alto) || 0,
-      ancho: Number(medidas.ancho) || 0,
-      largo: Number(medidas.largo) || 0,
+      alto: Math.max(Number(medidas.alto) || 10, 1),
+      ancho: Math.max(Number(medidas.ancho) || 10, 1),
+      largo: Math.max(Number(medidas.largo) || 10, 1),
       tipo_guia: "1",
+      // Campos obligatorios para el entorno de pruebas de Servientrega
       alianza: "PRUEBAS",
-      alianza_oficina: "OFICINA_PRUEBA",
+      alianza_oficina:
+        retiro_oficina === "SI" && nombre_agencia_retiro_oficina
+          ? nombre_agencia_retiro_oficina
+          : "DON JUAN_INICIAL_XR",
       mail_remite: remitente.email || "correo@ejemplo.com",
       empaque,
       ...AUTH,

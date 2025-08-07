@@ -161,15 +161,19 @@ export const formatearPayloadGuia = (data: {
     factura: data.factura || "PRUEBA",
     valor_declarado: Number(formData.medidas.valor_declarado || 0),
     valor_asegurado: Number(formData.medidas.valor_seguro || 0),
-    peso_fisico: Number(formData.medidas.peso || 0),
+    peso_fisico: Math.max(Number(formData.medidas.peso || 1), 1),
     peso_volumentrico: 0, // Se calcula automáticamente
     piezas: 1,
-    alto: Number(formData.medidas.alto || 0),
-    ancho: Number(formData.medidas.ancho || 0),
-    largo: Number(formData.medidas.largo || 0),
+    alto: Math.max(Number(formData.medidas.alto || 10), 1),
+    ancho: Math.max(Number(formData.medidas.ancho || 10), 1),
+    largo: Math.max(Number(formData.medidas.largo || 10), 1),
     tipo_guia: "1",
-    alianza: formData.punto_atencion_nombre || "PRUEBAS",
-    alianza_oficina: formData.punto_atencion_nombre || "PRUEBA_INICIAL_XR",
+    // Campos obligatorios para el entorno de pruebas de Servientrega
+    alianza: "PRUEBAS",
+    alianza_oficina:
+      data.retiro_oficina && data.nombre_agencia_retiro_oficina
+        ? data.nombre_agencia_retiro_oficina
+        : "DON JUAN_INICIAL_XR",
     mail_remite: formData.remitente.email || "correoremitente@gmail.com",
     usuingreso: credenciales.usuingreso,
     contrasenha: credenciales.contrasenha,

@@ -247,8 +247,8 @@ POST {{base_url}}/servientrega/generar-guia
   "ancho": 20,
   "largo": 25,
   "tipo_guia": "1",
-  "alianza": "PUNTO_CAMBIO",
-  "alianza_oficina": "PUNTO_CAMBIO_INICIAL_XR",
+  "alianza": "PRUEBAS",
+  "alianza_oficina": "DON JUAN_INICIAL_XR",
   "mail_remite": "remitente@email.com",
   "usuingreso": "PRUEBA",
   "contrasenha": "s12345ABCDe"
@@ -288,8 +288,8 @@ POST {{base_url}}/servientrega/generar-guia
   "ancho": 30,
   "largo": 35,
   "tipo_guia": "1",
-  "alianza": "PUNTO_CAMBIO",
-  "alianza_oficina": "PUNTO_CAMBIO_INICIAL_XR",
+  "alianza": "PRUEBAS",
+  "alianza_oficina": "QUITO_CENTRO_HISTORICO",
   "mail_remite": "remitente@email.com",
   "usuingreso": "PRUEBA",
   "contrasenha": "s12345ABCDe"
@@ -520,6 +520,20 @@ POST {{base_url}}/servientrega/generar-guia
 - `mail_remite`: Email del remitente
 - `usuingreso`: Usuario de prueba
 - `contrasenha`: Contraseña de prueba
+
+### ⚠️ **IMPORTANTE - Campos de Alianza (OBLIGATORIOS EN PRUEBAS):**
+
+Los campos `alianza` y `alianza_oficina` son **OBLIGATORIOS** en el entorno de pruebas de Servientrega:
+
+- `alianza`: **SIEMPRE** debe ser `"PRUEBAS"`
+- `alianza_oficina`:
+  - Si `retiro_oficina` = "SI": Usar la oficina seleccionada por el usuario
+  - Si `retiro_oficina` = "NO": Usar `"DON JUAN_INICIAL_XR"` (valor por defecto)
+
+**Ejemplo:**
+
+- **Envío a domicilio**: `"alianza_oficina": "DON JUAN_INICIAL_XR"`
+- **Retiro en oficina**: `"alianza_oficina": "QUITO_CENTRO_HISTORICO"` (oficina seleccionada)
 
 ### 📦 Tipos de Empaque Válidos:
 
