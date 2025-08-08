@@ -56,6 +56,7 @@ model PuntoAtencion {
   codigo_postal String?
   telefono      String?
   activo        Boolean  @default(true)
+  es_principal  Boolean  @default(false)
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 

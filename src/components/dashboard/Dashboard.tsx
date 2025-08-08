@@ -17,6 +17,7 @@ import BalanceDashboard from "./BalanceDashboard";
 import ServientregaMain from "../servientrega/ServientregaMain";
 import SaldoServientregaAdmin from "../admin/SaldoServientregaAdmin";
 import { Unauthorized } from "../ui/unauthorized";
+import { PointSelector } from "./PointSelector";
 import { User, PuntoAtencion } from "../../types";
 import { useNavigate } from "react-router-dom";
 
@@ -111,8 +112,23 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
 
       default:
         // Dashboard por defecto según rol
-        if (isOperador && selectedPoint) {
-          return <BalanceDashboard user={user} selectedPoint={selectedPoint} />;
+        if (isOperador) {
+          if (selectedPoint) {
+            return (
+              <BalanceDashboard user={user} selectedPoint={selectedPoint} />
+            );
+          } else {
+            // Operador sin punto asignado - mostrar selector
+            return (
+              <PointSelector
+                user={user}
+                onPointSelected={(point) => {
+                  // Esta función será manejada por el componente padre
+                  window.location.reload(); // Temporal - recargar para actualizar el estado
+                }}
+              />
+            );
+          }
         }
 
         if (isConcesion) {
