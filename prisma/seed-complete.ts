@@ -41,6 +41,10 @@ async function main() {
   await safeDelete("Historial Asignación Puntos", () =>
     prisma.historialAsignacionPunto.deleteMany()
   );
+  await safeDelete("Saldos Iniciales", () => prisma.saldoInicial.deleteMany());
+  await safeDelete("Movimientos Saldo", () =>
+    prisma.movimientoSaldo.deleteMany()
+  );
   await safeDelete("Usuarios", () => prisma.usuario.deleteMany());
   await safeDelete("Monedas", () => prisma.moneda.deleteMany());
   await safeDelete("Puntos de Atención", () =>
@@ -50,8 +54,10 @@ async function main() {
   console.log("🏗️  Creando nueva estructura de datos...");
 
   // 1. Crear Puntos de Atención
-  const puntoPrincipal = await prisma.puntoAtencion.create({
-    data: {
+  const puntoPrincipal = await prisma.puntoAtencion.upsert({
+    where: { nombre: "Casa de Cambios Principal" },
+    update: {},
+    create: {
       nombre: "Casa de Cambios Principal",
       direccion: "Rabida y Juan Leon Mera",
       ciudad: "Quito",
@@ -65,8 +71,10 @@ async function main() {
   console.log("✅ Punto principal creado");
 
   // Punto Norte
-  const puntoNorte = await prisma.puntoAtencion.create({
-    data: {
+  const puntoNorte = await prisma.puntoAtencion.upsert({
+    where: { nombre: "Casa de Cambios Norte" },
+    update: {},
+    create: {
       nombre: "Casa de Cambios Norte",
       direccion: "Av. 6 de Diciembre y Eloy Alfaro",
       ciudad: "Quito",
@@ -80,8 +88,10 @@ async function main() {
   console.log("✅ Punto Norte creado");
 
   // Punto Sur
-  const puntoSur = await prisma.puntoAtencion.create({
-    data: {
+  const puntoSur = await prisma.puntoAtencion.upsert({
+    where: { nombre: "Casa de Cambios Sur" },
+    update: {},
+    create: {
       nombre: "Casa de Cambios Sur",
       direccion: "Av. Maldonado y Morán Valverde",
       ciudad: "Quito",
@@ -177,7 +187,11 @@ async function main() {
 
   const monedasCreadas = [];
   for (const moneda of monedas) {
-    const monedaCreada = await prisma.moneda.create({ data: moneda });
+    const monedaCreada = await prisma.moneda.upsert({
+      where: { codigo: moneda.codigo },
+      update: {},
+      create: moneda,
+    });
     monedasCreadas.push(monedaCreada);
   }
   console.log(`✅ ${monedasCreadas.length} monedas creadas`);
@@ -188,8 +202,10 @@ async function main() {
   const hashedPasswordConcesion = await bcrypt.hash("concesion123", 10);
 
   // Usuario ADMIN
-  const admin = await prisma.usuario.create({
-    data: {
+  const admin = await prisma.usuario.upsert({
+    where: { username: "admin" },
+    update: {},
+    create: {
       username: "admin",
       password: hashedPasswordAdmin,
       rol: "ADMIN",
@@ -203,8 +219,10 @@ async function main() {
   console.log("✅ Usuario administrador creado");
 
   // Usuario OPERADOR
-  const operador = await prisma.usuario.create({
-    data: {
+  const operador = await prisma.usuario.upsert({
+    where: { username: "operador" },
+    update: {},
+    create: {
       username: "operador",
       password: hashedPasswordOperador,
       rol: "OPERADOR",
@@ -217,8 +235,10 @@ async function main() {
   console.log("✅ Usuario operador creado");
 
   // Usuario CONCESION
-  const concesion = await prisma.usuario.create({
-    data: {
+  const concesion = await prisma.usuario.upsert({
+    where: { username: "concesion" },
+    update: {},
+    create: {
       username: "concesion",
       password: hashedPasswordConcesion,
       rol: "CONCESION",
@@ -239,32 +259,42 @@ async function main() {
       // Saldo inicial mayor para USD (moneda base en Ecuador)
       const montoInicial = moneda.codigo === "USD" ? 50000 : 10000;
 
-      await prisma.saldo.create({
-        data: {
+      // Verificar si ya existe el saldo
+      const saldoExistente = await prisma.saldo.findFirst({
+        where: {
           punto_atencion_id: punto.id,
           moneda_id: moneda.id,
-          cantidad: montoInicial,
-          billetes: montoInicial,
-          monedas_fisicas: 0,
         },
       });
 
-      // Crear historial del saldo inicial
-      await prisma.historialSaldo.create({
-        data: {
-          punto_atencion_id: punto.id,
-          moneda_id: moneda.id,
-          usuario_id: admin.id,
-          cantidad_anterior: 0,
-          cantidad_incrementada: montoInicial,
-          cantidad_nueva: montoInicial,
-          tipo_movimiento: "INGRESO",
-          descripcion: `Saldo inicial para ${moneda.nombre} en ${punto.nombre}`,
-          numero_referencia: `INIT-${punto.nombre.replace(/\s+/g, "")}-${
-            moneda.codigo
-          }`,
-        },
-      });
+      if (!saldoExistente) {
+        await prisma.saldo.create({
+          data: {
+            punto_atencion_id: punto.id,
+            moneda_id: moneda.id,
+            cantidad: montoInicial,
+            billetes: montoInicial,
+            monedas_fisicas: 0,
+          },
+        });
+
+        // Crear historial del saldo inicial
+        await prisma.historialSaldo.create({
+          data: {
+            punto_atencion_id: punto.id,
+            moneda_id: moneda.id,
+            usuario_id: admin.id,
+            cantidad_anterior: 0,
+            cantidad_incrementada: montoInicial,
+            cantidad_nueva: montoInicial,
+            tipo_movimiento: "INGRESO",
+            descripcion: `Saldo inicial para ${moneda.nombre} en ${punto.nombre}`,
+            numero_referencia: `INIT-${punto.nombre.replace(/\s+/g, "")}-${
+              moneda.codigo
+            }`,
+          },
+        });
+      }
     }
   }
   console.log(
@@ -273,35 +303,45 @@ async function main() {
 
   // 5. Crear cuadres de caja iniciales para todos los puntos
   for (const punto of puntos) {
-    const cuadreInicial = await prisma.cuadreCaja.create({
-      data: {
-        usuario_id: admin.id,
+    // Verificar si ya existe un cuadre abierto para este punto
+    const cuadreExistente = await prisma.cuadreCaja.findFirst({
+      where: {
         punto_atencion_id: punto.id,
         estado: "ABIERTO",
-        fecha: new Date(),
-        observaciones: `Cuadre inicial del sistema - ${punto.nombre}`,
-        total_cambios: 0,
-        total_transferencias_entrada: 0,
-        total_transferencias_salida: 0,
       },
     });
 
-    // Crear detalles del cuadre para todas las monedas
-    for (const moneda of monedasCreadas) {
-      const montoInicial = moneda.codigo === "USD" ? 50000 : 10000;
-
-      await prisma.detalleCuadreCaja.create({
+    if (!cuadreExistente) {
+      const cuadreInicial = await prisma.cuadreCaja.create({
         data: {
-          cuadre_id: cuadreInicial.id,
-          moneda_id: moneda.id,
-          saldo_apertura: montoInicial,
-          saldo_cierre: montoInicial,
-          conteo_fisico: montoInicial,
-          billetes: montoInicial,
-          monedas_fisicas: 0,
-          diferencia: 0,
+          usuario_id: admin.id,
+          punto_atencion_id: punto.id,
+          estado: "ABIERTO",
+          fecha: new Date(),
+          observaciones: `Cuadre inicial del sistema - ${punto.nombre}`,
+          total_cambios: 0,
+          total_transferencias_entrada: 0,
+          total_transferencias_salida: 0,
         },
       });
+
+      // Crear detalles del cuadre para todas las monedas
+      for (const moneda of monedasCreadas) {
+        const montoInicial = moneda.codigo === "USD" ? 50000 : 10000;
+
+        await prisma.detalleCuadreCaja.create({
+          data: {
+            cuadre_id: cuadreInicial.id,
+            moneda_id: moneda.id,
+            saldo_apertura: montoInicial,
+            saldo_cierre: montoInicial,
+            conteo_fisico: montoInicial,
+            billetes: montoInicial,
+            monedas_fisicas: 0,
+            diferencia: 0,
+          },
+        });
+      }
     }
   }
   console.log("✅ Cuadres de caja iniciales creados para todos los puntos");

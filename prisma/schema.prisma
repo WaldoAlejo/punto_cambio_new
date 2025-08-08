@@ -82,6 +82,7 @@ model PuntoAtencion {
 
   @@index([ciudad])
   @@index([activo])
+  @@unique([nombre])
 }
 
 model Moneda {

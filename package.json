@@ -12,6 +12,7 @@
     "type-check": "tsc --noEmit",
     "preview": "vite preview",
     "seed": "npx tsx prisma/seed.ts",
+    "seed:complete": "npx tsx prisma/seed-complete.ts",
     "dev:server": "tsx server/index.ts",
     "build:server": "tsc --project tsconfig.server.json",
     "start:server": "nodemon dist/index.js",
