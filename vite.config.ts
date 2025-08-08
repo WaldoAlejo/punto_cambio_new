@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080, // puerto accesible públicamente
     proxy: {
       "/api": {
-        target: "http://localhost:3001", // backend corriendo en el mismo servidor
+        target: "http://34.132.200.84:3001", // backend corriendo en GCP
         changeOrigin: true,
         secure: false,
       },

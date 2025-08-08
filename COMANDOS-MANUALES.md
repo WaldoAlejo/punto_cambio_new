@@ -1,9 +1,14 @@
-# 🔧 COMANDOS MANUALES PARA CORREGIR EL PROBLEMA
+# 🔧 COMANDOS MANUALES PARA CORREGIR EL PROBLEMA (GCP)
+
+## **IMPORTANTE: Ejecutar en tu VM de Google Cloud**
+
+Estos comandos deben ejecutarse en tu máquina virtual `cevallos_oswaldo@punto-cambio-server`
 
 ## **OPCIÓN 1: Script Mejorado**
 
 ```bash
 cd ~/punto_cambio_new
+git pull  # Obtener los últimos cambios
 chmod +x scripts/fix-migration-simple.sh
 ./scripts/fix-migration-simple.sh
 ```

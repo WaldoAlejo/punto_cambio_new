@@ -51,6 +51,10 @@ if [ $? -eq 0 ]; then
         echo "   • Casa de Cambios Principal"
         echo "   • amazonas1"
         echo "   • Casa de Cambios Norte"
+        echo ""
+        echo "🌐 URLs de acceso:"
+        echo "   Frontend: http://34.132.200.84:8080"
+        echo "   Backend:  http://34.132.200.84:3001"
     else
         echo "❌ Error ejecutando el seed"
     fi
