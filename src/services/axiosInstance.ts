@@ -5,7 +5,7 @@ import { ErrorHandler } from "@/utils/errorHandler";
 const getToken = (): string | null => localStorage.getItem("authToken");
 
 const axiosInstance = axios.create({
-  baseURL: env.IS_DEVELOPMENT ? "/api" : env.API_URL,
+  baseURL: env.API_URL,
   timeout: 30000, // 30 segundos
   headers: {
     "Content-Type": "application/json",

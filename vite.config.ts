@@ -7,13 +7,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "0.0.0.0", // permite conexiones externas (desde cualquier IP)
     port: 8080, // puerto accesible públicamente
-    proxy: {
-      "/api": {
-        target: "http://34.132.200.84:3001", // backend corriendo en GCP
-        changeOrigin: true,
-        secure: false,
-      },
-    },
+
     watch: {
       usePolling: true,
       interval: 1000,
