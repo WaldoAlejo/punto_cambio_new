@@ -43,7 +43,7 @@ const PointSelection = ({
     try {
       const ubicacion = await getLocation();
       console.log("📍 Ubicación obtenida:", ubicacion);
-      
+
       // Para operadores: crear o actualizar jornada automáticamente
       if (user.rol === "OPERADOR") {
         const scheduleData = {
@@ -52,15 +52,14 @@ const PointSelection = ({
           fecha_inicio: new Date().toISOString(),
           ubicacion_inicio: ubicacion,
         };
-        
+
         console.log("📅 Creando jornada con datos:", scheduleData);
 
-        const { schedule, error } = await scheduleService.createOrUpdateSchedule(
-          scheduleData
-        );
-        
+        const { schedule, error } =
+          await scheduleService.createOrUpdateSchedule(scheduleData);
+
         console.log("📅 Resultado de crear jornada:", { schedule, error });
-        
+
         if (error) {
           toast({
             title: "Error",
@@ -137,15 +136,12 @@ const PointSelection = ({
   // Filtrar puntos según el rol del usuario
   const getAvailablePoints = () => {
     if (user.rol === "OPERADOR") {
-      // Los operadores no pueden usar puntos que contengan palabras reservadas para administración
-      return points.filter((point) => {
-        const nombre = point.nombre.toLowerCase();
-        const reservedWords = ["principal", "administrativo", "central", "admin", "matriz"];
-        return !reservedWords.some(word => nombre.includes(word));
-      });
+      // Los operadores pueden usar todos los puntos activos
+      // La restricción se maneja por el campo es_principal en el backend si es necesario
+      return points.filter((point) => point.activo);
     }
     // Admins y super usuarios pueden usar todos los puntos
-    return points;
+    return points.filter((point) => point.activo);
   };
 
   const availablePoints = getAvailablePoints();
@@ -165,10 +161,9 @@ const PointSelection = ({
           <div className="space-y-4">
             {availablePoints.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                {user.rol === "OPERADOR" 
+                {user.rol === "OPERADOR"
                   ? "No hay puntos operativos disponibles para operadores."
-                  : "No hay puntos disponibles."
-                }
+                  : "No hay puntos disponibles."}
               </div>
             ) : (
               availablePoints.map((point) => (

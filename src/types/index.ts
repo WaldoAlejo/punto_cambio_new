@@ -27,6 +27,7 @@ export interface PuntoAtencion {
   codigo_postal?: string;
   telefono?: string;
   activo: boolean;
+  es_principal: boolean;
   created_at: string;
   updated_at: string;
 }

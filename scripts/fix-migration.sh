@@ -19,10 +19,27 @@ if [ $? -eq 0 ]; then
         echo ""
         echo "🎉 ¡Todo completado exitosamente!"
         echo ""
+        echo "🔄 Reiniciando servidor para aplicar cambios..."
+        # Intentar reiniciar con diferentes métodos
+        if command -v pm2 &> /dev/null; then
+            pm2 restart all
+        elif pgrep -f "node.*server" > /dev/null; then
+            pkill -f "node.*server"
+            echo "⚠️  Servidor detenido. Reinicia manualmente con: npm run dev:server"
+        else
+            echo "⚠️  Reinicia el servidor manualmente para aplicar los cambios"
+        fi
+        
+        echo ""
         echo "🔑 Credenciales disponibles:"
         echo "   admin/admin123 (ADMIN)"
         echo "   operador/operador123 (OPERADOR general)"
         echo "   operador1/operador123 (OPERADOR amazonas1)"
+        echo ""
+        echo "🏢 Puntos disponibles:"
+        echo "   • Casa de Cambios Principal"
+        echo "   • amazonas1"
+        echo "   • Casa de Cambios Norte"
     else
         echo "❌ Error ejecutando el seed"
     fi

@@ -41,6 +41,7 @@ router.get(
         codigo_postal: punto.codigo_postal,
         telefono: punto.telefono,
         activo: punto.activo,
+        es_principal: punto.es_principal,
         created_at: punto.created_at.toISOString(),
         updated_at: punto.updated_at.toISOString(),
       }));
@@ -92,6 +93,7 @@ router.get(
         codigo_postal: punto.codigo_postal,
         telefono: punto.telefono,
         activo: punto.activo,
+        es_principal: punto.es_principal,
         created_at: punto.created_at.toISOString(),
         updated_at: punto.updated_at.toISOString(),
       }));
@@ -380,6 +382,7 @@ router.get(
         codigo_postal: punto.codigo_postal,
         telefono: punto.telefono,
         activo: punto.activo,
+        es_principal: punto.es_principal,
         created_at: punto.created_at.toISOString(),
         updated_at: punto.updated_at.toISOString(),
       }));
@@ -430,6 +433,7 @@ router.get(
         codigo_postal: punto.codigo_postal,
         telefono: punto.telefono,
         activo: punto.activo,
+        es_principal: punto.es_principal,
         created_at: punto.created_at.toISOString(),
         updated_at: punto.updated_at.toISOString(),
       }));
