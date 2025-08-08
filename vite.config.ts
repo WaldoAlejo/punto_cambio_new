@@ -29,7 +29,11 @@ export default defineConfig(({ mode }) => ({
       ],
     },
   },
-  plugins: [react()],
+  plugins: [
+    react({
+      jsxRuntime: "automatic",
+    }),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -37,5 +41,8 @@ export default defineConfig(({ mode }) => ({
   },
   optimizeDeps: {
     exclude: ["fsevents"],
+  },
+  esbuild: {
+    jsx: "automatic",
   },
 }));
