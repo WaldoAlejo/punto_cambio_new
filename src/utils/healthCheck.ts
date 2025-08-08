@@ -55,7 +55,7 @@ export class HealthCheckService {
     const token = localStorage.getItem("authToken");
     if (token) {
       try {
-        const response = await axiosInstance.get("/api/auth/verify", {
+        const response = await axiosInstance.get("/auth/verify", {
           timeout: 5000,
         });
         if (response.status === 200 && response.data.valid) {
@@ -78,7 +78,7 @@ export class HealthCheckService {
 
     // Verificar base de datos (a través de una consulta simple)
     try {
-      const response = await axiosInstance.get("/api/currencies", {
+      const response = await axiosInstance.get("/currencies", {
         timeout: 5000,
       });
       if (response.status === 200) {
@@ -138,7 +138,7 @@ export class HealthCheckService {
     }
 
     try {
-      const response = await axiosInstance.get("/api/auth/verify", {
+      const response = await axiosInstance.get("/auth/verify", {
         timeout: 5000,
       });
 
