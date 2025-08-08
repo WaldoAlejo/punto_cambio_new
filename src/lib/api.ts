@@ -2,8 +2,7 @@ import { authService } from "@/services/authService";
 
 // Configuración base para las llamadas a la API
 export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://34.132.200.84:3001/api";
-
+  import.meta.env.VITE_API_URL || "http://35.238.95.118:3001/api";
 
 export const apiClient = {
   async get<TResponse = unknown>(endpoint: string): Promise<TResponse | null> {

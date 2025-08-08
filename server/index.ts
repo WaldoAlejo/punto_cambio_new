@@ -43,7 +43,7 @@ app.use(
       "http://localhost:5173",
       "http://localhost:3000",
       "http://localhost:8080",
-      "http://34.132.200.84:8080", // IP pública frontend
+      "http://35.238.95.118:8080", // IP pública frontend
     ],
     credentials: true,
   })

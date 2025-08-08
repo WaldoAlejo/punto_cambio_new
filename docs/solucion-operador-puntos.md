@@ -29,7 +29,7 @@ const API_BASE_URL = env.API_URL;
 ```javascript
 // ANTES (problemático)
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://34.132.200.84:3001/api";
+  import.meta.env.VITE_API_URL || "http://35.238.95.118:3001/api";
 
 // DESPUÉS (corregido)
 import { env } from "../config/environment";
@@ -41,7 +41,7 @@ const API_BASE_URL = env.API_URL;
 #### **📁 Archivo: `/.env.local` (creado)**
 
 ```env
-VITE_API_URL=http://34.132.200.84:3001/api
+VITE_API_URL=http://35.238.95.118:3001/api
 VITE_APP_NAME=Punto Cambio
 VITE_APP_VERSION=1.0.0
 ```
@@ -111,7 +111,7 @@ Jornada existe → Dashboard muestra BalanceDashboard → Operador puede trabaja
 ### **✅ URLs Corregidas:**
 
 - ❌ ANTES: `http://localhost:3001/api/api/schedules/active` (duplicado)
-- ✅ DESPUÉS: `http://34.132.200.84:3001/api/schedules/active` (correcto)
+- ✅ DESPUÉS: `http://35.238.95.118:3001/api/schedules/active` (correcto)
 
 ### **✅ Rutas Funcionando:**
 
@@ -157,7 +157,7 @@ Jornada existe → Dashboard muestra BalanceDashboard → Operador puede trabaja
 
 ## 📝 **NOTAS TÉCNICAS**
 
-- **Servidor verificado**: ✅ Funcionando en `http://34.132.200.84:3001`
+- **Servidor verificado**: ✅ Funcionando en `http://35.238.95.118:3001`
 - **Base de datos**: ✅ Conectada y operativa
 - **Variables de entorno**: ✅ Configuradas correctamente
 - **Rutas de API**: ✅ Todas funcionando

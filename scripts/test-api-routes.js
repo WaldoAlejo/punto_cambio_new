@@ -1,5 +1,5 @@
 // Script para probar las rutas de la API
-const API_BASE = "http://34.132.200.84:3001/api";
+const API_BASE = "http://35.238.95.118:3001/api";
 
 async function testRoute(endpoint, description) {
   try {
