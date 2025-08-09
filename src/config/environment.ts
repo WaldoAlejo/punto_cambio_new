@@ -31,7 +31,7 @@ if (import.meta.env.DEV) {
 }
 
 export const env: EnvironmentConfig = {
-  API_URL: import.meta.env.VITE_API_URL || "http://35.238.95.118:3001/api",
+  API_URL: import.meta.env.VITE_API_URL || "http://35.238.95.118/api",
   NODE_ENV: import.meta.env.NODE_ENV || "development",
   IS_DEVELOPMENT: import.meta.env.DEV || false,
   IS_PRODUCTION: import.meta.env.PROD || false,
