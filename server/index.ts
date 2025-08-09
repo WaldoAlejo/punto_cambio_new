@@ -43,7 +43,8 @@ app.use(
       "http://localhost:5173",
       "http://localhost:3000",
       "http://localhost:8080",
-      "http://35.238.95.118:8080", // IP pública frontend
+      "http://35.238.95.118:8080", // IP pública frontend puerto 8080
+      "http://35.238.95.118", // IP pública frontend puerto 80
     ],
     credentials: true,
   })
