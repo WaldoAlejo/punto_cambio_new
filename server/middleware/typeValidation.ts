@@ -51,7 +51,7 @@ export const validateUserExists = async (
     req.validatedUser = user;
     next();
   } catch (error) {
-    logger.error("Error validando usuario:", error);
+    logger.error("Error validando usuario:", error as Record<string, unknown>);
     res.status(500).json({
       error: "Error interno del servidor",
       success: false,
@@ -106,7 +106,10 @@ export const validatePuntoAtencionExists = async (
     req.validatedPunto = punto;
     next();
   } catch (error) {
-    logger.error("Error validando punto de atención:", error);
+    logger.error(
+      "Error validando punto de atención:",
+      error as Record<string, unknown>
+    );
     res.status(500).json({
       error: "Error interno del servidor",
       success: false,
@@ -161,7 +164,7 @@ export const validateMonedaExists = async (
     req.validatedMoneda = moneda;
     next();
   } catch (error) {
-    logger.error("Error validando moneda:", error);
+    logger.error("Error validando moneda:", error as Record<string, unknown>);
     res.status(500).json({
       error: "Error interno del servidor",
       success: false,

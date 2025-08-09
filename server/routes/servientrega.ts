@@ -42,10 +42,10 @@ router.post("/productos", async (_, res) => {
     });
     const productos = Array.isArray(result?.fetch)
       ? result.fetch
-          .map((p) => ({
+          .map((p: any) => ({
             nombre_producto: (p.producto || "").trim(),
           }))
-          .filter((p) => p.nombre_producto.length > 0)
+          .filter((p: any) => p.nombre_producto.length > 0)
       : [];
     res.json({ productos });
   } catch {
@@ -346,10 +346,10 @@ router.get("/saldo/historial", async (_, res) => {
     res.json(historialFormateado);
   } catch (error) {
     console.error("❌ Error al obtener historial de saldo:", error);
-    console.error("❌ Stack trace:", error.stack);
+    console.error("❌ Stack trace:", (error as Error).stack);
     res.status(500).json({
       error: "Error al obtener historial de saldo",
-      detalle: error.message,
+      detalle: (error as Error).message,
     });
   }
 });
@@ -382,7 +382,7 @@ router.get("/saldo/historial/test-db", async (_, res) => {
     console.error("❌ Error en test de DB:", error);
     res.status(500).json({
       error: "Error en test de DB",
-      detalle: error.message,
+      detalle: (error as Error).message,
     });
   }
 });
@@ -462,11 +462,11 @@ router.get("/saldo/historial/debug", async (_, res) => {
     });
   } catch (error) {
     console.error("❌ Error general en debug:", error);
-    console.error("❌ Stack trace:", error.stack);
+    console.error("❌ Stack trace:", (error as Error).stack);
     res.status(500).json({
       error: "Error en debug",
-      detalle: error.message,
-      stack: error.stack,
+      detalle: (error as Error).message,
+      stack: (error as Error).stack,
     });
   }
 });
