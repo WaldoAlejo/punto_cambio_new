@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: "punto-cambio-api",
-      script: "dist/server/index.js",
+      script: "dist/index.js",
       instances: process.env.NODE_ENV === "production" ? "max" : 1,
       exec_mode: "cluster",
       env: {
