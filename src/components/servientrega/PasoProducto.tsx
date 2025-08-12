@@ -34,15 +34,49 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
   const fetchProductos = async () => {
     try {
       setCargandoProductos(true);
+      console.log("🔍 Cargando productos de Servientrega...");
+
       const response = await axiosInstance.post<{
         productos: { nombre_producto: string }[];
+        success?: boolean;
+        fallback?: boolean;
+        warning?: string;
       }>("/servientrega/productos");
-      setProductos(
-        Array.isArray(response.data.productos) ? response.data.productos : []
-      );
-    } catch (err) {
+
+      console.log("📦 Respuesta de productos:", response.data);
+
+      const productos = Array.isArray(response.data.productos)
+        ? response.data.productos
+        : [];
+      setProductos(productos);
+
+      // Mostrar advertencia si se usó fallback
+      if (response.data.fallback) {
+        toast.warning(
+          response.data.warning || "Se cargaron productos por defecto"
+        );
+      } else if (productos.length > 0) {
+        toast.success(`${productos.length} productos cargados correctamente`);
+      }
+    } catch (err: any) {
       console.error("❌ Error al cargar productos:", err);
-      toast.error("No se pudieron cargar los productos. Intenta nuevamente.");
+
+      // Mostrar error más específico
+      const errorMessage =
+        err.response?.data?.details ||
+        err.response?.data?.error ||
+        err.message ||
+        "Error desconocido";
+      toast.error(`Error al cargar productos: ${errorMessage}`);
+
+      // Productos de emergencia si todo falla
+      const productosEmergencia = [
+        { nombre_producto: "PREMIER" },
+        { nombre_producto: "ESTANDAR" },
+        { nombre_producto: "EXPRESS" },
+      ];
+      setProductos(productosEmergencia);
+      toast.info("Se cargaron productos básicos como respaldo");
     } finally {
       setCargandoProductos(false);
     }

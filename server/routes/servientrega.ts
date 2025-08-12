@@ -18,28 +18,97 @@ const AUTH = {
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 const UMBRAL_MINIMO_SALDO = new Prisma.Decimal(5);
 
+// Endpoint de prueba para verificar conectividad
+router.get("/test-connection", async (_, res) => {
+  try {
+    console.log("🔧 Probando conexión con Servientrega...");
+
+    const result = await callServientregaAPI({
+      tipo: "obtener_producto",
+      ...AUTH,
+    });
+
+    res.json({
+      success: true,
+      message: "Conexión exitosa con Servientrega",
+      timestamp: new Date().toISOString(),
+      hasData: !!result,
+      dataType: typeof result,
+      isArray: Array.isArray(result),
+    });
+  } catch (error) {
+    console.error("❌ Error en test de conexión:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al conectar con Servientrega",
+      error: error instanceof Error ? error.message : "Error desconocido",
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
 async function callServientregaAPI(payload: any) {
   try {
+    console.log(
+      "🌐 Llamando a Servientrega API con payload:",
+      JSON.stringify(payload, null, 2)
+    );
+
     const { data } = await axios.post(BASE_URL, payload, {
       headers: { "Content-Type": "application/json" },
       httpsAgent,
       timeout: 20000,
     });
+
+    console.log(
+      "📡 Respuesta recibida de Servientrega:",
+      JSON.stringify(data, null, 2)
+    );
     return data;
-  } catch {
-    throw new Error("Error al conectar con Servientrega");
+  } catch (error) {
+    console.error("❌ Error en callServientregaAPI:", error);
+
+    if (axios.isAxiosError(error)) {
+      console.error("❌ Axios error details:", {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+      });
+
+      throw new Error(
+        `Error al conectar con Servientrega: ${error.message} (${
+          error.response?.status || "Sin código"
+        })`
+      );
+    }
+
+    throw new Error(
+      `Error al conectar con Servientrega: ${
+        error instanceof Error ? error.message : "Error desconocido"
+      }`
+    );
   }
 }
 
 // =============================
 // 📦 Productos (Devuelve siempre [{ nombre_producto }])
 // =============================
-router.post("/productos", async (_, res) => {
+router.post("/productos", async (req, res) => {
   try {
+    console.log("🔍 Iniciando carga de productos Servientrega...");
+
     const result = await callServientregaAPI({
       tipo: "obtener_producto",
       ...AUTH,
     });
+
+    console.log(
+      "📦 Respuesta de Servientrega para productos:",
+      JSON.stringify(result, null, 2)
+    );
+
     const productos = Array.isArray(result?.fetch)
       ? result.fetch
           .map((p: any) => ({
@@ -47,18 +116,62 @@ router.post("/productos", async (_, res) => {
           }))
           .filter((p: any) => p.nombre_producto.length > 0)
       : [];
-    res.json({ productos });
-  } catch {
-    res.status(500).json({ error: "No se pudieron cargar los productos" });
+
+    console.log(`✅ Productos procesados: ${productos.length} encontrados`);
+    console.log("📋 Lista de productos:", productos);
+
+    res.json({
+      productos,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("❌ Error al cargar productos:", error);
+    console.error(
+      "❌ Stack trace:",
+      error instanceof Error ? error.stack : "No stack available"
+    );
+
+    // Fallback: devolver productos por defecto si la API falla
+    console.log("🔄 Usando productos por defecto como fallback...");
+    const productosPorDefecto = [
+      { nombre_producto: "PREMIER" },
+      { nombre_producto: "ESTANDAR" },
+      { nombre_producto: "EXPRESS" },
+      { nombre_producto: "DOCUMENTOS" },
+    ];
+
+    res.json({
+      productos: productosPorDefecto,
+      success: true,
+      fallback: true,
+      timestamp: new Date().toISOString(),
+      warning:
+        "Se usaron productos por defecto debido a un error en la API de Servientrega",
+    });
   }
 });
 
 // 🌎 Paises
 router.post("/paises", async (_, res) => {
   try {
-    res.json(await callServientregaAPI({ tipo: "obtener_paises", ...AUTH }));
+    console.log("🌍 Cargando países de Servientrega...");
+    const result = await callServientregaAPI({
+      tipo: "obtener_paises",
+      ...AUTH,
+    });
+    res.json({
+      ...result,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ Error al cargar países:", err);
+    res.status(500).json({
+      error: err.message,
+      success: false,
+      timestamp: new Date().toISOString(),
+    });
   }
 });
 
@@ -66,11 +179,34 @@ router.post("/paises", async (_, res) => {
 router.post("/ciudades", async (req, res) => {
   try {
     const { codpais } = req.body;
-    res.json(
-      await callServientregaAPI({ tipo: "obtener_ciudades", codpais, ...AUTH })
-    );
+    console.log(`🏙️ Cargando ciudades para país: ${codpais}`);
+
+    if (!codpais) {
+      return res.status(400).json({
+        error: "El código de país es requerido",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const result = await callServientregaAPI({
+      tipo: "obtener_ciudades",
+      codpais,
+      ...AUTH,
+    });
+
+    res.json({
+      ...result,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ Error al cargar ciudades:", err);
+    res.status(500).json({
+      error: err.message,
+      success: false,
+      timestamp: new Date().toISOString(),
+    });
   }
 });
 
