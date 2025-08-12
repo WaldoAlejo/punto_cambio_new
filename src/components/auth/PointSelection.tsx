@@ -136,9 +136,8 @@ const PointSelection = ({
   // Filtrar puntos según el rol del usuario
   const getAvailablePoints = () => {
     if (user.rol === "OPERADOR") {
-      // Los operadores pueden usar todos los puntos activos
-      // La restricción se maneja por el campo es_principal en el backend si es necesario
-      return points.filter((point) => point.activo);
+      // Los operadores NO pueden usar el punto principal
+      return points.filter((point) => point.activo && !point.es_principal);
     }
     // Admins y super usuarios pueden usar todos los puntos
     return points.filter((point) => point.activo);
@@ -162,7 +161,7 @@ const PointSelection = ({
             {availablePoints.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 {user.rol === "OPERADOR"
-                  ? "No hay puntos operativos disponibles para operadores."
+                  ? "No hay puntos operativos disponibles. Los operadores no pueden acceder al punto principal."
                   : "No hay puntos disponibles."}
               </div>
             ) : (
@@ -176,7 +175,16 @@ const PointSelection = ({
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <h3 className="font-semibold text-lg">{point.nombre}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-lg">
+                          {point.nombre}
+                        </h3>
+                        {point.es_principal && (
+                          <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded">
+                            Principal
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-gray-600">{point.direccion}</p>
                       <p className="text-sm text-gray-600">
                         {point.ciudad}, {point.provincia}

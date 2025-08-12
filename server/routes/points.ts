@@ -17,18 +17,26 @@ router.get(
       const manana = new Date(hoy);
       manana.setDate(manana.getDate() + 1);
 
-      const puntosLibres = await prisma.puntoAtencion.findMany({
-        where: {
-          activo: true,
-          NOT: {
-            jornadas: {
-              some: {
-                estado: { in: ["ACTIVO", "ALMUERZO"] },
-                fecha_inicio: { gte: hoy, lt: manana },
-              },
+      // Construir filtros según el rol del usuario
+      const whereClause: any = {
+        activo: true,
+        NOT: {
+          jornadas: {
+            some: {
+              estado: { in: ["ACTIVO", "ALMUERZO"] },
+              fecha_inicio: { gte: hoy, lt: manana },
             },
           },
         },
+      };
+
+      // Si es OPERADOR, excluir el punto principal
+      if (req.user?.rol === "OPERADOR") {
+        whereClause.es_principal = false;
+      }
+
+      const puntosLibres = await prisma.puntoAtencion.findMany({
+        where: whereClause,
         orderBy: { nombre: "asc" },
       });
 
@@ -49,6 +57,8 @@ router.get(
       logger.info("Puntos libres obtenidos", {
         count: formatted.length,
         requestedBy: req.user?.id,
+        userRole: req.user?.rol,
+        filteredForOperator: req.user?.rol === "OPERADOR",
       });
 
       res.status(200).json({

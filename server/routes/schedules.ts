@@ -165,6 +165,24 @@ router.post(
         return;
       }
 
+      // Validar que los operadores no puedan usar el punto principal
+      if (req.user?.rol === "OPERADOR") {
+        const puntoAtencion = await prisma.puntoAtencion.findUnique({
+          where: { id: punto_atencion_id },
+          select: { es_principal: true, nombre: true },
+        });
+
+        if (puntoAtencion?.es_principal) {
+          res.status(403).json({
+            error:
+              "Los operadores no pueden iniciar jornada en el punto principal",
+            success: false,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
       const manana = new Date(hoy);
