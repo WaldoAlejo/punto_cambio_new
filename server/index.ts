@@ -41,7 +41,25 @@ const limiter = rateLimit({
 });
 
 // Middleware
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'", "https:", "data:"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'self'"],
+      },
+    },
+    crossOriginOpenerPolicy: false, // Deshabilitar COOP para HTTP
+    hsts: false, // Deshabilitar HSTS para permitir HTTP
+  })
+);
 app.use(
   cors({
     origin: [
