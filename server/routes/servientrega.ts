@@ -279,17 +279,20 @@ router.post("/productos", async (req, res) => {
       error instanceof Error ? error.stack : "No stack available"
     );
 
-    // Fallback: devolver productos por defecto si la API falla
+    // Fallback: devolver productos por defecto si la API falla (estructura real de Servientrega)
     console.log("🔄 Usando productos por defecto como fallback...");
-    const productosPorDefecto = [
-      { nombre_producto: "PREMIER" },
-      { nombre_producto: "ESTANDAR" },
-      { nombre_producto: "EXPRESS" },
-      { nombre_producto: "DOCUMENTOS" },
-    ];
+    const productosPorDefecto = {
+      fetch: [
+        { producto: "DOCUMENTO UNITARIO" },
+        { producto: "DOCUMENTO UNITARIO - 10AM" },
+        { producto: "INTERNACIONAL" },
+        { producto: "MERCANCIA INDUSTRIAL" },
+        { producto: "MERCANCIA PREMIER" },
+      ],
+    };
 
     res.json({
-      productos: productosPorDefecto,
+      ...productosPorDefecto,
       success: true,
       fallback: true,
       timestamp: new Date().toISOString(),
@@ -314,10 +317,30 @@ router.post("/paises", async (_, res) => {
     });
   } catch (err: any) {
     console.error("❌ Error al cargar países:", err);
-    res.status(500).json({
-      error: err.message,
-      success: false,
+
+    // Fallback: devolver países por defecto (estructura real de Servientrega)
+    console.log("🔄 Usando países por defecto como fallback...");
+    const paisesPorDefecto = {
+      fetch: [
+        { codpais: 63, nombrecorto: "EC", pais: "ECUADOR", phone_code: "593" },
+        { codpais: 48, nombrecorto: "CO", pais: "COLOMBIA", phone_code: "57" },
+        { codpais: 173, nombrecorto: "PE", pais: "PERU", phone_code: "51" },
+        {
+          codpais: 231,
+          nombrecorto: "US",
+          pais: "UNITED STATES",
+          phone_code: "1",
+        },
+      ],
+    };
+
+    res.json({
+      ...paisesPorDefecto,
+      success: true,
+      fallback: true,
       timestamp: new Date().toISOString(),
+      warning:
+        "Se usaron países por defecto debido a un error en la API de Servientrega",
     });
   }
 });
@@ -349,10 +372,46 @@ router.post("/ciudades", async (req, res) => {
     });
   } catch (err: any) {
     console.error("❌ Error al cargar ciudades:", err);
-    res.status(500).json({
-      error: err.message,
-      success: false,
+
+    // Fallback: devolver ciudades por defecto según el país (estructura real de Servientrega)
+    console.log("🔄 Usando ciudades por defecto como fallback...");
+    const { codpais } = req.body;
+
+    let ciudadesPorDefecto;
+    if (codpais === 63) {
+      // Ecuador
+      ciudadesPorDefecto = {
+        fetch: [
+          { city: "GUAYAQUIL" },
+          { city: "QUITO" },
+          { city: "CUENCA" },
+          { city: "AMBATO" },
+          { city: "MANTA" },
+        ],
+      };
+    } else if (codpais === 48) {
+      // Colombia
+      ciudadesPorDefecto = {
+        fetch: [
+          { city: "BOGOTA" },
+          { city: "MEDELLIN" },
+          { city: "CALI" },
+          { city: "BARRANQUILLA" },
+        ],
+      };
+    } else {
+      ciudadesPorDefecto = {
+        fetch: [{ city: "CIUDAD PRINCIPAL" }],
+      };
+    }
+
+    res.json({
+      ...ciudadesPorDefecto,
+      success: true,
+      fallback: true,
       timestamp: new Date().toISOString(),
+      warning:
+        "Se usaron ciudades por defecto debido a un error en la API de Servientrega",
     });
   }
 });
@@ -378,9 +437,24 @@ router.post("/agencias", async (_, res) => {
     console.log("🔄 Usando agencias por defecto como fallback...");
     const agenciasPorDefecto = {
       fetch: [
-        { agencia: "QUITO PRINCIPAL", codigo: "QTO001" },
-        { agencia: "GUAYAQUIL PRINCIPAL", codigo: "GYE001" },
-        { agencia: "CUENCA PRINCIPAL", codigo: "CUE001" },
+        {
+          agencia: "QUITO_PRINCIPAL",
+          tipo_cs: "DIRECTO",
+          direccion: "AV. AMAZONAS Y NACIONES UNIDAS",
+          ciudad: "QUITO",
+        },
+        {
+          agencia: "GUAYAQUIL_PRINCIPAL",
+          tipo_cs: "DIRECTO",
+          direccion: "AV. 9 DE OCTUBRE Y MALECÓN",
+          ciudad: "GUAYAQUIL",
+        },
+        {
+          agencia: "CUENCA_PRINCIPAL",
+          tipo_cs: "DIRECTO",
+          direccion: "AV. SOLANO Y GRAN COLOMBIA",
+          ciudad: "CUENCA",
+        },
       ],
     };
 
@@ -416,13 +490,11 @@ router.post("/empaques", async (_, res) => {
     console.log("🔄 Usando empaques por defecto como fallback...");
     const empaquesPorDefecto = {
       fetch: [
-        { tipo_empaque: "SOBRE", descripcion: "Sobre estándar" },
-        { tipo_empaque: "CAJA", descripcion: "Caja de cartón" },
-        {
-          tipo_empaque: "AISLANTE DE HUMEDAD",
-          descripcion: "Empaque especial",
-        },
-        { tipo_empaque: "BOLSA", descripcion: "Bolsa plástica" },
+        { articulo: "AISLANTE DE HUMEDAD", valorventa: ".30" },
+        { articulo: "CC 1 (30*30*30)", valorventa: "1.20" },
+        { articulo: "CC 1 - A (20*20*40)", valorventa: ".76" },
+        { articulo: "SOBRE MANILA", valorventa: ".15" },
+        { articulo: "BOLSA PLASTICA", valorventa: ".10" },
       ],
     };
 
