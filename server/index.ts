@@ -5,7 +5,12 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import path from "path";
+import { fileURLToPath } from "url";
 import logger from "./utils/logger.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
@@ -42,7 +47,9 @@ app.use(
     origin: [
       "http://localhost:5173",
       "http://localhost:3000",
+      "http://localhost:3001",
       "http://localhost:8080",
+      "http://35.238.95.118:3001", // IP pública puerto 3001 (producción)
       "http://35.238.95.118:8080", // IP pública frontend puerto 8080
       "http://35.238.95.118", // IP pública frontend puerto 80
     ],
@@ -91,6 +98,25 @@ app.use("/api/vista-saldos-puntos", vistaSaldosRoutes);
 app.use("/api/movimientos-saldo", movimientosSaldoRoutes);
 app.use("/api/servientrega", servientregaRoutes);
 
+// Servir archivos estáticos del frontend en producción
+if (process.env.NODE_ENV === "production") {
+  const frontendDistPath = path.join(__dirname, "..", "dist");
+
+  // Servir archivos estáticos
+  app.use(express.static(frontendDistPath));
+
+  // Manejar rutas SPA - todas las rutas no-API deben servir index.html
+  app.get("*", (req, res, next) => {
+    // Si es una ruta de API, continuar con el siguiente middleware
+    if (req.path.startsWith("/api/") || req.path.startsWith("/health")) {
+      return next();
+    }
+
+    // Para todas las demás rutas, servir index.html
+    res.sendFile(path.join(frontendDistPath, "index.html"));
+  });
+}
+
 // Error handling middleware
 app.use(
   (
@@ -117,10 +143,10 @@ app.use(
   }
 );
 
-// 404 handler
-app.use("*", (req, res) => {
+// 404 handler solo para rutas de API
+app.use("/api/*", (req, res) => {
   res.status(404).json({
-    error: "Route not found",
+    error: "API route not found",
     path: req.originalUrl,
     timestamp: new Date().toISOString(),
   });

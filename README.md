@@ -1,73 +1,131 @@
-# Welcome to your Lovable project
+# 🏦 Punto Cambio - Sistema de Casa de Cambios
 
-## Project info
+Sistema completo de gestión para casas de cambio con frontend React y backend Node.js/Express.
 
-**URL**: https://lovable.dev/projects/6f90d020-909a-4022-a3ab-ea344b3d0dc0
+## 🚀 Despliegue Rápido
 
-## How can I edit this code?
+### Para despliegue en producción (VM de GCP):
 
-There are several ways of editing your application.
+```bash
+# Primera vez
+git clone <tu-repositorio>
+cd punto_cambio_new
+npm install
+./deploy.sh full
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/6f90d020-909a-4022-a3ab-ea344b3d0dc0) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Actualizaciones diarias
+./deploy.sh quick
 ```
 
-**Edit a file directly in GitHub**
+**📖 Ver [DESPLIEGUE-SIMPLE.md](./DESPLIEGUE-SIMPLE.md) para guía completa**
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 🏗️ Arquitectura
 
-**Use GitHub Codespaces**
+- **Frontend**: React + TypeScript + Vite (carpeta `src/`)
+- **Backend**: Node.js + Express + TypeScript (carpeta `server/`)
+- **Base de datos**: PostgreSQL + Prisma ORM
+- **Despliegue**: PM2 + Scripts automatizados
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 🛠️ Desarrollo Local
 
-## What technologies are used for this project?
+```bash
+# Instalar dependencias
+npm install
 
-This project is built with:
+# Configurar base de datos
+npx prisma generate
+npx prisma db push
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+# Desarrollo (frontend y backend separados)
+npm run dev          # Frontend en puerto 5173
+npm run dev:server   # Backend en puerto 3001
 
-## How can I deploy this project?
+# O usar el script helper
+./start.sh dev
+```
 
-Simply open [Lovable](https://lovable.dev/projects/6f90d020-909a-4022-a3ab-ea344b3d0dc0) and click on Share -> Publish.
+## 📦 Construcción
 
-## Can I connect a custom domain to my Lovable project?
+```bash
+# Construir todo (frontend + backend)
+npm run build
 
-Yes, you can!
+# Solo frontend
+npm run build:frontend
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+# Solo backend
+npm run build:server
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## 🚀 Despliegue en Producción
+
+### Scripts disponibles:
+
+```bash
+# Despliegue completo (primera vez o cambios importantes)
+./deploy.sh full
+
+# Despliegue rápido (solo cambios de código)
+./deploy.sh quick
+
+# Iniciar aplicación
+./start.sh prod
+
+# Verificar sistema
+./check-system.sh
+
+# Probar construcción local
+./test-build.sh
+```
+
+### Comandos PM2:
+
+```bash
+# Ver estado
+pm2 status
+
+# Ver logs
+pm2 logs punto-cambio-api
+
+# Reiniciar
+pm2 restart punto-cambio-api
+
+# Parar
+pm2 stop punto-cambio-api
+```
+
+## 🌐 URLs de Producción
+
+- **Aplicación**: http://35.238.95.118:3001
+- **API**: http://35.238.95.118:3001/api
+- **Health Check**: http://35.238.95.118:3001/health
+
+## 📚 Documentación
+
+- **[DESPLIEGUE-SIMPLE.md](./DESPLIEGUE-SIMPLE.md)** - Guía rápida de despliegue
+- **[SETUP-PRODUCTION.md](./SETUP-PRODUCTION.md)** - Configuración completa de producción
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Documentación técnica detallada
+
+## 🛠️ Tecnologías
+
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS, shadcn/ui
+- **Backend**: Node.js, Express, TypeScript
+- **Base de datos**: PostgreSQL, Prisma ORM
+- **Despliegue**: PM2, Scripts automatizados
+- **Infraestructura**: Google Cloud Platform
+
+## 🔄 Flujo de Trabajo
+
+1. **Desarrollo local**: Hacer cambios en VSCode
+2. **Commit y push**: Subir cambios a GitHub
+3. **Despliegue**: Ejecutar `./deploy.sh quick` en la VM
+4. **Verificación**: Revisar que todo funcione correctamente
+
+## 🚨 Soporte
+
+Si tienes problemas:
+
+1. Revisar logs: `pm2 logs punto-cambio-api`
+2. Verificar estado: `pm2 status`
+3. Ejecutar health check: `curl http://localhost:3001/health`
+4. Consultar documentación en los archivos .md

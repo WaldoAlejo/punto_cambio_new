@@ -3,7 +3,7 @@ module.exports = {
     {
       name: "punto-cambio-api",
       script: "dist/index.js",
-      instances: process.env.NODE_ENV === "production" ? "max" : 1,
+      instances: process.env.NODE_ENV === "production" ? 2 : 1,
       exec_mode: "cluster",
       env: {
         NODE_ENV: "development",
@@ -14,6 +14,7 @@ module.exports = {
         NODE_ENV: "production",
         PORT: 3001,
         LOG_LEVEL: "info",
+        NODE_OPTIONS: "--max-old-space-size=1024",
       },
       log_file: "./logs/combined.log",
       out_file: "./logs/out.log",
@@ -23,10 +24,15 @@ module.exports = {
       max_memory_restart: "1G",
       node_args: "--max-old-space-size=1024",
       watch: false,
-      ignore_watch: ["node_modules", "logs"],
+      ignore_watch: ["node_modules", "logs", "dist", "src"],
       restart_delay: 4000,
       max_restarts: 10,
       min_uptime: "10s",
+      // Configuración de auto-restart
+      autorestart: true,
+      // Configuración de logs
+      log_type: "json",
+      time: true,
     },
   ],
 };

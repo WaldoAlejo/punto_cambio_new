@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run build:frontend && npm run build:server",
+    "build:frontend": "vite build",
+    "build:server": "tsc --project tsconfig.server.json",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -14,7 +16,6 @@
     "seed": "npx tsx prisma/seed.ts",
     "seed:complete": "npx tsx prisma/seed-complete.ts",
     "dev:server": "tsx server/index.ts",
-    "build:server": "tsc --project tsconfig.server.json",
     "start:server": "nodemon dist/index.js",
     "audit": "npm audit",
     "audit:fix": "npm audit fix",
@@ -22,7 +23,14 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "test:types": "tsc --noEmit --skipLibCheck",
-    "analyze": "npm run build && npx vite-bundle-analyzer dist"
+    "analyze": "npm run build && npx vite-bundle-analyzer dist",
+    "deploy": "git pull origin main && npm install && npm run build && npx prisma generate && npx prisma db push && pm2 restart ecosystem.config.js --env production",
+    "deploy:quick": "git pull origin main && npm run build && pm2 restart punto-cambio-api",
+    "pm2:start": "pm2 start ecosystem.config.js --env production",
+    "pm2:stop": "pm2 stop punto-cambio-api",
+    "pm2:restart": "pm2 restart punto-cambio-api",
+    "pm2:logs": "pm2 logs punto-cambio-api",
+    "pm2:status": "pm2 status"
   },
   "prisma": {
     "seed": "tsx prisma/seed-casa-cambios.ts"

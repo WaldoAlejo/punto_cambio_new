@@ -29,6 +29,20 @@ export default defineConfig(({ mode }) => ({
       ],
     },
   },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
+    sourcemap: mode === "development",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom"],
+          router: ["react-router-dom"],
+          ui: ["@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu"],
+        },
+      },
+    },
+  },
   plugins: [
     react({
       jsxRuntime: "automatic",
