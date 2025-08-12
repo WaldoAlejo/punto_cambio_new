@@ -113,7 +113,7 @@ const TimeTracker = ({
       try {
         if (!user.id || !selectedPoint?.id) return;
         const { data } = await axiosInstance.get<ActiveScheduleResponse>(
-          "/api/schedules/active"
+          "/schedules/active"
         );
         if (data.success && data.schedule) {
           setJornadaActual({
@@ -167,7 +167,7 @@ const TimeTracker = ({
   const guardarJornadaBackend = async (data: JornadaPayload) => {
     try {
       const response = await axiosInstance.post<SaveScheduleResponse>(
-        "/api/schedules",
+        "/schedules",
         data
       );
       if (response.data.success) {

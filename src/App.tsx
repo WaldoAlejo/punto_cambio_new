@@ -8,6 +8,7 @@ import "./App.css";
 import { useEffect, useState } from "react";
 // Cambia este import:
 import axiosInstance from "@/services/axiosInstance";
+import { pointService } from "@/services/pointService";
 import { PuntoAtencion } from "./types";
 
 interface JornadaActiveResponse {
@@ -37,7 +38,7 @@ function App() {
     if (user && user.rol === "OPERADOR") {
       setVerifyingJornada(true);
       axiosInstance
-        .get<JornadaActiveResponse>("/api/schedules/active")
+        .get<JornadaActiveResponse>("/schedules/active")
         .then((res) => {
           const active = res.data?.schedule;
           if (!active) {
@@ -78,10 +79,10 @@ function App() {
       (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") &&
       !selectedPoint
     ) {
-      axiosInstance
-        .get<{ points: PuntoAtencion[] }>("/api/points/all")
-        .then((res) => {
-          const points = res.data.points || [];
+      pointService
+        .getAllPointsForAdmin()
+        .then((result) => {
+          const points = result.points || [];
           // Buscar el punto principal (normalmente sería el primero o uno específico)
           const puntoPrincipal =
             points.find(
@@ -110,7 +111,7 @@ function App() {
       !verifyingJornada
     ) {
       axiosInstance
-        .get<{ points: PuntoAtencion[] }>("/api/points")
+        .get<{ points: PuntoAtencion[] }>("/points")
         .then((res) => setPoints(res.data.points || []))
         .catch(() => setPoints([]));
     }

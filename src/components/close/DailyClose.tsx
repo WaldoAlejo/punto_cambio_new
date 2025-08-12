@@ -48,7 +48,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     [key: string]: { bills: string; coins: string };
   }>({});
   const [todayClose, setTodayClose] = useState<CuadreCaja | null>(null);
-  const [hasActiveJornada, setHasActiveJornada] = useState<boolean | null>(null);
+  const [hasActiveJornada, setHasActiveJornada] = useState<boolean | null>(
+    null
+  );
   const [loading, setLoading] = useState(false);
 
   // Verificar jornada activa
@@ -56,13 +58,16 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     const checkActiveJornada = async () => {
       try {
         const token = localStorage.getItem("authToken");
-        console.log("🔍 DailyClose - localStorage keys:", Object.keys(localStorage));
+        console.log(
+          "🔍 DailyClose - localStorage keys:",
+          Object.keys(localStorage)
+        );
         console.log("🔍 DailyClose - token check:", {
           tokenExists: !!token,
           tokenPreview: token ? token.substring(0, 30) + "..." : "No token",
-          userInfo: { id: user.id, rol: user.rol, nombre: user.nombre }
+          userInfo: { id: user.id, rol: user.rol, nombre: user.nombre },
         });
-        
+
         if (!token) {
           console.log("❌ No token found for jornada check");
           setHasActiveJornada(false);
@@ -70,22 +75,30 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         }
 
         console.log("🔍 Checking active jornada for user:", user.rol);
-        const response = await fetch("/api/schedules/active", {
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json"
+        const response = await fetch(
+          `${
+            import.meta.env.VITE_API_URL || "http://35.238.95.118/api"
+          }/schedules/active`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
           }
-        });
-        
+        );
+
         console.log("🕒 Active jornada response status:", response.status);
-        
+
         if (response.ok) {
           const data = await response.json();
           console.log("🕒 Active jornada response data:", data);
-          
+
           // Verificar que tenga schedule y que esté ACTIVO
-          const hasJornada = data.success && data.schedule && 
-                           (data.schedule.estado === 'ACTIVO' || data.schedule.estado === 'ALMUERZO');
+          const hasJornada =
+            data.success &&
+            data.schedule &&
+            (data.schedule.estado === "ACTIVO" ||
+              data.schedule.estado === "ALMUERZO");
           console.log("🕒 Has active jornada:", hasJornada);
           setHasActiveJornada(hasJornada);
         } else {
@@ -100,7 +113,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
     if (user.rol === "OPERADOR") {
       checkActiveJornada();
-      
+
       // Recheck jornada every 30 seconds when mounted
       const interval = setInterval(checkActiveJornada, 30000);
       return () => clearInterval(interval);
@@ -115,7 +128,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       try {
         setLoading(true);
         console.log("🔄 Fetching automated cuadre data...");
-        
+
         const token = localStorage.getItem("authToken");
         if (!token) {
           toast({
@@ -125,36 +138,43 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           });
           return;
         }
-        
-        const response = await fetch("/api/cuadre-caja", {
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Content-Type": "application/json"
+
+        const response = await fetch(
+          `${
+            import.meta.env.VITE_API_URL || "http://35.238.95.118/api"
+          }/cuadre-caja`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
           }
-        });
-        
+        );
+
         if (response.ok) {
           const data = await response.json();
           console.log("📊 Cuadre data received:", data);
-          
+
           if (data.success && data.data) {
             console.log("✅ Cuadre data details:", {
               detallesCount: data.data.detalles?.length || 0,
               detalles: data.data.detalles,
               mensaje: data.data.mensaje,
-              periodoInicio: data.data.periodo_inicio
+              periodoInicio: data.data.periodo_inicio,
             });
-            
+
             setCuadreData(data.data);
-            
+
             // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
-            const initialAdjustments: { [key: string]: { bills: string; coins: string } } = {};
+            const initialAdjustments: {
+              [key: string]: { bills: string; coins: string };
+            } = {};
             data.data.detalles.forEach((detalle: CuadreDetalle) => {
               // Inicializar con el saldo esperado dividido entre billetes y monedas
               // Por defecto asumimos todo en billetes, pero el usuario puede ajustar
               initialAdjustments[detalle.moneda_id] = {
                 bills: detalle.saldo_cierre.toFixed(2),
-                coins: "0.00"
+                coins: "0.00",
               };
             });
             setUserAdjustments(initialAdjustments);
@@ -165,7 +185,11 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             setUserAdjustments({});
           }
         } else {
-          console.error("❌ Error response from cuadre API:", response.status, response.statusText);
+          console.error(
+            "❌ Error response from cuadre API:",
+            response.status,
+            response.statusText
+          );
           throw new Error("Error al obtener datos de cuadre");
         }
       } catch (error) {
@@ -194,7 +218,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     // No permitir valores negativos
     const numValue = parseFloat(value);
     if (numValue < 0) return;
-    
+
     setUserAdjustments((prev) => ({
       ...prev,
       [monedaId]: {
@@ -221,7 +245,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     if (!selectedPoint || !cuadreData) {
       toast({
         title: "Error",
-        description: "Debe seleccionar un punto de atención y tener datos de cuadre",
+        description:
+          "Debe seleccionar un punto de atención y tener datos de cuadre",
         variant: "destructive",
       });
       return;
@@ -230,7 +255,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     // Validar que todos los saldos estén completos
     const incompleteBalances = cuadreData.detalles.some(
       (detalle) =>
-        !userAdjustments[detalle.moneda_id]?.bills || 
+        !userAdjustments[detalle.moneda_id]?.bills ||
         !userAdjustments[detalle.moneda_id]?.coins
     );
 
@@ -252,10 +277,15 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     if (invalidBalances.length > 0) {
       const proceed = window.confirm(
         `⚠️ Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
-          .map((d) => `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(2)}, Ingresado ${calculateUserTotal(d.moneda_id).toFixed(2)}`)
-          .join('\n')}\n\n¿Desea continuar de todas formas?`
+          .map(
+            (d) =>
+              `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(
+                2
+              )}, Ingresado ${calculateUserTotal(d.moneda_id).toFixed(2)}`
+          )
+          .join("\n")}\n\n¿Desea continuar de todas formas?`
       );
-      
+
       if (!proceed) return;
     }
 
@@ -268,7 +298,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       saldo_apertura: detalle.saldo_apertura,
       saldo_cierre: detalle.saldo_cierre,
     }));
-    
+
     console.log("📊 Detalles prepared:", detalles);
 
     try {
@@ -276,26 +306,32 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       if (!token) {
         toast({
           title: "Sesión Expirada",
-          description: "Su sesión ha expirado. Por favor, inicie sesión nuevamente.",
+          description:
+            "Su sesión ha expirado. Por favor, inicie sesión nuevamente.",
           variant: "destructive",
         });
-        setTimeout(() => window.location.href = "/login", 2000);
+        setTimeout(() => (window.location.href = "/login"), 2000);
         return;
       }
-      
+
       const requestBody = {
         detalles,
-        observaciones: cuadreData.observaciones || ""
+        observaciones: cuadreData.observaciones || "",
       };
-      
-      const res = await fetch("/api/cuadre-caja", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify(requestBody),
-      });
+
+      const res = await fetch(
+        `${
+          import.meta.env.VITE_API_URL || "http://35.238.95.118/api"
+        }/cuadre-caja`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(requestBody),
+        }
+      );
 
       const data = await res.json();
 
@@ -312,7 +348,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       console.error("💥 Error in performDailyClose:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "No se pudo guardar el cierre",
+        description:
+          error instanceof Error
+            ? error.message
+            : "No se pudo guardar el cierre",
         variant: "destructive",
       });
     }
@@ -386,12 +425,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         </div>
       </div>
 
-{loading ? (
+      {loading ? (
         <Card>
           <CardContent className="py-12">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Cargando datos de cuadre automático...</p>
+              <p className="text-gray-600">
+                Cargando datos de cuadre automático...
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -400,10 +441,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           <CardHeader>
             <CardTitle>Cuadre de Caja Automático</CardTitle>
             <CardDescription>
-              {cuadreData?.detalles.length === 0 
+              {cuadreData?.detalles.length === 0
                 ? "No se han registrado movimientos de divisas hoy"
-                : "Revise y ajuste los conteos físicos. Los valores están pre-calculados según los movimientos del día."
-              }
+                : "Revise y ajuste los conteos físicos. Los valores están pre-calculados según los movimientos del día."}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -417,13 +457,17 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                   </p>
                 </div>
                 <div className="text-center">
-                  <h4 className="font-semibold text-green-700">Transferencias Entrada</h4>
+                  <h4 className="font-semibold text-green-700">
+                    Transferencias Entrada
+                  </h4>
                   <p className="text-2xl font-bold text-green-600">
                     {cuadreData.totales.transferencias_entrada}
                   </p>
                 </div>
                 <div className="text-center">
-                  <h4 className="font-semibold text-orange-700">Transferencias Salida</h4>
+                  <h4 className="font-semibold text-orange-700">
+                    Transferencias Salida
+                  </h4>
                   <p className="text-2xl font-bold text-orange-600">
                     {cuadreData.totales.transferencias_salida}
                   </p>
@@ -434,7 +478,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             {cuadreData?.detalles.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">
-                  No hay divisas para cerrar hoy. Realice algún cambio de divisa primero.
+                  No hay divisas para cerrar hoy. Realice algún cambio de divisa
+                  primero.
                 </p>
               </div>
             ) : (
@@ -442,9 +487,16 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 {cuadreData?.detalles.map((detalle) => {
                   const userTotal = calculateUserTotal(detalle.moneda_id);
                   const isValid = validateBalance(detalle, userTotal);
-                  
+
                   return (
-                    <div key={detalle.moneda_id} className={`border rounded-lg p-4 ${!isValid ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
+                    <div
+                      key={detalle.moneda_id}
+                      className={`border rounded-lg p-4 ${
+                        !isValid
+                          ? "border-red-200 bg-red-50"
+                          : "border-gray-200"
+                      }`}
+                    >
                       <div className="flex justify-between items-center mb-3">
                         <h3 className="font-semibold text-lg">
                           {detalle.codigo} - {detalle.nombre}
@@ -455,101 +507,146 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                           </span>
                         )}
                       </div>
-                      
+
                       {/* Información automática */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
-                         <div className="bg-blue-50 p-2 rounded">
-                           <label className="text-blue-700 font-medium">Saldo Apertura</label>
-                           <p className="text-blue-800 font-bold">{detalle.saldo_apertura.toFixed(2)}</p>
-                           <p className="text-xs text-blue-600">Dinero al inicio del día</p>
-                         </div>
-                         <div className="bg-green-50 p-2 rounded">
-                           <label className="text-green-700 font-medium">Ingresos (+)</label>
-                           <p className="text-green-800 font-bold">+{detalle.ingresos_periodo.toFixed(2)}</p>
-                           <p className="text-xs text-green-600">Divisas que recibimos</p>
-                         </div>
-                         <div className="bg-red-50 p-2 rounded">
-                           <label className="text-red-700 font-medium">Egresos (-)</label>
-                           <p className="text-red-800 font-bold">-{detalle.egresos_periodo.toFixed(2)}</p>
-                           <p className="text-xs text-red-600">Divisas que entregamos</p>
-                         </div>
-                         <div className="bg-purple-50 p-2 rounded">
-                           <label className="text-purple-700 font-medium">Saldo Esperado</label>
-                           <p className="text-purple-800 font-bold">{detalle.saldo_cierre.toFixed(2)}</p>
-                           <p className="text-xs text-purple-600">Lo que debe quedar</p>
-                         </div>
+                        <div className="bg-blue-50 p-2 rounded">
+                          <label className="text-blue-700 font-medium">
+                            Saldo Apertura
+                          </label>
+                          <p className="text-blue-800 font-bold">
+                            {detalle.saldo_apertura.toFixed(2)}
+                          </p>
+                          <p className="text-xs text-blue-600">
+                            Dinero al inicio del día
+                          </p>
+                        </div>
+                        <div className="bg-green-50 p-2 rounded">
+                          <label className="text-green-700 font-medium">
+                            Ingresos (+)
+                          </label>
+                          <p className="text-green-800 font-bold">
+                            +{detalle.ingresos_periodo.toFixed(2)}
+                          </p>
+                          <p className="text-xs text-green-600">
+                            Divisas que recibimos
+                          </p>
+                        </div>
+                        <div className="bg-red-50 p-2 rounded">
+                          <label className="text-red-700 font-medium">
+                            Egresos (-)
+                          </label>
+                          <p className="text-red-800 font-bold">
+                            -{detalle.egresos_periodo.toFixed(2)}
+                          </p>
+                          <p className="text-xs text-red-600">
+                            Divisas que entregamos
+                          </p>
+                        </div>
+                        <div className="bg-purple-50 p-2 rounded">
+                          <label className="text-purple-700 font-medium">
+                            Saldo Esperado
+                          </label>
+                          <p className="text-purple-800 font-bold">
+                            {detalle.saldo_cierre.toFixed(2)}
+                          </p>
+                          <p className="text-xs text-purple-600">
+                            Lo que debe quedar
+                          </p>
+                        </div>
                       </div>
-                      
-                       {/* Instrucciones claras */}
-                       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                         <p className="text-sm text-yellow-800">
-                           <strong>📝 Instrucciones:</strong> Ingrese el total final que tiene físicamente. 
-                           Ejemplo: Si tenía {detalle.saldo_apertura.toFixed(2)} y los movimientos suman {(detalle.ingresos_periodo - detalle.egresos_periodo).toFixed(2)}, 
-                           debe tener {detalle.saldo_cierre.toFixed(2)} en total.
-                         </p>
-                       </div>
-                       
-                       {/* Conteo físico del usuario */}
-                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                         <div className="space-y-2">
-                           <Label className="text-sm font-medium">
-                             💵 Billetes Físicos
-                             <span className="text-xs text-gray-500 block">Valor total en billetes</span>
-                           </Label>
-                           <Input
-                             type="number"
-                             step="0.01"
-                             min="0"
-                             value={userAdjustments[detalle.moneda_id]?.bills || ""}
-                             onChange={(e) =>
-                               handleUserAdjustment(
-                                 detalle.moneda_id,
-                                 "bills",
-                                 e.target.value
-                               )
-                             }
-                             placeholder="0.00"
-                             className={!isValid ? 'border-red-300' : ''}
-                           />
-                         </div>
-                         <div className="space-y-2">
-                           <Label className="text-sm font-medium">
-                             🪙 Monedas Físicas
-                             <span className="text-xs text-gray-500 block">Valor total en monedas</span>
-                           </Label>
-                           <Input
-                             type="number"
-                             step="0.01"
-                             min="0"
-                             value={userAdjustments[detalle.moneda_id]?.coins || ""}
-                             onChange={(e) =>
-                               handleUserAdjustment(
-                                 detalle.moneda_id,
-                                 "coins",
-                                 e.target.value
-                               )
-                             }
-                             placeholder="0.00"
-                             className={!isValid ? 'border-red-300' : ''}
-                           />
-                         </div>
-                         <div className="space-y-2">
-                           <Label className="text-sm font-medium">
-                             💰 Total Final Físico
-                             <span className="text-xs text-gray-500 block">Billetes + Monedas</span>
-                           </Label>
-                           <div className={`h-10 px-3 py-2 border rounded-md flex items-center font-bold ${
-                             !isValid ? 'bg-red-50 border-red-300 text-red-700' : 'bg-gray-50'
-                           }`}>
-                             {userTotal.toFixed(2)}
-                             {!isValid && (
-                               <span className="ml-2 text-xs">
-                                 (Diff: {(userTotal - detalle.saldo_cierre).toFixed(2)})
-                               </span>
-                             )}
-                           </div>
-                         </div>
-                       </div>
+
+                      {/* Instrucciones claras */}
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                        <p className="text-sm text-yellow-800">
+                          <strong>📝 Instrucciones:</strong> Ingrese el total
+                          final que tiene físicamente. Ejemplo: Si tenía{" "}
+                          {detalle.saldo_apertura.toFixed(2)} y los movimientos
+                          suman{" "}
+                          {(
+                            detalle.ingresos_periodo - detalle.egresos_periodo
+                          ).toFixed(2)}
+                          , debe tener {detalle.saldo_cierre.toFixed(2)} en
+                          total.
+                        </p>
+                      </div>
+
+                      {/* Conteo físico del usuario */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">
+                            💵 Billetes Físicos
+                            <span className="text-xs text-gray-500 block">
+                              Valor total en billetes
+                            </span>
+                          </Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={
+                              userAdjustments[detalle.moneda_id]?.bills || ""
+                            }
+                            onChange={(e) =>
+                              handleUserAdjustment(
+                                detalle.moneda_id,
+                                "bills",
+                                e.target.value
+                              )
+                            }
+                            placeholder="0.00"
+                            className={!isValid ? "border-red-300" : ""}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">
+                            🪙 Monedas Físicas
+                            <span className="text-xs text-gray-500 block">
+                              Valor total en monedas
+                            </span>
+                          </Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={
+                              userAdjustments[detalle.moneda_id]?.coins || ""
+                            }
+                            onChange={(e) =>
+                              handleUserAdjustment(
+                                detalle.moneda_id,
+                                "coins",
+                                e.target.value
+                              )
+                            }
+                            placeholder="0.00"
+                            className={!isValid ? "border-red-300" : ""}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">
+                            💰 Total Final Físico
+                            <span className="text-xs text-gray-500 block">
+                              Billetes + Monedas
+                            </span>
+                          </Label>
+                          <div
+                            className={`h-10 px-3 py-2 border rounded-md flex items-center font-bold ${
+                              !isValid
+                                ? "bg-red-50 border-red-300 text-red-700"
+                                : "bg-gray-50"
+                            }`}
+                          >
+                            {userTotal.toFixed(2)}
+                            {!isValid && (
+                              <span className="ml-2 text-xs">
+                                (Diff:{" "}
+                                {(userTotal - detalle.saldo_cierre).toFixed(2)})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}

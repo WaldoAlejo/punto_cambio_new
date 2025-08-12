@@ -43,19 +43,22 @@ const Reports = ({ user }: ReportsProps) => {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch("/api/reports", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          reportType,
-          dateFrom,
-          dateTo,
-        }),
-      });
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://35.238.95.118/api"}/reports`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            reportType,
+            dateFrom,
+            dateTo,
+          }),
+        }
+      );
 
       const data = await response.json();
 
@@ -71,7 +74,8 @@ const Reports = ({ user }: ReportsProps) => {
     } catch (error) {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Error al generar reporte",
+        description:
+          error instanceof Error ? error.message : "Error al generar reporte",
         variant: "destructive",
       });
     } finally {
