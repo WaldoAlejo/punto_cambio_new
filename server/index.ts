@@ -120,8 +120,20 @@ app.use("/api/servientrega", servientregaRoutes);
 if (process.env.NODE_ENV === "production") {
   const frontendDistPath = path.join(__dirname, "..", "dist");
 
-  // Servir archivos estáticos
-  app.use(express.static(frontendDistPath));
+  // Servir archivos estáticos con headers específicos
+  app.use(
+    express.static(frontendDistPath, {
+      setHeaders: (res, path) => {
+        // Evitar que el navegador fuerce HTTPS
+        res.setHeader(
+          "Content-Security-Policy",
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https:;"
+        );
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.setHeader("X-Frame-Options", "SAMEORIGIN");
+      },
+    })
+  );
 
   // Manejar rutas SPA - todas las rutas no-API deben servir index.html
   app.get("*", (req, res, next) => {

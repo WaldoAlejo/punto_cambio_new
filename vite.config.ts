@@ -43,6 +43,7 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
+  base: "./", // Usar rutas relativas para evitar problemas con HTTPS
   plugins: [
     react({
       jsxRuntime: "automatic",
