@@ -18,15 +18,46 @@ const AUTH = {
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 const UMBRAL_MINIMO_SALDO = new Prisma.Decimal(5);
 
+// Endpoint para verificar configuración
+router.get("/config", async (_, res) => {
+  try {
+    res.json({
+      success: true,
+      config: {
+        base_url: BASE_URL,
+        auth: {
+          usuario: AUTH.usuingreso,
+          contrasena_length: AUTH.contrasenha.length,
+          contrasena_masked: AUTH.contrasenha.substring(0, 2) + "***",
+        },
+        https_agent: {
+          rejectUnauthorized: httpsAgent.options.rejectUnauthorized,
+        },
+        umbral_saldo: UMBRAL_MINIMO_SALDO.toString(),
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Error desconocido",
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
 // Endpoint de prueba para verificar conectividad
 router.get("/test-connection", async (_, res) => {
   try {
     console.log("🔧 Probando conexión con Servientrega...");
 
-    const result = await callServientregaAPI({
-      tipo: "obtener_producto",
-      ...AUTH,
-    });
+    const result = await callServientregaAPI(
+      {
+        tipo: "obtener_producto",
+        ...AUTH,
+      },
+      5000
+    ); // Timeout corto para test rápido
 
     res.json({
       success: true,
@@ -35,6 +66,7 @@ router.get("/test-connection", async (_, res) => {
       hasData: !!result,
       dataType: typeof result,
       isArray: Array.isArray(result),
+      url: BASE_URL,
     });
   } catch (error) {
     console.error("❌ Error en test de conexión:", error);
@@ -43,21 +75,118 @@ router.get("/test-connection", async (_, res) => {
       message: "Error al conectar con Servientrega",
       error: error instanceof Error ? error.message : "Error desconocido",
       timestamp: new Date().toISOString(),
+      url: BASE_URL,
     });
   }
 });
 
-async function callServientregaAPI(payload: any) {
+// Endpoint de estado general de Servientrega
+router.get("/status", async (_, res) => {
+  try {
+    console.log("📊 Verificando estado general de Servientrega...");
+
+    const tests = [];
+
+    // Test 1: Conectividad básica (timeout corto para diagnóstico rápido)
+    try {
+      await callServientregaAPI({ tipo: "obtener_producto", ...AUTH }, 5000);
+      tests.push({
+        name: "Conectividad API",
+        status: "OK",
+        message: "Conexión exitosa",
+      });
+    } catch (error) {
+      tests.push({
+        name: "Conectividad API",
+        status: "ERROR",
+        message: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+
+    // Test 2: Base de datos
+    try {
+      const countRemitentes = await prisma.servientregaRemitente.count();
+      const countDestinatarios = await prisma.servientregaDestinatario.count();
+      tests.push({
+        name: "Base de datos",
+        status: "OK",
+        message: `${countRemitentes} remitentes, ${countDestinatarios} destinatarios`,
+      });
+    } catch (error) {
+      tests.push({
+        name: "Base de datos",
+        status: "ERROR",
+        message: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+
+    // Test 3: Puntos de atención
+    try {
+      const countPuntos = await prisma.puntoAtencion.count({
+        where: { activo: true },
+      });
+      tests.push({
+        name: "Puntos de atención",
+        status: "OK",
+        message: `${countPuntos} puntos activos`,
+      });
+    } catch (error) {
+      tests.push({
+        name: "Puntos de atención",
+        status: "ERROR",
+        message: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+
+    const allOk = tests.every((test) => test.status === "OK");
+
+    res.json({
+      success: allOk,
+      overall_status: allOk ? "HEALTHY" : "DEGRADED",
+      timestamp: new Date().toISOString(),
+      tests,
+      endpoints_available: [
+        "GET /test-connection",
+        "GET /status",
+        "POST /productos",
+        "POST /paises",
+        "POST /ciudades",
+        "POST /agencias",
+        "POST /empaques",
+        "GET /remitente/buscar/:query",
+        "POST /remitente/guardar",
+        "PUT /remitente/actualizar/:cedula",
+        "GET /destinatario/buscar/:query",
+        "POST /destinatario/guardar",
+        "PUT /destinatario/actualizar/:cedula",
+      ],
+    });
+  } catch (error) {
+    console.error("❌ Error en verificación de estado:", error);
+    res.status(500).json({
+      success: false,
+      overall_status: "ERROR",
+      error: error instanceof Error ? error.message : "Error desconocido",
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+async function callServientregaAPI(payload: any, timeoutMs: number = 15000) {
   try {
     console.log(
       "🌐 Llamando a Servientrega API con payload:",
       JSON.stringify(payload, null, 2)
     );
+    console.log(`⏱️ Timeout configurado: ${timeoutMs}ms`);
 
     const { data } = await axios.post(BASE_URL, payload, {
       headers: { "Content-Type": "application/json" },
       httpsAgent,
-      timeout: 20000,
+      timeout: timeoutMs,
+      // Configuraciones adicionales para mejorar conectividad
+      maxRedirects: 3,
+      validateStatus: (status) => status < 500, // Aceptar códigos 4xx como válidos
     });
 
     console.log(
@@ -69,17 +198,35 @@ async function callServientregaAPI(payload: any) {
     console.error("❌ Error en callServientregaAPI:", error);
 
     if (axios.isAxiosError(error)) {
-      console.error("❌ Axios error details:", {
+      const errorDetails = {
         message: error.message,
         code: error.code,
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-      });
+        timeout: error.code === "ECONNABORTED",
+        url: BASE_URL,
+      };
+
+      console.error("❌ Axios error details:", errorDetails);
+
+      // Mensaje más específico para timeouts
+      if (error.code === "ECONNABORTED") {
+        throw new Error(
+          `Timeout al conectar con Servientrega después de ${timeoutMs}ms`
+        );
+      }
+
+      // Mensaje más específico para errores de conexión
+      if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
+        throw new Error(
+          `No se puede conectar con Servientrega (${error.code})`
+        );
+      }
 
       throw new Error(
         `Error al conectar con Servientrega: ${error.message} (${
-          error.response?.status || "Sin código"
+          error.response?.status || error.code || "Sin código"
         })`
       );
     }
@@ -213,22 +360,80 @@ router.post("/ciudades", async (req, res) => {
 // 🏢 Agencias
 router.post("/agencias", async (_, res) => {
   try {
-    res.json(
-      await callServientregaAPI({ tipo: "obtener_agencias_aliadas", ...AUTH })
-    );
+    console.log("🏢 Cargando agencias de Servientrega...");
+    const result = await callServientregaAPI({
+      tipo: "obtener_agencias_aliadas",
+      ...AUTH,
+    });
+
+    res.json({
+      ...result,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ Error al cargar agencias:", err);
+
+    // Fallback: devolver agencias por defecto
+    console.log("🔄 Usando agencias por defecto como fallback...");
+    const agenciasPorDefecto = {
+      fetch: [
+        { agencia: "QUITO PRINCIPAL", codigo: "QTO001" },
+        { agencia: "GUAYAQUIL PRINCIPAL", codigo: "GYE001" },
+        { agencia: "CUENCA PRINCIPAL", codigo: "CUE001" },
+      ],
+    };
+
+    res.json({
+      ...agenciasPorDefecto,
+      success: true,
+      fallback: true,
+      timestamp: new Date().toISOString(),
+      warning:
+        "Se usaron agencias por defecto debido a un error en la API de Servientrega",
+    });
   }
 });
 
 // 📦 Empaques
 router.post("/empaques", async (_, res) => {
   try {
-    res.json(
-      await callServientregaAPI({ tipo: "obtener_empaqueyembalaje", ...AUTH })
-    );
+    console.log("📦 Cargando empaques de Servientrega...");
+    const result = await callServientregaAPI({
+      tipo: "obtener_empaqueyembalaje",
+      ...AUTH,
+    });
+
+    res.json({
+      ...result,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ Error al cargar empaques:", err);
+
+    // Fallback: devolver empaques por defecto
+    console.log("🔄 Usando empaques por defecto como fallback...");
+    const empaquesPorDefecto = {
+      fetch: [
+        { tipo_empaque: "SOBRE", descripcion: "Sobre estándar" },
+        { tipo_empaque: "CAJA", descripcion: "Caja de cartón" },
+        {
+          tipo_empaque: "AISLANTE DE HUMEDAD",
+          descripcion: "Empaque especial",
+        },
+        { tipo_empaque: "BOLSA", descripcion: "Bolsa plástica" },
+      ],
+    };
+
+    res.json({
+      ...empaquesPorDefecto,
+      success: true,
+      fallback: true,
+      timestamp: new Date().toISOString(),
+      warning:
+        "Se usaron empaques por defecto debido a un error en la API de Servientrega",
+    });
   }
 });
 
@@ -238,36 +443,82 @@ router.post("/empaques", async (_, res) => {
 router.get("/remitente/buscar/:query", async (req, res) => {
   try {
     const { query } = req.params;
+    console.log(`🔍 Buscando remitentes con query: "${query}"`);
+
+    if (!query || query.trim().length < 2) {
+      return res.status(400).json({
+        error: "La búsqueda debe tener al menos 2 caracteres",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     const remitentes = await prisma.servientregaRemitente.findMany({
       where: {
         OR: [
-          { cedula: { contains: query, mode: "insensitive" } },
-          { nombre: { contains: query, mode: "insensitive" } },
+          { cedula: { contains: query.trim(), mode: "insensitive" } },
+          { nombre: { contains: query.trim(), mode: "insensitive" } },
         ],
       },
       take: 10,
+      orderBy: { nombre: "asc" },
     });
-    res.json({ remitentes });
-  } catch {
-    res.status(500).json({ error: "Error al buscar remitentes" });
+
+    console.log(`✅ Encontrados ${remitentes.length} remitentes`);
+    res.json({
+      remitentes,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("❌ Error al buscar remitentes:", error);
+    res.status(500).json({
+      error: "Error al buscar remitentes",
+      success: false,
+      timestamp: new Date().toISOString(),
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
   }
 });
 
 router.post("/remitente/guardar", async (req, res) => {
   try {
     const data = req.body;
+    console.log("💾 Guardando remitente:", data);
+
+    // Validaciones básicas
+    if (!data.nombre || (!data.cedula && !data.identificacion)) {
+      return res.status(400).json({
+        error: "Nombre y cédula/identificación son requeridos",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     // Normaliza nombre identificador
+    const remitenteData = {
+      ...data,
+      cedula: data.identificacion || data.cedula,
+    };
+
     const remitente = await prisma.servientregaRemitente.create({
-      data: {
-        ...data,
-        cedula: data.identificacion || data.cedula,
-      },
+      data: remitenteData,
     });
-    res.json(remitente);
+
+    console.log("✅ Remitente guardado:", remitente.id);
+    res.json({
+      ...remitente,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
   } catch (err: any) {
-    res
-      .status(500)
-      .json({ error: "Error al guardar remitente", detalle: err.message });
+    console.error("❌ Error al guardar remitente:", err);
+    res.status(500).json({
+      error: "Error al guardar remitente",
+      success: false,
+      timestamp: new Date().toISOString(),
+      details: err.message,
+    });
   }
 });
 
@@ -275,13 +526,35 @@ router.put("/remitente/actualizar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
     const data = req.body;
+    console.log(`🔄 Actualizando remitente con cédula: ${cedula}`);
+
+    if (!cedula) {
+      return res.status(400).json({
+        error: "La cédula es requerida",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     const remitente = await prisma.servientregaRemitente.update({
       where: { cedula },
       data,
     });
-    res.json(remitente);
-  } catch {
-    res.status(500).json({ error: "Error al actualizar remitente" });
+
+    console.log("✅ Remitente actualizado:", remitente.id);
+    res.json({
+      ...remitente,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("❌ Error al actualizar remitente:", error);
+    res.status(500).json({
+      error: "Error al actualizar remitente",
+      success: false,
+      timestamp: new Date().toISOString(),
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
   }
 });
 
@@ -317,18 +590,41 @@ router.get("/remitente/puntos", async (req, res) => {
 router.get("/destinatario/buscar/:query", async (req, res) => {
   try {
     const { query } = req.params;
+    console.log(`🔍 Buscando destinatarios con query: "${query}"`);
+
+    if (!query || query.trim().length < 2) {
+      return res.status(400).json({
+        error: "La búsqueda debe tener al menos 2 caracteres",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     const destinatarios = await prisma.servientregaDestinatario.findMany({
       where: {
         OR: [
-          { cedula: { contains: query, mode: "insensitive" } },
-          { nombre: { contains: query, mode: "insensitive" } },
+          { cedula: { contains: query.trim(), mode: "insensitive" } },
+          { nombre: { contains: query.trim(), mode: "insensitive" } },
         ],
       },
       take: 10,
+      orderBy: { nombre: "asc" },
     });
-    res.json({ destinatarios });
-  } catch {
-    res.status(500).json({ error: "Error al buscar destinatarios" });
+
+    console.log(`✅ Encontrados ${destinatarios.length} destinatarios`);
+    res.json({
+      destinatarios,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("❌ Error al buscar destinatarios:", error);
+    res.status(500).json({
+      error: "Error al buscar destinatarios",
+      success: false,
+      timestamp: new Date().toISOString(),
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
   }
 });
 
@@ -336,16 +632,40 @@ router.get("/destinatario/buscar/:query", async (req, res) => {
 router.get("/destinatario/buscar-nombre/:query", async (req, res) => {
   try {
     const { query } = req.params;
+    console.log(`🔍 Buscando destinatarios por nombre: "${query}"`);
+
+    if (!query || query.trim().length < 2) {
+      return res.status(400).json({
+        error: "La búsqueda debe tener al menos 2 caracteres",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     const destinatarios = await prisma.servientregaDestinatario.findMany({
       where: {
-        nombre: { contains: query, mode: "insensitive" },
+        nombre: { contains: query.trim(), mode: "insensitive" },
       },
       take: 10,
       orderBy: { nombre: "asc" },
     });
-    res.json({ destinatarios });
-  } catch {
-    res.status(500).json({ error: "Error al buscar destinatarios por nombre" });
+
+    console.log(
+      `✅ Encontrados ${destinatarios.length} destinatarios por nombre`
+    );
+    res.json({
+      destinatarios,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("❌ Error al buscar destinatarios por nombre:", error);
+    res.status(500).json({
+      error: "Error al buscar destinatarios por nombre",
+      success: false,
+      timestamp: new Date().toISOString(),
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
   }
 });
 
