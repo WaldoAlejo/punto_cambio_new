@@ -4,6 +4,7 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  base: mode === "production" ? "./" : "/",
   server: {
     host: "0.0.0.0", // permite conexiones externas (desde cualquier IP)
     port: 8080, // puerto accesible públicamente
@@ -43,7 +44,6 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  base: "./", // Usar rutas relativas para evitar problemas con HTTPS
   plugins: [
     react({
       jsxRuntime: "automatic",
