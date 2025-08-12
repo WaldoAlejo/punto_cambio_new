@@ -112,7 +112,7 @@ esac
 log "🔍 Verificando estado de PM2..."
 if pm2 list | grep -q "punto-cambio-api"; then
     log "🔄 Reiniciando aplicación con PM2..."
-    pm2 restart punto-cambio-api --env production || {
+    pm2 restart punto-cambio-api || {
         error "Error al reiniciar con PM2"
         exit 1
     }
