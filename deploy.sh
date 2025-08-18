@@ -157,10 +157,37 @@ npm run build:frontend || {
 
 # Iniciar la aplicación con PM2
 log_message "Iniciando la aplicación con PM2..."
-pm2 start ecosystem.config.cjs --env production || {
-  log_error "Error al iniciar la aplicación con PM2. Intentando con scripts/create-pm2-config.sh..."
-  ./scripts/create-pm2-config.sh
-  pm2 start ecosystem.config.js --env production || log_error "Error al iniciar la aplicación con PM2"
+
+# Verificar que el archivo dist/index.js existe
+if [ ! -f "dist/index.js" ]; then
+  log_error "El archivo dist/index.js no existe"
+  exit 1
+fi
+
+# Crear un archivo ecosystem.config.js simple
+log_message "Creando archivo ecosystem.config.js simple..."
+cat > ecosystem.config.js << 'EOF'
+module.exports = {
+  apps: [
+    {
+      name: "punto-cambio-api",
+      script: "./dist/index.js",
+      instances: 1,
+      exec_mode: "fork",
+      env_production: {
+        NODE_ENV: "production",
+        PORT: 3001
+      },
+      watch: false
+    }
+  ]
+};
+EOF
+
+# Iniciar la aplicación con PM2
+pm2 start ecosystem.config.js --env production || {
+  log_error "Error al iniciar la aplicación con PM2. Intentando directamente..."
+  pm2 start dist/index.js --name punto-cambio-api || log_error "Error al iniciar la aplicación con PM2"
 }
 
 # Guardar la configuración de PM2

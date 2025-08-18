@@ -30,12 +30,28 @@ fi
 
 # Reiniciar la aplicación con PM2
 log_message "Reiniciando la aplicación con PM2..."
-pm2 restart punto-cambio-api || {
-  log_error "Error al reiniciar la aplicación con PM2. Intentando iniciar..."
-  pm2 start ecosystem.config.cjs --env production || {
-    log_error "Error al iniciar la aplicación con PM2. Intentando con ecosystem.config.js..."
+
+# Verificar si la aplicación está en ejecución
+if pm2 list | grep -q "punto-cambio-api"; then
+  log_message "La aplicación está en ejecución, reiniciando..."
+  pm2 restart punto-cambio-api || log_error "Error al reiniciar la aplicación con PM2"
+else
+  log_message "La aplicación no está en ejecución, iniciando..."
+  
+  # Verificar que el archivo dist/index.js existe
+  if [ ! -f "dist/index.js" ]; then
+    log_error "El archivo dist/index.js no existe"
+    exit 1
+  fi
+  
+  # Verificar si existe ecosystem.config.js
+  if [ -f "ecosystem.config.js" ]; then
+    log_message "Iniciando con ecosystem.config.js..."
     pm2 start ecosystem.config.js --env production || log_error "Error al iniciar la aplicación con PM2"
-  }
+  else
+    log_message "Iniciando directamente con dist/index.js..."
+    pm2 start dist/index.js --name punto-cambio-api || log_error "Error al iniciar la aplicación con PM2"
+  fi
 }
 
 # Guardar la configuración de PM2

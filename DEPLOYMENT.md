@@ -66,25 +66,73 @@ El script realiza las siguientes acciones:
 - Verifica el estado de la aplicación
 - Verifica que la aplicación está respondiendo
 
-## Pasos para el Despliegue
+### start.sh
 
-### 1. Clonar el Repositorio
+Este script inicia la aplicación:
 
 ```bash
-git clone <URL_DEL_REPOSITORIO> punto_cambio_new
-cd punto_cambio_new
+./start.sh
 ```
 
-### 2. Ejecutar el Script de Despliegue
+El script realiza las siguientes acciones:
+
+- Verifica si la aplicación ya está en ejecución
+- Verifica que el archivo dist/index.js existe
+- Crea un archivo ecosystem.config.js simple si no existe
+- Inicia la aplicación con PM2
+- Verifica el estado de la aplicación
+- Verifica que la aplicación está respondiendo
+
+### stop.sh
+
+Este script detiene la aplicación:
+
+```bash
+./stop.sh
+```
+
+El script realiza las siguientes acciones:
+
+- Verifica si la aplicación está en ejecución
+- Detiene la aplicación con PM2
+- Verifica el estado de la aplicación
+
+## Pasos para el Despliegue
+
+### 1. Conectarse a la VM de Google Cloud
+
+```bash
+ssh usuario@35.238.95.118
+```
+
+### 2. Navegar al Directorio del Proyecto
+
+```bash
+cd /ruta/a/tu/proyecto/punto_cambio_new
+```
+
+### 3. Asegurarse de que los Scripts Tienen Permisos de Ejecución
+
+```bash
+chmod +x *.sh
+```
+
+### 4. Ejecutar el Script de Despliegue
 
 ```bash
 ./deploy.sh
 ```
 
-### 3. Verificar el Despliegue
+### 5. Verificar el Despliegue
 
 ```bash
 ./status.sh
+```
+
+### 6. Iniciar la Aplicación (si no está en ejecución)
+
+```bash
+./start.sh
 ```
 
 ## Solución de Problemas
