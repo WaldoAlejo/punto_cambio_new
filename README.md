@@ -92,6 +92,9 @@ node scripts/test-prisma-connection.js
 # Configurar correctamente el frontend y el backend
 ./scripts/setup-frontend-backend.sh
 
+# Corregir la estructura de compilación
+./scripts/fix-build-structure.sh
+
 # Verificar y corregir problemas de CORS
 ./scripts/fix-cors.sh
 
