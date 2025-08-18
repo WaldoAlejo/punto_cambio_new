@@ -95,7 +95,7 @@ fi
 
 # Construir el backend primero
 log_message "Construyendo el backend..."
-npm run build:server
+./scripts/build-server.sh
 
 # Construir el frontend
 log_message "Construyendo el frontend..."
