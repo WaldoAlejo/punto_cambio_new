@@ -43,7 +43,12 @@ log_message "Archivo index.js encontrado en $INDEX_FILE"
 # Crear un nuevo archivo ecosystem.config.js
 log_message "Creando un nuevo archivo ecosystem.config.js..."
 
-cat > ecosystem.config.js << EOF
+# Verificar si el proyecto usa ES modules
+if grep -q '"type": "module"' package.json; then
+  log_message "El proyecto usa ES modules. Creando ecosystem.config.cjs..."
+  
+  # Crear un archivo ecosystem.config.cjs (CommonJS)
+  cat > ecosystem.config.cjs << EOF
 module.exports = {
   apps: [
     {
@@ -81,6 +86,49 @@ module.exports = {
   ],
 };
 EOF
+else
+  log_message "El proyecto usa CommonJS. Creando ecosystem.config.js..."
+  
+  # Crear un archivo ecosystem.config.js (CommonJS)
+  cat > ecosystem.config.js << EOF
+module.exports = {
+  apps: [
+    {
+      name: "punto-cambio-api",
+      script: "${INDEX_FILE}",
+      instances: 1,
+      exec_mode: "fork",
+      env: {
+        NODE_ENV: "development",
+        PORT: 3001,
+        LOG_LEVEL: "debug",
+      },
+      env_production: {
+        NODE_ENV: "production",
+        PORT: 3001,
+        LOG_LEVEL: "info",
+        NODE_OPTIONS: "--max-old-space-size=1024",
+      },
+      log_file: "./logs/combined.log",
+      out_file: "./logs/out.log",
+      error_file: "./logs/error.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      merge_logs: true,
+      max_memory_restart: "1G",
+      node_args: "--max-old-space-size=1024",
+      watch: false,
+      ignore_watch: ["node_modules", "logs", "dist", "src"],
+      restart_delay: 4000,
+      max_restarts: 10,
+      min_uptime: "10s",
+      autorestart: true,
+      log_type: "json",
+      time: true,
+    },
+  ],
+};
+EOF
+fi
 
 log_message "Archivo ecosystem.config.js creado correctamente"
 
@@ -102,7 +150,17 @@ fi
 
 # Iniciar la aplicación con PM2
 log_message "Iniciando la aplicación con PM2..."
-pm2 start ecosystem.config.js --env production
+if [ -f "ecosystem.config.cjs" ]; then
+  pm2 start ecosystem.config.cjs --env production || {
+    log_error "Error al iniciar la aplicación con ecosystem.config.cjs. Intentando con el comando directo..."
+    pm2 start $INDEX_FILE --name punto-cambio-api --env production
+  }
+else
+  pm2 start ecosystem.config.js --env production || {
+    log_error "Error al iniciar la aplicación con ecosystem.config.js. Intentando con el comando directo..."
+    pm2 start $INDEX_FILE --name punto-cambio-api --env production
+  }
+fi
 
 # Guardar la configuración de PM2
 log_message "Guardando la configuración de PM2..."
