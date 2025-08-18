@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script para verificar el estado del servidor
+# Script para verificar el estado de la aplicación
 # Este script debe ejecutarse desde el directorio raíz del proyecto
 
 # Colores para mensajes

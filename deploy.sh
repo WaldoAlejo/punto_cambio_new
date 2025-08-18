@@ -44,41 +44,42 @@ log_message "Deteniendo la aplicación actual..."
 pm2 stop all || true
 pm2 delete all || true
 
+# Crear o actualizar el archivo .env.production
+log_message "Creando o actualizando el archivo .env.production..."
+cat > .env.production << 'EOF'
+# Variables de entorno para producción
+DATABASE_URL=postgresql://postgres:Esh2ew8p@34.66.51.85:5432/punto_cambio
+DB_USER=postgres
+DB_PASSWORD=Esh2ew8p
+DB_POOL_MIN=2
+DB_POOL_MAX=10
+DB_TIMEOUT=30000
+JWT_SECRET=s3rv13ntr3g4_super_secure_jwt_key_change_in_production
+NODE_ENV=production
+PORT=3001
+FRONTEND_URL=http://35.238.95.118:3001
+LOG_LEVEL=info
+VITE_API_URL=http://35.238.95.118:3001/api
+VITE_APP_NAME=Punto Cambio
+VITE_APP_VERSION=1.0.0
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+LOGIN_RATE_LIMIT_MAX_REQUESTS=5
+EOF
+
+# Crear o actualizar el archivo .env
+log_message "Creando o actualizando el archivo .env..."
+cp .env.production .env
+
 # Instalar dependencias
 log_message "Instalando dependencias..."
 npm install
-
-# Verificar que existen los archivos de configuración de TypeScript
-if [ ! -f "tsconfig.app.json" ]; then
-  log_message "Creando archivo tsconfig.app.json..."
-  cat > tsconfig.app.json << 'EOF'
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "composite": true,
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "jsx": "react-jsx",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
-    "outDir": "dist",
-    "rootDir": "src",
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true
-  },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"],
-  "exclude": ["node_modules", "dist", "server"]
-}
-EOF
-fi
 
 # Generar cliente de Prisma
 log_message "Generando cliente de Prisma..."
 npx prisma generate
 
-# Limpiar la base de datos y ejecutar el seed completo
+# Limpiar la base de datos y ejecutar el seed completo (opcional)
 log_message "¿Deseas limpiar la base de datos y ejecutar el seed completo? (s/n)"
 read -r CLEAN_DB
 if [ "$CLEAN_DB" = "s" ] || [ "$CLEAN_DB" = "S" ]; then
@@ -93,9 +94,59 @@ else
   log_message "Omitiendo limpieza de la base de datos"
 fi
 
-# Construir el backend primero
+# Limpiar el directorio dist
+log_message "Limpiando el directorio dist..."
+rm -rf dist
+
+# Verificar que existe el archivo ecosystem.config.cjs
+if [ ! -f "ecosystem.config.cjs" ]; then
+  log_message "Creando archivo ecosystem.config.cjs..."
+  cat > ecosystem.config.cjs << 'EOF'
+module.exports = {
+  apps: [
+    {
+      name: "punto-cambio-api",
+      script: "dist/index.js",
+      instances: 1,
+      exec_mode: "fork",
+      env: {
+        NODE_ENV: "development",
+        PORT: 3001,
+        LOG_LEVEL: "debug",
+      },
+      env_production: {
+        NODE_ENV: "production",
+        PORT: 3001,
+        LOG_LEVEL: "info",
+        NODE_OPTIONS: "--max-old-space-size=1024",
+      },
+      log_file: "./logs/combined.log",
+      out_file: "./logs/out.log",
+      error_file: "./logs/error.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+      merge_logs: true,
+      max_memory_restart: "1G",
+      node_args: "--max-old-space-size=1024",
+      watch: false,
+      ignore_watch: ["node_modules", "logs", "dist", "src"],
+      restart_delay: 4000,
+      max_restarts: 10,
+      min_uptime: "10s",
+      autorestart: true,
+      log_type: "json",
+      time: true,
+    },
+  ],
+};
+EOF
+fi
+
+# Construir el backend
 log_message "Construyendo el backend..."
-./scripts/build-server.sh
+npm run build:server || {
+  log_error "Error al construir el backend. Intentando con scripts/build-server.sh..."
+  ./scripts/build-server.sh
+}
 
 # Construir el frontend
 log_message "Construyendo el frontend..."
@@ -104,17 +155,17 @@ npm run build:frontend || {
   npm run build:dev
 }
 
-# Crear una nueva configuración de PM2
-log_message "Creando una nueva configuración de PM2..."
-./scripts/create-pm2-config.sh
+# Iniciar la aplicación con PM2
+log_message "Iniciando la aplicación con PM2..."
+pm2 start ecosystem.config.cjs --env production || {
+  log_error "Error al iniciar la aplicación con PM2. Intentando con scripts/create-pm2-config.sh..."
+  ./scripts/create-pm2-config.sh
+  pm2 start ecosystem.config.js --env production || log_error "Error al iniciar la aplicación con PM2"
+}
 
 # Guardar la configuración de PM2
 log_message "Guardando la configuración de PM2..."
 pm2 save
-
-# Configurar cron job para monitorear conexiones a la base de datos
-log_message "Configurando cron job para monitorear conexiones a la base de datos..."
-(crontab -l 2>/dev/null | grep -v "monitor-db-connections.js"; echo "0 * * * * cd $(pwd) && /usr/bin/node scripts/monitor-db-connections.js >> logs/db-monitor.log 2>&1") | crontab -
 
 # Verificar el estado de la aplicación
 log_message "Verificando el estado de la aplicación..."

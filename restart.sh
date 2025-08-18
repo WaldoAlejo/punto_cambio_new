@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script para iniciar el servidor simple con PM2
+# Script para reiniciar la aplicación
 # Este script debe ejecutarse desde el directorio raíz del proyecto
 
 # Colores para mensajes
@@ -28,23 +28,15 @@ if [ ! -f "package.json" ]; then
   exit 1
 fi
 
-# Crear directorio para logs si no existe
-mkdir -p logs
-
-# Detener la aplicación actual
-log_message "Deteniendo la aplicación actual..."
-pm2 stop all || true
-pm2 delete all || true
-
-# Verificar que el archivo simple-server.js existe
-if [ ! -f "simple-server.js" ]; then
-  log_error "El archivo simple-server.js no existe"
-  exit 1
-fi
-
-# Iniciar el servidor simple con PM2
-log_message "Iniciando el servidor simple con PM2..."
-pm2 start simple-server.js --name punto-cambio-api
+# Reiniciar la aplicación con PM2
+log_message "Reiniciando la aplicación con PM2..."
+pm2 restart punto-cambio-api || {
+  log_error "Error al reiniciar la aplicación con PM2. Intentando iniciar..."
+  pm2 start ecosystem.config.cjs --env production || {
+    log_error "Error al iniciar la aplicación con PM2. Intentando con ecosystem.config.js..."
+    pm2 start ecosystem.config.js --env production || log_error "Error al iniciar la aplicación con PM2"
+  }
+}
 
 # Guardar la configuración de PM2
 log_message "Guardando la configuración de PM2..."
@@ -58,5 +50,5 @@ pm2 status
 log_message "Verificando que la aplicación está respondiendo..."
 curl -s http://localhost:3001/health || log_error "La aplicación no está respondiendo"
 
-log_message "Servidor simple iniciado con éxito"
+log_message "Reinicio completado con éxito"
 log_message "Verifica los logs con: pm2 logs"
