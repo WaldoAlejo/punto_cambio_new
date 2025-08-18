@@ -86,6 +86,15 @@ node scripts/test-prisma-connection.js
 # Verificar el estado de la aplicación
 ./scripts/check-app-status.sh
 
+# Verificar los logs de la aplicación
+./scripts/check-logs.sh
+
+# Configurar correctamente el frontend y el backend
+./scripts/setup-frontend-backend.sh
+
+# Verificar y corregir problemas de CORS
+./scripts/fix-cors.sh
+
 # Compilar el backend manualmente
 ./scripts/build-server.sh
 
