@@ -7,14 +7,14 @@ Sistema completo de gestión para casas de cambio con frontend React y backend N
 ### Para despliegue en producción (VM de GCP):
 
 ```bash
-# Despliegue limpio y optimizado
+# Despliegue optimizado
 git clone <tu-repositorio>
 cd punto_cambio_new
 npm install
-./deploy-clean.sh
+./deploy.sh
 ```
 
-**📖 Ver [OPTIMIZACION-CONEXIONES-DB.md](./OPTIMIZACION-CONEXIONES-DB.md) para detalles sobre la optimización**
+**📖 Ver [PLAN-DESPLIEGUE.md](./PLAN-DESPLIEGUE.md) para instrucciones detalladas**
 
 ## 🏗️ Arquitectura
 
@@ -59,14 +59,17 @@ npm run build:server
 ### Scripts disponibles:
 
 ```bash
-# Despliegue limpio y optimizado (recomendado)
-./deploy-clean.sh
+# Despliegue optimizado
+./deploy.sh
 
 # Monitorear conexiones a la base de datos
 node scripts/monitor-db-connections.js
 
 # Probar conexión a la base de datos
 node scripts/test-db-connection.js
+
+# Probar conexión con Prisma
+node scripts/test-prisma-connection.js
 
 # Solucionar problemas comunes
 ./scripts/fix-common-issues.sh
@@ -96,7 +99,7 @@ pm2 stop punto-cambio-api
 
 ## 📚 Documentación
 
-- **[OPTIMIZACION-CONEXIONES-DB.md](./OPTIMIZACION-CONEXIONES-DB.md)** - Optimización de conexiones a la base de datos
+- **[PLAN-DESPLIEGUE.md](./PLAN-DESPLIEGUE.md)** - Plan detallado de despliegue
 - **[README.md](./README.md)** - Documentación principal
 
 ## 🛠️ Tecnologías
@@ -111,8 +114,8 @@ pm2 stop punto-cambio-api
 
 1. **Desarrollo local**: Hacer cambios en VSCode
 2. **Commit y push**: Subir cambios a GitHub
-3. **Despliegue**: Ejecutar `./deploy.sh quick` en la VM
-4. **Verificación**: Revisar que todo funcione correctamente
+3. **Despliegue**: Ejecutar `./deploy.sh` en la VM
+4. **Verificación**: Revisar que todo funcione correctamente con los scripts de prueba
 
 ## 🚨 Soporte
 
