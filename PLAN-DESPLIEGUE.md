@@ -101,6 +101,7 @@ El script `deploy.sh` realizará las siguientes acciones:
 - Instalar dependencias
 - Verificar y crear archivos de configuración de TypeScript si no existen
 - Generar cliente de Prisma
+- Opcionalmente, limpiar la base de datos y ejecutar el seed completo
 - Construir el backend y el frontend
 - Iniciar la aplicación con PM2
 - Configurar un cron job para monitorear las conexiones a la base de datos

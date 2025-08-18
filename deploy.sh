@@ -78,6 +78,21 @@ fi
 log_message "Generando cliente de Prisma..."
 npx prisma generate
 
+# Limpiar la base de datos y ejecutar el seed completo
+log_message "¿Deseas limpiar la base de datos y ejecutar el seed completo? (s/n)"
+read -r CLEAN_DB
+if [ "$CLEAN_DB" = "s" ] || [ "$CLEAN_DB" = "S" ]; then
+  log_message "Limpiando la base de datos..."
+  npx prisma db push --force-reset
+  
+  log_message "Ejecutando seed completo..."
+  npm run seed:complete
+  
+  log_message "Base de datos limpiada y datos iniciales cargados correctamente"
+else
+  log_message "Omitiendo limpieza de la base de datos"
+fi
+
 # Construir el backend primero
 log_message "Construyendo el backend..."
 npm run build:server

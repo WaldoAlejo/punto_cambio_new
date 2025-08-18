@@ -74,6 +74,9 @@ node scripts/test-prisma-connection.js
 # Verificar integridad del sistema
 ./scripts/verify-system.sh
 
+# Limpiar la base de datos y ejecutar el seed completo
+./scripts/reset-database.sh
+
 # Solucionar problemas comunes
 ./scripts/fix-common-issues.sh
 ```
