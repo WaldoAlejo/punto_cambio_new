@@ -1,5 +1,17 @@
 import dotenv from "dotenv";
-dotenv.config({ path: ".env.production" });
+import fs from "fs";
+
+// Cargar variables de entorno según el entorno
+if (fs.existsSync(".env.local")) {
+  console.log("Cargando variables de entorno desde .env.local");
+  dotenv.config({ path: ".env.local" });
+} else if (fs.existsSync(".env.production")) {
+  console.log("Cargando variables de entorno desde .env.production");
+  dotenv.config({ path: ".env.production" });
+} else {
+  console.log("Cargando variables de entorno desde .env");
+  dotenv.config();
+}
 
 import express from "express";
 import cors from "cors";
