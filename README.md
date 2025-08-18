@@ -77,6 +77,9 @@ node scripts/test-prisma-connection.js
 # Limpiar la base de datos y ejecutar el seed completo
 ./scripts/reset-database.sh
 
+# Verificar y corregir la configuración de PM2
+./scripts/fix-pm2-config.sh
+
 # Solucionar problemas comunes
 ./scripts/fix-common-issues.sh
 ```

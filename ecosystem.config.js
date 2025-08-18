@@ -2,7 +2,7 @@ export default {
   apps: [
     {
       name: "punto-cambio-api",
-      script: "dist/index.js",
+      script: "dist/server/index.js",
       instances: 1, // Reducir a 1 instancia para limitar las conexiones
       exec_mode: "fork", // Cambiar a fork en lugar de cluster
       env: {
