@@ -104,35 +104,9 @@ npm run build:frontend || {
   npm run build:dev
 }
 
-# Verificar que el archivo dist/index.js existe
-log_message "Verificando archivos de construcción..."
-if [ ! -f "dist/index.js" ]; then
-  log_warning "El archivo dist/index.js no existe. Verificando otras posibles ubicaciones..."
-  
-  # Verificar si el archivo está en dist/server/index.js
-  if [ -f "dist/server/index.js" ]; then
-    log_message "Archivo encontrado en dist/server/index.js. Actualizando ecosystem.config.js..."
-    sed -i 's|"dist/index.js"|"dist/server/index.js"|g' ecosystem.config.js
-  else
-    # Buscar el archivo index.js en el directorio dist
-    INDEX_FILE=$(find dist -name "index.js" | head -1)
-    if [ -n "$INDEX_FILE" ]; then
-      log_message "Archivo encontrado en $INDEX_FILE. Actualizando ecosystem.config.js..."
-      sed -i "s|\"dist/index.js\"|\"$INDEX_FILE\"|g" ecosystem.config.js
-    else
-      log_error "No se pudo encontrar el archivo index.js en el directorio dist. Verificando la estructura de directorios..."
-      find dist -type f | sort
-      log_error "La aplicación no se iniciará correctamente sin este archivo."
-    fi
-  fi
-fi
-
-# Iniciar la aplicación con PM2
-log_message "Iniciando la aplicación con PM2..."
-pm2 start ecosystem.config.js --env production || {
-  log_error "Error al iniciar la aplicación con PM2. Intentando con el comando directo..."
-  pm2 start dist/server/index.js --name punto-cambio-api --env production
-}
+# Crear una nueva configuración de PM2
+log_message "Creando una nueva configuración de PM2..."
+./scripts/create-pm2-config.sh
 
 # Guardar la configuración de PM2
 log_message "Guardando la configuración de PM2..."

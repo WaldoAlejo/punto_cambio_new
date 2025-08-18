@@ -80,6 +80,9 @@ node scripts/test-prisma-connection.js
 # Verificar y corregir la configuración de PM2
 ./scripts/fix-pm2-config.sh
 
+# Crear una nueva configuración de PM2
+./scripts/create-pm2-config.sh
+
 # Compilar el backend manualmente
 ./scripts/build-server.sh
 
