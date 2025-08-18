@@ -48,13 +48,50 @@ pm2 delete all || true
 log_message "Instalando dependencias..."
 npm install
 
-# Construir la aplicación
-log_message "Construyendo la aplicación..."
-npm run build
+# Verificar que existen los archivos de configuración de TypeScript
+if [ ! -f "tsconfig.app.json" ]; then
+  log_message "Creando archivo tsconfig.app.json..."
+  cat > tsconfig.app.json << 'EOF'
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "jsx": "react-jsx",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "outDir": "dist",
+    "rootDir": "src",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"],
+  "exclude": ["node_modules", "dist", "server"]
+}
+EOF
+fi
+
+# Generar cliente de Prisma
+log_message "Generando cliente de Prisma..."
+npx prisma generate
+
+# Construir el backend primero
+log_message "Construyendo el backend..."
+npm run build:server
+
+# Construir el frontend
+log_message "Construyendo el frontend..."
+npm run build:frontend || {
+  log_error "Error al construir el frontend. Intentando con modo de desarrollo..."
+  npm run build:dev
+}
 
 # Iniciar la aplicación con PM2
 log_message "Iniciando la aplicación con PM2..."
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.js --env production
 
 # Guardar la configuración de PM2
 log_message "Guardando la configuración de PM2..."
@@ -67,6 +104,10 @@ log_message "Configurando cron job para monitorear conexiones a la base de datos
 # Verificar el estado de la aplicación
 log_message "Verificando el estado de la aplicación..."
 pm2 status
+
+# Probar la conexión a la base de datos
+log_message "Probando la conexión a la base de datos..."
+node scripts/test-db-connection.js || log_warning "Error al probar la conexión a la base de datos"
 
 log_message "Despliegue completado con éxito"
 log_message "Verifica los logs con: pm2 logs"

@@ -71,6 +71,9 @@ node scripts/test-db-connection.js
 # Probar conexión con Prisma
 node scripts/test-prisma-connection.js
 
+# Verificar integridad del sistema
+./scripts/verify-system.sh
+
 # Solucionar problemas comunes
 ./scripts/fix-common-issues.sh
 ```
