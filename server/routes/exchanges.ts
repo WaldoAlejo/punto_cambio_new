@@ -1,12 +1,12 @@
 import express from "express";
-import { PrismaClient, EstadoTransaccion } from "@prisma/client";
+import { EstadoTransaccion } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 const exchangeSchema = z.object({
   moneda_origen_id: z.string().uuid(),
@@ -154,7 +154,7 @@ router.post(
         usuario_id: req.user.id,
         punto_atencion_id,
         numeroRecibo,
-        estado: EstadoTransaccion.PENDIENTE
+        estado: EstadoTransaccion.PENDIENTE,
       });
 
       const exchange = await prisma.cambioDivisa.create({
@@ -225,7 +225,7 @@ router.post(
         id: exchange.id,
         estado: exchange.estado,
         numero_recibo: exchange.numero_recibo,
-        fecha: exchange.fecha
+        fecha: exchange.fecha,
       });
 
       await prisma.recibo.create({
@@ -481,7 +481,7 @@ router.patch(
               cantidad_anterior: 0, // Se calculará después si es necesario
               cantidad_incrementada: -Number(cambio.monto_origen),
               cantidad_nueva: 0, // Se calculará después si es necesario
-              tipo_movimiento: 'EGRESO',
+              tipo_movimiento: "EGRESO",
               descripcion: `Cambio de divisa - Egreso ${cambio.monto_origen}`,
               numero_referencia: cambio.numero_recibo,
             },
@@ -492,7 +492,7 @@ router.patch(
               cantidad_anterior: 0, // Se calculará después si es necesario
               cantidad_incrementada: Number(cambio.monto_destino),
               cantidad_nueva: 0, // Se calculará después si es necesario
-              tipo_movimiento: 'INGRESO',
+              tipo_movimiento: "INGRESO",
               descripcion: `Cambio de divisa - Ingreso ${cambio.monto_destino}`,
               numero_referencia: cambio.numero_recibo,
             },
@@ -542,81 +542,85 @@ router.patch(
 );
 
 // Endpoint para obtener cambios pendientes
-router.get("/pending", authenticateToken, async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
-  try {
-    const { pointId } = req.query;
-    
-    if (!pointId) {
-      res.status(400).json({ 
-        success: false, 
-        error: "Se requiere pointId" 
+router.get(
+  "/pending",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+    try {
+      const { pointId } = req.query;
+
+      if (!pointId) {
+        res.status(400).json({
+          success: false,
+          error: "Se requiere pointId",
+        });
+        return;
+      }
+
+      const exchanges = await prisma.cambioDivisa.findMany({
+        where: {
+          punto_atencion_id: pointId as string,
+          estado: {
+            in: [EstadoTransaccion.PENDIENTE],
+          },
+          // Removido el filtro de saldo_pendiente > 0 para mostrar TODOS los cambios pendientes
+        },
+        include: {
+          monedaOrigen: {
+            select: {
+              id: true,
+              nombre: true,
+              codigo: true,
+              simbolo: true,
+            },
+          },
+          monedaDestino: {
+            select: {
+              id: true,
+              nombre: true,
+              codigo: true,
+              simbolo: true,
+            },
+          },
+          usuario: {
+            select: {
+              id: true,
+              nombre: true,
+              username: true,
+            },
+          },
+          puntoAtencion: {
+            select: {
+              id: true,
+              nombre: true,
+            },
+          },
+        },
+        orderBy: {
+          fecha: "desc",
+        },
       });
-      return;
+
+      logger.info("Cambios pendientes obtenidos", {
+        count: exchanges.length,
+        pointId,
+      });
+
+      res.json({
+        success: true,
+        exchanges,
+      });
+    } catch (error) {
+      logger.error("Error fetching pending exchanges", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
     }
-
-    const exchanges = await prisma.cambioDivisa.findMany({
-      where: {
-        punto_atencion_id: pointId as string,
-        estado: {
-          in: [EstadoTransaccion.PENDIENTE]
-        }
-        // Removido el filtro de saldo_pendiente > 0 para mostrar TODOS los cambios pendientes
-      },
-      include: {
-        monedaOrigen: {
-          select: {
-            id: true,
-            nombre: true,
-            codigo: true,
-            simbolo: true,
-          },
-        },
-        monedaDestino: {
-          select: {
-            id: true,
-            nombre: true,
-            codigo: true,
-            simbolo: true,
-          },
-        },
-        usuario: {
-          select: {
-            id: true,
-            nombre: true,
-            username: true,
-          },
-        },
-        puntoAtencion: {
-          select: {
-            id: true,
-            nombre: true,
-          },
-        },
-      },
-      orderBy: {
-        fecha: "desc",
-      },
-    });
-
-    logger.info("Cambios pendientes obtenidos", {
-      count: exchanges.length,
-      pointId,
-    });
-
-    res.json({
-      success: true,
-      exchanges,
-    });
-  } catch (error) {
-    logger.error("Error fetching pending exchanges", {
-      error: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-    res.status(500).json({
-      success: false,
-      error: "Error interno del servidor",
-    });
   }
-});
+);
 
 export default router;

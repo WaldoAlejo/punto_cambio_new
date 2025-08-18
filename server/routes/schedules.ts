@@ -1,12 +1,12 @@
 import express from "express";
-import { PrismaClient, Prisma, EstadoJornada } from "@prisma/client";
+import { Prisma, EstadoJornada } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 const scheduleSchema = z
   .object({

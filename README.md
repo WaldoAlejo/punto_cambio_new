@@ -7,17 +7,14 @@ Sistema completo de gestión para casas de cambio con frontend React y backend N
 ### Para despliegue en producción (VM de GCP):
 
 ```bash
-# Primera vez
+# Despliegue limpio y optimizado
 git clone <tu-repositorio>
 cd punto_cambio_new
 npm install
-./deploy.sh full
-
-# Actualizaciones diarias
-./deploy.sh quick
+./deploy-clean.sh
 ```
 
-**📖 Ver [DESPLIEGUE-SIMPLE.md](./DESPLIEGUE-SIMPLE.md) para guía completa**
+**📖 Ver [OPTIMIZACION-CONEXIONES-DB.md](./OPTIMIZACION-CONEXIONES-DB.md) para detalles sobre la optimización**
 
 ## 🏗️ Arquitectura
 
@@ -62,20 +59,17 @@ npm run build:server
 ### Scripts disponibles:
 
 ```bash
-# Despliegue completo (primera vez o cambios importantes)
-./deploy.sh full
+# Despliegue limpio y optimizado (recomendado)
+./deploy-clean.sh
 
-# Despliegue rápido (solo cambios de código)
-./deploy.sh quick
+# Monitorear conexiones a la base de datos
+node scripts/monitor-db-connections.js
 
-# Iniciar aplicación
-./start.sh prod
+# Probar conexión a la base de datos
+node scripts/test-db-connection.js
 
-# Verificar sistema
-./check-system.sh
-
-# Probar construcción local
-./test-build.sh
+# Solucionar problemas comunes
+./scripts/fix-common-issues.sh
 ```
 
 ### Comandos PM2:
@@ -102,9 +96,8 @@ pm2 stop punto-cambio-api
 
 ## 📚 Documentación
 
-- **[DESPLIEGUE-SIMPLE.md](./DESPLIEGUE-SIMPLE.md)** - Guía rápida de despliegue
-- **[SETUP-PRODUCTION.md](./SETUP-PRODUCTION.md)** - Configuración completa de producción
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Documentación técnica detallada
+- **[OPTIMIZACION-CONEXIONES-DB.md](./OPTIMIZACION-CONEXIONES-DB.md)** - Optimización de conexiones a la base de datos
+- **[README.md](./README.md)** - Documentación principal
 
 ## 🛠️ Tecnologías
 

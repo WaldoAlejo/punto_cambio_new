@@ -1,12 +1,10 @@
 import {
-  PrismaClient,
   TipoMovimiento,
   TipoTransferencia,
   Transferencia,
 } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-
-const prisma = new PrismaClient();
 
 export interface TransferData {
   origen_id?: string | null;

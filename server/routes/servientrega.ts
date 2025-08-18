@@ -1,11 +1,11 @@
 import express from "express";
 import axios from "axios";
 import https from "https";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import { subDays, startOfDay, endOfDay } from "date-fns";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 const BASE_URL =
   "https://servientrega-ecuador-prueba.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";

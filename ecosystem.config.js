@@ -3,8 +3,8 @@ export default {
     {
       name: "punto-cambio-api",
       script: "dist/index.js",
-      instances: process.env.NODE_ENV === "production" ? 2 : 1,
-      exec_mode: "cluster",
+      instances: 1, // Reducir a 1 instancia para limitar las conexiones
+      exec_mode: "fork", // Cambiar a fork en lugar de cluster
       env: {
         NODE_ENV: "development",
         PORT: 3001,
