@@ -79,9 +79,9 @@ app.use(
       "http://localhost:3000",
       "http://localhost:3001",
       "http://localhost:8080",
-      "http://35.238.95.118:3001", // IP pública puerto 3001 (producción)
-      "http://35.238.95.118:8080", // IP pública frontend puerto 8080
-      "http://35.238.95.118", // IP pública frontend puerto 80
+      "http://34.70.184.11:3001", // IP pública puerto 3001 (producción)
+      "http://34.70.184.11:8080", // IP pública frontend puerto 8080
+      "http://34.70.184.11", // IP pública frontend puerto 80
     ],
     credentials: true,
   })
@@ -195,8 +195,10 @@ app.use("/api/*", (req, res) => {
 });
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
-  logger.info(`Server running on port ${PORT} and accessible on all interfaces`);
+app.listen(PORT, "0.0.0.0", () => {
+  logger.info(
+    `Server running on port ${PORT} and accessible on all interfaces`
+  );
 });
 
 export default app;
