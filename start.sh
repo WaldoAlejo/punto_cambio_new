@@ -56,18 +56,27 @@ module.exports = {
         NODE_ENV: "production",
         PORT: 3001
       },
-      watch: false
+      watch: false,
+      node_args: "--experimental-specifier-resolution=node"
     }
   ]
 };
 EOF
 fi
 
+# Detener cualquier instancia existente
+log_message "Deteniendo cualquier instancia existente..."
+pm2 stop punto-cambio-api || true
+pm2 delete punto-cambio-api || true
+
 # Iniciar la aplicación con PM2
 log_message "Iniciando la aplicación con PM2..."
 pm2 start ecosystem.config.js --env production || {
   log_error "Error al iniciar la aplicación con PM2. Intentando directamente..."
-  pm2 start dist/index.js --name punto-cambio-api || log_error "Error al iniciar la aplicación con PM2"
+  pm2 start dist/index.js --name punto-cambio-api --node-args="--experimental-specifier-resolution=node" || {
+    log_error "Error al iniciar la aplicación con PM2. Intentando con node directamente..."
+    node --experimental-specifier-resolution=node dist/index.js &
+  }
 }
 
 # Guardar la configuración de PM2

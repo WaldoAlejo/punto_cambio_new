@@ -143,9 +143,99 @@ fi
 
 # Construir el backend
 log_message "Construyendo el backend..."
-npm run build:server || {
-  log_error "Error al construir el backend. Intentando con scripts/build-server.sh..."
+log_message "Limpiando el directorio dist..."
+rm -rf dist
+
+log_message "Compilando el backend..."
+npx tsc --project tsconfig.server.json || {
+  log_error "Error al compilar el backend con tsc. Intentando con scripts/build-server.sh..."
   ./scripts/build-server.sh
+}
+
+# Verificar la estructura de directorios
+log_message "Verificando la estructura de directorios..."
+find dist -type f | sort
+
+# Verificar si existe el archivo index.js
+if [ -f "dist/index.js" ]; then
+  log_message "El archivo dist/index.js existe"
+else
+  log_warning "El archivo dist/index.js no existe"
+  
+  # Buscar el archivo index.js en el directorio dist
+  INDEX_FILE=$(find dist -name "index.js" | head -1)
+  if [ -n "$INDEX_FILE" ]; then
+    log_message "Archivo encontrado en $INDEX_FILE"
+  else
+    log_error "No se pudo encontrar el archivo index.js en el directorio dist"
+    
+    # Crear un archivo index.js en dist
+    log_message "Creando un archivo index.js en dist..."
+    mkdir -p dist
+    cat > dist/index.js << 'EOF'
+import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Cargar variables de entorno según el entorno
+if (fs.existsSync(".env.local")) {
+  console.log("Cargando variables de entorno desde .env.local");
+  dotenv.config({ path: ".env.local" });
+} else if (fs.existsSync(".env.production")) {
+  console.log("Cargando variables de entorno desde .env.production");
+  dotenv.config({ path: ".env.production" });
+} else {
+  console.log("Cargando variables de entorno desde .env");
+  dotenv.config();
+}
+
+// Importar el servidor
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static("dist"));
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "OK",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Servir archivos estáticos del frontend
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "dist", "index.html"));
+});
+
+// Start server
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
+EOF
+  fi
+fi
+
+# Verificar que el archivo package.json tiene el tipo module
+log_message "Verificando que el archivo package.json tiene el tipo module..."
+if grep -q '"type": "module"' package.json; then
+  log_message "El archivo package.json tiene el tipo module"
+else
+  log_warning "El archivo package.json no tiene el tipo module. Actualizando..."
+  sed -i 's|"private": true,|"private": true,\n  "type": "module",|g' package.json
 }
 
 # Construir el frontend
@@ -178,16 +268,26 @@ module.exports = {
         NODE_ENV: "production",
         PORT: 3001
       },
-      watch: false
+      watch: false,
+      node_args: "--experimental-specifier-resolution=node"
     }
   ]
 };
 EOF
 
+# Detener cualquier instancia existente
+log_message "Deteniendo cualquier instancia existente..."
+pm2 stop punto-cambio-api || true
+pm2 delete punto-cambio-api || true
+
 # Iniciar la aplicación con PM2
+log_message "Iniciando la aplicación con PM2..."
 pm2 start ecosystem.config.js --env production || {
   log_error "Error al iniciar la aplicación con PM2. Intentando directamente..."
-  pm2 start dist/index.js --name punto-cambio-api || log_error "Error al iniciar la aplicación con PM2"
+  pm2 start dist/index.js --name punto-cambio-api --node-args="--experimental-specifier-resolution=node" || {
+    log_error "Error al iniciar la aplicación con PM2. Intentando con node directamente..."
+    node --experimental-specifier-resolution=node dist/index.js &
+  }
 }
 
 # Guardar la configuración de PM2

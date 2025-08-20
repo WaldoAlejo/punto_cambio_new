@@ -97,6 +97,28 @@ El script realiza las siguientes acciones:
 - Detiene la aplicación con PM2
 - Verifica el estado de la aplicación
 
+### fix.sh
+
+Este script verifica y corrige problemas comunes:
+
+```bash
+./fix.sh
+```
+
+El script realiza las siguientes acciones:
+
+- Verifica que existe el archivo tsconfig.server.json
+- Verifica que el archivo package.json tiene el tipo module
+- Verifica que existe el archivo .env.production
+- Verifica que existe el archivo .env
+- Verifica que existe el archivo ecosystem.config.js
+- Verifica que existe el directorio dist
+- Verifica que existe el archivo dist/index.js
+- Verifica que existe el archivo dist/index.html
+- Verifica que PM2 está instalado
+- Verifica que la aplicación está en ejecución
+- Verifica que la aplicación está respondiendo
+
 ## Pasos para el Despliegue
 
 ### 1. Conectarse a la VM de Google Cloud
@@ -136,6 +158,16 @@ chmod +x *.sh
 ```
 
 ## Solución de Problemas
+
+### Solución Automática de Problemas
+
+Para solucionar automáticamente los problemas más comunes, ejecuta el script `fix.sh`:
+
+```bash
+./fix.sh
+```
+
+Este script verificará y corregirá los problemas más comunes, como archivos de configuración faltantes, variables de entorno incorrectas, etc.
 
 ### La aplicación no responde
 
@@ -177,6 +209,32 @@ ls -la tsconfig.server.json
 grep '"type": "module"' package.json
 ```
 
+4. Intenta construir el backend manualmente:
+
+```bash
+npx tsc --project tsconfig.server.json
+```
+
+### Error al iniciar la aplicación con PM2
+
+1. Verifica que el archivo `dist/index.js` existe:
+
+```bash
+ls -la dist/index.js
+```
+
+2. Intenta iniciar la aplicación directamente con Node.js:
+
+```bash
+node --experimental-specifier-resolution=node dist/index.js
+```
+
+3. Verifica los logs de PM2:
+
+```bash
+pm2 logs
+```
+
 ### Error al conectar con la base de datos
 
 1. Verifica que la base de datos está en ejecución:
@@ -195,4 +253,10 @@ psql -h 34.66.51.85 -p 5432 -U postgres -d punto_cambio
 
 ```bash
 grep DATABASE_URL .env.production
+```
+
+4. Prueba la conexión a la base de datos:
+
+```bash
+node scripts/test-db-connection.js
 ```

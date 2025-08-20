@@ -50,7 +50,10 @@ else
     pm2 start ecosystem.config.js --env production || log_error "Error al iniciar la aplicación con PM2"
   else
     log_message "Iniciando directamente con dist/index.js..."
-    pm2 start dist/index.js --name punto-cambio-api || log_error "Error al iniciar la aplicación con PM2"
+    pm2 start dist/index.js --name punto-cambio-api --node-args="--experimental-specifier-resolution=node" || {
+      log_error "Error al iniciar la aplicación con PM2. Intentando con node directamente..."
+      node --experimental-specifier-resolution=node dist/index.js &
+    }
   fi
 }
 
