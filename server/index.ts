@@ -195,8 +195,8 @@ app.use("/api/*", (req, res) => {
 });
 
 // Start server
-app.listen(PORT, "0.0.0.0", () => {
-  logger.info(`Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  logger.info(`Server running on port ${PORT} and accessible on all interfaces`);
 });
 
 export default app;
