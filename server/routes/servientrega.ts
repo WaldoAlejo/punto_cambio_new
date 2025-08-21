@@ -1817,10 +1817,10 @@ router.post("/tarifa", async (req, res) => {
 
     const payload: any = {
       tipo,
-      pais_ori: pais_ori?.toUpperCase(),
+      pais_ori: (pais_ori || "ECUADOR").toUpperCase(),
       ciu_ori: ciu_ori?.toUpperCase(),
       provincia_ori: provincia_ori?.toUpperCase(),
-      pais_des: pais_des?.toUpperCase(),
+      pais_des: (pais_des || "ECUADOR").toUpperCase(),
       ciu_des: ciu_des?.toUpperCase(),
       provincia_des: provincia_des?.toUpperCase(),
       valor_seguro: String(valor_seguro || "0"),
@@ -1835,9 +1835,35 @@ router.post("/tarifa", async (req, res) => {
       ...AUTH,
     };
 
-    res.json(await callServientregaAPI(payload));
-  } catch {
-    res.status(500).json({ error: "Error al calcular tarifa" });
+    const result = await callServientregaAPI(payload);
+
+    // Parsear la respuesta si viene como string JSON escapado
+    let parsedResult = result;
+    if (typeof result === "string" && result.startsWith("﻿[")) {
+      try {
+        // Remover BOM y parsear JSON
+        const cleanResult = result.replace(/^﻿/, "");
+        parsedResult = JSON.parse(cleanResult);
+        console.log("📊 Respuesta de tarifa parseada correctamente");
+      } catch (parseError) {
+        console.error("❌ Error al parsear respuesta de tarifa:", parseError);
+        parsedResult = result; // Mantener original si falla el parseo
+      }
+    }
+
+    res.json({
+      success: true,
+      tarifa: parsedResult,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("❌ Error al calcular tarifa:", error);
+    res.status(500).json({
+      success: false,
+      error: "Error al calcular tarifa",
+      details: error instanceof Error ? error.message : "Error desconocido",
+      timestamp: new Date().toISOString(),
+    });
   }
 });
 
