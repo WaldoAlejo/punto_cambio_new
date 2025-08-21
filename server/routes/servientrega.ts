@@ -150,9 +150,16 @@ router.post("/tarifa", async (req, res) => {
     // Validaciones locales antes de enviar a Servientrega  
     const erroresValidacion: string[] = [];
     
+    // Validar peso mínimo 2kg
+    const pesoNumerico = parseFloat(peso);
+    if (isNaN(pesoNumerico) || pesoNumerico < 2) {
+      console.log("❌ Peso inválido:", peso, "-> parseado:", pesoNumerico);
+    }
+    
     console.log("🔍 Validando campos:", {
       peso,
-      peso_parseado: parseFloat(peso),
+      peso_parseado: pesoNumerico,
+      peso_final: Math.max(2, pesoNumerico),
       ciu_ori,
       provincia_ori,
       ciu_des,
@@ -185,7 +192,7 @@ router.post("/tarifa", async (req, res) => {
       provincia_des: String(provincia_des).toUpperCase(),
       valor_seguro: String(valor_seguro),
       valor_declarado: String(valor_declarado),
-      peso: String(peso), // Usar el peso tal como viene
+      peso: String(Math.max(2, pesoNumerico)), // Asegurar mínimo 2kg
       alto: String(alto),
       ancho: String(ancho),
       largo: String(largo),
