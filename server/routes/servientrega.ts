@@ -144,6 +144,27 @@ router.post("/tarifa", async (req, res) => {
       empaque = ""
     } = req.body;
 
+    // Validaciones locales antes de enviar a Servientrega
+    const erroresValidacion = [];
+    
+    // Validar peso mínimo 2kg
+    const pesoNumerico = parseFloat(peso);
+    if (pesoNumerico < 2) {
+      erroresValidacion.push("El peso mínimo debe ser 2 kg");
+    }
+
+    // Validar campos requeridos
+    if (!ciu_ori || !provincia_ori || !ciu_des || !provincia_des) {
+      erroresValidacion.push("Faltan campos obligatorios: ciudad y provincia de origen y destino");
+    }
+
+    if (erroresValidacion.length > 0) {
+      return res.status(400).json({ 
+        error: "Errores de validación", 
+        errores: erroresValidacion 
+      });
+    }
+
     // Validar que el producto sea válido
     const productosValidos = ["MERCANCIA PREMIER", "DOCUMENTO"];
     const productoFinal = productosValidos.includes(nombre_producto) 
@@ -152,13 +173,13 @@ router.post("/tarifa", async (req, res) => {
 
     const payload = {
       tipo: "obtener_tarifa_nacional",
-      ciu_ori,
-      provincia_ori,
-      ciu_des,
-      provincia_des,
+      ciu_ori: String(ciu_ori).toUpperCase(),
+      provincia_ori: String(provincia_ori).toUpperCase(),
+      ciu_des: String(ciu_des).toUpperCase(),
+      provincia_des: String(provincia_des).toUpperCase(),
       valor_seguro: String(valor_seguro),
       valor_declarado: String(valor_declarado),
-      peso: String(peso),
+      peso: String(Math.max(2, pesoNumerico)), // Asegurar mínimo 2kg
       alto: String(alto),
       ancho: String(ancho),
       largo: String(largo),
@@ -173,6 +194,26 @@ router.post("/tarifa", async (req, res) => {
     const result = await callServientregaAPI(payload);
     
     console.log("📋 Respuesta de Servientrega:", JSON.stringify(result, null, 2));
+    
+    // Procesar errores de Servientrega
+    if (typeof result === 'string' && result.includes('proceso')) {
+      const errores = [];
+      
+      // Extraer todos los mensajes de error
+      const regex = /\{"proceso":"([^"]+)"\}/g;
+      let match;
+      while ((match = regex.exec(result)) !== null) {
+        errores.push(match[1]);
+      }
+      
+      if (errores.length > 0) {
+        return res.status(400).json({
+          error: "Error en Servientrega",
+          errores: errores,
+          respuesta_original: result
+        });
+      }
+    }
     
     res.json(result);
   } catch (error) {
