@@ -8,6 +8,7 @@ import { subDays, startOfDay, endOfDay } from "date-fns";
 const router = express.Router();
 
 const BASE_URL = "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
+const RETAIL_URL = "https://servientrega-ecuador.appsiscore.com/app/ws/serviretail_cs.php";
 
 const AUTH = {
   usuingreso: "INTPUNTOC",
@@ -17,9 +18,10 @@ const AUTH = {
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 const UMBRAL_MINIMO_SALDO = new Prisma.Decimal(5);
 
-async function callServientregaAPI(payload: any, timeoutMs: number = 15000) {
+async function callServientregaAPI(payload: any, timeoutMs: number = 15000, useRetailUrl: boolean = false) {
   try {
-    const { data } = await axios.post(BASE_URL, payload, {
+    const url = useRetailUrl ? RETAIL_URL : BASE_URL;
+    const { data } = await axios.post(url, payload, {
       headers: { "Content-Type": "application/json" },
       httpsAgent,
       timeout: timeoutMs,
@@ -446,6 +448,43 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
   } catch (error) {
     console.error("Error al actualizar destinatario:", error);
     res.status(500).json({ error: "Error al actualizar destinatario" });
+  }
+});
+
+// =============================
+// 🔍 Validar Endpoint Retail  
+// =============================
+
+router.post("/validar-retail", async (req, res) => {
+  try {
+    const payload = req.body;
+    const result = await callServientregaAPI(payload, 15000, true); // usar RETAIL_URL
+    res.json(result);
+  } catch (error) {
+    console.error("Error al validar endpoint retail:", error);
+    res.status(500).json({ error: "Error al validar endpoint retail" });
+  }
+});
+
+router.get("/test-retail", async (_, res) => {
+  try {
+    const testPayload = { 
+      tipo: "test",
+      ...AUTH 
+    };
+    const result = await callServientregaAPI(testPayload, 10000, true);
+    res.json({ 
+      success: true, 
+      message: "Endpoint retail responde correctamente",
+      data: result 
+    });
+  } catch (error) {
+    console.error("Error al probar endpoint retail:", error);
+    res.status(500).json({ 
+      success: false,
+      error: "Error al conectar con endpoint retail",
+      details: error instanceof Error ? error.message : "Error desconocido"
+    });
   }
 });
 
