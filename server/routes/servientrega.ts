@@ -318,17 +318,124 @@ async function callServientregaAPI(payload: any, timeoutMs: number = 15000) {
 }
 
 // =============================
+// 🔧 Test de conectividad básica
+// =============================
+router.get("/test-connection", async (req, res) => {
+  try {
+    console.log("🔧 Test: Verificando conectividad básica...");
+
+    const testInfo: any = {
+      timestamp: new Date().toISOString(),
+      server: {
+        status: "running",
+        nodeVersion: process.version,
+        platform: process.platform,
+      },
+      servientrega: {
+        url: BASE_URL,
+        auth: { ...AUTH, contrasenha: "***HIDDEN***" },
+      },
+    };
+
+    // Test básico de conectividad
+    try {
+      const response = await axios.get("https://google.com", { timeout: 5000 });
+      testInfo.internetConnection = {
+        status: "ok",
+        statusCode: response.status,
+      };
+    } catch (internetError) {
+      testInfo.internetConnection = {
+        status: "error",
+        error:
+          internetError instanceof Error
+            ? internetError.message
+            : "Error desconocido",
+      };
+    }
+
+    res.json(testInfo);
+  } catch (error) {
+    console.error("❌ Error en test de conectividad:", error);
+    res.status(500).json({
+      error: "Error en test",
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
+  }
+});
+
+// =============================
+// 🔧 Debug de productos
+// =============================
+router.get("/productos/debug", async (req, res) => {
+  try {
+    console.log("🔧 Debug: Verificando configuración de productos...");
+
+    const debugInfo: any = {
+      timestamp: new Date().toISOString(),
+      config: {
+        BASE_URL,
+        AUTH: { ...AUTH, contrasenha: "***HIDDEN***" },
+        timeout: 15000,
+      },
+      cache: {
+        hasProductosCache: cache.has("productos"),
+        cacheSize: cache.size,
+        cacheKeys: Array.from(cache.keys()),
+      },
+    };
+
+    // Intentar llamada directa a la API
+    try {
+      console.log("🔧 Probando llamada directa a Servientrega...");
+      const directResult = await callServientregaAPI({
+        tipo: "obtener_producto",
+        ...AUTH,
+      });
+
+      debugInfo.directCall = {
+        success: true,
+        result: directResult,
+        productCount: Array.isArray(directResult.productos)
+          ? directResult.productos.length
+          : 0,
+      };
+    } catch (directError) {
+      debugInfo.directCall = {
+        success: false,
+        error:
+          directError instanceof Error
+            ? directError.message
+            : "Error desconocido",
+        stack: directError instanceof Error ? directError.stack : null,
+      };
+    }
+
+    res.json(debugInfo);
+  } catch (error) {
+    console.error("❌ Error en debug de productos:", error);
+    res.status(500).json({
+      error: "Error en debug",
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
+  }
+});
+
+// =============================
 // 📦 Productos (Devuelve siempre [{ nombre_producto }])
 // =============================
 router.post("/productos", async (req, res) => {
   try {
     console.log("🔍 Iniciando carga de productos Servientrega...");
+    console.log("🔍 Request headers:", req.headers);
+    console.log("🔍 Request body:", req.body);
 
     // Verificar cache primero
     const cacheKey = "productos";
     const cachedResult = getCachedData(cacheKey);
 
     if (cachedResult) {
+      console.log("📋 Devolviendo productos desde cache");
       return res.json({
         ...cachedResult,
         success: true,
@@ -337,6 +444,7 @@ router.post("/productos", async (req, res) => {
       });
     }
 
+    console.log("🌐 Cache no disponible, llamando a API de Servientrega...");
     const result = await callServientregaAPI({
       tipo: "obtener_producto",
       ...AUTH,
@@ -345,6 +453,16 @@ router.post("/productos", async (req, res) => {
     console.log(
       "📦 Respuesta de Servientrega para productos:",
       JSON.stringify(result, null, 2)
+    );
+
+    // Validar que la respuesta tenga productos
+    if (!result || !Array.isArray(result.productos)) {
+      console.log("⚠️ Respuesta de Servientrega no tiene productos válidos");
+      throw new Error("Respuesta de API no contiene productos válidos");
+    }
+
+    console.log(
+      `✅ ${result.productos.length} productos recibidos de Servientrega`
     );
 
     // Guardar en cache por 60 minutos (los productos no cambian frecuentemente)
