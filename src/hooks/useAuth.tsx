@@ -13,7 +13,6 @@ import {
   validateAndTransformUser,
   validateAndTransformPuntoAtencion,
 } from "../utils/typeValidation";
-import { ErrorHandler } from "../utils/errorHandler";
 
 interface AuthContextType {
   user: AuthUser | null;

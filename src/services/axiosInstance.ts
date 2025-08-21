@@ -1,6 +1,5 @@
 import axios, { AxiosError, AxiosResponse } from "axios";
 import { env } from "@/config/environment";
-import { ErrorHandler } from "@/utils/errorHandler";
 
 const getToken = (): string | null => localStorage.getItem("authToken");
 

@@ -215,10 +215,10 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
         return (
           <ExchangeDetailsForm
             fromCurrency={
-              exchangeData ? getCurrency(exchangeData.fromCurrency) : null
+              exchangeData ? getCurrency(exchangeData.fromCurrency) || null : null
             }
             toCurrency={
-              exchangeData ? getCurrency(exchangeData.toCurrency) : null
+              exchangeData ? getCurrency(exchangeData.toCurrency) || null : null
             }
             fromCurrencyName={
               exchangeData ? getCurrencyName(exchangeData.fromCurrency) : ""

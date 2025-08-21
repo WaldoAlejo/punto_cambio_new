@@ -64,7 +64,6 @@ const ExchangeDetailsForm = ({
   abonoInicialFecha,
   onAbonoInicialFechaChange,
   abonoInicialRecibidoPor,
-  onAbonoInicialRecibidoPorChange,
   saldoPendiente,
   onSaldoPendienteChange,
   referenciaCambioPrincipal,
