@@ -154,16 +154,21 @@ router.post("/tarifa", async (req, res) => {
     const pesoNumerico = parseFloat(peso);
     if (isNaN(pesoNumerico) || pesoNumerico < 2) {
       console.log("❌ Peso inválido:", peso, "-> parseado:", pesoNumerico);
+      erroresValidacion.push(`Peso inválido: ${peso}. Debe ser número mayor o igual a 2`);
     }
     
+    // Validar ciudades y provincias (formato esperado por Servientrega)
+    const ciudadesPermitidas = ["QUITO", "GUAYAQUIL", "CUENCA", "AMBATO", "MACHALA"];
+    const provinciasPermitidas = ["PICHINCHA", "GUAYAS", "AZUAY", "TUNGURAHUA", "EL ORO"];
+    
     console.log("🔍 Validando campos:", {
-      peso,
+      peso_original: peso,
       peso_parseado: pesoNumerico,
-      peso_final: Math.max(2, pesoNumerico),
-      ciu_ori,
-      provincia_ori,
-      ciu_des,
-      provincia_des
+      peso_final: pesoNumerico >= 2 ? pesoNumerico : 2,
+      ciu_ori: ciu_ori?.toUpperCase(),
+      provincia_ori: provincia_ori?.toUpperCase(),
+      ciu_des: ciu_des?.toUpperCase(),
+      provincia_des: provincia_des?.toUpperCase()
     });
 
     if (erroresValidacion.length > 0) {
