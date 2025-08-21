@@ -18,6 +18,70 @@ const AUTH = {
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 const UMBRAL_MINIMO_SALDO = new Prisma.Decimal(5);
 
+// Función helper para adaptar respuestas de Servientrega
+function adaptServientregaResponse(result: any, dataType: string): any {
+  if (!result) return result;
+
+  // Si ya tiene el formato correcto, devolverlo tal como está
+  if (
+    Array.isArray(result.productos) ||
+    Array.isArray(result.paises) ||
+    Array.isArray(result.ciudades) ||
+    Array.isArray(result.agencias) ||
+    Array.isArray(result.empaques)
+  ) {
+    return result;
+  }
+
+  // Si usa el nuevo formato con 'fetch', adaptarlo
+  if (Array.isArray(result.fetch)) {
+    const adaptedResult = { ...result };
+
+    switch (dataType) {
+      case "productos":
+        adaptedResult.productos = result.fetch.map((item: any) => ({
+          nombre_producto: item.producto ? item.producto.trim() : item.producto,
+        }));
+        break;
+      case "paises":
+        adaptedResult.paises = result.fetch.map((item: any) => ({
+          nombre_pais: item.pais ? item.pais.trim() : item.pais,
+          codigo_pais: item.codigo ? item.codigo.trim() : item.codigo,
+        }));
+        break;
+      case "ciudades":
+        adaptedResult.ciudades = result.fetch.map((item: any) => ({
+          nombre_ciudad: item.ciudad ? item.ciudad.trim() : item.ciudad,
+          codigo_ciudad: item.codigo ? item.codigo.trim() : item.codigo,
+        }));
+        break;
+      case "agencias":
+        adaptedResult.agencias = result.fetch.map((item: any) => ({
+          nombre_agencia: item.agencia ? item.agencia.trim() : item.agencia,
+          codigo_agencia: item.codigo ? item.codigo.trim() : item.codigo,
+          direccion: item.direccion ? item.direccion.trim() : item.direccion,
+        }));
+        break;
+      case "empaques":
+        adaptedResult.empaques = result.fetch.map((item: any) => ({
+          nombre_empaque: item.empaque ? item.empaque.trim() : item.empaque,
+          codigo_empaque: item.codigo ? item.codigo.trim() : item.codigo,
+        }));
+        break;
+      default:
+        // Para tipos desconocidos, mantener la estructura fetch
+        break;
+    }
+
+    console.log(
+      `📦 Adaptado formato ${dataType} de 'fetch' a estructura estándar`
+    );
+    return adaptedResult;
+  }
+
+  return result;
+}
+
 // Sistema de cache simple para reducir peticiones
 const cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
 
@@ -365,6 +429,108 @@ router.get("/test-connection", async (req, res) => {
 });
 
 // =============================
+// 🔧 Debug general de todos los endpoints
+// =============================
+router.get("/debug/all", async (req, res) => {
+  try {
+    console.log("🔧 Debug: Verificando todos los endpoints de Servientrega...");
+
+    const debugInfo: any = {
+      timestamp: new Date().toISOString(),
+      tests: {},
+    };
+
+    // Test productos
+    try {
+      const productosResult = await callServientregaAPI({
+        tipo: "obtener_producto",
+        ...AUTH,
+      });
+      debugInfo.tests.productos = {
+        success: true,
+        hasProductos: Array.isArray(productosResult.productos),
+        hasFetch: Array.isArray(productosResult.fetch),
+        structure: Object.keys(productosResult || {}),
+        sample: productosResult,
+      };
+    } catch (error) {
+      debugInfo.tests.productos = {
+        success: false,
+        error: error instanceof Error ? error.message : "Error desconocido",
+      };
+    }
+
+    // Test países
+    try {
+      const paisesResult = await callServientregaAPI({
+        tipo: "obtener_paises",
+        ...AUTH,
+      });
+      debugInfo.tests.paises = {
+        success: true,
+        hasProductos: Array.isArray(paisesResult.productos),
+        hasFetch: Array.isArray(paisesResult.fetch),
+        structure: Object.keys(paisesResult || {}),
+        sample: paisesResult,
+      };
+    } catch (error) {
+      debugInfo.tests.paises = {
+        success: false,
+        error: error instanceof Error ? error.message : "Error desconocido",
+      };
+    }
+
+    // Test agencias
+    try {
+      const agenciasResult = await callServientregaAPI({
+        tipo: "obtener_agencias_aliadas",
+        ...AUTH,
+      });
+      debugInfo.tests.agencias = {
+        success: true,
+        hasProductos: Array.isArray(agenciasResult.productos),
+        hasFetch: Array.isArray(agenciasResult.fetch),
+        structure: Object.keys(agenciasResult || {}),
+        sample: agenciasResult,
+      };
+    } catch (error) {
+      debugInfo.tests.agencias = {
+        success: false,
+        error: error instanceof Error ? error.message : "Error desconocido",
+      };
+    }
+
+    // Test empaques
+    try {
+      const empaquesResult = await callServientregaAPI({
+        tipo: "obtener_empaqueyembalaje",
+        ...AUTH,
+      });
+      debugInfo.tests.empaques = {
+        success: true,
+        hasProductos: Array.isArray(empaquesResult.productos),
+        hasFetch: Array.isArray(empaquesResult.fetch),
+        structure: Object.keys(empaquesResult || {}),
+        sample: empaquesResult,
+      };
+    } catch (error) {
+      debugInfo.tests.empaques = {
+        success: false,
+        error: error instanceof Error ? error.message : "Error desconocido",
+      };
+    }
+
+    res.json(debugInfo);
+  } catch (error) {
+    console.error("❌ Error en debug general:", error);
+    res.status(500).json({
+      error: "Error en debug general",
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
+  }
+});
+
+// =============================
 // 🔧 Debug de productos
 // =============================
 router.get("/productos/debug", async (req, res) => {
@@ -393,12 +559,19 @@ router.get("/productos/debug", async (req, res) => {
         ...AUTH,
       });
 
+      // Contar productos según el formato
+      let productCount = 0;
+      if (Array.isArray(directResult.productos)) {
+        productCount = directResult.productos.length;
+      } else if (Array.isArray(directResult.fetch)) {
+        productCount = directResult.fetch.length;
+      }
+
       debugInfo.directCall = {
         success: true,
         result: directResult,
-        productCount: Array.isArray(directResult.productos)
-          ? directResult.productos.length
-          : 0,
+        productCount: productCount,
+        format: Array.isArray(directResult.productos) ? "productos" : "fetch",
       };
     } catch (directError) {
       debugInfo.directCall = {
@@ -455,22 +628,28 @@ router.post("/productos", async (req, res) => {
       JSON.stringify(result, null, 2)
     );
 
-    // Validar que la respuesta tenga productos
-    if (!result || !Array.isArray(result.productos)) {
-      console.log("⚠️ Respuesta de Servientrega no tiene productos válidos");
+    // Adaptar respuesta usando función helper
+    const adaptedResult = adaptServientregaResponse(result, "productos");
+
+    // Validar que la respuesta adaptada tenga productos
+    if (!adaptedResult || !Array.isArray(adaptedResult.productos)) {
+      console.log(
+        "⚠️ Respuesta de Servientrega no tiene productos válidos después de adaptación"
+      );
+      console.log("📋 Estructura recibida:", JSON.stringify(result, null, 2));
       throw new Error("Respuesta de API no contiene productos válidos");
     }
 
     console.log(
-      `✅ ${result.productos.length} productos recibidos de Servientrega`
+      `✅ ${adaptedResult.productos.length} productos procesados de Servientrega`
     );
 
     // Guardar en cache por 60 minutos (los productos no cambian frecuentemente)
-    setCachedData(cacheKey, result, 60);
+    setCachedData(cacheKey, adaptedResult, 60);
 
-    // Devolver exactamente lo que envía Servientrega
+    // Devolver respuesta adaptada
     res.json({
-      ...result,
+      ...adaptedResult,
       success: true,
       timestamp: new Date().toISOString(),
       fromCache: false,
@@ -531,11 +710,14 @@ router.post("/paises", async (_, res) => {
       ...AUTH,
     });
 
+    // Adaptar respuesta usando función helper
+    const adaptedResult = adaptServientregaResponse(result, "paises");
+
     // Guardar en cache por 120 minutos (los países cambian muy poco)
-    setCachedData(cacheKey, result, 120);
+    setCachedData(cacheKey, adaptedResult, 120);
 
     res.json({
-      ...result,
+      ...adaptedResult,
       success: true,
       timestamp: new Date().toISOString(),
       fromCache: false,
@@ -590,8 +772,11 @@ router.post("/ciudades", async (req, res) => {
       ...AUTH,
     });
 
+    // Adaptar respuesta usando función helper
+    const adaptedResult = adaptServientregaResponse(result, "ciudades");
+
     res.json({
-      ...result,
+      ...adaptedResult,
       success: true,
       timestamp: new Date().toISOString(),
     });
@@ -615,8 +800,11 @@ router.post("/agencias", async (_, res) => {
       ...AUTH,
     });
 
+    // Adaptar respuesta usando función helper
+    const adaptedResult = adaptServientregaResponse(result, "agencias");
+
     res.json({
-      ...result,
+      ...adaptedResult,
       success: true,
       timestamp: new Date().toISOString(),
     });
@@ -640,8 +828,11 @@ router.post("/empaques", async (_, res) => {
       ...AUTH,
     });
 
+    // Adaptar respuesta usando función helper
+    const adaptedResult = adaptServientregaResponse(result, "empaques");
+
     res.json({
-      ...result,
+      ...adaptedResult,
       success: true,
       timestamp: new Date().toISOString(),
     });
