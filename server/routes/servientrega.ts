@@ -8,11 +8,11 @@ import { subDays, startOfDay, endOfDay } from "date-fns";
 const router = express.Router();
 
 const BASE_URL =
-  "https://servientrega-ecuador-prueba.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
+  "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
 
 const AUTH = {
-  usuingreso: "PRUEBA",
-  contrasenha: "s12345ABCDe",
+  usuingreso: "INTPUNTOC",
+  contrasenha: "73Yes7321t",
 };
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
@@ -85,7 +85,11 @@ router.get("/status", async (_, res) => {
   try {
     console.log("📊 Verificando estado general de Servientrega...");
 
-    const tests = [];
+    const tests: Array<{
+      name: string;
+      status: "OK" | "ERROR";
+      message: string;
+    }> = [];
 
     // Test 1: Conectividad básica (timeout corto para diagnóstico rápido)
     try {
