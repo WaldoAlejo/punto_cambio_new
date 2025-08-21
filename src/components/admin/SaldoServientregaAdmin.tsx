@@ -44,7 +44,10 @@ interface SolicitudSaldo {
   punto_atencion_nombre: string;
   monto_requerido: number;
   estado: string;
+  observaciones?: string;
   creado_en: string;
+  aprobado_por?: string;
+  aprobado_en?: string;
 }
 
 interface PuntosResponse {

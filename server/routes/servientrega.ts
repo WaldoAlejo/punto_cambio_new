@@ -1126,13 +1126,27 @@ router.post("/saldo", async (req, res) => {
 // =============================
 router.post("/solicitar-saldo", async (req, res) => {
   try {
-    const { punto_atencion_id, monto_requerido } = req.body;
+    console.log("🔔 Nueva solicitud de saldo recibida:", req.body);
+    const { punto_atencion_id, monto_requerido, observaciones } = req.body;
+
+    if (!punto_atencion_id || !monto_requerido) {
+      console.log("❌ Datos faltantes en solicitud:", {
+        punto_atencion_id,
+        monto_requerido,
+      });
+      return res.status(400).json({ error: "Datos requeridos faltantes" });
+    }
 
     const punto = await prisma.puntoAtencion.findUnique({
       where: { id: punto_atencion_id },
     });
-    if (!punto)
+
+    if (!punto) {
+      console.log("❌ Punto de atención no encontrado:", punto_atencion_id);
       return res.status(404).json({ error: "Punto de atención no encontrado" });
+    }
+
+    console.log("✅ Punto de atención encontrado:", punto.nombre);
 
     const solicitud = await prisma.servientregaSolicitudSaldo.create({
       data: {
@@ -1140,7 +1154,15 @@ router.post("/solicitar-saldo", async (req, res) => {
         punto_atencion_nombre: punto.nombre,
         monto_requerido: new Prisma.Decimal(monto_requerido),
         estado: "PENDIENTE",
+        observaciones: observaciones || null,
       },
+    });
+
+    console.log("✅ Solicitud creada exitosamente:", {
+      id: solicitud.id,
+      punto: solicitud.punto_atencion_nombre,
+      monto: solicitud.monto_requerido.toString(),
+      estado: solicitud.estado,
     });
 
     res.json({
@@ -1148,18 +1170,140 @@ router.post("/solicitar-saldo", async (req, res) => {
       solicitud,
     });
   } catch (err) {
-    res.status(500).json({ error: "Error al registrar solicitud de saldo" });
+    console.error("❌ Error al registrar solicitud de saldo:", err);
+    res.status(500).json({
+      error: "Error al registrar solicitud de saldo",
+      detalle: err instanceof Error ? err.message : "Error desconocido",
+    });
   }
 });
 
 router.get("/solicitar-saldo/listar", async (_, res) => {
   try {
+    console.log("📋 Consultando solicitudes de saldo...");
+
     const solicitudes = await prisma.servientregaSolicitudSaldo.findMany({
       orderBy: { creado_en: "desc" },
     });
+
+    console.log("📋 Solicitudes encontradas:", {
+      total: solicitudes.length,
+      pendientes: solicitudes.filter((s) => s.estado === "PENDIENTE").length,
+      aprobadas: solicitudes.filter((s) => s.estado === "APROBADA").length,
+      rechazadas: solicitudes.filter((s) => s.estado === "RECHAZADA").length,
+    });
+
+    // Log detallado de las primeras 3 solicitudes para debug
+    if (solicitudes.length > 0) {
+      console.log(
+        "📋 Primeras solicitudes:",
+        solicitudes.slice(0, 3).map((s) => ({
+          id: s.id,
+          punto: s.punto_atencion_nombre,
+          monto: s.monto_requerido.toString(),
+          estado: s.estado,
+          fecha: s.creado_en,
+        }))
+      );
+    }
+
     res.json(solicitudes);
-  } catch {
-    res.status(500).json({ error: "Error al listar solicitudes" });
+  } catch (err) {
+    console.error("❌ Error al listar solicitudes:", err);
+    res.status(500).json({
+      error: "Error al listar solicitudes",
+      detalle: err instanceof Error ? err.message : "Error desconocido",
+    });
+  }
+});
+
+// Endpoint para verificar estructura de la tabla
+router.get("/solicitar-saldo/check-schema", async (_, res) => {
+  try {
+    console.log("🔧 Verificando estructura de la tabla...");
+
+    // Intentar crear una solicitud de prueba para verificar que el campo observaciones existe
+    const testData = {
+      punto_atencion_id: "test",
+      punto_atencion_nombre: "Test",
+      monto_requerido: new Prisma.Decimal(1),
+      estado: "PENDIENTE",
+      observaciones: "Test de estructura",
+    };
+
+    // Solo verificar que la estructura es válida, no crear realmente
+    const schemaCheck = await prisma.$queryRaw`
+      SELECT column_name, data_type, is_nullable 
+      FROM information_schema.columns 
+      WHERE table_name = 'ServientregaSolicitudSaldo'
+      ORDER BY ordinal_position;
+    `;
+
+    res.json({
+      success: true,
+      message: "Estructura de tabla verificada",
+      columns: schemaCheck,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("❌ Error verificando estructura:", err);
+    res.status(500).json({
+      error: "Error verificando estructura",
+      detalle: err instanceof Error ? err.message : "Error desconocido",
+    });
+  }
+});
+
+// Endpoint de debug para verificar solicitudes
+router.get("/solicitar-saldo/debug", async (_, res) => {
+  try {
+    console.log("🔧 Debug: Verificando solicitudes de saldo...");
+
+    // Contar total de solicitudes
+    const totalSolicitudes = await prisma.servientregaSolicitudSaldo.count();
+
+    // Obtener todas las solicitudes
+    const todasSolicitudes = await prisma.servientregaSolicitudSaldo.findMany({
+      orderBy: { creado_en: "desc" },
+      take: 10, // Solo las últimas 10
+    });
+
+    // Contar por estado
+    const porEstado = await prisma.servientregaSolicitudSaldo.groupBy({
+      by: ["estado"],
+      _count: {
+        estado: true,
+      },
+    });
+
+    const resultado = {
+      success: true,
+      timestamp: new Date().toISOString(),
+      totalSolicitudes,
+      porEstado: porEstado.reduce((acc, item) => {
+        acc[item.estado] = item._count.estado;
+        return acc;
+      }, {} as Record<string, number>),
+      ultimasSolicitudes: todasSolicitudes.map((s) => ({
+        id: s.id,
+        punto: s.punto_atencion_nombre,
+        monto: s.monto_requerido.toString(),
+        estado: s.estado,
+        observaciones: s.observaciones,
+        creado_en: s.creado_en,
+        aprobado_por: s.aprobado_por,
+        aprobado_en: s.aprobado_en,
+      })),
+    };
+
+    console.log("🔧 Debug resultado:", resultado);
+    res.json(resultado);
+  } catch (err) {
+    console.error("❌ Error en debug:", err);
+    res.status(500).json({
+      error: "Error en debug",
+      detalle: err instanceof Error ? err.message : "Error desconocido",
+    });
   }
 });
 

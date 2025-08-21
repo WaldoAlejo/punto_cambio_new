@@ -490,8 +490,9 @@ model ServientregaSolicitudSaldo {
   punto_atencion_nombre String
   monto_requerido       Decimal   @db.Decimal(15, 2)
   estado                String    @default("PENDIENTE") // PENDIENTE, APROBADA, RECHAZADA
+  observaciones         String?   // Observaciones del operador
   creado_en             DateTime  @default(now())
-  aprobado_por          String? // Usuario administrador que aprobó o rechazó
+  aprobado_por          String?   // Usuario administrador que aprobó o rechazó
   aprobado_en           DateTime? // Fecha de aprobación/rechazo
 
   punto_atencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
