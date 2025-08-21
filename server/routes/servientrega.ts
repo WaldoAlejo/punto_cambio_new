@@ -7,8 +7,8 @@ import { subDays, startOfDay, endOfDay } from "date-fns";
 
 const router = express.Router();
 
-const BASE_URL = "https://servientrega-ecuador-prueba.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
-const RETAIL_URL = "https://servientrega-ecuador-prueba.appsiscore.com/app/ws/serviretail_cs.php";
+const BASE_URL = "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
+const RETAIL_URL = "https://servientrega-ecuador.appsiscore.com/app/ws/serviretail_cs.php";
 
 const AUTH = {
   usuingreso: "INTPUNTOC",
@@ -147,28 +147,17 @@ router.post("/tarifa", async (req, res) => {
       usar_prueba = false
     } = req.body;
 
-    // Validaciones locales antes de enviar a Servientrega
+    // Validaciones locales antes de enviar a Servientrega  
     const erroresValidacion: string[] = [];
     
-    // Validar peso mínimo 2kg
-    const pesoNumerico = parseFloat(peso);
-    if (isNaN(pesoNumerico) || pesoNumerico < 2) {
-      erroresValidacion.push("El peso mínimo debe ser 2 kg");
-    }
-
-    // Validar campos requeridos (más permisivo)
-    if (!ciu_ori || ciu_ori.trim() === '') {
-      erroresValidacion.push("Ciudad de origen es obligatoria");
-    }
-    if (!provincia_ori || provincia_ori.trim() === '') {
-      erroresValidacion.push("Provincia de origen es obligatoria");
-    }
-    if (!ciu_des || ciu_des.trim() === '') {
-      erroresValidacion.push("Ciudad de destino es obligatoria");
-    }
-    if (!provincia_des || provincia_des.trim() === '') {
-      erroresValidacion.push("Provincia de destino es obligatoria");
-    }
+    console.log("🔍 Validando campos:", {
+      peso,
+      peso_parseado: parseFloat(peso),
+      ciu_ori,
+      provincia_ori,
+      ciu_des,
+      provincia_des
+    });
 
     if (erroresValidacion.length > 0) {
       return res.status(400).json({ 
@@ -196,7 +185,7 @@ router.post("/tarifa", async (req, res) => {
       provincia_des: String(provincia_des).toUpperCase(),
       valor_seguro: String(valor_seguro),
       valor_declarado: String(valor_declarado),
-      peso: String(Math.max(2, pesoNumerico)), // Asegurar mínimo 2kg
+      peso: String(peso), // Usar el peso tal como viene
       alto: String(alto),
       ancho: String(ancho),
       largo: String(largo),
