@@ -143,7 +143,8 @@ router.post("/tarifa", async (req, res) => {
       largo,
       recoleccion = "NO",
       nombre_producto = "MERCANCIA PREMIER",
-      empaque = ""
+      empaque = "",
+      usar_prueba = false
     } = req.body;
 
     // Validaciones locales antes de enviar a Servientrega
@@ -182,6 +183,11 @@ router.post("/tarifa", async (req, res) => {
       ? nombre_producto 
       : "MERCANCIA PREMIER";
 
+    // Elegir credenciales según si es prueba o producción
+    const credenciales = usar_prueba 
+      ? { usuingreso: "PRUEBA", contrasenha: "s12345ABCDe" }
+      : AUTH;
+
     const payload = {
       tipo: "obtener_tarifa_nacional",
       ciu_ori: String(ciu_ori).toUpperCase(),
@@ -197,7 +203,7 @@ router.post("/tarifa", async (req, res) => {
       recoleccion,
       nombre_producto: productoFinal,
       empaque,
-      ...AUTH,
+      ...credenciales,
     };
     
     console.log("📦 Payload enviado a Servientrega:", JSON.stringify(payload, null, 2));
@@ -230,6 +236,47 @@ router.post("/tarifa", async (req, res) => {
   } catch (error) {
     console.error("Error al calcular tarifa:", error);
     res.status(500).json({ error: "Error al calcular tarifa" });
+  }
+});
+
+// Endpoint específico para pruebas con credenciales de PRUEBA
+router.post("/tarifa-prueba", async (req, res) => {
+  try {
+    console.log("🧪 MODO PRUEBA - Datos recibidos:", JSON.stringify(req.body, null, 2));
+    
+    const payload = {
+      tipo: "obtener_tarifa_nacional",
+      ciu_ori: String(req.body.ciu_ori || "GUAYAQUIL").toUpperCase(),
+      provincia_ori: String(req.body.provincia_ori || "GUAYAS").toUpperCase(),
+      ciu_des: String(req.body.ciu_des || "GUAYAQUIL").toUpperCase(),
+      provincia_des: String(req.body.provincia_des || "GUAYAS").toUpperCase(),
+      valor_seguro: String(req.body.valor_seguro || "12.5"),
+      valor_declarado: String(req.body.valor_declarado || "2.5"),
+      peso: String(Math.max(2, parseFloat(req.body.peso || "5"))),
+      alto: String(req.body.alto || "20"),
+      ancho: String(req.body.ancho || "25"),
+      largo: String(req.body.largo || "30"),
+      recoleccion: req.body.recoleccion || "NO",
+      nombre_producto: req.body.nombre_producto || "MERCANCIA PREMIER",
+      empaque: req.body.empaque || "",
+      usuingreso: "PRUEBA",
+      contrasenha: "s12345ABCDe"
+    };
+    
+    console.log("🧪 Payload PRUEBA enviado:", JSON.stringify(payload, null, 2));
+    
+    const result = await callServientregaAPI(payload);
+    
+    console.log("🧪 Respuesta PRUEBA:", JSON.stringify(result, null, 2));
+    
+    res.json({ 
+      modo: "PRUEBA",
+      payload_enviado: payload,
+      respuesta: result 
+    });
+  } catch (error) {
+    console.error("Error en tarifa de prueba:", error);
+    res.status(500).json({ error: "Error en tarifa de prueba" });
   }
 });
 
