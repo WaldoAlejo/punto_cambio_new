@@ -18,6 +18,77 @@ const AUTH = {
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 const UMBRAL_MINIMO_SALDO = new Prisma.Decimal(5);
 
+// Sistema de cache simple para reducir peticiones
+const cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+
+function getCachedData(key: string): any | null {
+  const cached = cache.get(key);
+  if (!cached) return null;
+
+  const now = Date.now();
+  if (now - cached.timestamp > cached.ttl) {
+    cache.delete(key);
+    return null;
+  }
+
+  console.log(`📋 Usando datos en cache para: ${key}`);
+  return cached.data;
+}
+
+function setCachedData(key: string, data: any, ttlMinutes: number = 30): void {
+  cache.set(key, {
+    data,
+    timestamp: Date.now(),
+    ttl: ttlMinutes * 60 * 1000, // convertir a milisegundos
+  });
+  console.log(`💾 Datos guardados en cache: ${key} (TTL: ${ttlMinutes}min)`);
+}
+
+// Endpoint para verificar y gestionar cache
+router.get("/cache/status", async (_, res) => {
+  try {
+    const cacheStatus = Array.from(cache.entries()).map(([key, value]) => ({
+      key,
+      timestamp: new Date(value.timestamp).toISOString(),
+      ttl: value.ttl,
+      expired: Date.now() - value.timestamp > value.ttl,
+      ageMinutes: Math.round((Date.now() - value.timestamp) / (1000 * 60)),
+    }));
+
+    res.json({
+      success: true,
+      cacheEntries: cacheStatus.length,
+      entries: cacheStatus,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Error desconocido",
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+router.post("/cache/clear", async (_, res) => {
+  try {
+    const entriesCleared = cache.size;
+    cache.clear();
+
+    res.json({
+      success: true,
+      message: `Cache limpiado exitosamente. ${entriesCleared} entradas eliminadas.`,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Error desconocido",
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
 // Endpoint para verificar configuración
 router.get("/config", async (_, res) => {
   try {
@@ -152,6 +223,9 @@ router.get("/status", async (_, res) => {
       endpoints_available: [
         "GET /test-connection",
         "GET /status",
+        "GET /config",
+        "GET /cache/status",
+        "POST /cache/clear",
         "POST /productos",
         "POST /paises",
         "POST /ciudades",
@@ -250,6 +324,19 @@ router.post("/productos", async (req, res) => {
   try {
     console.log("🔍 Iniciando carga de productos Servientrega...");
 
+    // Verificar cache primero
+    const cacheKey = "productos";
+    const cachedResult = getCachedData(cacheKey);
+
+    if (cachedResult) {
+      return res.json({
+        ...cachedResult,
+        success: true,
+        timestamp: new Date().toISOString(),
+        fromCache: true,
+      });
+    }
+
     const result = await callServientregaAPI({
       tipo: "obtener_producto",
       ...AUTH,
@@ -260,14 +347,36 @@ router.post("/productos", async (req, res) => {
       JSON.stringify(result, null, 2)
     );
 
+    // Guardar en cache por 60 minutos (los productos no cambian frecuentemente)
+    setCachedData(cacheKey, result, 60);
+
     // Devolver exactamente lo que envía Servientrega
     res.json({
       ...result,
       success: true,
       timestamp: new Date().toISOString(),
+      fromCache: false,
     });
   } catch (error) {
     console.error("❌ Error al cargar productos:", error);
+
+    // Si hay error de rate limit, intentar devolver datos en cache aunque estén expirados
+    if (error instanceof Error && error.message.includes("Too many requests")) {
+      const cacheKey = "productos";
+      const expiredCache = cache.get(cacheKey);
+
+      if (expiredCache) {
+        console.log("⚠️ Rate limit detectado, usando cache expirado");
+        return res.json({
+          ...expiredCache.data,
+          success: true,
+          timestamp: new Date().toISOString(),
+          fromCache: true,
+          warning: "Datos del cache debido a límite de peticiones",
+        });
+      }
+    }
+
     console.error(
       "❌ Stack trace:",
       error instanceof Error ? error.stack : "No stack available"
@@ -285,17 +394,55 @@ router.post("/productos", async (req, res) => {
 router.post("/paises", async (_, res) => {
   try {
     console.log("🌍 Cargando países de Servientrega...");
+
+    // Verificar cache primero
+    const cacheKey = "paises";
+    const cachedResult = getCachedData(cacheKey);
+
+    if (cachedResult) {
+      return res.json({
+        ...cachedResult,
+        success: true,
+        timestamp: new Date().toISOString(),
+        fromCache: true,
+      });
+    }
+
     const result = await callServientregaAPI({
       tipo: "obtener_paises",
       ...AUTH,
     });
+
+    // Guardar en cache por 120 minutos (los países cambian muy poco)
+    setCachedData(cacheKey, result, 120);
+
     res.json({
       ...result,
       success: true,
       timestamp: new Date().toISOString(),
+      fromCache: false,
     });
   } catch (err: any) {
     console.error("❌ Error al cargar países:", err);
+
+    // Fallback con cache expirado si hay rate limit
+    if (err.message && err.message.includes("Too many requests")) {
+      const cacheKey = "paises";
+      const expiredCache = cache.get(cacheKey);
+
+      if (expiredCache) {
+        console.log(
+          "⚠️ Rate limit detectado, usando cache expirado para países"
+        );
+        return res.json({
+          ...expiredCache.data,
+          success: true,
+          timestamp: new Date().toISOString(),
+          fromCache: true,
+          warning: "Datos del cache debido a límite de peticiones",
+        });
+      }
+    }
 
     res.status(500).json({
       error: err.message,
