@@ -140,18 +140,18 @@ router.get("/", authenticateToken, async (req, res) => {
       : new Date(new Date().setHours(0, 0, 0, 0));
 
     const cambiosResult = await pool.query<CambioDivisa>(
-      `SELECT * FROM "CambioDivisa" WHERE punto_atencion_id = $1 AND fecha >= $2 AND estado = $3::"EstadoTransaccion"`,
+      `SELECT * FROM "CambioDivisa" WHERE punto_atencion_id = $1 AND fecha >= $2 AND estado = $3`,
       [usuario.punto_atencion_id, fechaInicio.toISOString(), "COMPLETADO"]
     );
     const cambiosHoy = cambiosResult.rows;
 
     const [transferIn, transferOut] = await Promise.all([
       pool.query<Transferencia>(
-        `SELECT * FROM "Transferencia" WHERE destino_id = $1 AND fecha >= $2 AND estado = $3::"EstadoTransferencia"`,
+        `SELECT * FROM "Transferencia" WHERE destino_id = $1 AND fecha >= $2 AND estado = $3`,
         [usuario.punto_atencion_id, fechaInicio.toISOString(), "APROBADO"]
       ),
       pool.query<Transferencia>(
-        `SELECT * FROM "Transferencia" WHERE origen_id = $1 AND fecha >= $2 AND estado = $3::"EstadoTransferencia"`,
+        `SELECT * FROM "Transferencia" WHERE origen_id = $1 AND fecha >= $2 AND estado = $3`,
         [usuario.punto_atencion_id, fechaInicio.toISOString(), "APROBADO"]
       ),
     ]);
