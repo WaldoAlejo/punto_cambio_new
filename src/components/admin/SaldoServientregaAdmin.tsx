@@ -65,7 +65,7 @@ export default function SaldoServientregaAdmin() {
   const [saldos, setSaldos] = useState<Record<string, number>>({});
   const [nuevoMonto, setNuevoMonto] = useState<string>("");
   const [loading, setLoading] = useState(false);
-  const [mensaje, setMensaje] = useState<string | null>(null);
+  const [mensaje] = useState<string | null>(null);
   const [historial, setHistorial] = useState<HistorialAsignacion[]>([]);
   const [solicitudes, setSolicitudes] = useState<SolicitudSaldo[]>([]);
   const [filtroFecha, setFiltroFecha] = useState<string>("");

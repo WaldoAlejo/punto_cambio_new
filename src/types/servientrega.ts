@@ -1,5 +1,6 @@
 export interface Remitente {
   identificacion: string;
+  cedula?: string;
   nombre: string;
   direccion: string;
   telefono: string;
@@ -12,6 +13,7 @@ export interface Remitente {
 
 export interface Destinatario {
   identificacion: string;
+  cedula?: string;
   nombre: string;
   direccion: string;
   telefono: string;
