@@ -194,13 +194,19 @@ export class ReceiptService {
     };
   }
 
-  static formatReceiptForPrinting(receipt: ReceiptData): string {
+  static formatReceiptForPrinting(
+    receipt: ReceiptData,
+    copyType: "cliente" | "operador" = "cliente"
+  ): string {
     const separator = "================================";
     const halfSeparator = "----------------";
+    const copyLabel =
+      copyType === "cliente" ? "COPIA CLIENTE" : "COPIA OPERADOR";
 
     let receiptText = `
 ${separator}
         PUNTO CAMBIO
+        ${copyLabel}
 ${separator}
 Recibo: ${receipt.numeroRecibo}
 Fecha: ${receipt.fecha}
@@ -299,9 +305,11 @@ ${
 `;
     }
 
-    receiptText += `
+    // Sección de firmas diferenciada por tipo de copia
+    if (copyType === "cliente") {
+      receiptText += `
 ${separator}
-FIRMAS DE RESPONSABILIDAD:
+FIRMA DE RESPONSABILIDAD:
 
 Cliente: ____________________
 ${
@@ -313,54 +321,238 @@ Doc: ${(receipt.detalles as CurrencyExchangeDetails).cliente.cedula}`
     : ""
 }
 
-Operador: ___________________
-${receipt.usuario}
+Fecha: ___/___/______
 
 ${separator}
-Gracias por su preferencia
-Este comprobante es válido como
+*** COPIA PARA EL CLIENTE ***
+Conserve este comprobante como
 evidencia de la operación realizada
 ${separator}
 
 `;
+    } else {
+      receiptText += `
+${separator}
+FIRMA DE RESPONSABILIDAD:
+
+Operador: ___________________
+${receipt.usuario}
+
+Fecha: ___/___/______
+
+Supervisor: _________________
+(Si aplica)
+
+${separator}
+*** COPIA PARA ARCHIVO ***
+Comprobante interno de la operación
+${separator}
+
+`;
+    }
 
     return receiptText;
   }
 
   static printReceipt(receiptData: ReceiptData, copies: number = 2): void {
-    const formattedReceipt = this.formatReceiptForPrinting(receiptData);
-
     // En un entorno real, aquí se enviaría a la impresora térmica
     console.log("Imprimiendo recibo:");
-    console.log(formattedReceipt);
 
-    for (let i = 1; i <= copies; i++) {
-      console.log(`--- Copia ${i} ---`);
+    // Generar las dos copias diferenciadas
+    const copyTypes: ("cliente" | "operador")[] = ["cliente", "operador"];
+
+    for (let i = 0; i < Math.min(copies, 2); i++) {
+      const copyType = copyTypes[i];
+      const formattedReceipt = this.formatReceiptForPrinting(
+        receiptData,
+        copyType
+      );
+
+      console.log(`--- Copia ${i + 1} (${copyType.toUpperCase()}) ---`);
+      console.log(formattedReceipt);
+
       if (typeof window !== "undefined" && "print" in window) {
-        const printWindow = window.open("", "_blank");
-        if (printWindow) {
-          printWindow.document.write(`
-            <html>
-              <head>
-                <title>Recibo ${receiptData.numeroRecibo}</title>
-                <style>
-                  body { font-family: monospace; font-size: 12px; margin: 20px; }
-                  .receipt { white-space: pre-line; }
-                </style>
-              </head>
-              <body>
-                <div class="receipt">${formattedReceipt}</div>
-                <script>
-                  window.print(); 
-                  setTimeout(() => {
-                    window.close();
-                  }, 1000);
-                </script>
-              </body>
-            </html>
-          `);
+        try {
+          const printWindow = window.open("", "_blank", "width=800,height=600");
+
+          if (printWindow) {
+            const copyLabel = copyType === "cliente" ? "Cliente" : "Operador";
+            printWindow.document.write(`
+              <html>
+                <head>
+                  <title>Recibo ${receiptData.numeroRecibo} - Copia ${copyLabel}</title>
+                  <style>
+                    body { 
+                      font-family: 'Courier New', monospace; 
+                      font-size: 12px; 
+                      margin: 20px; 
+                      line-height: 1.2;
+                    }
+                    .receipt { 
+                      white-space: pre-line; 
+                      max-width: 400px;
+                    }
+                    @media print {
+                      body { margin: 0; }
+                      .receipt { font-size: 10px; }
+                    }
+                  </style>
+                </head>
+                <body>
+                  <div class="receipt">${formattedReceipt}</div>
+                  <script>
+                    window.onload = function() {
+                      setTimeout(() => {
+                        window.print(); 
+                        setTimeout(() => {
+                          window.close();
+                        }, 2000);
+                      }, 500);
+                    };
+                  </script>
+                </body>
+              </html>
+            `);
+            printWindow.document.close();
+          } else {
+            // Si el popup fue bloqueado, mostrar alerta
+            console.warn(
+              `⚠️ Popup bloqueado para copia ${copyType}. Verifique la configuración del navegador.`
+            );
+            alert(
+              `⚠️ El navegador bloqueó la ventana de impresión.\n\nPor favor:\n1. Permita popups para este sitio\n2. O use Ctrl+P para imprimir manualmente`
+            );
+          }
+        } catch (error) {
+          console.error(
+            `❌ Error al abrir ventana de impresión para copia ${copyType}:`,
+            error
+          );
+          alert(
+            `❌ Error al imprimir copia ${copyType}. Verifique la configuración del navegador.`
+          );
         }
       }
     }
+  }
+
+  // Método alternativo para mostrar el recibo en la misma ventana
+  static showReceiptInCurrentWindow(receiptData: ReceiptData): void {
+    // Mostrar ambas copias en tabs
+    const clienteReceipt = this.formatReceiptForPrinting(
+      receiptData,
+      "cliente"
+    );
+    const operadorReceipt = this.formatReceiptForPrinting(
+      receiptData,
+      "operador"
+    );
+
+    // Crear un div temporal para mostrar el recibo
+    const receiptDiv = document.createElement("div");
+    receiptDiv.innerHTML = `
+      <div style="
+        position: fixed; 
+        top: 0; 
+        left: 0; 
+        width: 100%; 
+        height: 100%; 
+        background: rgba(0,0,0,0.8); 
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      ">
+        <div style="
+          background: white; 
+          padding: 20px; 
+          border-radius: 8px;
+          max-width: 600px;
+          max-height: 90vh;
+          overflow-y: auto;
+        ">
+          <div style="margin-bottom: 20px;">
+            <button id="tabCliente" onclick="showTab('cliente')" style="
+              background: #007bff; 
+              color: white; 
+              border: none; 
+              padding: 8px 16px; 
+              margin: 2px;
+              border-radius: 4px;
+              cursor: pointer;
+            ">👤 Copia Cliente</button>
+            <button id="tabOperador" onclick="showTab('operador')" style="
+              background: #6c757d; 
+              color: white; 
+              border: none; 
+              padding: 8px 16px; 
+              margin: 2px;
+              border-radius: 4px;
+              cursor: pointer;
+            ">👨‍💼 Copia Operador</button>
+          </div>
+          
+          <div id="receiptCliente" style="
+            font-family: 'Courier New', monospace; 
+            font-size: 12px; 
+            white-space: pre-line;
+            margin-bottom: 20px;
+            display: block;
+          ">${clienteReceipt}</div>
+          
+          <div id="receiptOperador" style="
+            font-family: 'Courier New', monospace; 
+            font-size: 12px; 
+            white-space: pre-line;
+            margin-bottom: 20px;
+            display: none;
+          ">${operadorReceipt}</div>
+          
+          <div style="text-align: center;">
+            <button onclick="window.print()" style="
+              background: #28a745; 
+              color: white; 
+              border: none; 
+              padding: 10px 20px; 
+              margin: 5px;
+              border-radius: 4px;
+              cursor: pointer;
+            ">🖨️ Imprimir</button>
+            <button onclick="this.closest('div').parentElement.remove()" style="
+              background: #dc3545; 
+              color: white; 
+              border: none; 
+              padding: 10px 20px; 
+              margin: 5px;
+              border-radius: 4px;
+              cursor: pointer;
+            ">❌ Cerrar</button>
+          </div>
+        </div>
+      </div>
+      
+      <script>
+        function showTab(type) {
+          // Ocultar ambos recibos
+          document.getElementById('receiptCliente').style.display = 'none';
+          document.getElementById('receiptOperador').style.display = 'none';
+          
+          // Resetear botones
+          document.getElementById('tabCliente').style.background = '#6c757d';
+          document.getElementById('tabOperador').style.background = '#6c757d';
+          
+          // Mostrar el seleccionado
+          if (type === 'cliente') {
+            document.getElementById('receiptCliente').style.display = 'block';
+            document.getElementById('tabCliente').style.background = '#007bff';
+          } else {
+            document.getElementById('receiptOperador').style.display = 'block';
+            document.getElementById('tabOperador').style.background = '#007bff';
+          }
+        }
+      </script>
+    `;
+
+    document.body.appendChild(receiptDiv);
   }
 }

@@ -68,11 +68,21 @@ export const useExchangeProcess = ({
     );
 
     try {
+      console.log("🖨️ Intentando imprimir recibo...");
       ReceiptService.printReceipt(receiptData, 2);
+
+      // Como fallback, también mostrar en la ventana actual
+      setTimeout(() => {
+        ReceiptService.showReceiptInCurrentWindow(receiptData);
+      }, 1000);
     } catch (error) {
-      console.warn("Error al imprimir recibo:", error);
+      console.warn("❌ Error al imprimir recibo:", error);
+
+      // Si falla la impresión, mostrar en ventana actual
+      ReceiptService.showReceiptInCurrentWindow(receiptData);
+
       toast.warning(
-        "El recibo se generó correctamente pero hubo un problema con la impresión"
+        "El recibo se generó correctamente pero hubo un problema con la impresión. Se muestra en pantalla."
       );
     }
   };
