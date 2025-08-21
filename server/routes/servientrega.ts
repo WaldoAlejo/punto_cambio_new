@@ -326,4 +326,127 @@ router.post("/saldo", async (req, res) => {
   }
 });
 
+// =============================
+// 👤 Búsqueda de Remitentes y Destinatarios
+// =============================
+
+router.get("/remitente/buscar/:cedula", async (req, res) => {
+  try {
+    const { cedula } = req.params;
+    const remitentes = await prisma.servientregaRemitente.findMany({
+      where: {
+        identificacion: {
+          contains: cedula,
+          mode: 'insensitive'
+        }
+      },
+      take: 10,
+      orderBy: { created_at: "desc" }
+    });
+
+    res.json({ remitentes });
+  } catch (error) {
+    console.error("Error al buscar remitente:", error);
+    res.status(500).json({ error: "Error al buscar remitente" });
+  }
+});
+
+router.get("/destinatario/buscar/:cedula", async (req, res) => {
+  try {
+    const { cedula } = req.params;
+    const destinatarios = await prisma.servientregaDestinatario.findMany({
+      where: {
+        identificacion: {
+          contains: cedula,
+          mode: 'insensitive'
+        }
+      },
+      take: 10,
+      orderBy: { created_at: "desc" }
+    });
+
+    res.json({ destinatarios });
+  } catch (error) {
+    console.error("Error al buscar destinatario:", error);
+    res.status(500).json({ error: "Error al buscar destinatario" });
+  }
+});
+
+router.get("/destinatario/buscar-nombre/:nombre", async (req, res) => {
+  try {
+    const { nombre } = req.params;
+    const destinatarios = await prisma.servientregaDestinatario.findMany({
+      where: {
+        nombre: {
+          contains: nombre,
+          mode: 'insensitive'
+        }
+      },
+      take: 10,
+      orderBy: { created_at: "desc" }
+    });
+
+    res.json({ destinatarios });
+  } catch (error) {
+    console.error("Error al buscar destinatario por nombre:", error);
+    res.status(500).json({ error: "Error al buscar destinatario por nombre" });
+  }
+});
+
+// =============================
+// 💾 Guardar y Actualizar Remitentes/Destinatarios  
+// =============================
+
+router.post("/remitente/guardar", async (req, res) => {
+  try {
+    const remitente = await prisma.servientregaRemitente.create({
+      data: req.body
+    });
+    res.json({ success: true, remitente });
+  } catch (error) {
+    console.error("Error al guardar remitente:", error);
+    res.status(500).json({ error: "Error al guardar remitente" });
+  }
+});
+
+router.put("/remitente/actualizar/:identificacion", async (req, res) => {
+  try {
+    const { identificacion } = req.params;
+    const remitente = await prisma.servientregaRemitente.updateMany({
+      where: { identificacion },
+      data: req.body
+    });
+    res.json({ success: true, remitente });
+  } catch (error) {
+    console.error("Error al actualizar remitente:", error);
+    res.status(500).json({ error: "Error al actualizar remitente" });
+  }
+});
+
+router.post("/destinatario/guardar", async (req, res) => {
+  try {
+    const destinatario = await prisma.servientregaDestinatario.create({
+      data: req.body
+    });
+    res.json({ success: true, destinatario });
+  } catch (error) {
+    console.error("Error al guardar destinatario:", error);
+    res.status(500).json({ error: "Error al guardar destinatario" });
+  }
+});
+
+router.put("/destinatario/actualizar/:identificacion", async (req, res) => {
+  try {
+    const { identificacion } = req.params;
+    const destinatario = await prisma.servientregaDestinatario.updateMany({
+      where: { identificacion },
+      data: req.body
+    });
+    res.json({ success: true, destinatario });
+  } catch (error) {
+    console.error("Error al actualizar destinatario:", error);
+    res.status(500).json({ error: "Error al actualizar destinatario" });
+  }
+});
+
 export default router;
