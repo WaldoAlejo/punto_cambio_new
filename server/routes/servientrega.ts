@@ -7,7 +7,8 @@ import { subDays, startOfDay, endOfDay } from "date-fns";
 
 const router = express.Router();
 
-const BASE_URL = "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
+const BASE_URL =
+  "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
 
 const AUTH = {
   usuingreso: "INTPUNTOC",
@@ -26,21 +27,25 @@ async function callServientregaAPI(payload: any, timeoutMs: number = 15000) {
       maxRedirects: 3,
       validateStatus: (status) => status < 500,
     });
-    
+
     return data;
   } catch (error) {
     console.error("❌ Error al consumir API Servientrega:", error);
-    
+
     if (axios.isAxiosError(error)) {
       if (error.code === "ECONNABORTED") {
-        throw new Error(`Timeout al conectar con Servientrega después de ${timeoutMs}ms`);
+        throw new Error(
+          `Timeout al conectar con Servientrega después de ${timeoutMs}ms`
+        );
       }
       if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
-        throw new Error(`No se puede conectar con Servientrega (${error.code})`);
+        throw new Error(
+          `No se puede conectar con Servientrega (${error.code})`
+        );
       }
       throw new Error(`Error al conectar con Servientrega: ${error.message}`);
     }
-    
+
     throw new Error("Error al conectar con Servientrega");
   }
 }
@@ -140,7 +145,9 @@ interface AnularGuiaResponse {
 router.post("/generar-guia", async (req, res) => {
   try {
     const payload = { tipo: "GeneracionGuia", ...req.body, ...AUTH };
-    const response = (await callServientregaAPI(payload)) as GenerarGuiaResponse;
+    const response = (await callServientregaAPI(
+      payload
+    )) as GenerarGuiaResponse;
 
     if (response?.guia && response?.base64) {
       const { remitente, destinatario, punto_atencion_id } = req.body;
@@ -173,7 +180,9 @@ router.post("/generar-guia", async (req, res) => {
           await prisma.servientregaSaldo.update({
             where: { punto_atencion_id },
             data: {
-              monto_usado: saldo.monto_usado.add(new Prisma.Decimal(req.body.valor || 0)),
+              monto_usado: saldo.monto_usado.add(
+                new Prisma.Decimal(req.body.valor || 0)
+              ),
             },
           });
         }
@@ -337,11 +346,11 @@ router.get("/remitente/buscar/:cedula", async (req, res) => {
       where: {
         cedula: {
           contains: cedula,
-          mode: 'insensitive'
-        }
+          mode: "insensitive",
+        },
       },
       take: 10,
-      orderBy: { nombre: "asc" }
+      orderBy: { nombre: "asc" },
     });
 
     res.json({ remitentes });
@@ -358,11 +367,11 @@ router.get("/destinatario/buscar/:cedula", async (req, res) => {
       where: {
         cedula: {
           contains: cedula,
-          mode: 'insensitive'
-        }
+          mode: "insensitive",
+        },
       },
       take: 10,
-      orderBy: { nombre: "asc" }
+      orderBy: { nombre: "asc" },
     });
 
     res.json({ destinatarios });
@@ -379,11 +388,11 @@ router.get("/destinatario/buscar-nombre/:nombre", async (req, res) => {
       where: {
         nombre: {
           contains: nombre,
-          mode: 'insensitive'
-        }
+          mode: "insensitive",
+        },
       },
       take: 10,
-      orderBy: { nombre: "asc" }
+      orderBy: { nombre: "asc" },
     });
 
     res.json({ destinatarios });
@@ -394,13 +403,13 @@ router.get("/destinatario/buscar-nombre/:nombre", async (req, res) => {
 });
 
 // =============================
-// 💾 Guardar y Actualizar Remitentes/Destinatarios  
+// 💾 Guardar y Actualizar Remitentes/Destinatarios
 // =============================
 
 router.post("/remitente/guardar", async (req, res) => {
   try {
     const remitente = await prisma.servientregaRemitente.create({
-      data: req.body
+      data: req.body,
     });
     res.json({ success: true, remitente });
   } catch (error) {
@@ -414,7 +423,7 @@ router.put("/remitente/actualizar/:cedula", async (req, res) => {
     const { cedula } = req.params;
     const remitente = await prisma.servientregaRemitente.updateMany({
       where: { cedula },
-      data: req.body
+      data: req.body,
     });
     res.json({ success: true, remitente });
   } catch (error) {
@@ -425,27 +434,82 @@ router.put("/remitente/actualizar/:cedula", async (req, res) => {
 
 router.post("/destinatario/guardar", async (req, res) => {
   try {
+    const destinatarioData = req.body;
+
+    console.log(`📝 Guardando nuevo destinatario:`, destinatarioData);
+
     const destinatario = await prisma.servientregaDestinatario.create({
-      data: req.body
+      data: destinatarioData,
     });
-    res.json({ success: true, destinatario });
+
+    console.log(`✅ Destinatario guardado correctamente:`, destinatario);
+
+    res.json({
+      success: true,
+      destinatario,
+      message: "Destinatario guardado correctamente",
+    });
   } catch (error) {
-    console.error("Error al guardar destinatario:", error);
-    res.status(500).json({ error: "Error al guardar destinatario" });
+    console.error("❌ Error al guardar destinatario:", error);
+    console.error(
+      "📋 Stack trace:",
+      error instanceof Error ? error.stack : "No stack trace"
+    );
+
+    res.status(500).json({
+      success: false,
+      error: "Error al guardar destinatario",
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
   }
 });
 
 router.put("/destinatario/actualizar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
+    const updateData = req.body;
+
+    console.log(`📝 Actualizando destinatario con cédula: ${cedula}`);
+    console.log(`📋 Datos a actualizar:`, updateData);
+
+    // Verificar si el destinatario existe
+    const existingDestinatario =
+      await prisma.servientregaDestinatario.findFirst({
+        where: { cedula },
+      });
+
+    if (!existingDestinatario) {
+      console.log(`❌ Destinatario con cédula ${cedula} no encontrado`);
+      return res.status(404).json({
+        success: false,
+        error: "Destinatario no encontrado",
+      });
+    }
+
     const destinatario = await prisma.servientregaDestinatario.updateMany({
       where: { cedula },
-      data: req.body
+      data: updateData,
     });
-    res.json({ success: true, destinatario });
+
+    console.log(`✅ Destinatario actualizado correctamente:`, destinatario);
+
+    res.json({
+      success: true,
+      destinatario,
+      message: "Destinatario actualizado correctamente",
+    });
   } catch (error) {
-    console.error("Error al actualizar destinatario:", error);
-    res.status(500).json({ error: "Error al actualizar destinatario" });
+    console.error("❌ Error al actualizar destinatario:", error);
+    console.error(
+      "📋 Stack trace:",
+      error instanceof Error ? error.stack : "No stack trace"
+    );
+
+    res.status(500).json({
+      success: false,
+      error: "Error al actualizar destinatario",
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
   }
 });
 
