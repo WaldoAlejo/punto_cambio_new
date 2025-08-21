@@ -133,7 +133,13 @@ router.post("/tarifa", async (req, res) => {
       ...req.body,
       ...AUTH,
     };
+    
+    console.log("📦 Payload enviado a Servientrega:", JSON.stringify(payload, null, 2));
+    
     const result = await callServientregaAPI(payload);
+    
+    console.log("📋 Respuesta de Servientrega:", JSON.stringify(result, null, 2));
+    
     res.json(result);
   } catch (error) {
     console.error("Error al calcular tarifa:", error);
