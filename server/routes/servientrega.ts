@@ -1309,26 +1309,118 @@ router.get("/solicitar-saldo/debug", async (_, res) => {
 
 router.post("/solicitar-saldo/responder", async (req, res) => {
   try {
+    console.log("🔄 Procesando respuesta a solicitud:", req.body);
     const { solicitud_id, estado, aprobado_por } = req.body;
+
     if (!["APROBADA", "RECHAZADA"].includes(estado)) {
       return res.status(400).json({ error: "Estado inválido" });
     }
 
+    if (!solicitud_id || !aprobado_por) {
+      return res.status(400).json({ error: "Datos requeridos faltantes" });
+    }
+
+    // Obtener la solicitud original
+    const solicitudOriginal =
+      await prisma.servientregaSolicitudSaldo.findUnique({
+        where: { id: solicitud_id },
+      });
+
+    if (!solicitudOriginal) {
+      return res.status(404).json({ error: "Solicitud no encontrada" });
+    }
+
+    if (solicitudOriginal.estado !== "PENDIENTE") {
+      return res.status(400).json({ error: "La solicitud ya fue procesada" });
+    }
+
+    console.log("✅ Solicitud encontrada:", {
+      id: solicitudOriginal.id,
+      punto: solicitudOriginal.punto_atencion_nombre,
+      monto: solicitudOriginal.monto_requerido.toString(),
+      estado_actual: solicitudOriginal.estado,
+    });
+
+    // Actualizar la solicitud
     const solicitud = await prisma.servientregaSolicitudSaldo.update({
       where: { id: solicitud_id },
       data: {
         estado,
-        aprobado_por: estado === "APROBADA" ? aprobado_por : null,
+        aprobado_por,
         aprobado_en: new Date(),
       },
     });
 
+    console.log("✅ Solicitud actualizada:", {
+      id: solicitud.id,
+      nuevo_estado: solicitud.estado,
+      aprobado_por: solicitud.aprobado_por,
+    });
+
+    // Si se aprueba, asignar el saldo automáticamente
+    if (estado === "APROBADA") {
+      try {
+        console.log("💰 Asignando saldo automáticamente...");
+
+        // Obtener saldo actual
+        const saldoActual = await prisma.servientregaSaldo.findUnique({
+          where: { punto_atencion_id: solicitudOriginal.punto_atencion_id },
+        });
+
+        const nuevoMontoTotal = saldoActual
+          ? saldoActual.monto_total.add(solicitudOriginal.monto_requerido)
+          : solicitudOriginal.monto_requerido;
+
+        // Actualizar o crear saldo
+        await prisma.servientregaSaldo.upsert({
+          where: { punto_atencion_id: solicitudOriginal.punto_atencion_id },
+          update: {
+            monto_total: nuevoMontoTotal,
+          },
+          create: {
+            punto_atencion_id: solicitudOriginal.punto_atencion_id,
+            monto_total: solicitudOriginal.monto_requerido,
+            monto_usado: new Prisma.Decimal(0),
+            creado_por: aprobado_por,
+          },
+        });
+
+        // Registrar en historial
+        await prisma.servientregaHistorialSaldo.create({
+          data: {
+            punto_atencion_id: solicitudOriginal.punto_atencion_id,
+            punto_atencion_nombre: solicitudOriginal.punto_atencion_nombre,
+            monto_total: solicitudOriginal.monto_requerido,
+            creado_por: aprobado_por,
+          },
+        });
+
+        console.log("✅ Saldo asignado exitosamente:", {
+          punto: solicitudOriginal.punto_atencion_nombre,
+          monto_asignado: solicitudOriginal.monto_requerido.toString(),
+          nuevo_monto_total: nuevoMontoTotal.toString(),
+          saldo_disponible: nuevoMontoTotal
+            .sub(saldoActual?.monto_usado || new Prisma.Decimal(0))
+            .toString(),
+        });
+      } catch (saldoError) {
+        console.error("❌ Error al asignar saldo:", saldoError);
+        // No fallar la respuesta, pero registrar el error
+      }
+    }
+
     res.json({
+      success: true,
       message: `Solicitud ${estado.toLowerCase()} correctamente`,
       solicitud,
+      saldo_asignado: estado === "APROBADA",
     });
-  } catch {
-    res.status(500).json({ error: "Error al responder solicitud" });
+  } catch (err) {
+    console.error("❌ Error al responder solicitud:", err);
+    res.status(500).json({
+      error: "Error al responder solicitud",
+      detalle: err instanceof Error ? err.message : "Error desconocido",
+    });
   }
 });
 
