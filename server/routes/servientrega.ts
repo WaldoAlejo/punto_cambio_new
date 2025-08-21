@@ -147,7 +147,7 @@ router.post("/tarifa", async (req, res) => {
     } = req.body;
 
     // Validaciones locales antes de enviar a Servientrega
-    const erroresValidacion = [];
+    const erroresValidacion: string[] = [];
     
     // Validar peso mínimo 2kg
     const pesoNumerico = parseFloat(peso);
@@ -208,7 +208,7 @@ router.post("/tarifa", async (req, res) => {
     
     // Procesar errores de Servientrega
     if (typeof result === 'string' && result.includes('proceso')) {
-      const errores = [];
+      const errores: string[] = [];
       
       // Extraer todos los mensajes de error
       const regex = /\{"proceso":"([^"]+)"\}/g;
