@@ -7,13 +7,8 @@ import { subDays, startOfDay, endOfDay } from "date-fns";
 
 const router = express.Router();
 
-<<<<<<< HEAD
-const BASE_URL =
-  "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
-=======
 const BASE_URL = "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
 const RETAIL_URL = "https://servientrega-ecuador.appsiscore.com/app/ws/serviretail_cs.php";
->>>>>>> 82a993145494cf570f113f3677abf239e920374a
 
 const AUTH = {
   usuingreso: "INTPUNTOC",
@@ -519,9 +514,6 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
-export default router;
-=======
 // =============================
 // 🔍 Validar Endpoint Retail  
 // =============================
@@ -560,4 +552,3 @@ router.get("/test-retail", async (_, res) => {
 });
 
 export default router;
->>>>>>> 82a993145494cf570f113f3677abf239e920374a
