@@ -7,8 +7,8 @@ import { subDays, startOfDay, endOfDay } from "date-fns";
 
 const router = express.Router();
 
-const BASE_URL = "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
-const RETAIL_URL = "https://servientrega-ecuador.appsiscore.com/app/ws/serviretail_cs.php";
+const BASE_URL = "https://servientrega-ecuador-prueba.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
+const RETAIL_URL = "https://servientrega-ecuador-prueba.appsiscore.com/app/ws/serviretail_cs.php";
 
 const AUTH = {
   usuingreso: "INTPUNTOC",
