@@ -202,8 +202,10 @@ const PendingExchangesList = ({
   if (isLoading) {
     return (
       <Card>
-        <CardContent className="p-6">
-          <div className="text-center">Cargando cambios pendientes...</div>
+        <CardContent className="p-4">
+          <div className="text-center text-sm text-muted-foreground">
+            Cargando cambios pendientes...
+          </div>
         </CardContent>
       </Card>
     );
@@ -212,9 +214,11 @@ const PendingExchangesList = ({
   if (pendingExchanges.length === 0) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle>Cambios Pendientes</CardTitle>
-          <CardDescription>No hay cambios parciales pendientes</CardDescription>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Cambios Pendientes</CardTitle>
+          <CardDescription className="text-sm">
+            No hay cambios parciales pendientes
+          </CardDescription>
         </CardHeader>
       </Card>
     );
@@ -223,29 +227,32 @@ const PendingExchangesList = ({
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle>Cambios Pendientes</CardTitle>
-          <CardDescription>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Cambios Pendientes</CardTitle>
+          <CardDescription className="text-sm">
             {pendingExchanges.length} cambio(s) con pagos pendientes
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="space-y-3 max-h-80 overflow-y-auto">
             {pendingExchanges.map((exchange) => (
-              <div key={exchange.id} className="border rounded-lg p-4">
-                <div className="flex justify-between items-start mb-3">
+              <div
+                key={exchange.id}
+                className="border rounded-lg p-3 bg-muted/20"
+              >
+                <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h4 className="font-medium">
-                      Cliente: {exchange.datos_cliente?.nombre}{" "}
+                    <h4 className="font-medium text-sm">
+                      {exchange.datos_cliente?.nombre}{" "}
                       {exchange.datos_cliente?.apellido}
                     </h4>
-                    <p className="text-sm text-gray-600">
-                      Documento: {exchange.datos_cliente?.documento}
+                    <p className="text-xs text-muted-foreground">
+                      Doc: {exchange.datos_cliente?.documento}
                     </p>
                   </div>
                   <Badge
                     variant="outline"
-                    className="bg-yellow-50 text-yellow-800"
+                    className="bg-yellow-50 text-yellow-800 text-xs"
                   >
                     {exchange.estado}
                   </Badge>

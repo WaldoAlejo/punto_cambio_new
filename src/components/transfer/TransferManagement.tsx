@@ -70,7 +70,7 @@ const TransferManagement = ({ user }: TransferManagementProps) => {
     };
 
     loadData();
-    const interval = setInterval(fetchTransfers, 10000);
+    const interval = setInterval(fetchTransfers, 30000); // Aumentado a 30 segundos
     return () => clearInterval(interval);
   }, []); // Solo al montar
 
@@ -95,14 +95,14 @@ const TransferManagement = ({ user }: TransferManagementProps) => {
         return;
       }
       await fetchTransfers();
-      
+
       toast({
         title: "✅ Transferencia aprobada",
         description: "La transferencia ha sido aprobada exitosamente",
       });
-      
+
       // Disparar evento para actualizar saldos
-      window.dispatchEvent(new CustomEvent('transferApproved'));
+      window.dispatchEvent(new CustomEvent("transferApproved"));
     } catch {
       toast({
         title: "Error",

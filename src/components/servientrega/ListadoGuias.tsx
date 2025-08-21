@@ -103,7 +103,7 @@ export default function ListadoGuias() {
   }, [desde, hasta]);
 
   return (
-    <div className="w-full max-w-4xl mx-auto mt-6 space-y-4">
+    <div className="w-full max-w-4xl mx-auto mt-4 space-y-3">
       {/* Información del saldo */}
       {user?.punto_atencion_id && (
         <SaldoCompacto
@@ -113,45 +113,47 @@ export default function ListadoGuias() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>📦 Guías generadas</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Guías generadas</CardTitle>
         </CardHeader>
         <CardContent>
           {/* Filtros */}
-          <div className="flex gap-4 mb-4">
-            <div>
-              <Label>Desde</Label>
+          <div className="flex gap-3 mb-4 flex-wrap">
+            <div className="flex-1 min-w-32">
+              <Label className="text-xs">Desde</Label>
               <Input
                 type="date"
                 value={desde}
                 onChange={(e) => setDesde(e.target.value)}
+                className="h-8 text-sm"
               />
             </div>
-            <div>
-              <Label>Hasta</Label>
+            <div className="flex-1 min-w-32">
+              <Label className="text-xs">Hasta</Label>
               <Input
                 type="date"
                 value={hasta}
                 onChange={(e) => setHasta(e.target.value)}
+                className="h-8 text-sm"
               />
             </div>
-            <Button onClick={fetchGuias} className="self-end">
+            <Button onClick={fetchGuias} className="self-end h-8 text-sm">
               Buscar
             </Button>
           </div>
 
           {/* Listado de guías */}
           {loading ? (
-            <Loading text="Cargando guías..." className="py-6" />
+            <Loading text="Cargando guías..." className="py-4" />
           ) : error ? (
-            <div className="text-center py-6">
-              <p className="text-red-600 mb-2">{error}</p>
+            <div className="text-center py-4">
+              <p className="text-destructive mb-2 text-sm">{error}</p>
               <Button onClick={fetchGuias} variant="outline" size="sm">
                 Reintentar
               </Button>
             </div>
           ) : guias.length === 0 ? (
-            <p className="text-gray-600 text-center py-6">
+            <p className="text-muted-foreground text-center py-4 text-sm">
               No hay guías en este periodo.
             </p>
           ) : (

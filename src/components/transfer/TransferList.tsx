@@ -126,61 +126,63 @@ const TransferList = ({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>{getOperatorTitle()}</CardTitle>
-        <CardDescription>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">{getOperatorTitle()}</CardTitle>
+        <CardDescription className="text-sm">
           {filteredTransfers.length === 0
             ? "No hay transferencias registradas"
-            : `${filteredTransfers.length} transferencia(s) encontrada(s)`}
+            : `${filteredTransfers.length} transferencia(s)`}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {filteredTransfers.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <p>No hay transferencias registradas</p>
+          <div className="text-center py-6 text-muted-foreground">
+            <p className="text-sm">No hay transferencias registradas</p>
             {user.rol !== "ADMIN" && user.rol !== "SUPER_USUARIO" && (
-              <p className="text-sm mt-2">
+              <p className="text-xs mt-1">
                 Crea tu primera transferencia usando el formulario
               </p>
             )}
           </div>
         ) : (
-          <div className="space-y-4 max-h-96 overflow-y-auto">
+          <div className="space-y-3 max-h-80 overflow-y-auto">
             {filteredTransfers.map((transfer) => (
               <div
                 key={transfer.id}
-                className="border rounded-lg p-4 space-y-3"
+                className="border rounded-lg p-3 space-y-2 bg-muted/20"
               >
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className="font-medium text-gray-900">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <h4 className="font-medium text-sm">
                         {getTransferTypeLabel(transfer.tipo_transferencia)}
                       </h4>
                       {getStatusBadge(transfer.estado)}
                       {isReceived(transfer) && (
-                        <span className="ml-2 text-xs text-blue-800 bg-blue-50 rounded px-2 py-0.5">
-                          Transferencia recibida
+                        <span className="text-xs text-blue-800 bg-blue-50 rounded px-1.5 py-0.5">
+                          Recibida
                         </span>
                       )}
                       {isRequested(transfer) && (
-                        <span className="ml-2 text-xs text-gray-700 bg-gray-50 rounded px-2 py-0.5">
-                          Solicitada por mí
+                        <span className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5">
+                          Solicitada
                         </span>
                       )}
                     </div>
-                    <div className="text-sm space-y-1 text-gray-600">
-                      <p>
-                        <span className="font-medium">Monto:</span>{" "}
-                        {transfer.monto} {getCurrencyName(transfer.moneda_id)}
-                      </p>
+                    <div className="text-xs space-y-1 text-muted-foreground">
+                      <div className="flex justify-between">
+                        <span>
+                          <span className="font-medium">Monto:</span>{" "}
+                          {transfer.monto} {getCurrencyName(transfer.moneda_id)}
+                        </span>
+                        <span>
+                          {new Date(transfer.fecha).toLocaleDateString()}
+                        </span>
+                      </div>
                       {transfer.tipo_transferencia === "ENTRE_PUNTOS" &&
                         transfer.origen_id && (
                           <p>
-                            <span className="font-medium">De:</span>{" "}
-                            {getPointName(transfer.origen_id)}
-                            <span className="mx-2">→</span>
-                            <span className="font-medium">A:</span>{" "}
+                            {getPointName(transfer.origen_id)} →{" "}
                             {getPointName(transfer.destino_id)}
                           </p>
                         )}
@@ -190,16 +192,6 @@ const TransferList = ({
                           {getPointName(transfer.destino_id)}
                         </p>
                       )}
-                      <p>
-                        <span className="font-medium">Fecha:</span>{" "}
-                        {new Date(transfer.fecha).toLocaleDateString("es-ES", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
                       {transfer.numero_recibo && (
                         <p>
                           <span className="font-medium">Recibo:</span>{" "}
@@ -207,7 +199,7 @@ const TransferList = ({
                         </p>
                       )}
                       {transfer.descripcion && (
-                        <p>
+                        <p className="text-xs truncate">
                           <span className="font-medium">Notas:</span>{" "}
                           {transfer.descripcion}
                         </p>
@@ -223,7 +215,7 @@ const TransferList = ({
                       <Button
                         size="sm"
                         onClick={() => approveTransfer(transfer.id)}
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs"
                       >
                         Aprobar
                       </Button>
@@ -237,6 +229,7 @@ const TransferList = ({
                               "La funcionalidad de rechazo estará disponible próximamente",
                           });
                         }}
+                        className="h-7 text-xs"
                       >
                         Rechazar
                       </Button>

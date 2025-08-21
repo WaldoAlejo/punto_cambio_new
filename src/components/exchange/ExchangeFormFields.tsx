@@ -56,69 +56,66 @@ const ExchangeFormFields = ({
   }
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Tipo de operación con estilo mejorado */}
-      <div className="space-y-3">
-        <Label className="text-sm font-semibold text-foreground">Tipo de Operación</Label>
+    <div className="space-y-4">
+      {/* Tipo de operación compacto */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Tipo de Operación</Label>
         <Select
           value={operationType}
           onValueChange={(value: "COMPRA" | "VENTA") => setOperationType(value)}
         >
-          <SelectTrigger className="h-12 text-base">
+          <SelectTrigger className="h-10">
             <SelectValue placeholder="Seleccionar tipo" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="COMPRA" className="text-base py-3">💰 Compra</SelectItem>
-            <SelectItem value="VENTA" className="text-base py-3">💸 Venta</SelectItem>
+            <SelectItem value="COMPRA">COMPRA</SelectItem>
+            <SelectItem value="VENTA">VENTA</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Sección de monedas con mejor spacing */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="space-y-3">
+      {/* Monedas en una sola fila */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
           <CurrencySearchSelect
             currencies={currencies}
             value={fromCurrency}
             onValueChange={setFromCurrency}
-            placeholder="Seleccionar moneda origen"
-            label="🏦 Moneda Origen"
+            placeholder="Moneda origen"
+            label="Moneda Origen"
           />
         </div>
-        
-        <div className="space-y-3">
+
+        <div className="space-y-2">
           <CurrencySearchSelect
             currencies={currencies}
             value={toCurrency}
             onValueChange={setToCurrency}
-            placeholder="Seleccionar moneda destino"
-            label="🎯 Moneda Destino"
+            placeholder="Moneda destino"
+            label="Moneda Destino"
           />
         </div>
       </div>
 
-      {/* Tasa de cambio destacada */}
-      <div className="bg-accent/10 rounded-lg p-4 space-y-3">
-        <Label className="text-sm font-semibold text-foreground flex items-center gap-2">
-          📊 Tasa de Cambio
-        </Label>
-        <Input
-          type="number"
-          step="0.0001"
-          value={rate}
-          onChange={(e) => setRate(e.target.value)}
-          placeholder="Ingrese la tasa de cambio"
-          className="h-12 text-base font-medium"
-        />
-      </div>
+      {/* Tasa y montos en una fila */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Tasa de Cambio</Label>
+          <Input
+            type="number"
+            step="0.0001"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            placeholder="0.0000"
+            className="h-10"
+          />
+        </div>
 
-      {/* Montos con mejor diseño */}
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="space-y-3">
-          <Label className="text-sm font-semibold text-foreground">
-            💵 Monto a Cambiar
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Monto a Cambiar
             {fromCurrency && (
-              <span className="text-primary font-bold ml-1">
+              <span className="text-muted-foreground ml-1">
                 ({getCurrencyName(fromCurrency)})
               </span>
             )}
@@ -129,35 +126,35 @@ const ExchangeFormFields = ({
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
-            className="h-12 text-base font-medium"
+            className="h-10"
           />
         </div>
-        
-        <div className="space-y-3">
-          <Label className="text-sm font-semibold text-foreground">
-            ✨ Monto Resultante
+
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">
+            Monto Resultante
             {toCurrency && (
-              <span className="text-primary font-bold ml-1">
+              <span className="text-muted-foreground ml-1">
                 ({getCurrencyName(toCurrency)})
               </span>
             )}
           </Label>
-          <div className="h-12 px-4 py-3 border-2 border-primary/20 rounded-lg bg-primary/5 flex items-center">
-            <span className="text-lg font-bold text-primary">
+          <div className="h-10 px-3 py-2 border rounded-md bg-muted/50 flex items-center">
+            <span className="font-medium text-primary">
               {isNaN(destinationAmount) ? "0.00" : destinationAmount.toFixed(2)}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Observaciones con mejor estilo */}
-      <div className="space-y-3">
-        <Label className="text-sm font-semibold text-foreground">📝 Observaciones (Opcional)</Label>
+      {/* Observaciones más compactas */}
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">Observaciones (Opcional)</Label>
         <Input
           value={observation}
           onChange={(e) => setObservation(e.target.value)}
-          placeholder="Observaciones adicionales"
-          className="h-12 text-base"
+          placeholder="Observaciones adicionales..."
+          className="h-10"
         />
       </div>
     </div>

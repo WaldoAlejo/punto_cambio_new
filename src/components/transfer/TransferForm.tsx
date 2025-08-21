@@ -156,81 +156,78 @@ const TransferForm = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Send className="h-5 w-5" />
-          Nueva Transferencia
-        </CardTitle>
+        <CardTitle>Nueva Transferencia</CardTitle>
         <CardDescription>
           Solicita una transferencia entre puntos. Todos los campos son
           obligatorios.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Origen */}
             <div className="space-y-1">
-              <Label>Punto de Origen</Label>
+              <Label className="text-sm font-medium">Punto de Origen</Label>
               <Input
                 value={selectedPoint?.nombre || "No seleccionado"}
                 disabled
-                className="bg-gray-50"
+                className="bg-muted h-9"
               />
             </div>
 
             {/* Destino */}
             <div className="space-y-1">
-              <Label htmlFor="destinationPoint">
-                Punto de Destino <span className="text-red-600">*</span>
+              <Label htmlFor="destinationPoint" className="text-sm font-medium">
+                Punto de Destino *
               </Label>
               <Select
                 value={destinationPointId}
                 onValueChange={setDestinationPointId}
                 name="destinationPoint"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione punto de destino" />
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Seleccionar destino" />
                 </SelectTrigger>
                 <SelectContent>
                   {availablePoints.map((point) => (
                     <SelectItem key={point.id} value={point.id}>
-                      {point.nombre} — {point.direccion}
+                      {point.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {errors.destinationPointId && (
-                <span className="text-xs text-red-600">
+                <span className="text-xs text-destructive">
                   {errors.destinationPointId}
                 </span>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Moneda */}
             <div className="space-y-1">
-              <Label htmlFor="currency">
-                Moneda <span className="text-red-600">*</span>
+              <Label htmlFor="currency" className="text-sm font-medium">
+                Moneda *
               </Label>
               <Select
                 value={currencyId}
                 onValueChange={setCurrencyId}
                 name="currency"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione moneda" />
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Seleccionar moneda" />
                 </SelectTrigger>
                 <SelectContent>
                   {currencies.map((currency) => (
                     <SelectItem key={currency.id} value={currency.id}>
-                      {currency.codigo} — {currency.nombre}
+                      {currency.codigo} - {currency.nombre}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {errors.currencyId && (
-                <span className="text-xs text-red-600">
+                <span className="text-xs text-destructive">
                   {errors.currencyId}
                 </span>
               )}
@@ -238,36 +235,38 @@ const TransferForm = ({
 
             {/* Monto */}
             <div className="space-y-1">
-              <Label htmlFor="amount">
-                Monto <span className="text-red-600">*</span>
+              <Label htmlFor="amount" className="text-sm font-medium">
+                Monto *
               </Label>
-              <div className="flex">
-                <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
                   {selectedCurrency?.simbolo || "$"}
                 </span>
                 <Input
                   id="amount"
+                  className="pl-8 h-9"
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
                   step="0.01"
                   min="0.01"
-                  className="rounded-l-none"
                   disabled={!currencyId}
                   autoComplete="off"
                 />
               </div>
               {errors.amount && (
-                <span className="text-xs text-red-600">{errors.amount}</span>
+                <span className="text-xs text-destructive">
+                  {errors.amount}
+                </span>
               )}
             </div>
           </div>
 
           {/* Descripción */}
           <div className="space-y-1">
-            <Label htmlFor="description">
-              Descripción / Motivo <span className="text-red-600">*</span>
+            <Label htmlFor="description" className="text-sm font-medium">
+              Descripción / Motivo *
             </Label>
             <Textarea
               id="description"
@@ -275,45 +274,50 @@ const TransferForm = ({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Ej: Transferencia de fondos para cambio de turno"
               rows={2}
+              className="resize-none"
             />
             {errors.description && (
-              <span className="text-xs text-red-600">{errors.description}</span>
+              <span className="text-xs text-destructive">
+                {errors.description}
+              </span>
             )}
           </div>
 
-          {/* Resumen */}
+          {/* Resumen compacto */}
           {destinationPointId &&
             currencyId &&
             amount &&
             parseFloat(amount) > 0 && (
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
-                <h4 className="font-medium text-blue-900 mb-2">
-                  Resumen de Transferencia
-                </h4>
-                <div className="space-y-1 text-sm text-blue-800">
-                  <p>
-                    <strong>Desde:</strong> {selectedPoint?.nombre}
-                  </p>
-                  <p>
-                    <strong>Hacia:</strong> {selectedDestinationPoint?.nombre}
-                  </p>
-                  <p>
-                    <strong>Monto:</strong> {selectedCurrency?.simbolo}
+              <div className="p-3 bg-muted/50 rounded-lg border">
+                <h4 className="font-medium mb-2 text-sm">Resumen</h4>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-muted-foreground">Desde:</span>{" "}
+                    {selectedPoint?.nombre}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Hacia:</span>{" "}
+                    {selectedDestinationPoint?.nombre}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Monto:</span>{" "}
+                    {selectedCurrency?.simbolo}
                     {amount} {selectedCurrency?.codigo}
-                  </p>
-                  <p>
-                    <strong>Solicitante:</strong> {user.nombre}
-                  </p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Solicitante:</span>{" "}
+                    {user.nombre}
+                  </div>
                 </div>
               </div>
             )}
 
-          <div className="flex gap-2 pt-3">
+          <div className="flex gap-2 pt-2">
             <Button
               type="submit"
               disabled={isLoading || Object.values(errors).some(Boolean)}
+              className="h-9"
             >
-              <Send className="mr-2 h-4 w-4" />
               {isLoading ? "Creando..." : "Crear Transferencia"}
             </Button>
             {formHasData && (
@@ -322,8 +326,8 @@ const TransferForm = ({
                 variant="outline"
                 onClick={onCancel}
                 disabled={isLoading}
+                className="h-9"
               >
-                <X className="mr-2 h-4 w-4" />
                 Cancelar
               </Button>
             )}

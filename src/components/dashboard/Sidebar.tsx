@@ -3,23 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import {
-  ArrowRightLeft,
-  Send,
-  Clock,
-  Users,
-  MapPin,
-  Coins,
-  BarChart3,
-  Calculator,
-  CheckSquare,
-  Menu,
-  X,
-  ChevronDown,
-  ChevronRight,
-  Truck,
-  DollarSign,
-} from "lucide-react";
+import { X, ChevronDown, ChevronRight } from "lucide-react";
 import { User, PuntoAtencion } from "../../types";
 
 interface SidebarProps {
@@ -34,7 +18,6 @@ interface SidebarProps {
 interface MenuItem {
   id: string;
   label: string;
-  icon: React.ElementType;
   color: string;
   roles?: string[];
 }
@@ -66,42 +49,36 @@ const Sidebar = ({
     {
       id: "exchanges",
       label: "Cambio de Divisas",
-      icon: ArrowRightLeft,
       color: "text-blue-600",
       roles: ["OPERADOR"],
     },
     {
       id: "pending-exchanges",
       label: "Cambios Pendientes",
-      icon: Clock,
       color: "text-red-600",
       roles: ["OPERADOR"],
     },
     {
       id: "transfers",
       label: "Transferencias",
-      icon: Send,
       color: "text-green-600",
       roles: ["OPERADOR"],
     },
     {
       id: "operator-time-management",
       label: "Gestión de Horarios",
-      icon: Clock,
       color: "text-purple-600",
       roles: ["OPERADOR"],
     },
     {
       id: "daily-close",
       label: "Cierre Diario",
-      icon: Calculator,
       color: "text-orange-600",
       roles: ["OPERADOR"],
     },
     {
       id: "servientrega",
       label: "Guía Servientrega",
-      icon: Truck,
       color: "text-cyan-600",
       roles: ["OPERADOR", "CONCESION"],
     },
@@ -111,66 +88,56 @@ const Sidebar = ({
     {
       id: "admin-time-management",
       label: "Control de Horarios",
-      icon: Clock,
       color: "text-purple-600",
     },
     {
       id: "transfer-approvals",
       label: "Aprobaciones",
-      icon: CheckSquare,
       color: "text-yellow-600",
     },
     {
       id: "users",
       label: "Usuarios",
-      icon: Users,
       color: "text-blue-600",
     },
     {
       id: "points",
       label: "Puntos de Atención",
-      icon: MapPin,
       color: "text-green-600",
     },
     {
       id: "balance-management",
       label: "Gestión de Saldos",
-      icon: Coins,
       color: "text-blue-600",
     },
     {
       id: "servientrega-saldo",
       label: "Saldo Servientrega",
-      icon: DollarSign,
       color: "text-cyan-600",
     },
     {
       id: "reports",
       label: "Reportes",
-      icon: BarChart3,
       color: "text-red-600",
     },
   ];
 
   const renderMenuItem = (item: MenuItem) => {
-    const Icon = item.icon;
     const isActive = activeView === item.id;
     return (
       <Button
         key={item.id}
         variant={isActive ? "default" : "ghost"}
-        className={`w-full justify-start h-10 px-3 ${
-          isActive ? "bg-blue-700 text-white shadow" : "hover:bg-gray-100"
+        className={`w-full justify-start h-8 px-3 text-sm ${
+          isActive ? "bg-primary text-primary-foreground" : "hover:bg-muted"
         } ${!isOpen ? "px-2" : ""} transition-all`}
         onClick={() => onViewChange(item.id)}
       >
-        <Icon
-          className={`h-4 w-4 ${item.color} ${isActive ? "text-white" : ""} ${
-            !isOpen ? "mx-auto" : "mr-3"
-          }`}
-        />
-        {isOpen && (
-          <span className="text-sm font-medium truncate">{item.label}</span>
+        {isOpen && <span className="font-medium truncate">{item.label}</span>}
+        {!isOpen && (
+          <span className="text-xs font-bold mx-auto">
+            {item.label.charAt(0)}
+          </span>
         )}
       </Button>
     );
@@ -187,20 +154,20 @@ const Sidebar = ({
 
       <aside
         className={`
-          fixed top-0 left-0 h-full bg-white border-r border-gray-200 z-50 transition-all duration-300
+          fixed top-0 left-0 h-full bg-white border-r z-50 transition-all duration-300
           flex flex-col
-          ${isOpen ? "w-64" : "w-16"}
+          ${isOpen ? "w-56" : "w-14"}
           ${isMobile ? "shadow-xl" : ""}
           lg:relative lg:z-auto
         `}
       >
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+        <div className="flex items-center justify-between p-3 border-b">
           {isOpen && (
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg font-bold text-blue-800 tracking-tight">
-                PuntoCambio
-              </h1>
-              <p className="text-xs text-gray-500">Sistema de Gestión</p>
+              <h1 className="text-sm font-bold text-primary">PuntoCambio</h1>
+              <p className="text-xs text-muted-foreground">
+                Sistema de Gestión
+              </p>
             </div>
           )}
           <Button

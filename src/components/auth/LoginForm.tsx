@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "sonner";
-import { LogIn } from "lucide-react";
 
 const LoginForm = () => {
   const [username, setUsername] = useState("");
@@ -44,48 +43,55 @@ const LoginForm = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <LogIn className="h-12 w-12 text-blue-600" />
-          </div>
-          <CardTitle className="text-2xl">Sistema de Cambio</CardTitle>
-          <CardDescription>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center pb-4">
+          <CardTitle className="text-xl font-semibold">
+            Sistema de Cambio
+          </CardTitle>
+          <CardDescription className="text-sm">
             Ingrese sus credenciales para acceder
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="username">Usuario</Label>
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="username" className="text-sm font-medium">
+                Usuario
+              </Label>
               <Input
                 id="username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Nombre de usuario"
+                className="h-10"
                 required
                 disabled={isLoading}
+                autoComplete="username"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
+            <div className="space-y-1">
+              <Label htmlFor="password" className="text-sm font-medium">
+                Contraseña
+              </Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Contraseña"
+                className="h-10"
                 required
                 disabled={isLoading}
+                autoComplete="current-password"
               />
             </div>
 
             <Button
               type="submit"
-              className="w-full"
+              className="w-full h-10 mt-4"
               disabled={isLoading || !username || !password}
             >
               {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}

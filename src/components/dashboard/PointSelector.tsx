@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Clock, Users } from "lucide-react";
+
 import { pointService } from "../../services/pointService";
 import { scheduleService } from "../../services/scheduleService";
 import { PuntoAtencion, User } from "../../types";
@@ -90,10 +90,12 @@ export const PointSelector = ({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-[300px]">
         <div className="text-center">
-          <Clock className="mx-auto h-12 w-12 text-gray-400 animate-spin" />
-          <p className="mt-4 text-gray-600">Cargando puntos disponibles...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">
+            Cargando puntos disponibles...
+          </p>
         </div>
       </div>
     );
@@ -101,22 +103,17 @@ export const PointSelector = ({
 
   if (availablePoints.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex items-center justify-center min-h-[300px]">
         <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-yellow-100">
-              <MapPin className="h-8 w-8 text-yellow-600" />
-            </div>
-            <CardTitle className="text-xl text-yellow-800">
-              No hay puntos disponibles
-            </CardTitle>
+          <CardHeader className="text-center pb-4">
+            <CardTitle className="text-lg">No hay puntos disponibles</CardTitle>
           </CardHeader>
-          <CardContent className="text-center space-y-4">
-            <p className="text-gray-600">
+          <CardContent className="text-center space-y-3">
+            <p className="text-muted-foreground text-sm">
               Actualmente no hay puntos de atención disponibles para iniciar
               jornada.
             </p>
-            <Button onClick={loadAvailablePoints} variant="outline">
+            <Button onClick={loadAvailablePoints} variant="outline" size="sm">
               Actualizar
             </Button>
           </CardContent>
@@ -126,48 +123,49 @@ export const PointSelector = ({
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+    <div className="container mx-auto p-4">
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold mb-1">
           Seleccionar Punto de Atención
         </h2>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground text-sm">
           Selecciona un punto de atención para iniciar tu jornada laboral.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {availablePoints.map((point) => (
-          <Card key={point.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
+          <Card key={point.id} className="hover:shadow-md transition-shadow">
+            <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-lg">{point.nombre}</CardTitle>
-                  <div className="flex items-center mt-2 text-sm text-gray-600">
-                    <MapPin className="h-4 w-4 mr-1" />
+                  <CardTitle className="text-base">{point.nombre}</CardTitle>
+                  <div className="mt-1 text-sm text-muted-foreground">
                     {point.direccion}
                   </div>
                 </div>
                 <Badge
                   variant="secondary"
-                  className="bg-green-100 text-green-800"
+                  className="bg-green-100 text-green-800 text-xs"
                 >
                   Disponible
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               <div className="space-y-3">
-                <div className="text-sm text-gray-600">
+                <div className="text-xs text-muted-foreground space-y-1">
                   <p>
-                    <strong>Ciudad:</strong> {point.ciudad}
+                    <span className="font-medium">Ciudad:</span> {point.ciudad}
                   </p>
                   <p>
-                    <strong>Provincia:</strong> {point.provincia}
+                    <span className="font-medium">Provincia:</span>{" "}
+                    {point.provincia}
                   </p>
                   {point.telefono && (
                     <p>
-                      <strong>Teléfono:</strong> {point.telefono}
+                      <span className="font-medium">Teléfono:</span>{" "}
+                      {point.telefono}
                     </p>
                   )}
                 </div>
@@ -175,19 +173,10 @@ export const PointSelector = ({
                 <Button
                   onClick={() => handleStartSchedule(point)}
                   disabled={isStartingSchedule}
-                  className="w-full"
+                  className="w-full h-9"
+                  size="sm"
                 >
-                  {isStartingSchedule ? (
-                    <>
-                      <Clock className="mr-2 h-4 w-4 animate-spin" />
-                      Iniciando...
-                    </>
-                  ) : (
-                    <>
-                      <Users className="mr-2 h-4 w-4" />
-                      Iniciar Jornada
-                    </>
-                  )}
+                  {isStartingSchedule ? "Iniciando..." : "Iniciar Jornada"}
                 </Button>
               </div>
             </CardContent>

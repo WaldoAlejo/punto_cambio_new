@@ -198,15 +198,16 @@ export class ReceiptService {
     receipt: ReceiptData,
     copyType: "cliente" | "operador" = "cliente"
   ): string {
-    const separator = "================================";
-    const halfSeparator = "----------------";
+    // Formato optimizado para impresoras térmicas (48 caracteres)
+    const separator = "================================================";
+    const halfSeparator = "------------------------";
     const copyLabel =
       copyType === "cliente" ? "COPIA CLIENTE" : "COPIA OPERADOR";
 
     let receiptText = `
 ${separator}
-        PUNTO CAMBIO
-        ${copyLabel}
+                PUNTO CAMBIO
+                ${copyLabel}
 ${separator}
 Recibo: ${receipt.numeroRecibo}
 Fecha: ${receipt.fecha}
@@ -384,17 +385,31 @@ ${separator}
                   <style>
                     body { 
                       font-family: 'Courier New', monospace; 
-                      font-size: 12px; 
-                      margin: 20px; 
-                      line-height: 1.2;
+                      font-size: 11px; 
+                      margin: 5px; 
+                      line-height: 1.1;
+                      background: white;
                     }
                     .receipt { 
                       white-space: pre-line; 
-                      max-width: 400px;
+                      max-width: 350px;
+                      width: 100%;
                     }
                     @media print {
-                      body { margin: 0; }
-                      .receipt { font-size: 10px; }
+                      body { 
+                        margin: 0; 
+                        padding: 0;
+                        font-size: 9px;
+                      }
+                      .receipt { 
+                        font-size: 9px; 
+                        max-width: 300px;
+                        width: 100%;
+                      }
+                      @page {
+                        margin: 0;
+                        size: 80mm auto;
+                      }
                     }
                   </style>
                 </head>
@@ -417,19 +432,19 @@ ${separator}
           } else {
             // Si el popup fue bloqueado, mostrar alerta
             console.warn(
-              `⚠️ Popup bloqueado para copia ${copyType}. Verifique la configuración del navegador.`
+              `ADVERTENCIA: Popup bloqueado para copia ${copyType}. Verifique la configuración del navegador.`
             );
             alert(
-              `⚠️ El navegador bloqueó la ventana de impresión.\n\nPor favor:\n1. Permita popups para este sitio\n2. O use Ctrl+P para imprimir manualmente`
+              `ADVERTENCIA: El navegador bloqueó la ventana de impresión.\n\nPor favor:\n1. Permita popups para este sitio\n2. O use Ctrl+P para imprimir manualmente`
             );
           }
         } catch (error) {
           console.error(
-            `❌ Error al abrir ventana de impresión para copia ${copyType}:`,
+            `ERROR: Error al abrir ventana de impresión para copia ${copyType}:`,
             error
           );
           alert(
-            `❌ Error al imprimir copia ${copyType}. Verifique la configuración del navegador.`
+            `ERROR: Error al imprimir copia ${copyType}. Verifique la configuración del navegador.`
           );
         }
       }
@@ -480,7 +495,7 @@ ${separator}
               margin: 2px;
               border-radius: 4px;
               cursor: pointer;
-            ">👤 Copia Cliente</button>
+            ">COPIA CLIENTE</button>
             <button id="tabOperador" onclick="showTab('operador')" style="
               background: #6c757d; 
               color: white; 
@@ -489,23 +504,33 @@ ${separator}
               margin: 2px;
               border-radius: 4px;
               cursor: pointer;
-            ">👨‍💼 Copia Operador</button>
+            ">COPIA OPERADOR</button>
           </div>
           
           <div id="receiptCliente" style="
             font-family: 'Courier New', monospace; 
-            font-size: 12px; 
+            font-size: 11px; 
             white-space: pre-line;
             margin-bottom: 20px;
             display: block;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            max-width: 350px;
+            line-height: 1.2;
           ">${clienteReceipt}</div>
           
           <div id="receiptOperador" style="
             font-family: 'Courier New', monospace; 
-            font-size: 12px; 
+            font-size: 11px; 
             white-space: pre-line;
             margin-bottom: 20px;
             display: none;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            max-width: 350px;
+            line-height: 1.2;
           ">${operadorReceipt}</div>
           
           <div style="text-align: center;">
@@ -517,7 +542,7 @@ ${separator}
               margin: 5px;
               border-radius: 4px;
               cursor: pointer;
-            ">🖨️ Imprimir</button>
+            ">IMPRIMIR</button>
             <button onclick="this.closest('div').parentElement.remove()" style="
               background: #dc3545; 
               color: white; 
@@ -526,7 +551,7 @@ ${separator}
               margin: 5px;
               border-radius: 4px;
               cursor: pointer;
-            ">❌ Cerrar</button>
+            ">CERRAR</button>
           </div>
         </div>
       </div>

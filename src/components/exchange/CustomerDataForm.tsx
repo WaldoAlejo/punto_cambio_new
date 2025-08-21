@@ -56,10 +56,10 @@ const CustomerDataForm = ({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Nombre *</Label>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Nombre *</Label>
               <Input
                 value={customerData.nombre}
                 onChange={(e) =>
@@ -68,12 +68,13 @@ const CustomerDataForm = ({
                     nombre: e.target.value,
                   }))
                 }
-                placeholder="Nombre del cliente"
+                placeholder="Nombre"
+                className="h-9"
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label>Apellido *</Label>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Apellido *</Label>
               <Input
                 value={customerData.apellido}
                 onChange={(e) =>
@@ -82,15 +83,16 @@ const CustomerDataForm = ({
                     apellido: e.target.value,
                   }))
                 }
-                placeholder="Apellido del cliente"
+                placeholder="Apellido"
+                className="h-9"
                 required
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Cédula *</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Cédula *</Label>
               <Input
                 value={customerData.cedula}
                 onChange={(e) =>
@@ -101,11 +103,12 @@ const CustomerDataForm = ({
                   }))
                 }
                 placeholder="Número de cédula"
+                className="h-9"
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label>Teléfono</Label>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Teléfono</Label>
               <Input
                 value={customerData.telefono}
                 onChange={(e) =>
@@ -115,11 +118,16 @@ const CustomerDataForm = ({
                   }))
                 }
                 placeholder="Número de teléfono"
+                className="h-9"
               />
             </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={!isFormValid()}>
+          <Button
+            type="submit"
+            className="w-full h-10"
+            disabled={!isFormValid()}
+          >
             Confirmar Datos del Cliente
           </Button>
         </form>

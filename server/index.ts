@@ -45,11 +45,24 @@ import servientregaRoutes from "./routes/servientrega.js";
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
 
-// Rate limiting
+// Rate limiting - Configuración más permisiva para aplicación interna
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 1000, // 1000 peticiones por IP en 15 minutos (más permisivo)
   message: "Too many requests from this IP, please try again later.",
+  standardHeaders: true, // Incluir headers de rate limit
+  legacyHeaders: false, // Deshabilitar headers legacy
+  skip: (req) => {
+    // Excluir rutas críticas del rate limiting
+    const excludedPaths = [
+      "/health",
+      "/api/auth/verify",
+      "/api/exchanges",
+      "/api/transfers",
+      "/api/servientrega",
+    ];
+    return excludedPaths.some((path) => req.path.startsWith(path));
+  },
 });
 
 // Middleware
@@ -70,6 +83,7 @@ app.use(
     },
     crossOriginOpenerPolicy: false, // Deshabilitar COOP para HTTP
     hsts: false, // Deshabilitar HSTS para permitir HTTP
+    originAgentCluster: false, // Deshabilitar Origin-Agent-Cluster header
   })
 );
 app.use(
@@ -106,6 +120,22 @@ app.get("/health", (req, res) => {
     status: "OK",
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+  });
+});
+
+// Rate limit status endpoint
+app.get("/api/rate-limit-status", (req, res) => {
+  const rateLimitHeaders = {
+    limit: res.get("X-RateLimit-Limit"),
+    remaining: res.get("X-RateLimit-Remaining"),
+    reset: res.get("X-RateLimit-Reset"),
+  };
+
+  res.json({
+    status: "OK",
+    rateLimit: rateLimitHeaders,
+    clientIP: req.ip,
+    timestamp: new Date().toISOString(),
   });
 });
 
