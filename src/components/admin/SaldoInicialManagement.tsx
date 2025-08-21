@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,8 +25,6 @@ import {
   Eye,
   TrendingUp,
   TrendingDown,
-  DollarSign,
-  Coins,
 } from "lucide-react";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import {
@@ -165,11 +163,7 @@ const SaldoInicialManagement = () => {
       const response = await saldoInicialService.getMovimientosSaldo(pointId);
 
       if (response.error) {
-        toast({
-          title: "Error",
-          description: response.error,
-          variant: "destructive",
-        });
+        toast.error(`Error: ${response.error}`);
       } else {
         setMovimientos(response.movimientos);
         setMovimientosDialog(true);

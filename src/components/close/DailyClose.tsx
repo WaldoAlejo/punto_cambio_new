@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { User, PuntoAtencion, Moneda, CuadreCaja } from "../../types";
+import { User, PuntoAtencion, CuadreCaja } from "../../types";
 
 interface DailyCloseProps {
   user: User;
@@ -55,7 +55,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
   // Verificar jornada activa
   useEffect(() => {
-    const checkActiveJornada = async () => {
+    const checkActiveJornada = async (): Promise<void> => {
       try {
         const token = localStorage.getItem("authToken");
         console.log(
@@ -113,13 +113,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
     if (user.rol === "OPERADOR") {
       checkActiveJornada();
-
-      // Recheck jornada every 30 seconds when mounted
       const interval = setInterval(checkActiveJornada, 30000);
       return () => clearInterval(interval);
     } else {
-      setHasActiveJornada(true); // Los admin siempre pueden
+      setHasActiveJornada(true);
     }
+    // Ensure all code paths return void
+    return;
   }, [user]);
 
   // Obtener datos de cuadre automático
