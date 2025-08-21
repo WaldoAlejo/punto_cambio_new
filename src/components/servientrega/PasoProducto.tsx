@@ -37,7 +37,8 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
       console.log("🔍 Cargando productos de Servientrega...");
 
       const response = await axiosInstance.post<{
-        productos: { nombre_producto: string }[];
+        fetch?: { producto: string }[];
+        productos?: { nombre_producto: string }[];
         success?: boolean;
         fallback?: boolean;
         warning?: string;
@@ -45,9 +46,18 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
 
       console.log("📦 Respuesta de productos:", response.data);
 
-      const productos = Array.isArray(response.data.productos)
-        ? response.data.productos
-        : [];
+      // Adaptar la respuesta - el servidor devuelve "fetch" con objetos que tienen "producto"
+      let productos: { nombre_producto: string }[] = [];
+      
+      if (Array.isArray(response.data.fetch)) {
+        // Convertir formato del servidor a formato esperado por el frontend
+        productos = response.data.fetch.map(item => ({
+          nombre_producto: item.producto.trim()
+        }));
+      } else if (Array.isArray(response.data.productos)) {
+        productos = response.data.productos;
+      }
+      
       setProductos(productos);
 
       // Mostrar advertencia si se usó fallback
