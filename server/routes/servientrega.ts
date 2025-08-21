@@ -64,8 +64,10 @@ function adaptServientregaResponse(result: any, dataType: string): any {
         break;
       case "empaques":
         adaptedResult.empaques = result.fetch.map((item: any) => ({
-          nombre_empaque: item.empaque ? item.empaque.trim() : item.empaque,
-          codigo_empaque: item.codigo ? item.codigo.trim() : item.codigo,
+          nombre_empaque: item.articulo ? item.articulo.trim() : item.articulo,
+          valor_venta: item.valorventa
+            ? item.valorventa.trim()
+            : item.valorventa,
         }));
         break;
       default:
