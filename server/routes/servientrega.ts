@@ -573,7 +573,7 @@ router.post("/remitente/guardar", async (req, res) => {
 router.put("/remitente/actualizar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
-    const { identificacion, ciudad, provincia, pais, codpais, ...updateData } = req.body;
+    const { cedula: bodyIdentificacion, ciudad, provincia, pais, codpais, ...updateData } = req.body;
     
     console.log(`📝 Actualizando remitente con cédula: ${cedula}`);
     console.log(`📋 Datos a actualizar:`, updateData);
@@ -624,7 +624,7 @@ router.post("/destinatario/guardar", async (req, res) => {
 router.put("/destinatario/actualizar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
-    const { identificacion, codpais, ...updateData } = req.body;
+    const { cedula: bodyIdentificacion, codpais, ...updateData } = req.body;
 
     console.log(`📝 Actualizando destinatario con cédula: ${cedula}`);
     console.log(`📋 Datos a actualizar:`, updateData);
