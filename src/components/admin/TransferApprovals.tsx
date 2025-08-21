@@ -64,8 +64,8 @@ const TransferApprovals = () => {
       "Confirmar aprobación",
       `¿Está seguro de aprobar la transferencia de ${transfer.monto.toLocaleString()} ${
         transfer.moneda?.codigo
-      } desde ${transfer.puntoOrigen?.nombre} hacia ${
-        transfer.puntoDestino?.nombre || "Matriz"
+      } desde ${transfer.origen?.nombre || "Origen"} hacia ${
+        transfer.destino?.nombre || "Matriz"
       }?`,
       async () => {
         try {

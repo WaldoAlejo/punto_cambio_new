@@ -249,7 +249,7 @@ router.get("/saldo/historial", async (_, res) => {
         created_at: true,
         updated_at: true,
         punto_atencion_id: true,
-        puntoAtencion: {
+        punto_atencion: {
           select: {
             id: true,
             nombre: true,
@@ -264,8 +264,8 @@ router.get("/saldo/historial", async (_, res) => {
     const data = historial.map((item) => ({
       ...item,
       disponible: item.monto_total.sub(item.monto_usado),
-      punto_nombre: item.puntoAtencion?.nombre,
-      punto_ubicacion: `${item.puntoAtencion?.ciudad}, ${item.puntoAtencion?.provincia}`,
+      punto_nombre: item.punto_atencion?.nombre,
+      punto_ubicacion: `${item.punto_atencion?.ciudad}, ${item.punto_atencion?.provincia}`,
     }));
 
     res.json(data);
