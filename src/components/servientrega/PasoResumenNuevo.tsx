@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import axiosInstance from "@/services/axiosInstance";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   formatearPayloadTarifa,
   procesarRespuestaTarifa,
 } from "@/config/servientrega";
+import TarifaModal from "./TarifaModal";
 
 interface PasoResumenProps {
   formData: FormDataGuia;
@@ -54,9 +55,11 @@ export default function PasoResumenNuevo({
   onNext,
 }: PasoResumenProps) {
   const [tarifa, setTarifa] = useState<TarifaResponse | null>(null);
+  const [tarifaServientrega, setTarifaServientrega] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [saldo, setSaldo] = useState<SaldoInfo | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(false);
+  const [showTarifaModal, setShowTarifaModal] = useState(false);
 
   // Estados del formulario
   const [contenido, setContenido] = useState(
@@ -124,6 +127,13 @@ export default function PasoResumenNuevo({
       const data = res.data;
 
       console.log("📥 Respuesta de tarifa:", data);
+
+      // Guardar respuesta completa de Servientrega para el modal
+      if (Array.isArray(data) && data.length > 0) {
+        setTarifaServientrega(data[0]);
+      } else if (typeof data === 'object') {
+        setTarifaServientrega(data);
+      }
 
       // Usar función centralizada para procesar respuesta
       const tarifaCalculada = procesarRespuestaTarifa(data);
@@ -376,9 +386,21 @@ export default function PasoResumenNuevo({
                   </div>
                 )}
                 <Separator />
-                <div className="flex justify-between font-semibold text-lg">
-                  <span>Total:</span>
-                  <span className="text-blue-600">${total.toFixed(2)}</span>
+                <div className="flex justify-between items-center">
+                  <div className="flex justify-between font-semibold text-lg">
+                    <span>Total:</span>
+                    <span className="text-blue-600">${total.toFixed(2)}</span>
+                  </div>
+                  {tarifaServientrega && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowTarifaModal(true)}
+                      className="ml-4"
+                    >
+                      Ver detalles
+                    </Button>
+                  )}
                 </div>
                 {tarifa.gtotal && tarifa.gtotal !== total && (
                   <div className="flex justify-between text-xs text-orange-600 mt-1">
@@ -514,6 +536,18 @@ export default function PasoResumenNuevo({
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal de detalles de tarifa */}
+      <TarifaModal
+        isOpen={showTarifaModal}
+        onClose={() => setShowTarifaModal(false)}
+        tarifa={tarifaServientrega}
+        onConfirm={() => {
+          setShowTarifaModal(false);
+          handleSubmit();
+        }}
+        loading={loading}
+      />
     </div>
   );
 }
