@@ -157,10 +157,6 @@ router.post("/tarifa", async (req, res) => {
       erroresValidacion.push(`Peso inválido: ${peso}. Debe ser número mayor o igual a 2`);
     }
     
-    // Validar ciudades y provincias (formato esperado por Servientrega)
-    const ciudadesPermitidas = ["QUITO", "GUAYAQUIL", "CUENCA", "AMBATO", "MACHALA"];
-    const provinciasPermitidas = ["PICHINCHA", "GUAYAS", "AZUAY", "TUNGURAHUA", "EL ORO"];
-    
     console.log("🔍 Validando campos:", {
       peso_original: peso,
       peso_parseado: pesoNumerico,
