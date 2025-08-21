@@ -128,9 +128,43 @@ router.post("/tarifas", async (req, res) => {
 
 router.post("/tarifa", async (req, res) => {
   try {
+    const {
+      ciu_ori,
+      provincia_ori,
+      ciu_des,
+      provincia_des,
+      valor_seguro,
+      valor_declarado,
+      peso,
+      alto,
+      ancho,
+      largo,
+      recoleccion = "NO",
+      nombre_producto = "MERCANCIA PREMIER",
+      empaque = ""
+    } = req.body;
+
+    // Validar que el producto sea válido
+    const productosValidos = ["MERCANCIA PREMIER", "DOCUMENTO"];
+    const productoFinal = productosValidos.includes(nombre_producto) 
+      ? nombre_producto 
+      : "MERCANCIA PREMIER";
+
     const payload = {
       tipo: "obtener_tarifa_nacional",
-      ...req.body,
+      ciu_ori,
+      provincia_ori,
+      ciu_des,
+      provincia_des,
+      valor_seguro: String(valor_seguro),
+      valor_declarado: String(valor_declarado),
+      peso: String(peso),
+      alto: String(alto),
+      ancho: String(ancho),
+      largo: String(largo),
+      recoleccion,
+      nombre_producto: productoFinal,
+      empaque,
       ...AUTH,
     };
     
