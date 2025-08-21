@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { X, ChevronDown, ChevronRight, BarChart3 } from "lucide-react";
+import { X, Menu, ChevronDown, ChevronRight, BarChart3 } from "lucide-react";
 import { User, PuntoAtencion } from "../../types";
 
 interface SidebarProps {

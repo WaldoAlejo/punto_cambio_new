@@ -26,6 +26,8 @@ export interface PuntoAtencion {
   provincia: string;
   codigo_postal?: string;
   telefono?: string;
+  servientrega_agencia_codigo?: string;
+  servientrega_agencia_nombre?: string;
   activo: boolean;
   es_principal: boolean;
   created_at: string;

@@ -23,6 +23,8 @@ interface JornadaActiveResponse {
       provincia: string;
       codigo_postal?: string;
       telefono?: string;
+      servientrega_agencia_codigo?: string;
+      servientrega_agencia_nombre?: string;
     };
   } | null;
 }
@@ -56,7 +58,10 @@ function App() {
               provincia: active.puntoAtencion?.provincia || "",
               codigo_postal: active.puntoAtencion?.codigo_postal || "",
               telefono: active.puntoAtencion?.telefono || "",
+              servientrega_agencia_codigo: active.puntoAtencion?.servientrega_agencia_codigo,
+              servientrega_agencia_nombre: active.puntoAtencion?.servientrega_agencia_nombre,
               activo: true,
+              es_principal: false,
               created_at: "",
               updated_at: "",
             });

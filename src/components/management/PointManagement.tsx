@@ -17,22 +17,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { PuntoAtencion } from "../../types";
 import { pointService } from "../../services/pointService";
 import EditPointDialog from "@/components/admin/EditPointDialog";
-import { Edit, Trash, MapPin, Building, Phone } from "lucide-react";
-import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { Edit } from "lucide-react";
+
 
 export const PointManagement = () => {
-  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,6 +36,8 @@ export const PointManagement = () => {
     provincia: "",
     codigo_postal: "",
     telefono: "",
+    servientrega_agencia_codigo: "",
+    servientrega_agencia_nombre: "",
   });
   const [editingPoint, setEditingPoint] = useState<PuntoAtencion | null>(null);
 
@@ -51,14 +45,16 @@ export const PointManagement = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { points: fetchedPoints } =
-        await pointService.getAllPointsForAdmin();
-      // Ordenar por nombre
-      setPoints(fetchedPoints.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      const { points: fetchedPoints } = await pointService.getAllPointsForAdmin();
+      setPoints(fetchedPoints);
     } catch {
       const errorMessage = "Error al cargar puntos de atención";
       setError(errorMessage);
-      toast.error(errorMessage);
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -70,21 +66,33 @@ export const PointManagement = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (
       !formData.nombre ||
       !formData.direccion ||
       !formData.ciudad ||
       !formData.provincia
     ) {
-      toast.error(
-        "Los campos nombre, dirección, ciudad y provincia son obligatorios"
-      );
+      toast({
+        title: "Error",
+        description:
+          "Los campos nombre, dirección, ciudad y provincia son obligatorios",
+        variant: "destructive",
+      });
       return;
     }
 
     try {
       const { point: newPoint } = await pointService.createPoint(formData);
-      if (!newPoint) throw new Error();
+
+      if (!newPoint) {
+        toast({
+          title: "Error",
+          description: "Error al crear punto de atención",
+          variant: "destructive",
+        });
+        return;
+      }
 
       await loadPoints();
       setFormData({
@@ -94,55 +102,46 @@ export const PointManagement = () => {
         provincia: "",
         codigo_postal: "",
         telefono: "",
+        servientrega_agencia_codigo: "",
+        servientrega_agencia_nombre: "",
       });
       setShowForm(false);
 
-      toast.success(`✅ Punto ${newPoint.nombre} creado exitosamente`);
+      toast({
+        title: "Punto creado",
+        description: `Punto de atención ${newPoint.nombre} creado exitosamente`,
+      });
     } catch {
-      toast.error("Error al crear punto de atención");
+      toast({
+        title: "Error",
+        description: "Error interno del servidor",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleTogglePointStatus = (point: PuntoAtencion) => {
-    const action = point.activo ? "desactivar" : "activar";
-    showConfirmation(
-      `Confirmar ${action} punto`,
-      `¿Está seguro de que desea ${action} el punto "${point.nombre}"?`,
-      async () => {
-        try {
-          await pointService.togglePointStatus(point.id);
-          await loadPoints();
-          toast.success(
-            `✅ Punto ${point.nombre} ${
-              point.activo ? "desactivado" : "activado"
-            } exitosamente`
-          );
-        } catch {
-          toast.error("No se pudo cambiar el estado del punto");
-        }
-      }
-    );
+  // --- ACTIVAR/DESACTIVAR ---
+  const togglePointStatus = async (pointId: string) => {
+    try {
+      await pointService.togglePointStatus(pointId);
+      await loadPoints();
+      const targetPoint = points.find((p) => p.id === pointId);
+      toast({
+        title: "Estado actualizado",
+        description: `Punto ${targetPoint?.nombre} ${
+          targetPoint?.activo ? "desactivado" : "activado"
+        }`,
+      });
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo cambiar el estado del punto",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDeletePoint = (point: PuntoAtencion) => {
-    showConfirmation(
-      "Confirmar eliminación",
-      `¿Está seguro de que desea eliminar el punto "${point.nombre}"? Esta acción no se puede deshacer.`,
-      async () => {
-        try {
-          await pointService.deletePoint(point.id);
-          await loadPoints();
-          toast.success(`✅ Punto ${point.nombre} eliminado exitosamente`);
-        } catch {
-          toast.error(
-            "No se pudo eliminar el punto. Puede que tenga datos asociados."
-          );
-        }
-      },
-      "destructive"
-    );
-  };
-
+  // --- UI ---
   if (isLoading) {
     return (
       <div className="p-6 text-center py-12">
@@ -191,7 +190,7 @@ export const PointManagement = () => {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div>
+                <div className="space-y-2">
                   <Label>Nombre *</Label>
                   <Input
                     value={formData.nombre}
@@ -200,7 +199,7 @@ export const PointManagement = () => {
                     }
                   />
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label>Ciudad *</Label>
                   <Input
                     value={formData.ciudad}
@@ -210,7 +209,8 @@ export const PointManagement = () => {
                   />
                 </div>
               </div>
-              <div>
+
+              <div className="space-y-2">
                 <Label>Dirección *</Label>
                 <Input
                   value={formData.direccion}
@@ -219,8 +219,9 @@ export const PointManagement = () => {
                   }
                 />
               </div>
+
               <div className="grid grid-cols-3 gap-4">
-                <div>
+                <div className="space-y-2">
                   <Label>Provincia *</Label>
                   <Input
                     value={formData.provincia}
@@ -229,7 +230,7 @@ export const PointManagement = () => {
                     }
                   />
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label>Código Postal</Label>
                   <Input
                     value={formData.codigo_postal}
@@ -241,7 +242,7 @@ export const PointManagement = () => {
                     }
                   />
                 </div>
-                <div>
+                <div className="space-y-2">
                   <Label>Teléfono</Label>
                   <Input
                     value={formData.telefono}
@@ -251,6 +252,21 @@ export const PointManagement = () => {
                   />
                 </div>
               </div>
+
+              <div className="space-y-2">
+                <Label>Agencia Servientrega (Opcional)</Label>
+                <Input
+                  placeholder="Seleccione agencia"
+                  value={formData.servientrega_agencia_nombre}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      servientrega_agencia_nombre: e.target.value,
+                    })
+                  }
+                />
+              </div>
+
               <div className="flex gap-2">
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                   Crear Punto
@@ -272,13 +288,16 @@ export const PointManagement = () => {
         <CardHeader>
           <CardTitle>Puntos de Atención del Sistema</CardTitle>
           <CardDescription>
-            Lista de todos los puntos registrados
+            Lista de todos los puntos de atención registrados
           </CardDescription>
         </CardHeader>
         <CardContent>
           {points.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              No hay puntos registrados
+            <div className="text-center py-12">
+              <p className="text-gray-500 text-lg">No hay puntos registrados</p>
+              <p className="text-gray-400 mt-2">
+                Cree uno haciendo clic en "Nuevo Punto"
+              </p>
             </div>
           ) : (
             <Table>
@@ -289,21 +308,28 @@ export const PointManagement = () => {
                   <TableHead>Ciudad</TableHead>
                   <TableHead>Provincia</TableHead>
                   <TableHead>Teléfono</TableHead>
+                  <TableHead>Agencia Servientrega</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead>Fecha Creación</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {points.map((point) => (
                   <TableRow key={point.id}>
-                    <TableCell>{point.nombre}</TableCell>
+                    <TableCell className="font-medium">
+                      {point.nombre}
+                    </TableCell>
                     <TableCell>{point.direccion}</TableCell>
                     <TableCell>{point.ciudad}</TableCell>
                     <TableCell>{point.provincia}</TableCell>
                     <TableCell>{point.telefono || "N/A"}</TableCell>
                     <TableCell>
+                      {point.servientrega_agencia_nombre || "No asignada"}
+                    </TableCell>
+                    <TableCell>
                       <span
-                        className={`px-2 py-1 rounded text-xs ${
+                        className={`px-2 py-1 rounded text-xs font-medium ${
                           point.activo
                             ? "bg-green-100 text-green-800"
                             : "bg-red-100 text-red-800"
@@ -313,27 +339,24 @@ export const PointManagement = () => {
                       </span>
                     </TableCell>
                     <TableCell>
+                      {new Date(point.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => setEditingPoint(point)}
+                          title="Editar punto"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button
                           size="sm"
                           variant={point.activo ? "destructive" : "default"}
-                          onClick={() => handleTogglePointStatus(point)}
+                          onClick={() => togglePointStatus(point.id)}
                         >
                           {point.activo ? "Desactivar" : "Activar"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeletePoint(point)}
-                        >
-                          <Trash className="h-4 w-4 text-red-500" />
                         </Button>
                       </div>
                     </TableCell>
@@ -345,6 +368,7 @@ export const PointManagement = () => {
         </CardContent>
       </Card>
 
+      {/* MODAL de edición */}
       {editingPoint && (
         <EditPointDialog
           point={editingPoint}
@@ -353,8 +377,6 @@ export const PointManagement = () => {
           onPointUpdated={loadPoints}
         />
       )}
-
-      <ConfirmationDialog />
     </div>
   );
 };
