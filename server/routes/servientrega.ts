@@ -126,6 +126,21 @@ router.post("/tarifas", async (req, res) => {
   }
 });
 
+router.post("/tarifa", async (req, res) => {
+  try {
+    const payload = {
+      tipo: "obtener_tarifa_nacional",
+      ...req.body,
+      ...AUTH,
+    };
+    const result = await callServientregaAPI(payload);
+    res.json(result);
+  } catch (error) {
+    console.error("Error al calcular tarifa:", error);
+    res.status(500).json({ error: "Error al calcular tarifa" });
+  }
+});
+
 // =============================
 // 🚚 Generar y anular guías
 // =============================
