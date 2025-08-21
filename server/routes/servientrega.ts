@@ -128,6 +128,8 @@ router.post("/tarifas", async (req, res) => {
 
 router.post("/tarifa", async (req, res) => {
   try {
+    console.log("📥 Datos recibidos:", JSON.stringify(req.body, null, 2));
+    
     const {
       ciu_ori,
       provincia_ori,
@@ -149,13 +151,22 @@ router.post("/tarifa", async (req, res) => {
     
     // Validar peso mínimo 2kg
     const pesoNumerico = parseFloat(peso);
-    if (pesoNumerico < 2) {
+    if (isNaN(pesoNumerico) || pesoNumerico < 2) {
       erroresValidacion.push("El peso mínimo debe ser 2 kg");
     }
 
-    // Validar campos requeridos
-    if (!ciu_ori || !provincia_ori || !ciu_des || !provincia_des) {
-      erroresValidacion.push("Faltan campos obligatorios: ciudad y provincia de origen y destino");
+    // Validar campos requeridos (más permisivo)
+    if (!ciu_ori || ciu_ori.trim() === '') {
+      erroresValidacion.push("Ciudad de origen es obligatoria");
+    }
+    if (!provincia_ori || provincia_ori.trim() === '') {
+      erroresValidacion.push("Provincia de origen es obligatoria");
+    }
+    if (!ciu_des || ciu_des.trim() === '') {
+      erroresValidacion.push("Ciudad de destino es obligatoria");
+    }
+    if (!provincia_des || provincia_des.trim() === '') {
+      erroresValidacion.push("Provincia de destino es obligatoria");
     }
 
     if (erroresValidacion.length > 0) {
