@@ -335,13 +335,13 @@ router.get("/remitente/buscar/:cedula", async (req, res) => {
     const { cedula } = req.params;
     const remitentes = await prisma.servientregaRemitente.findMany({
       where: {
-        identificacion: {
+        cedula: {
           contains: cedula,
           mode: 'insensitive'
         }
       },
       take: 10,
-      orderBy: { created_at: "desc" }
+      orderBy: { nombre: "asc" }
     });
 
     res.json({ remitentes });
@@ -356,13 +356,13 @@ router.get("/destinatario/buscar/:cedula", async (req, res) => {
     const { cedula } = req.params;
     const destinatarios = await prisma.servientregaDestinatario.findMany({
       where: {
-        identificacion: {
+        cedula: {
           contains: cedula,
           mode: 'insensitive'
         }
       },
       take: 10,
-      orderBy: { created_at: "desc" }
+      orderBy: { nombre: "asc" }
     });
 
     res.json({ destinatarios });
@@ -383,7 +383,7 @@ router.get("/destinatario/buscar-nombre/:nombre", async (req, res) => {
         }
       },
       take: 10,
-      orderBy: { created_at: "desc" }
+      orderBy: { nombre: "asc" }
     });
 
     res.json({ destinatarios });
@@ -409,11 +409,11 @@ router.post("/remitente/guardar", async (req, res) => {
   }
 });
 
-router.put("/remitente/actualizar/:identificacion", async (req, res) => {
+router.put("/remitente/actualizar/:cedula", async (req, res) => {
   try {
-    const { identificacion } = req.params;
+    const { cedula } = req.params;
     const remitente = await prisma.servientregaRemitente.updateMany({
-      where: { identificacion },
+      where: { cedula },
       data: req.body
     });
     res.json({ success: true, remitente });
@@ -435,11 +435,11 @@ router.post("/destinatario/guardar", async (req, res) => {
   }
 });
 
-router.put("/destinatario/actualizar/:identificacion", async (req, res) => {
+router.put("/destinatario/actualizar/:cedula", async (req, res) => {
   try {
-    const { identificacion } = req.params;
+    const { cedula } = req.params;
     const destinatario = await prisma.servientregaDestinatario.updateMany({
-      where: { identificacion },
+      where: { cedula },
       data: req.body
     });
     res.json({ success: true, destinatario });
