@@ -122,6 +122,7 @@ export default function PasoResumenNuevo({
       });
 
       console.log("📤 Payload para tarifa:", payload);
+      console.log("📤 FormData completo:", formData);
 
       const res = await axiosInstance.post("/servientrega/tarifa", payload);
       const data = res.data;
