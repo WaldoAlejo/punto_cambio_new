@@ -51,6 +51,36 @@ interface TarifaResponse {
   prima?: number;
 }
 
+interface TarifaServientrega {
+  flete: number;
+  valor_declarado: string;
+  tiempo: string;
+  valor_empaque: string;
+  valor_empaque_iva: string;
+  total_empaque: string;
+  trayecto: string;
+  prima: number;
+  peso: string;
+  volumen: number;
+  peso_cobrar: string;
+  descuento: number;
+  tarifa0: number;
+  tarifa12: number;
+  tiva: number;
+  gtotal: number;
+  total_transacion: string;
+}
+
+interface GuiaGenerada {
+  guia: string;
+  guia_64: string;
+  proceso: string;
+  flete: number;
+  valor_empaque: number;
+  tiva: number;
+  total_transacion: number;
+}
+
 interface SaldoInfo {
   disponible: number;
   estado: "OK" | "SALDO_BAJO" | "ERROR";
@@ -64,13 +94,13 @@ export default function PasoResumenNuevo({
   onNext,
 }: PasoResumenProps) {
   const [tarifa, setTarifa] = useState<TarifaResponse | null>(null);
-  const [tarifaServientrega, setTarifaServientrega] = useState<any>(null);
+  const [tarifaServientrega, setTarifaServientrega] = useState<TarifaServientrega | null>(null);
   const [loading, setLoading] = useState(false);
   const [saldo, setSaldo] = useState<SaldoInfo | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(false);
   const [showTarifaModal, setShowTarifaModal] = useState(false);
   const [generandoGuia, setGenerandoGuia] = useState(false);
-  const [guiaGenerada, setGuiaGenerada] = useState<any>(null);
+  const [guiaGenerada, setGuiaGenerada] = useState<GuiaGenerada | null>(null);
 
   // Estados del formulario
   const [contenido, setContenido] = useState(
@@ -279,7 +309,7 @@ export default function PasoResumenNuevo({
 
   // Usar total_transacion de Servientrega como valor principal
   const total = tarifa
-    ? (tarifa as any).total_transacion ||
+    ? tarifa.total_transacion ||
       tarifa.gtotal ||
       tarifa.flete +
         tarifa.valor_empaque +

@@ -355,6 +355,7 @@ export default function TarifaModal({
               disabled={
                 loading ||
                 (saldoDisponible !== undefined &&
+                  tarifa &&
                   saldoDisponible - parseFloat(tarifa.total_transacion) < 0)
               }
               className="bg-green-600 hover:bg-green-700 text-white"

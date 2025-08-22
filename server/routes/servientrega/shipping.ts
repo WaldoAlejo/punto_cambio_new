@@ -8,6 +8,13 @@ import { ServientregaDBService } from "../../services/servientregaDBService.js";
 
 const router = express.Router();
 
+// Interfaces para las respuestas de Servientrega
+interface AnularGuiaResponse {
+  fetch?: {
+    proceso?: string;
+  };
+}
+
 // Función para obtener las credenciales desde variables de entorno
 function getCredentials(isPrueba: boolean = false): ServientregaCredentials {
   if (isPrueba) {
@@ -169,16 +176,17 @@ router.post("/generar-guia", async (req, res) => {
     let processedResponse: any = response;
 
     if (typeof response === "string") {
+      const responseString = response as string;
       try {
         // Intentar parsear si es un string JSON
-        processedResponse = JSON.parse(response);
+        processedResponse = JSON.parse(responseString);
       } catch (parseError) {
         // Si no es JSON válido, intentar separar las dos partes
         try {
-          const firstBracketEnd = response.indexOf("}]");
+          const firstBracketEnd = responseString.indexOf("}]");
           if (firstBracketEnd !== -1) {
-            const tarifaPart = response.substring(0, firstBracketEnd + 2);
-            const fetchPart = response.substring(firstBracketEnd + 2);
+            const tarifaPart = responseString.substring(0, firstBracketEnd + 2);
+            const fetchPart = responseString.substring(firstBracketEnd + 2);
 
             const tarifaData = JSON.parse(tarifaPart);
             const fetchData = JSON.parse(fetchPart);
@@ -193,7 +201,7 @@ router.post("/generar-guia", async (req, res) => {
             "Error al procesar respuesta de Servientrega:",
             splitError
           );
-          processedResponse = response;
+          processedResponse = responseString;
         }
       }
     }
