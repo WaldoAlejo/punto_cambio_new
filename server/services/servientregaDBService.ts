@@ -65,12 +65,12 @@ export class ServientregaDBService {
     });
   }
 
-  private sanitizeRemitenteData(data: Partial<RemitenteData>): Partial<RemitenteData> {
+  private sanitizeRemitenteData(data: Partial<RemitenteData>): Record<string, any> {
     const allowedFields = ['nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email', 'cedula'];
     return Object.keys(data)
       .filter(key => allowedFields.includes(key))
-      .reduce((obj: Partial<RemitenteData>, key) => {
-        obj[key as keyof RemitenteData] = data[key as keyof RemitenteData];
+      .reduce((obj: Record<string, any>, key) => {
+        obj[key] = data[key as keyof RemitenteData];
         return obj;
       }, {});
   }
@@ -126,12 +126,12 @@ export class ServientregaDBService {
     });
   }
 
-  private sanitizeDestinatarioData(data: Partial<DestinatarioData>): Partial<DestinatarioData> {
+  private sanitizeDestinatarioData(data: Partial<DestinatarioData>): Record<string, any> {
     const allowedFields = ['nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email', 'cedula', 'codpais'];
     return Object.keys(data)
       .filter(key => allowedFields.includes(key))
-      .reduce((obj: Partial<DestinatarioData>, key) => {
-        obj[key as keyof DestinatarioData] = data[key as keyof DestinatarioData];
+      .reduce((obj: Record<string, any>, key) => {
+        obj[key] = data[key as keyof DestinatarioData];
         return obj;
       }, {});
   }
