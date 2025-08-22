@@ -90,44 +90,44 @@ export const formatearPayloadTarifa = (data: {
 
 // Función para procesar respuesta de tarifa
 export const procesarRespuestaTarifa = (data: any) => {
-  const tarifaData = Array.isArray(data) ? data[0] : data;
+  console.log("🔍 Procesando respuesta de tarifa:", data);
 
-  console.log("🔍 Procesando respuesta de tarifa:", tarifaData);
-
-  // Servientrega puede devolver diferentes campos según la respuesta
-  const flete = Number(tarifaData.flete || tarifaData.tarifa0 || 0);
-  const valorEmpaque = Number(tarifaData.valor_empaque || 0);
-  const seguro = Number(tarifaData.seguro || tarifaData.prima || 0);
-  const total = Number(tarifaData.gtotal || 0);
-  const totalTransacion = Number(
-    tarifaData.total_transacion || tarifaData.gtotal || 0
-  );
-
-  // Si el flete es 0 pero hay gtotal, usar gtotal como base
-  const fleteCalculado =
-    flete > 0 ? flete : Math.max(0, total - valorEmpaque - seguro);
+  // Convertir strings a números donde sea necesario
+  const flete = Number(data.flete || 0);
+  const valorEmpaque = Number(data.valor_empaque || 0);
+  const valorEmpaqueIva = Number(data.valor_empaque_iva || 0);
+  const totalEmpaque = Number(data.total_empaque || 0);
+  const prima = Number(data.prima || 0);
+  const descuento = Number(data.descuento || 0);
+  const tarifa0 = Number(data.tarifa0 || 0);
+  const tarifa12 = Number(data.tarifa12 || 0);
+  const tiva = Number(data.tiva || 0);
+  const gtotal = Number(data.gtotal || 0);
+  const totalTransacion = Number(data.total_transacion || 0);
+  const pesoCobrar = Number(data.peso_cobrar || 0);
+  const volumen = Number(data.volumen || 0);
 
   return {
-    flete: fleteCalculado,
-    valor_declarado: Number(tarifaData.valor_declarado || 0),
+    flete,
+    valor_declarado: Number(data.valor_declarado || 0),
     valor_empaque: valorEmpaque,
-    valor_empaque_iva: Number(tarifaData.valor_empaque_iva || 0),
-    total_empaque: Number(tarifaData.total_empaque || 0),
-    seguro: seguro,
-    tiempo: tarifaData.tiempo
-      ? `${tarifaData.tiempo} día(s) hábil(es)`
+    valor_empaque_iva: valorEmpaqueIva,
+    total_empaque: totalEmpaque,
+    seguro: prima, // En Servientrega, el seguro se llama "prima"
+    tiempo: data.tiempo
+      ? `${data.tiempo} día(s) hábil(es)`
       : "1-2 días hábiles",
-    peso_vol: Number(tarifaData.volumen || tarifaData.peso_vol || 0),
-    trayecto: tarifaData.trayecto || "",
-    descuento: Number(tarifaData.descuento || 0),
-    tarifa0: Number(tarifaData.tarifa0 || 0),
-    tarifa12: Number(tarifaData.tarifa12 || 0),
+    peso_vol: volumen,
+    trayecto: data.trayecto || "",
+    descuento,
+    tarifa0,
+    tarifa12,
     // Campos adicionales de Servientrega
-    gtotal: total,
+    gtotal,
     total_transacion: totalTransacion, // Este es el valor real a cobrar
-    peso_cobrar: Number(tarifaData.peso_cobrar || 0),
-    tiva: Number(tarifaData.tiva || 0),
-    prima: Number(tarifaData.prima || 0),
+    peso_cobrar: pesoCobrar,
+    tiva,
+    prima,
   };
 };
 

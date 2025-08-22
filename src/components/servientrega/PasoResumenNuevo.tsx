@@ -169,24 +169,22 @@ export default function PasoResumenNuevo({
     try {
       // Usar función centralizada para formatear payload
       const payload = construirPayloadTarifa(formData);
-      console.log("Payload para tarifa:", payload);
+      console.log("📤 Payload para tarifa:", payload);
 
-      const apiService = new ServientregaAPIService(getCredentials());
-      apiService.apiUrl = "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
-      const res = await apiService.calcularTarifa(payload);
+      // Llamar a nuestro backend que se encarga de la comunicación con Servientrega
+      const res = await axiosInstance.post("/servientrega/tarifa", payload);
       const data = res.data;
 
       console.log("📥 Respuesta de tarifa:", data);
 
+      // La respuesta de Servientrega es un array con un objeto
+      const tarifaData = Array.isArray(data) ? data[0] : data;
+
       // Guardar respuesta completa de Servientrega para el modal
-      if (Array.isArray(data) && data.length > 0) {
-        setTarifaServientrega(data[0]);
-      } else if (typeof data === "object") {
-        setTarifaServientrega(data);
-      }
+      setTarifaServientrega(tarifaData);
 
       // Usar función centralizada para procesar respuesta
-      const tarifaCalculada = procesarRespuestaTarifa(data);
+      const tarifaCalculada = procesarRespuestaTarifa(tarifaData);
 
       // Agregar el seguro del formData si no viene en la respuesta
       if (!tarifaCalculada.seguro && formData.medidas.valor_seguro) {
@@ -197,22 +195,25 @@ export default function PasoResumenNuevo({
       setTarifa(tarifaCalculada as TarifaResponse);
 
       // Actualizar formData con los costos calculados
-      // Usar total_transacion como valor principal, sino calcular manualmente
+      // Usar total_transacion como valor principal (es el valor real a cobrar)
       const totalCalculado =
-        tarifaCalculada.total_transacion ||
-        tarifaCalculada.gtotal ||
-        tarifaCalculada.flete +
-          tarifaCalculada.valor_empaque +
-          (tarifaCalculada.seguro || 0) +
-          (tarifaCalculada.tiva || 0);
+        tarifaCalculada.total_transacion || tarifaCalculada.gtotal || 0;
 
       console.log("💰 Total calculado:", totalCalculado);
+      console.log("📊 Desglose de costos:", {
+        flete: tarifaCalculada.flete,
+        valor_empaque: tarifaCalculada.valor_empaque,
+        seguro: tarifaCalculada.seguro,
+        tiva: tarifaCalculada.tiva,
+        gtotal: tarifaCalculada.gtotal,
+        total_transacion: tarifaCalculada.total_transacion,
+      });
 
       // Actualizar el formData en el componente padre
       formData.resumen_costos = {
-        costo_empaque: tarifaCalculada.valor_empaque,
+        costo_empaque: tarifaCalculada.valor_empaque || 0,
         valor_seguro: tarifaCalculada.seguro || 0,
-        flete: tarifaCalculada.flete,
+        flete: tarifaCalculada.flete || 0,
         total: totalCalculado,
       };
 
@@ -839,13 +840,6 @@ function construirPayloadTarifa(formData: any) {
     recoleccion: formData.medidas?.recoleccion ? "SI" : "NO",
     nombre_producto: formData.nombre_producto || "",
     empaque: formData.empaque || "",
-    ...getCredentials(),
-  };
-}
-
-function getCredentials(): ServientregaCredentials {
-  return {
-    usuingreso: "INTPUNTOC",
-    contrasenha: "73Yes7321t",
+    // Las credenciales se manejan en el backend
   };
 }
