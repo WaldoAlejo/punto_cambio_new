@@ -573,14 +573,23 @@ router.post("/remitente/guardar", async (req, res) => {
 router.put("/remitente/actualizar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
-    const { cedula: bodyIdentificacion, ciudad, provincia, pais, codpais, ...updateData } = req.body;
+    const updateData = req.body;
     
     console.log(`📝 Actualizando remitente con cédula: ${cedula}`);
     console.log(`📋 Datos a actualizar:`, updateData);
     
+    // Filtrar campos que no existen en el schema de Prisma
+    const allowedFields = ['nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email'];
+    const filteredData = Object.keys(updateData)
+      .filter(key => allowedFields.includes(key))
+      .reduce((obj, key) => {
+        obj[key] = updateData[key];
+        return obj;
+      }, {});
+    
     const remitente = await prisma.servientregaRemitente.updateMany({
       where: { cedula },
-      data: updateData,
+      data: filteredData,
     });
     res.json({ success: true, remitente });
   } catch (error) {
@@ -624,7 +633,7 @@ router.post("/destinatario/guardar", async (req, res) => {
 router.put("/destinatario/actualizar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
-    const { cedula: bodyIdentificacion, codpais, ...updateData } = req.body;
+    const updateData = req.body;
 
     console.log(`📝 Actualizando destinatario con cédula: ${cedula}`);
     console.log(`📋 Datos a actualizar:`, updateData);
@@ -643,9 +652,18 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
       });
     }
 
+    // Filtrar campos que no existen en el schema de Prisma  
+    const allowedFields = ['nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email'];
+    const filteredData = Object.keys(updateData)
+      .filter(key => allowedFields.includes(key))
+      .reduce((obj, key) => {
+        obj[key] = updateData[key];
+        return obj;
+      }, {});
+
     const destinatario = await prisma.servientregaDestinatario.updateMany({
       where: { cedula },
-      data: updateData,
+      data: filteredData,
     });
 
     console.log(`✅ Destinatario actualizado correctamente:`, destinatario);
