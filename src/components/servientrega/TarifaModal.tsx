@@ -1,4 +1,3 @@
-
 import {
   Dialog,
   DialogContent,
@@ -18,6 +17,7 @@ import {
   DollarSign,
   CheckCircle,
   Info,
+  AlertTriangle,
 } from "lucide-react";
 
 interface TarifaServientrega {
@@ -46,6 +46,8 @@ interface TarifaModalProps {
   onConfirm?: () => void;
   tarifa: TarifaServientrega | null;
   loading?: boolean;
+  saldoDisponible?: number;
+  puntoAtencionNombre?: string;
 }
 
 export default function TarifaModal({
@@ -54,6 +56,8 @@ export default function TarifaModal({
   onConfirm,
   tarifa,
   loading = false,
+  saldoDisponible,
+  puntoAtencionNombre,
 }: TarifaModalProps) {
   if (!tarifa) return null;
 
@@ -256,6 +260,77 @@ export default function TarifaModal({
             </CardContent>
           </Card>
 
+          {/* Información del saldo */}
+          {saldoDisponible !== undefined && (
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                  <DollarSign className="h-5 w-5" />
+                  Información de Saldo
+                </h3>
+
+                <div className="space-y-3">
+                  {puntoAtencionNombre && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-600">Punto de atención:</span>
+                      <span className="font-medium">{puntoAtencionNombre}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Saldo disponible:</span>
+                    <span className="font-medium text-blue-600">
+                      {formatCurrency(saldoDisponible)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Costo del envío:</span>
+                    <span className="font-medium text-orange-600">
+                      {formatCurrency(tarifa.total_transacion)}
+                    </span>
+                  </div>
+
+                  <Separator />
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">
+                      Saldo después del envío:
+                    </span>
+                    <span
+                      className={`font-bold ${
+                        saldoDisponible - parseFloat(tarifa.total_transacion) >=
+                        0
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {formatCurrency(
+                        saldoDisponible - parseFloat(tarifa.total_transacion)
+                      )}
+                    </span>
+                  </div>
+
+                  {saldoDisponible - parseFloat(tarifa.total_transacion) <
+                    0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
+                      <div className="flex items-center gap-2 text-red-800">
+                        <AlertTriangle className="h-4 w-4" />
+                        <span className="font-medium text-sm">
+                          Saldo insuficiente
+                        </span>
+                      </div>
+                      <p className="text-xs text-red-700 mt-1">
+                        No tienes saldo suficiente para este envío. Contacta al
+                        administrador.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Mensaje de confirmación */}
           <div className="bg-green-50 border border-green-200 rounded-lg p-4">
             <div className="flex items-center gap-2 text-green-800">
@@ -263,8 +338,8 @@ export default function TarifaModal({
               <span className="font-medium">Cotización válida</span>
             </div>
             <p className="text-sm text-green-700 mt-1">
-              Esta cotización es válida por 24 horas. Los precios pueden variar
-              según las condiciones del servicio.
+              Esta cotización es válida por 24 horas. El saldo se descontará
+              únicamente cuando se genere la guía.
             </p>
           </div>
         </div>

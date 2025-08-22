@@ -132,7 +132,7 @@ export default function PasoResumenNuevo({
       // Guardar respuesta completa de Servientrega para el modal
       if (Array.isArray(data) && data.length > 0) {
         setTarifaServientrega(data[0]);
-      } else if (typeof data === 'object') {
+      } else if (typeof data === "object") {
         setTarifaServientrega(data);
       }
 
@@ -548,6 +548,8 @@ export default function PasoResumenNuevo({
           handleSubmit();
         }}
         loading={loading}
+        saldoDisponible={saldo?.disponible}
+        puntoAtencionNombre={formData.punto_atencion_nombre}
       />
     </div>
   );
