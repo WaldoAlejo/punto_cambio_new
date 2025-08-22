@@ -3,7 +3,7 @@ import { ServientregaAPIService, ServientregaCredentials } from "../../services/
 
 const router = express.Router();
 
-// Función para obtener las credenciales
+// Función para obtener las credenciales desde variables de entorno
 function getCredentials(): ServientregaCredentials {
   return {
     usuingreso: process.env.SERVIENTREGA_USER || "INTPUNTOC",

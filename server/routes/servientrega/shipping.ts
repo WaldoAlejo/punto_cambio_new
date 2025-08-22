@@ -5,7 +5,7 @@ import { ServientregaDBService } from "../../services/servientregaDBService.js";
 
 const router = express.Router();
 
-// Función para obtener las credenciales
+// Función para obtener las credenciales desde variables de entorno
 function getCredentials(isPrueba: boolean = false): ServientregaCredentials {
   if (isPrueba) {
     return {
