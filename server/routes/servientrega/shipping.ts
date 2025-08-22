@@ -15,41 +15,17 @@ interface AnularGuiaResponse {
   };
 }
 
-// Función para obtener las credenciales desde variables de entorno
-function getCredentials(isPrueba: boolean = false): ServientregaCredentials {
-  if (isPrueba) {
-    return {
-      usuingreso: "PRUEBA",
-      contrasenha: "s12345ABCDe",
-    };
-  }
-
+// Función para obtener las credenciales SIEMPRE correctas
+function getCredentials(): ServientregaCredentials {
   return {
-    usuingreso: process.env.SERVIENTREGA_USER || "INTPUNTOC",
-    contrasenha: process.env.SERVIENTREGA_PASSWORD || "73Yes7321t",
+    usuingreso: "INTPUNTOC",
+    contrasenha: "73Yes7321t",
   };
 }
 
 // =============================
 // 💰 Cálculo de Tarifas
 // =============================
-
-router.post("/tarifas", async (req, res) => {
-  try {
-    const apiService = new ServientregaAPIService(getCredentials());
-    const result = await apiService.callAPI({
-      tipo: "TarifaConIva",
-      ...req.body,
-    });
-    res.json(result);
-  } catch (error) {
-    console.error("Error al obtener tarifas:", error);
-    res.status(500).json({
-      error: "Error al obtener tarifas",
-      details: error instanceof Error ? error.message : "Error desconocido",
-    });
-  }
-});
 
 router.post("/tarifa", async (req, res) => {
   try {
@@ -58,11 +34,9 @@ router.post("/tarifa", async (req, res) => {
       JSON.stringify(req.body, null, 2)
     );
 
-    const { usar_prueba = false, ...requestData } = req.body;
-
     // Validar datos de entrada
     const validationErrors =
-      ServientregaValidationService.validateTarifaRequest(requestData);
+      ServientregaValidationService.validateTarifaRequest(req.body);
     if (validationErrors.length > 0) {
       return res.status(400).json({
         error: "Errores de validación",
@@ -72,12 +46,14 @@ router.post("/tarifa", async (req, res) => {
 
     // Sanitizar y preparar payload
     const sanitizedData =
-      ServientregaValidationService.sanitizeTarifaRequest(requestData);
+      ServientregaValidationService.sanitizeTarifaRequest(req.body);
 
     console.log("🔍 Datos sanitizados:", sanitizedData);
 
-    // Crear servicio API con credenciales apropiadas
-    const apiService = new ServientregaAPIService(getCredentials(usar_prueba));
+    // Crear servicio API con credenciales correctas y URL oficial
+    const apiService = new ServientregaAPIService(getCredentials());
+    apiService.apiUrl = "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php"; // fuerza la URL oficial
+
     const result = await apiService.calcularTarifa(sanitizedData);
 
     // Procesar errores de Servientrega
@@ -96,51 +72,6 @@ router.post("/tarifa", async (req, res) => {
     console.error("Error al calcular tarifa:", error);
     res.status(500).json({
       error: "Error al calcular tarifa",
-      details: error instanceof Error ? error.message : "Error desconocido",
-    });
-  }
-});
-
-// Endpoint específico para pruebas
-router.post("/tarifa-prueba", async (req, res) => {
-  try {
-    console.log(
-      "🧪 MODO PRUEBA - Datos recibidos:",
-      JSON.stringify(req.body, null, 2)
-    );
-
-    const defaultData = {
-      ciu_ori: "GUAYAQUIL",
-      provincia_ori: "GUAYAS",
-      ciu_des: "GUAYAQUIL",
-      provincia_des: "GUAYAS",
-      valor_seguro: "12.5",
-      valor_declarado: "2.5",
-      peso: "5",
-      alto: "20",
-      ancho: "25",
-      largo: "30",
-      recoleccion: "NO",
-      nombre_producto: "MERCANCIA PREMIER",
-      empaque: "",
-    };
-
-    const requestData = { ...defaultData, ...req.body };
-    const sanitizedData =
-      ServientregaValidationService.sanitizeTarifaRequest(requestData);
-
-    const apiService = new ServientregaAPIService(getCredentials(true));
-    const result = await apiService.calcularTarifa(sanitizedData);
-
-    res.json({
-      modo: "PRUEBA",
-      payload_enviado: sanitizedData,
-      respuesta: result,
-    });
-  } catch (error) {
-    console.error("Error en tarifa de prueba:", error);
-    res.status(500).json({
-      error: "Error en tarifa de prueba",
       details: error instanceof Error ? error.message : "Error desconocido",
     });
   }

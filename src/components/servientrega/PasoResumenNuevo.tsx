@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import type { FormDataGuia } from "@/types/servientrega";
 import {
-  formatearPayloadTarifa,
   procesarRespuestaTarifa,
   formatearPayloadGuia,
   procesarRespuestaGuia,

@@ -18,6 +18,7 @@ export interface ServientregaAPIResponse {
 
 export class ServientregaAPIService {
   private credentials: ServientregaCredentials;
+  public apiUrl: string = BASE_URL; // Permite forzar la URL desde fuera si es necesario
 
   constructor(credentials: ServientregaCredentials) {
     this.credentials = credentials;
@@ -29,7 +30,8 @@ export class ServientregaAPIService {
     useRetailUrl: boolean = false
   ): Promise<ServientregaAPIResponse> {
     try {
-      const url = useRetailUrl ? RETAIL_URL : BASE_URL;
+      // Permite forzar la URL desde la instancia
+      const url = useRetailUrl ? RETAIL_URL : this.apiUrl || BASE_URL;
       const fullPayload = { ...payload, ...this.credentials };
       
       console.log(`🔗 Llamando a ${useRetailUrl ? 'RETAIL' : 'MAIN'} API:`, url);
@@ -88,10 +90,8 @@ export class ServientregaAPIService {
   }
 
   async calcularTarifa(payload: Record<string, any>): Promise<ServientregaAPIResponse> {
-    return this.callAPI({
-      tipo: "obtener_tarifa_nacional",
-      ...payload
-    });
+    // El payload ya debe tener todos los campos requeridos por Servientrega
+    return this.callAPI(payload);
   }
 
   async generarGuia(payload: Record<string, any>): Promise<ServientregaAPIResponse> {
