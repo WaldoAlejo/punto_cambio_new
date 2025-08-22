@@ -535,115 +535,117 @@ export default function PasoResumenNuevo({
 
           {/* Formulario adicional - Solo mostrar si no se ha generado la guía */}
           {!guiaGenerada && (
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-800">
-              Información Adicional
-            </h3>
+            <>
+              <div className="space-y-4">
+                <h3 className="font-semibold text-gray-800">
+                  Información Adicional
+                </h3>
 
-            <div className="space-y-2">
-              <Label htmlFor="contenido">Contenido del paquete *</Label>
-              <Input
-                id="contenido"
-                value={contenido}
-                onChange={(e) => setContenido(e.target.value)}
-                placeholder="Describe el contenido del paquete"
-                required
-              />
-            </div>
-
-            {/* Mostrar información de retiro de oficina si ya se seleccionó */}
-            {formData.retiro_oficina &&
-              formData.nombre_agencia_retiro_oficina && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-blue-600 font-medium">
-                      📍 Retiro en oficina
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    <strong>Agencia:</strong>{" "}
-                    {formData.nombre_agencia_retiro_oficina}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    El paquete será entregado en la agencia seleccionada
-                  </p>
-                </div>
-              )}
-
-            {/* Solo mostrar checkbox si no se ha seleccionado agencia previamente */}
-            {!formData.retiro_oficina && (
-              <>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="retiro-oficina"
-                    checked={retiroOficina}
-                    onCheckedChange={(checked) =>
-                      setRetiroOficina(checked as boolean)
-                    }
+                <div className="space-y-2">
+                  <Label htmlFor="contenido">Contenido del paquete *</Label>
+                  <Input
+                    id="contenido"
+                    value={contenido}
+                    onChange={(e) => setContenido(e.target.value)}
+                    placeholder="Describe el contenido del paquete"
+                    required
                   />
-                  <Label htmlFor="retiro-oficina">Retiro en oficina</Label>
                 </div>
 
-                {retiroOficina && (
+                {/* Mostrar información de retiro de oficina si ya se seleccionó */}
+                {formData.retiro_oficina &&
+                  formData.nombre_agencia_retiro_oficina && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-blue-600 font-medium">
+                          📍 Retiro en oficina
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700">
+                        <strong>Agencia:</strong>{" "}
+                        {formData.nombre_agencia_retiro_oficina}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        El paquete será entregado en la agencia seleccionada
+                      </p>
+                    </div>
+                  )}
+
+                {/* Solo mostrar checkbox si no se ha seleccionado agencia previamente */}
+                {!formData.retiro_oficina && (
+                  <>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="retiro-oficina"
+                        checked={retiroOficina}
+                        onCheckedChange={(checked) =>
+                          setRetiroOficina(checked as boolean)
+                        }
+                      />
+                      <Label htmlFor="retiro-oficina">Retiro en oficina</Label>
+                    </div>
+
+                    {retiroOficina && (
+                      <div className="space-y-2">
+                        <Label htmlFor="nombre-agencia">
+                          Nombre de la agencia *
+                        </Label>
+                        <Input
+                          id="nombre-agencia"
+                          value={nombreAgencia}
+                          onChange={(e) => setNombreAgencia(e.target.value)}
+                          placeholder="Nombre de la agencia para retiro"
+                          required
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="nombre-agencia">
-                      Nombre de la agencia *
-                    </Label>
+                    <Label htmlFor="pedido">Número de pedido (opcional)</Label>
                     <Input
-                      id="nombre-agencia"
-                      value={nombreAgencia}
-                      onChange={(e) => setNombreAgencia(e.target.value)}
-                      placeholder="Nombre de la agencia para retiro"
-                      required
+                      id="pedido"
+                      value={pedido}
+                      onChange={(e) => setPedido(e.target.value)}
+                      placeholder="Ej: PED-001"
                     />
                   </div>
-                )}
-              </>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="pedido">Número de pedido (opcional)</Label>
-                <Input
-                  id="pedido"
-                  value={pedido}
-                  onChange={(e) => setPedido(e.target.value)}
-                  placeholder="Ej: PED-001"
-                />
+                  <div className="space-y-2">
+                    <Label htmlFor="factura">Número de factura (opcional)</Label>
+                    <Input
+                      id="factura"
+                      value={factura}
+                      onChange={(e) => setFactura(e.target.value)}
+                      placeholder="Ej: FAC-001"
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="factura">Número de factura (opcional)</Label>
-                <Input
-                  id="factura"
-                  value={factura}
-                  onChange={(e) => setFactura(e.target.value)}
-                  placeholder="Ej: FAC-001"
-                />
-              </div>
-            </div>
-          </div>
 
-          {/* Botón de continuar */}
-          <div className="flex justify-end pt-4">
-            <Button
-              onClick={handleSubmit}
-              disabled={
-                loading ||
-                !contenido.trim() ||
-                (retiroOficina && !nombreAgencia.trim())
-              }
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Calculando...
-                </>
-              ) : (
-                "Continuar a Confirmación"
-              )}
-            </Button>
-          </div>
+              {/* Botón de continuar */}
+              <div className="flex justify-end pt-4">
+                <Button
+                  onClick={handleSubmit}
+                  disabled={
+                    loading ||
+                    !contenido.trim() ||
+                    (retiroOficina && !nombreAgencia.trim())
+                  }
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-8"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Calculando...
+                    </>
+                  ) : (
+                    "Continuar a Confirmación"
+                  )}
+                </Button>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
@@ -659,7 +661,7 @@ export default function PasoResumenNuevo({
         }}
         loading={generandoGuia}
         saldoDisponible={saldo?.disponible}
-        puntoAtencionNombre={formData.punto_atencion_nombre}
+        puntoAtencionNombre={formData.punto_atencion_id} // ← corregido aquí
       />
 
       {/* Modal/Card de guía generada */}

@@ -55,11 +55,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [loading, setLoading] = useState(false);
 
   const [cedulaQuery, setCedulaQuery] = useState("");
-  const [cedulaResultados, setCedulaResultados] = useState<any[]>([]);
+  const [cedulaResultados, setCedulaResultados] = useState<Destinatario[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
 
   const [nombreQuery, setNombreQuery] = useState("");
-  const [nombreResultados, setNombreResultados] = useState<any[]>([]);
+  const [nombreResultados, setNombreResultados] = useState<Destinatario[]>([]);
   const [buscandoNombre, setBuscandoNombre] = useState(false);
 
   const [destinatarioExistente, setDestinatarioExistente] =

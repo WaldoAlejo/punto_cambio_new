@@ -279,7 +279,9 @@ export default function PasoEmpaqueYMedidas({
                 <Input
                   name={campo}
                   type="number"
-                  value={getDisplayValue((medidas as any)[campo])}
+                  value={getDisplayValue(
+                    medidas[campo as keyof typeof medidas]
+                  )}
                   onChange={handleMedidaChange}
                   placeholder="0"
                 />

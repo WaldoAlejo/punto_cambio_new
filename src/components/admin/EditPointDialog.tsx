@@ -110,7 +110,7 @@ const EditPointDialog = ({
               <Label className="capitalize">{field} *</Label>
               <Input
                 name={field}
-                value={(formData as any)[field]}
+                value={formData[field as keyof typeof formData]}
                 onChange={handleChange}
                 disabled={loading}
               />

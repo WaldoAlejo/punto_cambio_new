@@ -43,7 +43,7 @@ export default function PasoRemitente({
   const [loading, setLoading] = useState(false);
   const [ciudadValida, setCiudadValida] = useState(false);
   const [cedulaQuery, setCedulaQuery] = useState("");
-  const [cedulaResultados, setCedulaResultados] = useState<any[]>([]);
+  const [cedulaResultados, setCedulaResultados] = useState<Remitente[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
   const [remitenteExistente, setRemitenteExistente] =
     useState<Remitente | null>(null);
