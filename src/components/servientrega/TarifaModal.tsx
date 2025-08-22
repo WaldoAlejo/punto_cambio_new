@@ -18,6 +18,7 @@ import {
   CheckCircle,
   Info,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 
 interface TarifaServientrega {
@@ -349,8 +350,23 @@ export default function TarifaModal({
             Cerrar
           </Button>
           {onConfirm && (
-            <Button onClick={onConfirm} disabled={loading}>
-              {loading ? "Procesando..." : "Confirmar y Continuar"}
+            <Button
+              onClick={onConfirm}
+              disabled={
+                loading ||
+                (saldoDisponible !== undefined &&
+                  saldoDisponible - parseFloat(tarifa.total_transacion) < 0)
+              }
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generando guía...
+                </>
+              ) : (
+                "Confirmar y generar guía"
+              )}
             </Button>
           )}
         </DialogFooter>

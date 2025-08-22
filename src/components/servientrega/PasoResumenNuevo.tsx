@@ -9,11 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Loader2, Calculator, Wallet, AlertTriangle } from "lucide-react";
+import { Loader2, Calculator, Wallet, AlertTriangle, CheckCircle } from "lucide-react";
 import type { FormDataGuia } from "@/types/servientrega";
 import {
   formatearPayloadTarifa,
   procesarRespuestaTarifa,
+  formatearPayloadGuia,
+  procesarRespuestaGuia,
 } from "@/config/servientrega";
 import TarifaModal from "./TarifaModal";
 
@@ -32,11 +34,18 @@ interface TarifaResponse {
   flete: number;
   valor_declarado: number;
   valor_empaque: number;
+  valor_empaque_iva?: number;
+  total_empaque?: number;
   seguro?: number;
   tiempo: string | null;
   peso_vol?: number;
+  trayecto?: string;
+  descuento?: number;
+  tarifa0?: number;
+  tarifa12?: number;
   // Campos adicionales de Servientrega
   gtotal?: number;
+  total_transacion?: number; // Este es el valor real a cobrar
   peso_cobrar?: number;
   tiva?: number;
   prima?: number;
@@ -60,6 +69,8 @@ export default function PasoResumenNuevo({
   const [saldo, setSaldo] = useState<SaldoInfo | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(false);
   const [showTarifaModal, setShowTarifaModal] = useState(false);
+  const [generandoGuia, setGenerandoGuia] = useState(false);
+  const [guiaGenerada, setGuiaGenerada] = useState<any>(null);
 
   // Estados del formulario
   const [contenido, setContenido] = useState(
@@ -147,17 +158,21 @@ export default function PasoResumenNuevo({
       setTarifa(tarifaCalculada as TarifaResponse);
 
       // Actualizar formData con los costos calculados
-      const total =
+      // Usar total_transacion como valor principal, sino calcular manualmente
+      const totalCalculado =
+        tarifaCalculada.total_transacion ||
+        tarifaCalculada.gtotal ||
         tarifaCalculada.flete +
-        tarifaCalculada.valor_empaque +
-        (tarifaCalculada.seguro || 0);
+          tarifaCalculada.valor_empaque +
+          (tarifaCalculada.seguro || 0) +
+          (tarifaCalculada.tiva || 0);
 
       // Actualizar el formData en el componente padre
       formData.resumen_costos = {
         costo_empaque: tarifaCalculada.valor_empaque,
         valor_seguro: tarifaCalculada.seguro || 0,
         flete: tarifaCalculada.flete,
-        total: total,
+        total: totalCalculado,
       };
 
       toast.success("Tarifa calculada exitosamente");
@@ -166,6 +181,68 @@ export default function PasoResumenNuevo({
       toast.error("Error al calcular la tarifa");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ✅ Generar guía después de confirmar tarifa
+  const generarGuia = async () => {
+    if (!contenido.trim()) {
+      toast.error("El contenido es obligatorio");
+      return;
+    }
+
+    if (retiroOficina && !nombreAgencia.trim()) {
+      toast.error(
+        "Debe especificar el nombre de la agencia para retiro en oficina"
+      );
+      return;
+    }
+
+    setGenerandoGuia(true);
+    try {
+      // Usar función centralizada para formatear payload
+      const payload = formatearPayloadGuia({
+        formData,
+        contenido: contenido.trim(),
+        retiro_oficina: retiroOficina,
+        nombre_agencia_retiro_oficina: retiroOficina
+          ? nombreAgencia.trim()
+          : undefined,
+        pedido: pedido.trim() || "PRUEBA",
+        factura: factura.trim() || "PRUEBA",
+      });
+
+      // Agregar información del punto de atención y valor total
+      const payloadCompleto = {
+        ...payload,
+        punto_atencion_id: formData.punto_atencion_id,
+        valor_total: total, // Usar el total calculado
+      };
+
+      console.log("📤 Payload para generar guía:", payloadCompleto);
+
+      const res = await axiosInstance.post(
+        "/servientrega/generar-guia",
+        payloadCompleto
+      );
+      const data = procesarRespuestaGuia(res.data);
+
+      console.log("📥 Respuesta de generar guía procesada:", data);
+
+      if (data?.guia && data?.guia_64) {
+        setGuiaGenerada(data);
+        toast.success(`✅ Guía generada exitosamente: ${data.guia}`);
+
+        // Actualizar saldo después de generar la guía
+        await obtenerSaldo();
+      } else {
+        toast.error("No se pudo generar la guía. Verifica los datos.");
+      }
+    } catch (error) {
+      console.error("❌ Error al generar guía:", error);
+      toast.error("Error al generar la guía. Intenta nuevamente.");
+    } finally {
+      setGenerandoGuia(false);
     }
   };
 
@@ -200,9 +277,10 @@ export default function PasoResumenNuevo({
     });
   };
 
-  // Usar gtotal de Servientrega si está disponible, sino calcular manualmente
+  // Usar total_transacion de Servientrega como valor principal
   const total = tarifa
-    ? tarifa.gtotal ||
+    ? (tarifa as any).total_transacion ||
+      tarifa.gtotal ||
       tarifa.flete +
         tarifa.valor_empaque +
         (tarifa.seguro || 0) +
@@ -392,7 +470,7 @@ export default function PasoResumenNuevo({
                     <span>Total:</span>
                     <span className="text-blue-600">${total.toFixed(2)}</span>
                   </div>
-                  {tarifaServientrega && (
+                  {tarifaServientrega && !guiaGenerada && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -425,7 +503,8 @@ export default function PasoResumenNuevo({
 
           <Separator />
 
-          {/* Formulario adicional */}
+          {/* Formulario adicional - Solo mostrar si no se ha generado la guía */}
+          {!guiaGenerada && (
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-800">
               Información Adicional
@@ -535,6 +614,7 @@ export default function PasoResumenNuevo({
               )}
             </Button>
           </div>
+          )}
         </CardContent>
       </Card>
 
@@ -545,12 +625,88 @@ export default function PasoResumenNuevo({
         tarifa={tarifaServientrega}
         onConfirm={() => {
           setShowTarifaModal(false);
-          handleSubmit();
+          generarGuia();
         }}
-        loading={loading}
+        loading={generandoGuia}
         saldoDisponible={saldo?.disponible}
         puntoAtencionNombre={formData.punto_atencion_nombre}
       />
+
+      {/* Modal/Card de guía generada */}
+      {guiaGenerada && (
+        <Card className="w-full max-w-2xl mx-auto mt-6 shadow-lg border rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-green-600 flex items-center gap-2">
+              <CheckCircle className="h-6 w-6" />
+              ¡Guía generada exitosamente!
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="text-center">
+                <p className="text-lg font-bold text-green-800">
+                  Número de guía: {guiaGenerada.guia}
+                </p>
+                <p className="text-sm text-green-600 mt-1">
+                  {guiaGenerada.proceso}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-gray-600">Flete:</span>
+                <span className="font-medium ml-2">${guiaGenerada.flete?.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Empaque:</span>
+                <span className="font-medium ml-2">${guiaGenerada.valor_empaque?.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">IVA:</span>
+                <span className="font-medium ml-2">${guiaGenerada.tiva?.toFixed(2)}</span>
+              </div>
+              <div>
+                <span className="text-gray-600">Total:</span>
+                <span className="font-bold text-green-600 ml-2">
+                  ${guiaGenerada.total_transacion?.toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 mt-6">
+              <Button
+                onClick={() => {
+                  if (guiaGenerada.guia_64) {
+                    const pdfURL = `data:application/pdf;base64,${guiaGenerada.guia_64}`;
+                    window.open(pdfURL, "_blank");
+                  }
+                }}
+                disabled={!guiaGenerada.guia_64}
+                className="w-full bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Ver PDF de la guía
+              </Button>
+              <Button
+                onClick={() => {
+                  setGuiaGenerada(null);
+                  setTarifa(null);
+                  setTarifaServientrega(null);
+                  setContenido("");
+                  setPedido("");
+                  setFactura("");
+                  setRetiroOficina(false);
+                  setNombreAgencia("");
+                }}
+                className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200"
+                variant="secondary"
+              >
+                Generar otra guía
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

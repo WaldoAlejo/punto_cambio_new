@@ -99,6 +99,9 @@ export const procesarRespuestaTarifa = (data: any) => {
   const valorEmpaque = Number(tarifaData.valor_empaque || 0);
   const seguro = Number(tarifaData.seguro || tarifaData.prima || 0);
   const total = Number(tarifaData.gtotal || 0);
+  const totalTransacion = Number(
+    tarifaData.total_transacion || tarifaData.gtotal || 0
+  );
 
   // Si el flete es 0 pero hay gtotal, usar gtotal como base
   const fleteCalculado =
@@ -108,13 +111,20 @@ export const procesarRespuestaTarifa = (data: any) => {
     flete: fleteCalculado,
     valor_declarado: Number(tarifaData.valor_declarado || 0),
     valor_empaque: valorEmpaque,
+    valor_empaque_iva: Number(tarifaData.valor_empaque_iva || 0),
+    total_empaque: Number(tarifaData.total_empaque || 0),
     seguro: seguro,
     tiempo: tarifaData.tiempo
       ? `${tarifaData.tiempo} día(s) hábil(es)`
       : "1-2 días hábiles",
     peso_vol: Number(tarifaData.volumen || tarifaData.peso_vol || 0),
+    trayecto: tarifaData.trayecto || "",
+    descuento: Number(tarifaData.descuento || 0),
+    tarifa0: Number(tarifaData.tarifa0 || 0),
+    tarifa12: Number(tarifaData.tarifa12 || 0),
     // Campos adicionales de Servientrega
     gtotal: total,
+    total_transacion: totalTransacion, // Este es el valor real a cobrar
     peso_cobrar: Number(tarifaData.peso_cobrar || 0),
     tiva: Number(tarifaData.tiva || 0),
     prima: Number(tarifaData.prima || 0),
@@ -184,22 +194,51 @@ export const formatearPayloadGuia = (data: {
 export const procesarRespuestaGuia = (data: any) => {
   console.log("🔍 Procesando respuesta de guía:", data);
 
-  // La respuesta tiene dos partes: tarifa y fetch
-  const tarifaData = Array.isArray(data) ? data[0] : data;
-  const fetchData = data.fetch || {};
+  let tarifaData: any = {};
+  let fetchData: any = {};
+
+  // Si la respuesta es un string, intentar parsear las dos partes
+  if (typeof data === "string") {
+    try {
+      // Buscar donde termina el primer JSON y empieza el segundo
+      const firstBracketEnd = data.indexOf("}]");
+      if (firstBracketEnd !== -1) {
+        const tarifaPart = data.substring(0, firstBracketEnd + 2);
+        const fetchPart = data.substring(firstBracketEnd + 2);
+
+        tarifaData = JSON.parse(tarifaPart)[0] || {};
+        fetchData = JSON.parse(fetchPart) || {};
+      }
+    } catch (error) {
+      console.error("Error al parsear respuesta de guía:", error);
+    }
+  } else if (data && typeof data === "object") {
+    // Si ya es un objeto, usar la estructura existente
+    tarifaData = Array.isArray(data) ? data[0] : data;
+    fetchData = data.fetch || {};
+  }
 
   return {
-    // Datos de tarifa
+    // Datos de tarifa actualizados
     flete: Number(tarifaData.flete || 0),
     valor_declarado: Number(tarifaData.valor_declarado || 0),
     tiempo: tarifaData.tiempo || "1-2 días",
     valor_empaque: Number(tarifaData.valor_empaque || 0),
+    valor_empaque_iva: Number(tarifaData.valor_empaque_iva || 0),
+    total_empaque: Number(tarifaData.total_empaque || 0),
     trayecto: tarifaData.trayecto || "",
     prima: Number(tarifaData.prima || 0),
     peso: Number(tarifaData.peso || 0),
     volumen: Number(tarifaData.volumen || 0),
     peso_cobrar: Number(tarifaData.peso_cobrar || 0),
+    descuento: Number(tarifaData.descuento || 0),
+    tarifa0: Number(tarifaData.tarifa0 || 0),
+    tarifa12: Number(tarifaData.tarifa12 || 0),
+    tiva: Number(tarifaData.tiva || 0),
     gtotal: Number(tarifaData.gtotal || 0),
+    total_transacion: Number(
+      tarifaData.total_transacion || tarifaData.gtotal || 0
+    ),
 
     // Datos de la guía generada
     proceso: fetchData.proceso || "",
