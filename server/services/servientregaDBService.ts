@@ -325,7 +325,7 @@ export class ServientregaDBService {
           },
         },
       },
-      orderBy: { created_at: "desc" },
+      orderBy: { creado_en: "desc" },
     });
   }
 
