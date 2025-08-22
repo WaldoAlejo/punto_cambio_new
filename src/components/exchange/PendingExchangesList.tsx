@@ -19,13 +19,21 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
-import { User, PuntoAtencion, CambioDivisa } from "../../types";
+import {
+  User,
+  PuntoAtencion,
+  CambioDivisa,
+  DetalleDivisasSimple,
+} from "../../types";
 import { exchangeService } from "../../services/exchangeService";
 import { ReceiptService } from "../../services/receiptService";
+import ExchangeDetailsForm from "./ExchangeDetailsForm";
+import PartialPaymentForm from "./PartialPaymentForm";
 
 interface PendingExchangesListProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
+  currencies?: any[];
 }
 
 interface PartialPaymentData {
@@ -38,6 +46,7 @@ interface PartialPaymentData {
 const PendingExchangesList = ({
   user,
   selectedPoint,
+  currencies = [],
 }: PendingExchangesListProps) => {
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
   const [pendingExchanges, setPendingExchanges] = useState<CambioDivisa[]>([]);
@@ -53,6 +62,30 @@ const PendingExchangesList = ({
     observations: "",
   });
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Estados para completar cambio con pantalla de entrega
+  const [showDeliveryForm, setShowDeliveryForm] = useState(false);
+  const [exchangeToComplete, setExchangeToComplete] =
+    useState<CambioDivisa | null>(null);
+  const [divisasRecibidas, setDivisasRecibidas] =
+    useState<DetalleDivisasSimple>({
+      billetes: 0,
+      monedas: 0,
+      total: 0,
+    });
+  const [metodoEntrega, setMetodoEntrega] = useState<
+    "efectivo" | "transferencia"
+  >("efectivo");
+  const [transferenciaNumero, setTransferenciaNumero] = useState("");
+  const [transferenciaBanco, setTransferenciaBanco] = useState("");
+  const [transferenciaImagen, setTransferenciaImagen] = useState<File | null>(
+    null
+  );
+
+  // Estado para formulario de abono parcial
+  const [showPartialPaymentForm, setShowPartialPaymentForm] = useState(false);
+  const [exchangeForPartialPayment, setExchangeForPartialPayment] =
+    useState<CambioDivisa | null>(null);
 
   useEffect(() => {
     loadPendingExchanges();
@@ -78,14 +111,19 @@ const PendingExchangesList = ({
   };
 
   const handlePartialPayment = (exchange: CambioDivisa) => {
-    setSelectedExchange(exchange);
-    setPartialPayment({
-      initialPayment: 0,
-      pendingBalance: exchange.monto_destino,
-      receivedBy: user?.nombre || "",
-      observations: "",
-    });
-    setIsDialogOpen(true);
+    setExchangeForPartialPayment(exchange);
+    setShowPartialPaymentForm(true);
+  };
+
+  const handlePartialPaymentComplete = async () => {
+    setShowPartialPaymentForm(false);
+    setExchangeForPartialPayment(null);
+    await loadPendingExchanges();
+  };
+
+  const handlePartialPaymentCancel = () => {
+    setShowPartialPaymentForm(false);
+    setExchangeForPartialPayment(null);
   };
 
   const updatePendingBalance = (payment: number) => {
@@ -154,49 +192,65 @@ const PendingExchangesList = ({
   };
 
   const handleCompleteExchange = (exchange: CambioDivisa) => {
-    showConfirmation(
-      "Confirmar completar cambio",
-      `¿Está seguro de completar el cambio para ${exchange.datos_cliente?.nombre} ${exchange.datos_cliente?.apellido}? Se entregará el monto restante de ${exchange.monto_destino} ${exchange.monedaDestino?.codigo}.`,
-      async () => {
-        try {
-          const { error } = await exchangeService.closePendingExchange(
-            exchange.id
-          );
+    // Abrir la pantalla de entrega de dinero
+    setExchangeToComplete(exchange);
+    setDivisasRecibidas({
+      billetes: 0,
+      monedas: 0,
+      total: exchange.monto_destino,
+    });
+    setMetodoEntrega("efectivo");
+    setTransferenciaNumero("");
+    setTransferenciaBanco("");
+    setTransferenciaImagen(null);
+    setShowDeliveryForm(true);
+  };
 
-          if (error) {
-            toast.error(`Error al completar el cambio: ${error}`);
-            return;
-          }
+  const handleDeliveryComplete = async () => {
+    if (!exchangeToComplete) return;
 
-          // Generar e imprimir recibo de cambio completado
-          try {
-            const receiptData = ReceiptService.generatePartialExchangeReceipt(
-              exchange,
-              selectedPoint?.nombre || "N/A",
-              user.nombre,
-              false // false = cambio completado
-            );
-            ReceiptService.printReceipt(receiptData, 2);
-          } catch (printError) {
-            console.warn("Error al imprimir recibo final:", printError);
-            toast.warning(
-              "Cambio completado pero hubo un problema al imprimir el recibo"
-            );
-          }
+    setIsProcessing(true);
+    try {
+      const { error } = await exchangeService.closePendingExchange(
+        exchangeToComplete.id
+      );
 
-          toast.success(
-            "✅ Cambio de divisa completado exitosamente. Recibo generado."
-          );
-
-          // Disparar evento para actualizar saldos
-          window.dispatchEvent(new CustomEvent("exchangeCompleted"));
-
-          await loadPendingExchanges();
-        } catch (error) {
-          toast.error("Error al completar el cambio");
-        }
+      if (error) {
+        toast.error(`Error al completar el cambio: ${error}`);
+        return;
       }
-    );
+
+      // Generar e imprimir recibo de cambio completado
+      try {
+        const receiptData = ReceiptService.generatePartialExchangeReceipt(
+          exchangeToComplete,
+          selectedPoint?.nombre || "N/A",
+          user.nombre,
+          false // false = cambio completado
+        );
+        ReceiptService.printReceipt(receiptData, 2);
+      } catch (printError) {
+        console.warn("Error al imprimir recibo final:", printError);
+        toast.warning(
+          "Cambio completado pero hubo un problema al imprimir el recibo"
+        );
+      }
+
+      toast.success(
+        "✅ Cambio de divisa completado exitosamente. Recibo generado."
+      );
+
+      // Disparar evento para actualizar saldos
+      window.dispatchEvent(new CustomEvent("exchangeCompleted"));
+
+      setShowDeliveryForm(false);
+      setExchangeToComplete(null);
+      await loadPendingExchanges();
+    } catch (error) {
+      toast.error("Error al completar el cambio");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (isLoading) {
@@ -402,6 +456,86 @@ const PendingExchangesList = ({
       </Dialog>
 
       <ConfirmationDialog />
+
+      {/* Modal para completar cambio con pantalla de entrega */}
+      {showDeliveryForm && exchangeToComplete && (
+        <Dialog open={showDeliveryForm} onOpenChange={setShowDeliveryForm}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Completar Cambio - {exchangeToComplete.datos_cliente?.nombre}{" "}
+                {exchangeToComplete.datos_cliente?.apellido}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="mt-4">
+              <ExchangeDetailsForm
+                fromCurrency={exchangeToComplete.monedaOrigen}
+                toCurrency={exchangeToComplete.monedaDestino}
+                fromCurrencyName={exchangeToComplete.monedaOrigen?.codigo || ""}
+                toCurrencyName={exchangeToComplete.monedaDestino?.codigo || ""}
+                exchangeData={{
+                  fromCurrency: exchangeToComplete.moneda_origen_id,
+                  toCurrency: exchangeToComplete.moneda_destino_id,
+                  operationType: exchangeToComplete.tipo_operacion,
+                  rateBilletes:
+                    exchangeToComplete.tasa_cambio_billetes?.toString() || "0",
+                  rateMonedas:
+                    exchangeToComplete.tasa_cambio_monedas?.toString() || "0",
+                  amountBilletes:
+                    exchangeToComplete.divisas_entregadas_billetes?.toString() ||
+                    "0",
+                  amountMonedas:
+                    exchangeToComplete.divisas_entregadas_monedas?.toString() ||
+                    "0",
+                  totalAmountEntregado: exchangeToComplete.monto_origen,
+                  totalAmountRecibido: exchangeToComplete.monto_destino,
+                  observation: exchangeToComplete.observacion || "",
+                }}
+                onBack={() => setShowDeliveryForm(false)}
+                onComplete={handleDeliveryComplete}
+                onDivisasRecibidasChange={setDivisasRecibidas}
+                divisasRecibidas={divisasRecibidas}
+                metodoEntrega={metodoEntrega}
+                onMetodoEntregaChange={setMetodoEntrega}
+                transferenciaNumero={transferenciaNumero}
+                onTransferenciaNumeroChange={setTransferenciaNumero}
+                transferenciaBanco={transferenciaBanco}
+                onTransferenciaBancoChange={setTransferenciaBanco}
+                transferenciaImagen={transferenciaImagen}
+                onTransferenciaImagenChange={setTransferenciaImagen}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Modal para abono parcial con pantalla de cambio */}
+      {showPartialPaymentForm && exchangeForPartialPayment && (
+        <Dialog
+          open={showPartialPaymentForm}
+          onOpenChange={setShowPartialPaymentForm}
+        >
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Registrar Abono Parcial -{" "}
+                {exchangeForPartialPayment.datos_cliente?.nombre}{" "}
+                {exchangeForPartialPayment.datos_cliente?.apellido}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="mt-4">
+              <PartialPaymentForm
+                exchange={exchangeForPartialPayment}
+                user={user}
+                selectedPoint={selectedPoint}
+                currencies={currencies}
+                onComplete={handlePartialPaymentComplete}
+                onCancel={handlePartialPaymentCancel}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   );
 };

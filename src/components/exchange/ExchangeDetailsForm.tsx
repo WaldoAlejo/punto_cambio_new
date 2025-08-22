@@ -3,17 +3,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import CurrencyDetailForm from "./CurrencyDetailForm";
 import { DetalleDivisasSimple, Moneda } from "../../types";
+import { ExchangeFormData } from "./ExchangeForm";
 
 export interface ExchangeDetailsFormProps {
   fromCurrency: Moneda | null;
   toCurrency: Moneda | null;
   fromCurrencyName: string;
   toCurrencyName: string;
+  exchangeData: ExchangeFormData; // Datos del formulario de cambio
   onBack: () => void;
   onComplete: () => void;
-  onDivisasEntregadasChange: (data: DetalleDivisasSimple) => void;
   onDivisasRecibidasChange: (data: DetalleDivisasSimple) => void;
-  divisasEntregadas: DetalleDivisasSimple;
   divisasRecibidas: DetalleDivisasSimple;
 
   // Métodos de entrega
@@ -44,11 +44,10 @@ const ExchangeDetailsForm = ({
   toCurrency,
   fromCurrencyName,
   toCurrencyName,
+  exchangeData,
   onBack,
   onComplete,
-  onDivisasEntregadasChange,
   onDivisasRecibidasChange,
-  divisasEntregadas,
   divisasRecibidas,
   metodoEntrega,
   onMetodoEntregaChange,
@@ -154,14 +153,41 @@ const ExchangeDetailsForm = ({
         </div>
       )}
 
-      {/* Divisas que el CLIENTE ENTREGA al operador */}
+      {/* Resumen de divisas que el CLIENTE ENTREGA al operador */}
       {metodoEntrega === "efectivo" && fromCurrency && (
-        <CurrencyDetailForm
-          currency={fromCurrency}
-          title={`💰 Divisas que el Cliente Entrega (${fromCurrencyName})`}
-          onDetailData={onDivisasEntregadasChange}
-          initialData={divisasEntregadas}
-        />
+        <div className="border rounded-lg p-4 bg-blue-50">
+          <h3 className="font-semibold mb-3">
+            💰 Divisas que el Cliente Entrega ({fromCurrencyName})
+          </h3>
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <span className="text-gray-600">💴 Billetes:</span>
+              <div className="font-bold text-blue-700">
+                {parseFloat(exchangeData.amountBilletes || "0").toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <span className="text-gray-600">🪙 Monedas:</span>
+              <div className="font-bold text-blue-700">
+                {parseFloat(exchangeData.amountMonedas || "0").toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <span className="text-gray-600">💰 Total:</span>
+              <div className="font-bold text-blue-700">
+                {exchangeData.totalAmountEntregado.toFixed(2)}
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-gray-600">
+            <div>
+              Tasa billetes: {parseFloat(exchangeData.rateBilletes).toFixed(4)}
+            </div>
+            <div>
+              Tasa monedas: {parseFloat(exchangeData.rateMonedas).toFixed(4)}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Divisas que el OPERADOR ENTREGA al cliente */}

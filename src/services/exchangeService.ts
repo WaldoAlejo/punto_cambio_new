@@ -6,7 +6,21 @@ export interface CreateExchangeData {
   moneda_destino_id: string;
   monto_origen: number;
   monto_destino: number;
-  tasa_cambio: number;
+
+  // Tasas diferenciadas
+  tasa_cambio_billetes: number;
+  tasa_cambio_monedas: number;
+
+  // Detalles de divisas entregadas (por el cliente)
+  divisas_entregadas_billetes: number;
+  divisas_entregadas_monedas: number;
+  divisas_entregadas_total: number;
+
+  // Detalles de divisas recibidas (por el cliente)
+  divisas_recibidas_billetes: number;
+  divisas_recibidas_monedas: number;
+  divisas_recibidas_total: number;
+
   tipo_operacion: "COMPRA" | "VENTA";
   punto_atencion_id: string;
   datos_cliente: {
@@ -15,16 +29,6 @@ export interface CreateExchangeData {
     documento: string;
     cedula: string;
     telefono?: string;
-  };
-  divisas_entregadas: {
-    billetes: number;
-    monedas: number;
-    total: number;
-  };
-  divisas_recibidas: {
-    billetes: number;
-    monedas: number;
-    total: number;
   };
   observacion?: string;
 

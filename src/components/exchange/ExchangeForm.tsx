@@ -14,17 +14,32 @@ import ExchangeFormFields from "./ExchangeFormFields";
 
 interface ExchangeFormProps {
   currencies: Moneda[];
-  onBack: () => void;
-  onContinue: (data: ExchangeFormData) => void;
+  onBack?: () => void;
+  onContinue?: (data: ExchangeFormData) => void;
+  onSubmit?: (data: ExchangeFormData) => void;
+  onCancel?: () => void;
+  initialData?: Partial<ExchangeFormData>;
+  isPartialPayment?: boolean;
+  maxAmount?: number;
 }
 
 export interface ExchangeFormData {
   operationType: "COMPRA" | "VENTA";
   fromCurrency: string;
   toCurrency: string;
-  rate: string;
-  amount: string;
-  destinationAmount: number;
+
+  // Tasas diferenciadas
+  rateBilletes: string;
+  rateMonedas: string;
+
+  // Montos entregados por el cliente
+  amountBilletes: string;
+  amountMonedas: string;
+  totalAmountEntregado: number;
+
+  // Monto total que recibe el cliente
+  totalAmountRecibido: number;
+
   observation: string;
 }
 
@@ -32,15 +47,53 @@ const ExchangeForm = ({
   currencies,
   onBack,
   onContinue,
+  onSubmit,
+  onCancel,
+  initialData,
+  isPartialPayment = false,
+  maxAmount,
 }: ExchangeFormProps) => {
   const [operationType, setOperationType] = useState<"COMPRA" | "VENTA">(
-    "COMPRA"
+    initialData?.operationType || "COMPRA"
   );
-  const [fromCurrency, setFromCurrency] = useState("");
-  const [toCurrency, setToCurrency] = useState("");
-  const [observation, setObservation] = useState("");
-  const { rate, setRate, amount, setAmount, destinationAmount } =
-    useExchangeCalculations();
+  const [fromCurrency, setFromCurrency] = useState(
+    initialData?.fromCurrency || ""
+  );
+  const [toCurrency, setToCurrency] = useState(initialData?.toCurrency || "");
+  const [observation, setObservation] = useState(
+    initialData?.observation || ""
+  );
+
+  // Tasas diferenciadas
+  const [rateBilletes, setRateBilletes] = useState(
+    initialData?.rateBilletes || ""
+  );
+  const [rateMonedas, setRateMonedas] = useState(
+    initialData?.rateMonedas || ""
+  );
+
+  // Montos entregados por el cliente
+  const [amountBilletes, setAmountBilletes] = useState(
+    initialData?.amountBilletes || ""
+  );
+  const [amountMonedas, setAmountMonedas] = useState(
+    initialData?.amountMonedas || ""
+  );
+
+  // Cálculos automáticos
+  const totalAmountEntregado =
+    (parseFloat(amountBilletes) || 0) + (parseFloat(amountMonedas) || 0);
+
+  const calculateTotalRecibido = () => {
+    const billetes = parseFloat(amountBilletes) || 0;
+    const monedas = parseFloat(amountMonedas) || 0;
+    const tasaBilletes = parseFloat(rateBilletes) || 0;
+    const tasaMonedas = parseFloat(rateMonedas) || 0;
+
+    return billetes * tasaBilletes + monedas * tasaMonedas;
+  };
+
+  const totalAmountRecibido = calculateTotalRecibido();
 
   // NUEVO: Validación de monedas cargadas
   if (!currencies || currencies.length < 2) {
@@ -68,38 +121,62 @@ const ExchangeForm = ({
       );
       return;
     }
-    if (!rate) {
-      toast.error("Debe ingresar la tasa de cambio");
-      return;
-    }
-    if (!amount) {
-      toast.error("Debe ingresar el monto que entrega el cliente");
+
+    if (!rateBilletes || !rateMonedas) {
+      toast.error("Debe ingresar las tasas de cambio para billetes y monedas");
       return;
     }
 
-    const amountNum = parseFloat(amount);
-    if (isNaN(amountNum) || amountNum <= 0) {
+    if (!amountBilletes && !amountMonedas) {
+      toast.error("Debe ingresar al menos un monto (billetes o monedas)");
+      return;
+    }
+
+    const rateBilletesNum = parseFloat(rateBilletes);
+    const rateMonedasNum = parseFloat(rateMonedas);
+
+    if (isNaN(rateBilletesNum) || rateBilletesNum <= 0) {
       toast.error(
-        "El monto que entrega el cliente debe ser un número positivo"
+        "La tasa de cambio para billetes debe ser un número positivo"
       );
       return;
     }
 
-    const rateNum = parseFloat(rate);
-    if (isNaN(rateNum) || rateNum <= 0) {
-      toast.error("La tasa de cambio debe ser un número positivo");
+    if (isNaN(rateMonedasNum) || rateMonedasNum <= 0) {
+      toast.error("La tasa de cambio para monedas debe ser un número positivo");
       return;
     }
 
-    onContinue({
+    if (totalAmountEntregado <= 0) {
+      toast.error("El monto total entregado debe ser mayor a cero");
+      return;
+    }
+
+    // Validación específica para abonos parciales
+    if (isPartialPayment && maxAmount && totalAmountRecibido > maxAmount) {
+      toast.error(`El abono no puede exceder ${maxAmount.toLocaleString()}`);
+      return;
+    }
+
+    const formData = {
       operationType,
       fromCurrency,
       toCurrency,
-      rate,
-      amount,
-      destinationAmount,
+      rateBilletes,
+      rateMonedas,
+      amountBilletes,
+      amountMonedas,
+      totalAmountEntregado,
+      totalAmountRecibido,
       observation,
-    });
+    };
+
+    // Usar onSubmit si está disponible (para abonos parciales), sino onContinue
+    if (onSubmit) {
+      onSubmit(formData);
+    } else if (onContinue) {
+      onContinue(formData);
+    }
   };
 
   return (
@@ -119,11 +196,16 @@ const ExchangeForm = ({
           setFromCurrency={setFromCurrency}
           toCurrency={toCurrency}
           setToCurrency={setToCurrency}
-          rate={rate}
-          setRate={setRate}
-          amount={amount}
-          setAmount={setAmount}
-          destinationAmount={destinationAmount}
+          rateBilletes={rateBilletes}
+          setRateBilletes={setRateBilletes}
+          rateMonedas={rateMonedas}
+          setRateMonedas={setRateMonedas}
+          amountBilletes={amountBilletes}
+          setAmountBilletes={setAmountBilletes}
+          amountMonedas={amountMonedas}
+          setAmountMonedas={setAmountMonedas}
+          totalAmountEntregado={totalAmountEntregado}
+          totalAmountRecibido={totalAmountRecibido}
           observation={observation}
           setObservation={setObservation}
           currencies={currencies}
@@ -131,15 +213,21 @@ const ExchangeForm = ({
         />
 
         <div className="flex gap-2 mt-4">
-          <Button variant="outline" onClick={onBack}>
-            Atrás
+          <Button variant="outline" onClick={onBack || onCancel}>
+            {isPartialPayment ? "Cancelar" : "Atrás"}
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!fromCurrency || !toCurrency || !amount || !rate}
+            disabled={
+              !fromCurrency ||
+              !toCurrency ||
+              !rateBilletes ||
+              !rateMonedas ||
+              (!amountBilletes && !amountMonedas)
+            }
             className="flex-1"
           >
-            Continuar
+            {isPartialPayment ? "Continuar con Abono" : "Continuar"}
           </Button>
         </div>
       </CardContent>

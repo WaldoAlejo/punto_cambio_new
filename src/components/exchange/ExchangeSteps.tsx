@@ -12,12 +12,14 @@ interface ExchangeStepsProps {
 export interface ExchangeCompleteData {
   customerData: DatosCliente;
   exchangeData: ExchangeFormData;
-  divisasEntregadas: DetalleDivisasSimple;
+
+  // Detalles de divisas que se entregarán al cliente (método de entrega)
   divisasRecibidas: DetalleDivisasSimple;
   metodoEntrega: "efectivo" | "transferencia";
   transferenciaNumero?: string;
   transferenciaBanco?: string;
   transferenciaImagen?: File | null;
+
   // NUEVO: Campos para abono parcial
   abonoInicialMonto?: number | null;
   abonoInicialFecha?: string | null;
@@ -45,12 +47,6 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
     const [exchangeData, setExchangeData] = useState<ExchangeFormData | null>(
       null
     );
-    const [divisasEntregadas, setDivisasEntregadas] =
-      useState<DetalleDivisasSimple>({
-        billetes: 0,
-        monedas: 0,
-        total: 0,
-      });
     const [divisasRecibidas, setDivisasRecibidas] =
       useState<DetalleDivisasSimple>({
         billetes: 0,
@@ -105,10 +101,6 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
       setStep("details");
     };
 
-    const handleDivisasEntregadasChange = (data: DetalleDivisasSimple) => {
-      setDivisasEntregadas(data);
-    };
-
     const handleDivisasRecibidasChange = (data: DetalleDivisasSimple) => {
       setDivisasRecibidas(data);
     };
@@ -135,7 +127,6 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
         onComplete({
           customerData,
           exchangeData,
-          divisasEntregadas,
           divisasRecibidas,
           metodoEntrega,
           transferenciaNumero,
@@ -169,7 +160,6 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
         telefono: "",
       });
       setExchangeData(null);
-      setDivisasEntregadas({ billetes: 0, monedas: 0, total: 0 });
       setDivisasRecibidas({ billetes: 0, monedas: 0, total: 0 });
       setMetodoEntrega("efectivo");
       setTransferenciaNumero("");
@@ -215,7 +205,9 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
         return (
           <ExchangeDetailsForm
             fromCurrency={
-              exchangeData ? getCurrency(exchangeData.fromCurrency) || null : null
+              exchangeData
+                ? getCurrency(exchangeData.fromCurrency) || null
+                : null
             }
             toCurrency={
               exchangeData ? getCurrency(exchangeData.toCurrency) || null : null
@@ -226,11 +218,10 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
             toCurrencyName={
               exchangeData ? getCurrencyName(exchangeData.toCurrency) : ""
             }
+            exchangeData={exchangeData}
             onBack={() => setStep("exchange")}
             onComplete={handleDetailsComplete}
-            onDivisasEntregadasChange={handleDivisasEntregadasChange}
             onDivisasRecibidasChange={handleDivisasRecibidasChange}
-            divisasEntregadas={divisasEntregadas}
             divisasRecibidas={divisasRecibidas}
             // Props para método de entrega
             metodoEntrega={metodoEntrega}

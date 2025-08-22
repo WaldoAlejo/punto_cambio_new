@@ -6,7 +6,11 @@ type CurrencyExchangeDetails = {
   monedaOrigen: string;
   montoDestino: number;
   monedaDestino: string;
-  tasaCambio: number;
+
+  // Tasas diferenciadas
+  tasaCambioBilletes: number;
+  tasaCambioMonedas: number;
+
   observacion?: string | null;
   cliente: {
     nombre: string;
@@ -148,7 +152,11 @@ export class ReceiptService {
         monedaOrigen: exchange.monedaOrigen?.codigo || "",
         montoDestino: exchange.monto_destino,
         monedaDestino: exchange.monedaDestino?.codigo || "",
-        tasaCambio: exchange.tasa_cambio,
+
+        // Tasas diferenciadas
+        tasaCambioBilletes: exchange.tasa_cambio_billetes,
+        tasaCambioMonedas: exchange.tasa_cambio_monedas,
+
         observacion: exchange.observacion,
         cliente: {
           nombre: exchange.datos_cliente?.nombre || "",
@@ -157,14 +165,14 @@ export class ReceiptService {
           telefono: exchange.datos_cliente?.telefono || "",
         },
         divisasEntregadas: {
-          billetes: exchange.divisas_entregadas?.billetes || 0,
-          monedas: exchange.divisas_entregadas?.monedas || 0,
-          total: exchange.divisas_entregadas?.total || 0,
+          billetes: exchange.divisas_entregadas_billetes || 0,
+          monedas: exchange.divisas_entregadas_monedas || 0,
+          total: exchange.divisas_entregadas_total || 0,
         },
         divisasRecibidas: {
-          billetes: exchange.divisas_recibidas?.billetes || 0,
-          monedas: exchange.divisas_recibidas?.monedas || 0,
-          total: exchange.divisas_recibidas?.total || 0,
+          billetes: exchange.divisas_recibidas_billetes || 0,
+          monedas: exchange.divisas_recibidas_monedas || 0,
+          total: exchange.divisas_recibidas_total || 0,
         },
       },
     };
@@ -230,7 +238,10 @@ OPERACIÓN: ${detalles.tipoOperacion}
 ${receipt.tipo.includes("PARCIAL") ? "*** CAMBIO PARCIAL ***" : ""}
 Entrega: ${detalles.montoOrigen.toLocaleString()} ${detalles.monedaOrigen}
 Recibe: ${detalles.montoDestino.toLocaleString()} ${detalles.monedaDestino}
-Tasa: ${detalles.tasaCambio}
+
+TASAS DE CAMBIO:
+Billetes: ${detalles.tasaCambioBilletes.toFixed(4)}
+Monedas: ${detalles.tasaCambioMonedas.toFixed(4)}
 ${halfSeparator}`;
 
       if (receipt.tipo.includes("ABONO INICIAL")) {

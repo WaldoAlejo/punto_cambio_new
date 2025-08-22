@@ -208,7 +208,21 @@ model CambioDivisa {
   fecha             DateTime          @default(now())
   monto_origen      Decimal           @db.Decimal(15, 2)
   monto_destino     Decimal           @db.Decimal(15, 2)
-  tasa_cambio       Decimal           @db.Decimal(10, 6)
+  
+  // ==== TASAS DIFERENCIADAS ====
+  tasa_cambio_billetes Decimal        @db.Decimal(10, 6)
+  tasa_cambio_monedas  Decimal        @db.Decimal(10, 6)
+  
+  // ==== DETALLES DE DIVISAS ENTREGADAS (por el cliente) ====
+  divisas_entregadas_billetes Decimal @db.Decimal(15, 2) @default(0)
+  divisas_entregadas_monedas  Decimal @db.Decimal(15, 2) @default(0)
+  divisas_entregadas_total    Decimal @db.Decimal(15, 2) @default(0)
+  
+  // ==== DETALLES DE DIVISAS RECIBIDAS (por el cliente) ====
+  divisas_recibidas_billetes  Decimal @db.Decimal(15, 2) @default(0)
+  divisas_recibidas_monedas   Decimal @db.Decimal(15, 2) @default(0)
+  divisas_recibidas_total     Decimal @db.Decimal(15, 2) @default(0)
+  
   tipo_operacion    TipoOperacion
   moneda_origen_id  String
   moneda_destino_id String
@@ -232,7 +246,12 @@ model CambioDivisa {
   fecha_compromiso            DateTime?
   observacion_parcial         String?
   referencia_cambio_principal String?
-  cliente                     String? // <-- agregado
+  cliente                     String?
+  
+  // ==== RECIBOS PARA ABONOS PARCIALES ====
+  numero_recibo_abono         String?   @unique
+  numero_recibo_completar     String?   @unique
+  fecha_completado            DateTime?
   // ==== FIN CAMPOS ====
 
   monedaOrigen  Moneda        @relation("MonedaOrigen", fields: [moneda_origen_id], references: [id], onDelete: Restrict)

@@ -17,11 +17,23 @@ interface ExchangeFormFieldsProps {
   setFromCurrency: (value: string) => void;
   toCurrency: string;
   setToCurrency: (value: string) => void;
-  rate: string;
-  setRate: (value: string) => void;
-  amount: string;
-  setAmount: (value: string) => void;
-  destinationAmount: number;
+
+  // Tasas diferenciadas
+  rateBilletes: string;
+  setRateBilletes: (value: string) => void;
+  rateMonedas: string;
+  setRateMonedas: (value: string) => void;
+
+  // Montos entregados por el cliente
+  amountBilletes: string;
+  setAmountBilletes: (value: string) => void;
+  amountMonedas: string;
+  setAmountMonedas: (value: string) => void;
+  totalAmountEntregado: number;
+
+  // Monto total que recibe el cliente
+  totalAmountRecibido: number;
+
   observation: string;
   setObservation: (value: string) => void;
   currencies: Moneda[];
@@ -35,11 +47,16 @@ const ExchangeFormFields = ({
   setFromCurrency,
   toCurrency,
   setToCurrency,
-  rate,
-  setRate,
-  amount,
-  setAmount,
-  destinationAmount,
+  rateBilletes,
+  setRateBilletes,
+  rateMonedas,
+  setRateMonedas,
+  amountBilletes,
+  setAmountBilletes,
+  amountMonedas,
+  setAmountMonedas,
+  totalAmountEntregado,
+  totalAmountRecibido,
   observation,
   setObservation,
   currencies,
@@ -97,15 +114,17 @@ const ExchangeFormFields = ({
         </div>
       </div>
 
-      {/* Tasa y montos en una fila */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Tasas diferenciadas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label className="text-sm font-medium">Tasa de Cambio</Label>
+          <Label className="text-sm font-medium">
+            💴 Tasa de Cambio para Billetes
+          </Label>
           <Input
             type="number"
             step="0.0001"
-            value={rate}
-            onChange={(e) => setRate(e.target.value)}
+            value={rateBilletes}
+            onChange={(e) => setRateBilletes(e.target.value)}
             placeholder="0.0000"
             className="h-10"
           />
@@ -113,37 +132,79 @@ const ExchangeFormFields = ({
 
         <div className="space-y-2">
           <Label className="text-sm font-medium">
-            💰 Monto que Entrega el Cliente
-            {fromCurrency && (
-              <span className="text-muted-foreground ml-1">
-                ({getCurrencyName(fromCurrency)})
-              </span>
-            )}
+            🪙 Tasa de Cambio para Monedas
           </Label>
           <Input
             type="number"
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
+            step="0.0001"
+            value={rateMonedas}
+            onChange={(e) => setRateMonedas(e.target.value)}
+            placeholder="0.0000"
             className="h-10"
           />
         </div>
+      </div>
 
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">
-            💵 Monto que Recibe el Cliente
-            {toCurrency && (
-              <span className="text-muted-foreground ml-1">
-                ({getCurrencyName(toCurrency)})
-              </span>
-            )}
-          </Label>
-          <div className="h-10 px-3 py-2 border rounded-md bg-muted/50 flex items-center">
-            <span className="font-medium text-primary">
-              {isNaN(destinationAmount) ? "0.00" : destinationAmount.toFixed(2)}
+      {/* Montos que entrega el cliente */}
+      <div className="border rounded-lg p-4 bg-blue-50">
+        <Label className="text-sm font-medium mb-3 block">
+          💰 Montos que Entrega el Cliente
+          {fromCurrency && (
+            <span className="text-muted-foreground ml-1">
+              ({getCurrencyName(fromCurrency)})
             </span>
+          )}
+        </Label>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label className="text-xs">💴 Billetes</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={amountBilletes}
+              onChange={(e) => setAmountBilletes(e.target.value)}
+              placeholder="0.00"
+              className="h-9"
+            />
           </div>
+          <div className="space-y-2">
+            <Label className="text-xs">🪙 Monedas</Label>
+            <Input
+              type="number"
+              step="0.01"
+              value={amountMonedas}
+              onChange={(e) => setAmountMonedas(e.target.value)}
+              placeholder="0.00"
+              className="h-9"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs">💰 Total Entregado</Label>
+            <div className="h-9 px-3 py-2 border rounded-md bg-white flex items-center font-bold text-blue-700">
+              {isNaN(totalAmountEntregado)
+                ? "0.00"
+                : totalAmountEntregado.toFixed(2)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Monto total que recibe el cliente */}
+      <div className="border rounded-lg p-4 bg-green-50">
+        <Label className="text-sm font-medium mb-3 block">
+          💵 Monto Total que Recibe el Cliente
+          {toCurrency && (
+            <span className="text-muted-foreground ml-1">
+              ({getCurrencyName(toCurrency)})
+            </span>
+          )}
+        </Label>
+        <div className="h-12 px-4 py-3 border rounded-md bg-white flex items-center">
+          <span className="text-xl font-bold text-green-700">
+            {isNaN(totalAmountRecibido)
+              ? "0.00"
+              : totalAmountRecibido.toFixed(2)}
+          </span>
         </div>
       </div>
 

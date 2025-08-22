@@ -23,12 +23,24 @@ interface ExchangePayload {
   moneda_destino_id: string;
   monto_origen: number;
   monto_destino: number;
-  tasa_cambio: number;
+
+  // Tasas diferenciadas
+  tasa_cambio_billetes: number;
+  tasa_cambio_monedas: number;
+
+  // Detalles de divisas entregadas (por el cliente)
+  divisas_entregadas_billetes: number;
+  divisas_entregadas_monedas: number;
+  divisas_entregadas_total: number;
+
+  // Detalles de divisas recibidas (por el cliente)
+  divisas_recibidas_billetes: number;
+  divisas_recibidas_monedas: number;
+  divisas_recibidas_total: number;
+
   tipo_operacion: "COMPRA" | "VENTA";
   punto_atencion_id: string;
   datos_cliente: DatosCliente;
-  divisas_entregadas: DetalleDivisasSimple;
-  divisas_recibidas: DetalleDivisasSimple;
   observacion?: string;
   metodo_entrega: "efectivo" | "transferencia";
   transferencia_numero?: string | null;
@@ -101,14 +113,19 @@ export const useExchangeProcess = ({
     setIsProcessing(true);
 
     try {
-      const rateValue = parseFloat(data.exchangeData.rate);
-      const montoOrigen = parseFloat(data.exchangeData.amount);
+      const rateBilletes = parseFloat(data.exchangeData.rateBilletes);
+      const rateMonedas = parseFloat(data.exchangeData.rateMonedas);
+      const amountBilletes = parseFloat(
+        data.exchangeData.amountBilletes || "0"
+      );
+      const amountMonedas = parseFloat(data.exchangeData.amountMonedas || "0");
 
       if (
         !data.exchangeData.fromCurrency ||
         !data.exchangeData.toCurrency ||
-        isNaN(rateValue) ||
-        isNaN(montoOrigen) ||
+        isNaN(rateBilletes) ||
+        isNaN(rateMonedas) ||
+        (amountBilletes === 0 && amountMonedas === 0) ||
         !data.exchangeData.operationType
       ) {
         toast.error("Datos incompletos o inválidos para procesar el cambio.");
@@ -127,14 +144,26 @@ export const useExchangeProcess = ({
       const exchangePayload: ExchangePayload = {
         moneda_origen_id: data.exchangeData.fromCurrency,
         moneda_destino_id: data.exchangeData.toCurrency,
-        monto_origen: montoOrigen,
-        monto_destino: data.exchangeData.destinationAmount,
-        tasa_cambio: rateValue,
+        monto_origen: data.exchangeData.totalAmountEntregado,
+        monto_destino: data.exchangeData.totalAmountRecibido,
+
+        // Tasas diferenciadas
+        tasa_cambio_billetes: rateBilletes,
+        tasa_cambio_monedas: rateMonedas,
+
+        // Detalles de divisas entregadas (por el cliente)
+        divisas_entregadas_billetes: amountBilletes,
+        divisas_entregadas_monedas: amountMonedas,
+        divisas_entregadas_total: data.exchangeData.totalAmountEntregado,
+
+        // Detalles de divisas recibidas (por el cliente)
+        divisas_recibidas_billetes: data.divisasRecibidas.billetes,
+        divisas_recibidas_monedas: data.divisasRecibidas.monedas,
+        divisas_recibidas_total: data.divisasRecibidas.total,
+
         tipo_operacion: data.exchangeData.operationType as "COMPRA" | "VENTA",
         punto_atencion_id: selectedPoint.id,
         datos_cliente: data.customerData,
-        divisas_entregadas: data.divisasEntregadas,
-        divisas_recibidas: data.divisasRecibidas,
         observacion: data.exchangeData.observation || undefined,
         metodo_entrega: data.metodoEntrega,
         transferencia_numero:

@@ -134,7 +134,21 @@ export interface CambioDivisa {
   fecha: string;
   monto_origen: number;
   monto_destino: number;
-  tasa_cambio: number;
+
+  // Tasas diferenciadas
+  tasa_cambio_billetes: number;
+  tasa_cambio_monedas: number;
+
+  // Detalles de divisas entregadas (por el cliente)
+  divisas_entregadas_billetes: number;
+  divisas_entregadas_monedas: number;
+  divisas_entregadas_total: number;
+
+  // Detalles de divisas recibidas (por el cliente)
+  divisas_recibidas_billetes: number;
+  divisas_recibidas_monedas: number;
+  divisas_recibidas_total: number;
+
   tipo_operacion: "COMPRA" | "VENTA";
   moneda_origen_id: string;
   moneda_destino_id: string;
@@ -143,8 +157,6 @@ export interface CambioDivisa {
   estado: "PENDIENTE" | "COMPLETADO" | "CANCELADO";
   observacion?: string | null;
   datos_cliente?: DatosCliente;
-  divisas_entregadas?: DetalleDivisasSimple;
-  divisas_recibidas?: DetalleDivisasSimple;
 
   // Campos para método de entrega
   metodo_entrega?: "efectivo" | "transferencia";
@@ -161,6 +173,11 @@ export interface CambioDivisa {
   observacion_parcial?: string | null;
   referencia_cambio_principal?: string | null;
   cliente?: string | null;
+
+  // Recibos para abonos parciales
+  numero_recibo_abono?: string | null;
+  numero_recibo_completar?: string | null;
+  fecha_completado?: string | null;
 
   // Relaciones
   monedaOrigen?: Moneda;
