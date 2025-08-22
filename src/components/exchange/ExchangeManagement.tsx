@@ -91,12 +91,19 @@ const ExchangeManagement = ({
         <div className="bg-card rounded-xl shadow-lg p-6 border border-border/50">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-primary mb-2">Cambio de Divisas</h1>
-              <p className="text-muted-foreground">Gestiona tus operaciones de cambio de forma eficiente</p>
+              <h1 className="text-3xl font-bold text-primary mb-2">
+                💱 Cambio de Divisas
+              </h1>
+              <p className="text-muted-foreground">
+                Gestiona las operaciones donde el cliente entrega una divisa y
+                recibe otra
+              </p>
             </div>
             <div className="text-right">
               <p className="text-sm text-muted-foreground">Punto de Atención</p>
-              <p className="text-lg font-semibold text-primary">{selectedPoint?.nombre}</p>
+              <p className="text-lg font-semibold text-primary">
+                {selectedPoint?.nombre}
+              </p>
             </div>
           </div>
         </div>
@@ -106,7 +113,9 @@ const ExchangeManagement = ({
           {isProcessing ? (
             <div className="text-center py-16 px-6">
               <div className="animate-spin rounded-full h-20 w-20 border-4 border-primary/20 border-t-primary mx-auto"></div>
-              <p className="mt-6 text-lg text-muted-foreground">Procesando cambio...</p>
+              <p className="mt-6 text-lg text-muted-foreground">
+                Procesando cambio...
+              </p>
             </div>
           ) : (
             <ExchangeSteps
@@ -123,13 +132,10 @@ const ExchangeManagement = ({
           <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
             <ExchangeList exchanges={exchanges || []} currencies={currencies} />
           </div>
-          
+
           {/* Cambios pendientes */}
           <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
-            <PendingExchangesList 
-              user={user}
-              selectedPoint={selectedPoint}
-            />
+            <PendingExchangesList user={user} selectedPoint={selectedPoint} />
           </div>
         </div>
       </div>

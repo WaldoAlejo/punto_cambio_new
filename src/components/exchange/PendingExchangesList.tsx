@@ -215,9 +215,9 @@ const PendingExchangesList = ({
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Cambios Pendientes</CardTitle>
+          <CardTitle className="text-base">⏳ Cambios Pendientes</CardTitle>
           <CardDescription className="text-sm">
-            No hay cambios parciales pendientes
+            No hay cambios de divisas con pagos pendientes
           </CardDescription>
         </CardHeader>
       </Card>
@@ -228,9 +228,9 @@ const PendingExchangesList = ({
     <>
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Cambios Pendientes</CardTitle>
+          <CardTitle className="text-base">⏳ Cambios Pendientes</CardTitle>
           <CardDescription className="text-sm">
-            {pendingExchanges.length} cambio(s) con pagos pendientes
+            {pendingExchanges.length} cambio(s) de divisas con pagos pendientes
           </CardDescription>
         </CardHeader>
         <CardContent>

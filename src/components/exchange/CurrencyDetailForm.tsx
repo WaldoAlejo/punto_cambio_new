@@ -65,7 +65,7 @@ const CurrencyDetailForm = ({
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label>Billetes</Label>
+              <Label>💴 Billetes</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -76,7 +76,7 @@ const CurrencyDetailForm = ({
               />
             </div>
             <div className="space-y-2">
-              <Label>Monedas</Label>
+              <Label>🪙 Monedas</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -87,7 +87,7 @@ const CurrencyDetailForm = ({
               />
             </div>
             <div className="space-y-2">
-              <Label>Total</Label>
+              <Label>💰 Total</Label>
               <div className="h-10 px-3 py-2 border rounded-md bg-gray-50 flex items-center font-bold">
                 {isNaN(detail.total) ? "0.00" : detail.total.toFixed(2)}{" "}
                 {currency.simbolo}

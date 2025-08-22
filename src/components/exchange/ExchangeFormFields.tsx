@@ -81,8 +81,8 @@ const ExchangeFormFields = ({
             currencies={currencies}
             value={fromCurrency}
             onValueChange={setFromCurrency}
-            placeholder="Moneda origen"
-            label="Moneda Origen"
+            placeholder="Seleccionar moneda que entrega el cliente"
+            label="💰 Moneda que ENTREGA el Cliente"
           />
         </div>
 
@@ -91,8 +91,8 @@ const ExchangeFormFields = ({
             currencies={currencies}
             value={toCurrency}
             onValueChange={setToCurrency}
-            placeholder="Moneda destino"
-            label="Moneda Destino"
+            placeholder="Seleccionar moneda que recibe el cliente"
+            label="💵 Moneda que RECIBE el Cliente"
           />
         </div>
       </div>
@@ -113,7 +113,7 @@ const ExchangeFormFields = ({
 
         <div className="space-y-2">
           <Label className="text-sm font-medium">
-            Monto a Cambiar
+            💰 Monto que Entrega el Cliente
             {fromCurrency && (
               <span className="text-muted-foreground ml-1">
                 ({getCurrencyName(fromCurrency)})
@@ -132,7 +132,7 @@ const ExchangeFormFields = ({
 
         <div className="space-y-2">
           <Label className="text-sm font-medium">
-            Monto Resultante
+            💵 Monto que Recibe el Cliente
             {toCurrency && (
               <span className="text-muted-foreground ml-1">
                 ({getCurrencyName(toCurrency)})

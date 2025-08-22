@@ -88,9 +88,9 @@ const ExchangeDetailsForm = ({
 
   return (
     <div className="space-y-4">
-      {/* Selector de método de entrega */}
+      {/* Selector de método de entrega al cliente */}
       <div>
-        <Label>Método de entrega</Label>
+        <Label>¿Cómo se entregará el dinero al cliente?</Label>
         <div className="flex gap-4 mt-1">
           <button
             type="button"
@@ -101,7 +101,7 @@ const ExchangeDetailsForm = ({
             }`}
             onClick={() => onMetodoEntregaChange("efectivo")}
           >
-            Efectivo
+            💵 Efectivo (en el punto)
           </button>
           <button
             type="button"
@@ -112,7 +112,7 @@ const ExchangeDetailsForm = ({
             }`}
             onClick={() => onMetodoEntregaChange("transferencia")}
           >
-            Transferencia bancaria
+            🏦 Transferencia bancaria
           </button>
         </div>
       </div>
@@ -154,19 +154,21 @@ const ExchangeDetailsForm = ({
         </div>
       )}
 
-      {/* Si entrega es efectivo, mostrar CurrencyDetailForm */}
+      {/* Divisas que el CLIENTE ENTREGA al operador */}
       {metodoEntrega === "efectivo" && fromCurrency && (
         <CurrencyDetailForm
           currency={fromCurrency}
-          title={`Divisas Entregadas (${fromCurrencyName})`}
+          title={`💰 Divisas que el Cliente Entrega (${fromCurrencyName})`}
           onDetailData={onDivisasEntregadasChange}
           initialData={divisasEntregadas}
         />
       )}
+
+      {/* Divisas que el OPERADOR ENTREGA al cliente */}
       {toCurrency && (
         <CurrencyDetailForm
           currency={toCurrency}
-          title={`Divisas Recibidas (${toCurrencyName})`}
+          title={`💵 Divisas que el Operador Entrega al Cliente (${toCurrencyName})`}
           onDetailData={onDivisasRecibidasChange}
           initialData={divisasRecibidas}
         />
@@ -184,7 +186,9 @@ const ExchangeDetailsForm = ({
                 // Activar modo parcial
                 onAbonoInicialMontoChange?.(0);
                 onSaldoPendienteChange?.(0);
-                onAbonoInicialFechaChange?.(new Date().toISOString().split('T')[0]);
+                onAbonoInicialFechaChange?.(
+                  new Date().toISOString().split("T")[0]
+                );
               } else {
                 // Desactivar modo parcial
                 onAbonoInicialMontoChange?.(null);
@@ -195,19 +199,25 @@ const ExchangeDetailsForm = ({
             }}
             className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
           />
-          <Label htmlFor="cambio-parcial" className="font-semibold text-blue-700 cursor-pointer">
+          <Label
+            htmlFor="cambio-parcial"
+            className="font-semibold text-blue-700 cursor-pointer"
+          >
             ✅ Activar cambio parcial (con abono inicial)
           </Label>
         </div>
         <p className="text-sm text-blue-600">
-          Active esta opción cuando el cliente haga un abono inicial y quede con saldo pendiente para completar más tarde.
+          Active esta opción cuando el cliente haga un abono inicial y quede con
+          saldo pendiente para completar más tarde.
         </p>
       </div>
 
       {/* === CAMPOS PARA ABONO PARCIAL === */}
       {(abonoInicialMonto !== null || saldoPendiente !== null) && (
         <div className="border rounded-xl p-3 space-y-2 bg-yellow-50">
-          <Label className="font-semibold">📋 Detalles del cambio parcial</Label>
+          <Label className="font-semibold">
+            📋 Detalles del cambio parcial
+          </Label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {onAbonoInicialMontoChange && (
               <div>

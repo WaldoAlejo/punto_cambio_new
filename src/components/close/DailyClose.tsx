@@ -478,8 +478,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             {cuadreData?.detalles.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">
-                  No hay divisas para cerrar hoy. Realice algún cambio de divisa
-                  primero.
+                  No hay divisas para cerrar hoy. Realice alguna operación de
+                  cambio de divisas primero.
                 </p>
               </div>
             ) : (

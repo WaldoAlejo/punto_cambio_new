@@ -43,9 +43,9 @@ const ExchangeList = ({ exchanges, currencies }: ExchangeListProps) => {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Cambios Recientes</CardTitle>
+        <CardTitle className="text-base">💱 Cambios Recientes</CardTitle>
         <CardDescription className="text-sm">
-          Últimas operaciones realizadas
+          Últimas operaciones de cambio de divisas realizadas
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -82,9 +82,11 @@ const ExchangeList = ({ exchanges, currencies }: ExchangeListProps) => {
                     {exchange.datos_cliente?.apellido || ""}
                   </p>
                   <p className="text-muted-foreground">
-                    {formatMonto(exchange.monto_origen)}{" "}
-                    {getCurrencyName(exchange.moneda_origen_id)} →{" "}
-                    {formatMonto(exchange.monto_destino)}{" "}
+                    Cliente entregó: {formatMonto(exchange.monto_origen)}{" "}
+                    {getCurrencyName(exchange.moneda_origen_id)}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Cliente recibió: {formatMonto(exchange.monto_destino)}{" "}
                     {getCurrencyName(exchange.moneda_destino_id)}
                   </p>
                   <div className="flex justify-between items-center">

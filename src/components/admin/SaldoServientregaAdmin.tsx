@@ -147,9 +147,33 @@ export default function SaldoServientregaAdmin() {
       const { data } = await axiosInstance.get(
         "/servientrega/solicitar-saldo/listar"
       );
-      setSolicitudes(data || []);
+      console.log("📋 Respuesta completa de solicitudes:", data);
+
+      // Verificar si la respuesta tiene la estructura esperada
+      if (data && Array.isArray(data.solicitudes)) {
+        setSolicitudes(data.solicitudes);
+        console.log(
+          "📋 Solicitudes establecidas:",
+          data.solicitudes.length,
+          "registros"
+        );
+      } else if (Array.isArray(data)) {
+        setSolicitudes(data);
+        console.log(
+          "📋 Solicitudes establecidas (array directo):",
+          data.length,
+          "registros"
+        );
+      } else {
+        console.log(
+          "❌ Los datos de solicitudes no tienen el formato esperado:",
+          data
+        );
+        setSolicitudes([]);
+      }
     } catch (error) {
       console.error("❌ Error al obtener solicitudes de saldo:", error);
+      setSolicitudes([]);
     }
   };
 
@@ -247,7 +271,7 @@ export default function SaldoServientregaAdmin() {
   }, [esAdmin]);
 
   // ✅ Filtrar historial
-  const historialFiltrado = historial.filter((h) => {
+  const historialFiltrado = (historial || []).filter((h) => {
     const coincidePunto =
       !filtroPunto ||
       filtroPunto === "todos" ||
@@ -312,14 +336,15 @@ export default function SaldoServientregaAdmin() {
             <div className="flex items-center gap-3">
               <span>💰 Administrar saldos Servientrega</span>
               {esAdmin &&
-                solicitudes.filter((s) => s.estado === "PENDIENTE").length >
-                  0 && (
+                (solicitudes || []).filter((s) => s.estado === "PENDIENTE")
+                  .length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="animate-pulse bg-red-500 text-white text-xs px-3 py-1 rounded-full font-medium">
                       🔔{" "}
                       {
-                        solicitudes.filter((s) => s.estado === "PENDIENTE")
-                          .length
+                        (solicitudes || []).filter(
+                          (s) => s.estado === "PENDIENTE"
+                        ).length
                       }{" "}
                       solicitudes pendientes
                     </span>
@@ -345,7 +370,7 @@ export default function SaldoServientregaAdmin() {
                 <SelectValue placeholder="Seleccionar punto" />
               </SelectTrigger>
               <SelectContent>
-                {puntos.map((p) => (
+                {(puntos || []).map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.nombre} - {p.ciudad}, {p.provincia}
                   </SelectItem>
@@ -405,10 +430,14 @@ export default function SaldoServientregaAdmin() {
             <CardTitle className="flex items-center justify-between text-lg">
               <div className="flex items-center gap-2">
                 <span>📋 Solicitudes de saldo</span>
-                {solicitudes.filter((s) => s.estado === "PENDIENTE").length >
-                  0 && (
+                {(solicitudes || []).filter((s) => s.estado === "PENDIENTE")
+                  .length > 0 && (
                   <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                    {solicitudes.filter((s) => s.estado === "PENDIENTE").length}{" "}
+                    {
+                      (solicitudes || []).filter(
+                        (s) => s.estado === "PENDIENTE"
+                      ).length
+                    }{" "}
                     pendientes
                   </span>
                 )}
@@ -424,7 +453,7 @@ export default function SaldoServientregaAdmin() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {solicitudes.length === 0 ? (
+            {(solicitudes || []).length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500 mb-2">
                   📭 No hay solicitudes de saldo
@@ -437,7 +466,7 @@ export default function SaldoServientregaAdmin() {
             ) : (
               <div className="space-y-4">
                 {/* Solicitudes pendientes primero */}
-                {solicitudes
+                {(solicitudes || [])
                   .filter((sol) => sol.estado === "PENDIENTE")
                   .map((sol) => (
                     <div
@@ -523,14 +552,14 @@ export default function SaldoServientregaAdmin() {
                   ))}
 
                 {/* Solicitudes procesadas */}
-                {solicitudes.filter((sol) => sol.estado !== "PENDIENTE")
+                {(solicitudes || []).filter((sol) => sol.estado !== "PENDIENTE")
                   .length > 0 && (
                   <div className="mt-6">
                     <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
                       📋 Historial de solicitudes procesadas
                       <span className="text-xs bg-gray-200 px-2 py-1 rounded">
                         {
-                          solicitudes.filter(
+                          (solicitudes || []).filter(
                             (sol) => sol.estado !== "PENDIENTE"
                           ).length
                         }
@@ -538,7 +567,7 @@ export default function SaldoServientregaAdmin() {
                     </h4>
 
                     <div className="space-y-3">
-                      {solicitudes
+                      {(solicitudes || [])
                         .filter((sol) => sol.estado !== "PENDIENTE")
                         .sort(
                           (a, b) =>
@@ -605,8 +634,9 @@ export default function SaldoServientregaAdmin() {
                         ))}
                     </div>
 
-                    {solicitudes.filter((sol) => sol.estado !== "PENDIENTE")
-                      .length > 5 && (
+                    {(solicitudes || []).filter(
+                      (sol) => sol.estado !== "PENDIENTE"
+                    ).length > 5 && (
                       <p className="text-xs text-gray-500 text-center mt-2">
                         Mostrando las últimas 5 solicitudes procesadas
                       </p>
@@ -625,7 +655,7 @@ export default function SaldoServientregaAdmin() {
           <CardHeader>
             <CardTitle className="text-lg flex justify-between items-center">
               <span>
-                Historial de asignaciones ({historial.length} total,{" "}
+                Historial de asignaciones ({(historial || []).length} total,{" "}
                 {historialFiltrado.length} mostrados)
               </span>
               <div className="flex gap-1">
@@ -659,7 +689,7 @@ export default function SaldoServientregaAdmin() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos los puntos</SelectItem>
-                    {puntos.map((p) => (
+                    {(puntos || []).map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.nombre}
                       </SelectItem>
@@ -693,11 +723,11 @@ export default function SaldoServientregaAdmin() {
             {historialFiltrado.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-sm text-gray-500 italic">
-                  {historial.length === 0
+                  {(historial || []).length === 0
                     ? "No hay asignaciones registradas."
                     : "No hay asignaciones que coincidan con los filtros aplicados."}
                 </p>
-                {historial.length > 0 &&
+                {(historial || []).length > 0 &&
                   (filtroFecha || (filtroPunto && filtroPunto !== "todos")) && (
                     <Button
                       variant="outline"

@@ -50,9 +50,9 @@ const CustomerDataForm = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Datos del Cliente</CardTitle>
+        <CardTitle>👤 Datos del Cliente</CardTitle>
         <CardDescription>
-          Ingrese los datos del cliente para el cambio de divisas
+          Ingrese los datos del cliente que realizará el cambio de divisas
         </CardDescription>
       </CardHeader>
       <CardContent>

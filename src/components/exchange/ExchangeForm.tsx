@@ -63,7 +63,9 @@ const ExchangeForm = ({
 
   const handleSubmit = () => {
     if (!fromCurrency || !toCurrency) {
-      toast.error("Debe seleccionar las monedas de origen y destino");
+      toast.error(
+        "Debe seleccionar qué moneda entrega el cliente y qué moneda recibe"
+      );
       return;
     }
     if (!rate) {
@@ -71,13 +73,15 @@ const ExchangeForm = ({
       return;
     }
     if (!amount) {
-      toast.error("Debe ingresar el monto a cambiar");
+      toast.error("Debe ingresar el monto que entrega el cliente");
       return;
     }
 
     const amountNum = parseFloat(amount);
     if (isNaN(amountNum) || amountNum <= 0) {
-      toast.error("El monto debe ser un número positivo");
+      toast.error(
+        "El monto que entrega el cliente debe ser un número positivo"
+      );
       return;
     }
 
@@ -101,9 +105,10 @@ const ExchangeForm = ({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Datos del Cambio</CardTitle>
+        <CardTitle>💱 Datos del Cambio de Divisas</CardTitle>
         <CardDescription>
-          Configure los detalles de la operación
+          Configure los detalles de la operación: qué moneda entrega el cliente
+          y qué moneda recibe
         </CardDescription>
       </CardHeader>
       <CardContent>

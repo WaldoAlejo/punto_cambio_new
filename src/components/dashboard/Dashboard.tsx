@@ -57,7 +57,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isOperador)
           return (
             <Unauthorized
-              message="Solo los operadores pueden acceder al cambio de divisas"
+              message="Solo los operadores pueden acceder al módulo de cambio de divisas"
               onGoBack={() => setActiveView("dashboard")}
             />
           );

@@ -41,6 +41,7 @@ import saldosInicialesRoutes from "./routes/saldos-iniciales.js";
 import vistaSaldosRoutes from "./routes/vista-saldos-puntos.js";
 import movimientosSaldoRoutes from "./routes/movimientos-saldo.js";
 import servientregaRoutes from "./routes/servientrega.js";
+import puntosAtencionRoutes from "./routes/puntos-atencion.js";
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
@@ -157,6 +158,7 @@ app.use("/api/saldos-iniciales", saldosInicialesRoutes);
 app.use("/api/vista-saldos-puntos", vistaSaldosRoutes);
 app.use("/api/movimientos-saldo", movimientosSaldoRoutes);
 app.use("/api/servientrega", servientregaRoutes);
+app.use("/api/puntos-atencion", puntosAtencionRoutes);
 
 // Servir archivos estáticos del frontend en producción
 if (process.env.NODE_ENV === "production") {
