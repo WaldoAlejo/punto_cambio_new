@@ -729,7 +729,7 @@ export default function SaldoServientregaAdmin() {
                       </div>
                       <div className="flex flex-col sm:items-end mt-2 sm:mt-0">
                         <span className="text-green-700 font-bold">
-                          +${h.monto_total.toFixed(2)}
+                          +${Number(h.monto_total || 0).toFixed(2)}
                         </span>
                         <span className="text-gray-500 text-xs">
                           {new Date(h.creado_en).toLocaleString()}
