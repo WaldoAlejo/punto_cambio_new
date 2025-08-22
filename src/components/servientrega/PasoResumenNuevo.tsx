@@ -9,7 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Loader2, Calculator, Wallet, AlertTriangle, CheckCircle } from "lucide-react";
+import {
+  Loader2,
+  Calculator,
+  Wallet,
+  AlertTriangle,
+  CheckCircle,
+} from "lucide-react";
 import type { FormDataGuia } from "@/types/servientrega";
 import {
   formatearPayloadTarifa,
@@ -94,7 +100,8 @@ export default function PasoResumenNuevo({
   onNext,
 }: PasoResumenProps) {
   const [tarifa, setTarifa] = useState<TarifaResponse | null>(null);
-  const [tarifaServientrega, setTarifaServientrega] = useState<TarifaServientrega | null>(null);
+  const [tarifaServientrega, setTarifaServientrega] =
+    useState<TarifaServientrega | null>(null);
   const [loading, setLoading] = useState(false);
   const [saldo, setSaldo] = useState<SaldoInfo | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(false);
@@ -150,6 +157,15 @@ export default function PasoResumenNuevo({
 
   // ✅ Calcular tarifa
   const calcularTarifa = async () => {
+    console.log("🔄 Iniciando cálculo de tarifa...");
+
+    // Validar datos requeridos
+    if (!formData.remitente || !formData.destinatario || !formData.medidas) {
+      console.error("❌ Faltan datos requeridos para calcular tarifa");
+      toast.error("Faltan datos para calcular la tarifa");
+      return;
+    }
+
     setLoading(true);
     try {
       // Usar función centralizada para formatear payload
@@ -164,6 +180,7 @@ export default function PasoResumenNuevo({
 
       console.log("📤 Payload para tarifa:", payload);
       console.log("📤 FormData completo:", formData);
+      console.log("📤 Medidas:", formData.medidas);
 
       const res = await axiosInstance.post("/servientrega/tarifa", payload);
       const data = res.data;
@@ -185,6 +202,7 @@ export default function PasoResumenNuevo({
         tarifaCalculada.seguro = Number(formData.medidas.valor_seguro);
       }
 
+      console.log("📊 Tarifa calculada:", tarifaCalculada);
       setTarifa(tarifaCalculada as TarifaResponse);
 
       // Actualizar formData con los costos calculados
@@ -197,6 +215,8 @@ export default function PasoResumenNuevo({
           (tarifaCalculada.seguro || 0) +
           (tarifaCalculada.tiva || 0);
 
+      console.log("💰 Total calculado:", totalCalculado);
+
       // Actualizar el formData en el componente padre
       formData.resumen_costos = {
         costo_empaque: tarifaCalculada.valor_empaque,
@@ -206,9 +226,27 @@ export default function PasoResumenNuevo({
       };
 
       toast.success("Tarifa calculada exitosamente");
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Error al calcular tarifa:", error);
-      toast.error("Error al calcular la tarifa");
+
+      // Mostrar error más específico
+      let errorMessage = "Error al calcular la tarifa";
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.errores) {
+        errorMessage = `Errores de validación: ${error.response.data.errores
+          .map((e: any) => e.message)
+          .join(", ")}`;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      toast.error(errorMessage);
+      console.error("📋 Detalles del error:", {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+      });
     } finally {
       setLoading(false);
     }
@@ -278,6 +316,8 @@ export default function PasoResumenNuevo({
 
   // ✅ Cargar datos al montar
   useEffect(() => {
+    console.log("🚀 Iniciando cálculo de tarifa y saldo...");
+    console.log("📋 FormData recibido:", formData);
     calcularTarifa();
     obtenerSaldo();
   }, []);
@@ -470,66 +510,107 @@ export default function PasoResumenNuevo({
           <Separator />
 
           {/* Costos */}
-          {tarifa && (
-            <div>
-              <h3 className="font-semibold text-gray-800 mb-2">Costos</h3>
+          <div>
+            <h3 className="font-semibold text-gray-800 mb-2">Costos</h3>
+            {tarifa ? (
               <div className="bg-blue-50 p-4 rounded-lg space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Flete:</span>
-                  <span>${tarifa.flete.toFixed(2)}</span>
+                  <span>${Number(tarifa.flete || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Empaque:</span>
-                  <span>${tarifa.valor_empaque.toFixed(2)}</span>
+                  <span>${Number(tarifa.valor_empaque || 0).toFixed(2)}</span>
                 </div>
-                {tarifa.seguro && tarifa.seguro > 0 && (
+                {tarifa.seguro && Number(tarifa.seguro) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span>Seguro:</span>
-                    <span>${tarifa.seguro.toFixed(2)}</span>
+                    <span>${Number(tarifa.seguro).toFixed(2)}</span>
                   </div>
                 )}
-                {tarifa.tiva && tarifa.tiva > 0 && (
+                {tarifa.tiva && Number(tarifa.tiva) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span>IVA:</span>
-                    <span>${tarifa.tiva.toFixed(2)}</span>
+                    <span>${Number(tarifa.tiva).toFixed(2)}</span>
+                  </div>
+                )}
+                {tarifa.descuento && Number(tarifa.descuento) > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Descuento:</span>
+                    <span>-${Number(tarifa.descuento).toFixed(2)}</span>
                   </div>
                 )}
                 <Separator />
                 <div className="flex justify-between items-center">
-                  <div className="flex justify-between font-semibold text-lg">
+                  <div className="flex justify-between font-semibold text-lg w-full">
                     <span>Total:</span>
-                    <span className="text-blue-600">${total.toFixed(2)}</span>
+                    <span className="text-blue-600">
+                      ${Number(total || 0).toFixed(2)}
+                    </span>
                   </div>
+                </div>
+                <div className="flex justify-between items-center mt-2">
                   {tarifaServientrega && !guiaGenerada && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setShowTarifaModal(true)}
-                      className="ml-4"
+                      className="flex-1 mr-2"
                     >
-                      Ver detalles
+                      Ver detalles completos
                     </Button>
                   )}
                 </div>
-                {tarifa.gtotal && tarifa.gtotal !== total && (
-                  <div className="flex justify-between text-xs text-orange-600 mt-1">
-                    <span>Total Servientrega:</span>
-                    <span>${tarifa.gtotal.toFixed(2)}</span>
-                  </div>
-                )}
-                {tarifa.peso_vol && tarifa.peso_vol > 0 && (
-                  <div className="text-xs text-gray-500 text-center mt-2">
-                    Peso volumétrico: {tarifa.peso_vol} kg
-                  </div>
-                )}
-                {tarifa.tiempo && (
-                  <div className="text-xs text-gray-500 text-center">
-                    Tiempo estimado: {tarifa.tiempo}
+
+                {/* Información adicional */}
+                <div className="mt-3 pt-2 border-t border-blue-200">
+                  {tarifa.peso_vol && Number(tarifa.peso_vol) > 0 && (
+                    <div className="text-xs text-gray-500 text-center">
+                      Peso volumétrico: {Number(tarifa.peso_vol).toFixed(2)} kg
+                    </div>
+                  )}
+                  {tarifa.tiempo && (
+                    <div className="text-xs text-gray-500 text-center mt-1">
+                      Tiempo estimado: {tarifa.tiempo}
+                    </div>
+                  )}
+                  {tarifa.trayecto && (
+                    <div className="text-xs text-gray-500 text-center mt-1">
+                      Trayecto: {tarifa.trayecto}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gray-50 p-4 rounded-lg text-center">
+                <div className="text-gray-500 mb-2">
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                      Calculando tarifa...
+                    </>
+                  ) : (
+                    "Calculando costos..."
+                  )}
+                </div>
+                {!loading && (
+                  <div className="space-y-2">
+                    <Button
+                      onClick={calcularTarifa}
+                      size="sm"
+                      className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+                    >
+                      <Calculator className="h-4 w-4 mr-2" />
+                      Calcular tarifa
+                    </Button>
+                    <div className="text-xs text-gray-500 text-center">
+                      Los costos se calcularán automáticamente
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <Separator />
 
@@ -613,7 +694,9 @@ export default function PasoResumenNuevo({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="factura">Número de factura (opcional)</Label>
+                    <Label htmlFor="factura">
+                      Número de factura (opcional)
+                    </Label>
                     <Input
                       id="factura"
                       value={factura}
@@ -688,15 +771,21 @@ export default function PasoResumenNuevo({
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-gray-600">Flete:</span>
-                <span className="font-medium ml-2">${guiaGenerada.flete?.toFixed(2)}</span>
+                <span className="font-medium ml-2">
+                  ${guiaGenerada.flete?.toFixed(2)}
+                </span>
               </div>
               <div>
                 <span className="text-gray-600">Empaque:</span>
-                <span className="font-medium ml-2">${guiaGenerada.valor_empaque?.toFixed(2)}</span>
+                <span className="font-medium ml-2">
+                  ${guiaGenerada.valor_empaque?.toFixed(2)}
+                </span>
               </div>
               <div>
                 <span className="text-gray-600">IVA:</span>
-                <span className="font-medium ml-2">${guiaGenerada.tiva?.toFixed(2)}</span>
+                <span className="font-medium ml-2">
+                  ${guiaGenerada.tiva?.toFixed(2)}
+                </span>
               </div>
               <div>
                 <span className="text-gray-600">Total:</span>
