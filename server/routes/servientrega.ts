@@ -582,7 +582,7 @@ router.put("/remitente/actualizar/:cedula", async (req, res) => {
     const allowedFields = ['nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email'];
     const filteredData = Object.keys(updateData)
       .filter(key => allowedFields.includes(key))
-      .reduce((obj, key) => {
+      .reduce((obj: Record<string, any>, key) => {
         obj[key] = updateData[key];
         return obj;
       }, {});
@@ -656,7 +656,7 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
     const allowedFields = ['nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email'];
     const filteredData = Object.keys(updateData)
       .filter(key => allowedFields.includes(key))
-      .reduce((obj, key) => {
+      .reduce((obj: Record<string, any>, key) => {
         obj[key] = updateData[key];
         return obj;
       }, {});
