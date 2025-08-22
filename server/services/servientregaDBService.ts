@@ -16,7 +16,7 @@ export interface RemitenteData {
 }
 
 export interface DestinatarioData extends RemitenteData {
-  codpais: number;
+  // codpais se mapea a pais en la base de datos
 }
 
 export interface GuiaData {
@@ -35,7 +35,6 @@ export interface SaldoData {
 }
 
 export class ServientregaDBService {
-  
   // ===== REMITENTES =====
   async buscarRemitentes(cedula: string) {
     return prisma.servientregaRemitente.findMany({
@@ -65,10 +64,19 @@ export class ServientregaDBService {
     });
   }
 
-  private sanitizeRemitenteData(data: Partial<RemitenteData>): Record<string, any> {
-    const allowedFields = ['cedula', 'nombre', 'direccion', 'telefono', 'codigo_postal', 'email'];
+  private sanitizeRemitenteData(
+    data: Partial<RemitenteData>
+  ): Record<string, any> {
+    const allowedFields = [
+      "cedula",
+      "nombre",
+      "direccion",
+      "telefono",
+      "codigo_postal",
+      "email",
+    ];
     return Object.keys(data)
-      .filter(key => allowedFields.includes(key))
+      .filter((key) => allowedFields.includes(key))
       .reduce((obj: Record<string, any>, key) => {
         obj[key] = data[key as keyof RemitenteData];
         return obj;
@@ -109,7 +117,10 @@ export class ServientregaDBService {
     });
   }
 
-  async actualizarDestinatario(cedula: string, data: Partial<DestinatarioData>) {
+  async actualizarDestinatario(
+    cedula: string,
+    data: Partial<DestinatarioData>
+  ) {
     // Verificar si existe
     const existing = await prisma.servientregaDestinatario.findFirst({
       where: { cedula },
@@ -126,14 +137,33 @@ export class ServientregaDBService {
     });
   }
 
-  private sanitizeDestinatarioData(data: Partial<DestinatarioData>): Record<string, any> {
-    const allowedFields = ['cedula', 'nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email', 'codigo_postal'];
-    return Object.keys(data)
-      .filter(key => allowedFields.includes(key))
+  private sanitizeDestinatarioData(
+    data: Partial<DestinatarioData>
+  ): Record<string, any> {
+    const allowedFields = [
+      "cedula",
+      "nombre",
+      "direccion",
+      "ciudad",
+      "provincia",
+      "pais",
+      "telefono",
+      "email",
+      "codigo_postal",
+    ];
+
+    // Filtrar solo los campos permitidos y excluir campos no válidos como 'codpais'
+    const sanitized = Object.keys(data)
+      .filter((key) => allowedFields.includes(key))
       .reduce((obj: Record<string, any>, key) => {
         obj[key] = data[key as keyof DestinatarioData];
         return obj;
       }, {});
+
+    // Si viene 'codpais' en los datos originales, lo ignoramos ya que no existe en el modelo
+    // El campo correcto es 'pais' que debe ser un string
+
+    return sanitized;
   }
 
   // ===== GUÍAS =====
@@ -191,7 +221,7 @@ export class ServientregaDBService {
             punto_atencion_id,
             monto_total: new Prisma.Decimal(monto_total),
             monto_usado: new Prisma.Decimal(0),
-            creado_por: creado_por || 'SYSTEM',
+            creado_por: creado_por || "SYSTEM",
           },
         });
   }
