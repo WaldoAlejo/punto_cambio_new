@@ -80,7 +80,7 @@ export class ServientregaValidationService {
   static sanitizeTarifaRequest(request: TarifaRequest): Record<string, string> {
     const peso = Math.max(this.PESO_MINIMO, parseFloat(String(request.peso)));
     const producto = this.PRODUCTOS_VALIDOS.includes(request.nombre_producto || '') 
-      ? request.nombre_producto 
+      ? request.nombre_producto || "MERCANCIA PREMIER"
       : "MERCANCIA PREMIER";
 
     return {

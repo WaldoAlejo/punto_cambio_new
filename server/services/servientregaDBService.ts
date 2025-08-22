@@ -51,8 +51,9 @@ export class ServientregaDBService {
   }
 
   async guardarRemitente(data: RemitenteData) {
+    const sanitizedData = this.sanitizeRemitenteData(data);
     return prisma.servientregaRemitente.create({
-      data: this.sanitizeRemitenteData(data),
+      data: sanitizedData as any, // Prisma types are too strict here
     });
   }
 
@@ -64,12 +65,12 @@ export class ServientregaDBService {
     });
   }
 
-  private sanitizeRemitenteData(data: Partial<RemitenteData>) {
+  private sanitizeRemitenteData(data: Partial<RemitenteData>): Partial<RemitenteData> {
     const allowedFields = ['nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email', 'cedula'];
     return Object.keys(data)
       .filter(key => allowedFields.includes(key))
-      .reduce((obj: Record<string, any>, key) => {
-        obj[key] = data[key as keyof RemitenteData];
+      .reduce((obj: Partial<RemitenteData>, key) => {
+        obj[key as keyof RemitenteData] = data[key as keyof RemitenteData];
         return obj;
       }, {});
   }
@@ -102,8 +103,9 @@ export class ServientregaDBService {
   }
 
   async guardarDestinatario(data: DestinatarioData) {
+    const sanitizedData = this.sanitizeDestinatarioData(data);
     return prisma.servientregaDestinatario.create({
-      data: this.sanitizeDestinatarioData(data),
+      data: sanitizedData as any, // Prisma types are too strict here
     });
   }
 
@@ -124,12 +126,12 @@ export class ServientregaDBService {
     });
   }
 
-  private sanitizeDestinatarioData(data: Partial<DestinatarioData>) {
+  private sanitizeDestinatarioData(data: Partial<DestinatarioData>): Partial<DestinatarioData> {
     const allowedFields = ['nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email', 'cedula', 'codpais'];
     return Object.keys(data)
       .filter(key => allowedFields.includes(key))
-      .reduce((obj: Record<string, any>, key) => {
-        obj[key] = data[key as keyof DestinatarioData];
+      .reduce((obj: Partial<DestinatarioData>, key) => {
+        obj[key as keyof DestinatarioData] = data[key as keyof DestinatarioData];
         return obj;
       }, {});
   }
@@ -189,7 +191,7 @@ export class ServientregaDBService {
             punto_atencion_id,
             monto_total: new Prisma.Decimal(monto_total),
             monto_usado: new Prisma.Decimal(0),
-            creado_por,
+            creado_por: creado_por || 'SYSTEM',
           },
         });
   }
