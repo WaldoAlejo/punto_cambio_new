@@ -171,7 +171,9 @@ export default function PasoResumenNuevo({
       const payload = construirPayloadTarifa(formData);
       console.log("Payload para tarifa:", payload);
 
-      const res = await axiosInstance.post("/servientrega/tarifa", payload);
+      const apiService = new ServientregaAPIService(getCredentials());
+      apiService.apiUrl = "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
+      const res = await apiService.calcularTarifa(payload);
       const data = res.data;
 
       console.log("📥 Respuesta de tarifa:", data);
@@ -830,13 +832,20 @@ function construirPayloadTarifa(formData: any) {
     provincia_des: formData.destinatario?.provincia || "",
     valor_seguro: String(formData.medidas?.valor_seguro ?? ""),
     valor_declarado: String(formData.medidas?.valor_declarado ?? ""),
-    peso: String(formData.medidas?.peso ?? ""),    alto: String(formData.medidas?.alto ?? ""),
+    peso: String(formData.medidas?.peso ?? ""),
+    alto: String(formData.medidas?.alto ?? ""),
     ancho: String(formData.medidas?.ancho ?? ""),
     largo: String(formData.medidas?.largo ?? ""),
     recoleccion: formData.medidas?.recoleccion ? "SI" : "NO",
     nombre_producto: formData.nombre_producto || "",
     empaque: formData.empaque || "",
-    usuingreso: "PRUEBA", // O el usuario real si lo tienes
-    contrasenha: "s12345ABCDe", // O la contraseña real si lo tienes
+    ...getCredentials(),
+  };
+}
+
+function getCredentials(): ServientregaCredentials {
+  return {
+    usuingreso: "INTPUNTOC",
+    contrasenha: "73Yes7321t",
   };
 }

@@ -266,4 +266,110 @@ export class ServientregaDBService {
       punto_ubicacion: `${item.punto_atencion?.ciudad}, ${item.punto_atencion?.provincia}`,
     }));
   }
+
+  // ===== SOLICITUDES DE SALDO =====
+  async crearSolicitudSaldo(data: {
+    punto_atencion_id: string;
+    monto_solicitado: number;
+    observaciones: string;
+    creado_por: string;
+  }) {
+    // Obtener el nombre del punto de atención
+    const puntoAtencion = await prisma.puntoAtencion.findUnique({
+      where: { id: data.punto_atencion_id },
+      select: { nombre: true },
+    });
+
+    return prisma.servientregaSolicitudSaldo.create({
+      data: {
+        punto_atencion_id: data.punto_atencion_id,
+        punto_atencion_nombre: puntoAtencion?.nombre || "Punto desconocido",
+        monto_requerido: new Prisma.Decimal(data.monto_solicitado),
+        observaciones: data.observaciones,
+        estado: "PENDIENTE",
+      },
+      include: {
+        punto_atencion: {
+          select: {
+            nombre: true,
+            ciudad: true,
+            provincia: true,
+          },
+        },
+      },
+    });
+  }
+
+  async listarSolicitudesSaldo(filtros?: {
+    estado?: string;
+    punto_atencion_id?: string;
+  }) {
+    const where: any = {};
+
+    if (filtros?.estado) {
+      where.estado = filtros.estado;
+    }
+
+    if (filtros?.punto_atencion_id) {
+      where.punto_atencion_id = filtros.punto_atencion_id;
+    }
+
+    return prisma.servientregaSolicitudSaldo.findMany({
+      where,
+      include: {
+        punto_atencion: {
+          select: {
+            nombre: true,
+            ciudad: true,
+            provincia: true,
+          },
+        },
+      },
+      orderBy: { created_at: "desc" },
+    });
+  }
+
+  async actualizarEstadoSolicitudSaldo(
+    id: string,
+    estado: string,
+    aprobado_por?: string
+  ) {
+    return prisma.servientregaSolicitudSaldo.update({
+      where: { id },
+      data: {
+        estado,
+        aprobado_por,
+        aprobado_en: new Date(),
+      },
+      include: {
+        punto_atencion: {
+          select: {
+            nombre: true,
+            ciudad: true,
+            provincia: true,
+          },
+        },
+      },
+    });
+  }
+
+  // ===== PUNTOS DE ATENCIÓN =====
+  async obtenerPuntosAtencion() {
+    return prisma.puntoAtencion.findMany({
+      select: {
+        id: true,
+        nombre: true,
+        direccion: true,
+        ciudad: true,
+        provincia: true,
+        codigo_postal: true,
+        telefono: true,
+        activo: true,
+      },
+      where: {
+        activo: true,
+      },
+      orderBy: [{ provincia: "asc" }, { ciudad: "asc" }, { nombre: "asc" }],
+    });
+  }
 }

@@ -10,20 +10,22 @@ const router = express.Router();
 router.get("/remitente/buscar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
-    
+
     if (!cedula || cedula.length < 2) {
-      return res.status(400).json({ error: "La cédula debe tener al menos 2 caracteres" });
+      return res
+        .status(400)
+        .json({ error: "La cédula debe tener al menos 2 caracteres" });
     }
 
     const dbService = new ServientregaDBService();
     const remitentes = await dbService.buscarRemitentes(cedula);
-    
+
     res.json({ remitentes });
   } catch (error) {
     console.error("Error al buscar remitente:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Error al buscar remitente",
-      details: error instanceof Error ? error.message : "Error desconocido"
+      details: error instanceof Error ? error.message : "Error desconocido",
     });
   }
 });
@@ -31,20 +33,22 @@ router.get("/remitente/buscar/:cedula", async (req, res) => {
 router.get("/destinatario/buscar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
-    
+
     if (!cedula || cedula.length < 2) {
-      return res.status(400).json({ error: "La cédula debe tener al menos 2 caracteres" });
+      return res
+        .status(400)
+        .json({ error: "La cédula debe tener al menos 2 caracteres" });
     }
 
     const dbService = new ServientregaDBService();
     const destinatarios = await dbService.buscarDestinatarios(cedula);
-    
+
     res.json({ destinatarios });
   } catch (error) {
     console.error("Error al buscar destinatario:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Error al buscar destinatario",
-      details: error instanceof Error ? error.message : "Error desconocido"
+      details: error instanceof Error ? error.message : "Error desconocido",
     });
   }
 });
@@ -52,20 +56,22 @@ router.get("/destinatario/buscar/:cedula", async (req, res) => {
 router.get("/destinatario/buscar-nombre/:nombre", async (req, res) => {
   try {
     const { nombre } = req.params;
-    
+
     if (!nombre || nombre.length < 2) {
-      return res.status(400).json({ error: "El nombre debe tener al menos 2 caracteres" });
+      return res
+        .status(400)
+        .json({ error: "El nombre debe tener al menos 2 caracteres" });
     }
 
     const dbService = new ServientregaDBService();
     const destinatarios = await dbService.buscarDestinatariosPorNombre(nombre);
-    
+
     res.json({ destinatarios });
   } catch (error) {
     console.error("Error al buscar destinatario por nombre:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Error al buscar destinatario por nombre",
-      details: error instanceof Error ? error.message : "Error desconocido"
+      details: error instanceof Error ? error.message : "Error desconocido",
     });
   }
 });
@@ -78,18 +84,18 @@ router.post("/remitente/guardar", async (req, res) => {
   try {
     const dbService = new ServientregaDBService();
     const remitente = await dbService.guardarRemitente(req.body);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       remitente,
-      message: "Remitente guardado correctamente" 
+      message: "Remitente guardado correctamente",
     });
   } catch (error) {
     console.error("Error al guardar remitente:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: "Error al guardar remitente",
-      details: error instanceof Error ? error.message : "Error desconocido"
+      details: error instanceof Error ? error.message : "Error desconocido",
     });
   }
 });
@@ -98,28 +104,28 @@ router.put("/remitente/actualizar/:cedula", async (req, res) => {
   try {
     const { cedula } = req.params;
     const updateData = req.body;
-    
+
     if (!cedula) {
       return res.status(400).json({ error: "La cédula es requerida" });
     }
-    
+
     console.log(`📝 Actualizando remitente con cédula: ${cedula}`);
     console.log(`📋 Datos a actualizar:`, updateData);
-    
+
     const dbService = new ServientregaDBService();
     const remitente = await dbService.actualizarRemitente(cedula, updateData);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       remitente,
-      message: "Remitente actualizado correctamente"
+      message: "Remitente actualizado correctamente",
     });
   } catch (error) {
     console.error("Error al actualizar remitente:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: "Error al actualizar remitente",
-      details: error instanceof Error ? error.message : "Error desconocido"
+      details: error instanceof Error ? error.message : "Error desconocido",
     });
   }
 });
@@ -140,7 +146,10 @@ router.post("/destinatario/guardar", async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error al guardar destinatario:", error);
-    console.error("📋 Stack trace:", error instanceof Error ? error.stack : "No stack trace");
+    console.error(
+      "📋 Stack trace:",
+      error instanceof Error ? error.stack : "No stack trace"
+    );
 
     res.status(500).json({
       success: false,
@@ -163,7 +172,10 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
     console.log(`📋 Datos a actualizar:`, updateData);
 
     const dbService = new ServientregaDBService();
-    const destinatario = await dbService.actualizarDestinatario(cedula, updateData);
+    const destinatario = await dbService.actualizarDestinatario(
+      cedula,
+      updateData
+    );
 
     console.log(`✅ Destinatario actualizado correctamente:`, destinatario);
 
@@ -174,13 +186,45 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error al actualizar destinatario:", error);
-    console.error("📋 Stack trace:", error instanceof Error ? error.stack : "No stack trace");
+    console.error(
+      "📋 Stack trace:",
+      error instanceof Error ? error.stack : "No stack trace"
+    );
 
-    const statusCode = error instanceof Error && error.message === "Destinatario no encontrado" ? 404 : 500;
+    const statusCode =
+      error instanceof Error && error.message === "Destinatario no encontrado"
+        ? 404
+        : 500;
 
     res.status(statusCode).json({
       success: false,
-      error: error instanceof Error ? error.message : "Error al actualizar destinatario",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Error al actualizar destinatario",
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
+  }
+});
+
+// =============================
+// 📍 Puntos de Atención
+// =============================
+
+router.get("/remitente/puntos", async (req, res) => {
+  try {
+    const dbService = new ServientregaDBService();
+    const puntos = await dbService.obtenerPuntosAtencion();
+
+    res.json({
+      success: true,
+      puntos,
+    });
+  } catch (error) {
+    console.error("Error al obtener puntos de atención:", error);
+    res.status(500).json({
+      success: false,
+      error: "Error al obtener puntos de atención",
       details: error instanceof Error ? error.message : "Error desconocido",
     });
   }
