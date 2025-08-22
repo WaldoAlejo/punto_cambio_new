@@ -27,6 +27,7 @@ import {
 } from "../../types";
 import { exchangeService } from "../../services/exchangeService";
 import { ReceiptService } from "../../services/receiptService";
+import { currencyService } from "../../services/currencyService";
 import ExchangeDetailsForm from "./ExchangeDetailsForm";
 import PartialPaymentForm from "./PartialPaymentForm";
 
@@ -87,9 +88,40 @@ const PendingExchangesList = ({
   const [exchangeForPartialPayment, setExchangeForPartialPayment] =
     useState<CambioDivisa | null>(null);
 
+  // Estado para monedas (si no se proporcionan)
+  const [internalCurrencies, setInternalCurrencies] = useState<any[]>([]);
+  const [loadingCurrencies, setLoadingCurrencies] = useState(false);
+
   useEffect(() => {
     loadPendingExchanges();
   }, [selectedPoint]);
+
+  useEffect(() => {
+    if (currencies.length === 0) {
+      loadCurrencies();
+    }
+  }, [currencies]);
+
+  const loadCurrencies = async () => {
+    setLoadingCurrencies(true);
+    try {
+      const { currencies: loadedCurrencies, error } =
+        await currencyService.getCurrencies();
+      if (error) {
+        toast.error(`Error al cargar monedas: ${error}`);
+        return;
+      }
+      setInternalCurrencies(loadedCurrencies || []);
+    } catch (error) {
+      toast.error("Error al cargar monedas");
+    } finally {
+      setLoadingCurrencies(false);
+    }
+  };
+
+  // Usar las monedas proporcionadas o las cargadas internamente
+  const availableCurrencies =
+    currencies.length > 0 ? currencies : internalCurrencies;
 
   const loadPendingExchanges = async () => {
     if (!selectedPoint) return;
@@ -528,7 +560,7 @@ const PendingExchangesList = ({
                 exchange={exchangeForPartialPayment}
                 user={user}
                 selectedPoint={selectedPoint}
-                currencies={currencies}
+                currencies={availableCurrencies}
                 onComplete={handlePartialPaymentComplete}
                 onCancel={handlePartialPaymentCancel}
               />

@@ -135,7 +135,11 @@ const ExchangeManagement = ({
 
           {/* Cambios pendientes */}
           <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
-            <PendingExchangesList user={user} selectedPoint={selectedPoint} />
+            <PendingExchangesList
+              user={user}
+              selectedPoint={selectedPoint}
+              currencies={currencies}
+            />
           </div>
         </div>
       </div>
