@@ -66,7 +66,7 @@ export class ServientregaDBService {
   }
 
   private sanitizeRemitenteData(data: Partial<RemitenteData>): Record<string, any> {
-    const allowedFields = ['nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email', 'cedula'];
+    const allowedFields = ['cedula', 'nombre', 'direccion', 'telefono', 'codigo_postal', 'email'];
     return Object.keys(data)
       .filter(key => allowedFields.includes(key))
       .reduce((obj: Record<string, any>, key) => {
@@ -127,7 +127,7 @@ export class ServientregaDBService {
   }
 
   private sanitizeDestinatarioData(data: Partial<DestinatarioData>): Record<string, any> {
-    const allowedFields = ['nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email', 'cedula', 'codpais'];
+    const allowedFields = ['cedula', 'nombre', 'direccion', 'ciudad', 'provincia', 'pais', 'telefono', 'email', 'codigo_postal'];
     return Object.keys(data)
       .filter(key => allowedFields.includes(key))
       .reduce((obj: Record<string, any>, key) => {
