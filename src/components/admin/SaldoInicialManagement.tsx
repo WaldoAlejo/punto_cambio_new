@@ -10,9 +10,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { PuntoAtencion, Moneda, VistaSaldosPorPunto } from "../../types";
+import { PuntoAtencion, VistaSaldosPorPunto } from "../../types";
 import { pointService } from "../../services/pointService";
-import { currencyService } from "../../services/currencyService";
 import { saldoInicialService } from "../../services/saldoInicialService";
 
 const SaldoInicialManagement = () => {
