@@ -171,4 +171,40 @@ export const exchangeService = {
       return { exchange: null, error: "Error de conexión al cerrar el cambio" };
     }
   },
+
+  async completeExchange(
+    exchangeId: string,
+    deliveryDetails: any
+  ): Promise<{ exchange: CambioDivisa | null; error: string | null }> {
+    try {
+      const response = await apiService.patch<ExchangeResponse>(
+        `/exchanges/${exchangeId}/completar`,
+        {
+          metodo_entrega: deliveryDetails.metodoEntrega,
+          transferencia_numero: deliveryDetails.transferenciaNumero,
+          transferencia_banco: deliveryDetails.transferenciaBanco,
+          transferencia_imagen_url: deliveryDetails.transferenciaImagen
+            ? "uploaded"
+            : null,
+          divisas_recibidas_billetes:
+            deliveryDetails.divisasRecibidas?.billetes || 0,
+          divisas_recibidas_monedas:
+            deliveryDetails.divisasRecibidas?.monedas || 0,
+          divisas_recibidas_total: deliveryDetails.divisasRecibidas?.total || 0,
+        }
+      );
+
+      if (response.success) {
+        return { exchange: response.exchange, error: null };
+      } else {
+        return { exchange: null, error: "Error al completar el cambio" };
+      }
+    } catch (error) {
+      console.error("Error completing exchange:", error);
+      return {
+        exchange: null,
+        error: "Error de conexión al completar el cambio",
+      };
+    }
+  },
 };

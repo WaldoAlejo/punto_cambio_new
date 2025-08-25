@@ -99,9 +99,15 @@ export class ReceiptService {
           }`
         : `CAMBIO COMPLETADO. ${exchange.observacion || ""}`;
 
+    // Generar número de recibo específico según el tipo
+    const numeroRecibo = isInitialPayment
+      ? exchange.numero_recibo_abono ||
+        this.generateReceiptNumber("ABONO_PARCIAL")
+      : exchange.numero_recibo_completar ||
+        this.generateReceiptNumber("COMPLETAR_CAMBIO");
+
     return {
-      numeroRecibo:
-        exchange.numero_recibo || this.generateReceiptNumber("CAMBIO_DIVISA"),
+      numeroRecibo,
       fecha: new Date().toLocaleString(),
       tipo,
       puntoAtencion: puntoNombre,
@@ -112,7 +118,8 @@ export class ReceiptService {
         monedaOrigen: exchange.monedaOrigen?.codigo || "",
         montoDestino: montoMostrar,
         monedaDestino: exchange.monedaDestino?.codigo || "",
-        tasaCambio: exchange.tasa_cambio,
+        tasaCambioBilletes: exchange.tasa_cambio_billetes,
+        tasaCambioMonedas: exchange.tasa_cambio_monedas,
         observacion: observacionCompleta,
         cliente: {
           nombre: exchange.datos_cliente?.nombre || "",
@@ -121,14 +128,14 @@ export class ReceiptService {
           telefono: exchange.datos_cliente?.telefono || "",
         },
         divisasEntregadas: {
-          billetes: 0,
-          monedas: 0,
-          total: exchange.monto_origen,
+          billetes: exchange.divisas_entregadas_billetes,
+          monedas: exchange.divisas_entregadas_monedas,
+          total: exchange.divisas_entregadas_total,
         },
         divisasRecibidas: {
-          billetes: 0,
-          monedas: 0,
-          total: montoMostrar,
+          billetes: exchange.divisas_recibidas_billetes,
+          monedas: exchange.divisas_recibidas_monedas,
+          total: exchange.divisas_recibidas_total,
         },
       },
     };

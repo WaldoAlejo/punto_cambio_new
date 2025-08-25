@@ -149,7 +149,8 @@ router.post(
         moneda_destino_id,
         monto_origen,
         monto_destino,
-        tasa_cambio,
+        tasa_cambio_billetes: tasa_cambio,
+        tasa_cambio_monedas: tasa_cambio,
         tipo_operacion,
         usuario_id: req.user.id,
         punto_atencion_id,
@@ -163,7 +164,8 @@ router.post(
           moneda_destino_id,
           monto_origen,
           monto_destino,
-          tasa_cambio,
+          tasa_cambio_billetes: tasa_cambio,
+          tasa_cambio_monedas: tasa_cambio,
           tipo_operacion,
           usuario_id: req.user.id,
           punto_atencion_id,
@@ -187,6 +189,14 @@ router.post(
           saldo_pendiente: saldo_pendiente ?? null,
           referencia_cambio_principal: referencia_cambio_principal ?? null,
           cliente: `${datos_cliente.nombre} ${datos_cliente.apellido}`,
+          // Campos de divisas entregadas
+          divisas_entregadas_billetes: divisas_entregadas?.billetes ?? 0,
+          divisas_entregadas_monedas: divisas_entregadas?.monedas ?? 0,
+          divisas_entregadas_total: divisas_entregadas?.total ?? 0,
+          // Campos de divisas recibidas
+          divisas_recibidas_billetes: divisas_recibidas?.billetes ?? 0,
+          divisas_recibidas_monedas: divisas_recibidas?.monedas ?? 0,
+          divisas_recibidas_total: divisas_recibidas?.total ?? 0,
         },
         include: {
           monedaOrigen: {
