@@ -97,6 +97,9 @@ const SaldoInicialManagement = () => {
     }
   };
 
+  // Supón que recibes el punto de atención de la sesión por props o contexto
+  const puntoSesionId = "ID_DEL_PUNTO_NORTE"; // Reemplaza por tu lógica real
+
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold text-gray-800 mb-4">
@@ -105,11 +108,17 @@ const SaldoInicialManagement = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {points.map((point) => {
           const monedasDelPunto = getMonedasPorPunto(point.id);
+          const esPuntoSesion = point.id === puntoSesionId;
           return (
             <div key={point.id} className="border rounded-lg p-6 bg-white shadow-sm space-y-4">
               <div className="mb-2">
                 <span className="font-semibold text-lg">{point.nombre}</span>
                 <span className="ml-2 text-gray-500">{point.ciudad}</span>
+                {esPuntoSesion && (
+                  <span className="ml-2 text-red-500 font-semibold">
+                    (Sesión actual)
+                  </span>
+                )}
               </div>
               <div>
                 <Label>Moneda</Label>
@@ -121,6 +130,7 @@ const SaldoInicialManagement = () => {
                       [point.id]: value,
                     }))
                   }
+                  disabled={esPuntoSesion}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar moneda" />
@@ -153,13 +163,18 @@ const SaldoInicialManagement = () => {
                       }))
                     }
                     placeholder="0.00"
+                    disabled={esPuntoSesion}
                   />
                   <Button
                     className="mt-2 w-full"
                     onClick={() => handleAsignarSaldo(point.id)}
-                    disabled={loadingByPoint[point.id]}
+                    disabled={loadingByPoint[point.id] || esPuntoSesion}
                   >
-                    {loadingByPoint[point.id] ? "Asignando..." : "Asignar Saldo"}
+                    {esPuntoSesion
+                      ? "No puedes asignar saldo aquí"
+                      : loadingByPoint[point.id]
+                      ? "Asignando..."
+                      : "Asignar Saldo"}
                   </Button>
                 </div>
               )}
