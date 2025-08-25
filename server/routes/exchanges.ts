@@ -13,7 +13,11 @@ const exchangeSchema = z.object({
   moneda_destino_id: z.string().uuid(),
   monto_origen: z.number().positive(),
   monto_destino: z.number().positive(),
-  tasa_cambio: z.number().positive(),
+
+  // Tasas diferenciadas
+  tasa_cambio_billetes: z.number().positive(),
+  tasa_cambio_monedas: z.number().positive(),
+
   tipo_operacion: z.nativeEnum(TipoOperacion),
   punto_atencion_id: z.string().uuid(),
   datos_cliente: z.object({
@@ -23,16 +27,17 @@ const exchangeSchema = z.object({
     cedula: z.string(),
     telefono: z.string().optional(),
   }),
-  divisas_entregadas: z.object({
-    billetes: z.number().default(0),
-    monedas: z.number().default(0),
-    total: z.number().default(0),
-  }),
-  divisas_recibidas: z.object({
-    billetes: z.number().default(0),
-    monedas: z.number().default(0),
-    total: z.number().default(0),
-  }),
+
+  // Detalles de divisas entregadas (por el cliente)
+  divisas_entregadas_billetes: z.number().default(0),
+  divisas_entregadas_monedas: z.number().default(0),
+  divisas_entregadas_total: z.number().default(0),
+
+  // Detalles de divisas recibidas (por el cliente)
+  divisas_recibidas_billetes: z.number().default(0),
+  divisas_recibidas_monedas: z.number().default(0),
+  divisas_recibidas_total: z.number().default(0),
+
   observacion: z.string().optional(),
   metodo_entrega: z.enum(["efectivo", "transferencia"]),
   transferencia_numero: z.string().optional().nullable(),
@@ -75,12 +80,17 @@ router.post(
         moneda_destino_id,
         monto_origen,
         monto_destino,
-        tasa_cambio,
+        tasa_cambio_billetes,
+        tasa_cambio_monedas,
         tipo_operacion,
         punto_atencion_id,
         datos_cliente,
-        divisas_entregadas,
-        divisas_recibidas,
+        divisas_entregadas_billetes,
+        divisas_entregadas_monedas,
+        divisas_entregadas_total,
+        divisas_recibidas_billetes,
+        divisas_recibidas_monedas,
+        divisas_recibidas_total,
         observacion,
         metodo_entrega,
         transferencia_numero,
@@ -149,8 +159,8 @@ router.post(
         moneda_destino_id,
         monto_origen: Number(monto_origen),
         monto_destino: Number(monto_destino),
-        tasa_cambio_billetes: Number(tasa_cambio),
-        tasa_cambio_monedas: Number(tasa_cambio),
+        tasa_cambio_billetes: Number(tasa_cambio_billetes),
+        tasa_cambio_monedas: Number(tasa_cambio_monedas),
         tipo_operacion,
         usuario_id: req.user.id,
         punto_atencion_id,
@@ -164,8 +174,8 @@ router.post(
           moneda_destino_id,
           monto_origen: Number(monto_origen),
           monto_destino: Number(monto_destino),
-          tasa_cambio_billetes: Number(tasa_cambio),
-          tasa_cambio_monedas: Number(tasa_cambio),
+          tasa_cambio_billetes: Number(tasa_cambio_billetes),
+          tasa_cambio_monedas: Number(tasa_cambio_monedas),
           tipo_operacion,
           usuario_id: req.user.id,
           punto_atencion_id,
@@ -190,13 +200,13 @@ router.post(
           referencia_cambio_principal: referencia_cambio_principal ?? null,
           cliente: `${datos_cliente.nombre} ${datos_cliente.apellido}`,
           // Campos de divisas entregadas
-          divisas_entregadas_billetes: divisas_entregadas?.billetes ?? 0,
-          divisas_entregadas_monedas: divisas_entregadas?.monedas ?? 0,
-          divisas_entregadas_total: divisas_entregadas?.total ?? 0,
+          divisas_entregadas_billetes: Number(divisas_entregadas_billetes),
+          divisas_entregadas_monedas: Number(divisas_entregadas_monedas),
+          divisas_entregadas_total: Number(divisas_entregadas_total),
           // Campos de divisas recibidas
-          divisas_recibidas_billetes: divisas_recibidas?.billetes ?? 0,
-          divisas_recibidas_monedas: divisas_recibidas?.monedas ?? 0,
-          divisas_recibidas_total: divisas_recibidas?.total ?? 0,
+          divisas_recibidas_billetes: Number(divisas_recibidas_billetes),
+          divisas_recibidas_monedas: Number(divisas_recibidas_monedas),
+          divisas_recibidas_total: Number(divisas_recibidas_total),
         },
         include: {
           monedaOrigen: {
