@@ -114,12 +114,12 @@ export class ReceiptService {
       usuario: usuarioNombre,
       detalles: {
         tipoOperacion: exchange.tipo_operacion,
-        montoOrigen: exchange.monto_origen,
+        montoOrigen: Number(exchange.monto_origen) || 0,
         monedaOrigen: exchange.monedaOrigen?.codigo || "",
         montoDestino: montoMostrar,
         monedaDestino: exchange.monedaDestino?.codigo || "",
-        tasaCambioBilletes: exchange.tasa_cambio_billetes,
-        tasaCambioMonedas: exchange.tasa_cambio_monedas,
+        tasaCambioBilletes: Number(exchange.tasa_cambio_billetes) || 0,
+        tasaCambioMonedas: Number(exchange.tasa_cambio_monedas) || 0,
         observacion: observacionCompleta,
         cliente: {
           nombre: exchange.datos_cliente?.nombre || "",
@@ -128,14 +128,14 @@ export class ReceiptService {
           telefono: exchange.datos_cliente?.telefono || "",
         },
         divisasEntregadas: {
-          billetes: exchange.divisas_entregadas_billetes,
-          monedas: exchange.divisas_entregadas_monedas,
-          total: exchange.divisas_entregadas_total,
+          billetes: Number(exchange.divisas_entregadas_billetes) || 0,
+          monedas: Number(exchange.divisas_entregadas_monedas) || 0,
+          total: Number(exchange.divisas_entregadas_total) || 0,
         },
         divisasRecibidas: {
-          billetes: exchange.divisas_recibidas_billetes,
-          monedas: exchange.divisas_recibidas_monedas,
-          total: exchange.divisas_recibidas_total,
+          billetes: Number(exchange.divisas_recibidas_billetes) || 0,
+          monedas: Number(exchange.divisas_recibidas_monedas) || 0,
+          total: Number(exchange.divisas_recibidas_total) || 0,
         },
       },
     };
@@ -155,14 +155,14 @@ export class ReceiptService {
       usuario: usuarioNombre,
       detalles: {
         tipoOperacion: exchange.tipo_operacion,
-        montoOrigen: exchange.monto_origen,
+        montoOrigen: Number(exchange.monto_origen) || 0,
         monedaOrigen: exchange.monedaOrigen?.codigo || "",
-        montoDestino: exchange.monto_destino,
+        montoDestino: Number(exchange.monto_destino) || 0,
         monedaDestino: exchange.monedaDestino?.codigo || "",
 
         // Tasas diferenciadas
-        tasaCambioBilletes: exchange.tasa_cambio_billetes,
-        tasaCambioMonedas: exchange.tasa_cambio_monedas,
+        tasaCambioBilletes: Number(exchange.tasa_cambio_billetes) || 0,
+        tasaCambioMonedas: Number(exchange.tasa_cambio_monedas) || 0,
 
         observacion: exchange.observacion,
         cliente: {
