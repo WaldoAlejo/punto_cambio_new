@@ -1,5 +1,5 @@
 import express from "express";
-import { EstadoTransaccion } from "@prisma/client";
+import { EstadoTransaccion, TipoOperacion } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
@@ -14,7 +14,7 @@ const exchangeSchema = z.object({
   monto_origen: z.number().positive(),
   monto_destino: z.number().positive(),
   tasa_cambio: z.number().positive(),
-  tipo_operacion: z.enum(["COMPRA", "VENTA"]),
+  tipo_operacion: z.nativeEnum(TipoOperacion),
   punto_atencion_id: z.string().uuid(),
   datos_cliente: z.object({
     nombre: z.string(),
@@ -147,10 +147,10 @@ router.post(
       console.log("💫 Creating exchange with data:", {
         moneda_origen_id,
         moneda_destino_id,
-        monto_origen,
-        monto_destino,
-        tasa_cambio_billetes: tasa_cambio,
-        tasa_cambio_monedas: tasa_cambio,
+        monto_origen: Number(monto_origen),
+        monto_destino: Number(monto_destino),
+        tasa_cambio_billetes: Number(tasa_cambio),
+        tasa_cambio_monedas: Number(tasa_cambio),
         tipo_operacion,
         usuario_id: req.user.id,
         punto_atencion_id,
@@ -162,10 +162,10 @@ router.post(
         data: {
           moneda_origen_id,
           moneda_destino_id,
-          monto_origen,
-          monto_destino,
-          tasa_cambio_billetes: tasa_cambio,
-          tasa_cambio_monedas: tasa_cambio,
+          monto_origen: Number(monto_origen),
+          monto_destino: Number(monto_destino),
+          tasa_cambio_billetes: Number(tasa_cambio),
+          tasa_cambio_monedas: Number(tasa_cambio),
           tipo_operacion,
           usuario_id: req.user.id,
           punto_atencion_id,
