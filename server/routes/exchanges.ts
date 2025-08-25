@@ -633,4 +633,193 @@ router.get(
   }
 );
 
+// Ruta para buscar clientes por nombre y cédula
+router.get(
+  "/search-customers",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({
+          error: "Usuario no autenticado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const { query } = req.query;
+
+      if (!query || typeof query !== "string" || query.trim().length < 2) {
+        res.status(400).json({
+          error: "Debe proporcionar al menos 2 caracteres para la búsqueda",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const searchTerm = query.trim().toLowerCase();
+
+      logger.info("Buscando clientes", {
+        searchTerm,
+        usuario_id: req.user.id,
+      });
+
+      // Buscar en cambios de divisa por nombre completo o cédula
+      const exchanges = await prisma.cambioDivisa.findMany({
+        where: {
+          OR: [
+            {
+              cliente: {
+                contains: searchTerm,
+                mode: "insensitive",
+              },
+            },
+            {
+              // Buscar en el JSON datos_cliente si existe
+              AND: [
+                {
+                  NOT: {
+                    cliente: null,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        select: {
+          id: true,
+          cliente: true,
+          fecha: true,
+          numero_recibo: true,
+        },
+        orderBy: {
+          fecha: "desc",
+        },
+        take: 20,
+      });
+
+      // Buscar también en los recibos que contienen datos_cliente
+      const recibos = await prisma.recibo.findMany({
+        where: {
+          tipo_operacion: "CAMBIO_DIVISA",
+          OR: [
+            {
+              datos_operacion: {
+                path: ["datos_cliente", "nombre"],
+                string_contains: searchTerm,
+              },
+            },
+            {
+              datos_operacion: {
+                path: ["datos_cliente", "apellido"],
+                string_contains: searchTerm,
+              },
+            },
+            {
+              datos_operacion: {
+                path: ["datos_cliente", "cedula"],
+                string_contains: searchTerm,
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          datos_operacion: true,
+          fecha: true,
+          numero_recibo: true,
+        },
+        orderBy: {
+          fecha: "desc",
+        },
+        take: 20,
+      });
+
+      // Procesar y combinar resultados
+      const clientesFromExchanges = exchanges.map((exchange) => ({
+        id: exchange.id,
+        nombre: exchange.cliente?.split(" ")[0] || "",
+        apellido: exchange.cliente?.split(" ").slice(1).join(" ") || "",
+        cedula: "",
+        telefono: "",
+        fuente: "exchange",
+        fecha_ultima_operacion: exchange.fecha,
+        numero_recibo: exchange.numero_recibo,
+      }));
+
+      const clientesFromRecibos = recibos.map((recibo) => {
+        const datosCliente =
+          (recibo.datos_operacion as any)?.datos_cliente || {};
+        return {
+          id: recibo.id,
+          nombre: datosCliente.nombre || "",
+          apellido: datosCliente.apellido || "",
+          cedula: datosCliente.cedula || "",
+          telefono: datosCliente.telefono || "",
+          fuente: "recibo",
+          fecha_ultima_operacion: recibo.fecha,
+          numero_recibo: recibo.numero_recibo,
+        };
+      });
+
+      // Combinar y eliminar duplicados por cédula
+      const todosClientes = [...clientesFromExchanges, ...clientesFromRecibos];
+      const clientesUnicos = new Map();
+
+      todosClientes.forEach((cliente) => {
+        const key = cliente.cedula || `${cliente.nombre}_${cliente.apellido}`;
+        if (
+          !clientesUnicos.has(key) ||
+          new Date(cliente.fecha_ultima_operacion) >
+            new Date(clientesUnicos.get(key).fecha_ultima_operacion)
+        ) {
+          clientesUnicos.set(key, cliente);
+        }
+      });
+
+      const resultados = Array.from(clientesUnicos.values())
+        .filter((cliente) => {
+          const nombreCompleto =
+            `${cliente.nombre} ${cliente.apellido}`.toLowerCase();
+          const cedula = cliente.cedula.toLowerCase();
+          return (
+            nombreCompleto.includes(searchTerm) || cedula.includes(searchTerm)
+          );
+        })
+        .sort(
+          (a, b) =>
+            new Date(b.fecha_ultima_operacion).getTime() -
+            new Date(a.fecha_ultima_operacion).getTime()
+        )
+        .slice(0, 10);
+
+      logger.info("Búsqueda de clientes completada", {
+        searchTerm,
+        resultados: resultados.length,
+        usuario_id: req.user.id,
+      });
+
+      res.status(200).json({
+        clientes: resultados,
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error al buscar clientes", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        usuario_id: req.user?.id,
+      });
+
+      res.status(500).json({
+        error: "Error interno del servidor al buscar clientes",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
 export default router;

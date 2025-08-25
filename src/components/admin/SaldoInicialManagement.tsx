@@ -53,8 +53,8 @@ const SaldoInicialManagement = () => {
     useState<string>("");
 
   // Nuevo: Filtros
-  const [filtroPunto, setFiltroPunto] = useState<string>("");
-  const [filtroMoneda, setFiltroMoneda] = useState<string>("");
+  const [filtroPunto, setFiltroPunto] = useState<string>("all");
+  const [filtroMoneda, setFiltroMoneda] = useState<string>("all");
 
   useEffect(() => {
     loadInitialData();
@@ -200,8 +200,8 @@ const SaldoInicialManagement = () => {
   // Filtrar saldos
   const saldosFiltrados = vistaSaldos.filter(
     (s) =>
-      (!filtroPunto || s.punto_atencion_id === filtroPunto) &&
-      (!filtroMoneda || s.moneda_id === filtroMoneda)
+      (filtroPunto === "all" || s.punto_atencion_id === filtroPunto) &&
+      (filtroMoneda === "all" || s.moneda_id === filtroMoneda)
   );
 
   if (loading) {
@@ -234,7 +234,7 @@ const SaldoInicialManagement = () => {
               <SelectValue placeholder="Filtrar por punto" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todos</SelectItem>
+              <SelectItem value="all">Todos</SelectItem>
               {points.map((point) => (
                 <SelectItem key={point.id} value={point.id}>
                   {point.nombre} - {point.ciudad}
@@ -247,7 +247,7 @@ const SaldoInicialManagement = () => {
               <SelectValue placeholder="Filtrar por moneda" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todas</SelectItem>
+              <SelectItem value="all">Todas</SelectItem>
               {currencies.map((currency) => (
                 <SelectItem key={currency.id} value={currency.id}>
                   {currency.codigo} - {currency.nombre}

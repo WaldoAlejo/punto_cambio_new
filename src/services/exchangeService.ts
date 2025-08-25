@@ -56,6 +56,22 @@ interface ExchangesResponse {
   success: boolean;
 }
 
+export interface ClienteEncontrado {
+  id: string;
+  nombre: string;
+  apellido: string;
+  cedula: string;
+  telefono: string;
+  fuente: "exchange" | "recibo";
+  fecha_ultima_operacion: string;
+  numero_recibo: string | null;
+}
+
+interface SearchCustomersResponse {
+  clientes: ClienteEncontrado[];
+  success: boolean;
+}
+
 export const exchangeService = {
   async createExchange(
     data: CreateExchangeData
@@ -204,6 +220,38 @@ export const exchangeService = {
       return {
         exchange: null,
         error: "Error de conexión al completar el cambio",
+      };
+    }
+  },
+
+  async searchCustomers(
+    query: string
+  ): Promise<{ clientes: ClienteEncontrado[]; error: string | null }> {
+    try {
+      if (!query || query.trim().length < 2) {
+        return {
+          clientes: [],
+          error: "Debe ingresar al menos 2 caracteres para buscar",
+        };
+      }
+
+      const response = await apiService.get<SearchCustomersResponse>(
+        `/exchanges/search-customers?query=${encodeURIComponent(query.trim())}`
+      );
+
+      if (response.success) {
+        return { clientes: response.clientes, error: null };
+      } else {
+        return {
+          clientes: [],
+          error: "Error al buscar clientes",
+        };
+      }
+    } catch (error) {
+      console.error("Error searching customers:", error);
+      return {
+        clientes: [],
+        error: "Error de conexión al buscar clientes",
       };
     }
   },
