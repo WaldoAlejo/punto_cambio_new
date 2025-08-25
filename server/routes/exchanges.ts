@@ -248,6 +248,19 @@ router.post(
         fecha: exchange.fecha,
       });
 
+      // Construir objetos de divisas para compatibilidad
+      const divisas_entregadas = {
+        billetes: divisas_entregadas_billetes,
+        monedas: divisas_entregadas_monedas,
+        total: divisas_entregadas_total,
+      };
+
+      const divisas_recibidas = {
+        billetes: divisas_recibidas_billetes,
+        monedas: divisas_recibidas_monedas,
+        total: divisas_recibidas_total,
+      };
+
       await prisma.recibo.create({
         data: {
           numero_recibo: numeroRecibo,
