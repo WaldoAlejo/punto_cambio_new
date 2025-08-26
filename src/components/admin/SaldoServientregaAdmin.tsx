@@ -185,8 +185,7 @@ export default function SaldoServientregaAdmin() {
     punto_id: string
   ) => {
     try {
-      await axiosInstance.post("/servientrega/solicitar-saldo/responder", {
-        solicitud_id: id,
+      await axiosInstance.put(`/servientrega/solicitar-saldo/${id}/estado`, {
         estado,
         aprobado_por: user?.nombre || "admin",
       });
