@@ -213,15 +213,17 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
 
 router.get("/remitente/puntos", async (req, res) => {
   try {
+    console.log("🌐 API: Solicitud recibida para obtener puntos de atención");
     const dbService = new ServientregaDBService();
     const puntos = await dbService.obtenerPuntosAtencion();
 
+    console.log(`🌐 API: Enviando respuesta con ${puntos.length} puntos`);
     res.json({
       success: true,
       puntos,
     });
   } catch (error) {
-    console.error("Error al obtener puntos de atención:", error);
+    console.error("❌ API: Error al obtener puntos de atención:", error);
     res.status(500).json({
       success: false,
       error: "Error al obtener puntos de atención",

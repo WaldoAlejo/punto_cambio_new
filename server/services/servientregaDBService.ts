@@ -372,7 +372,9 @@ export class ServientregaDBService {
 
   // ===== PUNTOS DE ATENCIÓN =====
   async obtenerPuntosAtencion() {
-    return prisma.puntoAtencion.findMany({
+    console.log("🔍 ServientregaDBService: Obteniendo puntos de atención...");
+
+    const puntos = await prisma.puntoAtencion.findMany({
       select: {
         id: true,
         nombre: true,
@@ -388,5 +390,11 @@ export class ServientregaDBService {
       },
       orderBy: [{ provincia: "asc" }, { ciudad: "asc" }, { nombre: "asc" }],
     });
+
+    console.log(
+      `📍 ServientregaDBService: Encontrados ${puntos.length} puntos activos:`,
+      puntos
+    );
+    return puntos;
   }
 }

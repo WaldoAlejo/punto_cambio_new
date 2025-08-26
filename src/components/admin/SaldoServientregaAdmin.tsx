@@ -61,44 +61,60 @@ export default function SaldoServientregaAdmin() {
   const esAdmin = user?.rol === "ADMIN";
 
   const [puntos, setPuntos] = useState<PuntoAtencion[]>([]);
-  const [puntoSeleccionado, setPuntoSeleccionado] = useState<string>("");
   const [saldos, setSaldos] = useState<Record<string, number>>({});
-  const [nuevoMonto, setNuevoMonto] = useState<string>("");
-  const [loading, setLoading] = useState(false);
-  const [mensaje] = useState<string | null>(null);
+
   const [historial, setHistorial] = useState<HistorialAsignacion[]>([]);
   const [solicitudes, setSolicitudes] = useState<SolicitudSaldo[]>([]);
   const [filtroFecha, setFiltroFecha] = useState<string>("");
   const [filtroPunto, setFiltroPunto] = useState<string>("todos");
+  const [montosInput, setMontosInput] = useState<Record<string, string>>({});
+  const [loadingPuntos, setLoadingPuntos] = useState<Record<string, boolean>>(
+    {}
+  );
 
   // ✅ Obtener puntos y saldos
   const obtenerPuntosYSaldo = async () => {
     try {
+      console.log("🔍 Obteniendo puntos de atención...");
       const { data } = await axiosInstance.get<PuntosResponse>(
         "/servientrega/remitente/puntos"
       );
-      const puntosActivos = data.puntos || [];
-      setPuntos(puntosActivos);
-      if (puntosActivos.length > 0) {
-        setPuntoSeleccionado(puntosActivos[0].id);
-      }
+      console.log("📍 Respuesta completa de puntos:", data);
 
+      const puntosActivos = data.puntos || [];
+      console.log(
+        "📍 Puntos activos encontrados:",
+        puntosActivos.length,
+        puntosActivos
+      );
+
+      setPuntos(puntosActivos);
+
+      console.log("💰 Obteniendo saldos para cada punto...");
       const saldosTemp: Record<string, number> = {};
       await Promise.all(
         puntosActivos.map(async (p) => {
           try {
+            console.log(
+              `💰 Obteniendo saldo para punto: ${p.nombre} (${p.id})`
+            );
             const res = await axiosInstance.get<SaldoResponse>(
               `/servientrega/saldo/${p.id}`
             );
             saldosTemp[p.id] = res.data?.disponible ?? 0;
-          } catch {
+            console.log(
+              `💰 Saldo obtenido para ${p.nombre}: $${saldosTemp[p.id]}`
+            );
+          } catch (error) {
+            console.log(`❌ Error obteniendo saldo para ${p.nombre}:`, error);
             saldosTemp[p.id] = 0;
           }
         })
       );
       setSaldos(saldosTemp);
+      console.log("💰 Saldos finales:", saldosTemp);
     } catch (error) {
-      console.error("Error al obtener puntos o saldos:", error);
+      console.error("❌ Error al obtener puntos o saldos:", error);
       toast.error("Error al cargar información de puntos y saldos");
     }
   };
@@ -210,47 +226,6 @@ export default function SaldoServientregaAdmin() {
     }
   };
 
-  // ✅ Asignar saldo (admin)
-  const handleAsignarSaldo = () => {
-    const monto = parseFloat(nuevoMonto);
-    if (isNaN(monto) || monto <= 0) {
-      toast.error("Ingrese un monto válido mayor a 0");
-      return;
-    }
-    if (!puntoSeleccionado) {
-      toast.error("Seleccione un punto de atención");
-      return;
-    }
-
-    const punto = puntos.find((p) => p.id === puntoSeleccionado);
-    showConfirmation(
-      "Confirmar asignación de saldo",
-      `¿Está seguro de asignar $${monto.toLocaleString()} al punto "${
-        punto?.nombre
-      }"?`,
-      async () => {
-        setLoading(true);
-        try {
-          await axiosInstance.post("/servientrega/saldo", {
-            monto_total: monto,
-            creado_por: user?.nombre ?? "admin",
-            punto_atencion_id: puntoSeleccionado,
-          });
-          toast.success(
-            `✅ Saldo de $${monto.toLocaleString()} asignado correctamente`
-          );
-          setNuevoMonto("");
-          obtenerPuntosYSaldo();
-          obtenerHistorial();
-        } catch {
-          toast.error("Error al asignar saldo");
-        } finally {
-          setLoading(false);
-        }
-      }
-    );
-  };
-
   useEffect(() => {
     obtenerPuntosYSaldo();
     obtenerHistorial();
@@ -319,104 +294,171 @@ export default function SaldoServientregaAdmin() {
     }
   };
 
-  const saldoActual = Number(saldos[puntoSeleccionado] ?? 0);
-  const saldoBajo = saldoActual < UMBRAL_SALDO_BAJO;
-
   return (
-    <div className="max-w-6xl mx-auto mt-10 space-y-6">
-      {/* Panel principal */}
-      <Card className="p-4">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between text-xl">
-            <div className="flex items-center gap-3">
-              <span>💰 Administrar saldos Servientrega</span>
-              {esAdmin &&
-                (solicitudes || []).filter((s) => s.estado === "PENDIENTE")
-                  .length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="animate-pulse bg-red-500 text-white text-xs px-3 py-1 rounded-full font-medium">
-                      🔔{" "}
-                      {
-                        (solicitudes || []).filter(
-                          (s) => s.estado === "PENDIENTE"
-                        ).length
-                      }{" "}
-                      solicitudes pendientes
-                    </span>
-                  </div>
-                )}
-            </div>
-            {esAdmin && (
-              <div className="text-sm text-gray-500">
-                Auto-actualización cada 30s
-              </div>
+    <div className="p-6 space-y-6">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+          💰 Gestión de Saldos Servientrega
+          {esAdmin &&
+            (solicitudes || []).filter((s) => s.estado === "PENDIENTE").length >
+              0 && (
+              <span className="animate-pulse bg-red-500 text-white text-xs px-3 py-1 rounded-full font-medium">
+                🔔{" "}
+                {
+                  (solicitudes || []).filter((s) => s.estado === "PENDIENTE")
+                    .length
+                }{" "}
+                solicitudes pendientes
+              </span>
             )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Selección punto */}
-          <div className="space-y-2">
-            <Label>Punto de atención</Label>
-            <Select
-              value={puntoSeleccionado}
-              onValueChange={setPuntoSeleccionado}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar punto" />
-              </SelectTrigger>
-              <SelectContent>
-                {(puntos || []).map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.nombre} - {p.ciudad}, {p.provincia}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        </h1>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={obtenerPuntosYSaldo}
+            className="text-xs"
+          >
+            🔄 Actualizar
+          </Button>
+          <div className="text-sm text-gray-500 px-2 py-1 bg-gray-100 rounded">
+            {puntos.length} puntos cargados
           </div>
+        </div>
+      </div>
 
-          {/* Saldo */}
-          {puntoSeleccionado && (
-            <p
-              className={`text-base font-semibold ${
-                saldoBajo ? "text-red-600" : "text-green-700"
-              }`}
-            >
-              Saldo disponible: ${saldoActual.toFixed(2)}
-            </p>
-          )}
+      {/* Grid de puntos de atención */}
+      {puntos.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="text-gray-400 text-6xl mb-4">📍</div>
+          <h3 className="text-lg font-semibold text-gray-600 mb-2">
+            No se encontraron puntos de atención
+          </h3>
+          <p className="text-gray-500 mb-4">
+            Verifica que existan puntos de atención activos en el sistema
+          </p>
+          <Button
+            variant="outline"
+            onClick={obtenerPuntosYSaldo}
+            className="mx-auto"
+          >
+            🔄 Recargar puntos
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {(puntos || []).map((punto) => {
+            const saldoActualPunto = Number(saldos[punto.id] ?? 0);
+            const saldoBajoPunto = saldoActualPunto < UMBRAL_SALDO_BAJO;
+            const montoInput = montosInput[punto.id] || "";
+            const loadingPunto = loadingPuntos[punto.id] || false;
 
-          {/* Asignación saldo */}
-          {esAdmin && (
-            <>
-              <div className="space-y-2">
-                <Label>Monto a agregar</Label>
-                <Input
-                  type="number"
-                  value={nuevoMonto}
-                  onChange={(e) => setNuevoMonto(e.target.value)}
-                  placeholder="Ej. 50.00"
-                  min={0}
-                />
-              </div>
-              <Button
-                onClick={handleAsignarSaldo}
-                disabled={loading || !nuevoMonto.trim()}
+            const handleAsignarSaldoPunto = async () => {
+              const monto = parseFloat(montoInput);
+              if (isNaN(monto) || monto <= 0) {
+                toast.error("Ingrese un monto válido mayor a 0");
+                return;
+              }
+
+              showConfirmation(
+                "Confirmar asignación de saldo",
+                `¿Está seguro de asignar $${monto.toLocaleString()} al punto "${
+                  punto.nombre
+                }"?`,
+                async () => {
+                  setLoadingPuntos((prev) => ({ ...prev, [punto.id]: true }));
+                  try {
+                    await axiosInstance.post("/servientrega/saldo", {
+                      monto_total: monto,
+                      creado_por: user?.nombre ?? "admin",
+                      punto_atencion_id: punto.id,
+                    });
+                    toast.success(
+                      `✅ Saldo de $${monto.toLocaleString()} asignado correctamente a ${
+                        punto.nombre
+                      }`
+                    );
+                    setMontosInput((prev) => ({ ...prev, [punto.id]: "" }));
+                    obtenerPuntosYSaldo();
+                    obtenerHistorial();
+                  } catch {
+                    toast.error("Error al asignar saldo");
+                  } finally {
+                    setLoadingPuntos((prev) => ({
+                      ...prev,
+                      [punto.id]: false,
+                    }));
+                  }
+                }
+              );
+            };
+
+            return (
+              <div
+                key={punto.id}
+                className="border rounded-lg p-6 bg-white shadow-sm space-y-4"
               >
-                {loading ? "Asignando..." : "Agregar saldo"}
-              </Button>
-              {mensaje && (
-                <p
-                  className={`text-sm mt-2 ${
-                    mensaje.includes("✅") ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {mensaje}
-                </p>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
+                <div className="mb-2">
+                  <span className="font-semibold text-lg">{punto.nombre}</span>
+                  <span className="ml-2 text-gray-500">
+                    {punto.ciudad}, {punto.provincia}
+                  </span>
+                </div>
+
+                {/* Saldo actual */}
+                <div>
+                  <Label className="text-sm font-medium text-gray-600">
+                    Saldo Actual
+                  </Label>
+                  <div
+                    className={`font-semibold text-lg mb-2 ${
+                      saldoBajoPunto ? "text-red-600" : "text-green-700"
+                    }`}
+                  >
+                    ${saldoActualPunto.toFixed(2)}
+                    {saldoBajoPunto && (
+                      <span className="ml-2 text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">
+                        Saldo bajo
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Asignación de saldo */}
+                {esAdmin && (
+                  <>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-600">
+                        Asignar Saldo
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={montoInput}
+                        onChange={(e) =>
+                          setMontosInput((prev) => ({
+                            ...prev,
+                            [punto.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="0.00"
+                        className="mt-1"
+                      />
+                    </div>
+                    <Button
+                      className="w-full"
+                      onClick={handleAsignarSaldoPunto}
+                      disabled={loadingPunto || !montoInput.trim()}
+                    >
+                      {loadingPunto ? "Asignando..." : "Asignar Saldo"}
+                    </Button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Solicitudes de saldo */}
       {esAdmin && (
