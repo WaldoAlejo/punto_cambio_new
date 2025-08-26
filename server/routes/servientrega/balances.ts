@@ -26,7 +26,14 @@ router.get("/saldo/:puntoAtencionId", async (req, res) => {
   try {
     const { puntoAtencionId } = req.params;
 
+    console.log(
+      `💰 Servientrega: Consultando saldo para punto ${puntoAtencionId}`
+    );
+
     if (!puntoAtencionId) {
+      console.error(
+        "❌ Servientrega: ID de punto de atención no proporcionado"
+      );
       return res
         .status(400)
         .json({ error: "El ID del punto de atención es requerido" });
@@ -36,17 +43,29 @@ router.get("/saldo/:puntoAtencionId", async (req, res) => {
     const saldo = await dbService.obtenerSaldo(puntoAtencionId);
 
     if (!saldo) {
+      console.log(
+        `💰 Servientrega: No se encontró saldo para punto ${puntoAtencionId}, devolviendo 0`
+      );
       return res.json({ disponible: 0 });
     }
 
     const disponible = saldo.monto_total.sub(saldo.monto_usado);
-    res.json({
+    const resultado = {
       disponible: disponible.toNumber(),
       monto_total: saldo.monto_total.toNumber(),
       monto_usado: saldo.monto_usado.toNumber(),
-    });
+    };
+
+    console.log(
+      `✅ Servientrega: Saldo para punto ${puntoAtencionId}:`,
+      resultado
+    );
+    res.json(resultado);
   } catch (error) {
-    console.error("Error al obtener saldo:", error);
+    console.error(
+      `❌ Servientrega: Error al obtener saldo para punto ${req.params.puntoAtencionId}:`,
+      error
+    );
     res.status(500).json({
       error: "Error al obtener saldo",
       details: error instanceof Error ? error.message : "Error desconocido",

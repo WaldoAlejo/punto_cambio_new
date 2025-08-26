@@ -213,17 +213,38 @@ router.put("/destinatario/actualizar/:cedula", async (req, res) => {
 
 router.get("/remitente/puntos", async (req, res) => {
   try {
-    console.log("🌐 API: Solicitud recibida para obtener puntos de atención");
+    console.log(
+      "🌐 Servientrega API: Solicitud recibida para obtener puntos de atención"
+    );
+    console.log("👤 Usuario solicitante:", {
+      id: req.user?.id,
+      rol: req.user?.rol,
+    });
+
     const dbService = new ServientregaDBService();
     const puntos = await dbService.obtenerPuntosAtencion();
 
-    console.log(`🌐 API: Enviando respuesta con ${puntos.length} puntos`);
+    console.log(`📍 Servientrega API: ${puntos.length} puntos encontrados:`);
+    puntos.forEach((punto, index) => {
+      console.log(
+        `  ${index + 1}. ${punto.nombre} (${punto.ciudad}, ${
+          punto.provincia
+        }) - ID: ${punto.id}`
+      );
+    });
+
+    console.log(
+      `✅ Servientrega API: Enviando respuesta exitosa con ${puntos.length} puntos`
+    );
     res.json({
       success: true,
       puntos,
     });
   } catch (error) {
-    console.error("❌ API: Error al obtener puntos de atención:", error);
+    console.error(
+      "❌ Servientrega API: Error al obtener puntos de atención:",
+      error
+    );
     res.status(500).json({
       success: false,
       error: "Error al obtener puntos de atención",

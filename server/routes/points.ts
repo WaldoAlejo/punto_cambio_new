@@ -35,10 +35,22 @@ router.get(
         whereClause.es_principal = false;
       }
 
+      console.log("🔍 Consultando puntos con filtros:", whereClause);
+
       const puntosLibres = await prisma.puntoAtencion.findMany({
         where: whereClause,
         orderBy: { nombre: "asc" },
       });
+
+      console.log(
+        `📍 Puntos encontrados en BD: ${puntosLibres.length}`,
+        puntosLibres.map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          activo: p.activo,
+          es_principal: p.es_principal,
+        }))
+      );
 
       const formatted = puntosLibres.map((punto) => ({
         id: punto.id,
@@ -54,11 +66,17 @@ router.get(
         updated_at: punto.updated_at.toISOString(),
       }));
 
+      console.log(
+        `✅ Puntos formateados para enviar: ${formatted.length}`,
+        formatted.map((p) => ({ id: p.id, nombre: p.nombre }))
+      );
+
       logger.info("Puntos libres obtenidos", {
         count: formatted.length,
         requestedBy: req.user?.id,
         userRole: req.user?.rol,
         filteredForOperator: req.user?.rol === "OPERADOR",
+        whereClause: JSON.stringify(whereClause),
       });
 
       res.status(200).json({

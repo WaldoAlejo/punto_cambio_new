@@ -372,7 +372,19 @@ export class ServientregaDBService {
 
   // ===== PUNTOS DE ATENCIÓN =====
   async obtenerPuntosAtencion() {
-    console.log("🔍 ServientregaDBService: Obteniendo puntos de atención...");
+    console.log(
+      "🔍 ServientregaDBService: Iniciando consulta de puntos de atención..."
+    );
+
+    // Primero verificar cuántos puntos hay en total
+    const totalPuntos = await prisma.puntoAtencion.count();
+    const puntosActivos = await prisma.puntoAtencion.count({
+      where: { activo: true },
+    });
+
+    console.log(
+      `📊 ServientregaDBService: Estadísticas de puntos - Total: ${totalPuntos}, Activos: ${puntosActivos}`
+    );
 
     const puntos = await prisma.puntoAtencion.findMany({
       select: {
@@ -392,9 +404,22 @@ export class ServientregaDBService {
     });
 
     console.log(
-      `📍 ServientregaDBService: Encontrados ${puntos.length} puntos activos:`,
-      puntos
+      `📍 ServientregaDBService: Consulta completada - ${puntos.length} puntos activos encontrados:`
     );
+    puntos.forEach((punto, index) => {
+      console.log(
+        `  ${index + 1}. ${punto.nombre} - ${punto.ciudad}, ${
+          punto.provincia
+        } (ID: ${punto.id})`
+      );
+    });
+
+    if (puntos.length === 0) {
+      console.warn(
+        "⚠️ ServientregaDBService: No se encontraron puntos de atención activos"
+      );
+    }
+
     return puntos;
   }
 }

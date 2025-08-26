@@ -17,17 +17,28 @@ interface PointResponse extends ApiResponse<PuntoAtencion> {
 export const pointService = {
   async getAllPoints() {
     try {
+      console.log("🔍 pointService.getAllPoints: Iniciando solicitud...");
       const response = await apiService.get<PointsResponse>("/points");
+      console.log(
+        "📍 pointService.getAllPoints: Respuesta recibida:",
+        response
+      );
+
       if (!response || !response.success) {
-        console.error("getAllPoints - Error:", response?.error);
+        console.error("❌ getAllPoints - Error:", response?.error);
         return {
           points: [],
           error: response?.error || "Error al obtener puntos de atención",
         };
       }
+
+      console.log(
+        `✅ getAllPoints: ${response.points?.length || 0} puntos obtenidos:`,
+        response.points
+      );
       return { points: response.points, error: null };
     } catch (error) {
-      console.error("getAllPoints ERROR:", error);
+      console.error("❌ getAllPoints ERROR:", error);
       return { points: [], error: "Error de conexión con el servidor" };
     }
   },

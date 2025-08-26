@@ -75,47 +75,74 @@ export default function SaldoServientregaAdmin() {
   // ✅ Obtener puntos y saldos
   const obtenerPuntosYSaldo = async () => {
     try {
-      console.log("🔍 Obteniendo puntos de atención...");
+      console.log(
+        "🔍 SaldoServientregaAdmin: Iniciando carga de puntos y saldos..."
+      );
+
       const { data } = await axiosInstance.get<PuntosResponse>(
         "/servientrega/remitente/puntos"
       );
-      console.log("📍 Respuesta completa de puntos:", data);
+      console.log("📍 Respuesta completa de puntos Servientrega:", data);
+
+      if (!data.success) {
+        console.error("❌ Error en respuesta de puntos:", data);
+        toast.error("Error al obtener puntos de atención");
+        return;
+      }
 
       const puntosActivos = data.puntos || [];
       console.log(
-        "📍 Puntos activos encontrados:",
-        puntosActivos.length,
-        puntosActivos
+        `📍 Puntos Servientrega encontrados: ${puntosActivos.length}`,
+        puntosActivos.map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          ciudad: p.ciudad,
+        }))
       );
 
       setPuntos(puntosActivos);
 
+      if (puntosActivos.length === 0) {
+        console.warn("⚠️ No se encontraron puntos de atención activos");
+        setSaldos({});
+        return;
+      }
+
       console.log("💰 Obteniendo saldos para cada punto...");
       const saldosTemp: Record<string, number> = {};
-      await Promise.all(
-        puntosActivos.map(async (p) => {
-          try {
-            console.log(
-              `💰 Obteniendo saldo para punto: ${p.nombre} (${p.id})`
-            );
-            const res = await axiosInstance.get<SaldoResponse>(
-              `/servientrega/saldo/${p.id}`
-            );
-            saldosTemp[p.id] = res.data?.disponible ?? 0;
-            console.log(
-              `💰 Saldo obtenido para ${p.nombre}: $${saldosTemp[p.id]}`
-            );
-          } catch (error) {
-            console.log(`❌ Error obteniendo saldo para ${p.nombre}:`, error);
-            saldosTemp[p.id] = 0;
-          }
-        })
-      );
+
+      const saldoPromises = puntosActivos.map(async (p) => {
+        try {
+          console.log(`💰 Consultando saldo para: ${p.nombre} (ID: ${p.id})`);
+          const res = await axiosInstance.get<SaldoResponse>(
+            `/servientrega/saldo/${p.id}`
+          );
+          const saldoDisponible = res.data?.disponible ?? 0;
+          saldosTemp[p.id] = saldoDisponible;
+          console.log(
+            `✅ Saldo para ${p.nombre}: $${saldoDisponible.toFixed(2)}`
+          );
+          return { punto: p.nombre, saldo: saldoDisponible };
+        } catch (error) {
+          console.error(`❌ Error obteniendo saldo para ${p.nombre}:`, error);
+          saldosTemp[p.id] = 0;
+          return { punto: p.nombre, saldo: 0, error: true };
+        }
+      });
+
+      const resultadosSaldos = await Promise.all(saldoPromises);
+      console.log("💰 Resumen de saldos obtenidos:", resultadosSaldos);
+
       setSaldos(saldosTemp);
-      console.log("💰 Saldos finales:", saldosTemp);
+      console.log(
+        "✅ Proceso de carga completado. Saldos finales:",
+        saldosTemp
+      );
     } catch (error) {
-      console.error("❌ Error al obtener puntos o saldos:", error);
+      console.error("❌ Error crítico al obtener puntos o saldos:", error);
       toast.error("Error al cargar información de puntos y saldos");
+      setPuntos([]);
+      setSaldos({});
     }
   };
 
@@ -200,30 +227,56 @@ export default function SaldoServientregaAdmin() {
     monto: number,
     punto_id: string
   ) => {
-    try {
-      await axiosInstance.put(`/servientrega/solicitar-saldo/${id}/estado`, {
-        estado,
-        aprobado_por: user?.nombre || "admin",
-      });
+    const solicitud = solicitudes.find((s) => s.id === id);
+    const nombrePunto = solicitud?.punto_atencion_nombre || "punto desconocido";
 
-      if (estado === "APROBADA") {
-        // Actualiza el saldo automáticamente
-        await axiosInstance.post("/servientrega/saldo", {
-          monto_total: monto,
-          creado_por: user?.nombre || "admin",
-          punto_atencion_id: punto_id,
+    const accion = estado === "APROBADA" ? "aprobar" : "rechazar";
+    const mensaje =
+      estado === "APROBADA"
+        ? `¿Está seguro de aprobar la solicitud de $${monto.toLocaleString()} para ${nombrePunto}? Esto asignará automáticamente el saldo.`
+        : `¿Está seguro de rechazar la solicitud de $${monto.toLocaleString()} para ${nombrePunto}?`;
+
+    showConfirmation(`Confirmar ${accion} solicitud`, mensaje, async () => {
+      try {
+        console.log(
+          `📋 ${
+            estado === "APROBADA" ? "Aprobando" : "Rechazando"
+          } solicitud ${id} para ${nombrePunto}`
+        );
+
+        await axiosInstance.put(`/servientrega/solicitar-saldo/${id}/estado`, {
+          estado,
+          aprobado_por: user?.nombre || "admin",
         });
-        toast.success("✅ Solicitud aprobada y saldo actualizado.");
-        obtenerPuntosYSaldo();
-        obtenerHistorial();
-      } else {
-        toast.success("❌ Solicitud rechazada correctamente.");
-      }
 
-      obtenerSolicitudes();
-    } catch {
-      toast.error("❌ Error al responder la solicitud.");
-    }
+        if (estado === "APROBADA") {
+          console.log(
+            `💰 Asignando saldo automáticamente: $${monto} al punto ${punto_id}`
+          );
+          // Actualiza el saldo automáticamente
+          await axiosInstance.post("/servientrega/saldo", {
+            monto_total: monto,
+            creado_por: user?.nombre || "admin",
+            punto_atencion_id: punto_id,
+          });
+          toast.success(
+            `✅ Solicitud aprobada y saldo de $${monto.toLocaleString()} asignado a ${nombrePunto}`
+          );
+
+          // Actualizar todos los datos
+          await Promise.all([obtenerPuntosYSaldo(), obtenerHistorial()]);
+        } else {
+          toast.success(
+            `❌ Solicitud de ${nombrePunto} rechazada correctamente`
+          );
+        }
+
+        obtenerSolicitudes();
+      } catch (error) {
+        console.error(`❌ Error al ${accion} solicitud:`, error);
+        toast.error(`❌ Error al ${accion} la solicitud`);
+      }
+    });
   };
 
   useEffect(() => {
@@ -361,27 +414,48 @@ export default function SaldoServientregaAdmin() {
               }
 
               showConfirmation(
-                "Confirmar asignación de saldo",
+                "Confirmar asignación de saldo Servientrega",
                 `¿Está seguro de asignar $${monto.toLocaleString()} al punto "${
                   punto.nombre
-                }"?`,
+                }" para servicios de Servientrega?`,
                 async () => {
                   setLoadingPuntos((prev) => ({ ...prev, [punto.id]: true }));
                   try {
-                    await axiosInstance.post("/servientrega/saldo", {
-                      monto_total: monto,
-                      creado_por: user?.nombre ?? "admin",
-                      punto_atencion_id: punto.id,
-                    });
+                    console.log(
+                      `💰 Asignando saldo Servientrega: $${monto} al punto ${punto.nombre} (${punto.id})`
+                    );
+
+                    const response = await axiosInstance.post(
+                      "/servientrega/saldo",
+                      {
+                        monto_total: monto,
+                        creado_por: user?.nombre ?? "admin",
+                        punto_atencion_id: punto.id,
+                      }
+                    );
+
+                    console.log(
+                      "✅ Respuesta de asignación de saldo:",
+                      response.data
+                    );
+
                     toast.success(
                       `✅ Saldo de $${monto.toLocaleString()} asignado correctamente a ${
                         punto.nombre
                       }`
                     );
                     setMontosInput((prev) => ({ ...prev, [punto.id]: "" }));
-                    obtenerPuntosYSaldo();
-                    obtenerHistorial();
-                  } catch {
+
+                    // Actualizar datos
+                    await Promise.all([
+                      obtenerPuntosYSaldo(),
+                      obtenerHistorial(),
+                    ]);
+                  } catch (error) {
+                    console.error(
+                      "❌ Error al asignar saldo Servientrega:",
+                      error
+                    );
                     toast.error("Error al asignar saldo");
                   } finally {
                     setLoadingPuntos((prev) => ({
@@ -408,19 +482,26 @@ export default function SaldoServientregaAdmin() {
                 {/* Saldo actual */}
                 <div>
                   <Label className="text-sm font-medium text-gray-600">
-                    Saldo Actual
+                    Saldo Servientrega Disponible
                   </Label>
                   <div
-                    className={`font-semibold text-lg mb-2 ${
+                    className={`font-semibold text-xl mb-2 ${
                       saldoBajoPunto ? "text-red-600" : "text-green-700"
                     }`}
                   >
-                    ${saldoActualPunto.toFixed(2)}
+                    $
+                    {saldoActualPunto.toLocaleString("es-ES", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                     {saldoBajoPunto && (
-                      <span className="ml-2 text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full">
-                        Saldo bajo
+                      <span className="ml-2 text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full animate-pulse">
+                        ⚠️ Saldo bajo
                       </span>
                     )}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Umbral mínimo: ${UMBRAL_SALDO_BAJO.toFixed(2)}
                   </div>
                 </div>
 
@@ -429,11 +510,12 @@ export default function SaldoServientregaAdmin() {
                   <>
                     <div>
                       <Label className="text-sm font-medium text-gray-600">
-                        Asignar Saldo
+                        Asignar Saldo para Servientrega
                       </Label>
                       <Input
                         type="number"
                         step="0.01"
+                        min="0"
                         value={montoInput}
                         onChange={(e) =>
                           setMontosInput((prev) => ({
@@ -443,16 +525,35 @@ export default function SaldoServientregaAdmin() {
                         }
                         placeholder="0.00"
                         className="mt-1"
+                        disabled={loadingPunto}
                       />
                     </div>
                     <Button
                       className="w-full"
                       onClick={handleAsignarSaldoPunto}
-                      disabled={loadingPunto || !montoInput.trim()}
+                      disabled={
+                        loadingPunto ||
+                        !montoInput.trim() ||
+                        parseFloat(montoInput) <= 0
+                      }
                     >
-                      {loadingPunto ? "Asignando..." : "Asignar Saldo"}
+                      {loadingPunto ? (
+                        <>
+                          <span className="animate-spin mr-2">⏳</span>
+                          Asignando...
+                        </>
+                      ) : (
+                        <>💰 Asignar Saldo</>
+                      )}
                     </Button>
                   </>
+                )}
+
+                {/* Información adicional para no-admin */}
+                {!esAdmin && (
+                  <div className="text-center py-2 text-gray-500 text-sm">
+                    👤 Solo los administradores pueden asignar saldos
+                  </div>
                 )}
               </div>
             );

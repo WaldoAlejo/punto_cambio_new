@@ -1,12 +1,18 @@
-import express from 'express';
-import { authenticateToken } from '../middleware/auth.js';
-import { pool } from '../lib/database.js';
+import express from "express";
+import { authenticateToken } from "../middleware/auth.js";
+import { pool } from "../lib/database.js";
 
 const router = express.Router();
 
 // Obtener vista consolidada de saldos por punto
-router.get('/', authenticateToken, async (req, res) => {
+router.get("/", authenticateToken, async (req, res) => {
   try {
+    console.log("🔍 Vista saldos: Iniciando consulta...");
+    console.log("👤 Usuario solicitante:", {
+      id: req.user?.id,
+      rol: req.user?.rol,
+    });
+
     const query = `
       SELECT 
         pa.id as punto_atencion_id,
@@ -31,17 +37,36 @@ router.get('/', authenticateToken, async (req, res) => {
       ORDER BY pa.nombre, m.orden_display, m.nombre
     `;
 
+    console.log("📊 Ejecutando consulta SQL...");
     const result = await pool.query(query);
+
+    console.log(`💰 Saldos encontrados: ${result.rows.length} registros`);
+
+    // Agrupar por punto para mostrar resumen
+    const puntosSummary = result.rows.reduce((acc, row) => {
+      if (!acc[row.punto_atencion_id]) {
+        acc[row.punto_atencion_id] = {
+          nombre: row.punto_nombre,
+          ciudad: row.ciudad,
+          monedas: 0,
+        };
+      }
+      acc[row.punto_atencion_id].monedas++;
+      return acc;
+    }, {});
+
+    console.log("📍 Resumen por puntos:", puntosSummary);
+    console.log("💰 Primeros 5 registros:", result.rows.slice(0, 5));
 
     res.json({
       success: true,
-      saldos: result.rows
+      saldos: result.rows,
     });
   } catch (error) {
-    console.error('Error in balance view route:', error);
+    console.error("❌ Error in balance view route:", error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: "Error interno del servidor",
     });
   }
 });
