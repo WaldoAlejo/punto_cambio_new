@@ -119,6 +119,8 @@ router.get(
         provincia: punto.provincia,
         codigo_postal: punto.codigo_postal,
         telefono: punto.telefono,
+        servientrega_agencia_codigo: punto.servientrega_agencia_codigo,
+        servientrega_agencia_nombre: punto.servientrega_agencia_nombre,
         activo: punto.activo,
         es_principal: punto.es_principal,
         created_at: punto.created_at.toISOString(),
@@ -179,6 +181,8 @@ router.get(
         provincia: punto.provincia,
         codigo_postal: punto.codigo_postal,
         telefono: punto.telefono,
+        servientrega_agencia_codigo: punto.servientrega_agencia_codigo,
+        servientrega_agencia_nombre: punto.servientrega_agencia_nombre,
         activo: punto.activo,
         es_principal: punto.es_principal,
         created_at: punto.created_at.toISOString(),
@@ -218,8 +222,16 @@ router.post(
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
-      const { nombre, direccion, ciudad, provincia, codigo_postal, telefono } =
-        req.body;
+      const {
+        nombre,
+        direccion,
+        ciudad,
+        provincia,
+        codigo_postal,
+        telefono,
+        servientrega_agencia_codigo,
+        servientrega_agencia_nombre,
+      } = req.body;
       if (!nombre || !direccion || !ciudad) {
         res.status(400).json({
           error: "Los campos nombre, dirección y ciudad son obligatorios",
@@ -235,6 +247,8 @@ router.post(
         provincia: provincia || "",
         codigo_postal: codigo_postal || null,
         telefono: telefono || null,
+        servientrega_agencia_codigo: servientrega_agencia_codigo || null,
+        servientrega_agencia_nombre: servientrega_agencia_nombre || null,
         activo: true,
       };
 
@@ -284,6 +298,8 @@ router.put(
         codigo_postal,
         telefono,
         activo,
+        servientrega_agencia_codigo,
+        servientrega_agencia_nombre,
       } = req.body;
 
       const existingPoint = await prisma.puntoAtencion.findUnique({
@@ -317,6 +333,8 @@ router.put(
           provincia: provincia || "",
           codigo_postal: codigo_postal || null,
           telefono: telefono || null,
+          servientrega_agencia_codigo: servientrega_agencia_codigo || null,
+          servientrega_agencia_nombre: servientrega_agencia_nombre || null,
           activo: activo !== undefined ? activo : existingPoint.activo,
         },
       });
@@ -468,6 +486,8 @@ router.get(
         provincia: punto.provincia,
         codigo_postal: punto.codigo_postal,
         telefono: punto.telefono,
+        servientrega_agencia_codigo: punto.servientrega_agencia_codigo,
+        servientrega_agencia_nombre: punto.servientrega_agencia_nombre,
         activo: punto.activo,
         es_principal: punto.es_principal,
         created_at: punto.created_at.toISOString(),

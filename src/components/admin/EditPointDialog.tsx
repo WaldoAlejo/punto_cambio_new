@@ -9,8 +9,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PuntoAtencion } from "../../types";
+import { PuntoAtencion, Agencia } from "../../types";
 import { pointService } from "../../services/pointService";
+import { AgenciaSelector } from "@/components/ui/AgenciaSelector";
 import { toast } from "@/hooks/use-toast";
 
 interface EditPointDialogProps {
@@ -33,6 +34,8 @@ const EditPointDialog = ({
     provincia: point.provincia,
     codigo_postal: point.codigo_postal || "",
     telefono: point.telefono || "",
+    servientrega_agencia_codigo: point.servientrega_agencia_codigo || "",
+    servientrega_agencia_nombre: point.servientrega_agencia_nombre || "",
   });
   const [loading, setLoading] = useState(false);
 
@@ -46,6 +49,8 @@ const EditPointDialog = ({
         provincia: point.provincia,
         codigo_postal: point.codigo_postal || "",
         telefono: point.telefono || "",
+        servientrega_agencia_codigo: point.servientrega_agencia_codigo || "",
+        servientrega_agencia_nombre: point.servientrega_agencia_nombre || "",
       });
     }
   }, [point, isOpen]);
@@ -134,6 +139,18 @@ const EditPointDialog = ({
               disabled={loading}
             />
           </div>
+          <AgenciaSelector
+            value={formData.servientrega_agencia_nombre}
+            onAgenciaSelect={(agencia) => {
+              setFormData({
+                ...formData,
+                servientrega_agencia_codigo: agencia?.tipo_cs || "",
+                servientrega_agencia_nombre: agencia?.nombre || "",
+              });
+            }}
+            placeholder="Seleccionar agencia de Servientrega..."
+            disabled={loading}
+          />
           <DialogFooter className="mt-4 flex gap-2 justify-end">
             <Button
               type="button"

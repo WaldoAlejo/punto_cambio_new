@@ -48,6 +48,13 @@ export interface Moneda {
 // Alias para compatibilidad con currencyService
 export type Currency = Moneda;
 
+export interface Agencia {
+  nombre: string;
+  tipo_cs: string;
+  direccion: string;
+  ciudad: string;
+}
+
 export interface Saldo {
   id: string;
   punto_atencion_id: string;
@@ -368,6 +375,8 @@ export interface CreatePointData {
   provincia?: string;
   codigo_postal?: string;
   telefono?: string;
+  servientrega_agencia_codigo?: string;
+  servientrega_agencia_nombre?: string;
 }
 
 export interface CreateCurrencyData {

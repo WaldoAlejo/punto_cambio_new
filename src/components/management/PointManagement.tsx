@@ -18,11 +18,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { PuntoAtencion } from "../../types";
+import { PuntoAtencion, Agencia } from "../../types";
 import { pointService } from "../../services/pointService";
 import EditPointDialog from "@/components/admin/EditPointDialog";
+import { AgenciaSelector } from "@/components/ui/AgenciaSelector";
 import { Edit } from "lucide-react";
-
 
 export const PointManagement = () => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
@@ -45,7 +45,8 @@ export const PointManagement = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { points: fetchedPoints } = await pointService.getAllPointsForAdmin();
+      const { points: fetchedPoints } =
+        await pointService.getAllPointsForAdmin();
       setPoints(fetchedPoints);
     } catch {
       const errorMessage = "Error al cargar puntos de atención";
@@ -253,19 +254,17 @@ export const PointManagement = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Agencia Servientrega (Opcional)</Label>
-                <Input
-                  placeholder="Seleccione agencia"
-                  value={formData.servientrega_agencia_nombre}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      servientrega_agencia_nombre: e.target.value,
-                    })
-                  }
-                />
-              </div>
+              <AgenciaSelector
+                value={formData.servientrega_agencia_nombre}
+                onAgenciaSelect={(agencia) => {
+                  setFormData({
+                    ...formData,
+                    servientrega_agencia_codigo: agencia?.tipo_cs || "",
+                    servientrega_agencia_nombre: agencia?.nombre || "",
+                  });
+                }}
+                placeholder="Seleccionar agencia de Servientrega..."
+              />
 
               <div className="flex gap-2">
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
