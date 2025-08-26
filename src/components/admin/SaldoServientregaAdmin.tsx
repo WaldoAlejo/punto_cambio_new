@@ -296,12 +296,10 @@ export default function SaldoServientregaAdmin() {
   // ✅ Función de debug para verificar datos
   const debugHistorial = async () => {
     try {
-      const { data } = await axiosInstance.get(
-        "/servientrega/saldo/historial/debug"
-      );
+      const { data } = await axiosInstance.get("/servientrega/saldo/historial");
       console.log("🔧 Debug del historial:", data);
       toast.success(
-        `Debug completado. Ver consola. Total registros: ${data.totalRegistros}`
+        `Debug completado. Ver consola. Total registros: ${data.length}`
       );
     } catch (error) {
       console.error("❌ Error en debug:", error);
@@ -312,9 +310,7 @@ export default function SaldoServientregaAdmin() {
   // ✅ Función para probar conexión a la base de datos
   const testDB = async () => {
     try {
-      const { data } = await axiosInstance.get(
-        "/servientrega/saldo/historial/test-db"
-      );
+      const { data } = await axiosInstance.get("/servientrega/saldo/historial");
       console.log("🔧 Test de DB:", data);
       toast.success("Test de DB completado. Ver consola.");
     } catch (error) {
