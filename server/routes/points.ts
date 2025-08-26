@@ -1,13 +1,56 @@
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, type PuntoAtencion } from "@prisma/client";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
-import "../types/prisma-extensions.js";
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
-// Obtener todos los puntos LIBRES (activos y sin jornada ACTIVO o ALMUERZO hoy)
+/** Campos extra de agencia que quieres exponer sin “augmentar” Prisma globalmente */
+type PuntoAtencionExtra = {
+  servientrega_agencia_codigo?: string | null;
+  servientrega_agencia_nombre?: string | null;
+};
+
+type PuntoAtencionOut = {
+  id: string;
+  nombre: string;
+  direccion: string;
+  ciudad: string;
+  provincia: string;
+  codigo_postal: string | null;
+  telefono: string | null;
+  servientrega_agencia_codigo?: string | null;
+  servientrega_agencia_nombre?: string | null;
+  activo: boolean;
+  es_principal: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+function formatPoint(
+  punto: PuntoAtencion & PuntoAtencionExtra
+): PuntoAtencionOut {
+  return {
+    id: punto.id,
+    nombre: punto.nombre,
+    direccion: punto.direccion,
+    ciudad: punto.ciudad,
+    provincia: punto.provincia,
+    codigo_postal: punto.codigo_postal,
+    telefono: punto.telefono,
+    servientrega_agencia_codigo:
+      (punto as PuntoAtencionExtra).servientrega_agencia_codigo ?? null,
+    servientrega_agencia_nombre:
+      (punto as PuntoAtencionExtra).servientrega_agencia_nombre ?? null,
+    activo: punto.activo,
+    es_principal: punto.es_principal,
+    created_at: punto.created_at.toISOString(),
+    updated_at: punto.updated_at.toISOString(),
+  };
+}
+
+/** Obtener todos los puntos LIBRES (activos y sin jornada ACTIVO o ALMUERZO hoy) */
 router.get(
   "/",
   authenticateToken,
@@ -32,7 +75,7 @@ router.get(
       };
 
       // Si es OPERADOR, excluir el punto principal
-      if (req.user?.rol === "OPERADOR") {
+      if ((req as any).user?.rol === "OPERADOR") {
         whereClause.es_principal = false;
       }
 
@@ -41,25 +84,25 @@ router.get(
         whereClause
       );
       console.log("👤 Points API: Usuario solicitante:", {
-        id: req.user?.id,
-        rol: req.user?.rol,
+        id: (req as any).user?.id,
+        rol: (req as any).user?.rol,
       });
       console.log("📅 Points API: Rango de fechas:", {
         hoy: hoy.toISOString(),
         manana: manana.toISOString(),
       });
 
-      // Primero obtener estadísticas generales
-      const totalPuntos = await prisma.puntoAtencion.count();
-      const puntosActivos = await prisma.puntoAtencion.count({
-        where: { activo: true },
-      });
+      // Stats
+      const [totalPuntos, puntosActivos] = await Promise.all([
+        prisma.puntoAtencion.count(),
+        prisma.puntoAtencion.count({ where: { activo: true } }),
+      ]);
 
       console.log(
         `📊 Points API: Estadísticas - Total: ${totalPuntos}, Activos: ${puntosActivos}`
       );
 
-      // Obtener puntos con jornadas para diagnóstico
+      // Puntos con jornadas para diagnóstico
       const puntosConJornadas = await prisma.puntoAtencion.findMany({
         where: {
           activo: true,
@@ -83,11 +126,11 @@ router.get(
       console.log(
         `🚫 Points API: Puntos con jornadas activas hoy: ${puntosConJornadas.length}`
       );
-      puntosConJornadas.forEach((punto, index) => {
+      puntosConJornadas.forEach((punto: any, index: number) => {
         console.log(
           `  ${index + 1}. ${punto.nombre} - Jornadas: ${punto.jornadas.length}`
         );
-        punto.jornadas.forEach((jornada, jIndex) => {
+        punto.jornadas.forEach((jornada: any, jIndex: number) => {
           console.log(
             `    ${jIndex + 1}. Estado: ${jornada.estado}, Inicio: ${
               jornada.fecha_inicio
@@ -96,6 +139,7 @@ router.get(
         });
       });
 
+      // Puntos libres
       const puntosLibres = await prisma.puntoAtencion.findMany({
         where: whereClause,
         orderBy: { nombre: "asc" },
@@ -104,29 +148,17 @@ router.get(
       console.log(
         `📍 Points API: Puntos libres encontrados: ${puntosLibres.length}`
       );
-      puntosLibres.forEach((punto, index) => {
+      puntosLibres.forEach((p: PuntoAtencion, index: number) => {
         console.log(
-          `  ${index + 1}. ${punto.nombre} - ${punto.ciudad}, ${
-            punto.provincia
-          } (ID: ${punto.id})`
+          `  ${index + 1}. ${p.nombre} - ${p.ciudad}, ${p.provincia} (ID: ${
+            p.id
+          })`
         );
       });
 
-      const formatted = puntosLibres.map((punto) => ({
-        id: punto.id,
-        nombre: punto.nombre,
-        direccion: punto.direccion,
-        ciudad: punto.ciudad,
-        provincia: punto.provincia,
-        codigo_postal: punto.codigo_postal,
-        telefono: punto.telefono,
-        servientrega_agencia_codigo: (punto as any).servientrega_agencia_codigo,
-        servientrega_agencia_nombre: (punto as any).servientrega_agencia_nombre,
-        activo: punto.activo,
-        es_principal: punto.es_principal,
-        created_at: punto.created_at.toISOString(),
-        updated_at: punto.updated_at.toISOString(),
-      }));
+      const formatted: PuntoAtencionOut[] = puntosLibres.map((p) =>
+        formatPoint(p as PuntoAtencion & PuntoAtencionExtra)
+      );
 
       console.log(
         `✅ Puntos formateados para enviar: ${formatted.length}`,
@@ -135,9 +167,9 @@ router.get(
 
       logger.info("Puntos libres obtenidos", {
         count: formatted.length,
-        requestedBy: req.user?.id,
-        userRole: req.user?.rol,
-        filteredForOperator: req.user?.rol === "OPERADOR",
+        requestedBy: (req as any).user?.id,
+        userRole: (req as any).user?.rol,
+        filteredForOperator: (req as any).user?.rol === "OPERADOR",
         whereClause: JSON.stringify(whereClause),
       });
 
@@ -150,7 +182,7 @@ router.get(
       logger.error("Error al obtener puntos libres", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
+        requestedBy: (req as any).user?.id,
       });
 
       res.status(500).json({
@@ -162,7 +194,7 @@ router.get(
   }
 );
 
-// Obtener TODOS los puntos (para admins)
+/** Obtener TODOS los puntos (para admins) — dejar UNA sola ruta /all */
 router.get(
   "/all",
   authenticateToken,
@@ -174,25 +206,13 @@ router.get(
         orderBy: { nombre: "asc" },
       });
 
-      const formatted = todosPuntos.map((punto) => ({
-        id: punto.id,
-        nombre: punto.nombre,
-        direccion: punto.direccion,
-        ciudad: punto.ciudad,
-        provincia: punto.provincia,
-        codigo_postal: punto.codigo_postal,
-        telefono: punto.telefono,
-        servientrega_agencia_codigo: (punto as any).servientrega_agencia_codigo,
-        servientrega_agencia_nombre: (punto as any).servientrega_agencia_nombre,
-        activo: punto.activo,
-        es_principal: punto.es_principal,
-        created_at: punto.created_at.toISOString(),
-        updated_at: punto.updated_at.toISOString(),
-      }));
+      const formatted: PuntoAtencionOut[] = todosPuntos.map((p) =>
+        formatPoint(p as PuntoAtencion & PuntoAtencionExtra)
+      );
 
       logger.info("Todos los puntos obtenidos", {
         count: formatted.length,
-        requestedBy: req.user?.id,
+        requestedBy: (req as any).user?.id,
       });
 
       res.status(200).json({
@@ -204,11 +224,11 @@ router.get(
       logger.error("Error al obtener todos los puntos", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
+        requestedBy: (req as any).user?.id,
       });
 
       res.status(500).json({
-        error: "Error al obtener puntos",
+        error: "Error al obtener todos los puntos",
         success: false,
         timestamp: new Date().toISOString(),
       });
@@ -216,7 +236,7 @@ router.get(
   }
 );
 
-// Crear punto (solo admins/superusuario)
+/** Crear punto (solo admins/superusuario) */
 router.post(
   "/",
   authenticateToken,
@@ -233,6 +253,7 @@ router.post(
         servientrega_agencia_codigo,
         servientrega_agencia_nombre,
       } = req.body;
+
       if (!nombre || !direccion || !ciudad) {
         res.status(400).json({
           error: "Los campos nombre, dirección y ciudad son obligatorios",
@@ -241,13 +262,15 @@ router.post(
         });
         return;
       }
-      const createData = {
+
+      const createData: any = {
         nombre,
         direccion,
         ciudad,
         provincia: provincia || "",
         codigo_postal: codigo_postal || null,
         telefono: telefono || null,
+        // Solo setear si vienen en el body (evita undefined)
         ...(servientrega_agencia_codigo !== undefined && {
           servientrega_agencia_codigo: servientrega_agencia_codigo || null,
         }),
@@ -257,18 +280,16 @@ router.post(
         activo: true,
       };
 
-      const newPoint = await prisma.puntoAtencion.create({
-        data: createData as any,
-      });
+      const newPoint = await prisma.puntoAtencion.create({ data: createData });
 
       logger.info("Punto creado", {
         pointId: newPoint.id,
         nombre: newPoint.nombre,
-        createdBy: req.user?.id,
+        createdBy: (req as any).user?.id,
       });
 
       res.status(201).json({
-        point: newPoint,
+        point: formatPoint(newPoint as PuntoAtencion & PuntoAtencionExtra),
         success: true,
         timestamp: new Date().toISOString(),
       });
@@ -276,7 +297,7 @@ router.post(
       logger.error("Error al crear punto", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
+        requestedBy: (req as any).user?.id,
       });
       res.status(500).json({
         error: "Error al crear punto de atención",
@@ -287,7 +308,7 @@ router.post(
   }
 );
 
-// Actualizar un punto de atención (solo admins/superusuarios)
+/** Actualizar un punto de atención (solo admins/superusuarios) */
 router.put(
   "/:id",
   authenticateToken,
@@ -329,32 +350,34 @@ router.put(
         return;
       }
 
+      const updateData: any = {
+        nombre,
+        direccion,
+        ciudad,
+        provincia: provincia || "",
+        codigo_postal: codigo_postal || null,
+        telefono: telefono || null,
+        ...(servientrega_agencia_codigo !== undefined && {
+          servientrega_agencia_codigo: servientrega_agencia_codigo || null,
+        }),
+        ...(servientrega_agencia_nombre !== undefined && {
+          servientrega_agencia_nombre: servientrega_agencia_nombre || null,
+        }),
+        activo: typeof activo === "boolean" ? activo : existingPoint.activo,
+      };
+
       const updatedPoint = await prisma.puntoAtencion.update({
         where: { id: pointId },
-        data: {
-          nombre,
-          direccion,
-          ciudad,
-          provincia: provincia || "",
-          codigo_postal: codigo_postal || null,
-          telefono: telefono || null,
-          ...(servientrega_agencia_codigo !== undefined && {
-            servientrega_agencia_codigo: servientrega_agencia_codigo || null,
-          }),
-          ...(servientrega_agencia_nombre !== undefined && {
-            servientrega_agencia_nombre: servientrega_agencia_nombre || null,
-          }),
-          activo: activo !== undefined ? activo : existingPoint.activo,
-        } as any,
+        data: updateData,
       });
 
       logger.info("Punto de atención actualizado", {
         pointId: updatedPoint.id,
-        updatedBy: req.user?.id,
+        updatedBy: (req as any).user?.id,
       });
 
       res.status(200).json({
-        point: updatedPoint,
+        point: formatPoint(updatedPoint as PuntoAtencion & PuntoAtencionExtra),
         success: true,
         timestamp: new Date().toISOString(),
       });
@@ -362,7 +385,7 @@ router.put(
       logger.error("Error al actualizar punto de atención", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
+        requestedBy: (req as any).user?.id,
       });
       res.status(500).json({
         error: "Error al actualizar el punto de atención",
@@ -373,7 +396,7 @@ router.put(
   }
 );
 
-// Eliminar un punto de atención (solo admins/superusuarios)
+/** Eliminar un punto de atención (solo admins/superusuarios) */
 router.delete(
   "/:id",
   authenticateToken,
@@ -395,13 +418,11 @@ router.delete(
         return;
       }
 
-      await prisma.puntoAtencion.delete({
-        where: { id: pointId },
-      });
+      await prisma.puntoAtencion.delete({ where: { id: pointId } });
 
       logger.info("Punto de atención eliminado", {
         pointId,
-        deletedBy: req.user?.id,
+        deletedBy: (req as any).user?.id,
       });
 
       res.status(200).json({
@@ -413,7 +434,7 @@ router.delete(
       logger.error("Error al eliminar punto de atención", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
+        requestedBy: (req as any).user?.id,
       });
       res.status(500).json({
         error: "Error al eliminar el punto de atención",
@@ -424,7 +445,7 @@ router.delete(
   }
 );
 
-// Cambiar el estado de un punto (activar/inactivar)
+/** Cambiar el estado de un punto (activar/inactivar) */
 router.patch(
   "/:id/toggle",
   authenticateToken,
@@ -453,11 +474,11 @@ router.patch(
       logger.info("Estado de punto cambiado", {
         pointId: updatedPoint.id,
         newStatus: updatedPoint.activo,
-        requestedBy: req.user?.id,
+        requestedBy: (req as any).user?.id,
       });
 
       res.status(200).json({
-        point: updatedPoint,
+        point: formatPoint(updatedPoint as PuntoAtencion & PuntoAtencionExtra),
         success: true,
         timestamp: new Date().toISOString(),
       });
@@ -465,7 +486,7 @@ router.patch(
       logger.error("Error al cambiar el estado del punto", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
+        requestedBy: (req as any).user?.id,
       });
       res.status(500).json({
         error: "Error al cambiar el estado del punto de atención",
@@ -476,60 +497,7 @@ router.patch(
   }
 );
 
-// Obtener TODOS los puntos (para administradores)
-router.get(
-  "/all",
-  authenticateToken,
-  requireRole(["ADMIN", "SUPER_USUARIO"]),
-  async (req: express.Request, res: express.Response): Promise<void> => {
-    try {
-      const todosPuntos = await prisma.puntoAtencion.findMany({
-        orderBy: { nombre: "asc" },
-      });
-
-      const formatted = todosPuntos.map((punto) => ({
-        id: punto.id,
-        nombre: punto.nombre,
-        direccion: punto.direccion,
-        ciudad: punto.ciudad,
-        provincia: punto.provincia,
-        codigo_postal: punto.codigo_postal,
-        telefono: punto.telefono,
-        servientrega_agencia_codigo: (punto as any).servientrega_agencia_codigo,
-        servientrega_agencia_nombre: (punto as any).servientrega_agencia_nombre,
-        activo: punto.activo,
-        es_principal: punto.es_principal,
-        created_at: punto.created_at.toISOString(),
-        updated_at: punto.updated_at.toISOString(),
-      }));
-
-      logger.info("Todos los puntos obtenidos", {
-        count: formatted.length,
-        requestedBy: req.user?.id,
-      });
-
-      res.status(200).json({
-        points: formatted,
-        success: true,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      logger.error("Error al obtener todos los puntos", {
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
-      });
-
-      res.status(500).json({
-        error: "Error al obtener todos los puntos",
-        success: false,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-);
-
-// Obtener puntos activos para transferencias (no importa si tienen jornadas)
+/** Puntos activos para transferencias (sin filtrar por jornadas) */
 router.get(
   "/active-for-transfers",
   authenticateToken,
@@ -540,23 +508,13 @@ router.get(
         orderBy: { nombre: "asc" },
       });
 
-      const formatted = puntosActivos.map((punto) => ({
-        id: punto.id,
-        nombre: punto.nombre,
-        direccion: punto.direccion,
-        ciudad: punto.ciudad,
-        provincia: punto.provincia,
-        codigo_postal: punto.codigo_postal,
-        telefono: punto.telefono,
-        activo: punto.activo,
-        es_principal: punto.es_principal,
-        created_at: punto.created_at.toISOString(),
-        updated_at: punto.updated_at.toISOString(),
-      }));
+      const formatted: PuntoAtencionOut[] = puntosActivos.map((p) =>
+        formatPoint(p as PuntoAtencion & PuntoAtencionExtra)
+      );
 
       logger.info("Puntos activos para transferencias obtenidos", {
         count: formatted.length,
-        requestedBy: req.user?.id,
+        requestedBy: (req as any).user?.id,
       });
 
       res.status(200).json({
@@ -565,105 +523,14 @@ router.get(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      logger.error("Error al obtener puntos activos para transferencias", {
+      logger.error("Error al obtener puntos activos", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
+        requestedBy: (req as any).user?.id,
       });
 
       res.status(500).json({
         error: "Error al obtener puntos activos",
-        success: false,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  }
-);
-
-// Obtener puntos activos para gestión de saldos (sin filtrar por jornadas)
-router.get(
-  "/for-balance-management",
-  authenticateToken,
-  requireRole(["ADMIN", "SUPER_USUARIO"]),
-  async (req: express.Request, res: express.Response): Promise<void> => {
-    try {
-      console.log(
-        "🔍 Points API (Balance Management): Iniciando consulta de puntos para gestión de saldos..."
-      );
-      console.log("👤 Points API (Balance Management): Usuario solicitante:", {
-        id: req.user?.id,
-        rol: req.user?.rol,
-      });
-
-      // Estadísticas generales
-      const totalPuntos = await prisma.puntoAtencion.count();
-      const puntosActivos = await prisma.puntoAtencion.count({
-        where: { activo: true },
-      });
-
-      console.log(
-        `📊 Points API (Balance Management): Estadísticas - Total: ${totalPuntos}, Activos: ${puntosActivos}`
-      );
-
-      const puntosParaSaldos = await prisma.puntoAtencion.findMany({
-        where: { activo: true },
-        orderBy: { nombre: "asc" },
-      });
-
-      console.log(
-        `📍 Points API (Balance Management): Puntos activos encontrados: ${puntosParaSaldos.length}`
-      );
-      puntosParaSaldos.forEach((punto, index) => {
-        console.log(
-          `  ${index + 1}. ${punto.nombre} - ${punto.ciudad}, ${
-            punto.provincia
-          } (ID: ${punto.id})`
-        );
-      });
-
-      const formatted = puntosParaSaldos.map((punto) => ({
-        id: punto.id,
-        nombre: punto.nombre,
-        direccion: punto.direccion,
-        ciudad: punto.ciudad,
-        provincia: punto.provincia,
-        codigo_postal: punto.codigo_postal,
-        telefono: punto.telefono,
-        activo: punto.activo,
-        es_principal: punto.es_principal,
-        created_at: punto.created_at.toISOString(),
-        updated_at: punto.updated_at.toISOString(),
-      }));
-
-      console.log(
-        `✅ Points API (Balance Management): Enviando ${formatted.length} puntos para gestión de saldos`
-      );
-
-      logger.info("Puntos para gestión de saldos obtenidos", {
-        count: formatted.length,
-        requestedBy: req.user?.id,
-        userRole: req.user?.rol,
-      });
-
-      res.status(200).json({
-        points: formatted,
-        success: true,
-        timestamp: new Date().toISOString(),
-      });
-    } catch (error) {
-      console.error(
-        "❌ Points API (Balance Management): Error al obtener puntos para gestión de saldos:",
-        error
-      );
-
-      logger.error("Error al obtener puntos para gestión de saldos", {
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: req.user?.id,
-      });
-
-      res.status(500).json({
-        error: "Error al obtener puntos para gestión de saldos",
         success: false,
         timestamp: new Date().toISOString(),
       });
