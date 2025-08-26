@@ -99,7 +99,8 @@ export default function SaldoOperador({
       await axiosInstance.post("/servientrega/solicitar-saldo", {
         punto_atencion_id: puntoAtencionId,
         monto_solicitado: Number(montoSolicitado),
-        observaciones: observaciones.trim() || undefined,
+        observaciones: observaciones.trim() || "",
+        creado_por: "Operador",
       });
 
       toast.success("Solicitud de saldo enviada al administrador");

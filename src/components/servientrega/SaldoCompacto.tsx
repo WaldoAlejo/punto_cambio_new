@@ -70,6 +70,7 @@ export default function SaldoCompacto({
         punto_atencion_id: puntoAtencionId,
         monto_solicitado: 50, // Monto por defecto
         observaciones: "Solicitud rápida desde listado de guías",
+        creado_por: "Operador",
       });
       toast.success("Solicitud de saldo enviada");
     } catch (error) {

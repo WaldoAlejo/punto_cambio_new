@@ -180,6 +180,8 @@ export default function PasoConfirmarEnvio({
       await axiosInstance.post("/servientrega/solicitar-saldo", {
         punto_atencion_id: formData.punto_atencion_id,
         monto_solicitado: formData.resumen_costos.total,
+        observaciones: "Solicitud desde generación de guía",
+        creado_por: "Operador",
       });
       toast.success("Solicitud de saldo enviada al administrador.");
     } catch (err) {

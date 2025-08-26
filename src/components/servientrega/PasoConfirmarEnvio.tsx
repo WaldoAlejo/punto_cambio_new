@@ -176,6 +176,7 @@ export default function PasoConfirmarEnvio({
         observaciones: `Solicitud automática para generar guía. Costo estimado: $${formData?.resumen_costos?.total?.toFixed(
           2
         )}`,
+        creado_por: "Sistema",
       });
       toast.success("Solicitud de saldo enviada al administrador.");
       setConfirmOpen(false);
