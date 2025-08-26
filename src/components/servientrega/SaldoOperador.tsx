@@ -98,7 +98,7 @@ export default function SaldoOperador({
     try {
       await axiosInstance.post("/servientrega/solicitar-saldo", {
         punto_atencion_id: puntoAtencionId,
-        monto_requerido: Number(montoSolicitado),
+        monto_solicitado: Number(montoSolicitado),
         observaciones: observaciones.trim() || undefined,
       });
 

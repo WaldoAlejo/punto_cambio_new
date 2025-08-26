@@ -68,7 +68,7 @@ export default function SaldoCompacto({
     try {
       await axiosInstance.post("/servientrega/solicitar-saldo", {
         punto_atencion_id: puntoAtencionId,
-        monto_requerido: 50, // Monto por defecto
+        monto_solicitado: 50, // Monto por defecto
         observaciones: "Solicitud rápida desde listado de guías",
       });
       toast.success("Solicitud de saldo enviada");

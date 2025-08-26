@@ -179,7 +179,7 @@ export default function PasoConfirmarEnvio({
     try {
       await axiosInstance.post("/servientrega/solicitar-saldo", {
         punto_atencion_id: formData.punto_atencion_id,
-        monto_requerido: formData.resumen_costos.total,
+        monto_solicitado: formData.resumen_costos.total,
       });
       toast.success("Solicitud de saldo enviada al administrador.");
     } catch (err) {

@@ -172,7 +172,7 @@ export default function PasoConfirmarEnvio({
 
       await axiosInstance.post("/servientrega/solicitar-saldo", {
         punto_atencion_id: formData?.punto_atencion_id || "",
-        monto_requerido: montoRequerido,
+        monto_solicitado: montoRequerido,
         observaciones: `Solicitud automática para generar guía. Costo estimado: $${formData?.resumen_costos?.total?.toFixed(
           2
         )}`,
