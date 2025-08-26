@@ -1,3 +1,8 @@
+// IMPORTANTE: Después de hacer pull, ejecutar:
+// 1. npm run migrate:agencias (para aplicar migración de campos Servientrega)
+// 2. npx prisma generate (para regenerar cliente Prisma)
+// 3. npm run seed:complete (para ejecutar seed sin errores)
+
 generator client {
   provider = "prisma-client-js"
 }

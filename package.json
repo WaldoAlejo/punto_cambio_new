@@ -31,7 +31,7 @@
     "pm2:restart": "pm2 restart punto-cambio-api",
     "pm2:logs": "pm2 logs punto-cambio-api",
     "pm2:status": "pm2 status",
-    "migrate:agencias": "npx tsx apply-migration.js"
+    "migrate:agencias": "npx prisma db push"
   },
   "prisma": {
     "seed": "tsx prisma/seed-casa-cambios.ts"
