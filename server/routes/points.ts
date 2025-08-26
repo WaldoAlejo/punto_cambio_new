@@ -182,8 +182,8 @@ router.get(
         provincia: punto.provincia,
         codigo_postal: punto.codigo_postal,
         telefono: punto.telefono,
-        servientrega_agencia_codigo: punto.servientrega_agencia_codigo,
-        servientrega_agencia_nombre: punto.servientrega_agencia_nombre,
+        servientrega_agencia_codigo: (punto as any).servientrega_agencia_codigo,
+        servientrega_agencia_nombre: (punto as any).servientrega_agencia_nombre,
         activo: punto.activo,
         es_principal: punto.es_principal,
         created_at: punto.created_at.toISOString(),
@@ -248,13 +248,17 @@ router.post(
         provincia: provincia || "",
         codigo_postal: codigo_postal || null,
         telefono: telefono || null,
-        servientrega_agencia_codigo: servientrega_agencia_codigo || null,
-        servientrega_agencia_nombre: servientrega_agencia_nombre || null,
+        ...(servientrega_agencia_codigo !== undefined && {
+          servientrega_agencia_codigo: servientrega_agencia_codigo || null,
+        }),
+        ...(servientrega_agencia_nombre !== undefined && {
+          servientrega_agencia_nombre: servientrega_agencia_nombre || null,
+        }),
         activo: true,
       };
 
       const newPoint = await prisma.puntoAtencion.create({
-        data: createData,
+        data: createData as any,
       });
 
       logger.info("Punto creado", {
@@ -334,10 +338,14 @@ router.put(
           provincia: provincia || "",
           codigo_postal: codigo_postal || null,
           telefono: telefono || null,
-          servientrega_agencia_codigo: servientrega_agencia_codigo || null,
-          servientrega_agencia_nombre: servientrega_agencia_nombre || null,
+          ...(servientrega_agencia_codigo !== undefined && {
+            servientrega_agencia_codigo: servientrega_agencia_codigo || null,
+          }),
+          ...(servientrega_agencia_nombre !== undefined && {
+            servientrega_agencia_nombre: servientrega_agencia_nombre || null,
+          }),
           activo: activo !== undefined ? activo : existingPoint.activo,
-        },
+        } as any,
       });
 
       logger.info("Punto de atención actualizado", {
@@ -487,8 +495,8 @@ router.get(
         provincia: punto.provincia,
         codigo_postal: punto.codigo_postal,
         telefono: punto.telefono,
-        servientrega_agencia_codigo: punto.servientrega_agencia_codigo,
-        servientrega_agencia_nombre: punto.servientrega_agencia_nombre,
+        servientrega_agencia_codigo: (punto as any).servientrega_agencia_codigo,
+        servientrega_agencia_nombre: (punto as any).servientrega_agencia_nombre,
         activo: punto.activo,
         es_principal: punto.es_principal,
         created_at: punto.created_at.toISOString(),
