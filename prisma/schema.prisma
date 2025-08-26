@@ -48,17 +48,19 @@ model Usuario {
 }
 
 model PuntoAtencion {
-  id            String   @id @default(uuid())
-  nombre        String
-  direccion     String
-  ciudad        String
-  provincia     String
-  codigo_postal String?
-  telefono      String?
-  activo        Boolean  @default(true)
-  es_principal  Boolean  @default(false)
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
+  id                          String   @id @default(uuid())
+  nombre                      String
+  direccion                   String
+  ciudad                      String
+  provincia                   String
+  codigo_postal               String?
+  telefono                    String?
+  servientrega_agencia_codigo String?
+  servientrega_agencia_nombre String?
+  activo                      Boolean  @default(true)
+  es_principal                Boolean  @default(false)
+  created_at                  DateTime @default(now())
+  updated_at                  DateTime @updatedAt
 
   usuarios                        Usuario[]
   saldos                          Saldo[]

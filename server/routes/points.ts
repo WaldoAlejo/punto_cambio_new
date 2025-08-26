@@ -2,6 +2,7 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
+import "../types/prisma-extensions.js";
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -119,8 +120,8 @@ router.get(
         provincia: punto.provincia,
         codigo_postal: punto.codigo_postal,
         telefono: punto.telefono,
-        servientrega_agencia_codigo: punto.servientrega_agencia_codigo,
-        servientrega_agencia_nombre: punto.servientrega_agencia_nombre,
+        servientrega_agencia_codigo: (punto as any).servientrega_agencia_codigo,
+        servientrega_agencia_nombre: (punto as any).servientrega_agencia_nombre,
         activo: punto.activo,
         es_principal: punto.es_principal,
         created_at: punto.created_at.toISOString(),
