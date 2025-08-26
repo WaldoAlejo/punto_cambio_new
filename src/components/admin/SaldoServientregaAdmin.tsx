@@ -490,7 +490,7 @@ export default function SaldoServientregaAdmin() {
                                 <strong>💰 Monto solicitado:</strong>
                               </p>
                               <p className="text-xl font-bold text-green-600">
-                                ${sol.monto_requerido.toFixed(2)}
+                                ${Number(sol.monto_requerido).toFixed(2)}
                               </p>
                             </div>
                             <div>
@@ -602,7 +602,7 @@ export default function SaldoServientregaAdmin() {
                                 </div>
                                 <p className="text-sm text-gray-600">
                                   <strong>Monto:</strong> $
-                                  {sol.monto_requerido.toFixed(2)} |
+                                  {Number(sol.monto_requerido).toFixed(2)} |
                                   <strong> Fecha:</strong>{" "}
                                   {new Date(sol.creado_en).toLocaleDateString()}
                                   {sol.aprobado_por && (
