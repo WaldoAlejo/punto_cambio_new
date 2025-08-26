@@ -35,7 +35,65 @@ router.get(
         whereClause.es_principal = false;
       }
 
-      console.log("🔍 Consultando puntos con filtros:", whereClause);
+      console.log(
+        "🔍 Points API: Consultando puntos con filtros:",
+        whereClause
+      );
+      console.log("👤 Points API: Usuario solicitante:", {
+        id: req.user?.id,
+        rol: req.user?.rol,
+      });
+      console.log("📅 Points API: Rango de fechas:", {
+        hoy: hoy.toISOString(),
+        manana: manana.toISOString(),
+      });
+
+      // Primero obtener estadísticas generales
+      const totalPuntos = await prisma.puntoAtencion.count();
+      const puntosActivos = await prisma.puntoAtencion.count({
+        where: { activo: true },
+      });
+
+      console.log(
+        `📊 Points API: Estadísticas - Total: ${totalPuntos}, Activos: ${puntosActivos}`
+      );
+
+      // Obtener puntos con jornadas para diagnóstico
+      const puntosConJornadas = await prisma.puntoAtencion.findMany({
+        where: {
+          activo: true,
+          jornadas: {
+            some: {
+              estado: { in: ["ACTIVO", "ALMUERZO"] },
+              fecha_inicio: { gte: hoy, lt: manana },
+            },
+          },
+        },
+        include: {
+          jornadas: {
+            where: {
+              estado: { in: ["ACTIVO", "ALMUERZO"] },
+              fecha_inicio: { gte: hoy, lt: manana },
+            },
+          },
+        },
+      });
+
+      console.log(
+        `🚫 Points API: Puntos con jornadas activas hoy: ${puntosConJornadas.length}`
+      );
+      puntosConJornadas.forEach((punto, index) => {
+        console.log(
+          `  ${index + 1}. ${punto.nombre} - Jornadas: ${punto.jornadas.length}`
+        );
+        punto.jornadas.forEach((jornada, jIndex) => {
+          console.log(
+            `    ${jIndex + 1}. Estado: ${jornada.estado}, Inicio: ${
+              jornada.fecha_inicio
+            }`
+          );
+        });
+      });
 
       const puntosLibres = await prisma.puntoAtencion.findMany({
         where: whereClause,
@@ -43,14 +101,15 @@ router.get(
       });
 
       console.log(
-        `📍 Puntos encontrados en BD: ${puntosLibres.length}`,
-        puntosLibres.map((p) => ({
-          id: p.id,
-          nombre: p.nombre,
-          activo: p.activo,
-          es_principal: p.es_principal,
-        }))
+        `📍 Points API: Puntos libres encontrados: ${puntosLibres.length}`
       );
+      puntosLibres.forEach((punto, index) => {
+        console.log(
+          `  ${index + 1}. ${punto.nombre} - ${punto.ciudad}, ${
+            punto.provincia
+          } (ID: ${punto.id})`
+        );
+      });
 
       const formatted = puntosLibres.map((punto) => ({
         id: punto.id,
@@ -485,6 +544,97 @@ router.get(
 
       res.status(500).json({
         error: "Error al obtener puntos activos",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
+// Obtener puntos activos para gestión de saldos (sin filtrar por jornadas)
+router.get(
+  "/for-balance-management",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    try {
+      console.log(
+        "🔍 Points API (Balance Management): Iniciando consulta de puntos para gestión de saldos..."
+      );
+      console.log("👤 Points API (Balance Management): Usuario solicitante:", {
+        id: req.user?.id,
+        rol: req.user?.rol,
+      });
+
+      // Estadísticas generales
+      const totalPuntos = await prisma.puntoAtencion.count();
+      const puntosActivos = await prisma.puntoAtencion.count({
+        where: { activo: true },
+      });
+
+      console.log(
+        `📊 Points API (Balance Management): Estadísticas - Total: ${totalPuntos}, Activos: ${puntosActivos}`
+      );
+
+      const puntosParaSaldos = await prisma.puntoAtencion.findMany({
+        where: { activo: true },
+        orderBy: { nombre: "asc" },
+      });
+
+      console.log(
+        `📍 Points API (Balance Management): Puntos activos encontrados: ${puntosParaSaldos.length}`
+      );
+      puntosParaSaldos.forEach((punto, index) => {
+        console.log(
+          `  ${index + 1}. ${punto.nombre} - ${punto.ciudad}, ${
+            punto.provincia
+          } (ID: ${punto.id})`
+        );
+      });
+
+      const formatted = puntosParaSaldos.map((punto) => ({
+        id: punto.id,
+        nombre: punto.nombre,
+        direccion: punto.direccion,
+        ciudad: punto.ciudad,
+        provincia: punto.provincia,
+        codigo_postal: punto.codigo_postal,
+        telefono: punto.telefono,
+        activo: punto.activo,
+        es_principal: punto.es_principal,
+        created_at: punto.created_at.toISOString(),
+        updated_at: punto.updated_at.toISOString(),
+      }));
+
+      console.log(
+        `✅ Points API (Balance Management): Enviando ${formatted.length} puntos para gestión de saldos`
+      );
+
+      logger.info("Puntos para gestión de saldos obtenidos", {
+        count: formatted.length,
+        requestedBy: req.user?.id,
+        userRole: req.user?.rol,
+      });
+
+      res.status(200).json({
+        points: formatted,
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error(
+        "❌ Points API (Balance Management): Error al obtener puntos para gestión de saldos:",
+        error
+      );
+
+      logger.error("Error al obtener puntos para gestión de saldos", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id,
+      });
+
+      res.status(500).json({
+        error: "Error al obtener puntos para gestión de saldos",
         success: false,
         timestamp: new Date().toISOString(),
       });

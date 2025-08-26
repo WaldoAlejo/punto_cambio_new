@@ -97,6 +97,48 @@ export const pointService = {
     }
   },
 
+  async getPointsForBalanceManagement() {
+    try {
+      console.log(
+        "🔍 pointService.getPointsForBalanceManagement: Iniciando solicitud..."
+      );
+      const response = await apiService.get<PointsResponse>(
+        "/points/for-balance-management"
+      );
+      console.log(
+        "📍 pointService.getPointsForBalanceManagement: Respuesta recibida:",
+        response
+      );
+
+      if (!response || !response.success) {
+        console.error(
+          "❌ getPointsForBalanceManagement - Error:",
+          response?.error
+        );
+        return {
+          points: [],
+          error:
+            response?.error || "Error al obtener puntos para gestión de saldos",
+        };
+      }
+
+      console.log(
+        `✅ getPointsForBalanceManagement: ${
+          response.points?.length || 0
+        } puntos obtenidos:`,
+        response.points?.map((p) => ({
+          id: p.id,
+          nombre: p.nombre,
+          ciudad: p.ciudad,
+        }))
+      );
+      return { points: response.points, error: null };
+    } catch (error) {
+      console.error("❌ getPointsForBalanceManagement ERROR:", error);
+      return { points: [], error: "Error de conexión con el servidor" };
+    }
+  },
+
   async createPoint(pointData: CreatePointData) {
     try {
       const response = await apiService.post<PointResponse>(

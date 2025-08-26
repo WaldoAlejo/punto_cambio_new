@@ -334,13 +334,14 @@ export interface Schedule {
 }
 
 // Tipos de respuesta de la API
-export interface ApiResponse<T> {
+export interface ApiResponse<T = any> {
   success: boolean;
+  data?: T;
   error?: string;
   timestamp?: string;
 }
 
-export interface ListResponse<T> extends ApiResponse<T> {
+export interface ListResponse<T> extends Omit<ApiResponse<T>, "data"> {
   data?: T[];
 }
 
