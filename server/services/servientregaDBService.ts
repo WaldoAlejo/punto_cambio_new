@@ -204,15 +204,33 @@ export class ServientregaDBService {
   async gestionarSaldo(data: SaldoData) {
     const { punto_atencion_id, monto_total, creado_por } = data;
 
+    // Obtener información del punto de atención
+    const puntoAtencion = await prisma.puntoAtencion.findUnique({
+      where: { id: punto_atencion_id },
+      select: { nombre: true },
+    });
+
     const existente = await prisma.servientregaSaldo.findUnique({
       where: { punto_atencion_id },
+    });
+
+    // Registrar en el historial cada asignación de saldo
+    await prisma.servientregaHistorialSaldo.create({
+      data: {
+        punto_atencion_id,
+        punto_atencion_nombre: puntoAtencion?.nombre || "Punto desconocido",
+        monto_total: new Prisma.Decimal(monto_total),
+        creado_por: creado_por || "SYSTEM",
+      },
     });
 
     return existente
       ? await prisma.servientregaSaldo.update({
           where: { punto_atencion_id },
           data: {
-            monto_total: new Prisma.Decimal(monto_total),
+            monto_total: existente.monto_total.add(
+              new Prisma.Decimal(monto_total)
+            ),
             updated_at: new Date(),
           },
         })
@@ -239,14 +257,14 @@ export class ServientregaDBService {
   }
 
   async obtenerHistorialSaldos() {
-    const historial = await prisma.servientregaSaldo.findMany({
+    const historial = await prisma.servientregaHistorialSaldo.findMany({
       select: {
         id: true,
         monto_total: true,
-        monto_usado: true,
-        created_at: true,
-        updated_at: true,
+        creado_por: true,
+        creado_en: true,
         punto_atencion_id: true,
+        punto_atencion_nombre: true,
         punto_atencion: {
           select: {
             id: true,
@@ -256,13 +274,12 @@ export class ServientregaDBService {
           },
         },
       },
-      orderBy: { created_at: "desc" },
+      orderBy: { creado_en: "desc" },
     });
 
     return historial.map((item) => ({
       ...item,
-      disponible: item.monto_total.sub(item.monto_usado),
-      punto_nombre: item.punto_atencion?.nombre,
+      punto_nombre: item.punto_atencion?.nombre || item.punto_atencion_nombre,
       punto_ubicacion: `${item.punto_atencion?.ciudad}, ${item.punto_atencion?.provincia}`,
     }));
   }
