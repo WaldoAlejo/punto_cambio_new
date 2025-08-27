@@ -14,7 +14,14 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format, parseISO, subDays } from "date-fns";
-import { CheckCircle, XCircle, Clock, Eye } from "lucide-react";
+import {
+  CheckCircle,
+  XCircle,
+  Clock,
+  Eye,
+  RefreshCw,
+  AlertTriangle,
+} from "lucide-react";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Loading } from "@/components/ui/loading";
 import { SolicitudAnulacionGuia } from "@/types/servientrega";
@@ -77,10 +84,21 @@ export const ServientregaAnulaciones = ({
       } else {
         setSolicitudes([]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error al cargar solicitudes:", err);
-      setError("Error al cargar las solicitudes de anulación.");
-      toast.error("No se pudieron cargar las solicitudes.");
+
+      if (err.response?.status === 404) {
+        setError(
+          "Los endpoints de anulaciones de Servientrega no están disponibles en el backend."
+        );
+        toast.warning(
+          "Funcionalidad de anulaciones no disponible. Contacte al administrador."
+        );
+      } else {
+        setError("Error al cargar las solicitudes de anulación.");
+        toast.error("No se pudieron cargar las solicitudes.");
+      }
+
       setSolicitudes([]);
     } finally {
       setLoading(false);
@@ -217,10 +235,45 @@ export const ServientregaAnulaciones = ({
             <Loading text="Cargando solicitudes..." className="py-8" />
           ) : error ? (
             <div className="text-center py-8">
-              <p className="text-destructive mb-4">{error}</p>
-              <Button onClick={fetchSolicitudes} variant="outline">
-                Reintentar
-              </Button>
+              {error.includes("no están disponibles") ? (
+                <Card className="border-yellow-200 bg-yellow-50 max-w-md mx-auto">
+                  <CardContent className="p-6 text-center">
+                    <div className="flex flex-col items-center space-y-4">
+                      <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center">
+                        <AlertTriangle className="w-8 h-8 text-yellow-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-yellow-800 mb-2">
+                          Funcionalidad en Desarrollo
+                        </h3>
+                        <p className="text-yellow-700 mb-4">
+                          Las anulaciones de Servientrega aún no están
+                          disponibles en el backend.
+                        </p>
+                        <p className="text-sm text-yellow-600">
+                          Esta funcionalidad será habilitada próximamente.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={fetchSolicitudes}
+                        variant="outline"
+                        className="border-yellow-300 text-yellow-700 hover:bg-yellow-100"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Reintentar
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div>
+                  <p className="text-destructive mb-4">{error}</p>
+                  <Button onClick={fetchSolicitudes} variant="outline">
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Reintentar
+                  </Button>
+                </div>
+              )}
             </div>
           ) : solicitudesFiltradas.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">

@@ -18,6 +18,7 @@ import ServientregaMain from "../servientrega/ServientregaMain";
 import SaldoServientregaAdmin from "../admin/SaldoServientregaAdmin";
 import ServientregaAnulaciones from "../admin/ServientregaAnulaciones";
 import ServientregaInformes from "../admin/ServientregaInformes";
+import ContabilidadDashboard from "../contabilidad/ContabilidadDashboard";
 import { Unauthorized } from "../ui/unauthorized";
 import { PointSelector } from "./PointSelector";
 import { User, PuntoAtencion } from "../../types";
@@ -126,6 +127,15 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isAdmin) return <div>Sin permisos</div>;
         return (
           <ServientregaInformes user={user} selectedPoint={selectedPoint} />
+        );
+      case "contabilidad-divisas":
+        if (!isAdmin && !isOperador) return <div>Sin permisos</div>;
+        return (
+          <ContabilidadDashboard
+            user={user}
+            selectedPoint={selectedPoint}
+            currencies={[]} // Se cargarán internamente
+          />
         );
 
       default:

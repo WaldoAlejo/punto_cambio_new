@@ -81,29 +81,7 @@ export interface SaldoInicial {
   puntoAtencion?: PuntoAtencion;
 }
 
-export interface MovimientoSaldo {
-  id: string;
-  punto_atencion_id: string;
-  moneda_id: string;
-  tipo_movimiento:
-    | "INGRESO"
-    | "EGRESO"
-    | "TRANSFERENCIA_ENTRANTE"
-    | "TRANSFERENCIA_SALIENTE"
-    | "CAMBIO_DIVISA";
-  monto: number;
-  saldo_anterior: number;
-  saldo_nuevo: number;
-  usuario_id: string;
-  referencia_id?: string;
-  tipo_referencia?: string;
-  descripcion?: string;
-  fecha: string;
-  created_at: string;
-  moneda?: Moneda;
-  usuario?: Usuario;
-  puntoAtencion?: PuntoAtencion;
-}
+// MovimientoSaldo se define más abajo en la sección de tipos contables
 
 export interface VistaSaldosPorPunto {
   punto_atencion_id: string;
@@ -397,6 +375,71 @@ export interface CreateTransferData {
     | "RETIRO_GERENCIA"
     | "DEPOSITO_GERENCIA";
   origen_id?: string;
+}
+
+// ===== TIPOS PARA SISTEMA CONTABLE =====
+
+export interface MovimientoContableData {
+  punto_atencion_id: string;
+  moneda_id: string;
+  tipo_movimiento:
+    | "INGRESO"
+    | "EGRESO"
+    | "TRANSFERENCIA_ENTRANTE"
+    | "TRANSFERENCIA_SALIENTE"
+    | "CAMBIO_DIVISA";
+  monto: number;
+  usuario_id: string;
+  referencia_id: string;
+  tipo_referencia: "CAMBIO_DIVISA" | "TRANSFERENCIA" | "AJUSTE_MANUAL";
+  descripcion: string;
+}
+
+export interface MovimientoSaldo {
+  id: string;
+  punto_atencion_id: string;
+  moneda_id: string;
+  moneda_codigo: string;
+  tipo_movimiento:
+    | "INGRESO"
+    | "EGRESO"
+    | "TRANSFERENCIA_ENTRANTE"
+    | "TRANSFERENCIA_SALIENTE"
+    | "CAMBIO_DIVISA";
+  monto: number;
+  saldo_anterior: number;
+  saldo_nuevo: number;
+  usuario_id: string;
+  usuario_nombre?: string;
+  referencia_id: string;
+  tipo_referencia: "CAMBIO_DIVISA" | "TRANSFERENCIA" | "AJUSTE_MANUAL";
+  descripcion: string;
+  fecha: string;
+  created_at: string;
+  // Propiedades opcionales para relaciones
+  moneda?: Moneda;
+  usuario?: Usuario;
+  puntoAtencion?: PuntoAtencion;
+}
+
+export interface SaldoActual {
+  moneda_id: string;
+  moneda_codigo: string;
+  saldo: number;
+}
+
+export interface SaldoActualizado {
+  moneda_id: string;
+  saldo_anterior: number;
+  saldo_nuevo: number;
+  diferencia: number;
+}
+
+export interface ResultadoMovimientoContable {
+  movimientos: MovimientoSaldo[];
+  saldos_actualizados: SaldoActualizado[];
+  success: boolean;
+  message: string;
 }
 
 export interface CreateExchangeData {

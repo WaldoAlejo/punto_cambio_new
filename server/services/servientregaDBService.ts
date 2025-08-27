@@ -422,4 +422,217 @@ export class ServientregaDBService {
 
     return puntos;
   }
+
+  // ===== INFORMES Y ESTADÍSTICAS =====
+  async obtenerGuiasConFiltros(filtros: {
+    desde?: string;
+    hasta?: string;
+    estado?: string;
+    punto_atencion_id?: string;
+  }) {
+    const where: any = {};
+
+    // Filtro por fechas
+    if (filtros.desde || filtros.hasta) {
+      where.created_at = {};
+      if (filtros.desde) {
+        where.created_at.gte = new Date(filtros.desde);
+      }
+      if (filtros.hasta) {
+        where.created_at.lte = new Date(filtros.hasta);
+      }
+    }
+
+    // Filtro por estado
+    if (filtros.estado && filtros.estado !== "TODOS") {
+      switch (filtros.estado) {
+        case "ACTIVA":
+          where.proceso = { not: "Anulada" };
+          break;
+        case "ANULADA":
+          where.proceso = "Anulada";
+          break;
+        case "PENDIENTE_ANULACION":
+          where.proceso = "Pendiente_Anulacion";
+          break;
+      }
+    }
+
+    // Filtro por punto de atención
+    if (filtros.punto_atencion_id && filtros.punto_atencion_id !== "TODOS") {
+      where.punto_atencion_id = filtros.punto_atencion_id;
+    }
+
+    return prisma.servientregaGuia.findMany({
+      where,
+      include: {
+        remitente: true,
+        destinatario: true,
+        punto_atencion: {
+          select: {
+            id: true,
+            nombre: true,
+            ciudad: true,
+            provincia: true,
+          },
+        },
+      },
+      orderBy: { created_at: "desc" },
+    });
+  }
+
+  async obtenerEstadisticasGuias(filtros: { desde?: string; hasta?: string }) {
+    const where: any = {};
+
+    // Filtro por fechas
+    if (filtros.desde || filtros.hasta) {
+      where.created_at = {};
+      if (filtros.desde) {
+        where.created_at.gte = new Date(filtros.desde);
+      }
+      if (filtros.hasta) {
+        where.created_at.lte = new Date(filtros.hasta);
+      }
+    }
+
+    // Obtener estadísticas generales
+    const [totalGuias, guiasActivas, guiasAnuladas, guiasPendientes] =
+      await Promise.all([
+        prisma.servientregaGuia.count({ where }),
+        prisma.servientregaGuia.count({
+          where: { ...where, proceso: { not: "Anulada" } },
+        }),
+        prisma.servientregaGuia.count({
+          where: { ...where, proceso: "Anulada" },
+        }),
+        prisma.servientregaGuia.count({
+          where: { ...where, proceso: "Pendiente_Anulacion" },
+        }),
+      ]);
+
+    // Obtener estadísticas por punto de atención
+    const guiasPorPunto = await prisma.servientregaGuia.groupBy({
+      by: ["punto_atencion_id"],
+      where,
+      _count: {
+        id: true,
+      },
+      _sum: {
+        valor_declarado: true,
+        costo_envio: true,
+      },
+    });
+
+    // Enriquecer con información de puntos de atención
+    const totalPorPunto = await Promise.all(
+      guiasPorPunto.map(async (grupo) => {
+        const punto = await prisma.puntoAtencion.findUnique({
+          where: { id: grupo.punto_atencion_id || "" },
+          select: { nombre: true },
+        });
+
+        const [activas, anuladas] = await Promise.all([
+          prisma.servientregaGuia.count({
+            where: {
+              ...where,
+              punto_atencion_id: grupo.punto_atencion_id,
+              proceso: { not: "Anulada" },
+            },
+          }),
+          prisma.servientregaGuia.count({
+            where: {
+              ...where,
+              punto_atencion_id: grupo.punto_atencion_id,
+              proceso: "Anulada",
+            },
+          }),
+        ]);
+
+        return {
+          punto_atencion_nombre: punto?.nombre || "Punto desconocido",
+          total: grupo._count.id,
+          activas,
+          anuladas,
+          valor_total: parseFloat(
+            grupo._sum.valor_declarado?.toString() || "0"
+          ),
+          costo_total: parseFloat(grupo._sum.costo_envio?.toString() || "0"),
+        };
+      })
+    );
+
+    return {
+      total_guias: totalGuias,
+      guias_activas: guiasActivas,
+      guias_anuladas: guiasAnuladas,
+      guias_pendientes_anulacion: guiasPendientes,
+      total_por_punto: totalPorPunto,
+    };
+  }
+
+  // ===== SOLICITUDES DE ANULACIÓN =====
+  async obtenerSolicitudesAnulacion(filtros: {
+    desde?: string;
+    hasta?: string;
+    estado?: string;
+  }) {
+    const where: any = {};
+
+    // Filtro por fechas
+    if (filtros.desde || filtros.hasta) {
+      where.fecha_solicitud = {};
+      if (filtros.desde) {
+        where.fecha_solicitud.gte = new Date(filtros.desde);
+      }
+      if (filtros.hasta) {
+        where.fecha_solicitud.lte = new Date(filtros.hasta);
+      }
+    }
+
+    // Filtro por estado
+    if (filtros.estado && filtros.estado !== "TODOS") {
+      where.estado = filtros.estado;
+    }
+
+    return prisma.servientregaSolicitudAnulacion.findMany({
+      where,
+      orderBy: { fecha_solicitud: "desc" },
+    });
+  }
+
+  async crearSolicitudAnulacion(data: {
+    guia_id: string;
+    numero_guia: string;
+    motivo_anulacion: string;
+    solicitado_por: string;
+    solicitado_por_nombre: string;
+  }) {
+    return prisma.servientregaSolicitudAnulacion.create({
+      data: {
+        guia_id: data.guia_id,
+        numero_guia: data.numero_guia,
+        motivo_anulacion: data.motivo_anulacion,
+        estado: "PENDIENTE",
+        solicitado_por: data.solicitado_por,
+        solicitado_por_nombre: data.solicitado_por_nombre,
+        fecha_solicitud: new Date(),
+      },
+    });
+  }
+
+  async actualizarSolicitudAnulacion(
+    id: string,
+    data: {
+      estado?: string;
+      respondido_por?: string;
+      respondido_por_nombre?: string;
+      observaciones_respuesta?: string;
+      fecha_respuesta?: Date;
+    }
+  ) {
+    return prisma.servientregaSolicitudAnulacion.update({
+      where: { id },
+      data,
+    });
+  }
 }

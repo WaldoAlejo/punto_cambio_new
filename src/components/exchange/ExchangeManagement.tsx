@@ -5,6 +5,7 @@ import { useExchangeProcess } from "../../hooks/useExchangeProcess";
 import ExchangeSteps, { ExchangeStepsRef } from "./ExchangeSteps";
 import ExchangeList from "./ExchangeList";
 import PendingExchangesList from "./PendingExchangesList";
+import SaldosDivisasEnTiempoReal from "../contabilidad/SaldosDivisasEnTiempoReal";
 
 interface ExchangeManagementProps {
   user: User;
@@ -128,6 +129,13 @@ const ExchangeManagement = ({
             />
           )}
         </div>
+
+        {/* Saldos en tiempo real */}
+        <SaldosDivisasEnTiempoReal
+          user={user}
+          selectedPoint={selectedPoint}
+          className="bg-card rounded-xl shadow-lg border border-border/50"
+        />
 
         {/* Listas debajo del formulario - Grid de 2 columnas */}
         <div className="grid lg:grid-cols-2 gap-8">

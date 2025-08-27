@@ -86,6 +86,7 @@ model PuntoAtencion {
   saldosServientrega              ServientregaSaldo[]
   historialSaldosServientrega     ServientregaHistorialSaldo[]
   solicitudesSaldoServientrega    ServientregaSolicitudSaldo[] // ✅ AGREGADO
+  guiasServientrega               ServientregaGuia[]
 
   @@index([ciudad])
   @@index([activo])
@@ -539,19 +540,25 @@ model ServientregaDestinatario {
 }
 
 model ServientregaGuia {
-  id              String   @id @default(uuid())
-  numero_guia     String   @unique
-  proceso         String
-  base64_response String?
-  remitente_id    String
-  destinatario_id String
-  created_at      DateTime @default(now())
-  updated_at      DateTime @updatedAt
+  id                String   @id @default(uuid())
+  numero_guia       String   @unique
+  proceso           String
+  base64_response   String?
+  remitente_id      String
+  destinatario_id   String
+  punto_atencion_id String?
+  valor_declarado   Decimal? @default(0) @db.Decimal(15, 2)
+  costo_envio       Decimal? @default(0) @db.Decimal(15, 2)
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
 
-  remitente    ServientregaRemitente    @relation(fields: [remitente_id], references: [id])
-  destinatario ServientregaDestinatario @relation(fields: [destinatario_id], references: [id])
+  remitente      ServientregaRemitente    @relation(fields: [remitente_id], references: [id])
+  destinatario   ServientregaDestinatario @relation(fields: [destinatario_id], references: [id])
+  punto_atencion PuntoAtencion?           @relation(fields: [punto_atencion_id], references: [id], onDelete: SetNull)
 
   @@index([numero_guia])
+  @@index([punto_atencion_id])
+  @@index([proceso])
 }
 
 model ServientregaSaldo {
@@ -563,6 +570,25 @@ model ServientregaSaldo {
   punto_atencion    PuntoAtencion @relation(fields: [punto_atencion_id], references: [id])
   created_at        DateTime      @default(now())
   updated_at        DateTime      @updatedAt
+}
+
+model ServientregaSolicitudAnulacion {
+  id                      String    @id @default(uuid())
+  guia_id                 String
+  numero_guia             String
+  motivo_anulacion        String
+  estado                  String    @default("PENDIENTE") // PENDIENTE, APROBADA, RECHAZADA
+  solicitado_por          String
+  solicitado_por_nombre   String
+  fecha_solicitud         DateTime  @default(now())
+  respondido_por          String?
+  respondido_por_nombre   String?
+  observaciones_respuesta String?
+  fecha_respuesta         DateTime?
+
+  @@index([numero_guia])
+  @@index([estado])
+  @@index([fecha_solicitud])
 }
 
 // ============================

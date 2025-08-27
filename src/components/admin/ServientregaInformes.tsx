@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { format, parseISO, subDays } from "date-fns";
-import { Download, Eye, FileText, BarChart3 } from "lucide-react";
+import { Download, Eye, FileText, BarChart3, RefreshCw } from "lucide-react";
 import { Loading } from "@/components/ui/loading";
 import { Guia } from "@/types/servientrega";
 import axiosInstance from "@/services/axiosInstance";
@@ -82,10 +82,21 @@ export const ServientregaInformes = ({
       if (guiasResponse.data.length === 0) {
         toast.info("No se encontraron guías en el período seleccionado.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error al cargar informes:", err);
-      setError("Error al cargar los informes de Servientrega.");
-      toast.error("No se pudieron cargar los informes.");
+
+      if (err.response?.status === 404) {
+        setError(
+          "Los endpoints de informes de Servientrega no están disponibles en el backend."
+        );
+        toast.warning(
+          "Funcionalidad de informes no disponible. Contacte al administrador."
+        );
+      } else {
+        setError("Error al cargar los informes de Servientrega.");
+        toast.error("No se pudieron cargar los informes.");
+      }
+
       setGuias([]);
       setEstadisticas(null);
     } finally {
@@ -126,9 +137,16 @@ export const ServientregaInformes = ({
       window.URL.revokeObjectURL(url);
 
       toast.success("✅ Informe exportado exitosamente");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error al exportar:", err);
-      toast.error("Error al exportar el informe");
+
+      if (err.response?.status === 404) {
+        toast.warning(
+          "Funcionalidad de exportación no disponible. Contacte al administrador."
+        );
+      } else {
+        toast.error("Error al exportar el informe");
+      }
     }
   };
 
@@ -187,6 +205,50 @@ export const ServientregaInformes = ({
     };
   });
 
+  // Si hay error 404, mostrar mensaje informativo
+  if (error && error.includes("no están disponibles")) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-gray-800">
+            Informes de Servientrega
+          </h1>
+        </div>
+
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="p-6 text-center">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center">
+                <FileText className="w-8 h-8 text-yellow-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-yellow-800 mb-2">
+                  Funcionalidad en Desarrollo
+                </h3>
+                <p className="text-yellow-700 mb-4">
+                  Los informes de Servientrega aún no están disponibles en el
+                  backend.
+                </p>
+                <p className="text-sm text-yellow-600">
+                  Esta funcionalidad será habilitada próximamente. Contacte al
+                  administrador del sistema para más información.
+                </p>
+              </div>
+              <Button
+                onClick={() => window.location.reload()}
+                variant="outline"
+                className="border-yellow-300 text-yellow-700 hover:bg-yellow-100"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reintentar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -196,6 +258,7 @@ export const ServientregaInformes = ({
         <Button
           onClick={handleExportarExcel}
           className="bg-green-600 hover:bg-green-700"
+          disabled={loading || error !== null}
         >
           <Download className="w-4 h-4 mr-2" />
           Exportar Excel

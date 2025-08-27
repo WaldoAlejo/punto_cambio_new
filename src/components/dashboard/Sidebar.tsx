@@ -82,6 +82,12 @@ const Sidebar = ({
       color: "text-cyan-600",
       roles: ["OPERADOR", "CONCESION"],
     },
+    {
+      id: "contabilidad-divisas",
+      label: "Contabilidad de Divisas",
+      color: "text-emerald-600",
+      roles: ["OPERADOR", "ADMIN", "SUPER_USUARIO"],
+    },
   ];
 
   const adminMenuItems: MenuItem[] = [

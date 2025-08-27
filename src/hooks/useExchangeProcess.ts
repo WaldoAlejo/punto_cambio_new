@@ -10,6 +10,7 @@ import {
 import { exchangeService } from "../services/exchangeService";
 import { ReceiptService } from "../services/receiptService";
 import { ExchangeCompleteData } from "../components/exchange/ExchangeSteps";
+import { movimientosContablesService } from "../services/movimientosContablesService";
 
 interface UseExchangeProcessProps {
   user: User;
@@ -155,6 +156,33 @@ export const useExchangeProcess = ({
         );
       }
 
+      // 🔍 VALIDACIÓN DE SALDOS ANTES DE PROCESAR
+      console.log("🔍 Validando saldo antes del cambio...");
+      const {
+        valido,
+        saldo_actual,
+        error: errorSaldo,
+      } = await movimientosContablesService.validarSaldoParaCambio(
+        selectedPoint.id,
+        data.exchangeData.toCurrency, // Moneda que vamos a entregar
+        data.exchangeData.totalAmountRecibido // Monto que vamos a entregar
+      );
+
+      if (!valido) {
+        toast.error(
+          `❌ Saldo insuficiente: ${
+            errorSaldo || "No hay suficiente saldo para realizar este cambio"
+          }`
+        );
+        toast.info(`💰 Saldo actual: ${saldo_actual}`);
+        setIsProcessing(false);
+        return;
+      }
+
+      console.log(
+        `✅ Saldo validado. Disponible: ${saldo_actual}, Requerido: ${data.exchangeData.totalAmountRecibido}`
+      );
+
       const exchangePayload: ExchangePayload = {
         moneda_origen_id: data.exchangeData.fromCurrency,
         moneda_destino_id: data.exchangeData.toCurrency,
@@ -226,11 +254,53 @@ export const useExchangeProcess = ({
             `⚠️ Cambio creado pero pendiente. Debe completarlo manualmente desde "Cambios Pendientes". Error: ${closeError}`
           );
         } else {
-          // Disparar evento para actualizar saldos
+          // 📊 PROCESAR MOVIMIENTOS CONTABLES
+          console.log("📊 Procesando movimientos contables...");
+          try {
+            const { result: contabilidadResult, error: contabilidadError } =
+              await movimientosContablesService.procesarMovimientosCambio(
+                createdExchange,
+                user.id
+              );
+
+            if (contabilidadError) {
+              console.error("❌ Error en contabilidad:", contabilidadError);
+              toast.warning(
+                `⚠️ Cambio completado pero error en contabilidad: ${contabilidadError}`
+              );
+            } else if (contabilidadResult && contabilidadResult.success) {
+              console.log(
+                "✅ Movimientos contables procesados:",
+                contabilidadResult
+              );
+
+              // Mostrar resumen de saldos actualizados
+              const resumen = contabilidadResult.saldos_actualizados
+                .map(
+                  (s) =>
+                    `${s.moneda_id}: ${s.saldo_anterior.toFixed(
+                      2
+                    )} → ${s.saldo_nuevo.toFixed(2)}`
+                )
+                .join(", ");
+
+              toast.success(
+                `✅ Cambio completado. Saldos actualizados: ${resumen}`
+              );
+            }
+          } catch (contabilidadErr) {
+            console.error(
+              "❌ Error inesperado en contabilidad:",
+              contabilidadErr
+            );
+            toast.warning(
+              "⚠️ Cambio completado pero error al actualizar saldos"
+            );
+          }
+
+          // Disparar evento para actualizar saldos en la UI
           window.dispatchEvent(new CustomEvent("exchangeCompleted"));
-          toast.success(
-            `✅ Cambio completado automáticamente. Los saldos se han actualizado. Recibo: ${createdExchange.numero_recibo}`
-          );
+          window.dispatchEvent(new CustomEvent("saldosUpdated"));
         }
       } else {
         // Quedar pendiente y mostrar explicación
