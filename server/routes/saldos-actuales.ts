@@ -17,7 +17,7 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
         m.codigo as moneda_codigo,
         m.nombre as moneda_nombre,
         m.simbolo as moneda_simbolo,
-        COALESCE(s.monto, 0) as saldo
+        COALESCE(s.cantidad, 0) as saldo
       FROM "Saldo" s
       JOIN "Moneda" m ON s.moneda_id = m.id
       WHERE s.punto_atencion_id = $1
