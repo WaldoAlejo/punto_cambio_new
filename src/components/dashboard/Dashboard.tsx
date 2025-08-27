@@ -16,6 +16,8 @@ import SaldoInicialManagement from "../admin/SaldoInicialManagement";
 import BalanceDashboard from "./BalanceDashboard";
 import ServientregaMain from "../servientrega/ServientregaMain";
 import SaldoServientregaAdmin from "../admin/SaldoServientregaAdmin";
+import ServientregaAnulaciones from "../admin/ServientregaAnulaciones";
+import ServientregaInformes from "../admin/ServientregaInformes";
 import { Unauthorized } from "../ui/unauthorized";
 import { PointSelector } from "./PointSelector";
 import { User, PuntoAtencion } from "../../types";
@@ -115,6 +117,16 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
       case "servientrega-saldo":
         if (!isAdmin) return <div>Sin permisos</div>;
         return <SaldoServientregaAdmin />;
+      case "servientrega-anulaciones":
+        if (!isAdmin) return <div>Sin permisos</div>;
+        return (
+          <ServientregaAnulaciones user={user} selectedPoint={selectedPoint} />
+        );
+      case "servientrega-informes":
+        if (!isAdmin) return <div>Sin permisos</div>;
+        return (
+          <ServientregaInformes user={user} selectedPoint={selectedPoint} />
+        );
 
       default:
         // Dashboard por defecto según rol

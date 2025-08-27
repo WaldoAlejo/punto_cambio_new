@@ -66,3 +66,35 @@ export interface FormDataGuia {
   requiere_empaque: boolean;
   resumen_costos: ResumenCostos;
 }
+
+export interface Guia {
+  id: string;
+  numero_guia: string;
+  base64_response: string;
+  created_at: string;
+  estado: "ACTIVA" | "ANULADA" | "PENDIENTE_ANULACION";
+  punto_atencion_id: string;
+  usuario_id: string;
+  usuario_nombre?: string;
+  punto_atencion_nombre?: string;
+  motivo_anulacion?: string;
+  fecha_anulacion?: string;
+  anulada_por?: string;
+}
+
+export interface SolicitudAnulacionGuia {
+  id: string;
+  guia_id: string;
+  numero_guia: string;
+  motivo: string;
+  estado: "PENDIENTE" | "APROBADA" | "RECHAZADA";
+  solicitado_por: string;
+  solicitado_por_nombre?: string;
+  punto_atencion_id: string;
+  punto_atencion_nombre?: string;
+  fecha_solicitud: string;
+  fecha_respuesta?: string;
+  respondido_por?: string;
+  respondido_por_nombre?: string;
+  comentario_respuesta?: string;
+}

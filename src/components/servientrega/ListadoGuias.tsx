@@ -13,13 +13,15 @@ import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Loading } from "@/components/ui/loading";
 import SaldoCompacto from "./SaldoCompacto";
 import { useAuth } from "@/hooks/useAuth";
-
-interface Guia {
-  id: string;
-  numero_guia: string;
-  base64_response: string;
-  created_at: string;
-}
+import { Guia } from "@/types/servientrega";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function ListadoGuias() {
   const hoy = new Date();
@@ -30,6 +32,11 @@ export default function ListadoGuias() {
   const [error, setError] = useState<string | null>(null);
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
   const { user } = useAuth();
+
+  // Estados para solicitud de anulación
+  const [showAnulacionDialog, setShowAnulacionDialog] = useState(false);
+  const [guiaParaAnular, setGuiaParaAnular] = useState<Guia | null>(null);
+  const [motivoAnulacion, setMotivoAnulacion] = useState("");
 
   const fetchGuias = async () => {
     setLoading(true);
@@ -59,13 +66,50 @@ export default function ListadoGuias() {
     }
   };
 
-  const handleAnular = (guia: string) => {
+  const handleSolicitarAnulacion = (guia: Guia) => {
+    setGuiaParaAnular(guia);
+    setMotivoAnulacion("");
+    setShowAnulacionDialog(true);
+  };
+
+  const handleConfirmarSolicitudAnulacion = async () => {
+    if (!guiaParaAnular || !motivoAnulacion.trim()) {
+      toast.error("Debe proporcionar un motivo para la anulación");
+      return;
+    }
+
+    try {
+      await axiosInstance.post("/servientrega/solicitar-anulacion", {
+        guia_id: guiaParaAnular.id,
+        numero_guia: guiaParaAnular.numero_guia,
+        motivo: motivoAnulacion.trim(),
+      });
+
+      toast.success(
+        "✅ Solicitud de anulación enviada. Esperando aprobación del administrador."
+      );
+      setShowAnulacionDialog(false);
+      setGuiaParaAnular(null);
+      setMotivoAnulacion("");
+      fetchGuias();
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "Error desconocido";
+      console.error("Error al solicitar anulación:", err);
+      toast.error(`No se pudo enviar la solicitud: ${errorMessage}`);
+    }
+  };
+
+  const handleAnularDirecto = (guia: Guia) => {
     showConfirmation(
       "Confirmar anulación",
-      `¿Está seguro de que desea anular la guía ${guia}? Esta acción no se puede deshacer.`,
+      `¿Está seguro de que desea anular la guía ${guia.numero_guia}? Esta acción no se puede deshacer.`,
       async () => {
         try {
-          await axiosInstance.post("/servientrega/anular-guia", { guia });
+          await axiosInstance.post("/servientrega/anular-guia", {
+            guia: guia.numero_guia,
+            motivo: "Anulación directa por administrador",
+          });
           toast.success("✅ Guía anulada exitosamente.");
           fetchGuias();
         } catch (err) {
@@ -171,27 +215,83 @@ export default function ListadoGuias() {
                       <strong>Fecha:</strong>{" "}
                       {format(parseISO(guia.created_at), "yyyy-MM-dd HH:mm")}
                     </p>
+                    <p>
+                      <strong>Estado:</strong>{" "}
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          guia.estado === "ACTIVA"
+                            ? "bg-green-100 text-green-800"
+                            : guia.estado === "ANULADA"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-yellow-100 text-yellow-800"
+                        }`}
+                      >
+                        {guia.estado === "ACTIVA"
+                          ? "Activa"
+                          : guia.estado === "ANULADA"
+                          ? "Anulada"
+                          : "Pendiente Anulación"}
+                      </span>
+                    </p>
+                    {guia.motivo_anulacion && (
+                      <p className="text-sm text-gray-600 mt-1">
+                        <strong>Motivo:</strong> {guia.motivo_anulacion}
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <Button
                       onClick={() => handleVerPDF(guia.base64_response)}
                       variant="secondary"
+                      size="sm"
                     >
                       Ver PDF
                     </Button>
 
-                    {isToday(parseISO(guia.created_at)) ? (
-                      <Button
-                        onClick={() => handleAnular(guia.numero_guia)}
-                        variant="destructive"
-                      >
-                        Anular
-                      </Button>
-                    ) : (
-                      <p className="text-sm text-gray-500 mt-2 md:mt-0">
-                        No se puede anular
-                      </p>
+                    {/* Lógica de botones según rol y estado */}
+                    {guia.estado === "ACTIVA" &&
+                      isToday(parseISO(guia.created_at)) && (
+                        <>
+                          {user?.rol === "ADMIN" ||
+                          user?.rol === "SUPER_USUARIO" ? (
+                            <Button
+                              onClick={() => handleAnularDirecto(guia)}
+                              variant="destructive"
+                              size="sm"
+                            >
+                              Anular
+                            </Button>
+                          ) : (
+                            <Button
+                              onClick={() => handleSolicitarAnulacion(guia)}
+                              variant="outline"
+                              size="sm"
+                              className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                            >
+                              Solicitar Anulación
+                            </Button>
+                          )}
+                        </>
+                      )}
+
+                    {guia.estado === "PENDIENTE_ANULACION" && (
+                      <span className="text-sm text-yellow-600 font-medium">
+                        Esperando aprobación
+                      </span>
                     )}
+
+                    {guia.estado === "ANULADA" && (
+                      <span className="text-sm text-red-600 font-medium">
+                        Guía anulada
+                      </span>
+                    )}
+
+                    {guia.estado === "ACTIVA" &&
+                      !isToday(parseISO(guia.created_at)) && (
+                        <span className="text-sm text-gray-500">
+                          No se puede anular
+                        </span>
+                      )}
                   </div>
                 </div>
               ))}
@@ -200,6 +300,54 @@ export default function ListadoGuias() {
         </CardContent>
         <ConfirmationDialog />
       </Card>
+
+      {/* Modal para solicitar anulación */}
+      <Dialog open={showAnulacionDialog} onOpenChange={setShowAnulacionDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Solicitar Anulación de Guía</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p>
+                <strong>Guía:</strong> {guiaParaAnular?.numero_guia}
+              </p>
+              <p>
+                <strong>Fecha:</strong>{" "}
+                {guiaParaAnular &&
+                  format(
+                    parseISO(guiaParaAnular.created_at),
+                    "yyyy-MM-dd HH:mm"
+                  )}
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="motivo">Motivo de la anulación *</Label>
+              <Textarea
+                id="motivo"
+                placeholder="Explique el motivo por el cual solicita la anulación de esta guía..."
+                value={motivoAnulacion}
+                onChange={(e) => setMotivoAnulacion(e.target.value)}
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowAnulacionDialog(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleConfirmarSolicitudAnulacion}
+              disabled={!motivoAnulacion.trim()}
+            >
+              Enviar Solicitud
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

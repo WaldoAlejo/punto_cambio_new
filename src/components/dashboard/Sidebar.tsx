@@ -116,6 +116,16 @@ const Sidebar = ({
       color: "text-cyan-600",
     },
     {
+      id: "servientrega-anulaciones",
+      label: "Anulaciones Servientrega",
+      color: "text-orange-600",
+    },
+    {
+      id: "servientrega-informes",
+      label: "Informes Servientrega",
+      color: "text-purple-600",
+    },
+    {
       id: "reports",
       label: "Reportes",
       color: "text-red-600",
