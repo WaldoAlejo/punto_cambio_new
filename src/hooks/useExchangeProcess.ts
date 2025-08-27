@@ -76,7 +76,8 @@ export const useExchangeProcess = ({
 
   const generateReceiptAndPrint = (
     exchange: CambioDivisa,
-    showSuccessMessage = true
+    showSuccessMessage = true,
+    onReceiptClose?: () => void
   ) => {
     const receiptData = ReceiptService.generateCurrencyExchangeReceipt(
       exchange,
@@ -92,23 +93,23 @@ export const useExchangeProcess = ({
         toast.success("✅ Recibo enviado a impresora correctamente");
       }
 
-      // Como fallback, también mostrar en la ventana actual
+      // Siempre mostrar en la ventana actual como fallback/confirmación
       setTimeout(() => {
-        ReceiptService.showReceiptInCurrentWindow(receiptData);
+        ReceiptService.showReceiptInCurrentWindow(receiptData, onReceiptClose);
       }, 1000);
 
-      return true; // Impresión exitosa
+      return { success: true, showModal: true }; // Impresión exitosa pero se muestra modal
     } catch (error) {
       console.warn("❌ Error al imprimir recibo:", error);
 
       // Si falla la impresión, mostrar en ventana actual
-      ReceiptService.showReceiptInCurrentWindow(receiptData);
+      ReceiptService.showReceiptInCurrentWindow(receiptData, onReceiptClose);
 
       toast.error(
         "❌ Error al imprimir recibo. Se muestra en pantalla. Puede usar el botón 'Reimprimir' para intentar nuevamente."
       );
 
-      return false; // Impresión falló
+      return { success: false, showModal: true }; // Impresión falló y se muestra modal
     }
   };
 
@@ -249,29 +250,29 @@ export const useExchangeProcess = ({
 
       // Generar e imprimir recibos
       setTimeout(() => {
-        const printSuccess = generateReceiptAndPrint(createdExchange);
-
-        // Después de imprimir, resetear formulario y regresar al dashboard
-        setTimeout(() => {
+        // Función que se ejecuta cuando se cierra el modal del recibo
+        const handleReceiptClose = () => {
           onResetForm();
-
-          if (printSuccess) {
-            toast.success(
-              "🎉 Operación completada exitosamente. Regresando al dashboard..."
-            );
-          } else {
-            toast.info(
-              "🎉 Operación completada. Use 'Reimprimir' si necesita el recibo nuevamente."
-            );
-          }
+          toast.success(
+            "🎉 Operación completada exitosamente. Regresando al dashboard..."
+          );
 
           // Regresar al dashboard si se proporcionó la función
           if (onReturnToDashboard) {
             setTimeout(() => {
               onReturnToDashboard();
-            }, 2000);
+            }, 1000);
           }
-        }, 1500);
+        };
+
+        const printResult = generateReceiptAndPrint(
+          createdExchange,
+          true,
+          handleReceiptClose
+        );
+
+        // Como siempre se muestra el modal, el usuario debe cerrarlo manualmente
+        // El callback handleReceiptClose se ejecutará cuando el usuario cierre el modal
       }, 100);
     } catch (error) {
       console.error("Error al procesar cambio:", error);
@@ -289,7 +290,8 @@ export const useExchangeProcess = ({
     }
 
     try {
-      generateReceiptAndPrint(exchange, false); // No mostrar mensaje de éxito automático
+      // Para reimprimir, no regresar al dashboard automáticamente
+      generateReceiptAndPrint(exchange, false); // No mostrar mensaje de éxito automático, sin callback de cierre
       toast.success("🖨️ Recibo reenviado a impresora");
     } catch (error) {
       console.error("Error al reimprimir recibo:", error);

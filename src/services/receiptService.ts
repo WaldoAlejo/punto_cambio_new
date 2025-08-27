@@ -470,7 +470,10 @@ ${separator}
   }
 
   // Método alternativo para mostrar el recibo en la misma ventana
-  static showReceiptInCurrentWindow(receiptData: ReceiptData): void {
+  static showReceiptInCurrentWindow(
+    receiptData: ReceiptData,
+    onClose?: () => void
+  ): void {
     // Mostrar ambas copias en tabs
     const clienteReceipt = this.formatReceiptForPrinting(
       receiptData,
@@ -561,7 +564,7 @@ ${separator}
               border-radius: 4px;
               cursor: pointer;
             ">IMPRIMIR</button>
-            <button onclick="this.closest('div').parentElement.remove()" style="
+            <button id="closeReceiptBtn" style="
               background: #dc3545; 
               color: white; 
               border: none; 
@@ -597,5 +600,16 @@ ${separator}
     `;
 
     document.body.appendChild(receiptDiv);
+
+    // Agregar event listener para el botón de cerrar
+    const closeBtn = document.getElementById("closeReceiptBtn");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => {
+        receiptDiv.remove();
+        if (onClose) {
+          onClose();
+        }
+      });
+    }
   }
 }
