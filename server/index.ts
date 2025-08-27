@@ -40,6 +40,8 @@ import activePointsRoutes from "./routes/activePoints.js";
 import saldosInicialesRoutes from "./routes/saldos-iniciales.js";
 import vistaSaldosRoutes from "./routes/vista-saldos-puntos.js";
 import movimientosSaldoRoutes from "./routes/movimientos-saldo.js";
+import saldosActualesRoutes from "./routes/saldos-actuales.js";
+import movimientosContablesRoutes from "./routes/movimientos-contables.js";
 import servientregaRoutes from "./routes/servientrega.js";
 import puntosAtencionRoutes from "./routes/puntos-atencion.js";
 
@@ -157,6 +159,8 @@ app.use("/api/active-points", activePointsRoutes);
 app.use("/api/saldos-iniciales", saldosInicialesRoutes);
 app.use("/api/vista-saldos-puntos", vistaSaldosRoutes);
 app.use("/api/movimientos-saldo", movimientosSaldoRoutes);
+app.use("/api/saldos-actuales", saldosActualesRoutes);
+app.use("/api/movimientos-contables", movimientosContablesRoutes);
 app.use("/api/servientrega", servientregaRoutes);
 app.use("/api/puntos-atencion", puntosAtencionRoutes);
 
