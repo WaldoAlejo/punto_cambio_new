@@ -18,7 +18,7 @@ import { CheckCircle, XCircle, Clock, Eye } from "lucide-react";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Loading } from "@/components/ui/loading";
 import { SolicitudAnulacionGuia } from "@/types/servientrega";
-import { axiosInstance } from "@/lib/axios";
+import axiosInstance from "@/services/axiosInstance";
 import { User, PuntoAtencion } from "@/types";
 
 interface ServientregaAnulacionesProps {

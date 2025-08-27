@@ -9,7 +9,7 @@ import { format, parseISO, subDays } from "date-fns";
 import { Download, Eye, FileText, BarChart3 } from "lucide-react";
 import { Loading } from "@/components/ui/loading";
 import { Guia } from "@/types/servientrega";
-import { axiosInstance } from "@/lib/axios";
+import axiosInstance from "@/services/axiosInstance";
 import { User, PuntoAtencion } from "@/types";
 
 interface ServientregaInformesProps {
