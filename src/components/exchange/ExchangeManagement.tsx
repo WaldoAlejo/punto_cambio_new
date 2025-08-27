@@ -9,11 +9,13 @@ import PendingExchangesList from "./PendingExchangesList";
 interface ExchangeManagementProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
+  onReturnToDashboard?: () => void;
 }
 
 const ExchangeManagement = ({
   user,
   selectedPoint,
+  onReturnToDashboard,
 }: ExchangeManagementProps) => {
   const stepsRef = useRef<ExchangeStepsRef>(null);
   const {
@@ -24,11 +26,12 @@ const ExchangeManagement = ({
     error: dataError,
   } = useExchangeData(selectedPoint);
 
-  const { isProcessing, processExchange } = useExchangeProcess({
+  const { isProcessing, processExchange, reprintReceipt } = useExchangeProcess({
     user,
     selectedPoint,
     onExchangeCreated: addExchange,
     onResetForm: () => stepsRef.current?.resetSteps(),
+    onReturnToDashboard,
   });
 
   if (!user) {
@@ -130,7 +133,11 @@ const ExchangeManagement = ({
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Lista de cambios recientes */}
           <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
-            <ExchangeList exchanges={exchanges || []} currencies={currencies} />
+            <ExchangeList
+              exchanges={exchanges || []}
+              currencies={currencies}
+              onReprintReceipt={reprintReceipt}
+            />
           </div>
 
           {/* Cambios pendientes */}
@@ -139,6 +146,7 @@ const ExchangeManagement = ({
               user={user}
               selectedPoint={selectedPoint}
               currencies={currencies}
+              onReprintReceipt={reprintReceipt}
             />
           </div>
         </div>

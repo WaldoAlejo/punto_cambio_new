@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Printer } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, CambioDivisa } from "../../types";
@@ -20,12 +21,14 @@ interface PendingExchangesListProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
   currencies?: any[];
+  onReprintReceipt?: (exchange: CambioDivisa) => void;
 }
 
 const PendingExchangesList = ({
   user,
   selectedPoint,
   currencies = [],
+  onReprintReceipt,
 }: PendingExchangesListProps) => {
   const { ConfirmationDialog } = useConfirmationDialog();
   const [pendingExchanges, setPendingExchanges] = useState<CambioDivisa[]>([]);
@@ -216,6 +219,17 @@ const PendingExchangesList = ({
                   >
                     Completar Pago
                   </Button>
+                  {onReprintReceipt && exchange.numero_recibo && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onReprintReceipt(exchange)}
+                      className="border-gray-300 text-gray-700 hover:bg-gray-50"
+                      title="Reimprimir recibo"
+                    >
+                      <Printer className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

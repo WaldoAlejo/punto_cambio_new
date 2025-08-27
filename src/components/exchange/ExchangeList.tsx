@@ -5,14 +5,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Printer } from "lucide-react";
 import { CambioDivisa, Moneda } from "../../types";
 
 interface ExchangeListProps {
   exchanges: CambioDivisa[];
   currencies: Moneda[];
+  onReprintReceipt?: (exchange: CambioDivisa) => void;
 }
 
-const ExchangeList = ({ exchanges, currencies }: ExchangeListProps) => {
+const ExchangeList = ({
+  exchanges,
+  currencies,
+  onReprintReceipt,
+}: ExchangeListProps) => {
   if (!exchanges || !currencies) {
     return (
       <Card>
@@ -93,11 +100,24 @@ const ExchangeList = ({ exchanges, currencies }: ExchangeListProps) => {
                     <span className="text-muted-foreground">
                       Tasa: {exchange.tasa_cambio}
                     </span>
-                    {exchange.numero_recibo && (
-                      <span className="text-muted-foreground">
-                        #{exchange.numero_recibo}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {exchange.numero_recibo && (
+                        <span className="text-muted-foreground">
+                          #{exchange.numero_recibo}
+                        </span>
+                      )}
+                      {onReprintReceipt && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onReprintReceipt(exchange)}
+                          className="h-6 px-2 text-xs"
+                          title="Reimprimir recibo"
+                        >
+                          <Printer className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

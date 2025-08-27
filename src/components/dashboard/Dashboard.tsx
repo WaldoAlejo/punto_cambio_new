@@ -61,7 +61,13 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
               onGoBack={() => setActiveView("dashboard")}
             />
           );
-        return <ExchangeManagement user={user} selectedPoint={selectedPoint} />;
+        return (
+          <ExchangeManagement
+            user={user}
+            selectedPoint={selectedPoint}
+            onReturnToDashboard={() => setActiveView("dashboard")}
+          />
+        );
       case "pending-exchanges":
         if (!isOperador) return <div>Sin permisos</div>;
         return (

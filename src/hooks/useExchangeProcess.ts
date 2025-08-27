@@ -16,6 +16,7 @@ interface UseExchangeProcessProps {
   selectedPoint: PuntoAtencion | null;
   onExchangeCreated: (exchange: CambioDivisa) => void;
   onResetForm: () => void;
+  onReturnToDashboard?: () => void;
 }
 
 interface ExchangePayload {
@@ -69,10 +70,14 @@ export const useExchangeProcess = ({
   selectedPoint,
   onExchangeCreated,
   onResetForm,
+  onReturnToDashboard,
 }: UseExchangeProcessProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const generateReceiptAndPrint = (exchange: CambioDivisa) => {
+  const generateReceiptAndPrint = (
+    exchange: CambioDivisa,
+    showSuccessMessage = true
+  ) => {
     const receiptData = ReceiptService.generateCurrencyExchangeReceipt(
       exchange,
       selectedPoint?.nombre || "N/A",
@@ -83,19 +88,27 @@ export const useExchangeProcess = ({
       console.log("🖨️ Intentando imprimir recibo...");
       ReceiptService.printReceipt(receiptData, 2);
 
+      if (showSuccessMessage) {
+        toast.success("✅ Recibo enviado a impresora correctamente");
+      }
+
       // Como fallback, también mostrar en la ventana actual
       setTimeout(() => {
         ReceiptService.showReceiptInCurrentWindow(receiptData);
       }, 1000);
+
+      return true; // Impresión exitosa
     } catch (error) {
       console.warn("❌ Error al imprimir recibo:", error);
 
       // Si falla la impresión, mostrar en ventana actual
       ReceiptService.showReceiptInCurrentWindow(receiptData);
 
-      toast.warning(
-        "El recibo se generó correctamente pero hubo un problema con la impresión. Se muestra en pantalla."
+      toast.error(
+        "❌ Error al imprimir recibo. Se muestra en pantalla. Puede usar el botón 'Reimprimir' para intentar nuevamente."
       );
+
+      return false; // Impresión falló
     }
   };
 
@@ -236,12 +249,28 @@ export const useExchangeProcess = ({
 
       // Generar e imprimir recibos
       setTimeout(() => {
-        generateReceiptAndPrint(createdExchange);
+        const printSuccess = generateReceiptAndPrint(createdExchange);
 
         // Después de imprimir, resetear formulario y regresar al dashboard
         setTimeout(() => {
           onResetForm();
-          toast.success("🎉 Operación completada. Regresando al dashboard...");
+
+          if (printSuccess) {
+            toast.success(
+              "🎉 Operación completada exitosamente. Regresando al dashboard..."
+            );
+          } else {
+            toast.info(
+              "🎉 Operación completada. Use 'Reimprimir' si necesita el recibo nuevamente."
+            );
+          }
+
+          // Regresar al dashboard si se proporcionó la función
+          if (onReturnToDashboard) {
+            setTimeout(() => {
+              onReturnToDashboard();
+            }, 2000);
+          }
         }, 1500);
       }, 100);
     } catch (error) {
@@ -252,8 +281,25 @@ export const useExchangeProcess = ({
     }
   };
 
+  // Función para reimprimir recibos
+  const reprintReceipt = (exchange: CambioDivisa) => {
+    if (!selectedPoint) {
+      toast.error("No hay punto de atención seleccionado");
+      return;
+    }
+
+    try {
+      generateReceiptAndPrint(exchange, false); // No mostrar mensaje de éxito automático
+      toast.success("🖨️ Recibo reenviado a impresora");
+    } catch (error) {
+      console.error("Error al reimprimir recibo:", error);
+      toast.error("Error al reimprimir recibo");
+    }
+  };
+
   return {
     isProcessing,
     processExchange,
+    reprintReceipt,
   };
 };
