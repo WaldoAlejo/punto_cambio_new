@@ -3,20 +3,18 @@
     "target": "ES2022",
     "lib": ["ES2023"],
     "module": "ESNext",
-    "skipLibCheck": true,
-
-    /* Bundler mode */
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    "strict": true,
+    "skipLibCheck": true,
     "isolatedModules": true,
-    "moduleDetection": "force",
     "noEmit": true,
 
-    /* Linting */
-    "strict": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true
+    "types": ["node"],
+    "resolveJsonModule": true,
+
+    /* Opcionales (solo si realmente los necesitas) */
+    "allowImportingTsExtensions": false,
+    "moduleDetection": "force"
   },
-  "include": ["vite.config.ts"]
+  "include": ["vite.config.ts", "scripts/**/*.ts"]
 }

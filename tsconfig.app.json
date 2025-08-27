@@ -3,12 +3,10 @@
   "compilerOptions": {
     "composite": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
-    "outDir": "dist",
-    "rootDir": "src",
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,

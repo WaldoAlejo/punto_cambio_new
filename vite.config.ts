@@ -6,6 +6,7 @@ import path from "path";
 function getComponentTagger() {
   try {
     // Try to require lovable-tagger - will fail gracefully in local environment
+    // @ts-ignore - require may not be typed in ESM, but it's wrapped in try/catch
     const { componentTagger } = require("lovable-tagger");
     return componentTagger;
   } catch {
@@ -17,13 +18,12 @@ function getComponentTagger() {
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const componentTagger = getComponentTagger();
-  
+
   return {
     base: mode === "production" ? "./" : "/",
     server: {
-      host: "0.0.0.0", // permite conexiones externas (desde cualquier IP)
-      port: 8080, // puerto accesible públicamente
-
+      host: "0.0.0.0",
+      port: 8080,
       watch: {
         usePolling: true,
         interval: 1000,
@@ -48,7 +48,8 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "dist",
       emptyOutDir: true,
-      sourcemap: mode === "development",
+      sourcemap: mode !== "production",
+      chunkSizeWarningLimit: 1000, // ← sube el límite del warning
       rollupOptions: {
         output: {
           manualChunks: {
@@ -60,10 +61,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     plugins: [
-      react({
-        jsxRuntime: "automatic",
-      }),
-      mode === 'development' && componentTagger && componentTagger(),
+      react(), // ← sin jsxRuntime
+      mode === "development" && componentTagger && componentTagger(),
     ].filter(Boolean),
     resolve: {
       alias: {
@@ -73,8 +72,6 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       exclude: ["fsevents"],
     },
-    esbuild: {
-      jsx: "automatic",
-    },
+    // esbuild no es necesario para JSX cuando usas el plugin SWC
   };
 });
