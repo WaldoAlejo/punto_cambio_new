@@ -538,4 +538,64 @@ router.get(
   }
 );
 
+/** Puntos para gestión de saldos (todos los puntos activos) */
+router.get(
+  "/for-balance-management",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    try {
+      console.log("🔍 Points API: Obteniendo puntos para gestión de saldos");
+      console.log("👤 Points API: Usuario solicitante:", {
+        id: (req as any).user?.id,
+        rol: (req as any).user?.rol,
+      });
+
+      const puntosParaSaldos = await prisma.puntoAtencion.findMany({
+        where: { activo: true },
+        orderBy: { nombre: "asc" },
+      });
+
+      const formatted: PuntoAtencionOut[] = puntosParaSaldos.map((p) =>
+        formatPoint(p as PuntoAtencion & PuntoAtencionExtra)
+      );
+
+      console.log(
+        `📍 Points API: Puntos para gestión de saldos encontrados: ${formatted.length}`
+      );
+      formatted.forEach((p: PuntoAtencionOut, index: number) => {
+        console.log(
+          `  ${index + 1}. ${p.nombre} - ${p.ciudad}, ${p.provincia} (ID: ${
+            p.id
+          })`
+        );
+      });
+
+      logger.info("Puntos para gestión de saldos obtenidos", {
+        count: formatted.length,
+        requestedBy: (req as any).user?.id,
+        userRole: (req as any).user?.rol,
+      });
+
+      res.status(200).json({
+        points: formatted,
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error al obtener puntos para gestión de saldos", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: (req as any).user?.id,
+      });
+
+      res.status(500).json({
+        error: "Error al obtener puntos para gestión de saldos",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
 export default router;
