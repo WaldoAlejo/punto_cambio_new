@@ -54,16 +54,19 @@ export const ServientregaInformes = ({
 
     try {
       const [guiasResponse, estadisticasResponse] = await Promise.all([
-        axiosInstance.get<Guia[]>("/servientrega/informes/guias", {
-          params: {
-            desde,
-            hasta,
-            estado: filtroEstado === "TODOS" ? undefined : filtroEstado,
-            punto_atencion_id:
-              filtroPunto === "TODOS" ? undefined : filtroPunto,
-          },
-        }),
-        axiosInstance.get<EstadisticasGuias>(
+        axiosInstance.get<{ data: Guia[]; success: boolean }>(
+          "/servientrega/informes/guias",
+          {
+            params: {
+              desde,
+              hasta,
+              estado: filtroEstado === "TODOS" ? undefined : filtroEstado,
+              punto_atencion_id:
+                filtroPunto === "TODOS" ? undefined : filtroPunto,
+            },
+          }
+        ),
+        axiosInstance.get<{ data: EstadisticasGuias; success: boolean }>(
           "/servientrega/informes/estadisticas",
           {
             params: { desde, hasta },
@@ -71,15 +74,20 @@ export const ServientregaInformes = ({
         ),
       ]);
 
-      if (Array.isArray(guiasResponse.data)) {
-        setGuias(guiasResponse.data);
+      // Acceder a la propiedad 'data' de la respuesta del backend
+      if (Array.isArray(guiasResponse.data?.data)) {
+        setGuias(guiasResponse.data.data);
       } else {
         setGuias([]);
       }
 
-      setEstadisticas(estadisticasResponse.data);
+      if (estadisticasResponse.data?.data) {
+        setEstadisticas(estadisticasResponse.data.data);
+      } else {
+        setEstadisticas(null);
+      }
 
-      if (guiasResponse.data.length === 0) {
+      if ((guiasResponse.data?.data || []).length === 0) {
         toast.info("No se encontraron guías en el período seleccionado.");
       }
     } catch (err: any) {
@@ -186,7 +194,7 @@ export const ServientregaInformes = ({
     }
   };
 
-  const guiasFiltradas = guias.filter((guia) => {
+  const guiasFiltradas = (guias || []).filter((guia) => {
     const cumpleEstado =
       filtroEstado === "TODOS" || guia.estado === filtroEstado;
     const cumplePunto =
@@ -196,9 +204,9 @@ export const ServientregaInformes = ({
 
   // Obtener lista única de puntos para el filtro
   const puntosUnicos = Array.from(
-    new Set(guias.map((g) => g.punto_atencion_id))
+    new Set((guias || []).map((g) => g.punto_atencion_id))
   ).map((id) => {
-    const guia = guias.find((g) => g.punto_atencion_id === id);
+    const guia = (guias || []).find((g) => g.punto_atencion_id === id);
     return {
       id,
       nombre: guia?.punto_atencion_nombre || `Punto ${id}`,
@@ -418,14 +426,48 @@ export const ServientregaInformes = ({
                     <div className="text-sm text-gray-600 space-y-1">
                       <p>
                         <strong>Fecha:</strong>{" "}
-                        {format(parseISO(guia.created_at), "yyyy-MM-dd HH:mm")}
+                        {format(
+                          parseISO(
+                            guia.fecha_creacion ||
+                              guia.created_at ||
+                              new Date().toISOString()
+                          ),
+                          "yyyy-MM-dd HH:mm"
+                        )}
                       </p>
                       <p>
-                        <strong>Punto:</strong> {guia.punto_atencion_nombre}
+                        <strong>Punto:</strong>{" "}
+                        {guia.punto_atencion_nombre || "N/A"}
                       </p>
-                      <p>
-                        <strong>Usuario:</strong> {guia.usuario_nombre}
-                      </p>
+                      {guia.usuario_nombre && (
+                        <p>
+                          <strong>Usuario:</strong> {guia.usuario_nombre}
+                        </p>
+                      )}
+                      {guia.destinatario_nombre && (
+                        <p>
+                          <strong>Destinatario:</strong>{" "}
+                          {guia.destinatario_nombre}
+                        </p>
+                      )}
+                      {guia.destinatario_telefono && (
+                        <p>
+                          <strong>Teléfono:</strong>{" "}
+                          {guia.destinatario_telefono}
+                        </p>
+                      )}
+                      {guia.valor_declarado && (
+                        <p>
+                          <strong>Valor Declarado:</strong> $
+                          {guia.valor_declarado.toLocaleString()}
+                        </p>
+                      )}
+                      {guia.costo_envio && (
+                        <p>
+                          <strong>Costo Envío:</strong> $
+                          {guia.costo_envio.toLocaleString()}
+                        </p>
+                      )}
                       {guia.motivo_anulacion && (
                         <p>
                           <strong>Motivo anulación:</strong>{" "}
@@ -453,7 +495,12 @@ export const ServientregaInformes = ({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleVerPDF(guia.base64_response)}
+                      onClick={() =>
+                        handleVerPDF(
+                          guia.pdf_base64 || guia.base64_response || ""
+                        )
+                      }
+                      disabled={!guia.pdf_base64 && !guia.base64_response}
                     >
                       <Eye className="w-4 h-4 mr-1" />
                       Ver PDF
@@ -467,42 +514,44 @@ export const ServientregaInformes = ({
       </Card>
 
       {/* Estadísticas por punto */}
-      {estadisticas && estadisticas.total_por_punto.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Estadísticas por Punto de Atención</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {estadisticas.total_por_punto.map((punto, index) => (
-                <div key={index} className="border rounded-lg p-4">
-                  <h3 className="font-semibold mb-2">
-                    {punto.punto_atencion_nombre}
-                  </h3>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-600">Total</p>
-                      <p className="text-lg font-bold">{punto.total}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Activas</p>
-                      <p className="text-lg font-bold text-green-600">
-                        {punto.activas}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">Anuladas</p>
-                      <p className="text-lg font-bold text-red-600">
-                        {punto.anuladas}
-                      </p>
+      {estadisticas &&
+        estadisticas.total_por_punto &&
+        estadisticas.total_por_punto.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Estadísticas por Punto de Atención</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {estadisticas.total_por_punto.map((punto, index) => (
+                  <div key={index} className="border rounded-lg p-4">
+                    <h3 className="font-semibold mb-2">
+                      {punto.punto_atencion_nombre}
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-600">Total</p>
+                        <p className="text-lg font-bold">{punto.total}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Activas</p>
+                        <p className="text-lg font-bold text-green-600">
+                          {punto.activas}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Anuladas</p>
+                        <p className="text-lg font-bold text-red-600">
+                          {punto.anuladas}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
     </div>
   );
 };

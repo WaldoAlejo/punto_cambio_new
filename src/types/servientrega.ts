@@ -70,13 +70,20 @@ export interface FormDataGuia {
 export interface Guia {
   id: string;
   numero_guia: string;
-  base64_response: string;
-  created_at: string;
+  base64_response?: string; // Para compatibilidad con código existente
+  pdf_base64?: string; // Campo que viene del backend de informes
+  created_at?: string; // Para compatibilidad con código existente
+  fecha_creacion?: string; // Campo que viene del backend de informes
   estado: "ACTIVA" | "ANULADA" | "PENDIENTE_ANULACION";
   punto_atencion_id: string;
-  usuario_id: string;
+  usuario_id?: string;
   usuario_nombre?: string;
   punto_atencion_nombre?: string;
+  destinatario_nombre?: string;
+  destinatario_telefono?: string;
+  destinatario_direccion?: string;
+  valor_declarado?: number;
+  costo_envio?: number;
   motivo_anulacion?: string;
   fecha_anulacion?: string;
   anulada_por?: string;

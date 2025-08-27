@@ -33,6 +33,7 @@ router.get("/informes/guias", authenticateToken, async (req, res) => {
     const guiasTransformadas = guias.map((guia) => ({
       id: guia.id,
       numero_guia: guia.numero_guia,
+      created_at: guia.created_at, // Mantener el nombre original para compatibilidad
       fecha_creacion: guia.created_at,
       estado: mapearEstadoGuia(guia.proceso),
       punto_atencion_id: guia.punto_atencion_id || "",
@@ -42,6 +43,7 @@ router.get("/informes/guias", authenticateToken, async (req, res) => {
       destinatario_direccion: guia.destinatario?.direccion || "N/A",
       valor_declarado: parseFloat(guia.valor_declarado?.toString() || "0"),
       costo_envio: parseFloat(guia.costo_envio?.toString() || "0"),
+      base64_response: guia.base64_response || "", // Mantener el nombre original para compatibilidad
       pdf_base64: guia.base64_response || "",
     }));
 
