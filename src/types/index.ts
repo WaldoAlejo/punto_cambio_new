@@ -467,3 +467,57 @@ export interface ReportData {
   balance?: number;
   exchanges?: number;
 }
+
+// Interfaces para contabilidad diaria
+export interface MovimientoDiario {
+  id: string;
+  fecha: string;
+  tipo: "INGRESO" | "EGRESO";
+  concepto:
+    | "CAMBIO_COMPRA"
+    | "CAMBIO_VENTA"
+    | "TRANSFERENCIA_RECIBIDA"
+    | "TRANSFERENCIA_ENVIADA"
+    | "SALDO_INICIAL";
+  moneda_id: string;
+  moneda_codigo: string;
+  moneda_simbolo: string;
+  monto: number;
+  referencia?: string; // ID del cambio o transferencia
+  numero_recibo?: string;
+  usuario_nombre?: string;
+  observaciones?: string;
+}
+
+export interface ResumenDiario {
+  fecha: string;
+  punto_atencion_id: string;
+  punto_atencion_nombre: string;
+  moneda_id: string;
+  moneda_codigo: string;
+  moneda_simbolo: string;
+  saldo_inicial: number;
+  total_ingresos: number;
+  total_egresos: number;
+  saldo_final: number;
+  diferencia: number;
+  movimientos: MovimientoDiario[];
+}
+
+export interface CierreDiario {
+  id: string;
+  fecha: string;
+  punto_atencion_id: string;
+  usuario_id: string;
+  resumen_por_moneda: ResumenDiario[];
+  observaciones?: string;
+  estado: "ABIERTO" | "CERRADO";
+  fecha_cierre?: string;
+  cerrado_por?: string;
+  diferencias_reportadas?: {
+    moneda_id: string;
+    diferencia_sistema: number;
+    diferencia_fisica: number;
+    justificacion?: string;
+  }[];
+}

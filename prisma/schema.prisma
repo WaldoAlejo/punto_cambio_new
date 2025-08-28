@@ -47,6 +47,8 @@ model Usuario {
   historialAutorizados      HistorialAsignacionPunto[] @relation("UsuarioAutorizador")
   saldosAsignados           SaldoInicial[]             @relation("UsuarioAsignadorSaldo")
   movimientosSaldo          MovimientoSaldo[]
+  cierresDiarios            CierreDiario[]
+  cierresDiariosRealizados  CierreDiario[]             @relation("UsuarioCerrador")
 
   @@index([username])
   @@index([punto_atencion_id])
@@ -87,6 +89,7 @@ model PuntoAtencion {
   historialSaldosServientrega     ServientregaHistorialSaldo[]
   solicitudesSaldoServientrega    ServientregaSolicitudSaldo[] // ✅ AGREGADO
   guiasServientrega               ServientregaGuia[]
+  cierresDiarios                  CierreDiario[]
 
   @@index([ciudad])
   @@index([activo])
@@ -589,6 +592,30 @@ model ServientregaSolicitudAnulacion {
   @@index([numero_guia])
   @@index([estado])
   @@index([fecha_solicitud])
+}
+
+model CierreDiario {
+  id                      String    @id @default(uuid())
+  fecha                   DateTime  @db.Date
+  punto_atencion_id       String
+  usuario_id              String
+  observaciones           String?
+  estado                  String    @default("ABIERTO") // ABIERTO, CERRADO
+  fecha_cierre            DateTime?
+  cerrado_por             String?
+  diferencias_reportadas  Json?
+  created_at              DateTime  @default(now())
+  updated_at              DateTime  @updatedAt
+
+  puntoAtencion           PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  usuario                 Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  usuarioCerrador         Usuario?      @relation("UsuarioCerrador", fields: [cerrado_por], references: [id], onDelete: Restrict)
+
+  @@unique([fecha, punto_atencion_id])
+  @@index([fecha])
+  @@index([punto_atencion_id])
+  @@index([estado])
+  @@index([fecha, punto_atencion_id])
 }
 
 // ============================

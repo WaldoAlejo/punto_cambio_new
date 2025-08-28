@@ -44,6 +44,7 @@ import saldosActualesRoutes from "./routes/saldos-actuales.js";
 import movimientosContablesRoutes from "./routes/movimientos-contables.js";
 import servientregaRoutes from "./routes/servientrega.js";
 import puntosAtencionRoutes from "./routes/puntos-atencion.js";
+import contabilidadDiariaRoutes from "./routes/contabilidad-diaria.js";
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
@@ -163,6 +164,7 @@ app.use("/api/saldos-actuales", saldosActualesRoutes);
 app.use("/api/movimientos-contables", movimientosContablesRoutes);
 app.use("/api/servientrega", servientregaRoutes);
 app.use("/api/puntos-atencion", puntosAtencionRoutes);
+app.use("/api/contabilidad-diaria", contabilidadDiariaRoutes);
 
 // Servir archivos estáticos del frontend en producción
 if (process.env.NODE_ENV === "production") {
