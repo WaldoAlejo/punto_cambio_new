@@ -17,7 +17,7 @@ const approvalSchema = z.object({
 router.get(
   "/",
   authenticateToken,
-  requireRole(["ADMIN", "SUPER_USUARIO", "OPERADOR"]), // <-- Aquí permitimos OPERADOR también
+  requireRole(["ADMIN", "SUPER_USUARIO", "OPERADOR", "CONCESION"]), // <-- Agregamos CONCESION
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
       res.set({
@@ -215,8 +215,10 @@ router.patch(
               cantidad_anterior: 0, // Se calculará después si es necesario
               cantidad_incrementada: -Number(transfer.monto),
               cantidad_nueva: 0, // Se calculará después si es necesario
-              tipo_movimiento: 'EGRESO',
-              descripcion: `Transferencia de salida a ${transferAprobada.destino?.nombre || 'Externa'} - ${transfer.monto}`,
+              tipo_movimiento: "EGRESO",
+              descripcion: `Transferencia de salida a ${
+                transferAprobada.destino?.nombre || "Externa"
+              } - ${transfer.monto}`,
               numero_referencia: transfer.numero_recibo || transfer.id,
             },
           });
@@ -254,8 +256,10 @@ router.patch(
             cantidad_anterior: 0, // Se calculará después si es necesario
             cantidad_incrementada: Number(transfer.monto),
             cantidad_nueva: 0, // Se calculará después si es necesario
-            tipo_movimiento: 'INGRESO',
-            descripcion: `Transferencia de entrada desde ${transferAprobada.origen?.nombre || 'Externa'} - ${transfer.monto}`,
+            tipo_movimiento: "INGRESO",
+            descripcion: `Transferencia de entrada desde ${
+              transferAprobada.origen?.nombre || "Externa"
+            } - ${transfer.monto}`,
             numero_referencia: transfer.numero_recibo || transfer.id,
           },
         });

@@ -88,6 +88,12 @@ const Sidebar = ({
       color: "text-emerald-600",
       roles: ["OPERADOR", "ADMIN", "SUPER_USUARIO"],
     },
+    {
+      id: "transfer-approvals",
+      label: "Aprobaciones",
+      color: "text-yellow-600",
+      roles: ["CONCESION"],
+    },
   ];
 
   const adminMenuItems: MenuItem[] = [
