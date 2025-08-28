@@ -21,6 +21,7 @@ async function main() {
   console.log("🧹 Iniciando limpieza completa de la base de datos...");
 
   // Eliminar todos los datos existentes en orden correcto (por dependencias)
+  await safeDelete("Cierres Diarios", () => prisma.cierreDiario.deleteMany());
   await safeDelete("Recibos", () => prisma.recibo.deleteMany());
   await safeDelete("Transferencias", () => prisma.transferencia.deleteMany());
   await safeDelete("Detalles Cuadre Caja", () =>
@@ -346,6 +347,63 @@ async function main() {
   }
   console.log("✅ Cuadres de caja iniciales creados para todos los puntos");
 
+  // 6. Crear algunos cierres diarios de ejemplo
+  const fechaAyer = new Date();
+  fechaAyer.setDate(fechaAyer.getDate() - 1);
+
+  const fechaAntesDeAyer = new Date();
+  fechaAntesDeAyer.setDate(fechaAntesDeAyer.getDate() - 2);
+
+  // Cierre diario cerrado de hace 2 días
+  await prisma.cierreDiario.create({
+    data: {
+      fecha: fechaAntesDeAyer,
+      punto_atencion_id: puntoPrincipal.id,
+      usuario_id: admin.id,
+      estado: "CERRADO",
+      fecha_cierre: new Date(fechaAntesDeAyer.getTime() + 18 * 60 * 60 * 1000), // 6 PM del mismo día
+      cerrado_por: admin.id,
+      observaciones: "Cierre diario normal - Sin diferencias",
+      diferencias_reportadas: {
+        USD: { diferencia: 0, observacion: "Sin diferencias" },
+        EUR: { diferencia: 0, observacion: "Sin diferencias" },
+      },
+    },
+  });
+
+  // Cierre diario abierto de ayer
+  await prisma.cierreDiario.create({
+    data: {
+      fecha: fechaAyer,
+      punto_atencion_id: puntoPrincipal.id,
+      usuario_id: admin.id,
+      estado: "ABIERTO",
+      observaciones: "Cierre pendiente - Esperando conteo final",
+    },
+  });
+
+  // Cierre diario para punto Norte (cerrado)
+  await prisma.cierreDiario.create({
+    data: {
+      fecha: fechaAyer,
+      punto_atencion_id: puntoNorte.id,
+      usuario_id: admin.id,
+      estado: "CERRADO",
+      fecha_cierre: new Date(fechaAyer.getTime() + 19 * 60 * 60 * 1000), // 7 PM de ayer
+      cerrado_por: admin.id,
+      observaciones: "Cierre con diferencia menor en USD",
+      diferencias_reportadas: {
+        USD: {
+          diferencia: -50,
+          observacion: "Diferencia menor en billetes de $20",
+        },
+        EUR: { diferencia: 0, observacion: "Sin diferencias" },
+      },
+    },
+  });
+
+  console.log("✅ Cierres diarios de ejemplo creados");
+
   console.log("\n🎉 ¡Seed completo ejecutado exitosamente!");
   console.log("\n📊 Resumen de datos creados:");
   console.log(`   • 3 Puntos de atención:`);
@@ -363,6 +421,9 @@ async function main() {
     } Saldos iniciales (todas las monedas en todos los puntos)`
   );
   console.log(`   • 3 Cuadres de caja iniciales`);
+  console.log(
+    `   • 3 Cierres diarios de ejemplo (1 cerrado, 2 con diferentes estados)`
+  );
   console.log("\n🔑 Credenciales de acceso:");
   console.log("   👤 ADMIN:");
   console.log("      • Usuario: admin");

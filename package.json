@@ -31,7 +31,7 @@
     "migrate:agencias": "npx prisma db push"
   },
   "prisma": {
-    "seed": "tsx prisma/seed-casa-cambios.ts"
+    "seed": "tsx prisma/seed-complete.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
