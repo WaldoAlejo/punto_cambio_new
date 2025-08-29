@@ -21,6 +21,7 @@ import {
   procesarRespuestaTarifa,
   formatearPayloadGuia,
   procesarRespuestaGuia,
+  formatearPayloadTarifa,
 } from "@/config/servientrega";
 import TarifaModal from "./TarifaModal";
 
@@ -167,7 +168,14 @@ export default function PasoResumenNuevo({
     setLoading(true);
     try {
       // Usar función centralizada para formatear payload
-      const payload = construirPayloadTarifa(formData);
+      const payload = formatearPayloadTarifa({
+        remitente: formData.remitente,
+        destinatario: formData.destinatario,
+        medidas: formData.medidas,
+        empaque: formData.empaque,
+        nombre_producto: formData.nombre_producto,
+        recoleccion: formData.medidas?.recoleccion || false,
+      });
       console.log("📤 Payload para tarifa:", payload);
 
       // Llamar a nuestro backend que se encarga de la comunicación con Servientrega
@@ -842,24 +850,4 @@ export default function PasoResumenNuevo({
       )}
     </div>
   );
-}
-
-function construirPayloadTarifa(formData: any) {
-  return {
-    tipo: "obtener_tarifa_nacional",
-    ciu_ori: formData.remitente?.ciudad || "",
-    provincia_ori: formData.remitente?.provincia || "",
-    ciu_des: formData.destinatario?.ciudad || "",
-    provincia_des: formData.destinatario?.provincia || "",
-    valor_seguro: String(formData.medidas?.valor_seguro ?? ""),
-    valor_declarado: String(formData.medidas?.valor_declarado ?? ""),
-    peso: String(formData.medidas?.peso ?? ""),
-    alto: String(formData.medidas?.alto ?? ""),
-    ancho: String(formData.medidas?.ancho ?? ""),
-    largo: String(formData.medidas?.largo ?? ""),
-    recoleccion: formData.medidas?.recoleccion ? "SI" : "NO",
-    nombre_producto: formData.nombre_producto || "",
-    empaque: formData.empaque || "",
-    // Las credenciales se manejan en el backend
-  };
 }
