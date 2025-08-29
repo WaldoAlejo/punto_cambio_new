@@ -55,7 +55,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
     const whereClause: Record<string, unknown> = {};
 
-    if (req.user?.rol === "OPERADOR") {
+    if (req.user?.rol === "OPERADOR" || req.user?.rol === "ADMINISTRATIVO") {
       whereClause.usuario_id = req.user.id;
     }
 
@@ -156,9 +156,13 @@ router.post(
         ubicacion_salida,
       } = req.body;
 
-      if (req.user?.rol === "OPERADOR" && usuario_id !== req.user.id) {
+      if (
+        (req.user?.rol === "OPERADOR" || req.user?.rol === "ADMINISTRATIVO") &&
+        usuario_id !== req.user.id
+      ) {
         res.status(403).json({
-          error: "Los operadores solo pueden gestionar sus propias jornadas",
+          error:
+            "Los operadores y administrativos solo pueden gestionar sus propias jornadas",
           success: false,
           timestamp: new Date().toISOString(),
         });
@@ -182,6 +186,8 @@ router.post(
           return;
         }
       }
+
+      // Los administrativos pueden usar cualquier punto de atención
 
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);

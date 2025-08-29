@@ -5,7 +5,7 @@ export interface Usuario {
   nombre: string;
   correo?: string | null;
   telefono?: string | null;
-  rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION";
+  rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION" | "ADMINISTRATIVO";
   activo: boolean;
   punto_atencion_id?: string | null;
   created_at: string;
@@ -342,7 +342,7 @@ export interface CreateUserData {
   nombre: string;
   correo?: string;
   telefono?: string;
-  rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION";
+  rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION" | "ADMINISTRATIVO";
   punto_atencion_id?: string;
 }
 

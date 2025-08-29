@@ -251,6 +251,9 @@ export const UserManagement = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="OPERADOR">Operador</SelectItem>
+                      <SelectItem value="ADMINISTRATIVO">
+                        Administrativo
+                      </SelectItem>
                       <SelectItem value="CONCESION">Concesión</SelectItem>
                       <SelectItem value="ADMIN">Administrador</SelectItem>
                       <SelectItem value="SUPER_USUARIO">

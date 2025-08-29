@@ -627,6 +627,7 @@ enum RolUsuario {
   ADMIN
   OPERADOR
   CONCESION
+  ADMINISTRATIVO
 }
 
 enum TipoMovimiento {

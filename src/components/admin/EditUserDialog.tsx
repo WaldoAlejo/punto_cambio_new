@@ -94,7 +94,6 @@ const EditUserDialog = ({
     }
   };
 
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
@@ -155,6 +154,7 @@ const EditUserDialog = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="OPERADOR">Operador</SelectItem>
+                  <SelectItem value="ADMINISTRATIVO">Administrativo</SelectItem>
                   <SelectItem value="CONCESION">Concesión</SelectItem>
                   <SelectItem value="ADMIN">Administrador</SelectItem>
                   {currentUser.rol === "SUPER_USUARIO" && (

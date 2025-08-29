@@ -36,7 +36,10 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user.rol === "OPERADOR" && !selectedPoint) {
+    if (
+      (user.rol === "OPERADOR" || user.rol === "ADMINISTRATIVO") &&
+      !selectedPoint
+    ) {
       navigate("/seleccionar-punto", { replace: true });
     }
   }, [user, selectedPoint, navigate]);
@@ -53,6 +56,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
     // Verificar permisos por rol
     const isAdmin = user.rol === "ADMIN" || user.rol === "SUPER_USUARIO";
     const isOperador = user.rol === "OPERADOR";
+    const isAdministrativo = user.rol === "ADMINISTRATIVO";
     const isConcesion = user.rol === "CONCESION";
 
     switch (activeView) {
@@ -80,7 +84,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isOperador) return <div>Sin permisos</div>;
         return <TransferManagement user={user} />;
       case "operator-time-management":
-        if (!isOperador) return <div>Sin permisos</div>;
+        if (!isOperador && !isAdministrativo) return <div>Sin permisos</div>;
         return (
           <OperatorTimeManagement user={user} selectedPoint={selectedPoint} />
         );
@@ -98,7 +102,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           <AdminTimeManagement user={user} selectedPoint={selectedPoint} />
         );
       case "transfer-approvals":
-        if (!isAdmin) return <div>Sin permisos</div>;
+        if (!isAdmin && !isConcesion) return <div>Sin permisos</div>;
         return <TransferApprovals />;
       case "users":
         if (!isAdmin) return <div>Sin permisos</div>;

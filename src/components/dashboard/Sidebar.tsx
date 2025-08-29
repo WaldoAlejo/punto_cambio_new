@@ -68,7 +68,7 @@ const Sidebar = ({
       id: "operator-time-management",
       label: "Gestión de Horarios",
       color: "text-purple-600",
-      roles: ["OPERADOR"],
+      roles: ["OPERADOR", "ADMINISTRATIVO"],
     },
     {
       id: "daily-close",

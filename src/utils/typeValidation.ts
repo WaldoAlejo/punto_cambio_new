@@ -30,7 +30,13 @@ export function validateAndTransformUser(data: any): Usuario | null {
   }
 
   // Validar rol
-  const validRoles = ["SUPER_USUARIO", "ADMIN", "OPERADOR", "CONCESION"];
+  const validRoles = [
+    "SUPER_USUARIO",
+    "ADMIN",
+    "OPERADOR",
+    "CONCESION",
+    "ADMINISTRATIVO",
+  ];
   if (!validRoles.includes(data.rol)) {
     console.error(`Rol inválido: ${data.rol}`);
     return null;

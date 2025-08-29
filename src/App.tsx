@@ -58,8 +58,10 @@ function App() {
               provincia: active.puntoAtencion?.provincia || "",
               codigo_postal: active.puntoAtencion?.codigo_postal || "",
               telefono: active.puntoAtencion?.telefono || "",
-              servientrega_agencia_codigo: active.puntoAtencion?.servientrega_agencia_codigo,
-              servientrega_agencia_nombre: active.puntoAtencion?.servientrega_agencia_nombre,
+              servientrega_agencia_codigo:
+                active.puntoAtencion?.servientrega_agencia_codigo,
+              servientrega_agencia_nombre:
+                active.puntoAtencion?.servientrega_agencia_nombre,
               activo: true,
               es_principal: false,
               created_at: "",
@@ -136,7 +138,8 @@ function App() {
           <LoginForm />
           <Toaster />
         </>
-      ) : user.rol === "OPERADOR" && !selectedPoint ? (
+      ) : (user.rol === "OPERADOR" || user.rol === "ADMINISTRATIVO") &&
+        !selectedPoint ? (
         <>
           <PointSelection user={user} points={points} onLogout={logout} />
           <Toaster />

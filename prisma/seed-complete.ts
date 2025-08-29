@@ -201,6 +201,7 @@ async function main() {
   const hashedPasswordAdmin = await bcrypt.hash("admin123", 10);
   const hashedPasswordOperador = await bcrypt.hash("operador123", 10);
   const hashedPasswordConcesion = await bcrypt.hash("concesion123", 10);
+  const hashedPasswordAdministrativo = await bcrypt.hash("admin123", 10);
 
   // Usuario ADMIN
   const admin = await prisma.usuario.upsert({
@@ -251,6 +252,22 @@ async function main() {
     },
   });
   console.log("✅ Usuario concesión creado");
+
+  // Usuario ADMINISTRATIVO
+  const administrativo = await prisma.usuario.upsert({
+    where: { username: "administrativo" },
+    update: {},
+    create: {
+      username: "administrativo",
+      password: hashedPasswordAdministrativo,
+      rol: "ADMINISTRATIVO",
+      nombre: "Usuario Administrativo",
+      correo: "administrativo@casadecambios.com",
+      telefono: "0966666666",
+      activo: true,
+    },
+  });
+  console.log("✅ Usuario administrativo creado");
 
   // 4. Crear saldos iniciales para todas las monedas en todos los puntos
   const puntos = [puntoPrincipal, puntoNorte, puntoSur];
@@ -411,10 +428,11 @@ async function main() {
   console.log(`     - ${puntoNorte.nombre}`);
   console.log(`     - ${puntoSur.nombre}`);
   console.log(`   • ${monedasCreadas.length} Monedas configuradas`);
-  console.log(`   • 3 Usuarios de prueba:`);
+  console.log(`   • 4 Usuarios de prueba:`);
   console.log(`     - ${admin.username} (ADMIN)`);
   console.log(`     - ${operador.username} (OPERADOR)`);
   console.log(`     - ${concesion.username} (CONCESION)`);
+  console.log(`     - ${administrativo.username} (ADMINISTRATIVO)`);
   console.log(
     `   • ${
       monedasCreadas.length * 3
@@ -434,6 +452,9 @@ async function main() {
   console.log("   👤 CONCESION:");
   console.log("      • Usuario: concesion");
   console.log("      • Contraseña: concesion123");
+  console.log("   👤 ADMINISTRATIVO:");
+  console.log("      • Usuario: administrativo");
+  console.log("      • Contraseña: admin123");
   console.log("\n🏢 Puntos de atención disponibles:");
   console.log("   • Principal: Rabida y Juan Leon Mera, Quito");
   console.log("   • Norte: Av. 6 de Diciembre y Eloy Alfaro, Quito");

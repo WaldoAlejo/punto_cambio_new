@@ -13,7 +13,7 @@ export interface AuthUser {
   nombre: string;
   correo?: string | null;
   telefono?: string | null;
-  rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION";
+  rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION" | "ADMINISTRATIVO";
   activo: boolean;
   punto_atencion_id?: string | null;
   created_at: string;

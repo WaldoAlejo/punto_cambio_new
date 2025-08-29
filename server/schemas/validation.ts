@@ -1,4 +1,3 @@
-
 import { z } from "zod";
 
 // Schema para login - Reducido a 3 caracteres mínimo para que funcione con "admin123"
@@ -41,11 +40,15 @@ export const createUserSchema = z.object({
     .regex(/^[\d\-+()\s]+$/, "Formato de teléfono inválido")
     .optional()
     .nullable(),
-  rol: z.enum(["ADMIN", "OPERADOR", "SUPER_USUARIO"], {
-    errorMap: () => ({
-      message: "Rol inválido. Debe ser ADMIN, OPERADOR o SUPER_USUARIO",
-    }),
-  }),
+  rol: z.enum(
+    ["ADMIN", "OPERADOR", "SUPER_USUARIO", "CONCESION", "ADMINISTRATIVO"],
+    {
+      errorMap: () => ({
+        message:
+          "Rol inválido. Debe ser ADMIN, OPERADOR, SUPER_USUARIO, CONCESION o ADMINISTRATIVO",
+      }),
+    }
+  ),
   punto_atencion_id: z
     .string()
     .uuid("ID de punto de atención inválido")
