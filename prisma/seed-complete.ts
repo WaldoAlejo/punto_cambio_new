@@ -197,11 +197,11 @@ async function main() {
   }
   console.log(`✅ ${monedasCreadas.length} monedas creadas`);
 
-  // 3. Crear usuarios de prueba
-  const hashedPasswordAdmin = await bcrypt.hash("admin123", 10);
-  const hashedPasswordOperador = await bcrypt.hash("operador123", 10);
-  const hashedPasswordConcesion = await bcrypt.hash("concesion123", 10);
-  const hashedPasswordAdministrativo = await bcrypt.hash("admin123", 10);
+  // 3. Crear usuarios de prueba con contraseñas fuertes
+  const hashedPasswordAdmin = await bcrypt.hash("Admin123!", 10);
+  const hashedPasswordOperador = await bcrypt.hash("Operador123!", 10);
+  const hashedPasswordConcesion = await bcrypt.hash("Concesion123!", 10);
+  const hashedPasswordAdministrativo = await bcrypt.hash("Admin123!", 10);
 
   // Usuario ADMIN
   const admin = await prisma.usuario.upsert({
@@ -442,19 +442,19 @@ async function main() {
   console.log(
     `   • 3 Cierres diarios de ejemplo (1 cerrado, 2 con diferentes estados)`
   );
-  console.log("\n🔑 Credenciales de acceso:");
+  console.log("\n🔑 Credenciales de acceso (NUEVAS CONTRASEÑAS FUERTES):");
   console.log("   👤 ADMIN:");
-  console.log("      • Usuario: admin");
-  console.log("      • Contraseña: admin123");
+  console.log("      • Usuario: admin (case-insensitive)");
+  console.log("      • Contraseña: Admin123!");
   console.log("   👤 OPERADOR:");
-  console.log("      • Usuario: operador");
-  console.log("      • Contraseña: operador123");
+  console.log("      • Usuario: operador (case-insensitive)");
+  console.log("      • Contraseña: Operador123!");
   console.log("   👤 CONCESION:");
-  console.log("      • Usuario: concesion");
-  console.log("      • Contraseña: concesion123");
+  console.log("      • Usuario: concesion (case-insensitive)");
+  console.log("      • Contraseña: Concesion123!");
   console.log("   👤 ADMINISTRATIVO:");
-  console.log("      • Usuario: administrativo");
-  console.log("      • Contraseña: admin123");
+  console.log("      • Usuario: administrativo (case-insensitive)");
+  console.log("      • Contraseña: Admin123!");
   console.log("\n🏢 Puntos de atención disponibles:");
   console.log("   • Principal: Rabida y Juan Leon Mera, Quito");
   console.log("   • Norte: Av. 6 de Diciembre y Eloy Alfaro, Quito");

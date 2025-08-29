@@ -87,8 +87,19 @@ export const UserManagement = () => {
       return;
     }
 
-    if (formData.password.length < 6) {
-      toast.error("La contraseña debe tener al menos 6 caracteres");
+    // Validar contraseña fuerte
+    const passwordRegex =
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/;
+
+    if (formData.password.length < 8) {
+      toast.error("La contraseña debe tener al menos 8 caracteres");
+      return;
+    }
+
+    if (!passwordRegex.test(formData.password)) {
+      toast.error(
+        "La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 símbolo (@$!%*?&)"
+      );
       return;
     }
 
@@ -305,8 +316,20 @@ export const UserManagement = () => {
                       password: e.target.value,
                     }))
                   }
-                  placeholder="Contraseña temporal"
+                  placeholder="Mín. 8 caracteres: A-z, 0-9, @$!%*?&"
                 />
+                <div className="text-xs text-gray-600 bg-yellow-50 p-2 rounded">
+                  <p>
+                    <strong>Requisitos de contraseña:</strong>
+                  </p>
+                  <ul className="list-disc list-inside mt-1">
+                    <li>Mínimo 8 caracteres</li>
+                    <li>Al menos 1 mayúscula (A-Z)</li>
+                    <li>Al menos 1 minúscula (a-z)</li>
+                    <li>Al menos 1 número (0-9)</li>
+                    <li>Al menos 1 símbolo (@$!%*?&)</li>
+                  </ul>
+                </div>
               </div>
 
               <div className="flex gap-2">

@@ -38,9 +38,13 @@ router.post(
 
       logger.info("Intento de login", { username, ip: req.ip });
 
+      // Buscar usuario con case-insensitive (username ya viene en minúsculas del schema)
       const user = await prisma.usuario.findFirst({
         where: {
-          username: username,
+          username: {
+            equals: username,
+            mode: "insensitive", // Búsqueda case-insensitive
+          },
           activo: true,
         },
       });

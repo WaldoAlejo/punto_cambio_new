@@ -52,6 +52,16 @@ const LoginForm = () => {
           <CardDescription className="text-sm">
             Ingrese sus credenciales para acceder
           </CardDescription>
+          <div className="text-xs text-gray-600 mt-2 p-2 bg-blue-50 rounded">
+            <p>
+              <strong>Nota:</strong> El usuario no distingue
+              mayúsculas/minúsculas
+            </p>
+            <p>
+              La contraseña debe tener mínimo 8 caracteres con mayúsculas,
+              minúsculas, números y símbolos
+            </p>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-3">

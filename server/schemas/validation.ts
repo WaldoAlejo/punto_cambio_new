@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-// Schema para login - Reducido a 3 caracteres mínimo para que funcione con "admin123"
+// Schema para login - Username case-insensitive, password con validación fuerte
 export const loginSchema = z.object({
   username: z
     .string()
@@ -9,11 +9,16 @@ export const loginSchema = z.object({
     .regex(
       /^[a-zA-Z0-9_]+$/,
       "El nombre de usuario solo puede contener letras, números y guiones bajos"
-    ),
+    )
+    .transform((val) => val.toLowerCase()), // Convertir a minúsculas para búsqueda case-insensitive
   password: z
     .string()
-    .min(3, "La contraseña debe tener al menos 3 caracteres") // Cambiado de 6 a 3
-    .max(100, "La contraseña no puede exceder 100 caracteres"),
+    .min(8, "La contraseña debe tener al menos 8 caracteres")
+    .max(100, "La contraseña no puede exceder 100 caracteres")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+      "La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 símbolo (@$!%*?&)"
+    ),
 });
 
 // Schema para crear usuario
@@ -25,11 +30,16 @@ export const createUserSchema = z.object({
     .regex(
       /^[a-zA-Z0-9_]+$/,
       "El nombre de usuario solo puede contener letras, números y guiones bajos"
-    ),
+    )
+    .transform((val) => val.toLowerCase()), // Convertir a minúsculas para consistencia
   password: z
     .string()
-    .min(6, "La contraseña debe tener al menos 6 caracteres")
-    .max(100, "La contraseña no puede exceder 100 caracteres"),
+    .min(8, "La contraseña debe tener al menos 8 caracteres")
+    .max(100, "La contraseña no puede exceder 100 caracteres")
+    .regex(
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+      "La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 símbolo (@$!%*?&)"
+    ),
   nombre: z
     .string()
     .min(2, "El nombre debe tener al menos 2 caracteres")
