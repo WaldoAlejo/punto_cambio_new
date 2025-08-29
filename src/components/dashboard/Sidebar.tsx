@@ -118,6 +118,11 @@ const Sidebar = ({
       color: "text-green-600",
     },
     {
+      id: "currencies",
+      label: "Gestión de Monedas",
+      color: "text-indigo-600",
+    },
+    {
       id: "balance-management",
       label: "Gestión de Saldos",
       color: "text-blue-600",

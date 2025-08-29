@@ -177,7 +177,7 @@ export const CurrencyManagement = () => {
           <CardHeader>
             <CardTitle>Crear Nueva Moneda</CardTitle>
             <CardDescription>
-              Complete la información de la nueva moneda
+              Complete la información de la nueva moneda para la casa de cambios
             </CardDescription>
           </CardHeader>
           <CardContent>
