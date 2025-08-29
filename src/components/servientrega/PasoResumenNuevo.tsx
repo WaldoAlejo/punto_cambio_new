@@ -112,9 +112,8 @@ export default function PasoResumenNuevo({
   const [contenido, setContenido] = useState(
     formData.contenido || formData.nombre_producto || ""
   );
-  const [retiroOficina, setRetiroOficina] = useState(
-    formData.retiro_oficina || false
-  );
+  // TEMPORALMENTE DESACTIVADO - Forzar entrega a domicilio
+  const [retiroOficina, setRetiroOficina] = useState(false);
   const [nombreAgencia, setNombreAgencia] = useState(
     formData.nombre_agencia_retiro_oficina || ""
   );
@@ -251,12 +250,13 @@ export default function PasoResumenNuevo({
       return;
     }
 
-    if (retiroOficina && !nombreAgencia.trim()) {
-      toast.error(
-        "Debe especificar el nombre de la agencia para retiro en oficina"
-      );
-      return;
-    }
+    // TEMPORALMENTE DESACTIVADO - Validación de agencia para retiro en oficina
+    // if (retiroOficina && !nombreAgencia.trim()) {
+    //   toast.error(
+    //     "Debe especificar el nombre de la agencia para retiro en oficina"
+    //   );
+    //   return;
+    // }
 
     setGenerandoGuia(true);
     try {
@@ -321,12 +321,13 @@ export default function PasoResumenNuevo({
       return;
     }
 
-    if (retiroOficina && !nombreAgencia.trim()) {
-      toast.error(
-        "Debe especificar el nombre de la agencia para retiro en oficina"
-      );
-      return;
-    }
+    // TEMPORALMENTE DESACTIVADO - Validación de agencia para retiro en oficina
+    // if (retiroOficina && !nombreAgencia.trim()) {
+    //   toast.error(
+    //     "Debe especificar el nombre de la agencia para retiro en oficina"
+    //   );
+    //   return;
+    // }
 
     onNext({
       contenido: contenido.trim(),
@@ -625,8 +626,10 @@ export default function PasoResumenNuevo({
                   />
                 </div>
 
-                {/* Mostrar información de retiro de oficina si ya se seleccionó */}
-                {formData.retiro_oficina &&
+                {/* TEMPORALMENTE DESACTIVADO - Mostrar información de retiro de oficina si ya se seleccionó */}
+                {/* TODO: Reactivar cuando se implemente completamente la funcionalidad de entrega en oficina */}
+                {false &&
+                  formData.retiro_oficina &&
                   formData.nombre_agencia_retiro_oficina && (
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
@@ -644,8 +647,9 @@ export default function PasoResumenNuevo({
                     </div>
                   )}
 
-                {/* Solo mostrar checkbox si no se ha seleccionado agencia previamente */}
-                {!formData.retiro_oficina && (
+                {/* TEMPORALMENTE DESACTIVADO - Solo mostrar checkbox si no se ha seleccionado agencia previamente */}
+                {/* TODO: Reactivar cuando se implemente completamente la funcionalidad de entrega en oficina */}
+                {false && !formData.retiro_oficina && (
                   <>
                     <div className="flex items-center space-x-2">
                       <Checkbox
@@ -674,6 +678,22 @@ export default function PasoResumenNuevo({
                     )}
                   </>
                 )}
+
+                {/* INFORMACIÓN TEMPORAL - Solo entrega a domicilio disponible */}
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-blue-600 font-medium">
+                      🏠 Entrega a domicilio
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700">
+                    El paquete será entregado en la dirección del destinatario
+                    especificada anteriormente.
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Actualmente solo está disponible la entrega a domicilio.
+                  </p>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -704,9 +724,9 @@ export default function PasoResumenNuevo({
                 <Button
                   onClick={handleSubmit}
                   disabled={
-                    loading ||
-                    !contenido.trim() ||
-                    (retiroOficina && !nombreAgencia.trim())
+                    loading || !contenido.trim()
+                    // TEMPORALMENTE DESACTIVADO - Validación de agencia
+                    // || (retiroOficina && !nombreAgencia.trim())
                   }
                   className="bg-blue-600 hover:bg-blue-700 text-white px-8"
                 >
