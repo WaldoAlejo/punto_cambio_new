@@ -15,6 +15,7 @@
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit",
     "seed": "npx tsx prisma/seed.ts",
+    "seed:admin": "npx tsx prisma/seed-admin.ts",
     "seed:complete": "npx tsx prisma/seed-complete.ts",
     "audit": "npm audit",
     "audit:fix": "npm audit fix",
