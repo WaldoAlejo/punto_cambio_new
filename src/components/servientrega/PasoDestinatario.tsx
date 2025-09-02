@@ -314,8 +314,14 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     setMostrarAgencias(checked);
     if (checked) {
       try {
+        console.log("🔍 Cargando agencias de Servientrega...");
         const res = await axiosInstance.post("/servientrega/agencias");
-        const data = res.data.fetch || [];
+        console.log("📍 Respuesta de agencias:", res.data);
+
+        // Corregir la estructura de datos - usar res.data.data en lugar de res.data.fetch
+        const data = res.data.data || res.data.fetch || [];
+        console.log("📋 Agencias procesadas:", data.length);
+
         setAgencias(
           data.map((a: any) => ({
             nombre: String(a.agencia ?? Object.values(a)[0] ?? "").trim(),
@@ -324,8 +330,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             ciudad: String(a.ciudad?.trim() ?? ""),
           }))
         );
+
+        console.log("✅ Agencias cargadas exitosamente:", data.length);
       } catch (error) {
-        console.error("Error al cargar agencias:", error);
+        console.error("❌ Error al cargar agencias:", error);
+        toast.error("Error al cargar las agencias de Servientrega");
       }
     } else {
       setAgenciaSeleccionada("");

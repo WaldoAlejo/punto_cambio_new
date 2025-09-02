@@ -8,14 +8,9 @@ interface AgenciasResponse extends ApiResponse {
 export const servientregaService = {
   async getAgencias(): Promise<{ agencias: Agencia[]; error: string | null }> {
     try {
-      console.log("🔍 servientregaService.getAgencias: Iniciando solicitud...");
       const response = await apiService.post<AgenciasResponse>(
         "/servientrega/agencias",
         {} // Enviar un objeto vacío como body para el POST
-      );
-      console.log(
-        "📍 servientregaService.getAgencias: Respuesta recibida:",
-        response
       );
 
       // Verificar si la respuesta tiene el formato esperado
@@ -38,14 +33,16 @@ export const servientregaService = {
         };
       }
 
-      // Si la respuesta es exitosa, extraer las agencias
-      const agencias = response.data || [];
-      console.log(`✅ getAgencias: ${agencias.length} agencias obtenidas`);
+      // Si la respuesta es exitosa, extraer y mapear las agencias
+      const rawAgencias = response.data || [];
 
-      // Log de las primeras agencias para debugging
-      if (agencias.length > 0) {
-        console.log("📋 Primeras agencias:", agencias.slice(0, 3));
-      }
+      // Mapear la estructura de datos del backend al tipo Agencia esperado
+      const agencias: Agencia[] = rawAgencias.map((rawAgencia: any) => ({
+        nombre: rawAgencia.agencia || rawAgencia.nombre || "",
+        tipo_cs: rawAgencia.tipo_cs || "",
+        direccion: rawAgencia.direccion || "",
+        ciudad: rawAgencia.ciudad || "",
+      }));
 
       return { agencias, error: null };
     } catch (error) {

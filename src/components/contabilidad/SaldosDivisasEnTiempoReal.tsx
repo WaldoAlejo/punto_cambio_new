@@ -11,23 +11,34 @@ import {
 } from "lucide-react";
 import { User, PuntoAtencion } from "@/types";
 import { useContabilidadDivisas } from "@/hooks/useContabilidadDivisas";
+import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
 import { Loading } from "@/components/ui/loading";
 
 interface SaldosDivisasEnTiempoRealProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
   className?: string;
+  isAdminView?: boolean;
 }
 
 export const SaldosDivisasEnTiempoReal = ({
   user,
   selectedPoint,
   className = "",
+  isAdminView = false,
 }: SaldosDivisasEnTiempoRealProps) => {
-  const { saldos, isLoading, error, refresh } = useContabilidadDivisas({
-    user,
-    selectedPoint,
-  });
+  // Usar hook apropiado según si es vista de administrador
+  const contabilidadNormal = useContabilidadDivisas({ user, selectedPoint });
+  const contabilidadAdmin = useContabilidadAdmin({ user });
+
+  const { saldos, isLoading, error, refresh } = isAdminView
+    ? {
+        saldos: contabilidadAdmin.saldosConsolidados,
+        isLoading: contabilidadAdmin.isLoading,
+        error: contabilidadAdmin.error,
+        refresh: contabilidadAdmin.refresh,
+      }
+    : contabilidadNormal;
 
   const [autoRefresh, setAutoRefresh] = useState(true);
 
@@ -148,7 +159,9 @@ export const SaldosDivisasEnTiempoReal = ({
                           {saldo.moneda_codigo} (Principal)
                         </h3>
                         <p className="text-sm text-green-600">
-                          Moneda base del sistema
+                          {isAdminView && "punto_nombre" in saldo
+                            ? (saldo as any).punto_nombre
+                            : "Moneda base del sistema"}
                         </p>
                       </div>
                     </div>
@@ -188,7 +201,9 @@ export const SaldosDivisasEnTiempoReal = ({
                       <div>
                         <h3 className="font-semibold">{saldo.moneda_codigo}</h3>
                         <p className="text-sm text-muted-foreground">
-                          Moneda secundaria
+                          {isAdminView && "punto_nombre" in saldo
+                            ? (saldo as any).punto_nombre
+                            : "Moneda secundaria"}
                         </p>
                       </div>
                     </div>

@@ -97,16 +97,24 @@ const Sidebar = ({
   ];
 
   const adminMenuItems: MenuItem[] = [
+    // Supervisión y contabilidad
     {
-      id: "admin-time-management",
-      label: "Control de Horarios",
-      color: "text-purple-600",
+      id: "contabilidad-divisas",
+      label: "Contabilidad General",
+      color: "text-emerald-600",
     },
     {
-      id: "transfer-approvals",
-      label: "Aprobaciones",
-      color: "text-yellow-600",
+      id: "reports",
+      label: "Reportes Generales",
+      color: "text-red-600",
     },
+    // Separador visual
+    {
+      id: "separator-1",
+      label: "---",
+      color: "",
+    },
+    // Gestión de usuarios y puntos
     {
       id: "users",
       label: "Usuarios",
@@ -118,6 +126,18 @@ const Sidebar = ({
       color: "text-green-600",
     },
     {
+      id: "admin-time-management",
+      label: "Control de Horarios",
+      color: "text-purple-600",
+    },
+    // Separador visual
+    {
+      id: "separator-2",
+      label: "---",
+      color: "",
+    },
+    // Gestión financiera
+    {
       id: "currencies",
       label: "Gestión de Monedas",
       color: "text-indigo-600",
@@ -127,6 +147,18 @@ const Sidebar = ({
       label: "Gestión de Saldos",
       color: "text-blue-600",
     },
+    {
+      id: "transfer-approvals",
+      label: "Aprobaciones",
+      color: "text-yellow-600",
+    },
+    // Separador visual
+    {
+      id: "separator-3",
+      label: "---",
+      color: "",
+    },
+    // Gestión de Servientrega
     {
       id: "servientrega-saldo",
       label: "Saldo Servientrega",
@@ -142,14 +174,14 @@ const Sidebar = ({
       label: "Informes Servientrega",
       color: "text-purple-600",
     },
-    {
-      id: "reports",
-      label: "Reportes",
-      color: "text-red-600",
-    },
   ];
 
   const renderMenuItem = (item: MenuItem) => {
+    // Renderizar separadores
+    if (item.id.startsWith("separator")) {
+      return isOpen ? <Separator key={item.id} className="my-2" /> : null;
+    }
+
     const isActive = activeView === item.id;
     return (
       <Button
@@ -249,7 +281,19 @@ const Sidebar = ({
             <Separator className="my-2" />
 
             {menuItems
-              .filter((item) => item.roles?.includes(user.rol || ""))
+              .filter((item) => {
+                // Filtrar por rol
+                if (!item.roles?.includes(user.rol || "")) return false;
+
+                // Para opciones de Servientrega, verificar que el punto tenga agencia asignada
+                if (item.id === "servientrega") {
+                  return selectedPoint?.servientrega_agencia_codigo
+                    ? true
+                    : false;
+                }
+
+                return true;
+              })
               .map(renderMenuItem)}
 
             {isAdmin && (

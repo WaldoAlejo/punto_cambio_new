@@ -105,53 +105,104 @@ const EditPointDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>Editar Punto de Atención</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {["nombre", "direccion", "ciudad", "provincia"].map((field) => (
-            <div key={field} className="space-y-2">
-              <Label className="capitalize">{field} *</Label>
+
+        <div className="flex-1 overflow-y-auto pr-2">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Información básica en grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Nombre *</Label>
+                <Input
+                  name="nombre"
+                  value={formData.nombre}
+                  onChange={handleChange}
+                  disabled={loading}
+                  placeholder="Nombre del punto de atención"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Ciudad *</Label>
+                <Input
+                  name="ciudad"
+                  value={formData.ciudad}
+                  onChange={handleChange}
+                  disabled={loading}
+                  placeholder="Ciudad"
+                />
+              </div>
+            </div>
+
+            {/* Dirección completa */}
+            <div className="space-y-2">
+              <Label>Dirección *</Label>
               <Input
-                name={field}
-                value={formData[field as keyof typeof formData]}
+                name="direccion"
+                value={formData.direccion}
                 onChange={handleChange}
+                disabled={loading}
+                placeholder="Dirección completa"
+              />
+            </div>
+
+            {/* Provincia, código postal y teléfono */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Provincia *</Label>
+                <Input
+                  name="provincia"
+                  value={formData.provincia}
+                  onChange={handleChange}
+                  disabled={loading}
+                  placeholder="Provincia"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Código Postal</Label>
+                <Input
+                  name="codigo_postal"
+                  value={formData.codigo_postal}
+                  onChange={handleChange}
+                  disabled={loading}
+                  placeholder="Código postal"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Teléfono</Label>
+                <Input
+                  name="telefono"
+                  value={formData.telefono}
+                  onChange={handleChange}
+                  disabled={loading}
+                  placeholder="Número de teléfono"
+                />
+              </div>
+            </div>
+
+            {/* Selector de agencia */}
+            <div className="border-t pt-4">
+              <AgenciaSelector
+                value={formData.servientrega_agencia_nombre}
+                onAgenciaSelect={(agencia) => {
+                  setFormData({
+                    ...formData,
+                    servientrega_agencia_codigo: agencia?.tipo_cs || "",
+                    servientrega_agencia_nombre: agencia?.nombre || "",
+                  });
+                }}
+                placeholder="Seleccionar agencia de Servientrega..."
                 disabled={loading}
               />
             </div>
-          ))}
-          <div className="space-y-2">
-            <Label>Código Postal</Label>
-            <Input
-              name="codigo_postal"
-              value={formData.codigo_postal}
-              onChange={handleChange}
-              disabled={loading}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Teléfono</Label>
-            <Input
-              name="telefono"
-              value={formData.telefono}
-              onChange={handleChange}
-              disabled={loading}
-            />
-          </div>
-          <AgenciaSelector
-            value={formData.servientrega_agencia_nombre}
-            onAgenciaSelect={(agencia) => {
-              setFormData({
-                ...formData,
-                servientrega_agencia_codigo: agencia?.tipo_cs || "",
-                servientrega_agencia_nombre: agencia?.nombre || "",
-              });
-            }}
-            placeholder="Seleccionar agencia de Servientrega..."
-            disabled={loading}
-          />
-          <DialogFooter className="mt-4 flex gap-2 justify-end">
+          </form>
+        </div>
+
+        {/* Footer fijo */}
+        <DialogFooter className="flex-shrink-0 mt-4 pt-4 border-t bg-white">
+          <div className="flex gap-2 justify-end w-full">
             <Button
               type="button"
               variant="outline"
@@ -162,13 +213,14 @@ const EditPointDialog = ({
             </Button>
             <Button
               type="submit"
+              onClick={handleSubmit}
               className="bg-blue-600 hover:bg-blue-700"
               disabled={loading}
             >
               {loading ? "Guardando..." : "Guardar Cambios"}
             </Button>
-          </DialogFooter>
-        </form>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

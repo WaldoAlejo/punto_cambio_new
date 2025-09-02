@@ -31,6 +31,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { User, PuntoAtencion, MovimientoSaldo, Moneda } from "@/types";
 import { useContabilidadDivisas } from "@/hooks/useContabilidadDivisas";
+import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
 import { Loading } from "@/components/ui/loading";
 
 interface HistorialMovimientosProps {
@@ -38,6 +39,7 @@ interface HistorialMovimientosProps {
   selectedPoint: PuntoAtencion | null;
   currencies: Moneda[];
   className?: string;
+  isAdminView?: boolean;
 }
 
 export const HistorialMovimientos = ({
@@ -45,9 +47,20 @@ export const HistorialMovimientos = ({
   selectedPoint,
   currencies,
   className = "",
+  isAdminView = false,
 }: HistorialMovimientosProps) => {
-  const { movimientos, isLoading, error, cargarMovimientos } =
-    useContabilidadDivisas({ user, selectedPoint });
+  // Usar hook apropiado según si es vista de administrador
+  const contabilidadNormal = useContabilidadDivisas({ user, selectedPoint });
+  const contabilidadAdmin = useContabilidadAdmin({ user });
+
+  const { movimientos, isLoading, error, cargarMovimientos } = isAdminView
+    ? {
+        movimientos: contabilidadAdmin.movimientosConsolidados,
+        isLoading: contabilidadAdmin.isLoading,
+        error: contabilidadAdmin.error,
+        cargarMovimientos: contabilidadAdmin.cargarMovimientosConsolidados,
+      }
+    : contabilidadNormal;
 
   const [filtroMoneda, setFiltroMoneda] = useState<string>("TODAS");
   const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
@@ -55,11 +68,11 @@ export const HistorialMovimientos = ({
 
   // Cargar movimientos cuando cambien los filtros
   useEffect(() => {
-    if (selectedPoint) {
+    if (isAdminView || selectedPoint) {
       const monedaId = filtroMoneda === "TODAS" ? undefined : filtroMoneda;
       cargarMovimientos(monedaId, limite);
     }
-  }, [selectedPoint, filtroMoneda, limite, cargarMovimientos]);
+  }, [isAdminView, selectedPoint, filtroMoneda, limite, cargarMovimientos]);
 
   const getTipoMovimientoIcon = (tipo: string) => {
     switch (tipo) {
@@ -260,6 +273,7 @@ export const HistorialMovimientos = ({
                   <TableHead>Fecha</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Moneda</TableHead>
+                  {isAdminView && <TableHead>Punto</TableHead>}
                   <TableHead className="text-right">Monto</TableHead>
                   <TableHead className="text-right">Saldo Anterior</TableHead>
                   <TableHead className="text-right">Saldo Nuevo</TableHead>
@@ -289,6 +303,15 @@ export const HistorialMovimientos = ({
                         {movimiento.moneda?.codigo || "N/A"}
                       </Badge>
                     </TableCell>
+                    {isAdminView && (
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {"punto_nombre" in movimiento
+                            ? (movimiento as any).punto_nombre
+                            : "N/A"}
+                        </Badge>
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <span
                         className={`font-semibold ${

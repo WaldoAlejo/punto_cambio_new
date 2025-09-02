@@ -188,9 +188,10 @@ export const PointManagement = () => {
               Complete la información del nuevo punto de atención
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+          <CardContent className="max-h-[70vh] overflow-y-auto">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Información básica */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Nombre *</Label>
                   <Input
@@ -198,6 +199,7 @@ export const PointManagement = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, nombre: e.target.value })
                     }
+                    placeholder="Nombre del punto de atención"
                   />
                 </div>
                 <div className="space-y-2">
@@ -207,10 +209,12 @@ export const PointManagement = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, ciudad: e.target.value })
                     }
+                    placeholder="Ciudad"
                   />
                 </div>
               </div>
 
+              {/* Dirección completa */}
               <div className="space-y-2">
                 <Label>Dirección *</Label>
                 <Input
@@ -218,10 +222,12 @@ export const PointManagement = () => {
                   onChange={(e) =>
                     setFormData({ ...formData, direccion: e.target.value })
                   }
+                  placeholder="Dirección completa"
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              {/* Información adicional */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Provincia *</Label>
                   <Input
@@ -229,6 +235,7 @@ export const PointManagement = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, provincia: e.target.value })
                     }
+                    placeholder="Provincia"
                   />
                 </div>
                 <div className="space-y-2">
@@ -241,6 +248,7 @@ export const PointManagement = () => {
                         codigo_postal: e.target.value,
                       })
                     }
+                    placeholder="Código postal"
                   />
                 </div>
                 <div className="space-y-2">
@@ -250,23 +258,28 @@ export const PointManagement = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, telefono: e.target.value })
                     }
+                    placeholder="Número de teléfono"
                   />
                 </div>
               </div>
 
-              <AgenciaSelector
-                value={formData.servientrega_agencia_nombre}
-                onAgenciaSelect={(agencia) => {
-                  setFormData({
-                    ...formData,
-                    servientrega_agencia_codigo: agencia?.tipo_cs || "",
-                    servientrega_agencia_nombre: agencia?.nombre || "",
-                  });
-                }}
-                placeholder="Seleccionar agencia de Servientrega..."
-              />
+              {/* Selector de agencia */}
+              <div className="border-t pt-4">
+                <AgenciaSelector
+                  value={formData.servientrega_agencia_nombre}
+                  onAgenciaSelect={(agencia) => {
+                    setFormData({
+                      ...formData,
+                      servientrega_agencia_codigo: agencia?.tipo_cs || "",
+                      servientrega_agencia_nombre: agencia?.nombre || "",
+                    });
+                  }}
+                  placeholder="Seleccionar agencia de Servientrega..."
+                />
+              </div>
 
-              <div className="flex gap-2">
+              {/* Botones de acción */}
+              <div className="flex gap-3 pt-4 border-t bg-gray-50 -mx-6 px-6 py-4 mt-6">
                 <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
                   Crear Punto
                 </Button>

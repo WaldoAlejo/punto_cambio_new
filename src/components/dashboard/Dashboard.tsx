@@ -139,6 +139,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
             user={user}
             selectedPoint={selectedPoint}
             currencies={[]} // Se cargarán internamente
+            isAdminView={isAdmin} // Nueva prop para vista de administrador
           />
         );
 

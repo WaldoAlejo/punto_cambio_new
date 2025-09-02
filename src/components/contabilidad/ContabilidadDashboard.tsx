@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { User, PuntoAtencion, Moneda } from "@/types";
 import { useContabilidadDivisas } from "@/hooks/useContabilidadDivisas";
+import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
 import { currencyService } from "@/services/currencyService";
 import SaldosDivisasEnTiempoReal from "./SaldosDivisasEnTiempoReal";
 import HistorialMovimientos from "./HistorialMovimientos";
@@ -23,15 +24,28 @@ interface ContabilidadDashboardProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
   currencies?: Moneda[];
+  isAdminView?: boolean;
 }
 
 export const ContabilidadDashboard = ({
   user,
   selectedPoint,
   currencies: propCurrencies,
+  isAdminView = false,
 }: ContabilidadDashboardProps) => {
-  const { saldos, movimientos, isLoading, error, refresh } =
-    useContabilidadDivisas({ user, selectedPoint });
+  // Usar hook apropiado según si es vista de administrador
+  const contabilidadNormal = useContabilidadDivisas({ user, selectedPoint });
+  const contabilidadAdmin = useContabilidadAdmin({ user });
+
+  const { saldos, movimientos, isLoading, error, refresh } = isAdminView
+    ? {
+        saldos: contabilidadAdmin.saldosConsolidados,
+        movimientos: contabilidadAdmin.movimientosConsolidados,
+        isLoading: contabilidadAdmin.isLoading,
+        error: contabilidadAdmin.error,
+        refresh: contabilidadAdmin.refresh,
+      }
+    : contabilidadNormal;
 
   const [currencies, setCurrencies] = useState<Moneda[]>(propCurrencies || []);
   const [loadingCurrencies, setLoadingCurrencies] = useState(!propCurrencies);
@@ -155,7 +169,7 @@ export const ContabilidadDashboard = ({
     }).format(amount);
   };
 
-  if (!selectedPoint) {
+  if (!selectedPoint && !isAdminView) {
     return (
       <div className="p-6 text-center py-12">
         <Calculator className="h-16 w-16 mx-auto mb-4 text-gray-400" />
@@ -184,10 +198,12 @@ export const ContabilidadDashboard = ({
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <Calculator className="h-6 w-6 text-blue-600" />
-            Contabilidad de Divisas
+            {isAdminView ? "Contabilidad General" : "Contabilidad de Divisas"}
           </h1>
           <p className="text-gray-600 mt-1">
-            Control contable automático para {selectedPoint.nombre}
+            {isAdminView
+              ? "Vista consolidada de todos los puntos de atención"
+              : `Control contable automático para ${selectedPoint?.nombre}`}
           </p>
         </div>
         <Button onClick={refresh} disabled={isLoading} variant="outline">
@@ -332,6 +348,7 @@ export const ContabilidadDashboard = ({
           <SaldosDivisasEnTiempoReal
             user={user}
             selectedPoint={selectedPoint}
+            isAdminView={isAdminView}
           />
         </TabsContent>
 
@@ -340,6 +357,7 @@ export const ContabilidadDashboard = ({
             user={user}
             selectedPoint={selectedPoint}
             currencies={currencies}
+            isAdminView={isAdminView}
           />
         </TabsContent>
       </Tabs>
