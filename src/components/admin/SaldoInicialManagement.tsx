@@ -124,11 +124,11 @@ const SaldoInicialManagement = () => {
   // Obtiene el punto seleccionado
   const selectedPoint = points.find((p) => p.id === selectedPointId);
 
-  // Filtra las monedas que tienen saldo para el punto seleccionado
+  // Obtiene TODAS las monedas disponibles para el punto seleccionado
   const getMonedasPorPunto = (puntoId: string) => {
     const monedas = vistaSaldos.filter((s) => s.punto_atencion_id === puntoId);
     console.log(
-      `💱 Monedas para punto ${puntoId}:`,
+      `💱 Monedas disponibles para punto ${puntoId}:`,
       monedas.length,
       monedas.map(
         (m) => `${m.moneda_codigo} (${m.moneda_simbolo}${m.saldo_actual})`
