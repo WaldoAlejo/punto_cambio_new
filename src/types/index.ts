@@ -41,6 +41,8 @@ export interface Moneda {
   simbolo: string;
   activo: boolean;
   orden_display: number;
+  comportamiento_compra: "MULTIPLICA" | "DIVIDE";
+  comportamiento_venta: "MULTIPLICA" | "DIVIDE";
   created_at: string;
   updated_at: string;
 }

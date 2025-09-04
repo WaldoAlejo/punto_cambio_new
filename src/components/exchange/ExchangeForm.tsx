@@ -90,6 +90,44 @@ const ExchangeForm = ({
     const tasaBilletes = parseFloat(rateBilletes) || 0;
     const tasaMonedas = parseFloat(rateMonedas) || 0;
 
+    // Si tenemos las monedas definidas, usar la nueva lógica
+    if (fromCurrency && toCurrency && currencies.length > 0) {
+      const monedaOrigen = currencies.find((c) => c.id === fromCurrency);
+      const monedaDestino = currencies.find((c) => c.id === toCurrency);
+
+      if (monedaOrigen && monedaDestino) {
+        // Determinar el comportamiento según el tipo de operación
+        const comportamientoBilletes =
+          operationType === "COMPRA"
+            ? monedaOrigen.comportamiento_compra
+            : monedaDestino.comportamiento_venta;
+        const comportamientoMonedas =
+          operationType === "COMPRA"
+            ? monedaOrigen.comportamiento_compra
+            : monedaDestino.comportamiento_venta;
+
+        let totalBilletes = 0;
+        let totalMonedas = 0;
+
+        if (billetes > 0 && tasaBilletes > 0) {
+          totalBilletes =
+            comportamientoBilletes === "MULTIPLICA"
+              ? billetes * tasaBilletes
+              : billetes / tasaBilletes;
+        }
+
+        if (monedas > 0 && tasaMonedas > 0) {
+          totalMonedas =
+            comportamientoMonedas === "MULTIPLICA"
+              ? monedas * tasaMonedas
+              : monedas / tasaMonedas;
+        }
+
+        return totalBilletes + totalMonedas;
+      }
+    }
+
+    // Fallback al comportamiento anterior
     return billetes * tasaBilletes + monedas * tasaMonedas;
   };
 

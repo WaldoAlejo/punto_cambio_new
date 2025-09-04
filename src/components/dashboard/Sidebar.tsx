@@ -143,6 +143,11 @@ const Sidebar = ({
       color: "text-indigo-600",
     },
     {
+      id: "currency-behaviors",
+      label: "Comportamientos de Divisas",
+      color: "text-indigo-500",
+    },
+    {
       id: "balance-management",
       label: "Gestión de Saldos",
       color: "text-blue-600",

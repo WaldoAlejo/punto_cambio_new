@@ -19,6 +19,7 @@ import SaldoServientregaAdmin from "../admin/SaldoServientregaAdmin";
 import ServientregaAnulaciones from "../admin/ServientregaAnulaciones";
 import ServientregaInformes from "../admin/ServientregaInformes";
 import ContabilidadDashboard from "../contabilidad/ContabilidadDashboard";
+import CurrencyBehaviorPage from "../../pages/admin/CurrencyBehaviorPage";
 import { Unauthorized } from "../ui/unauthorized";
 import { PointSelector } from "./PointSelector";
 import { User, PuntoAtencion } from "../../types";
@@ -113,6 +114,9 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
       case "currencies":
         if (!isAdmin) return <div>Sin permisos</div>;
         return <CurrencyManagement />;
+      case "currency-behaviors":
+        if (!isAdmin) return <div>Sin permisos</div>;
+        return <CurrencyBehaviorPage />;
       case "reports":
         if (!isAdmin) return <div>Sin permisos</div>;
         return <Reports user={user} selectedPoint={selectedPoint} />;

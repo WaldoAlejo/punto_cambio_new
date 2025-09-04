@@ -103,6 +103,11 @@ model Moneda {
   codigo        String   @unique
   activo        Boolean  @default(true)
   orden_display Int      @default(0)
+  
+  // Campos para configurar comportamiento de cálculo
+  comportamiento_compra ComportamientoCalculo @default(MULTIPLICA)
+  comportamiento_venta  ComportamientoCalculo @default(DIVIDE)
+  
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
@@ -641,6 +646,11 @@ enum TipoMovimiento {
 enum TipoOperacion {
   COMPRA
   VENTA
+}
+
+enum ComportamientoCalculo {
+  MULTIPLICA
+  DIVIDE
 }
 
 enum TipoTransferencia {

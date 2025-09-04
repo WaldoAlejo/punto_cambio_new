@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Moneda } from "../../types";
 import CurrencySearchSelect from "../ui/currency-search-select";
+import CurrencyBehaviorInfo from "./CurrencyBehaviorInfo";
 
 interface ExchangeFormFieldsProps {
   operationType: "COMPRA" | "VENTA";
@@ -113,6 +114,15 @@ const ExchangeFormFields = ({
           />
         </div>
       </div>
+
+      {/* Información del comportamiento de cálculo */}
+      {fromCurrency && toCurrency && (
+        <CurrencyBehaviorInfo
+          monedaOrigen={currencies.find((c) => c.id === fromCurrency)}
+          monedaDestino={currencies.find((c) => c.id === toCurrency)}
+          tipoOperacion={operationType}
+        />
+      )}
 
       {/* Tasas diferenciadas */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
