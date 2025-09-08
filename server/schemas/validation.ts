@@ -7,8 +7,8 @@ export const loginSchema = z.object({
     .min(3, "El nombre de usuario debe tener al menos 3 caracteres")
     .max(50, "El nombre de usuario no puede exceder 50 caracteres")
     .regex(
-      /^[a-zA-Z0-9_]+$/,
-      "El nombre de usuario solo puede contener letras, números y guiones bajos"
+      /^[a-zA-Z0-9_.]+$/,
+      "El nombre de usuario solo puede contener letras, números, guiones bajos y puntos"
     )
     .transform((val) => val.toLowerCase()), // Convertir a minúsculas para búsqueda case-insensitive
   password: z
@@ -16,8 +16,8 @@ export const loginSchema = z.object({
     .min(8, "La contraseña debe tener al menos 8 caracteres")
     .max(100, "La contraseña no puede exceder 100 caracteres")
     .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      "La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 símbolo (@$!%*?&)"
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&._-])[A-Za-z\d@$!%*?&._-]/,
+      "La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 símbolo (@$!%*?&._-)"
     ),
 });
 
@@ -28,8 +28,8 @@ export const createUserSchema = z.object({
     .min(3, "El nombre de usuario debe tener al menos 3 caracteres")
     .max(50, "El nombre de usuario no puede exceder 50 caracteres")
     .regex(
-      /^[a-zA-Z0-9_]+$/,
-      "El nombre de usuario solo puede contener letras, números y guiones bajos"
+      /^[a-zA-Z0-9_.]+$/,
+      "El nombre de usuario solo puede contener letras, números, guiones bajos y puntos"
     )
     .transform((val) => val.toLowerCase()), // Convertir a minúsculas para consistencia
   password: z
@@ -37,8 +37,8 @@ export const createUserSchema = z.object({
     .min(8, "La contraseña debe tener al menos 8 caracteres")
     .max(100, "La contraseña no puede exceder 100 caracteres")
     .regex(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      "La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 símbolo (@$!%*?&)"
+      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&._-])[A-Za-z\d@$!%*?&._-]/,
+      "La contraseña debe contener al menos: 1 mayúscula, 1 minúscula, 1 número y 1 símbolo (@$!%*?&._-)"
     ),
   nombre: z
     .string()
