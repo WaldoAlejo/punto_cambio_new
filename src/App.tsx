@@ -41,8 +41,8 @@ function App() {
       setVerifyingJornada(true);
       axiosInstance
         .get<JornadaActiveResponse>("/schedules/active")
-        .then((res) => {
-          const active = res.data?.schedule;
+        .then(({ data }) => {
+          const active = data?.schedule;
           if (!active) {
             setSelectedPoint(null);
             localStorage.removeItem("puntoAtencionSeleccionado");
@@ -126,7 +126,7 @@ function App() {
     ) {
       axiosInstance
         .get<{ points: PuntoAtencion[] }>("/points")
-        .then((res) => setPoints(res.data.points || []))
+        .then(({ data }) => setPoints(data.points || []))
         .catch(() => setPoints([]));
     }
   }, [user, selectedPoint, verifyingJornada]);
