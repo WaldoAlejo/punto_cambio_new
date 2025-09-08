@@ -24,7 +24,7 @@ interface ReportsProps {
   selectedPoint?: any; // Mantener compatibilidad
 }
 
-const Reports = ({ user }: ReportsProps) => {
+const Reports = ({ user: _user }: ReportsProps) => {
   const [reportType, setReportType] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");

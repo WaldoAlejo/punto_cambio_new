@@ -159,7 +159,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
             return (
               <PointSelector
                 user={user}
-                onPointSelected={(point) => {
+                onPointSelected={(_point) => {
                   // Esta función será manejada por el componente padre
                   window.location.reload(); // Temporal - recargar para actualizar el estado
                 }}

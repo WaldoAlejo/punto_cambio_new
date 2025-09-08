@@ -37,6 +37,7 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
 
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [selectedPoint]);
 
   // Escuchar eventos de cambios de divisas completados y transferencias aprobadas

@@ -108,7 +108,7 @@ export default function PasoRemitente({
       const partes = direccionCompleta.split(",").map((p: string) => p.trim());
 
       // Buscar la referencia (parte que empieza con "Ref:")
-      const referenciaIndex = partes.findIndex((p) =>
+      const referenciaIndex = partes.findIndex((p: string) =>
         p.toLowerCase().startsWith("ref:")
       );
       const referencia =

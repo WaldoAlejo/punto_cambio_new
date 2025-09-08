@@ -174,7 +174,7 @@ export const UserManagement = () => {
   };
 
   // Solo ADMIN o SUPER_USUARIO pueden ver el componente
-  if (currentUser.rol !== "ADMIN" && currentUser.rol !== "SUPER_USUARIO") {
+  if (currentUser?.rol !== "ADMIN" && currentUser?.rol !== "SUPER_USUARIO") {
     return (
       <div className="p-6">
         <div className="text-center py-12">
@@ -453,7 +453,7 @@ export const UserManagement = () => {
           isOpen={true}
           onClose={() => setEditingUser(null)}
           onUserUpdated={loadData}
-          currentUser={currentUser}
+          currentUser={currentUser!}
         />
       )}
       {resetPasswordUser && (

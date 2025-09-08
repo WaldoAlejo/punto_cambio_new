@@ -26,7 +26,7 @@ interface TimeReportsProps {
   selectedPoint: PuntoAtencion | null;
 }
 
-const TimeReports = ({ _user, selectedPoint }: TimeReportsProps) => {
+const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [reportData, setReportData] = useState<TimeReportData[]>([]);

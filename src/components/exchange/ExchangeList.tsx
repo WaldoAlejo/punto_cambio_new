@@ -98,7 +98,10 @@ const ExchangeList = ({
                   </p>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">
-                      Tasa: {exchange.tasa_cambio}
+                      Tasa:{" "}
+                      {exchange.tasa_cambio_billetes ||
+                        exchange.tasa_cambio_monedas ||
+                        0}
                     </span>
                     <div className="flex items-center gap-2">
                       {exchange.numero_recibo && (

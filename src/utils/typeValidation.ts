@@ -93,6 +93,7 @@ export function validateAndTransformPuntoAtencion(
     codigo_postal: data.codigo_postal || null,
     telefono: data.telefono || null,
     activo: Boolean(data.activo),
+    es_principal: Boolean(data.es_principal || false),
     created_at: String(data.created_at),
     updated_at: String(data.updated_at),
   };
@@ -128,6 +129,8 @@ export function validateAndTransformMoneda(data: any): Moneda | null {
     simbolo: String(data.simbolo),
     activo: Boolean(data.activo),
     orden_display: Number(data.orden_display) || 0,
+    comportamiento_compra: data.comportamiento_compra || "MULTIPLICA",
+    comportamiento_venta: data.comportamiento_venta || "MULTIPLICA",
     created_at: String(data.created_at),
     updated_at: String(data.updated_at),
   };

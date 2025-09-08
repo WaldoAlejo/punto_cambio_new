@@ -43,7 +43,7 @@ type Paso =
   | "listado";
 
 export default function ServientregaMain({
-  user,
+  user: _user,
   selectedPoint,
 }: ServientregaMainProps) {
   const [pasoActual, setPasoActual] = useState<Paso>("menu");
@@ -179,7 +179,8 @@ export default function ServientregaMain({
       case "remitente":
         return (
           <PasoRemitente
-            selectedPoint={selectedPoint}
+            user={_user}
+            selectedPoint={selectedPoint!}
             onNext={handleRemitenteNext}
           />
         );

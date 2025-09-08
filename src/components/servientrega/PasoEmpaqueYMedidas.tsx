@@ -34,12 +34,12 @@ interface EmpaqueApi {
 export default function PasoEmpaqueYMedidas({
   nombre_producto,
   esDocumento,
-  paisDestino,
-  ciudadDestino,
-  provinciaDestino,
-  paisOrigen,
-  ciudadOrigen,
-  provinciaOrigen,
+  paisDestino: _paisDestino,
+  ciudadDestino: _ciudadDestino,
+  provinciaDestino: _provinciaDestino,
+  paisOrigen: _paisOrigen,
+  ciudadOrigen: _ciudadOrigen,
+  provinciaOrigen: _provinciaOrigen,
   onNext,
 }: PasoEmpaqueYMedidasProps) {
   const [loading, setLoading] = useState(false);
@@ -69,7 +69,7 @@ export default function PasoEmpaqueYMedidas({
     costo_total: 0,
   });
 
-  const esInternacional = paisDestino?.toUpperCase() !== "ECUADOR";
+  const esInternacional = _paisDestino?.toUpperCase() !== "ECUADOR";
 
   // Cargar empaques disponibles
   useEffect(() => {
@@ -193,6 +193,7 @@ export default function PasoEmpaqueYMedidas({
         valor_declarado: medidas.valor_declarado,
         valor_seguro: manualSeguro ? medidas.valor_seguro : 0,
         recoleccion: !!medidas.recoleccion,
+        contenido: medidas.contenido,
       },
       empaque: requiereEmpaque ? empaque : undefined,
     });
@@ -280,7 +281,7 @@ export default function PasoEmpaqueYMedidas({
                   name={campo}
                   type="number"
                   value={getDisplayValue(
-                    medidas[campo as keyof typeof medidas]
+                    medidas[campo as keyof typeof medidas] as number
                   )}
                   onChange={handleMedidaChange}
                   placeholder="0"

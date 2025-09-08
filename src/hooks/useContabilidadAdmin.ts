@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { User, SaldoMoneda, MovimientoSaldo } from "@/types";
+import { User, SaldoMoneda, SaldoConsolidado, MovimientoSaldo } from "@/types";
 import { movimientosContablesService } from "@/services/movimientosContablesService";
 import { pointService } from "@/services/pointService";
 
@@ -8,16 +8,13 @@ interface UseContabilidadAdminProps {
   user: User;
 }
 
-interface SaldoConsolidado extends SaldoMoneda {
-  punto_nombre: string;
-  punto_id: string;
-}
-
 interface MovimientoConsolidado extends MovimientoSaldo {
   punto_nombre: string;
 }
 
-export const useContabilidadAdmin = ({ user }: UseContabilidadAdminProps) => {
+export const useContabilidadAdmin = ({
+  user: _user,
+}: UseContabilidadAdminProps) => {
   const [saldosConsolidados, setSaldosConsolidados] = useState<
     SaldoConsolidado[]
   >([]);
@@ -34,7 +31,7 @@ export const useContabilidadAdmin = ({ user }: UseContabilidadAdminProps) => {
 
     try {
       // Primero obtener todos los puntos
-      const { points, error: pointsError } = await pointService.getPoints();
+      const { points, error: pointsError } = await pointService.getAllPoints();
 
       if (pointsError) {
         setError(pointsError);
@@ -48,7 +45,7 @@ export const useContabilidadAdmin = ({ user }: UseContabilidadAdminProps) => {
       }
 
       // Obtener saldos de cada punto
-      const saldosPromises = points.map(async (punto) => {
+      const saldosPromises = points.map(async (punto: any) => {
         const { saldos, error: saldosError } =
           await movimientosContablesService.getSaldosActualesPorPunto(punto.id);
 
@@ -85,7 +82,8 @@ export const useContabilidadAdmin = ({ user }: UseContabilidadAdminProps) => {
     async (moneda_id?: string, limit = 100) => {
       try {
         // Obtener todos los puntos
-        const { points, error: pointsError } = await pointService.getPoints();
+        const { points, error: pointsError } =
+          await pointService.getAllPoints();
 
         if (pointsError) {
           setError(pointsError);
@@ -125,9 +123,7 @@ export const useContabilidadAdmin = ({ user }: UseContabilidadAdminProps) => {
 
         // Ordenar por fecha descendente
         movimientosConsolidados.sort(
-          (a, b) =>
-            new Date(b.fecha_movimiento).getTime() -
-            new Date(a.fecha_movimiento).getTime()
+          (a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
         );
 
         setMovimientosConsolidados(movimientosConsolidados.slice(0, limit));

@@ -523,3 +523,15 @@ export interface CierreDiario {
     justificacion?: string;
   }[];
 }
+
+// Tipos para contabilidad consolidada
+export interface SaldoMoneda {
+  moneda_id: string;
+  moneda_codigo: string;
+  saldo: number;
+}
+
+export interface SaldoConsolidado extends SaldoMoneda {
+  punto_nombre: string;
+  punto_id: string;
+}

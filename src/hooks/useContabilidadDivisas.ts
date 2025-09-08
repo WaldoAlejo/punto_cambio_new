@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { CambioDivisa, User, PuntoAtencion, MovimientoSaldo } from "../types";
-import {
-  movimientosContablesService,
-  SaldoActualizado,
-} from "../services/movimientosContablesService";
+import { movimientosContablesService } from "../services/movimientosContablesService";
+import { SaldoActualizado } from "../types";
 
 interface SaldoMoneda {
   moneda_id: string;

@@ -213,7 +213,10 @@ export default function ListadoGuias() {
                     </p>
                     <p>
                       <strong>Fecha:</strong>{" "}
-                      {format(parseISO(guia.created_at), "yyyy-MM-dd HH:mm")}
+                      {format(
+                        parseISO(guia.created_at || ""),
+                        "yyyy-MM-dd HH:mm"
+                      )}
                     </p>
                     <p>
                       <strong>Estado:</strong>{" "}
@@ -241,7 +244,7 @@ export default function ListadoGuias() {
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <Button
-                      onClick={() => handleVerPDF(guia.base64_response)}
+                      onClick={() => handleVerPDF(guia.base64_response || "")}
                       variant="secondary"
                       size="sm"
                     >
@@ -250,7 +253,7 @@ export default function ListadoGuias() {
 
                     {/* Lógica de botones según rol y estado */}
                     {guia.estado === "ACTIVA" &&
-                      isToday(parseISO(guia.created_at)) && (
+                      isToday(parseISO(guia.created_at || "")) && (
                         <>
                           {user?.rol === "ADMIN" ||
                           user?.rol === "SUPER_USUARIO" ? (
@@ -287,7 +290,7 @@ export default function ListadoGuias() {
                     )}
 
                     {guia.estado === "ACTIVA" &&
-                      !isToday(parseISO(guia.created_at)) && (
+                      !isToday(parseISO(guia.created_at || "")) && (
                         <span className="text-sm text-gray-500">
                           No se puede anular
                         </span>
@@ -316,7 +319,7 @@ export default function ListadoGuias() {
                 <strong>Fecha:</strong>{" "}
                 {guiaParaAnular &&
                   format(
-                    parseISO(guiaParaAnular.created_at),
+                    parseISO(guiaParaAnular.created_at || ""),
                     "yyyy-MM-dd HH:mm"
                   )}
               </p>

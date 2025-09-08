@@ -1,5 +1,4 @@
 import { apiService } from "./apiService";
-import logger from "../../server/utils/logger";
 
 export interface ReportItem {
   point: string;
@@ -34,7 +33,7 @@ export const reportService = {
     }
   ): Promise<FullReportResponse> {
     try {
-      logger.info("Generando reporte avanzado", { reportType, filters });
+      console.log("Generando reporte avanzado", { reportType, filters });
 
       const response = await apiService.post<{ data: FullReportResponse }>(
         "/reports",
@@ -45,7 +44,7 @@ export const reportService = {
       );
 
       if (!response?.data) {
-        logger.warn("No se pudo conectar con el servidor en generateReport");
+        console.warn("No se pudo conectar con el servidor en generateReport");
         return {
           exchanges: [],
           transfers: [],
@@ -60,7 +59,7 @@ export const reportService = {
 
       return response.data;
     } catch (error) {
-      logger.error("Excepción en generateReport", {
+      console.error("Excepción en generateReport", {
         message: error instanceof Error ? error.message : "Error desconocido",
       });
 

@@ -43,7 +43,7 @@ const OperatorTimeManagement = ({
         });
       } else {
         // Convertir SpontaneousExit a SalidaEspontanea
-        const convertedExits: SalidaEspontanea[] = exits.map(exit => ({
+        const convertedExits: SalidaEspontanea[] = exits.map((exit) => ({
           id: exit.id,
           usuario_id: exit.usuario_id,
           punto_atencion_id: exit.punto_atencion_id,
@@ -59,15 +59,15 @@ const OperatorTimeManagement = ({
           updated_at: exit.updated_at,
           estado: exit.estado,
           usuario: {
-            id: exit.usuario.id,
-            username: exit.usuario.username || '',
-            nombre: exit.usuario.nombre,
-            correo: '',
-            telefono: '',
-            rol: 'OPERADOR' as const,
+            id: exit.usuario?.id || "",
+            username: exit.usuario?.username || "",
+            nombre: exit.usuario?.nombre || "",
+            correo: "",
+            telefono: "",
+            rol: "OPERADOR" as const,
             activo: true,
-            created_at: '',
-            updated_at: '',
+            created_at: "",
+            updated_at: "",
           },
         }));
         setSpontaneousExits(convertedExits);
@@ -131,18 +131,18 @@ const OperatorTimeManagement = ({
           updated_at: updatedExit.updated_at,
           estado: updatedExit.estado,
           usuario: {
-            id: updatedExit.usuario.id,
-            username: updatedExit.usuario.username || '',
-            nombre: updatedExit.usuario.nombre,
-            correo: '',
-            telefono: '',
-            rol: 'OPERADOR' as const,
+            id: updatedExit.usuario?.id || "",
+            username: updatedExit.usuario?.username || "",
+            nombre: updatedExit.usuario?.nombre || "",
+            correo: "",
+            telefono: "",
+            rol: "OPERADOR" as const,
             activo: true,
-            created_at: '',
-            updated_at: '',
+            created_at: "",
+            updated_at: "",
           },
         };
-        
+
         setSpontaneousExits((prev) =>
           prev.map((exit) => (exit.id === exitId ? convertedExit : exit))
         );
@@ -185,9 +185,9 @@ const OperatorTimeManagement = ({
         </TabsContent>
 
         <TabsContent value="lunch">
-          <TimeTracker 
-            user={user} 
-            selectedPoint={selectedPoint} 
+          <TimeTracker
+            user={user}
+            selectedPoint={selectedPoint}
             spontaneousExits={spontaneousExits}
           />
         </TabsContent>

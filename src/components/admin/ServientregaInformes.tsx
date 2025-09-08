@@ -31,8 +31,8 @@ interface EstadisticasGuias {
 }
 
 export const ServientregaInformes = ({
-  user,
-  selectedPoint,
+  user: _user,
+  selectedPoint: _selectedPoint,
 }: ServientregaInformesProps) => {
   const hoy = new Date();
   const [guias, setGuias] = useState<Guia[]>([]);

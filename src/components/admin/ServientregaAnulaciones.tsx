@@ -34,8 +34,8 @@ interface ServientregaAnulacionesProps {
 }
 
 export const ServientregaAnulaciones = ({
-  user,
-  selectedPoint,
+  user: _user,
+  selectedPoint: _selectedPoint,
 }: ServientregaAnulacionesProps) => {
   const hoy = new Date();
   const [solicitudes, setSolicitudes] = useState<SolicitudAnulacionGuia[]>([]);

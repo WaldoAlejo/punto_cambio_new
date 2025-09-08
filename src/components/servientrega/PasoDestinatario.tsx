@@ -194,13 +194,13 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       let calleSecundaria = "";
 
       // Buscar la parte que contiene #
-      const parteConNumeracion = partes.find((p) => p.includes("#"));
+      const parteConNumeracion = partes.find((p: string) => p.includes("#"));
       if (parteConNumeracion) {
         numeracion = parteConNumeracion.trim();
       }
 
       // La calle secundaria es la parte que empieza con "y" (sin el "y")
-      const parteCalleSecundaria = partes.find((p) =>
+      const parteCalleSecundaria = partes.find((p: string) =>
         p.toLowerCase().startsWith("y ")
       );
       if (parteCalleSecundaria) {
@@ -214,7 +214,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         referencia:
           partes
             .find(
-              (p) =>
+              (p: string) =>
                 p.toLowerCase().startsWith("ref:") ||
                 (!p.includes("#") &&
                   !p.toLowerCase().startsWith("y ") &&
@@ -231,7 +231,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         referencia:
           partes
             .find(
-              (p) =>
+              (p: string) =>
                 p.toLowerCase().startsWith("ref:") ||
                 (!p.includes("#") &&
                   !p.toLowerCase().startsWith("y ") &&

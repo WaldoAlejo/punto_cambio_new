@@ -49,9 +49,9 @@ function adaptExitToSalidaEspontanea(
   return {
     ...exit,
     usuario: {
-      id: exit.usuario.id,
-      nombre: exit.usuario.nombre,
-      username: exit.usuario.username,
+      id: exit.usuario?.id || "",
+      nombre: exit.usuario?.nombre || "",
+      username: exit.usuario?.username || "",
       rol: userFallback.rol,
       activo: userFallback.activo,
       created_at: userFallback.created_at,
@@ -65,9 +65,10 @@ function adaptExitToSalidaEspontanea(
       exit.puntoAtencion &&
       selectedPoint.id === exit.puntoAtencion.id
         ? selectedPoint
-        : {
-            id: exit.puntoAtencion.id,
-            nombre: exit.puntoAtencion.nombre,
+        : exit.puntoAtencion
+        ? {
+            id: exit.puntoAtencion?.id || "",
+            nombre: exit.puntoAtencion?.nombre || "",
             direccion: "",
             ciudad: "",
             provincia: "",
@@ -76,7 +77,9 @@ function adaptExitToSalidaEspontanea(
             activo: true,
             created_at: "",
             updated_at: "",
-          },
+            es_principal: false,
+          }
+        : undefined,
     // Puedes adaptar usuarioAprobador si lo necesitas, igual a usuario
     usuarioAprobador: exit.usuarioAprobador
       ? {

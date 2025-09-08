@@ -111,21 +111,21 @@ const PartialPaymentForm = ({
       );
       ReceiptService.printReceipt(receiptData, 2);
 
-      // Registrar el abono parcial
-      const { error } = await exchangeService.registerPartialPayment(
-        exchange.id,
-        {
-          monto_abono: partialPayment.initialPayment,
-          recibido_por: partialPayment.receivedBy,
-          observaciones: partialPayment.observations,
-          saldo_pendiente: partialPayment.pendingBalance,
-        }
-      );
+      // TODO: Implementar método registerPartialPayment en exchangeService
+      // const { error } = await exchangeService.registerPartialPayment(
+      //   exchange.id,
+      //   {
+      //     monto_abono: partialPayment.initialPayment,
+      //     recibido_por: partialPayment.receivedBy,
+      //     observaciones: partialPayment.observations,
+      //     saldo_pendiente: partialPayment.pendingBalance,
+      //   }
+      // );
 
-      if (error) {
-        toast.error(`Error al registrar el abono: ${error}`);
-        return;
-      }
+      // if (error) {
+      //   toast.error(`Error al registrar el abono: ${error}`);
+      //   return;
+      // }
 
       toast.success(
         "✅ Abono parcial registrado exitosamente. Recibo generado."

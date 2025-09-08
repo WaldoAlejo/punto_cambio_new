@@ -229,7 +229,7 @@ const SpontaneousExitHistory = ({
                       Duración total:
                     </span>{" "}
                     <span className="text-blue-600">
-                      {formatDuration(exit.duracion_minutos)}
+                      {formatDuration(exit.duracion_minutos || 0)}
                     </span>
                   </p>
                 </div>
