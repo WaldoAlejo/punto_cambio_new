@@ -22,14 +22,16 @@ const scheduleSchema = z
         lng: z.number(),
         direccion: z.string().optional(),
       })
-      .optional(),
+      .optional()
+      .nullable(),
     ubicacion_salida: z
       .object({
         lat: z.number(),
         lng: z.number(),
         direccion: z.string().optional(),
       })
-      .optional(),
+      .optional()
+      .nullable(),
   })
   .refine(
     (data) =>

@@ -102,10 +102,10 @@ const TimeTracker = ({
   const [isGettingLocation, setIsGettingLocation] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const interval = window.setInterval(() => {
       setTiempoActual(new Date());
     }, 1000);
-    return () => clearInterval(interval);
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -136,8 +136,10 @@ const TimeTracker = ({
     direccion?: string;
   }> => {
     return new Promise((resolve, reject) => {
-      if (!navigator.geolocation)
-        return reject(new Error("Geolocalización no soportada"));
+      if (!("geolocation" in navigator)) {
+        reject(new Error("Geolocalización no soportada"));
+        return;
+      }
       setIsGettingLocation(true);
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -187,7 +189,7 @@ const TimeTracker = ({
 
   const iniciarJornada = async () => {
     try {
-      let ubicacion;
+      let ubicacion: { lat: number; lng: number; direccion?: string } | null;
       try {
         ubicacion = await getLocation();
       } catch {
@@ -195,12 +197,15 @@ const TimeTracker = ({
       }
       const ahora = new Date().toISOString();
 
-      await guardarJornadaBackend({
+      // No enviar ubicacion_inicio cuando sea null para pasar validación Zod
+      const payload: JornadaPayload = {
         usuario_id: user.id,
         punto_atencion_id: selectedPoint?.id,
         fecha_inicio: ahora,
-        ubicacion_inicio: ubicacion,
-      });
+        ...(ubicacion ? { ubicacion_inicio: ubicacion } : {}),
+      };
+
+      await guardarJornadaBackend(payload);
 
       toast.success(
         `✅ Jornada iniciada a las ${formatearHora(ahora)}${

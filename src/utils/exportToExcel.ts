@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 
 type ExcelRow = Record<string, string | number | boolean | null | undefined>;
@@ -47,18 +47,22 @@ export const exportToExcel = (
 
   const finalData = [...metadata, ...data, totals];
 
-  const worksheet = XLSX.utils.json_to_sheet(finalData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  // Crear workbook y hoja con ExcelJS
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(sheetName);
 
-  const excelBuffer = XLSX.write(workbook, {
-    bookType: "xlsx",
-    type: "array",
+  // Escribir filas: la primera fila usará los keys como encabezados
+  const headers = Object.keys(finalData[0]);
+  worksheet.addRow(headers);
+  for (const row of finalData) {
+    worksheet.addRow(headers.map((h) => row[h] ?? ""));
+  }
+
+  // Generar buffer y descargar
+  workbook.xlsx.writeBuffer().then((buffer) => {
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    saveAs(blob, `${fileName}.xlsx`);
   });
-
-  const blob = new Blob([excelBuffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-
-  saveAs(blob, `${fileName}.xlsx`);
 };
