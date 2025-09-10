@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -133,6 +133,21 @@ const ExchangeForm = ({
 
   const totalAmountRecibido = calculateTotalRecibido();
 
+  // Limpia la tasa que no se usa para evitar confusión visual
+  useEffect(() => {
+    const billetesNum = parseFloat(amountBilletes) || 0;
+    const monedasNum = parseFloat(amountMonedas) || 0;
+
+    // Si no hay monto de billetes, limpia la tasa de billetes
+    if (billetesNum === 0 && rateBilletes !== "") {
+      setRateBilletes("");
+    }
+    // Si no hay monto de monedas, limpia la tasa de monedas
+    if (monedasNum === 0 && rateMonedas !== "") {
+      setRateMonedas("");
+    }
+  }, [amountBilletes, amountMonedas]);
+
   // NUEVO: Validación de monedas cargadas
   if (!currencies || currencies.length < 2) {
     return (
@@ -160,11 +175,7 @@ const ExchangeForm = ({
       return;
     }
 
-    if (!rateBilletes || !rateMonedas) {
-      toast.error("Debe ingresar las tasas de cambio para billetes y monedas");
-      return;
-    }
-
+    // Debe ingresar al menos un monto (billetes o monedas)
     if (!amountBilletes && !amountMonedas) {
       toast.error("Debe ingresar al menos un monto (billetes o monedas)");
       return;
@@ -172,16 +183,34 @@ const ExchangeForm = ({
 
     const rateBilletesNum = parseFloat(rateBilletes);
     const rateMonedasNum = parseFloat(rateMonedas);
+    const amountBilletesNum = parseFloat(amountBilletes) || 0;
+    const amountMonedasNum = parseFloat(amountMonedas) || 0;
 
-    if (isNaN(rateBilletesNum) || rateBilletesNum <= 0) {
+    // Validar solo la tasa correspondiente al tipo usado
+    if (
+      amountBilletesNum > 0 &&
+      (isNaN(rateBilletesNum) || rateBilletesNum <= 0)
+    ) {
       toast.error(
         "La tasa de cambio para billetes debe ser un número positivo"
       );
       return;
     }
-
-    if (isNaN(rateMonedasNum) || rateMonedasNum <= 0) {
+    if (
+      amountMonedasNum > 0 &&
+      (isNaN(rateMonedasNum) || rateMonedasNum <= 0)
+    ) {
       toast.error("La tasa de cambio para monedas debe ser un número positivo");
+      return;
+    }
+
+    // Al menos una combinación válida
+    const tieneBilletesValidos = amountBilletesNum > 0 && rateBilletesNum > 0;
+    const tieneMonedasValidas = amountMonedasNum > 0 && rateMonedasNum > 0;
+    if (!tieneBilletesValidos && !tieneMonedasValidas) {
+      toast.error(
+        "Ingrese una tasa válida para el tipo de valor ingresado (billetes o monedas)"
+      );
       return;
     }
 
@@ -259,8 +288,6 @@ const ExchangeForm = ({
             disabled={
               !fromCurrency ||
               !toCurrency ||
-              !rateBilletes ||
-              !rateMonedas ||
               (!amountBilletes && !amountMonedas)
             }
             className="flex-1"
