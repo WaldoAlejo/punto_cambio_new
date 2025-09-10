@@ -5,6 +5,7 @@ import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
+import axios from "axios";
 
 const router = express.Router();
 
@@ -448,91 +449,13 @@ router.patch(
         return;
       }
 
-      // Actualizar el cambio a completado y actualizar saldos
-      const updatedCambio = await prisma.$transaction(async (tx) => {
-        // 1. Actualizar estado del cambio
-        const cambioActualizado = await tx.cambioDivisa.update({
-          where: { id },
-          data: {
-            estado: EstadoTransaccion.COMPLETADO,
-          },
-        });
-
-        // 2. Actualizar saldo de moneda origen (INGRESO: lo que recibimos del cliente)
-        await tx.saldo.upsert({
-          where: {
-            punto_atencion_id_moneda_id: {
-              punto_atencion_id: cambio.punto_atencion_id,
-              moneda_id: cambio.moneda_origen_id,
-            },
-          },
-          update: {
-            cantidad: {
-              increment: Number(cambio.monto_origen),
-            },
-            updated_at: new Date(),
-          },
-          create: {
-            punto_atencion_id: cambio.punto_atencion_id,
-            moneda_id: cambio.moneda_origen_id,
-            cantidad: Number(cambio.monto_origen),
-            billetes: 0,
-            monedas_fisicas: 0,
-          },
-        });
-
-        // 3. Actualizar saldo de moneda destino (EGRESO: lo que entregamos al cliente)
-        await tx.saldo.upsert({
-          where: {
-            punto_atencion_id_moneda_id: {
-              punto_atencion_id: cambio.punto_atencion_id,
-              moneda_id: cambio.moneda_destino_id,
-            },
-          },
-          update: {
-            cantidad: {
-              decrement: Number(cambio.monto_destino),
-            },
-            updated_at: new Date(),
-          },
-          create: {
-            punto_atencion_id: cambio.punto_atencion_id,
-            moneda_id: cambio.moneda_destino_id,
-            cantidad: -Number(cambio.monto_destino),
-            billetes: 0,
-            monedas_fisicas: 0,
-          },
-        });
-
-        // 4. Registrar movimientos en historial (consistente con saldos)
-        await tx.historialSaldo.createMany({
-          data: [
-            {
-              punto_atencion_id: cambio.punto_atencion_id,
-              moneda_id: cambio.moneda_origen_id,
-              usuario_id: req.user!.id,
-              cantidad_anterior: 0, // opcional
-              cantidad_incrementada: Number(cambio.monto_origen),
-              cantidad_nueva: 0, // opcional
-              tipo_movimiento: "INGRESO",
-              descripcion: `Cambio de divisa - Ingreso ${cambio.monto_origen}`,
-              numero_referencia: cambio.numero_recibo,
-            },
-            {
-              punto_atencion_id: cambio.punto_atencion_id,
-              moneda_id: cambio.moneda_destino_id,
-              usuario_id: req.user!.id,
-              cantidad_anterior: 0, // opcional
-              cantidad_incrementada: -Number(cambio.monto_destino),
-              cantidad_nueva: 0, // opcional
-              tipo_movimiento: "EGRESO",
-              descripcion: `Cambio de divisa - Egreso ${cambio.monto_destino}`,
-              numero_referencia: cambio.numero_recibo,
-            },
-          ],
-        });
-
-        return cambioActualizado;
+      // Actualizar el cambio a COMPLETADO sin tocar saldos ni historial.
+      // La contabilidad (saldos e historial) se procesa exclusivamente en /api/movimientos-contables/procesar-cambio.
+      const updatedCambio = await prisma.cambioDivisa.update({
+        where: { id },
+        data: {
+          estado: EstadoTransaccion.COMPLETADO,
+        },
       });
 
       const numeroReciboCierre = `CIERRE-${new Date().getTime()}`;
@@ -841,6 +764,98 @@ router.get(
         success: false,
         timestamp: new Date().toISOString(),
       });
+    }
+  }
+);
+
+// Recontabilizar un cambio ya creado: idempotente por referencia
+router.post(
+  "/:id/recontabilizar",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+
+      if (!req.user?.id) {
+        res
+          .status(401)
+          .json({ success: false, error: "Usuario no autenticado" });
+        return;
+      }
+
+      const cambio = await prisma.cambioDivisa.findUnique({ where: { id } });
+      if (!cambio) {
+        res.status(404).json({ success: false, error: "Cambio no encontrado" });
+        return;
+      }
+
+      // Construir movimientos esperados
+      const movimientos = [
+        {
+          punto_atencion_id: cambio.punto_atencion_id,
+          moneda_id: cambio.moneda_destino_id,
+          tipo_movimiento: "EGRESO",
+          monto: Number(cambio.monto_destino),
+          usuario_id: req.user.id,
+          referencia_id: cambio.id,
+          tipo_referencia: "CAMBIO_DIVISA",
+          descripcion: `Cambio de divisas - Entrega ${cambio.monto_destino}`,
+        },
+        {
+          punto_atencion_id: cambio.punto_atencion_id,
+          moneda_id: cambio.moneda_origen_id,
+          tipo_movimiento: "INGRESO",
+          monto: Number(cambio.monto_origen),
+          usuario_id: req.user.id,
+          referencia_id: cambio.id,
+          tipo_referencia: "CAMBIO_DIVISA",
+          descripcion: `Cambio de divisas - Recepción ${cambio.monto_origen}`,
+        },
+      ];
+
+      // Evitar duplicados: verificar si ya hay movimientos con esta referencia
+      const existentes = await prisma.movimientoSaldo.findMany({
+        where: {
+          referencia_id: cambio.id,
+          tipo_referencia: "CAMBIO_DIVISA",
+        },
+        select: { id: true },
+      });
+
+      if (existentes.length > 0) {
+        res.status(200).json({
+          success: true,
+          message: "Movimientos ya existentes para este cambio. No se duplicó.",
+        });
+        return;
+      }
+
+      // Delegar al endpoint de contabilidad existente mediante pool
+      // Reutilizamos la misma lógica que usa el frontend
+      const baseUrl =
+        process.env.INTERNAL_API_BASE_URL || "http://localhost:3001/api";
+      const url = `${baseUrl}/movimientos-contables/procesar-cambio`;
+
+      const response = await axios.post(
+        url,
+        {
+          cambio_id: cambio.id,
+          movimientos,
+        },
+        {
+          headers: { Authorization: req.headers.authorization || "" },
+          timeout: 15000,
+        }
+      );
+
+      res.status(200).json({ success: true, result: response.data });
+    } catch (error) {
+      logger.error("Error al recontabilizar cambio", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      res
+        .status(500)
+        .json({ success: false, error: "No se pudo recontabilizar" });
     }
   }
 );
