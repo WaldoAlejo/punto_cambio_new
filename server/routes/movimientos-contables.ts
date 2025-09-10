@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { pool } from "../lib/database.js";
+import { randomUUID } from "crypto";
 
 const router = express.Router();
 
@@ -215,13 +216,16 @@ router.post("/procesar-cambio", authenticateToken, async (req, res) => {
       // Crear el movimiento de saldo
       const insertMovimientoQuery = `
         INSERT INTO "MovimientoSaldo" 
-        (punto_atencion_id, moneda_id, tipo_movimiento, monto, saldo_anterior, saldo_nuevo, 
+        (id, punto_atencion_id, moneda_id, tipo_movimiento, monto, saldo_anterior, saldo_nuevo, 
          usuario_id, referencia_id, tipo_referencia, descripcion)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING id
       `;
 
+      const movimiento_id = randomUUID();
+
       await client.query(insertMovimientoQuery, [
+        movimiento_id,
         punto_atencion_id,
         moneda_id,
         tipo_movimiento,
