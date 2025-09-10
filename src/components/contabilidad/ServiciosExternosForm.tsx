@@ -22,15 +22,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
 const schema = z.object({
-  servicio: z
-    .enum([
-      "YAGANASTE",
-      "BANCO_GUAYAQUIL",
-      "WESTERN",
-      "PRODUBANCO",
-      "BANCO_PACIFICO",
-    ])
-    .nonempty(),
+  servicio: z.enum([
+    "YAGANASTE",
+    "BANCO_GUAYAQUIL",
+    "WESTERN",
+    "PRODUBANCO",
+    "BANCO_PACIFICO",
+  ]),
   tipo_movimiento: z.enum(["INGRESO", "EGRESO"]),
   monto: z
     .string()
