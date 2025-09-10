@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 export default function ServiciosExternosHistory() {
   const { user } = useAuth();
   const puntoId = user?.punto_atencion_id ?? "";
-  const [servicio, setServicio] = useState<string>("");
+  const [servicio, setServicio] = useState<string>("ALL");
   const [desde, setDesde] = useState<string>("");
   const [hasta, setHasta] = useState<string>("");
   const [items, setItems] = useState<any[]>([]);
@@ -25,7 +25,9 @@ export default function ServiciosExternosHistory() {
   const load = async () => {
     if (!puntoId) return;
     const { movimientos } = await listarMovimientosServiciosExternos(puntoId, {
-      servicio: (servicio || undefined) as ServicioExterno | undefined,
+      servicio: (servicio === "ALL"
+        ? undefined
+        : (servicio as ServicioExterno)) as ServicioExterno | undefined,
       desde: desde || undefined,
       hasta: hasta || undefined,
       limit: 50,
@@ -48,7 +50,7 @@ export default function ServiciosExternosHistory() {
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todos</SelectItem>
+              <SelectItem value="ALL">Todos</SelectItem>
               <SelectItem value="YAGANASTE">YaGanaste</SelectItem>
               <SelectItem value="BANCO_GUAYAQUIL">Banco Guayaquil</SelectItem>
               <SelectItem value="WESTERN">Western</SelectItem>
