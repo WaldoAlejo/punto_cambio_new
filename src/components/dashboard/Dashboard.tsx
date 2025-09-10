@@ -142,9 +142,21 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           <ContabilidadDashboard
             user={user}
             selectedPoint={selectedPoint}
-            currencies={[]} // Se cargarán internamente
-            isAdminView={isAdmin} // Nueva prop para vista de administrador
+            currencies={[]}
+            isAdminView={isAdmin}
           />
+        );
+      case "servicios-externos":
+        if (!isOperador) return <div>Sin permisos</div>;
+        // Carga pgina de Servicios Externos dentro de Contabilidad
+        // para operadores
+        const ServiciosExternosPage = React.lazy(
+          () => import("../contabilidad/ServiciosExternosPage")
+        );
+        return (
+          <React.Suspense fallback={<div>Cargando...</div>}>
+            <ServiciosExternosPage />
+          </React.Suspense>
         );
 
       default:

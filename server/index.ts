@@ -167,6 +167,9 @@ app.use("/api/movimientos-contables", movimientosContablesRoutes);
 app.use("/api/servientrega", servientregaRoutes);
 app.use("/api/puntos-atencion", puntosAtencionRoutes);
 app.use("/api/contabilidad-diaria", contabilidadDiariaRoutes);
+// Nuevas rutas: Servicios Externos
+import serviciosExternosRoutes from "./routes/servicios-externos.js";
+app.use("/api/servicios-externos", serviciosExternosRoutes);
 
 // Servir archivos estáticos del frontend en producción
 if (process.env.NODE_ENV === "production") {

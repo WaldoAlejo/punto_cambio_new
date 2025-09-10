@@ -49,6 +49,7 @@ model Usuario {
   movimientosSaldo          MovimientoSaldo[]
   cierresDiarios            CierreDiario[]
   cierresDiariosRealizados  CierreDiario[]             @relation("UsuarioCerrador")
+  servicioExternoMovimientos ServicioExternoMovimiento[]
 
   @@index([username])
   @@index([punto_atencion_id])
@@ -90,6 +91,7 @@ model PuntoAtencion {
   solicitudesSaldoServientrega    ServientregaSolicitudSaldo[] // ✅ AGREGADO
   guiasServientrega               ServientregaGuia[]
   cierresDiarios                  CierreDiario[]
+  servicioExternoMovimientos      ServicioExternoMovimiento[]
 
   @@index([ciudad])
   @@index([activo])
@@ -121,6 +123,7 @@ model Moneda {
   transferencias   Transferencia[]
   historialSaldos  HistorialSaldo[]
   detallesCuadre   DetalleCuadreCaja[]
+  servicioExternoMovimientos ServicioExternoMovimiento[]
 
   @@index([codigo])
   @@index([activo])
@@ -624,8 +627,43 @@ model CierreDiario {
 }
 
 // ============================
+// Movimientos Servicios Externos
+// ============================
+
+model ServicioExternoMovimiento {
+  id                String           @id @default(uuid())
+  punto_atencion_id String
+  servicio          ServicioExterno
+  tipo_movimiento   TipoMovimiento
+  moneda_id         String
+  monto             Decimal          @db.Decimal(15, 2)
+  usuario_id        String
+  fecha             DateTime         @default(now())
+  descripcion       String?
+  numero_referencia String?
+  comprobante_url   String?
+
+  puntoAtencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  moneda        Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
+  usuario       Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+
+  @@index([punto_atencion_id])
+  @@index([fecha])
+  @@index([servicio])
+  @@index([moneda_id])
+}
+
+// ============================
 // Enums
 // ============================
+
+enum ServicioExterno {
+  YAGANASTE
+  BANCO_GUAYAQUIL
+  WESTERN
+  PRODUBANCO
+  BANCO_PACIFICO
+}
 
 enum RolUsuario {
   SUPER_USUARIO

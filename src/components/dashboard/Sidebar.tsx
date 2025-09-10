@@ -89,6 +89,12 @@ const Sidebar = ({
       roles: ["OPERADOR", "ADMIN", "SUPER_USUARIO"],
     },
     {
+      id: "servicios-externos",
+      label: "Servicios Externos",
+      color: "text-emerald-700",
+      roles: ["OPERADOR"],
+    },
+    {
       id: "transfer-approvals",
       label: "Aprobaciones",
       color: "text-yellow-600",
