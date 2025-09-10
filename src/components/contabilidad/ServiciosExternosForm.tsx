@@ -53,6 +53,7 @@ export default function ServiciosExternosForm() {
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -104,7 +105,11 @@ export default function ServiciosExternosForm() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label>Servicio</Label>
-          <Select onValueChange={(v) => control.setValue("servicio", v as any)}>
+          <Select
+            onValueChange={(v) =>
+              setValue("servicio", v as any, { shouldValidate: true })
+            }
+          >
             <SelectTrigger>
               <SelectValue placeholder="Seleccione servicio" />
             </SelectTrigger>
@@ -123,7 +128,9 @@ export default function ServiciosExternosForm() {
         <div>
           <Label>Tipo</Label>
           <Select
-            onValueChange={(v) => control.setValue("tipo_movimiento", v as any)}
+            onValueChange={(v) =>
+              setValue("tipo_movimiento", v as any, { shouldValidate: true })
+            }
             defaultValue="INGRESO"
           >
             <SelectTrigger>
