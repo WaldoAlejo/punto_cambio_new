@@ -850,6 +850,21 @@ router.post(
 
       res.status(200).json({ success: true, result: response.data });
     } catch (error) {
+      // Propagar el error del endpoint de contabilidad para diagnóstico claro
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status || 500;
+        const data = error.response?.data || { error: error.message };
+        logger.error("Error al recontabilizar cambio (axios)", {
+          status,
+          data,
+        });
+        res.status(status).json({
+          success: false,
+          ...(typeof data === "object" ? data : { error: String(data) }),
+        });
+        return;
+      }
+
       logger.error("Error al recontabilizar cambio", {
         error: error instanceof Error ? error.message : String(error),
       });
