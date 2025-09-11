@@ -148,6 +148,15 @@ export const useExchangeProcess = ({
         return;
       }
 
+      // Bloquear monedas iguales
+      if (data.exchangeData.fromCurrency === data.exchangeData.toCurrency) {
+        toast.error(
+          "La moneda de origen y la de destino no pueden ser iguales."
+        );
+        setIsProcessing(false);
+        return;
+      }
+
       let transferenciaImagenUrl: string | null = null;
       if (data.metodoEntrega === "transferencia" && data.transferenciaImagen) {
         // Aquí podrías implementar la subida del archivo y obtener la URL

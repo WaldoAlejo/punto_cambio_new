@@ -113,6 +113,16 @@ router.post(
         return;
       }
 
+      // Validación: monedas distintas
+      if (moneda_origen_id === moneda_destino_id) {
+        res.status(400).json({
+          success: false,
+          error: "Moneda origen y destino no pueden ser iguales",
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       logger.info("Creando cambio de divisa", {
         usuario_id: req.user.id,
         punto_atencion_id,
