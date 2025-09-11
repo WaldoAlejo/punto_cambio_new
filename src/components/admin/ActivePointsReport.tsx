@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,74 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
   const [activeSchedules, setActiveSchedules] = useState<ActiveSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Filtros
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [fromDate, setFromDate] = useState<string>(todayStr);
+  const [toDate, setToDate] = useState<string>(todayStr);
+  const [onlyActive, setOnlyActive] = useState<boolean>(true);
+
+  // Paginación
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortKey, setSortKey] = useState<
+    "usuario" | "username" | "punto" | "entrada" | "almuerzo" | "regreso" | "salida" | "estado"
+  >("usuario");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const filteredData = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return activeSchedules;
+    return activeSchedules.filter((s) => {
+      const u = s.usuario.nombre.toLowerCase();
+      const un = s.usuario.username.toLowerCase();
+      const p = s.puntoAtencion.nombre.toLowerCase();
+      return u.includes(term) || un.includes(term) || p.includes(term);
+    });
+  }, [activeSchedules, searchTerm]);
+
+  const sortedData = useMemo(() => {
+    const data = [...filteredData];
+    const getTime = (v?: string) => (v ? new Date(v).getTime() : 0);
+    data.sort((a, b) => {
+      let comp = 0;
+      switch (sortKey) {
+        case "usuario":
+          comp = a.usuario.nombre.localeCompare(b.usuario.nombre);
+          break;
+        case "username":
+          comp = a.usuario.username.localeCompare(b.usuario.username);
+          break;
+        case "punto":
+          comp = a.puntoAtencion.nombre.localeCompare(b.puntoAtencion.nombre);
+          break;
+        case "entrada":
+          comp = getTime(a.fecha_inicio) - getTime(b.fecha_inicio);
+          break;
+        case "almuerzo":
+          comp = getTime(a.fecha_almuerzo) - getTime(b.fecha_almuerzo);
+          break;
+        case "regreso":
+          comp = getTime(a.fecha_regreso) - getTime(b.fecha_regreso);
+          break;
+        case "salida":
+          comp = getTime(a.fecha_salida) - getTime(b.fecha_salida);
+          break;
+        case "estado":
+          comp = a.estado.localeCompare(b.estado);
+          break;
+      }
+      return sortDir === "asc" ? comp : -comp;
+    });
+    return data;
+  }, [filteredData, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
+  const pagedData = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return sortedData.slice(start, start + pageSize);
+  }, [sortedData, page, pageSize]);
   const { toast } = useToast();
   const refreshTimeout = useRef<number | undefined>(undefined);
 
@@ -53,10 +121,12 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
     setLoading(true);
     setErrorMsg(null);
     try {
+      const estados = onlyActive ? ["ACTIVO", "ALMUERZO"] : ["ACTIVO", "ALMUERZO", "COMPLETADO"];
+      const byDay = fromDate === toDate;
       const { schedules, error } = await scheduleService.getAllSchedules({
-        fecha: new Date().toISOString().slice(0, 10),
-        estados: ["ACTIVO", "ALMUERZO"],
-        limit: 500,
+        ...(byDay ? { fecha: fromDate } : { from: fromDate, to: toDate }),
+        estados,
+        limit: 1000,
       });
       if (error) {
         setErrorMsg(error);
@@ -69,46 +139,33 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
         return;
       }
 
-      const today = new Date().toISOString().split("T")[0];
-      const activesOnly = schedules
-        .filter(
-          (schedule) =>
-            ["ACTIVO", "ALMUERZO"].includes(schedule.estado) &&
-            !schedule.fecha_salida &&
-            new Date(schedule.fecha_inicio).toISOString().split("T")[0] ===
-              today &&
-            schedule.usuario &&
-            schedule.puntoAtencion
-        )
-        .map((schedule) => {
-          if (!schedule.usuario || !schedule.puntoAtencion) return null;
-          return {
-            id: schedule.id,
-            fecha_inicio: schedule.fecha_inicio,
-            fecha_almuerzo: schedule.fecha_almuerzo,
-            fecha_regreso: schedule.fecha_regreso,
-            fecha_salida: schedule.fecha_salida,
-            ubicacion_inicio: schedule.ubicacion_inicio,
-            ubicacion_salida: schedule.ubicacion_salida,
-            estado: schedule.estado,
-            usuario: {
-              id: schedule.usuario.id,
-              nombre: schedule.usuario.nombre,
-              username: schedule.usuario.username,
-            },
-            puntoAtencion: {
-              id: schedule.puntoAtencion.id,
-              nombre: schedule.puntoAtencion.nombre,
-            },
-          };
-        })
-        .filter(Boolean) as ActiveSchedule[];
+      const filtered = schedules
+        .filter((schedule) => schedule.usuario && schedule.puntoAtencion)
+        .map((schedule) => ({
+          id: schedule.id,
+          fecha_inicio: schedule.fecha_inicio,
+          fecha_almuerzo: schedule.fecha_almuerzo,
+          fecha_regreso: schedule.fecha_regreso,
+          fecha_salida: schedule.fecha_salida,
+          ubicacion_inicio: schedule.ubicacion_inicio,
+          ubicacion_salida: schedule.ubicacion_salida,
+          estado: schedule.estado,
+          usuario: {
+            id: schedule.usuario!.id,
+            nombre: schedule.usuario!.nombre,
+            username: schedule.usuario!.username,
+          },
+          puntoAtencion: {
+            id: schedule.puntoAtencion!.id,
+            nombre: schedule.puntoAtencion!.nombre,
+          },
+        })) as ActiveSchedule[];
 
-      setActiveSchedules(activesOnly);
+      setActiveSchedules(filtered);
 
       toast({
         title: "Datos actualizados",
-        description: `Se encontraron ${activesOnly.length} usuarios activos`,
+        description: `Se encontraron ${filtered.length} registros`,
       });
     } catch (err) {
       const msg =
@@ -130,7 +187,6 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
   useEffect(() => {
     loadActiveSchedules();
 
-    // Opcional: refresco automático si lo deseas (deja AUTO_REFRESH_INTERVAL en 0 si NO quieres)
     if (AUTO_REFRESH_INTERVAL > 0) {
       refreshTimeout.current = window.setTimeout(
         loadActiveSchedules,
@@ -142,7 +198,7 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
         clearTimeout(refreshTimeout.current);
       }
     };
-  }, [loadActiveSchedules]);
+  }, [loadActiveSchedules, fromDate, toDate, onlyActive]);
 
   const formatTime = (dateString?: string) => {
     if (!dateString) return "No registrado";
@@ -200,53 +256,163 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">Usuarios Activos</h2>
-          <p className="text-gray-600">
-            Monitoreo en tiempo real de jornadas laborales -{" "}
-            {formatDate(new Date().toISOString())}
-          </p>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Usuarios Activos</h2>
+            <p className="text-gray-600">
+              Monitoreo en tiempo real de jornadas laborales -{" "}
+              {formatDate(new Date().toISOString())}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={loadActiveSchedules} disabled={loading}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Actualizar
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                try {
+                  const header = [
+                    "Usuario",
+                    "Username",
+                    "Punto",
+                    "Entrada",
+                    "Almuerzo",
+                    "Regreso",
+                    "Salida",
+                    "Estado",
+                  ];
+                  const rows = sortedData.map((s) => [
+                    s.usuario.nombre,
+                    `@${s.usuario.username}`,
+                    s.puntoAtencion.nombre,
+                    formatTime(s.fecha_inicio),
+                    formatTime(s.fecha_almuerzo),
+                    formatTime(s.fecha_regreso),
+                    formatTime(s.fecha_salida),
+                    s.estado,
+                  ]);
+                  const csv = [header, ...rows]
+                    .map((cols) =>
+                      cols
+                        .map((c) => {
+                          const v = String(c ?? "");
+                          return v.includes(",") || v.includes("\n") || v.includes('"')
+                            ? `"${v.replaceAll('"', '""')}"`
+                            : v;
+                        })
+                        .join(",")
+                    )
+                    .join("\n");
+                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  const today = new Date().toISOString().slice(0, 10);
+                  a.download = `informe_usuarios_activos_${today}.csv`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
+                } catch (e) {
+                  toast({
+                    title: "Error",
+                    description: "No se pudo exportar el informe",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              Exportar Informe
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={loadActiveSchedules} disabled={loading}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Actualizar
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={async () => {
-              try {
-                const base =
-                  (import.meta as any).env?.VITE_API_URL ||
-                  "http://35.238.95.118/api";
-                const today = new Date().toISOString().slice(0, 10);
-                const url = `${base}/schedules?fecha=${today}&estados=ACTIVO,ALMUERZO&limit=500&format=csv`;
-                const token = localStorage.getItem("authToken");
-                const res = await fetch(url, {
-                  headers: token ? { Authorization: `Bearer ${token}` } : {},
-                });
-                if (!res.ok) throw new Error("No se pudo exportar CSV");
-                const blob = await res.blob();
-                const dlUrl = window.URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = dlUrl;
-                a.download = `usuarios_activos_${today}.csv`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(dlUrl);
-              } catch (e) {
-                toast({
-                  title: "Error",
-                  description: "No se pudo exportar el CSV",
-                  variant: "destructive",
-                });
-              }
-            }}
-          >
-            Exportar CSV
-          </Button>
+
+        {/* Filtros */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Desde</label>
+            <input
+              type="date"
+              className="w-full border rounded px-2 py-1"
+              value={fromDate}
+              max={toDate}
+              onChange={(e) => {
+                setPage(1);
+                setFromDate(e.target.value);
+              }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Hasta</label>
+            <input
+              type="date"
+              className="w-full border rounded px-2 py-1"
+              value={toDate}
+              min={fromDate}
+              onChange={(e) => {
+                setPage(1);
+                setToDate(e.target.value);
+              }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Buscar</label>
+            <input
+              type="text"
+              placeholder="Usuario, username o punto"
+              className="w-full border rounded px-2 py-1"
+              value={searchTerm}
+              onChange={(e) => {
+                setPage(1);
+                setSearchTerm(e.target.value);
+              }}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Tamaño de página</label>
+            <select
+              className="w-full border rounded px-2 py-1"
+              value={pageSize}
+              onChange={(e) => {
+                setPage(1);
+                setPageSize(Number(e.target.value));
+              }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+          </div>
+          <div className="flex items-end justify-between gap-2">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={onlyActive}
+                onChange={(e) => {
+                  setPage(1);
+                  setOnlyActive(e.target.checked);
+                }}
+              />
+              Solo activos del período (incluye ALMUERZO)
+            </label>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFromDate(todayStr);
+                setToDate(todayStr);
+                setOnlyActive(true);
+                setSearchTerm("");
+                setPage(1);
+              }}
+            >
+              Limpiar filtros
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -363,6 +529,86 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        {/* Lista resumen tipo informe */}
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold mb-2">Informe (lista)</h3>
+          <div className="overflow-auto rounded border">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  {([
+                    { key: "usuario", label: "Usuario" },
+                    { key: "username", label: "Username" },
+                    { key: "punto", label: "Punto" },
+                    { key: "entrada", label: "Entrada" },
+                    { key: "almuerzo", label: "Almuerzo" },
+                    { key: "regreso", label: "Regreso" },
+                    { key: "salida", label: "Salida" },
+                    { key: "estado", label: "Estado" },
+                  ] as const).map((c) => (
+                    <th
+                      key={c.key}
+                      className="px-3 py-2 text-left cursor-pointer select-none hover:bg-gray-100"
+                      onClick={() => {
+                        setPage(1);
+                        if (sortKey === c.key) {
+                          setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+                        } else {
+                          setSortKey(c.key);
+                          setSortDir("asc");
+                        }
+                      }}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {c.label}
+                        {sortKey === c.key ? (
+                          <span className="text-gray-400">{sortDir === "asc" ? "▲" : "▼"}</span>
+                        ) : null}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pagedData.map((s) => (
+                  <tr key={`row-${s.id}`} className="border-t">
+                    <td className="px-3 py-2">{s.usuario.nombre}</td>
+                    <td className="px-3 py-2">@{s.usuario.username}</td>
+                    <td className="px-3 py-2">{s.puntoAtencion.nombre}</td>
+                    <td className="px-3 py-2">{formatTime(s.fecha_inicio)}</td>
+                    <td className="px-3 py-2">{formatTime(s.fecha_almuerzo)}</td>
+                    <td className="px-3 py-2">{formatTime(s.fecha_regreso)}</td>
+                    <td className="px-3 py-2">{formatTime(s.fecha_salida)}</td>
+                    <td className="px-3 py-2">{s.estado}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Paginación */}
+          <div className="flex items-center justify-between mt-3 text-sm">
+            <span>
+              Página {page} de {totalPages} — {activeSchedules.length} registros
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
