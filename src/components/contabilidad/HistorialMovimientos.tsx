@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import { format, parseISO } from "date-fns";
 import { User, PuntoAtencion, MovimientoSaldo, Moneda } from "@/types";
 import { useContabilidadDivisas } from "@/hooks/useContabilidadDivisas";
 import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
+import { pointService } from "@/services/pointService";
 import { Loading } from "@/components/ui/loading";
 
 interface HistorialMovimientosProps {
@@ -65,14 +66,36 @@ export const HistorialMovimientos = ({
   const [filtroMoneda, setFiltroMoneda] = useState<string>("TODAS");
   const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
   const [limite, setLimite] = useState(50);
+  const [filtroPunto, setFiltroPunto] = useState<string>("TODOS");
+  const [puntos, setPuntos] = useState<{ id: string; nombre: string }[]>([]);
+
+  // Cargar puntos para filtro (solo en admin view)
+  useEffect(() => {
+    const loadPoints = async () => {
+      if (!isAdminView) return;
+      const { points } = await pointService.getAllPointsForAdmin();
+      setPuntos(
+        (points || []).map((p: any) => ({ id: p.id, nombre: p.nombre }))
+      );
+    };
+    loadPoints();
+  }, [isAdminView]);
 
   // Cargar movimientos cuando cambien los filtros
   useEffect(() => {
     if (isAdminView || selectedPoint) {
       const monedaId = filtroMoneda === "TODAS" ? undefined : filtroMoneda;
+      // Para admin, cargar todos y luego filtrar por punto en cliente
       cargarMovimientos(monedaId, limite);
     }
-  }, [isAdminView, selectedPoint, filtroMoneda, limite, cargarMovimientos]);
+  }, [
+    isAdminView,
+    selectedPoint,
+    filtroMoneda,
+    filtroPunto,
+    limite,
+    cargarMovimientos,
+  ]);
 
   const getTipoMovimientoIcon = (tipo: string) => {
     switch (tipo) {
@@ -148,12 +171,18 @@ export const HistorialMovimientos = ({
     }).format(amount);
   };
 
-  const movimientosFiltrados = movimientos.filter((mov) => {
-    if (filtroTipo !== "TODOS" && mov.tipo_movimiento !== filtroTipo) {
-      return false;
-    }
-    return true;
-  });
+  const movimientosFiltrados = useMemo(() => {
+    return movimientos.filter((mov) => {
+      if (filtroTipo !== "TODOS" && mov.tipo_movimiento !== filtroTipo) {
+        return false;
+      }
+      if (isAdminView && filtroPunto !== "TODOS") {
+        // punto_id agregado en hook admin
+        if ((mov as any).punto_id !== filtroPunto) return false;
+      }
+      return true;
+    });
+  }, [movimientos, filtroTipo, filtroPunto, isAdminView]);
 
   if (!selectedPoint && !isAdminView) {
     return (
@@ -195,6 +224,25 @@ export const HistorialMovimientos = ({
               </SelectContent>
             </Select>
           </div>
+
+          {isAdminView && (
+            <div className="flex-1 min-w-48">
+              <Label className="text-sm">Punto de Atención</Label>
+              <Select value={filtroPunto} onValueChange={setFiltroPunto}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar punto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TODOS">Todos los puntos</SelectItem>
+                  {puntos.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex-1 min-w-48">
             <Label className="text-sm">Tipo de Movimiento</Label>
@@ -252,7 +300,7 @@ export const HistorialMovimientos = ({
           </Button>
         </div>
 
-        {/* Tabla de movimientos */}
+        {/* Tabla de movimientos (agrupando cambios por transacción) */}
         {isLoading ? (
           <Loading text="Cargando movimientos..." className="py-8" />
         ) : error ? (
@@ -284,80 +332,235 @@ export const HistorialMovimientos = ({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {movimientosFiltrados.map((movimiento) => (
-                  <TableRow key={movimiento.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getTipoMovimientoIcon(movimiento.tipo_movimiento)}
-                        <span className="text-sm">
-                          {format(
-                            parseISO(movimiento.fecha),
-                            "yyyy-MM-dd HH:mm"
+                {/**
+                 * Agrupar por referencia de cambio para mostrar una sola fila con Ingreso/Egreso
+                 * Solo aplica para tipo_referencia === "CAMBIO_DIVISA"
+                 */}
+                {(() => {
+                  const rows: JSX.Element[] = [];
+                  const seenCambio = new Set<string>();
+
+                  for (const mov of movimientosFiltrados) {
+                    if (
+                      mov.tipo_referencia === "CAMBIO_DIVISA" &&
+                      mov.referencia_id
+                    ) {
+                      if (seenCambio.has(mov.referencia_id)) continue;
+                      seenCambio.add(mov.referencia_id);
+
+                      const relacionados = movimientosFiltrados.filter(
+                        (m) =>
+                          m.tipo_referencia === "CAMBIO_DIVISA" &&
+                          m.referencia_id === mov.referencia_id
+                      );
+
+                      const ingreso = relacionados.find(
+                        (m) => m.tipo_movimiento === "INGRESO"
+                      );
+                      const egreso = relacionados.find(
+                        (m) => m.tipo_movimiento === "EGRESO"
+                      );
+
+                      const fechaBase =
+                        ingreso?.fecha || egreso?.fecha || mov.fecha;
+
+                      rows.push(
+                        <TableRow key={`cambio-${mov.referencia_id}`}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <ArrowRightLeft className="h-4 w-4 text-blue-600" />
+                              <span className="text-sm">
+                                {format(
+                                  parseISO(fechaBase),
+                                  "yyyy-MM-dd HH:mm"
+                                )}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {getTipoMovimientoBadge("CAMBIO_DIVISA")}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col gap-1">
+                              {ingreso && (
+                                <Badge variant="outline">
+                                  {ingreso.moneda?.codigo || "N/A"}
+                                </Badge>
+                              )}
+                              {egreso && (
+                                <Badge variant="outline" className="opacity-80">
+                                  {egreso.moneda?.codigo || "N/A"}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          {isAdminView && (
+                            <TableCell>
+                              <Badge variant="secondary">
+                                {"punto_nombre" in mov
+                                  ? (mov as any).punto_nombre
+                                  : "N/A"}
+                              </Badge>
+                            </TableCell>
                           )}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {getTipoMovimientoBadge(movimiento.tipo_movimiento)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {movimiento.moneda?.codigo || "N/A"}
-                      </Badge>
-                    </TableCell>
-                    {isAdminView && (
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {"punto_nombre" in movimiento
-                            ? (movimiento as any).punto_nombre
-                            : "N/A"}
-                        </Badge>
-                      </TableCell>
-                    )}
-                    <TableCell className="text-right">
-                      <span
-                        className={`font-semibold ${
-                          movimiento.tipo_movimiento === "INGRESO" ||
-                          movimiento.tipo_movimiento ===
-                            "TRANSFERENCIA_ENTRANTE"
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
-                        {movimiento.tipo_movimiento === "INGRESO" ||
-                        movimiento.tipo_movimiento === "TRANSFERENCIA_ENTRANTE"
-                          ? "+"
-                          : "-"}
-                        {formatCurrency(
-                          Math.abs(movimiento.monto),
-                          movimiento.moneda?.codigo
-                        )}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {formatCurrency(
-                        movimiento.saldo_anterior,
-                        movimiento.moneda?.codigo
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {formatCurrency(
-                        movimiento.saldo_nuevo,
-                        movimiento.moneda?.codigo
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm">
-                        {movimiento.usuario?.nombre || "Sistema"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {movimiento.descripcion || "Sin descripción"}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                          <TableCell className="text-right">
+                            <div className="flex flex-col items-end">
+                              {ingreso && (
+                                <span className="font-semibold text-green-600">
+                                  +
+                                  {formatCurrency(
+                                    Math.abs(ingreso.monto),
+                                    ingreso.moneda?.codigo
+                                  )}
+                                </span>
+                              )}
+                              {egreso && (
+                                <span className="font-semibold text-red-600">
+                                  -
+                                  {formatCurrency(
+                                    Math.abs(egreso.monto),
+                                    egreso.moneda?.codigo
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            <div className="flex flex-col items-end">
+                              {ingreso && (
+                                <span>
+                                  {formatCurrency(
+                                    ingreso.saldo_anterior,
+                                    ingreso.moneda?.codigo
+                                  )}
+                                </span>
+                              )}
+                              {egreso && (
+                                <span>
+                                  {formatCurrency(
+                                    egreso.saldo_anterior,
+                                    egreso.moneda?.codigo
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            <div className="flex flex-col items-end">
+                              {ingreso && (
+                                <span>
+                                  {formatCurrency(
+                                    ingreso.saldo_nuevo,
+                                    ingreso.moneda?.codigo
+                                  )}
+                                </span>
+                              )}
+                              {egreso && (
+                                <span>
+                                  {formatCurrency(
+                                    egreso.saldo_nuevo,
+                                    egreso.moneda?.codigo
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm">
+                              {ingreso?.usuario?.nombre ||
+                                egreso?.usuario?.nombre ||
+                                "Sistema"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {ingreso?.descripcion ||
+                                egreso?.descripcion ||
+                                "Cambio de divisa"}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    } else {
+                      // Fila normal para otros movimientos
+                      rows.push(
+                        <TableRow key={mov.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {getTipoMovimientoIcon(mov.tipo_movimiento)}
+                              <span className="text-sm">
+                                {format(
+                                  parseISO(mov.fecha),
+                                  "yyyy-MM-dd HH:mm"
+                                )}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {getTipoMovimientoBadge(mov.tipo_movimiento)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {mov.moneda?.codigo || "N/A"}
+                            </Badge>
+                          </TableCell>
+                          {isAdminView && (
+                            <TableCell>
+                              <Badge variant="secondary">
+                                {"punto_nombre" in mov
+                                  ? (mov as any).punto_nombre
+                                  : "N/A"}
+                              </Badge>
+                            </TableCell>
+                          )}
+                          <TableCell className="text-right">
+                            <span
+                              className={`font-semibold ${
+                                mov.tipo_movimiento === "INGRESO" ||
+                                mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE"
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              }`}
+                            >
+                              {mov.tipo_movimiento === "INGRESO" ||
+                              mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE"
+                                ? "+"
+                                : "-"}
+                              {formatCurrency(
+                                Math.abs(mov.monto),
+                                mov.moneda?.codigo
+                              )}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatCurrency(
+                              mov.saldo_anterior,
+                              mov.moneda?.codigo
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {formatCurrency(
+                              mov.saldo_nuevo,
+                              mov.moneda?.codigo
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm">
+                              {mov.usuario?.nombre || "Sistema"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {mov.descripcion || "Sin descripción"}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+                  }
+
+                  return rows;
+                })()}
               </TableBody>
             </Table>
           </div>

@@ -59,6 +59,11 @@ export const ContabilidadDashboard = ({
     monedaPrincipalSaldo: 0,
   });
 
+  // Totales consolidados por moneda (solo relevante en vista admin)
+  const [totalesPorMoneda, setTotalesPorMoneda] = useState<
+    { codigo: string; total: number }[]
+  >([]);
+
   // Cargar monedas si no se proporcionaron
   useEffect(() => {
     const loadCurrencies = async () => {
@@ -118,15 +123,37 @@ export const ContabilidadDashboard = ({
         )
         .reduce((sum, mov) => sum + mov.monto, 0);
 
-      const cambios = movimientosHoy.filter(
-        (mov) => mov.tipo_movimiento === "CAMBIO_DIVISA"
-      ).length;
+      // Contar cambios como cantidad de transacciones únicas (referencia_id) con tipo_referencia CAMBIO_DIVISA
+      const cambios = (() => {
+        const setRefs = new Set<string>();
+        for (const mov of movimientosHoy) {
+          if (mov.tipo_referencia === "CAMBIO_DIVISA" && mov.referencia_id) {
+            setRefs.add(mov.referencia_id);
+          }
+        }
+        return setRefs.size;
+      })();
 
       const saldosPositivos = saldos.filter((s) => s.saldo > 0).length;
       const saldosNegativos = saldos.filter((s) => s.saldo < 0).length;
 
-      const usdSaldo =
-        saldos.find((s) => s.moneda_codigo === "USD")?.saldo || 0;
+      // Suma USD en todos los puntos (vista admin) o solo del punto (vista normal)
+      const usdSaldo = isAdminView
+        ? saldos
+            .filter((s) => s.moneda_codigo === "USD")
+            .reduce((acc, s) => acc + s.saldo, 0)
+        : saldos.find((s) => s.moneda_codigo === "USD")?.saldo || 0;
+
+      // Totales por moneda (para tarjetas por divisa)
+      const map = new Map<string, number>();
+      for (const s of saldos) {
+        map.set(s.moneda_codigo, (map.get(s.moneda_codigo) || 0) + s.saldo);
+      }
+      const totales = Array.from(map.entries()).map(([codigo, total]) => ({
+        codigo,
+        total,
+      }));
+      setTotalesPorMoneda(totales);
 
       setEstadisticas({
         totalIngresos: ingresos,
@@ -332,6 +359,35 @@ export const ContabilidadDashboard = ({
               </div>
             </div>
           </div>
+
+          {isAdminView && totalesPorMoneda.length > 0 && (
+            <div className="mt-6">
+              <h4 className="font-semibold mb-3">
+                Totales por Divisa (Consolidado)
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {totalesPorMoneda
+                  .sort((a, b) =>
+                    a.codigo === "USD" ? -1 : a.codigo.localeCompare(b.codigo)
+                  )
+                  .map((t) => (
+                    <Card key={t.codigo}>
+                      <CardContent className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-gray-500">{t.codigo}</p>
+                            <p className="text-lg font-semibold">
+                              {formatCurrency(t.total, t.codigo)}
+                            </p>
+                          </div>
+                          <DollarSign className="h-5 w-5 text-gray-400" />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

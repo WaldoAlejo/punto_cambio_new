@@ -116,6 +116,7 @@ export const useContabilidadAdmin = ({
           return (movimientos || []).map((movimiento) => ({
             ...movimiento,
             punto_nombre: punto.nombre,
+            punto_id: punto.id,
           }));
         });
 
