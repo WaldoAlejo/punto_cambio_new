@@ -30,8 +30,9 @@ export const useContabilidadAdmin = ({
     setError(null);
 
     try {
-      // Primero obtener todos los puntos
-      const { points, error: pointsError } = await pointService.getAllPoints();
+      // Primero obtener todos los puntos (incluye todos para admins)
+      const { points, error: pointsError } =
+        await pointService.getAllPointsForAdmin();
 
       if (pointsError) {
         setError(pointsError);
@@ -81,9 +82,9 @@ export const useContabilidadAdmin = ({
   const cargarMovimientosConsolidados = useCallback(
     async (moneda_id?: string, limit = 100) => {
       try {
-        // Obtener todos los puntos
+        // Obtener todos los puntos (incluye todos para admins)
         const { points, error: pointsError } =
-          await pointService.getAllPoints();
+          await pointService.getAllPointsForAdmin();
 
         if (pointsError) {
           setError(pointsError);

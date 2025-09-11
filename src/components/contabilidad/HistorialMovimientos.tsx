@@ -155,7 +155,7 @@ export const HistorialMovimientos = ({
     return true;
   });
 
-  if (!selectedPoint) {
+  if (!selectedPoint && !isAdminView) {
     return (
       <Card className={className}>
         <CardContent className="p-6 text-center text-muted-foreground">
@@ -170,7 +170,9 @@ export const HistorialMovimientos = ({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-blue-600" />
-          Historial de Movimientos - {selectedPoint.nombre}
+          {isAdminView
+            ? "Historial de Movimientos - Contabilidad General"
+            : `Historial de Movimientos - ${selectedPoint?.nombre}`}
         </CardTitle>
       </CardHeader>
 

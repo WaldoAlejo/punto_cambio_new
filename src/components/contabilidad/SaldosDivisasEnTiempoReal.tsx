@@ -76,7 +76,7 @@ export const SaldosDivisasEnTiempoReal = ({
     return { color: "success", icon: TrendingUp, text: "Saldo normal" };
   };
 
-  if (!selectedPoint) {
+  if (!selectedPoint && !isAdminView) {
     return (
       <Card className={className}>
         <CardContent className="p-6 text-center text-muted-foreground">
@@ -92,7 +92,9 @@ export const SaldosDivisasEnTiempoReal = ({
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg font-semibold flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-green-600" />
-            Saldos de Divisas - {selectedPoint.nombre}
+            {isAdminView
+              ? "Saldos de Divisas - Contabilidad General"
+              : `Saldos de Divisas - ${selectedPoint?.nombre}`}
           </CardTitle>
           <div className="flex items-center gap-2">
             <Button
