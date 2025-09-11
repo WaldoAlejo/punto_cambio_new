@@ -240,8 +240,8 @@ router.post("/procesar-cambio", authenticateToken, async (req, res) => {
 
       // Actualizar saldo actual (asegurar ID no nulo)
       const upsertSaldoQuery = `
-        INSERT INTO "Saldo" (id, punto_atencion_id, moneda_id, cantidad, billetes, monedas_fisicas, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, 0, 0, NOW(), NOW())
+        INSERT INTO "Saldo" (id, punto_atencion_id, moneda_id, cantidad, billetes, monedas_fisicas, updated_at)
+        VALUES ($1, $2, $3, $4, 0, 0, NOW())
         ON CONFLICT (punto_atencion_id, moneda_id)
         DO UPDATE SET cantidad = EXCLUDED.cantidad, updated_at = NOW()
       `;
