@@ -39,12 +39,31 @@ interface ScheduleResponse {
 }
 
 export const scheduleService = {
-  async getAllSchedules(): Promise<{
+  async getAllSchedules(params?: {
+    fecha?: string; // YYYY-MM-DD
+    from?: string; // YYYY-MM-DD
+    to?: string; // YYYY-MM-DD
+    estados?: string[]; // ["ACTIVO","ALMUERZO","COMPLETADO"]
+    usuario_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
     schedules: Schedule[];
     error: string | null;
   }> {
     try {
-      const response = await apiService.get<SchedulesResponse>("/schedules");
+      const q = new URLSearchParams();
+      if (params?.fecha) q.set("fecha", params.fecha);
+      if (params?.from) q.set("from", params.from);
+      if (params?.to) q.set("to", params.to);
+      if (params?.estados?.length) q.set("estados", params.estados.join(","));
+      if (params?.usuario_id) q.set("usuario_id", params.usuario_id);
+      if (typeof params?.limit === "number")
+        q.set("limit", String(params.limit));
+      if (typeof params?.offset === "number")
+        q.set("offset", String(params.offset));
+      const url = `/schedules${q.toString() ? `?${q.toString()}` : ""}`;
+      const response = await apiService.get<SchedulesResponse>(url);
       if (!response) {
         return {
           schedules: [],
@@ -102,14 +121,20 @@ export const scheduleService = {
     ubicacion_salida?: { lat: number; lng: number; direccion?: string };
   }): Promise<{ schedule: Schedule | null; error: string | null }> {
     try {
-      console.log("📡 scheduleService.createOrUpdateSchedule - Enviando:", scheduleData);
-      
+      console.log(
+        "📡 scheduleService.createOrUpdateSchedule - Enviando:",
+        scheduleData
+      );
+
       const response = await apiService.post<ScheduleResponse>(
         "/schedules",
         scheduleData
       );
-      
-      console.log("📡 scheduleService.createOrUpdateSchedule - Respuesta:", response);
+
+      console.log(
+        "📡 scheduleService.createOrUpdateSchedule - Respuesta:",
+        response
+      );
       if (!response) {
         return {
           schedule: null,

@@ -19,6 +19,17 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
   const [exits, setExits] = useState<SalidaEspontanea[]>([]);
   const [showExitForm, setShowExitForm] = useState(false);
   const [loadingExits, setLoadingExits] = useState(false);
+  const [schedules, setSchedules] = useState<
+    {
+      id: string;
+      fecha_inicio: string;
+      fecha_almuerzo?: string | null;
+      fecha_regreso?: string | null;
+      fecha_salida?: string | null;
+      estado: string;
+    }[]
+  >([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
 
   useEffect(() => {
     if (
@@ -40,6 +51,45 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
           }
         })
         .finally(() => setLoadingExits(false));
+    }
+
+    if (selectedTab === "mi-historial") {
+      // Cargar últimas 4 semanas de jornadas del usuario
+      const to = new Date();
+      const from = new Date();
+      from.setDate(from.getDate() - 28);
+      setLoadingSchedules(true);
+      import("@/services/scheduleService").then(({ scheduleService }) =>
+        scheduleService
+          .getAllSchedules({
+            usuario_id: user.id,
+            from: from.toISOString().slice(0, 10),
+            to: to.toISOString().slice(0, 10),
+            limit: 200,
+          })
+          .then(({ schedules, error }) => {
+            if (error) {
+              setSchedules([]);
+              toast({
+                title: "Error",
+                description: "No se pudo cargar el historial de jornadas.",
+                variant: "destructive",
+              });
+            } else {
+              setSchedules(
+                (schedules || []).map((s) => ({
+                  id: s.id,
+                  fecha_inicio: s.fecha_inicio,
+                  fecha_almuerzo: s.fecha_almuerzo,
+                  fecha_regreso: s.fecha_regreso,
+                  fecha_salida: s.fecha_salida,
+                  estado: s.estado,
+                }))
+              );
+            }
+          })
+          .finally(() => setLoadingSchedules(false))
+      );
     }
     // 🔴 Quitamos 'toast' de dependencias:
   }, [selectedTab, user.id, showExitForm]);
@@ -126,14 +176,79 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
         )}
 
         {selectedTab === "mi-historial" && (
-          <div>
-            {loadingExits ? (
-              <div className="text-center p-4 text-gray-400">
-                Cargando historial...
-              </div>
-            ) : (
-              <SpontaneousExitHistory exits={exits} />
-            )}
+          <div className="space-y-6">
+            <div>
+              <h2 className="font-semibold mb-2">
+                Mis Jornadas (últimos 28 días)
+              </h2>
+              {loadingSchedules ? (
+                <div className="text-center p-4 text-gray-400">
+                  Cargando jornadas...
+                </div>
+              ) : schedules.length === 0 ? (
+                <div className="text-center p-4 text-gray-400">
+                  No hay jornadas en el período
+                </div>
+              ) : (
+                <div className="overflow-auto rounded border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Fecha</th>
+                        <th className="px-3 py-2 text-left">Inicio</th>
+                        <th className="px-3 py-2 text-left">Almuerzo</th>
+                        <th className="px-3 py-2 text-left">Regreso</th>
+                        <th className="px-3 py-2 text-left">Salida</th>
+                        <th className="px-3 py-2 text-left">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {schedules.map((s) => {
+                        const d = new Date(s.fecha_inicio);
+                        const toTime = (v?: string | null) =>
+                          v
+                            ? new Date(v).toLocaleTimeString("es-EC", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "-";
+                        return (
+                          <tr key={s.id} className="border-t">
+                            <td className="px-3 py-2">
+                              {d.toLocaleDateString("es-EC")}
+                            </td>
+                            <td className="px-3 py-2">
+                              {toTime(s.fecha_inicio)}
+                            </td>
+                            <td className="px-3 py-2">
+                              {toTime(s.fecha_almuerzo)}
+                            </td>
+                            <td className="px-3 py-2">
+                              {toTime(s.fecha_regreso)}
+                            </td>
+                            <td className="px-3 py-2">
+                              {toTime(s.fecha_salida)}
+                            </td>
+                            <td className="px-3 py-2">{s.estado}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h2 className="font-semibold mb-2">Mis Salidas Espontáneas</h2>
+              {loadingExits ? (
+                <div className="text-center p-4 text-gray-400">
+                  Cargando historial...
+                </div>
+              ) : (
+                <SpontaneousExitHistory exits={exits} />
+              )}
+            </div>
           </div>
         )}
       </div>

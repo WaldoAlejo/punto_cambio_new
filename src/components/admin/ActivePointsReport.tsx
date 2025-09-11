@@ -53,7 +53,11 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const { schedules, error } = await scheduleService.getAllSchedules();
+      const { schedules, error } = await scheduleService.getAllSchedules({
+        fecha: new Date().toISOString().slice(0, 10),
+        estados: ["ACTIVO", "ALMUERZO"],
+        limit: 500,
+      });
       if (error) {
         setErrorMsg(error);
         toast({
@@ -69,7 +73,7 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
       const activesOnly = schedules
         .filter(
           (schedule) =>
-            schedule.estado === "ACTIVO" &&
+            ["ACTIVO", "ALMUERZO"].includes(schedule.estado) &&
             !schedule.fecha_salida &&
             new Date(schedule.fecha_inicio).toISOString().split("T")[0] ===
               today &&
@@ -204,10 +208,46 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
             {formatDate(new Date().toISOString())}
           </p>
         </div>
-        <Button onClick={loadActiveSchedules} disabled={loading}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Actualizar
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={loadActiveSchedules} disabled={loading}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Actualizar
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={async () => {
+              try {
+                const base =
+                  (import.meta as any).env?.VITE_API_URL ||
+                  "http://35.238.95.118/api";
+                const today = new Date().toISOString().slice(0, 10);
+                const url = `${base}/schedules?fecha=${today}&estados=ACTIVO,ALMUERZO&limit=500&format=csv`;
+                const token = localStorage.getItem("authToken");
+                const res = await fetch(url, {
+                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                if (!res.ok) throw new Error("No se pudo exportar CSV");
+                const blob = await res.blob();
+                const dlUrl = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = dlUrl;
+                a.download = `usuarios_activos_${today}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(dlUrl);
+              } catch (e) {
+                toast({
+                  title: "Error",
+                  description: "No se pudo exportar el CSV",
+                  variant: "destructive",
+                });
+              }
+            }}
+          >
+            Exportar CSV
+          </Button>
+        </div>
       </div>
 
       {activeSchedules.length === 0 ? (

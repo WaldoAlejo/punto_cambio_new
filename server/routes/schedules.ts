@@ -45,7 +45,7 @@ const scheduleSchema = z
     }
   );
 
-// Obtener jornadas
+// Obtener jornadas (con filtros flexibles: fecha, from/to, estados)
 router.get("/", authenticateToken, async (req, res) => {
   try {
     res.set({
@@ -57,10 +57,12 @@ router.get("/", authenticateToken, async (req, res) => {
 
     const whereClause: Record<string, unknown> = {};
 
+    // Restricción por rol: operadores y administrativos solo ven sus propias jornadas
     if (req.user?.rol === "OPERADOR" || req.user?.rol === "ADMINISTRATIVO") {
       whereClause.usuario_id = req.user.id;
     }
 
+    // Admin y Super Usuario pueden consultar por usuario específico
     if (
       req.query.usuario_id &&
       ["ADMIN", "SUPER_USUARIO"].includes(req.user?.rol || "")
@@ -68,15 +70,53 @@ router.get("/", authenticateToken, async (req, res) => {
       whereClause.usuario_id = req.query.usuario_id as string;
     }
 
-    if (req.query.fecha) {
-      const fecha = new Date(req.query.fecha as string);
-      const siguienteDia = new Date(fecha);
+    // Filtros de fecha: "fecha" (día exacto) o rango "from"/"to"
+    const { fecha, from, to } = req.query as {
+      fecha?: string;
+      from?: string;
+      to?: string;
+    };
+
+    if (fecha) {
+      const dia = new Date(fecha);
+      const siguienteDia = new Date(dia);
       siguienteDia.setDate(siguienteDia.getDate() + 1);
       whereClause.fecha_inicio = {
-        gte: fecha,
+        gte: dia,
         lt: siguienteDia,
       };
+    } else if (from || to) {
+      const gte = from ? new Date(from) : undefined;
+      let lt: Date | undefined = undefined;
+      if (to) {
+        const hasta = new Date(to);
+        // Incluir el día de "to" completo avanzando al siguiente día exclusivo
+        lt = new Date(hasta);
+        lt.setDate(lt.getDate() + 1);
+      }
+      whereClause.fecha_inicio = {
+        ...(gte ? { gte } : {}),
+        ...(lt ? { lt } : {}),
+      } as Prisma.DateTimeFilter;
     }
+
+    // Filtro por estados (coma-separado), ej: estados=ACTIVO,ALMUERZO
+    if (req.query.estados) {
+      const estados = String(req.query.estados)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (estados.length > 0) {
+        // Prisma: estado: { in: [...] }
+        (whereClause as any).estado = { in: estados };
+      }
+    }
+
+    // Paginación
+    const rawLimit = parseInt(String(req.query.limit ?? "50"), 10);
+    const rawOffset = parseInt(String(req.query.offset ?? "0"), 10);
+    const take = Math.min(Math.max(isNaN(rawLimit) ? 50 : rawLimit, 1), 500);
+    const skip = Math.max(isNaN(rawOffset) ? 0 : rawOffset, 0);
 
     const schedules = await prisma.jornada.findMany({
       where: whereClause,
@@ -105,6 +145,8 @@ router.get("/", authenticateToken, async (req, res) => {
       orderBy: {
         fecha_inicio: "desc",
       },
+      skip,
+      take,
     });
 
     const formattedSchedules = schedules.map((s) => ({
@@ -118,7 +160,58 @@ router.get("/", authenticateToken, async (req, res) => {
     logger.info("Horarios obtenidos", {
       count: formattedSchedules.length,
       requestedBy: req.user?.id,
+      filters: { fecha, from, to, estados: req.query.estados },
     });
+
+    // Exportación CSV opcional
+    if (String(req.query.format || "").toLowerCase() === "csv") {
+      const header = [
+        "id",
+        "usuario_id",
+        "usuario_nombre",
+        "usuario_username",
+        "punto_atencion_id",
+        "punto_nombre",
+        "estado",
+        "fecha_inicio",
+        "fecha_almuerzo",
+        "fecha_regreso",
+        "fecha_salida",
+      ];
+      const rows = formattedSchedules.map((s) => [
+        s.id,
+        s.usuario_id,
+        s.usuario?.nombre || "",
+        s.usuario?.username || "",
+        s.punto_atencion_id,
+        s.puntoAtencion?.nombre || "",
+        s.estado,
+        s.fecha_inicio,
+        s.fecha_almuerzo || "",
+        s.fecha_regreso || "",
+        s.fecha_salida || "",
+      ]);
+      const csv = [header, ...rows]
+        .map((cols) =>
+          cols
+            .map((c) =>
+              typeof c === "string" && (c.includes(",") || c.includes("\n"))
+                ? `"${c.replaceAll('"', '""')}"`
+                : String(c)
+            )
+            .join(",")
+        )
+        .join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="jornadas_${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv"`
+      );
+      res.status(200).send(csv);
+      return;
+    }
 
     res.status(200).json({
       schedules: formattedSchedules,
@@ -424,6 +517,118 @@ router.get("/active", authenticateToken, async (req, res) => {
       success: false,
       timestamp: new Date().toISOString(),
     });
+  }
+});
+
+// Jornadas empezadas hoy (sin salida) — útil para admins
+router.get("/started-today", authenticateToken, async (req, res) => {
+  try {
+    if (
+      !req.user ||
+      !["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"].includes(req.user.rol)
+    ) {
+      res.status(403).json({ success: false, error: "Permisos insuficientes" });
+      return;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const schedules = await prisma.jornada.findMany({
+      where: {
+        fecha_inicio: { gte: today, lt: tomorrow },
+        OR: [
+          { estado: EstadoJornada.ACTIVO },
+          { estado: EstadoJornada.ALMUERZO },
+        ],
+      },
+      include: {
+        usuario: { select: { id: true, nombre: true, username: true } },
+        puntoAtencion: { select: { id: true, nombre: true } },
+      },
+      orderBy: { fecha_inicio: "desc" },
+    });
+
+    res.json({
+      success: true,
+      schedules: schedules.map((s) => ({
+        ...s,
+        fecha_inicio: s.fecha_inicio.toISOString(),
+        fecha_almuerzo: s.fecha_almuerzo?.toISOString() || null,
+        fecha_regreso: s.fecha_regreso?.toISOString() || null,
+        fecha_salida: s.fecha_salida?.toISOString() || null,
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: "Error interno" });
+  }
+});
+
+// Historial de un usuario (con filtros de rango/estados), admins pueden consultar cualquier usuario
+router.get("/user/:id", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const isSelf = req.user?.id === userId;
+    const isAdmin = ["ADMIN", "SUPER_USUARIO"].includes(req.user?.rol || "");
+    const isAdminist = req.user?.rol === "ADMINISTRATIVO";
+
+    if (!(isSelf || isAdmin || isAdminist)) {
+      res.status(403).json({ success: false, error: "Permisos insuficientes" });
+      return;
+    }
+
+    const { from, to, estados } = req.query as {
+      from?: string;
+      to?: string;
+      estados?: string;
+    };
+    const where: Prisma.JornadaWhereInput = { usuario_id: userId };
+
+    if (from || to) {
+      const gte = from ? new Date(from) : undefined;
+      let lt: Date | undefined;
+      if (to) {
+        const d = new Date(to);
+        lt = new Date(d);
+        lt.setDate(lt.getDate() + 1);
+      }
+      where.fecha_inicio = {
+        ...(gte ? { gte } : {}),
+        ...(lt ? { lt } : {}),
+      } as Prisma.DateTimeFilter;
+    }
+
+    if (estados) {
+      const list = estados
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (list.length) where.estado = { in: list as any };
+    }
+
+    const schedules = await prisma.jornada.findMany({
+      where,
+      include: {
+        usuario: { select: { id: true, nombre: true, username: true } },
+        puntoAtencion: { select: { id: true, nombre: true } },
+      },
+      orderBy: { fecha_inicio: "desc" },
+    });
+
+    res.json({
+      success: true,
+      schedules: schedules.map((s) => ({
+        ...s,
+        fecha_inicio: s.fecha_inicio.toISOString(),
+        fecha_almuerzo: s.fecha_almuerzo?.toISOString() || null,
+        fecha_regreso: s.fecha_regreso?.toISOString() || null,
+        fecha_salida: s.fecha_salida?.toISOString() || null,
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: "Error interno" });
   }
 });
 
