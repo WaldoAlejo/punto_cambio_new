@@ -71,6 +71,12 @@ const Sidebar = ({
       roles: ["OPERADOR", "ADMINISTRATIVO"],
     },
     {
+      id: "permission-request",
+      label: "Permisos de Salida",
+      color: "text-pink-600",
+      roles: ["OPERADOR", "ADMINISTRATIVO"],
+    },
+    {
       id: "daily-close",
       label: "Cierre Diario",
       color: "text-orange-600",
@@ -162,6 +168,11 @@ const Sidebar = ({
       id: "transfer-approvals",
       label: "Aprobaciones",
       color: "text-yellow-600",
+    },
+    {
+      id: "permission-approvals",
+      label: "Aprobación de Permisos",
+      color: "text-pink-700",
     },
     // Separador visual
     {

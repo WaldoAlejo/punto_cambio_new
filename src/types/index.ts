@@ -260,6 +260,30 @@ export interface SalidaEspontanea {
   usuarioAprobador?: Usuario;
 }
 
+// ===== Permisos =====
+export type PermisoTipo = "PERSONAL" | "SALUD" | "OFICIAL" | "OTRO";
+export type EstadoPermiso = "PENDIENTE" | "APROBADO" | "RECHAZADO";
+
+export interface Permiso {
+  id: string;
+  usuario_id: string;
+  punto_atencion_id?: string | null;
+  tipo: PermisoTipo;
+  fecha_inicio: string; // ISO
+  fecha_fin: string; // ISO
+  descripcion?: string | null;
+  archivo_url?: string | null;
+  archivo_nombre?: string | null;
+  estado: EstadoPermiso;
+  aprobado_por?: string | null;
+  fecha_aprobacion?: string | null;
+  created_at: string;
+  updated_at: string;
+  usuario?: Usuario;
+  puntoAtencion?: PuntoAtencion;
+  aprobador?: Usuario;
+}
+
 export interface HistorialAsignacionPunto {
   id: string;
   usuario_id: string;

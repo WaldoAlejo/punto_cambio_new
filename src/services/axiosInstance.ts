@@ -3,7 +3,7 @@ import { env } from "@/config/environment";
 
 const getToken = (): string | null => localStorage.getItem("authToken");
 
-const axiosInstance = axios.create({
+export const axiosInstance = axios.create({
   baseURL: env.API_URL,
   timeout: 30000, // 30 segundos
   headers: {

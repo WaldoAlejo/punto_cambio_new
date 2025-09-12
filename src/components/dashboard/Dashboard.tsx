@@ -6,6 +6,8 @@ import PendingExchangesList from "../exchange/PendingExchangesList";
 import TransferManagement from "../transfer/TransferManagement";
 import OperatorTimeManagement from "../timeTracking/OperatorTimeManagement";
 import AdminTimeManagement from "../timeTracking/AdminTimeManagement";
+import PermissionRequest from "../timeTracking/PermissionRequest";
+import PermissionApprovals from "../admin/PermissionApprovals";
 import { UserManagement } from "../management/UserManagement";
 import { PointManagement } from "../management/PointManagement";
 import { CurrencyManagement } from "../management/CurrencyManagement";
@@ -89,6 +91,9 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         return (
           <OperatorTimeManagement user={user} selectedPoint={selectedPoint} />
         );
+      case "permission-request":
+        if (!isOperador && !isAdministrativo) return <div>Sin permisos</div>;
+        return <PermissionRequest />;
       case "daily-close":
         if (!isOperador) return <div>Sin permisos</div>;
         return <DailyClose user={user} selectedPoint={selectedPoint} />;
@@ -105,6 +110,9 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
       case "transfer-approvals":
         if (!isAdmin && !isConcesion) return <div>Sin permisos</div>;
         return <TransferApprovals />;
+      case "permission-approvals":
+        if (!isAdmin) return <div>Sin permisos</div>;
+        return <PermissionApprovals />;
       case "users":
         if (!isAdmin) return <div>Sin permisos</div>;
         return <UserManagement />;

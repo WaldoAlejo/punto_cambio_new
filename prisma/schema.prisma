@@ -50,6 +50,8 @@ model Usuario {
   cierresDiarios            CierreDiario[]
   cierresDiariosRealizados  CierreDiario[]             @relation("UsuarioCerrador")
   servicioExternoMovimientos ServicioExternoMovimiento[]
+  permisos                  Permiso[]
+  permisosAprobados         Permiso[]                  @relation("UsuarioAprobadorPermiso")
 
   @@index([username])
   @@index([punto_atencion_id])
@@ -92,6 +94,7 @@ model PuntoAtencion {
   guiasServientrega               ServientregaGuia[]
   cierresDiarios                  CierreDiario[]
   servicioExternoMovimientos      ServicioExternoMovimiento[]
+  permisos                        Permiso[]
 
   @@index([ciudad])
   @@index([activo])
@@ -743,4 +746,43 @@ enum EstadoSalida {
   ACTIVO
   COMPLETADO
   CANCELADO
+}
+
+// === Permisos de salida ===
+enum PermisoTipo {
+  PERSONAL
+  SALUD
+  OFICIAL
+  OTRO
+}
+
+enum EstadoPermiso {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
+model Permiso {
+  id                 String         @id @default(uuid())
+  usuario_id         String
+  punto_atencion_id  String?
+  tipo               PermisoTipo
+  fecha_inicio       DateTime
+  fecha_fin          DateTime
+  descripcion        String?
+  archivo_url        String?
+  archivo_nombre     String?
+  estado             EstadoPermiso  @default(PENDIENTE)
+  aprobado_por       String?
+  fecha_aprobacion   DateTime?
+  created_at         DateTime       @default(now())
+  updated_at         DateTime       @updatedAt
+
+  usuario        Usuario        @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  puntoAtencion  PuntoAtencion? @relation(fields: [punto_atencion_id], references: [id], onDelete: SetNull)
+  aprobador      Usuario?       @relation("UsuarioAprobadorPermiso", fields: [aprobado_por], references: [id], onDelete: SetNull)
+
+  @@index([usuario_id])
+  @@index([estado])
+  @@index([fecha_inicio])
 }

@@ -46,6 +46,7 @@ import movimientosContablesRoutes from "./routes/movimientos-contables.js";
 import servientregaRoutes from "./routes/servientrega.js";
 import puntosAtencionRoutes from "./routes/puntos-atencion.js";
 import contabilidadDiariaRoutes from "./routes/contabilidad-diaria.js";
+import permissionRoutes from "./routes/permissions.js";
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
@@ -170,6 +171,8 @@ app.use("/api/contabilidad-diaria", contabilidadDiariaRoutes);
 // Nuevas rutas: Servicios Externos
 import serviciosExternosRoutes from "./routes/servicios-externos.js";
 app.use("/api/servicios-externos", serviciosExternosRoutes);
+// Permisos de salida
+app.use("/api/permissions", permissionRoutes);
 
 // Servir archivos estáticos del frontend si existe el build (independiente de NODE_ENV)
 try {
