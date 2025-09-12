@@ -216,11 +216,16 @@ export const HistorialMovimientos = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="TODAS">Todas las monedas</SelectItem>
-                {currencies.map((currency) => (
-                  <SelectItem key={currency.id} value={currency.id}>
-                    {currency.codigo} - {currency.nombre}
-                  </SelectItem>
-                ))}
+                {currencies
+                  .slice()
+                  .sort((a, b) =>
+                    a.codigo === "USD" ? -1 : a.codigo.localeCompare(b.codigo)
+                  )
+                  .map((currency) => (
+                    <SelectItem key={currency.id} value={currency.id}>
+                      {currency.codigo} - {currency.nombre}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -234,11 +239,14 @@ export const HistorialMovimientos = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="TODOS">Todos los puntos</SelectItem>
-                  {puntos.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.nombre}
-                    </SelectItem>
-                  ))}
+                  {puntos
+                    .slice()
+                    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+                    .map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nombre}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>

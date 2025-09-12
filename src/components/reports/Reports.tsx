@@ -160,14 +160,30 @@ const Reports = ({ user: _user }: ReportsProps) => {
                 <table className="w-full border-collapse border border-gray-300">
                   <thead>
                     <tr className="bg-gray-50">
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Fecha</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Punto</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Usuario</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Entrada</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Salida</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Almuerzo</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Salidas</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Tiempo Efectivo</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Fecha
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Punto
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Usuario
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Entrada
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Salida
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Almuerzo
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Salidas
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Tiempo Efectivo
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -178,17 +194,38 @@ const Reports = ({ user: _user }: ReportsProps) => {
                         return `${h}h ${m}m`;
                       };
                       const fmtTime = (iso?: string) =>
-                        iso ? new Date(iso).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" }) : "";
+                        iso
+                          ? new Date(iso).toLocaleTimeString("es-EC", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "";
                       return (
                         <tr key={index} className="hover:bg-gray-50">
-                          <td className="border border-gray-300 px-4 py-2">{row.date}</td>
-                          <td className="border border-gray-300 px-4 py-2">{row.point}</td>
-                          <td className="border border-gray-300 px-4 py-2">{row.user}</td>
-                          <td className="border border-gray-300 px-4 py-2">{fmtTime(row.entrada)}</td>
-                          <td className="border border-gray-300 px-4 py-2">{fmtTime(row.salida)}</td>
-                          <td className="border border-gray-300 px-4 py-2">{fmtHM(row.lunchMinutes)}</td>
-                          <td className="border border-gray-300 px-4 py-2">{fmtHM(row.spontaneousMinutes)}</td>
-                          <td className="border border-gray-300 px-4 py-2 font-semibold">{fmtHM(row.effectiveMinutes)}</td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {row.date}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {row.point}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {row.user}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtTime(row.entrada)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtTime(row.salida)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtHM(row.lunchMinutes)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtHM(row.spontaneousMinutes)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2 font-semibold">
+                            {fmtHM(row.effectiveMinutes)}
+                          </td>
                         </tr>
                       );
                     })}
@@ -229,7 +266,7 @@ const Reports = ({ user: _user }: ReportsProps) => {
                   </tbody>
                 </table>
               </div>
-            )
+            )}
           </CardContent>
         </Card>
       )}
