@@ -134,6 +134,8 @@ export const authenticateToken: RequestHandler = async (
       });
       return;
     }
+
+    // Nota: usuarios ADMINISTRATIVO pueden operar desde cualquier punto y no requieren punto_atencion_id fijo
     // --- FIN CORRECCIÓN ---
 
     req.user = user;

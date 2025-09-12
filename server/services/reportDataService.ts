@@ -194,7 +194,7 @@ export const reportDataService = {
         ...(filters?.pointId ? { punto_atencion_id: filters.pointId } : {}),
       },
       include: {
-        usuario: { select: { nombre: true } },
+        usuario: { select: { nombre: true, username: true } },
         puntoAtencion: { select: { nombre: true } },
       },
       orderBy: { fecha_inicio: "asc" },

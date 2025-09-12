@@ -9,6 +9,7 @@ import {
   spontaneousExitService,
   SpontaneousExit,
 } from "../../services/spontaneousExitService";
+import { scheduleService, Schedule } from "../../services/scheduleService";
 import { toast } from "@/hooks/use-toast";
 
 interface OperatorTimeManagementProps {
@@ -26,9 +27,21 @@ const OperatorTimeManagement = ({
   const [isLoadingExits, setIsLoadingExits] = useState(true);
   const [showExitForm, setShowExitForm] = useState(false);
 
+  // New state for schedules history
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [isLoadingSchedules, setIsLoadingSchedules] = useState(false);
+  const [activeTab, setActiveTab] = useState("tracker");
+
   useEffect(() => {
     loadSpontaneousExits();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "history") {
+      loadSchedulesHistory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const loadSpontaneousExits = async () => {
     try {
@@ -80,6 +93,43 @@ const OperatorTimeManagement = ({
       });
     } finally {
       setIsLoadingExits(false);
+    }
+  };
+
+  const loadSchedulesHistory = async () => {
+    try {
+      setIsLoadingSchedules(true);
+      const to = new Date();
+      const from = new Date();
+      from.setDate(from.getDate() - 28);
+
+      const { schedules: result, error } =
+        await scheduleService.getAllSchedules({
+          usuario_id: user.id,
+          from: from.toISOString().slice(0, 10),
+          to: to.toISOString().slice(0, 10),
+          limit: 200,
+        });
+
+      if (error) {
+        setSchedules([]);
+        toast({
+          title: "Error",
+          description: "No se pudo cargar el historial de jornadas.",
+          variant: "destructive",
+        });
+      } else {
+        setSchedules(result);
+      }
+    } catch (e) {
+      setSchedules([]);
+      toast({
+        title: "Error",
+        description: "Ocurrió un error al cargar las jornadas",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingSchedules(false);
     }
   };
 
@@ -161,6 +211,14 @@ const OperatorTimeManagement = ({
     }
   };
 
+  const toTime = (v?: string | null) =>
+    v
+      ? new Date(v).toLocaleTimeString("es-EC", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "-";
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -172,7 +230,7 @@ const OperatorTimeManagement = ({
         </p>
       </div>
 
-      <Tabs defaultValue="tracker" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="tracker">Mi Jornada</TabsTrigger>
           <TabsTrigger value="lunch">Almuerzo</TabsTrigger>
@@ -213,17 +271,77 @@ const OperatorTimeManagement = ({
         </TabsContent>
 
         <TabsContent value="history">
-          {isLoadingExits ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Cargando historial...</p>
+          <div className="space-y-6">
+            <div>
+              <h2 className="font-semibold mb-2">
+                Mis Jornadas (últimos 28 días)
+              </h2>
+              {isLoadingSchedules ? (
+                <div className="text-center p-4 text-gray-400">
+                  Cargando jornadas...
+                </div>
+              ) : schedules.length === 0 ? (
+                <div className="text-center p-4 text-gray-400">
+                  No hay jornadas en el período
+                </div>
+              ) : (
+                <div className="overflow-auto rounded border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Fecha</th>
+                        <th className="px-3 py-2 text-left">Inicio</th>
+                        <th className="px-3 py-2 text-left">Almuerzo</th>
+                        <th className="px-3 py-2 text-left">Regreso</th>
+                        <th className="px-3 py-2 text-left">Salida</th>
+                        <th className="px-3 py-2 text-left">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {schedules.map((s) => {
+                        const d = new Date(s.fecha_inicio);
+                        return (
+                          <tr key={s.id} className="border-t">
+                            <td className="px-3 py-2">
+                              {d.toLocaleDateString("es-EC")}
+                            </td>
+                            <td className="px-3 py-2">
+                              {toTime(s.fecha_inicio)}
+                            </td>
+                            <td className="px-3 py-2">
+                              {toTime(s.fecha_almuerzo)}
+                            </td>
+                            <td className="px-3 py-2">
+                              {toTime(s.fecha_regreso)}
+                            </td>
+                            <td className="px-3 py-2">
+                              {toTime(s.fecha_salida)}
+                            </td>
+                            <td className="px-3 py-2">{s.estado}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          ) : (
-            <SpontaneousExitHistory
-              exits={spontaneousExits}
-              onExitReturn={handleExitReturn}
-            />
-          )}
+
+            <div>
+              <h2 className="font-semibold mb-2">Mis Salidas Espontáneas</h2>
+              {isLoadingExits ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-2 text-gray-600">Cargando historial...</p>
+                </div>
+              ) : (
+                <SpontaneousExitHistory
+                  exits={spontaneousExits}
+                  onExitReturn={handleExitReturn}
+                />
+              )}
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

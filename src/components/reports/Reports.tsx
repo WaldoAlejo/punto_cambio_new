@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { User, Usuario } from "../../types";
+import { userService } from "@/services/userService";
+import { pointService } from "@/services/pointService";
 
 interface ReportsProps {
   user: User;
@@ -40,9 +42,7 @@ const Reports = ({ user: _user }: ReportsProps) => {
     // Cargar usuarios y puntos para el selector cuando el tipo sea worktime
     const loadUsers = async () => {
       try {
-        const res = await (
-          await import("@/services/userService")
-        ).userService.getAllUsers();
+        const res = await userService.getAllUsers();
         if (!res.error) setUsers(res.users);
       } catch (e) {
         console.warn("No se pudieron cargar usuarios para el filtro", e);
@@ -50,7 +50,6 @@ const Reports = ({ user: _user }: ReportsProps) => {
     };
     const loadPoints = async () => {
       try {
-        const { pointService } = await import("@/services/pointService");
         const res = await pointService.getAllPoints();
         if (!res.error)
           setPoints(res.points.map((p) => ({ id: p.id, nombre: p.nombre })));

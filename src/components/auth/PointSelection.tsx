@@ -44,8 +44,8 @@ const PointSelection = ({
       const ubicacion = await getLocation();
       console.log("📍 Ubicación obtenida:", ubicacion);
 
-      // Para operadores: crear o actualizar jornada automáticamente
-      if (user.rol === "OPERADOR") {
+      // Operadores y Administrativos: crear o actualizar jornada automáticamente
+      if (user.rol === "OPERADOR" || user.rol === "ADMINISTRATIVO") {
         const scheduleData = {
           usuario_id: user.id,
           punto_atencion_id: point.id,
@@ -74,7 +74,7 @@ const PointSelection = ({
           description: `Conectado a ${point.nombre}. Tu jornada laboral ha comenzado.`,
         });
       } else {
-        // Para administradores: solo seleccionar punto sin crear jornada
+        // Otros roles: solo seleccionar punto sin crear jornada
         toast({
           title: "Punto seleccionado",
           description: `Conectado a ${point.nombre}.`,
@@ -135,11 +135,11 @@ const PointSelection = ({
 
   // Filtrar puntos según el rol del usuario
   const getAvailablePoints = () => {
-    if (user.rol === "OPERADOR") {
-      // Los operadores NO pueden usar el punto principal
+    if (user.rol === "OPERADOR" || user.rol === "CONCESION") {
+      // Operadores y concesión NO pueden usar el punto principal
       return points.filter((point) => point.activo && !point.es_principal);
     }
-    // Admins y super usuarios pueden usar todos los puntos
+    // Administrativos, Admins y Super Usuarios pueden usar todos los puntos activos
     return points.filter((point) => point.activo);
   };
 

@@ -252,7 +252,9 @@ router.post(
       } = req.body;
 
       if (
-        (req.user?.rol === "OPERADOR" || req.user?.rol === "ADMINISTRATIVO") &&
+        (req.user?.rol === "OPERADOR" ||
+          req.user?.rol === "ADMINISTRATIVO" ||
+          req.user?.rol === "CONCESION") &&
         usuario_id !== req.user.id
       ) {
         res.status(403).json({
@@ -264,8 +266,8 @@ router.post(
         return;
       }
 
-      // Validar que los operadores no puedan usar el punto principal
-      if (req.user?.rol === "OPERADOR") {
+      // Validar que los operadores y concesión no puedan usar el punto principal
+      if (req.user?.rol === "OPERADOR" || req.user?.rol === "CONCESION") {
         const puntoAtencion = await prisma.puntoAtencion.findUnique({
           where: { id: punto_atencion_id },
           select: { es_principal: true, nombre: true },
@@ -273,8 +275,7 @@ router.post(
 
         if (puntoAtencion?.es_principal) {
           res.status(403).json({
-            error:
-              "Los operadores no pueden iniciar jornada en el punto principal",
+            error: "Este rol no puede iniciar jornada en el punto principal",
             success: false,
             timestamp: new Date().toISOString(),
           });
