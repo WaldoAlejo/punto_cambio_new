@@ -40,6 +40,16 @@ interface ActivePointsReportProps {
   user: UserType;
 }
 
+type ColKey =
+  | "usuario"
+  | "username"
+  | "punto"
+  | "entrada"
+  | "almuerzo"
+  | "regreso"
+  | "salida"
+  | "estado";
+
 const AUTO_REFRESH_INTERVAL = 0; // Pon aquí los milisegundos si quieres refresco automático, ej: 60000 para 1 min.
 
 const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
@@ -57,9 +67,7 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortKey, setSortKey] = useState<
-    "usuario" | "username" | "punto" | "entrada" | "almuerzo" | "regreso" | "salida" | "estado"
-  >("usuario");
+  const [sortKey, setSortKey] = useState<ColKey>("usuario");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const filteredData = useMemo(() => {
@@ -109,6 +117,17 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
     return data;
   }, [filteredData, sortKey, sortDir]);
 
+  const columnDefs: { key: ColKey; label: string }[] = [
+    { key: "usuario", label: "Usuario" },
+    { key: "username", label: "Username" },
+    { key: "punto", label: "Punto" },
+    { key: "entrada", label: "Entrada" },
+    { key: "almuerzo", label: "Almuerzo" },
+    { key: "regreso", label: "Regreso" },
+    { key: "salida", label: "Salida" },
+    { key: "estado", label: "Estado" },
+  ];
+
   const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
   const pagedData = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -121,7 +140,9 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
     setLoading(true);
     setErrorMsg(null);
     try {
-      const estados = onlyActive ? ["ACTIVO", "ALMUERZO"] : ["ACTIVO", "ALMUERZO", "COMPLETADO"];
+      const estados = onlyActive
+        ? ["ACTIVO", "ALMUERZO"]
+        : ["ACTIVO", "ALMUERZO", "COMPLETADO"];
       const byDay = fromDate === toDate;
       const { schedules, error } = await scheduleService.getAllSchedules({
         ...(byDay ? { fecha: fromDate } : { from: fromDate, to: toDate }),
@@ -182,7 +203,7 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, fromDate, toDate, onlyActive]);
 
   useEffect(() => {
     loadActiveSchedules();
@@ -259,7 +280,9 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800">Usuarios Activos</h2>
+            <h2 className="text-2xl font-bold text-gray-800">
+              Usuarios Activos
+            </h2>
             <p className="text-gray-600">
               Monitoreo en tiempo real de jornadas laborales -{" "}
               {formatDate(new Date().toISOString())}
@@ -299,14 +322,18 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
                       cols
                         .map((c) => {
                           const v = String(c ?? "");
-                          return v.includes(",") || v.includes("\n") || v.includes('"')
+                          return v.includes(",") ||
+                            v.includes("\n") ||
+                            v.includes('"')
                             ? `"${v.replaceAll('"', '""')}"`
                             : v;
                         })
                         .join(",")
                     )
                     .join("\n");
-                  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                  const blob = new Blob([csv], {
+                    type: "text/csv;charset=utf-8;",
+                  });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = url;
@@ -372,7 +399,9 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-600 mb-1">Tamaño de página</label>
+            <label className="block text-sm text-gray-600 mb-1">
+              Tamaño de página
+            </label>
             <select
               className="w-full border rounded px-2 py-1"
               value={pageSize}
@@ -428,188 +457,192 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4">
-          {activeSchedules.map((schedule) => (
-            <Card key={schedule.id} className="overflow-hidden">
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <User className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">
-                        {schedule.usuario.nombre}
-                      </CardTitle>
-                      <p className="text-sm text-gray-600">
-                        @{schedule.usuario.username}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant="secondary" className="mb-1">
-                      {schedule.puntoAtencion.nombre}
-                    </Badge>
-                    <p className="text-sm text-gray-600">
-                      Trabajando: {getWorkingHours(schedule.fecha_inicio)}
-                    </p>
-                  </div>
-                </div>
-              </CardHeader>
-
-              <CardContent>
-                <Tabs defaultValue="schedule" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="schedule">Horarios</TabsTrigger>
-                    <TabsTrigger value="location">Ubicaciones</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent
-                    value="schedule"
-                    className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4"
-                  >
-                    {[
-                      {
-                        label: "Entrada",
-                        value: schedule.fecha_inicio,
-                        color: "text-green-600",
-                      },
-                      {
-                        label: "Almuerzo",
-                        value: schedule.fecha_almuerzo,
-                        color: "text-orange-600",
-                      },
-                      {
-                        label: "Regreso",
-                        value: schedule.fecha_regreso,
-                        color: "text-blue-600",
-                      },
-                      {
-                        label: "Salida",
-                        value: schedule.fecha_salida,
-                        color: "text-red-600",
-                      },
-                    ].map(({ label, value, color }) => (
-                      <div key={label} className="space-y-1">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <Clock className="h-4 w-4 mr-1" />
-                          {label}
-                        </div>
-                        <p className={`font-medium ${color}`}>
-                          {formatTime(value)}
+        <>
+          <div className="grid gap-4">
+            {activeSchedules.map((schedule) => (
+              <Card key={schedule.id} className="overflow-hidden">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                        <User className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg">
+                          {schedule.usuario.nombre}
+                        </CardTitle>
+                        <p className="text-sm text-gray-600">
+                          @{schedule.usuario.username}
                         </p>
                       </div>
-                    ))}
-                  </TabsContent>
-
-                  <TabsContent
-                    value="location"
-                    className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4"
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        Ubicación de Entrada
-                      </div>
-                      <p className="text-sm bg-green-50 p-2 rounded border">
-                        {getLocationString(schedule.ubicacion_inicio)}
+                    </div>
+                    <div className="text-right">
+                      <Badge variant="secondary" className="mb-1">
+                        {schedule.puntoAtencion.nombre}
+                      </Badge>
+                      <p className="text-sm text-gray-600">
+                        Trabajando: {getWorkingHours(schedule.fecha_inicio)}
                       </p>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <MapPin className="h-4 w-4 mr-1" />
-                        Ubicación de Salida
-                      </div>
-                      <p className="text-sm bg-red-50 p-2 rounded border">
-                        {getLocationString(schedule.ubicacion_salida)}
-                      </p>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  </div>
+                </CardHeader>
 
-        {/* Lista resumen tipo informe */}
-        <div className="mt-6">
-          <h3 className="text-lg font-semibold mb-2">Informe (lista)</h3>
-          <div className="overflow-auto rounded border">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  {([
-                    { key: "usuario", label: "Usuario" },
-                    { key: "username", label: "Username" },
-                    { key: "punto", label: "Punto" },
-                    { key: "entrada", label: "Entrada" },
-                    { key: "almuerzo", label: "Almuerzo" },
-                    { key: "regreso", label: "Regreso" },
-                    { key: "salida", label: "Salida" },
-                    { key: "estado", label: "Estado" },
-                  ] as const).map((c) => (
-                    <th
-                      key={c.key}
-                      className="px-3 py-2 text-left cursor-pointer select-none hover:bg-gray-100"
-                      onClick={() => {
-                        setPage(1);
-                        if (sortKey === c.key) {
-                          setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-                        } else {
-                          setSortKey(c.key);
-                          setSortDir("asc");
-                        }
-                      }}
+                <CardContent>
+                  <Tabs defaultValue="schedule" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="schedule">Horarios</TabsTrigger>
+                      <TabsTrigger value="location">Ubicaciones</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent
+                      value="schedule"
+                      className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4"
                     >
-                      <span className="inline-flex items-center gap-1">
-                        {c.label}
-                        {sortKey === c.key ? (
-                          <span className="text-gray-400">{sortDir === "asc" ? "▲" : "▼"}</span>
-                        ) : null}
-                      </span>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pagedData.map((s) => (
-                  <tr key={`row-${s.id}`} className="border-t">
-                    <td className="px-3 py-2">{s.usuario.nombre}</td>
-                    <td className="px-3 py-2">@{s.usuario.username}</td>
-                    <td className="px-3 py-2">{s.puntoAtencion.nombre}</td>
-                    <td className="px-3 py-2">{formatTime(s.fecha_inicio)}</td>
-                    <td className="px-3 py-2">{formatTime(s.fecha_almuerzo)}</td>
-                    <td className="px-3 py-2">{formatTime(s.fecha_regreso)}</td>
-                    <td className="px-3 py-2">{formatTime(s.fecha_salida)}</td>
-                    <td className="px-3 py-2">{s.estado}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      {[
+                        {
+                          label: "Entrada",
+                          value: schedule.fecha_inicio,
+                          color: "text-green-600",
+                        },
+                        {
+                          label: "Almuerzo",
+                          value: schedule.fecha_almuerzo,
+                          color: "text-orange-600",
+                        },
+                        {
+                          label: "Regreso",
+                          value: schedule.fecha_regreso,
+                          color: "text-blue-600",
+                        },
+                        {
+                          label: "Salida",
+                          value: schedule.fecha_salida,
+                          color: "text-red-600",
+                        },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} className="space-y-1">
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Clock className="h-4 w-4 mr-1" />
+                            {label}
+                          </div>
+                          <p className={`font-medium ${color}`}>
+                            {formatTime(value)}
+                          </p>
+                        </div>
+                      ))}
+                    </TabsContent>
+
+                    <TabsContent
+                      value="location"
+                      className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center text-sm text-gray-600">
+                          <MapPin className="h-4 w-4 mr-1" />
+                          Ubicación de Entrada
+                        </div>
+                        <p className="text-sm bg-green-50 p-2 rounded border">
+                          {getLocationString(schedule.ubicacion_inicio)}
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center text-sm text-gray-600">
+                          <MapPin className="h-4 w-4 mr-1" />
+                          Ubicación de Salida
+                        </div>
+                        <p className="text-sm bg-red-50 p-2 rounded border">
+                          {getLocationString(schedule.ubicacion_salida)}
+                        </p>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-          {/* Paginación */}
-          <div className="flex items-center justify-between mt-3 text-sm">
-            <span>
-              Página {page} de {totalPages} — {activeSchedules.length} registros
-            </span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Siguiente
-              </Button>
+
+          {/* Lista resumen tipo informe */}
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-2">Informe (lista)</h3>
+            <div className="overflow-auto rounded border">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {columnDefs.map((c) => (
+                      <th
+                        key={c.key}
+                        className="px-3 py-2 text-left cursor-pointer select-none hover:bg-gray-100"
+                        onClick={() => {
+                          setPage(1);
+                          if (sortKey === c.key) {
+                            setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+                          } else {
+                            setSortKey(c.key);
+                            setSortDir("asc");
+                          }
+                        }}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {c.label}
+                          {sortKey === c.key ? (
+                            <span className="text-gray-400">
+                              {sortDir === "asc" ? "▲" : "▼"}
+                            </span>
+                          ) : null}
+                        </span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedData.map((s) => (
+                    <tr key={`row-${s.id}`} className="border-t">
+                      <td className="px-3 py-2">{s.usuario.nombre}</td>
+                      <td className="px-3 py-2">@{s.usuario.username}</td>
+                      <td className="px-3 py-2">{s.puntoAtencion.nombre}</td>
+                      <td className="px-3 py-2">
+                        {formatTime(s.fecha_inicio)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {formatTime(s.fecha_almuerzo)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {formatTime(s.fecha_regreso)}
+                      </td>
+                      <td className="px-3 py-2">
+                        {formatTime(s.fecha_salida)}
+                      </td>
+                      <td className="px-3 py-2">{s.estado}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Paginación */}
+            <div className="flex items-center justify-between mt-3 text-sm">
+              <span>
+                Página {page} de {totalPages} — {activeSchedules.length}{" "}
+                registros
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Siguiente
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

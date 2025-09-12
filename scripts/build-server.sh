@@ -118,7 +118,6 @@ fi
 if [ ! -f ".env.production" ]; then
   log_warning "El archivo .env.production no existe. Creando..."
   cat > .env.production << 'EOF'
-NODE_ENV=production
 PORT=3001
 DATABASE_URL=postgresql://postgres:postgres@34.66.51.85:5432/punto_cambio
 JWT_SECRET=tu_clave_secreta_jwt_muy_segura

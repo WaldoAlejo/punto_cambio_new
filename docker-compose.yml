@@ -7,7 +7,6 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - NODE_ENV=production
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
       - FRONTEND_URL=${FRONTEND_URL}
