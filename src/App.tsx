@@ -83,16 +83,13 @@ function App() {
   useEffect(() => {
     if (
       user &&
-      (user.rol === "ADMIN" ||
-        user.rol === "SUPER_USUARIO" ||
-        user.rol === "ADMINISTRATIVO") &&
+      (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") &&
       !selectedPoint
     ) {
       pointService
         .getAllPointsForAdmin()
         .then((result) => {
           const points = result.points || [];
-          // Buscar el punto principal (normalmente sería el primero o uno específico)
           const puntoPrincipal =
             points.find((p) => p.es_principal) ||
             points.find(
@@ -101,17 +98,11 @@ function App() {
                 p.nombre.toLowerCase().includes("matriz") ||
                 p.nombre.toLowerCase().includes("central")
             ) ||
-            points[0]; // Si no hay uno "principal", tomar el primero
-
-          if (puntoPrincipal) {
-            setSelectedPoint(puntoPrincipal);
-          }
+            points[0];
+          if (puntoPrincipal) setSelectedPoint(puntoPrincipal);
         })
         .catch((error) => {
-          console.error(
-            "Error al cargar punto principal para admin/administrativo:",
-            error
-          );
+          console.error("Error al cargar punto principal para admin:", error);
         });
     }
   }, [user, selectedPoint]);

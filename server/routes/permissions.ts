@@ -1,12 +1,12 @@
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../lib/prisma.js";
+import type { Permiso as PrismaPermiso } from "@prisma/client";
 import { z } from "zod";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import logger from "../utils/logger.js";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 const createPermissionSchema = z.object({
   tipo: z.enum(["PERSONAL", "SALUD", "OFICIAL", "OTRO"]),
@@ -56,7 +56,7 @@ router.get(
 
       res.status(200).json({
         success: true,
-        permisos: permisos.map((p) => ({
+        permisos: permisos.map((p: PrismaPermiso & any) => ({
           ...p,
           fecha_inicio: p.fecha_inicio.toISOString(),
           fecha_fin: p.fecha_fin.toISOString(),
