@@ -109,6 +109,7 @@ const Reports = ({ user: _user }: ReportsProps) => {
                   <SelectItem value="transfers">Transferencias</SelectItem>
                   <SelectItem value="balances">Saldos</SelectItem>
                   <SelectItem value="users">Actividad Usuarios</SelectItem>
+                  <SelectItem value="worktime">Tiempo de Trabajo</SelectItem>
                   <SelectItem value="summary">Resumen General</SelectItem>
                 </SelectContent>
               </Select>
@@ -154,39 +155,81 @@ const Reports = ({ user: _user }: ReportsProps) => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse border border-gray-300">
-                <thead>
-                  <tr className="bg-gray-50">
-                    {reportData.length > 0 &&
-                      Object.keys(reportData[0]).map((key) => (
-                        <th
-                          key={key}
-                          className="border border-gray-300 px-4 py-2 text-left font-semibold"
-                        >
-                          {key.charAt(0).toUpperCase() + key.slice(1)}
-                        </th>
-                      ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {reportData.map((row, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      {Object.values(row).map((value, cellIndex) => (
-                        <td
-                          key={cellIndex}
-                          className="border border-gray-300 px-4 py-2"
-                        >
-                          {typeof value === "object" && value !== null
-                            ? JSON.stringify(value)
-                            : String(value)}
-                        </td>
-                      ))}
+            {reportType === "worktime" ? (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-300">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Fecha</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Punto</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Usuario</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Entrada</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Salida</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Almuerzo</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Salidas</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Tiempo Efectivo</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {reportData.map((row: any, index) => {
+                      const fmtHM = (mins: number) => {
+                        const h = Math.floor((mins || 0) / 60);
+                        const m = Math.abs((mins || 0) % 60);
+                        return `${h}h ${m}m`;
+                      };
+                      const fmtTime = (iso?: string) =>
+                        iso ? new Date(iso).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" }) : "";
+                      return (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="border border-gray-300 px-4 py-2">{row.date}</td>
+                          <td className="border border-gray-300 px-4 py-2">{row.point}</td>
+                          <td className="border border-gray-300 px-4 py-2">{row.user}</td>
+                          <td className="border border-gray-300 px-4 py-2">{fmtTime(row.entrada)}</td>
+                          <td className="border border-gray-300 px-4 py-2">{fmtTime(row.salida)}</td>
+                          <td className="border border-gray-300 px-4 py-2">{fmtHM(row.lunchMinutes)}</td>
+                          <td className="border border-gray-300 px-4 py-2">{fmtHM(row.spontaneousMinutes)}</td>
+                          <td className="border border-gray-300 px-4 py-2 font-semibold">{fmtHM(row.effectiveMinutes)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-300">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      {reportData.length > 0 &&
+                        Object.keys(reportData[0]).map((key) => (
+                          <th
+                            key={key}
+                            className="border border-gray-300 px-4 py-2 text-left font-semibold"
+                          >
+                            {key.charAt(0).toUpperCase() + key.slice(1)}
+                          </th>
+                        ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportData.map((row, index) => (
+                      <tr key={index} className="hover:bg-gray-50">
+                        {Object.values(row).map((value, cellIndex) => (
+                          <td
+                            key={cellIndex}
+                            className="border border-gray-300 px-4 py-2"
+                          >
+                            {typeof value === "object" && value !== null
+                              ? JSON.stringify(value)
+                              : String(value)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
           </CardContent>
         </Card>
       )}

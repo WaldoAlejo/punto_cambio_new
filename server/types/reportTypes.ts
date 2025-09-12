@@ -33,6 +33,18 @@ export interface UserActivityData {
   transfers: number;
 }
 
+// Nuevo: Reporte de tiempo de trabajo por jornada
+export interface WorkTimeData {
+  date: string; // YYYY-MM-DD
+  point: string;
+  user: string;
+  entrada: string; // ISO
+  salida: string; // ISO
+  lunchMinutes: number; // minutos descontados por almuerzo
+  spontaneousMinutes: number; // minutos descontados por salidas espontáneas
+  effectiveMinutes: number; // (salida-entrada) - lunch - spontaneous
+}
+
 // Datos agregados para reportes tipo summary
 export interface SummaryReportResponse {
   exchanges: ExchangeData[];
@@ -50,11 +62,18 @@ export type ReportData =
   | ExchangeData
   | TransferData
   | BalanceData
-  | UserActivityData;
+  | UserActivityData
+  | WorkTimeData;
 
 // Tipos de request
 export interface ReportRequest {
-  reportType: "exchanges" | "transfers" | "balances" | "users" | "summary";
+  reportType:
+    | "exchanges"
+    | "transfers"
+    | "balances"
+    | "users"
+    | "summary"
+    | "worktime"; // nuevo tipo de reporte
   dateFrom: string;
   dateTo: string;
   pointId?: string; // <-- Agregado

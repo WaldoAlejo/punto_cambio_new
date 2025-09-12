@@ -129,6 +129,27 @@ export const reportService = {
         return summaryReport;
       }
 
+      case "worktime": {
+        const reportData = await reportDataService.getWorkTimeData(
+          startDate,
+          endDate,
+          {
+            pointId: request.pointId,
+            userId: request.userId,
+          }
+        );
+
+        logger.info("Reporte de tiempo de trabajo generado", {
+          reportType,
+          dateFrom,
+          dateTo,
+          recordCount: Array.isArray(reportData) ? reportData.length : 0,
+          requestedBy: userId,
+        });
+
+        return reportData as ReportData[];
+      }
+
       default:
         throw new Error("Tipo de reporte no válido");
     }
