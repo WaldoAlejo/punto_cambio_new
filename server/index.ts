@@ -171,35 +171,47 @@ app.use("/api/contabilidad-diaria", contabilidadDiariaRoutes);
 import serviciosExternosRoutes from "./routes/servicios-externos.js";
 app.use("/api/servicios-externos", serviciosExternosRoutes);
 
-// Servir archivos estáticos del frontend en producción
-if (process.env.NODE_ENV === "production") {
+// Servir archivos estáticos del frontend si existe el build (independiente de NODE_ENV)
+try {
   const frontendDistPath = path.join(__dirname, "..", "dist");
+  const indexPath = path.join(frontendDistPath, "index.html");
 
-  // Servir archivos estáticos con headers específicos
-  app.use(
-    express.static(frontendDistPath, {
-      setHeaders: (res, path) => {
-        // Evitar que el navegador fuerce HTTPS
-        res.setHeader(
-          "Content-Security-Policy",
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https:;"
-        );
-        res.setHeader("X-Content-Type-Options", "nosniff");
-        res.setHeader("X-Frame-Options", "SAMEORIGIN");
-      },
-    })
-  );
+  if (fs.existsSync(indexPath)) {
+    // Servir archivos estáticos con headers específicos
+    app.use(
+      express.static(frontendDistPath, {
+        setHeaders: (res, _path) => {
+          // Evitar que el navegador fuerce HTTPS
+          res.setHeader(
+            "Content-Security-Policy",
+            "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https:;"
+          );
+          res.setHeader("X-Content-Type-Options", "nosniff");
+          res.setHeader("X-Frame-Options", "SAMEORIGIN");
+        },
+      })
+    );
 
-  // Manejar rutas SPA - todas las rutas no-API deben servir index.html
-  app.get("*", (req, res, next) => {
-    // Si es una ruta de API, continuar con el siguiente middleware
-    if (req.path.startsWith("/api/") || req.path.startsWith("/health")) {
-      return next();
-    }
+    // Manejar rutas SPA - todas las rutas no-API deben servir index.html
+    app.get("*", (req, res, next) => {
+      // Si es una ruta de API, continuar con el siguiente middleware
+      if (req.path.startsWith("/api/") || req.path.startsWith("/health")) {
+        return next();
+      }
 
-    // Para todas las demás rutas, servir index.html
-    res.sendFile(path.join(frontendDistPath, "index.html"));
-  });
+      // Para todas las demás rutas, servir index.html
+      res.sendFile(indexPath);
+    });
+
+    logger.info(`Frontend estático habilitado desde: ${frontendDistPath}`);
+  } else {
+    logger.warn(
+      "No se encontró dist/index.html; frontend estático deshabilitado"
+    );
+  }
+} catch (e) {
+  const msg = e instanceof Error ? e.message : String(e);
+  logger.error("Error configurando frontend estático", { error: msg });
 }
 
 // Error handling middleware
