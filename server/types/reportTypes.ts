@@ -38,8 +38,12 @@ export interface WorkTimeData {
   date: string; // YYYY-MM-DD
   point: string;
   user: string;
+  username?: string;
   entrada: string; // ISO
+  almuerzo?: string; // ISO (inicio almuerzo)
+  regreso?: string; // ISO (fin almuerzo)
   salida: string; // ISO
+  estado?: string;
   lunchMinutes: number; // minutos descontados por almuerzo
   spontaneousMinutes: number; // minutos descontados por salidas espontáneas
   effectiveMinutes: number; // (salida-entrada) - lunch - spontaneous

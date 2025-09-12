@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
-import { User } from "../../types";
+import { User, Usuario } from "../../types";
 
 interface ReportsProps {
   user: User;
@@ -30,6 +30,48 @@ const Reports = ({ user: _user }: ReportsProps) => {
   const [dateTo, setDateTo] = useState("");
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState<any[]>([]);
+  const [users, setUsers] = useState<Usuario[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [points, setPoints] = useState<{ id: string; nombre: string }[]>([]);
+  const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Cargar usuarios y puntos para el selector cuando el tipo sea worktime
+    const loadUsers = async () => {
+      try {
+        const res = await (
+          await import("@/services/userService")
+        ).userService.getAllUsers();
+        if (!res.error) setUsers(res.users);
+      } catch (e) {
+        console.warn("No se pudieron cargar usuarios para el filtro", e);
+      }
+    };
+    const loadPoints = async () => {
+      try {
+        const { pointService } = await import("@/services/pointService");
+        const res = await pointService.getAllPoints();
+        if (!res.error)
+          setPoints(res.points.map((p) => ({ id: p.id, nombre: p.nombre })));
+      } catch (e) {
+        console.warn("No se pudieron cargar puntos para el filtro", e);
+      }
+    };
+    if (reportType === "worktime") {
+      if (users.length === 0) loadUsers();
+      if (points.length === 0) loadPoints();
+    }
+  }, [reportType]);
+
+  const filteredUsers = users.filter((u) => {
+    const term = userSearch.trim().toLowerCase();
+    if (!term) return true;
+    return (
+      u.nombre.toLowerCase().includes(term) ||
+      u.username.toLowerCase().includes(term)
+    );
+  });
 
   const generateReport = async () => {
     if (!reportType || !dateFrom || !dateTo) {
@@ -56,6 +98,13 @@ const Reports = ({ user: _user }: ReportsProps) => {
             reportType,
             dateFrom,
             dateTo,
+            // Para reporte de tiempos, permitimos filtrar por usuario y punto (selectores)
+            ...(reportType === "worktime" && selectedUserId
+              ? { userId: selectedUserId }
+              : {}),
+            ...(reportType === "worktime" && selectedPointId
+              ? { pointId: selectedPointId }
+              : {}),
           }),
         }
       );
@@ -97,7 +146,7 @@ const Reports = ({ user: _user }: ReportsProps) => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
             <div className="space-y-2">
               <Label>Tipo de Reporte</Label>
               <Select value={reportType} onValueChange={setReportType}>
@@ -133,7 +182,65 @@ const Reports = ({ user: _user }: ReportsProps) => {
               />
             </div>
 
-            <div className="flex items-end">
+            {/* Filtro de usuario para control de horarios */}
+            <div className="space-y-2">
+              <Label>Usuario (opcional)</Label>
+              {reportType === "worktime" ? (
+                <div className="space-y-2">
+                  <Input
+                    type="text"
+                    placeholder="Buscar por nombre o username"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                  />
+                  <Select
+                    value={selectedUserId || ""}
+                    onValueChange={(v) => setSelectedUserId(v || null)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar usuario" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Todos</SelectItem>
+                      {filteredUsers.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.nombre} (@{u.username})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <Input disabled placeholder="Seleccione 'Tiempo de Trabajo'" />
+              )}
+            </div>
+
+            {/* Filtro de punto de atención */}
+            <div className="space-y-2">
+              <Label>Punto (opcional)</Label>
+              {reportType === "worktime" ? (
+                <Select
+                  value={selectedPointId || ""}
+                  onValueChange={(v) => setSelectedPointId(v || null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar punto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Todos</SelectItem>
+                    {points.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input disabled placeholder="Seleccione 'Tiempo de Trabajo'" />
+              )}
+            </div>
+
+            <div className="flex items-end col-span-2">
               <Button
                 onClick={generateReport}
                 disabled={loading}
@@ -170,19 +277,31 @@ const Reports = ({ user: _user }: ReportsProps) => {
                         Usuario
                       </th>
                       <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
-                        Entrada
+                        Username
                       </th>
                       <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
-                        Salida
+                        Entrada
                       </th>
                       <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
                         Almuerzo
                       </th>
                       <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
-                        Salidas
+                        Regreso
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Salida
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Almuerzo (min)
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Salidas (min)
                       </th>
                       <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
                         Tiempo Efectivo
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Estado
                       </th>
                     </tr>
                   </thead>
@@ -212,7 +331,16 @@ const Reports = ({ user: _user }: ReportsProps) => {
                             {row.user}
                           </td>
                           <td className="border border-gray-300 px-4 py-2">
+                            {row.username ? `@${row.username}` : ""}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
                             {fmtTime(row.entrada)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtTime(row.almuerzo)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtTime(row.regreso)}
                           </td>
                           <td className="border border-gray-300 px-4 py-2">
                             {fmtTime(row.salida)}
@@ -225,6 +353,9 @@ const Reports = ({ user: _user }: ReportsProps) => {
                           </td>
                           <td className="border border-gray-300 px-4 py-2 font-semibold">
                             {fmtHM(row.effectiveMinutes)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {row.estado || ""}
                           </td>
                         </tr>
                       );
