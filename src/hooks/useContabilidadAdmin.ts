@@ -23,6 +23,7 @@ export const useContabilidadAdmin = ({
   >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isAdmin = _user?.rol === "ADMIN" || _user?.rol === "SUPER_USUARIO";
 
   // Cargar saldos consolidados de todos los puntos
   const cargarSaldosConsolidados = useCallback(async () => {
@@ -30,7 +31,12 @@ export const useContabilidadAdmin = ({
     setError(null);
 
     try {
-      // Primero obtener todos los puntos (incluye todos para admins)
+      if (!isAdmin) {
+        setSaldosConsolidados([]);
+        setIsLoading(false);
+        return;
+      }
+      // Primero obtener todos los puntos (solo para admins)
       const { points, error: pointsError } =
         await pointService.getAllPointsForAdmin();
 
@@ -82,7 +88,11 @@ export const useContabilidadAdmin = ({
   const cargarMovimientosConsolidados = useCallback(
     async (moneda_id?: string, limit = 100) => {
       try {
-        // Obtener todos los puntos (incluye todos para admins)
+        if (!isAdmin) {
+          setMovimientosConsolidados([]);
+          return;
+        }
+        // Obtener todos los puntos (solo para admins)
         const { points, error: pointsError } =
           await pointService.getAllPointsForAdmin();
 

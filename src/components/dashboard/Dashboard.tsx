@@ -145,13 +145,26 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           <ServientregaInformes user={user} selectedPoint={selectedPoint} />
         );
       case "contabilidad-divisas":
-        if (!isAdmin && !isOperador) return <div>Sin permisos</div>;
+        // Contabilidad por Punto de Atención (operador/administrativo con punto)
+        if (!isOperador && !isAdministrativo) return <div>Sin permisos</div>;
+        if (!selectedPoint) return <div>Seleccione un punto de atención</div>;
         return (
           <ContabilidadDashboard
             user={user}
             selectedPoint={selectedPoint}
             currencies={[]}
-            isAdminView={isAdmin}
+            isAdminView={false}
+          />
+        );
+      case "contabilidad-general":
+        // Contabilidad consolidada (solo admin)
+        if (!isAdmin) return <div>Sin permisos</div>;
+        return (
+          <ContabilidadDashboard
+            user={user}
+            selectedPoint={selectedPoint}
+            currencies={[]}
+            isAdminView={true}
           />
         );
       case "servicios-externos":

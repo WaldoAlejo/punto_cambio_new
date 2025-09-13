@@ -90,9 +90,9 @@ const Sidebar = ({
     },
     {
       id: "contabilidad-divisas",
-      label: "Contabilidad de Divisas",
+      label: "Contabilidad por Punto",
       color: "text-emerald-600",
-      roles: ["OPERADOR", "ADMIN", "SUPER_USUARIO"],
+      roles: ["OPERADOR", "ADMINISTRATIVO"],
     },
     {
       id: "servicios-externos",
@@ -111,7 +111,7 @@ const Sidebar = ({
   const adminMenuItems: MenuItem[] = [
     // Supervisión y contabilidad
     {
-      id: "contabilidad-divisas",
+      id: "contabilidad-general",
       label: "Contabilidad General",
       color: "text-emerald-600",
     },

@@ -38,13 +38,21 @@ export const ContabilidadDashboard = ({
   const contabilidadAdmin = useContabilidadAdmin({ user });
 
   const { saldos, movimientos, isLoading, error, refresh } = isAdminView
-    ? {
-        saldos: contabilidadAdmin.saldosConsolidados,
-        movimientos: contabilidadAdmin.movimientosConsolidados,
-        isLoading: contabilidadAdmin.isLoading,
-        error: contabilidadAdmin.error,
-        refresh: contabilidadAdmin.refresh,
-      }
+    ? user.rol === "ADMIN" || user.rol === "SUPER_USUARIO"
+      ? {
+          saldos: contabilidadAdmin.saldosConsolidados,
+          movimientos: contabilidadAdmin.movimientosConsolidados,
+          isLoading: contabilidadAdmin.isLoading,
+          error: contabilidadAdmin.error,
+          refresh: contabilidadAdmin.refresh,
+        }
+      : {
+          saldos: [],
+          movimientos: [],
+          isLoading: false,
+          error: "Permisos insuficientes",
+          refresh: () => {},
+        }
     : contabilidadNormal;
 
   const [currencies, setCurrencies] = useState<Moneda[]>(propCurrencies || []);
