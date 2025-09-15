@@ -29,7 +29,8 @@ const SaldoInicialManagement = () => {
 
   // Estados por punto seleccionado
   const [selectedCurrency, setSelectedCurrency] = useState<string>("");
-  const [cantidad, setCantidad] = useState<string>("");
+  const [billetes, setBilletes] = useState<string>("");
+  const [monedas, setMonedas] = useState<string>("");
   const [loadingAsignacion, setLoadingAsignacion] = useState(false);
 
   useEffect(() => {
@@ -165,7 +166,8 @@ const SaldoInicialManagement = () => {
     console.log(`🎯 Cambiando a punto: ${pointId}`);
     setSelectedPointId(pointId);
     setSelectedCurrency("");
-    setCantidad("");
+    setBilletes("");
+    setMonedas("");
 
     const punto = points.find((p) => p.id === pointId);
     if (punto) {
@@ -181,14 +183,25 @@ const SaldoInicialManagement = () => {
 
   // Asignar saldo inicial
   const handleAsignarSaldo = async () => {
-    if (!selectedPointId || !selectedCurrency || !cantidad) {
-      toast.error("Seleccione punto, moneda y cantidad");
+    if (!selectedPointId || !selectedCurrency) {
+      toast.error("Seleccione punto y moneda");
       return;
     }
 
-    const cantidadNum = parseFloat(cantidad);
-    if (isNaN(cantidadNum) || cantidadNum <= 0) {
-      toast.error("La cantidad debe ser un número positivo");
+    const billetesNum = parseFloat(billetes || "0");
+    const monedasNum = parseFloat(monedas || "0");
+    if (
+      isNaN(billetesNum) ||
+      billetesNum < 0 ||
+      isNaN(monedasNum) ||
+      monedasNum < 0
+    ) {
+      toast.error("Billetes/Monedas deben ser números válidos (>= 0)");
+      return;
+    }
+    const cantidadNum = billetesNum + monedasNum;
+    if (cantidadNum <= 0) {
+      toast.error("El total (billetes + monedas) debe ser mayor a 0");
       return;
     }
 
@@ -202,9 +215,9 @@ const SaldoInicialManagement = () => {
 
     showConfirmation(
       "Confirmar asignación de saldo inicial",
-      `¿Está seguro de asignar ${
+      `¿Asignar ${
         monedaInfo.moneda_simbolo
-      }${cantidadNum.toLocaleString()} de ${
+      }${cantidadNum.toLocaleString()} (${billetesNum.toLocaleString()} billetes + ${monedasNum.toLocaleString()} monedas) de ${
         monedaInfo.moneda_nombre
       } al punto "${punto.nombre}"?`,
       async () => {
@@ -219,6 +232,8 @@ const SaldoInicialManagement = () => {
             punto_atencion_id: selectedPointId,
             moneda_id: selectedCurrency,
             cantidad_inicial: cantidadNum,
+            billetes: billetesNum,
+            monedas_fisicas: monedasNum,
           });
 
           console.log(
@@ -240,7 +255,8 @@ const SaldoInicialManagement = () => {
             );
 
             // Limpiar formulario
-            setCantidad("");
+            setBilletes("");
+            setMonedas("");
             setSelectedCurrency("");
 
             // Recargar datos
@@ -457,17 +473,33 @@ const SaldoInicialManagement = () => {
                   </Select>
                 </div>
 
-                {/* Input de Cantidad */}
+                {/* Inputs: Billetes y Monedas */}
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
-                    Cantidad
+                    Billetes
                   </Label>
                   <Input
                     type="number"
                     step="0.01"
                     min="0"
-                    value={cantidad}
-                    onChange={(e) => setCantidad(e.target.value)}
+                    value={billetes}
+                    onChange={(e) => setBilletes(e.target.value)}
+                    placeholder="0.00"
+                    className="mt-1"
+                    disabled={!selectedCurrency}
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">
+                    Monedas
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={monedas}
+                    onChange={(e) => setMonedas(e.target.value)}
                     placeholder="0.00"
                     className="mt-1"
                     disabled={!selectedCurrency}
@@ -481,8 +513,9 @@ const SaldoInicialManagement = () => {
                     disabled={
                       loadingAsignacion ||
                       !selectedCurrency ||
-                      !cantidad.trim() ||
-                      parseFloat(cantidad) <= 0
+                      parseFloat(billetes || "0") +
+                        parseFloat(monedas || "0") <=
+                        0
                     }
                     className="w-full"
                   >

@@ -289,6 +289,139 @@ router.post(
         },
       });
 
+      // === Actualización contable de saldos (billetes y monedas) ===
+      await prisma.$transaction(async (tx) => {
+        // 1) Moneda Origen: el punto RECIBE lo que el cliente entrega -> sumar
+        const saldoOrigen = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id,
+              moneda_id: moneda_origen_id,
+            },
+          },
+        });
+        const saldoOrigenAnterior = Number(saldoOrigen?.cantidad ?? 0);
+        const saldoOrigenNuevo =
+          saldoOrigenAnterior + Number(divisas_entregadas_total || 0);
+        const billetesOrigenAnterior = Number(saldoOrigen?.billetes ?? 0);
+        const monedasOrigenAnterior = Number(saldoOrigen?.monedas_fisicas ?? 0);
+        const billetesOrigenNuevo =
+          billetesOrigenAnterior + Number(divisas_entregadas_billetes || 0);
+        const monedasOrigenNuevo =
+          monedasOrigenAnterior + Number(divisas_entregadas_monedas || 0);
+
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id,
+              moneda_id: moneda_origen_id,
+            },
+          },
+          update: {
+            cantidad: saldoOrigenNuevo,
+            billetes: billetesOrigenNuevo,
+            monedas_fisicas: monedasOrigenNuevo,
+          },
+          create: {
+            punto_atencion_id,
+            moneda_id: moneda_origen_id,
+            cantidad: saldoOrigenNuevo,
+            billetes: billetesOrigenNuevo,
+            monedas_fisicas: monedasOrigenNuevo,
+          },
+        });
+
+        await tx.movimientoSaldo.create({
+          data: {
+            punto_atencion_id,
+            moneda_id: moneda_origen_id,
+            tipo_movimiento: "CAMBIO_DIVISA",
+            monto: Number(divisas_entregadas_total || 0),
+            saldo_anterior: saldoOrigenAnterior,
+            saldo_nuevo: saldoOrigenNuevo,
+            usuario_id: req.user!.id,
+            referencia_id: exchange.id,
+            tipo_referencia: "CAMBIO_DIVISA",
+            descripcion: `Ingreso por cambio - Recibido del cliente (${numeroRecibo})`,
+          },
+        });
+
+        // 2) Moneda Destino: el punto ENTREGA lo que el cliente recibe -> restar
+        const saldoDestino = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id,
+              moneda_id: moneda_destino_id,
+            },
+          },
+        });
+        const saldoDestinoAnterior = Number(saldoDestino?.cantidad ?? 0);
+        const egreso = Number(divisas_recibidas_total || 0);
+        if (saldoDestinoAnterior < egreso) {
+          throw new Error(
+            "Saldo insuficiente en moneda destino para realizar el cambio"
+          );
+        }
+        const saldoDestinoNuevo = saldoDestinoAnterior - egreso;
+        const billetesDestinoAnterior = Number(saldoDestino?.billetes ?? 0);
+        const monedasDestinoAnterior = Number(
+          saldoDestino?.monedas_fisicas ?? 0
+        );
+        const billetesDestinoEgreso = Number(divisas_recibidas_billetes || 0);
+        const monedasDestinoEgreso = Number(divisas_recibidas_monedas || 0);
+        if (
+          billetesDestinoAnterior < billetesDestinoEgreso ||
+          monedasDestinoAnterior < monedasDestinoEgreso
+        ) {
+          // No forzamos fallo por desglose físico, solo advertimos; opcionalmente podría tirar error.
+          // throw new Error('Desglose físico insuficiente en billetes/monedas para la entrega');
+        }
+        const billetesDestinoNuevo = Math.max(
+          0,
+          billetesDestinoAnterior - billetesDestinoEgreso
+        );
+        const monedasDestinoNuevo = Math.max(
+          0,
+          monedasDestinoAnterior - monedasDestinoEgreso
+        );
+
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id,
+              moneda_id: moneda_destino_id,
+            },
+          },
+          update: {
+            cantidad: saldoDestinoNuevo,
+            billetes: billetesDestinoNuevo,
+            monedas_fisicas: monedasDestinoNuevo,
+          },
+          create: {
+            punto_atencion_id,
+            moneda_id: moneda_destino_id,
+            cantidad: saldoDestinoNuevo,
+            billetes: billetesDestinoNuevo,
+            monedas_fisicas: monedasDestinoNuevo,
+          },
+        });
+
+        await tx.movimientoSaldo.create({
+          data: {
+            punto_atencion_id,
+            moneda_id: moneda_destino_id,
+            tipo_movimiento: "CAMBIO_DIVISA",
+            monto: -egreso,
+            saldo_anterior: saldoDestinoAnterior,
+            saldo_nuevo: saldoDestinoNuevo,
+            usuario_id: req.user!.id,
+            referencia_id: exchange.id,
+            tipo_referencia: "CAMBIO_DIVISA",
+            descripcion: `Egreso por cambio - Entregado al cliente (${numeroRecibo})`,
+          },
+        });
+      });
+
       const exchangeResponse = {
         ...exchange,
         datos_cliente,
@@ -296,7 +429,7 @@ router.post(
         divisas_recibidas,
       };
 
-      logger.info("Cambio de divisa creado exitosamente", {
+      logger.info("Cambio de divisa creado y contabilizado exitosamente", {
         exchangeId: exchange.id,
         numeroRecibo,
         usuario_id: req.user.id,
@@ -600,13 +733,11 @@ router.patch(
         },
       });
 
-      res
-        .status(200)
-        .json({
-          exchange: updated,
-          success: true,
-          timestamp: new Date().toISOString(),
-        });
+      res.status(200).json({
+        exchange: updated,
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
       logger.error("Error al completar cambio de divisa", {
         error: error instanceof Error ? error.message : "Unknown error",

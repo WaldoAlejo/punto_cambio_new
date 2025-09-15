@@ -8,7 +8,20 @@ const prisma = new PrismaClient();
 
 const toNumber = (v: any) => {
   if (typeof v === "number") return v;
-  if (typeof v === "string") return Number(v.replace?.(",", "."));
+  if (typeof v === "string") {
+    const raw = v.trim();
+    if (!raw) return NaN;
+    // Caso: 1.234,56 -> 1234.56
+    if (/[,]\d{1,6}$/.test(raw) && raw.includes(".")) {
+      return Number(raw.replace(/\./g, "").replace(",", "."));
+    }
+    // Caso: 1234,56 -> 1234.56
+    if (/^\d+(?:,\d+)?$/.test(raw)) {
+      return Number(raw.replace(",", "."));
+    }
+    // Caso: 1,234.56 -> 1234.56 (quitar comas como miles)
+    return Number(raw.replace(/,/g, ""));
+  }
   return Number(v);
 };
 
@@ -51,13 +64,21 @@ router.post(
     console.warn("Request user:", req.user);
 
     try {
-      const { punto_atencion_id, moneda_id, cantidad_inicial, observaciones } =
-        req.body;
+      const {
+        punto_atencion_id,
+        moneda_id,
+        cantidad_inicial,
+        observaciones,
+        billetes,
+        monedas_fisicas,
+      } = req.body;
 
       console.warn("Extracted data:", {
         punto_atencion_id,
         moneda_id,
         cantidad_inicial,
+        billetes,
+        monedas_fisicas,
         observaciones,
       });
 
@@ -73,8 +94,81 @@ router.post(
         return res.status(401).json({ success: false, error: "No autorizado" });
       }
 
-      const cantidad = toNumber(cantidad_inicial);
-      console.warn("Converted amount:", cantidad);
+      // Validar punto y moneda existen
+      const [punto, moneda] = await Promise.all([
+        prisma.puntoAtencion.findUnique({
+          where: { id: punto_atencion_id },
+          select: { id: true, activo: true },
+        }),
+        prisma.moneda.findUnique({
+          where: { id: moneda_id },
+          select: { id: true, activo: true },
+        }),
+      ]);
+      if (!punto || punto.activo === false) {
+        return res.status(404).json({
+          success: false,
+          error: "Punto de atención inválido o inactivo",
+        });
+      }
+      if (!moneda || moneda.activo === false) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Moneda inválida o inactiva" });
+      }
+
+      // Compatibilidad: aceptar cantidad_inicial (total) o desglosado (billetes + monedas_fisicas)
+      const totalFromField = toNumber(cantidad_inicial);
+      const billetesNum =
+        billetes !== undefined ? toNumber(billetes) : undefined;
+      const monedasNum =
+        monedas_fisicas !== undefined ? toNumber(monedas_fisicas) : undefined;
+
+      // Validaciones
+      if (
+        (billetes !== undefined &&
+          (!Number.isFinite(billetesNum!) || isNaN(billetesNum!))) ||
+        (monedas_fisicas !== undefined &&
+          (!Number.isFinite(monedasNum!) || isNaN(monedasNum!)))
+      ) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Billetes/monedas inválidos" });
+      }
+
+      if (
+        (billetesNum !== undefined && billetesNum < 0) ||
+        (monedasNum !== undefined && monedasNum < 0)
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            error: "Billetes/monedas no pueden ser negativos",
+          });
+      }
+
+      let cantidad = totalFromField;
+      if (billetesNum !== undefined || monedasNum !== undefined) {
+        const safeBilletes = billetesNum || 0;
+        const safeMonedas = monedasNum || 0;
+        cantidad = safeBilletes + safeMonedas;
+      }
+
+      console.warn("Converted amount (total):", cantidad, {
+        billetesNum,
+        monedasNum,
+      });
+      if (!Number.isFinite(cantidad) || isNaN(cantidad)) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Cantidad inválida" });
+      }
+      if (cantidad < 0) {
+        return res
+          .status(400)
+          .json({ success: false, error: "La cantidad no puede ser negativa" });
+      }
 
       // Verificar si ya existe un saldo inicial activo usando Prisma
       console.warn("Checking for existing initial balance with Prisma...");
@@ -113,13 +207,15 @@ router.post(
           },
           update: {
             cantidad,
+            billetes: billetesNum ?? 0,
+            monedas_fisicas: monedasNum ?? 0,
           },
           create: {
             punto_atencion_id,
             moneda_id,
             cantidad,
-            billetes: 0,
-            monedas_fisicas: 0,
+            billetes: billetesNum ?? 0,
+            monedas_fisicas: monedasNum ?? 0,
           },
         });
         console.warn("Current balance updated successfully");
@@ -158,13 +254,15 @@ router.post(
         },
         update: {
           cantidad,
+          billetes: billetesNum ?? 0,
+          monedas_fisicas: monedasNum ?? 0,
         },
         create: {
           punto_atencion_id,
           moneda_id,
           cantidad,
-          billetes: 0,
-          monedas_fisicas: 0,
+          billetes: billetesNum ?? 0,
+          monedas_fisicas: monedasNum ?? 0,
         },
       });
       console.warn("Current balance upserted successfully");
@@ -179,6 +277,26 @@ router.post(
         "Error stack:",
         error instanceof Error ? error.stack : "No stack"
       );
+
+      // Manejo fino de errores Prisma
+      const code = (error as any)?.code;
+      if (code === "P2002") {
+        return res.status(409).json({
+          success: false,
+          error: "Saldo inicial ya existe (conflicto de unicidad)",
+        });
+      }
+      if (code === "P2003") {
+        return res.status(400).json({
+          success: false,
+          error: "Referencia inválida (punto o moneda inexistente)",
+        });
+      }
+      if (code === "P2025") {
+        return res
+          .status(404)
+          .json({ success: false, error: "Registro no encontrado" });
+      }
 
       const errorResponse = {
         success: false,

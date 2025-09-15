@@ -54,6 +54,8 @@ router.get(
       const formattedBalances = balances.map((balance) => ({
         ...balance,
         cantidad: parseFloat(balance.cantidad.toString()),
+        billetes: parseFloat(balance.billetes.toString()),
+        monedas_fisicas: parseFloat(balance.monedas_fisicas.toString()),
         updated_at: balance.updated_at.toISOString(),
       }));
 

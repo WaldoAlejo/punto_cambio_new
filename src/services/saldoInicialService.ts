@@ -31,6 +31,8 @@ export const saldoInicialService = {
     punto_atencion_id: string;
     moneda_id: string;
     cantidad_inicial: number;
+    billetes?: number;
+    monedas_fisicas?: number;
     observaciones?: string;
   }): Promise<{ saldo: SaldoInicial | null; error: string | null }> {
     try {
