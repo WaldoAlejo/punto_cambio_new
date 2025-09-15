@@ -16,8 +16,9 @@ const exchangeSchema = z.object({
   monto_destino: z.number().positive(),
 
   // Tasas diferenciadas
-  tasa_cambio_billetes: z.number().positive(),
-  tasa_cambio_monedas: z.number().positive(),
+  // Permitir 0 cuando no se use esa vía (billetes o monedas)
+  tasa_cambio_billetes: z.number().nonnegative().default(0),
+  tasa_cambio_monedas: z.number().nonnegative().default(0),
 
   tipo_operacion: z.nativeEnum(TipoOperacion),
   punto_atencion_id: z.string().uuid(),
@@ -500,6 +501,120 @@ router.patch(
 
       res.status(500).json({
         error: "Error interno del servidor al cerrar cambio de divisa",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
+// Completar cambio pendiente (setear detalles de entrega y marcar COMPLETADO)
+router.patch(
+  "/:id/completar",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+    const { id } = req.params;
+    const {
+      metodo_entrega,
+      transferencia_numero,
+      transferencia_banco,
+      transferencia_imagen_url,
+      divisas_recibidas_billetes,
+      divisas_recibidas_monedas,
+      divisas_recibidas_total,
+    } = req.body || {};
+
+    try {
+      if (!req.user?.id) {
+        res.status(401).json({
+          error: "Usuario no autenticado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const cambio = await prisma.cambioDivisa.findUnique({ where: { id } });
+      if (!cambio) {
+        res.status(404).json({
+          error: "Cambio de divisa no encontrado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      if (cambio.estado === EstadoTransaccion.COMPLETADO) {
+        res.status(400).json({
+          error: "El cambio ya está completado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const numeroReciboCompletar = `COMP-${Date.now()}`;
+
+      const updated = await prisma.cambioDivisa.update({
+        where: { id },
+        data: {
+          estado: EstadoTransaccion.COMPLETADO,
+          metodo_entrega: metodo_entrega || cambio.metodo_entrega,
+          transferencia_numero:
+            metodo_entrega === "transferencia" ? transferencia_numero : null,
+          transferencia_banco:
+            metodo_entrega === "transferencia" ? transferencia_banco : null,
+          transferencia_imagen_url:
+            metodo_entrega === "transferencia"
+              ? transferencia_imagen_url
+              : null,
+          divisas_recibidas_billetes:
+            divisas_recibidas_billetes ?? cambio.divisas_recibidas_billetes,
+          divisas_recibidas_monedas:
+            divisas_recibidas_monedas ?? cambio.divisas_recibidas_monedas,
+          divisas_recibidas_total:
+            divisas_recibidas_total ?? cambio.divisas_recibidas_total,
+          numero_recibo_completar: numeroReciboCompletar,
+          fecha_completado: new Date(),
+        },
+        include: {
+          monedaOrigen: {
+            select: { id: true, nombre: true, codigo: true, simbolo: true },
+          },
+          monedaDestino: {
+            select: { id: true, nombre: true, codigo: true, simbolo: true },
+          },
+          usuario: { select: { id: true, nombre: true, username: true } },
+          puntoAtencion: { select: { id: true, nombre: true } },
+        },
+      });
+
+      await prisma.recibo.create({
+        data: {
+          numero_recibo: numeroReciboCompletar,
+          tipo_operacion: "CAMBIO_DIVISA",
+          referencia_id: updated.id,
+          usuario_id: req.user.id,
+          punto_atencion_id: updated.punto_atencion_id,
+          datos_operacion: updated,
+        },
+      });
+
+      res
+        .status(200)
+        .json({
+          exchange: updated,
+          success: true,
+          timestamp: new Date().toISOString(),
+        });
+    } catch (error) {
+      logger.error("Error al completar cambio de divisa", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        usuario_id: req.user?.id,
+      });
+      res.status(500).json({
+        error: "Error interno del servidor al completar cambio de divisa",
         success: false,
         timestamp: new Date().toISOString(),
       });

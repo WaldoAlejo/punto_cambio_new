@@ -222,6 +222,34 @@ router.post(
         monto: number;
       }> = [];
 
+      // Obtener el cambio para conocer los detalles de billetes/monedas por cada moneda
+      const cambioResult = await client.query(
+        `SELECT id, moneda_origen_id, moneda_destino_id,
+                COALESCE(divisas_entregadas_billetes, 0) AS divisas_entregadas_billetes,
+                COALESCE(divisas_entregadas_monedas, 0) AS divisas_entregadas_monedas,
+                COALESCE(divisas_recibidas_billetes, 0) AS divisas_recibidas_billetes,
+                COALESCE(divisas_recibidas_monedas, 0) AS divisas_recibidas_monedas
+         FROM "CambioDivisa" WHERE id = $1`,
+        [cambio_id]
+      );
+
+      if (cambioResult.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          success: false,
+          message: "Cambio no encontrado para procesar movimientos contables",
+        });
+      }
+
+      const cambioRow = cambioResult.rows[0] as {
+        moneda_origen_id: string;
+        moneda_destino_id: string;
+        divisas_entregadas_billetes: number;
+        divisas_entregadas_monedas: number;
+        divisas_recibidas_billetes: number;
+        divisas_recibidas_monedas: number;
+      };
+
       for (const movimiento of movimientos as Array<{
         punto_atencion_id: string;
         moneda_id: string;
@@ -300,12 +328,62 @@ router.post(
           descripcion,
         ]);
 
-        // Actualizar saldo actual (asegurar ID no nulo)
+        // Calcular ajustes de billetes/monedas_fisicas según el tipo de movimiento y moneda
+        let delta_billetes = 0;
+        let delta_monedas_fisicas = 0;
+
+        if (moneda_id === cambioRow.moneda_destino_id) {
+          // Moneda que sale al cliente (EGRESO en cantidad)
+          // Usamos los valores que recibe el cliente en esa moneda
+          // Para compras/ventas esto representa lo que sale de caja en esa moneda
+          delta_billetes = -Number(cambioRow.divisas_recibidas_billetes || 0);
+          delta_monedas_fisicas = -Number(
+            cambioRow.divisas_recibidas_monedas || 0
+          );
+        } else if (moneda_id === cambioRow.moneda_origen_id) {
+          // Moneda que entra desde el cliente (INGRESO en cantidad)
+          // Usamos los valores que entrega el cliente en esa moneda
+          delta_billetes = Number(cambioRow.divisas_entregadas_billetes || 0);
+          delta_monedas_fisicas = Number(
+            cambioRow.divisas_entregadas_monedas || 0
+          );
+        }
+
+        // Leer valores actuales de billetes/monedas
+        const saldoDetResult = await client.query(
+          `SELECT COALESCE(billetes,0) AS billetes, COALESCE(monedas_fisicas,0) AS monedas_fisicas
+           FROM "Saldo" WHERE punto_atencion_id = $1 AND moneda_id = $2`,
+          [punto_atencion_id, moneda_id]
+        );
+
+        const billetes_actual = saldoDetResult.rows.length
+          ? Number(saldoDetResult.rows[0].billetes)
+          : 0;
+        const monedas_actual = saldoDetResult.rows.length
+          ? Number(saldoDetResult.rows[0].monedas_fisicas)
+          : 0;
+
+        const billetes_nuevo = billetes_actual + delta_billetes;
+        const monedas_nuevo = monedas_actual + delta_monedas_fisicas;
+
+        // Validación básica: no permitir negativos en conteo monetario por tipo
+        if (tipo_movimiento === "EGRESO") {
+          if (billetes_nuevo < 0 || monedas_nuevo < 0) {
+            await client.query("ROLLBACK");
+            return res.status(400).json({
+              success: false,
+              message:
+                "Saldo físico insuficiente (billetes/monedas) para realizar el egreso",
+            });
+          }
+        }
+
+        // Actualizar saldo actual (asegurar ID no nulo) incluyendo billetes/monedas_fisicas
         const upsertSaldoQuery = `
         INSERT INTO "Saldo" (id, punto_atencion_id, moneda_id, cantidad, billetes, monedas_fisicas, updated_at)
-        VALUES ($1, $2, $3, $4, 0, 0, NOW())
+        VALUES ($1, $2, $3, $4, $5, $6, NOW())
         ON CONFLICT (punto_atencion_id, moneda_id)
-        DO UPDATE SET cantidad = EXCLUDED.cantidad, updated_at = NOW()
+        DO UPDATE SET cantidad = EXCLUDED.cantidad, billetes = EXCLUDED.billetes, monedas_fisicas = EXCLUDED.monedas_fisicas, updated_at = NOW()
       `;
 
         const saldo_id = randomUUID();
@@ -315,6 +393,8 @@ router.post(
           punto_atencion_id,
           moneda_id,
           saldo_nuevo,
+          billetes_nuevo,
+          monedas_nuevo,
         ]);
 
         saldos_actualizados.push({

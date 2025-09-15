@@ -40,29 +40,63 @@ const CompletePaymentForm = ({
     setIsProcessing(true);
     try {
       // Completar el cambio pendiente
-      const { error } = await exchangeService.completeExchange(
-        exchange.id,
-        deliveryDetails
-      );
+      const { exchange: completedExchange, error } =
+        await exchangeService.completeExchange(exchange.id, deliveryDetails);
 
-      if (error) {
-        toast.error(`Error al completar el cambio: ${error}`);
+      if (error || !completedExchange) {
+        toast.error(`Error al completar el cambio: ${error || "sin detalles"}`);
         return;
+      }
+
+      // Procesar contabilidad tras completar
+      try {
+        const { movimientosContablesService } = await import(
+          "@/services/movimientosContablesService"
+        );
+        const { result, error: contabError } =
+          await movimientosContablesService.procesarMovimientosCambio(
+            completedExchange,
+            user.id
+          );
+
+        if (contabError) {
+          toast.warning(
+            `⚠️ Cambio completado pero error en contabilidad: ${contabError}`
+          );
+        } else if (result?.success) {
+          const resumen = result.saldos_actualizados
+            .map(
+              (s: any) =>
+                `${s.moneda_id}: ${s.saldo_anterior.toFixed(
+                  2
+                )} → ${s.saldo_nuevo.toFixed(2)}`
+            )
+            .join(", ");
+          toast.success(`✅ Saldos actualizados: ${resumen}`);
+        }
+      } catch (e) {
+        // No bloquear el flujo si falla contabilidad
+        console.error(
+          "Error inesperado al procesar contabilidad al completar cambio",
+          e
+        );
+        toast.warning(
+          "⚠️ Cambio completado pero no se pudo actualizar contabilidad"
+        );
       }
 
       // Generar e imprimir recibo de completación
       const receiptData = ReceiptService.generatePartialExchangeReceipt(
-        exchange,
+        completedExchange,
         selectedPoint?.nombre || "N/A",
         user.nombre,
         false // isInitialPayment = false para completación
       );
       ReceiptService.printReceipt(receiptData, 2);
 
-      toast.success("✅ Cambio completado exitosamente. Recibo generado.");
-
       // Disparar evento para actualizar saldos
       window.dispatchEvent(new CustomEvent("exchangeCompleted"));
+      window.dispatchEvent(new CustomEvent("saldosUpdated"));
 
       onComplete();
     } catch (error) {

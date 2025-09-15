@@ -141,8 +141,8 @@ model Saldo {
   punto_atencion_id String
   moneda_id         String
   cantidad          Decimal  @default(0) @db.Decimal(15, 2)
-  billetes          Int      @default(0)
-  monedas_fisicas   Int      @default(0)
+  billetes          Decimal  @default(0) @db.Decimal(15, 2)
+  monedas_fisicas   Decimal  @default(0) @db.Decimal(15, 2)
   updated_at        DateTime @updatedAt
 
   puntoAtencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
@@ -232,8 +232,9 @@ model CambioDivisa {
   monto_destino     Decimal           @db.Decimal(15, 2)
   
   // ==== TASAS DIFERENCIADAS ====
-  tasa_cambio_billetes Decimal        @db.Decimal(10, 6)
-  tasa_cambio_monedas  Decimal        @db.Decimal(10, 6)
+  // Tasas pueden ser 0 cuando no se usa esa vía
+  tasa_cambio_billetes Decimal        @default(0) @db.Decimal(10, 6)
+  tasa_cambio_monedas  Decimal        @default(0) @db.Decimal(10, 6)
   
   // ==== DETALLES DE DIVISAS ENTREGADAS (por el cliente) ====
   divisas_entregadas_billetes Decimal @db.Decimal(15, 2) @default(0)
