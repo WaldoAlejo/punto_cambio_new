@@ -1,17 +1,24 @@
-import { apiService } from "./apiService";
+import { apiService, ApiError } from "./apiService";
 import { SaldoInicial, VistaSaldosPorPunto, MovimientoSaldo } from "../types";
 
 type ApiOk<T> = { success: true } & T;
-type ApiFail = { success: false; error?: string; message?: string };
+type ApiFail = {
+  success: false;
+  error?: string;
+  message?: string;
+  details?: string;
+  code?: string;
+};
 
 function extractErrorMessage(e: unknown, fallback: string) {
   const err = e as any;
-  // apiService.setea err.message y, cuando viene del servidor, también err.payload { error | message }
   const fromPayload =
     err?.payload?.error ||
     err?.payload?.message ||
+    err?.payload?.details ||
     err?.response?.data?.error ||
-    err?.response?.data?.message;
+    err?.response?.data?.message ||
+    err?.response?.data?.details;
   const fromMessage = err?.message;
   return (fromPayload || fromMessage || fallback) as string;
 }
@@ -29,9 +36,11 @@ export const saldoInicialService = {
       if ((response as any).success) {
         return { saldos: (response as any).saldos ?? [], error: null };
       } else {
+        const r = response as ApiFail;
         const msg =
-          (response as ApiFail).error ||
-          (response as ApiFail).message ||
+          r.error ||
+          r.message ||
+          r.details ||
           "Error al obtener los saldos iniciales";
         return { saldos: [], error: msg };
       }
@@ -67,18 +76,23 @@ export const saldoInicialService = {
         const { saldo, updated } = response as any;
         return { saldo, error: null, updated };
       } else {
+        const r = response as ApiFail;
         const msg =
-          (response as ApiFail).error ||
-          (response as ApiFail).message ||
+          r.error ||
+          r.message ||
+          r.details ||
           "Error al asignar el saldo inicial";
         return { saldo: null, error: msg };
       }
     } catch (e) {
-      const msg = extractErrorMessage(
-        e,
-        "Error de conexión al asignar saldo inicial"
-      );
-      console.error("Error assigning initial balance:", e);
+      const err = e as ApiError | Error;
+      const msg =
+        (err as any)?.payload?.error ||
+        (err as any)?.payload?.details ||
+        (err as any)?.payload?.message ||
+        err.message ||
+        "Error de conexión al asignar saldo inicial";
+      console.error("Error assigning initial balance:", err);
       return { saldo: null, error: msg };
     }
   },
@@ -107,9 +121,11 @@ export const saldoInicialService = {
         );
         return { saldos, error: null };
       } else {
+        const r = response as ApiFail;
         const msg =
-          (response as ApiFail).error ||
-          (response as ApiFail).message ||
+          r.error ||
+          r.message ||
+          r.details ||
           "Error al obtener la vista de saldos";
         console.error(
           "❌ getVistaSaldosPorPunto - Error en respuesta:",
@@ -143,9 +159,11 @@ export const saldoInicialService = {
           error: null,
         };
       } else {
+        const r = response as ApiFail;
         const msg =
-          (response as ApiFail).error ||
-          (response as ApiFail).message ||
+          r.error ||
+          r.message ||
+          r.details ||
           "Error al obtener los movimientos de saldo";
         return { movimientos: [], error: msg };
       }

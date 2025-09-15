@@ -1,41 +1,51 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { pool } from "../lib/database.js";
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
-/** Parseo numérico robusto para distintos formatos */
+// ===== helpers =====
 const toNumber = (v: any): number => {
   if (typeof v === "number") return v;
   if (typeof v !== "string") return Number(v);
-
   const raw = v.trim();
   if (!raw) return NaN;
-
-  // 1) 1.234,56  -> 1234.56
-  if (/^\d{1,3}(\.\d{3})+,\d{1,6}$/.test(raw)) {
+  // 1.234,56 -> 1234.56
+  if (/^\d{1,3}(\.\d{3})+,\d{1,6}$/.test(raw))
     return Number(raw.replace(/\./g, "").replace(",", "."));
-  }
-  // 2) 1,234.56  -> 1234.56
-  if (/^\d{1,3}(,\d{3})+\.\d{1,6}$/.test(raw)) {
+  // 1,234.56 -> 1234.56
+  if (/^\d{1,3}(,\d{3})+\.\d{1,6}$/.test(raw))
     return Number(raw.replace(/,/g, ""));
-  }
-  // 3) 1234,56   -> 1234.56
-  if (/^\d+(,\d{1,6})$/.test(raw)) {
-    return Number(raw.replace(",", "."));
-  }
-  // 4) 1234.56 o 1234
+  // 1234,56 -> 1234.56
+  if (/^\d+(,\d{1,6})$/.test(raw)) return Number(raw.replace(",", "."));
   return Number(raw.replace(",", "."));
 };
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
-// ======================= GET: saldos iniciales del punto =======================
-router.get("/:pointId", authenticateToken, async (req, res) => {
-  try {
-    const { pointId } = req.params;
+// Tipos de Request
+interface GetSaldosParams {
+  pointId: string;
+}
+interface PostSaldoBody {
+  punto_atencion_id: string;
+  moneda_id: string;
+  cantidad_inicial: number | string; // puede venir como texto
+  observaciones?: string;
+  billetes?: number | string;
+  monedas_fisicas?: number | string;
+}
 
-    const query = `
+// ======================= GET: saldos iniciales (punto) =======================
+router.get<{ pointId: string }>(
+  "/:pointId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { pointId } = req.params;
+
+      const query = `
       SELECT 
         si.id, si.punto_atencion_id, si.moneda_id, si.cantidad_inicial,
         si.asignado_por, si.observaciones, si.activo, si.created_at,
@@ -47,26 +57,29 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
       WHERE si.punto_atencion_id = $1 AND si.activo = true
       ORDER BY si.created_at DESC
     `;
-    const result = await pool.query(query, [pointId]);
-
-    res.json({ success: true, saldos: result.rows });
-  } catch (error) {
-    console.error("Error in get initial balances route:", error);
-    res
-      .status(500)
-      .json({ success: false, error: "Error interno del servidor" });
+      const result = await pool.query(query, [pointId]);
+      return res.json({ success: true, saldos: result.rows });
+    } catch (error) {
+      console.error("GET /saldos-iniciales/:pointId error:", error);
+      return res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+        details: (error as any)?.message ?? null,
+      });
+    }
   }
-});
+);
 
-// ======================= POST: asignar/INCREMENTAR saldo inicial =======================
+// ======================= POST: asignar / INCREMENTAR =======================
 router.post(
   "/",
   authenticateToken,
   requireRole(["ADMIN", "SUPER_USUARIO"]),
-  async (req: any, res) => {
-    console.warn("=== SALDOS INICIALES POST START ===");
-    console.warn("Request body:", req.body);
-    console.warn("Request user:", req.user);
+  async (req: Request<unknown, unknown, PostSaldoBody>, res: Response) => {
+    // logs de entrada (útiles en PM2)
+    console.warn("=== POST /saldos-iniciales START ===");
+    console.warn("user:", req.user);
+    console.warn("body:", req.body);
 
     try {
       const {
@@ -87,8 +100,10 @@ router.post(
       if (!req.user?.id) {
         return res.status(401).json({ success: false, error: "No autorizado" });
       }
+      // A partir de aquí, req.user está definido por los middlewares
+      const user = req.user as NonNullable<typeof req.user>;
 
-      // Validar existencia/estado de punto y moneda
+      // Validar punto y moneda existen y están activos
       const [punto, moneda] = await Promise.all([
         prisma.puntoAtencion.findUnique({
           where: { id: punto_atencion_id },
@@ -100,12 +115,10 @@ router.post(
         }),
       ]);
       if (!punto || punto.activo === false) {
-        return res
-          .status(404)
-          .json({
-            success: false,
-            error: "Punto de atención inválido o inactivo",
-          });
+        return res.status(404).json({
+          success: false,
+          error: "Punto de atención inválido o inactivo",
+        });
       }
       if (!moneda || moneda.activo === false) {
         return res
@@ -113,14 +126,13 @@ router.post(
           .json({ success: false, error: "Moneda inválida o inactiva" });
       }
 
-      // Total o desglose (billetes + monedas_fisicas)
+      // Parseo y redondeo
       const totalFromField = toNumber(cantidad_inicial);
       const billetesNum =
         billetes !== undefined ? toNumber(billetes) : undefined;
       const monedasNum =
         monedas_fisicas !== undefined ? toNumber(monedas_fisicas) : undefined;
 
-      // Validaciones
       if (
         (billetes !== undefined &&
           (!Number.isFinite(billetesNum!) || isNaN(billetesNum!))) ||
@@ -131,25 +143,17 @@ router.post(
           .status(400)
           .json({ success: false, error: "Billetes/monedas inválidos" });
       }
-      if (
-        (billetesNum !== undefined && billetesNum < 0) ||
-        (monedasNum !== undefined && monedasNum < 0)
-      ) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            error: "Billetes/monedas no pueden ser negativos",
-          });
+      if ((billetesNum ?? 0) < 0 || (monedasNum ?? 0) < 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Billetes/monedas no pueden ser negativos",
+        });
       }
 
       let cantidad = totalFromField;
       if (billetesNum !== undefined || monedasNum !== undefined) {
-        const safeBilletes = billetesNum || 0;
-        const safeMonedas = monedasNum || 0;
-        cantidad = safeBilletes + safeMonedas;
+        cantidad = (billetesNum || 0) + (monedasNum || 0);
       }
-
       if (!Number.isFinite(cantidad) || isNaN(cantidad)) {
         return res
           .status(400)
@@ -161,13 +165,18 @@ router.post(
           .json({ success: false, error: "La cantidad debe ser mayor a 0" });
       }
 
-      // ---------- Transacción atómica (evitar increment sobre NULL) ----------
+      // Redondeo para cumplir DECIMAL(15,2)
+      cantidad = round2(cantidad);
+      const incBilletes = round2(billetesNum ?? 0);
+      const incMonedas = round2(monedasNum ?? 0);
+
+      // Transacción: incrementar sin usar { increment } (evita fallos con NULL históricos)
       const resultado = await prisma.$transaction(async (tx) => {
         const decCantidad = new Prisma.Decimal(cantidad);
-        const incBilletes = new Prisma.Decimal(billetesNum ?? 0);
-        const incMonedas = new Prisma.Decimal(monedasNum ?? 0);
+        const decBilletes = new Prisma.Decimal(incBilletes);
+        const decMonedas = new Prisma.Decimal(incMonedas);
 
-        // 1) SaldoInicial activo: incrementa cantidad_inicial (o crea)
+        // 1) SaldoInicial activo: si existe, sumar; si no, crear
         const existingInicial = await tx.saldoInicial.findFirst({
           where: { punto_atencion_id, moneda_id, activo: true },
           select: { id: true, cantidad_inicial: true, observaciones: true },
@@ -181,7 +190,7 @@ router.post(
           saldoInicialResult = await tx.saldoInicial.update({
             where: { id: existingInicial.id },
             data: {
-              cantidad_inicial: baseInicial.add(decCantidad), // SET explícito
+              cantidad_inicial: baseInicial.add(decCantidad), // set explícito
               observaciones:
                 observaciones ?? existingInicial.observaciones ?? null,
             },
@@ -192,14 +201,14 @@ router.post(
               punto_atencion_id,
               moneda_id,
               cantidad_inicial: decCantidad,
-              asignado_por: req.user.id,
+              asignado_por: user.id,
               observaciones: observaciones ?? null,
               activo: true,
             },
           });
         }
 
-        // 2) Saldo actual: lee valores actuales (pueden ser NULL) y SET con suma
+        // 2) Saldo actual: si existe, sumar; si no, crear
         const existingSaldo = await tx.saldo.findFirst({
           where: { punto_atencion_id, moneda_id },
           select: {
@@ -217,10 +226,10 @@ router.post(
           ).add(decCantidad);
           const baseBilletes = new Prisma.Decimal(
             existingSaldo.billetes ?? 0
-          ).add(incBilletes);
+          ).add(decBilletes);
           const baseMonedas = new Prisma.Decimal(
             existingSaldo.monedas_fisicas ?? 0
-          ).add(incMonedas);
+          ).add(decMonedas);
 
           saldoResult = await tx.saldo.update({
             where: { id: existingSaldo.id },
@@ -236,11 +245,27 @@ router.post(
               punto_atencion_id,
               moneda_id,
               cantidad: decCantidad,
-              billetes: incBilletes,
-              monedas_fisicas: incMonedas,
+              billetes: decBilletes,
+              monedas_fisicas: decMonedas,
             },
           });
         }
+
+        // (Opcional) registrar movimiento de saldo; descomenta si lo quieres persistir
+        // await tx.movimientoSaldo.create({
+        //   data: {
+        //     punto_atencion_id,
+        //     moneda_id,
+        //     tipo_movimiento: "SALDO_INICIAL",
+        //     monto: decCantidad,
+        //     saldo_anterior: new Prisma.Decimal(existingSaldo?.cantidad ?? 0),
+        //     saldo_nuevo: saldoResult.cantidad,
+        //     usuario_id: user.id,
+        //     referencia_id: saldoInicialResult.id,
+        //     tipo_referencia: "SALDO_INICIAL",
+        //     descripcion: observaciones ?? null,
+        //   },
+        // });
 
         return {
           saldoInicialResult,
@@ -248,7 +273,11 @@ router.post(
           updated: Boolean(existingInicial),
         };
       });
-      // ---------- Fin transacción ----------
+
+      console.warn("=== POST /saldos-iniciales OK ===", {
+        saldoInicialId: resultado.saldoInicialResult.id,
+        updated: resultado.updated,
+      });
 
       return res.json({
         success: true,
@@ -256,38 +285,49 @@ router.post(
         updated: resultado.updated,
       });
     } catch (error: any) {
-      console.error("=== SALDOS INICIALES POST ERROR ===");
-      console.error("Message:", error?.message);
-      console.error("Code:", error?.code, "Meta:", error?.meta);
-      console.error("Stack:", error?.stack);
-
-      // Responder con más detalle para depurar (si prefieres, deja sólo en logs)
+      // Prisma codes más comunes
       const code = error?.code as string | undefined;
-      if (code === "P2002")
-        return res
-          .status(409)
-          .json({
-            success: false,
-            error: "Saldo inicial ya existe (unicidad)",
-          });
-      if (code === "P2003")
-        return res
-          .status(400)
-          .json({ success: false, error: "Referencia inválida (FK)" });
-      if (code === "P2025")
-        return res
-          .status(404)
-          .json({ success: false, error: "Registro no encontrado" });
+      const meta = error?.meta;
 
-      // Incluye el mensaje técnico para ver la causa real mientras depuras
+      console.error("=== POST /saldos-iniciales ERROR ===");
+      console.error("message:", error?.message);
+      console.error("code:", code, "meta:", meta);
+      console.error("stack:", error?.stack);
+
+      if (code === "P2002") {
+        return res.status(409).json({
+          success: false,
+          error: "Saldo inicial ya existe (unicidad)",
+          code,
+          meta,
+        });
+      }
+      if (code === "P2003") {
+        return res.status(400).json({
+          success: false,
+          error: "Referencia inválida (FK)",
+          code,
+          meta,
+        });
+      }
+      if (code === "P2025") {
+        return res.status(404).json({
+          success: false,
+          error: "Registro no encontrado",
+          code,
+          meta,
+        });
+      }
+
       return res.status(500).json({
         success: false,
         error: "Error interno del servidor",
+        code: code ?? null,
+        meta: meta ?? null,
         details: error?.message ?? null,
-        code: error?.code ?? null,
       });
     } finally {
-      console.warn("=== SALDOS INICIALES POST END ===");
+      console.warn("=== POST /saldos-iniciales END ===");
     }
   }
 );

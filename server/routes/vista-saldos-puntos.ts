@@ -1,11 +1,11 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { pool } from "../lib/database.js";
 
 const router = express.Router();
 
 // Obtener vista consolidada de saldos por punto
-router.get("/", authenticateToken, async (req, res) => {
+router.get("/", authenticateToken, async (req: Request, res: Response) => {
   try {
     console.log("🔍 Vista saldos: Iniciando consulta...");
     console.log("👤 Usuario solicitante:", {
