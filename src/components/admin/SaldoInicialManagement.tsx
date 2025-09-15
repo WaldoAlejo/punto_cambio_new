@@ -35,6 +35,7 @@ const SaldoInicialManagement = () => {
 
   useEffect(() => {
     loadInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadInitialData = async () => {
@@ -47,59 +48,29 @@ const SaldoInicialManagement = () => {
         saldoInicialService.getVistaSaldosPorPunto(),
       ]);
 
-      console.log(
-        "📍 SaldoInicialManagement - Respuesta de puntos:",
-        pointsResponse
-      );
-      console.log(
-        "💰 SaldoInicialManagement - Respuesta de saldos:",
-        vistaSaldosResponse
-      );
+      console.log("📍 Puntos (raw):", pointsResponse);
+      console.log("💰 Saldos (raw):", vistaSaldosResponse);
 
-      // Validar respuestas
-      if (pointsResponse.error) {
-        console.error("❌ Error en respuesta de puntos:", pointsResponse.error);
-        toast.error(`Error al cargar puntos: ${pointsResponse.error}`);
-        return;
+      if ((pointsResponse as any)?.error) {
+        const msg = (pointsResponse as any).error || "Error al cargar puntos";
+        console.error("❌ Error en respuesta de puntos:", msg);
+        toast.error(`Error al cargar puntos: ${msg}`);
+        setPoints([]);
+      } else {
+        setPoints(pointsResponse.points || []);
       }
 
-      if (vistaSaldosResponse.error) {
-        console.error(
-          "❌ Error en respuesta de saldos:",
-          vistaSaldosResponse.error
-        );
-        toast.error(`Error al cargar saldos: ${vistaSaldosResponse.error}`);
+      if ((vistaSaldosResponse as any)?.error) {
+        const msg =
+          (vistaSaldosResponse as any).error || "Error al cargar saldos";
+        console.error("❌ Error en respuesta de saldos:", msg);
+        toast.error(`Error al cargar saldos: ${msg}`);
+        setVistaSaldos([]);
+      } else {
+        setVistaSaldos(vistaSaldosResponse.saldos || []);
       }
 
       const puntosObtenidos = pointsResponse.points || [];
-      const saldosObtenidos = vistaSaldosResponse.saldos || [];
-
-      console.log(
-        `📍 SaldoInicialManagement - Puntos cargados: ${puntosObtenidos.length}`
-      );
-      puntosObtenidos.forEach((punto, index) => {
-        console.log(
-          `  ${index + 1}. ${punto.nombre} - ${punto.ciudad}, ${
-            punto.provincia
-          } (ID: ${punto.id})`
-        );
-      });
-
-      console.log(
-        `💰 SaldoInicialManagement - Saldos cargados: ${saldosObtenidos.length}`
-      );
-      saldosObtenidos.forEach((saldo, index) => {
-        console.log(
-          `  ${index + 1}. Punto: ${saldo.punto_nombre} | Moneda: ${
-            saldo.moneda_codigo
-          } | Saldo: ${saldo.moneda_simbolo}${saldo.saldo_actual}`
-        );
-      });
-
-      setPoints(puntosObtenidos);
-      setVistaSaldos(saldosObtenidos);
-
-      // Auto-seleccionar el primer punto si no hay uno seleccionado
       if (puntosObtenidos.length > 0 && !selectedPointId) {
         const primerPunto = puntosObtenidos[0];
         console.log(
@@ -108,13 +79,12 @@ const SaldoInicialManagement = () => {
         setSelectedPointId(primerPunto.id);
       }
 
-      console.log("✅ SaldoInicialManagement - Carga de datos completada");
+      console.log("✅ Carga de datos completada");
     } catch (error) {
-      console.error(
-        "❌ SaldoInicialManagement - Error crítico al cargar datos:",
-        error
+      console.error("❌ Error crítico al cargar datos:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Error al cargar datos"
       );
-      toast.error("Error al cargar datos");
       setPoints([]);
       setVistaSaldos([]);
     } finally {
@@ -181,25 +151,27 @@ const SaldoInicialManagement = () => {
     }
   };
 
-  // Asignar saldo inicial
+  // Asignar saldo inicial (incremento)
   const handleAsignarSaldo = async () => {
     if (!selectedPointId || !selectedCurrency) {
       toast.error("Seleccione punto y moneda");
       return;
     }
 
-    const billetesNum = parseFloat(billetes || "0");
-    const monedasNum = parseFloat(monedas || "0");
+    const billetesNum = Number.parseFloat(billetes || "0");
+    const monedasNum = Number.parseFloat(monedas || "0");
+
     if (
-      isNaN(billetesNum) ||
+      Number.isNaN(billetesNum) ||
       billetesNum < 0 ||
-      isNaN(monedasNum) ||
+      Number.isNaN(monedasNum) ||
       monedasNum < 0
     ) {
       toast.error("Billetes/Monedas deben ser números válidos (>= 0)");
       return;
     }
-    const cantidadNum = billetesNum + monedasNum;
+
+    const cantidadNum = +(billetesNum + monedasNum).toFixed(2);
     if (cantidadNum <= 0) {
       toast.error("El total (billetes + monedas) debe ser mayor a 0");
       return;
@@ -214,7 +186,7 @@ const SaldoInicialManagement = () => {
     }
 
     showConfirmation(
-      "Confirmar asignación de saldo inicial",
+      "Confirmar asignación de saldo",
       `¿Asignar ${
         monedaInfo.moneda_simbolo
       }${cantidadNum.toLocaleString()} (${billetesNum.toLocaleString()} billetes + ${monedasNum.toLocaleString()} monedas) de ${
@@ -223,51 +195,52 @@ const SaldoInicialManagement = () => {
       async () => {
         setLoadingAsignacion(true);
 
+        // Payload EXACTO para la API (incremento)
+        const payload = {
+          punto_atencion_id: selectedPointId, // UUID del punto
+          moneda_id: selectedCurrency, // UUID de la moneda (value del Select)
+          cantidad_inicial: cantidadNum, // total (backend también acepta desglose)
+          billetes: billetesNum,
+          monedas_fisicas: monedasNum,
+        };
+
         try {
-          console.log(
-            `💰 SaldoInicialManagement - Asignando saldo: ${cantidadNum} ${monedaInfo.moneda_codigo} al punto ${punto.nombre} (${punto.id})`
+          console.log("📦 Payload POST /saldos-iniciales:", payload);
+
+          // Llamada al servicio
+          const res: any = await saldoInicialService.asignarSaldoInicial(
+            payload
           );
 
-          const response = await saldoInicialService.asignarSaldoInicial({
-            punto_atencion_id: selectedPointId,
-            moneda_id: selectedCurrency,
-            cantidad_inicial: cantidadNum,
-            billetes: billetesNum,
-            monedas_fisicas: monedasNum,
-          });
-
-          console.log(
-            "📋 SaldoInicialManagement - Respuesta de asignación:",
-            response
-          );
-
-          if (response.error) {
-            console.error("❌ Error al asignar saldo:", response.error);
-            toast.error(`Error: ${response.error}`);
-          } else {
-            console.log("✅ Saldo asignado correctamente:", response.saldo);
-            toast.success(
-              `✅ Saldo de ${
-                monedaInfo.moneda_simbolo
-              }${cantidadNum.toLocaleString()} asignado correctamente a ${
-                punto.nombre
-              }`
+          // Soporta ambos estilos: retorno con error o lanzar throw
+          if (res?.error) {
+            console.error(
+              "❌ Error al asignar saldo (respuesta controlada):",
+              res.error
             );
-
-            // Limpiar formulario
-            setBilletes("");
-            setMonedas("");
-            setSelectedCurrency("");
-
-            // Recargar datos
-            await loadInitialData();
+            toast.error(res.error);
+            return;
           }
-        } catch (error) {
-          console.error(
-            "❌ SaldoInicialManagement - Error inesperado al asignar saldo:",
-            error
+
+          console.log("✅ Saldo asignado correctamente:", res?.saldo ?? res);
+          toast.success(
+            `✅ Saldo de ${
+              monedaInfo.moneda_simbolo
+            }${cantidadNum.toLocaleString()} asignado correctamente a ${
+              punto.nombre
+            }`
           );
-          toast.error("Error inesperado al asignar saldo");
+
+          // Limpiar formulario + recargar data
+          setBilletes("");
+          setMonedas("");
+          setSelectedCurrency("");
+          await loadInitialData();
+        } catch (e: any) {
+          // Aquí llegan los errores lanzados por apiService con el message del backend
+          const msg = e?.message || "Error inesperado al asignar saldo";
+          console.error("❌ Error al asignar saldo (throw):", e);
+          toast.error(msg);
         } finally {
           setLoadingAsignacion(false);
         }
@@ -275,7 +248,7 @@ const SaldoInicialManagement = () => {
     );
   };
 
-  // Obtener monedas del punto seleccionado
+  // Monedas del punto seleccionado
   const monedasDelPuntoSeleccionado = selectedPointId
     ? getMonedasPorPunto(selectedPointId)
     : [];
@@ -464,7 +437,7 @@ const SaldoInicialManagement = () => {
                       {monedasDelPuntoSeleccionado.map((saldo) => (
                         <SelectItem
                           key={saldo.moneda_id}
-                          value={saldo.moneda_id}
+                          value={saldo.moneda_id} // UUID de moneda
                         >
                           {saldo.moneda_codigo} - {saldo.moneda_nombre}
                         </SelectItem>
@@ -487,6 +460,7 @@ const SaldoInicialManagement = () => {
                     placeholder="0.00"
                     className="mt-1"
                     disabled={!selectedCurrency}
+                    inputMode="decimal"
                   />
                 </div>
 
@@ -503,6 +477,7 @@ const SaldoInicialManagement = () => {
                     placeholder="0.00"
                     className="mt-1"
                     disabled={!selectedCurrency}
+                    inputMode="decimal"
                   />
                 </div>
 
@@ -513,8 +488,8 @@ const SaldoInicialManagement = () => {
                     disabled={
                       loadingAsignacion ||
                       !selectedCurrency ||
-                      parseFloat(billetes || "0") +
-                        parseFloat(monedas || "0") <=
+                      Number.parseFloat(billetes || "0") +
+                        Number.parseFloat(monedas || "0") <=
                         0
                     }
                     className="w-full"

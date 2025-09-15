@@ -1,32 +1,51 @@
 import { apiService } from "./apiService";
 import { SaldoInicial, VistaSaldosPorPunto, MovimientoSaldo } from "../types";
 
+type ApiOk<T> = { success: true } & T;
+type ApiFail = { success: false; error?: string; message?: string };
+
+function extractErrorMessage(e: unknown, fallback: string) {
+  const err = e as any;
+  // apiService.setea err.message y, cuando viene del servidor, también err.payload { error | message }
+  const fromPayload =
+    err?.payload?.error ||
+    err?.payload?.message ||
+    err?.response?.data?.error ||
+    err?.response?.data?.message;
+  const fromMessage = err?.message;
+  return (fromPayload || fromMessage || fallback) as string;
+}
+
 export const saldoInicialService = {
   // Obtener saldos iniciales por punto
   async getSaldosInicialesByPoint(
     pointId: string
   ): Promise<{ saldos: SaldoInicial[]; error: string | null }> {
     try {
-      const response = await apiService.get<{
-        saldos: SaldoInicial[];
-        success: boolean;
-      }>(`/saldos-iniciales/${pointId}`);
+      const response = await apiService.get<
+        ApiOk<{ saldos: SaldoInicial[] }> | ApiFail
+      >(`/saldos-iniciales/${pointId}`);
 
-      if (response.success) {
-        return { saldos: response.saldos, error: null };
+      if ((response as any).success) {
+        return { saldos: (response as any).saldos ?? [], error: null };
       } else {
-        return { saldos: [], error: "Error al obtener los saldos iniciales" };
+        const msg =
+          (response as ApiFail).error ||
+          (response as ApiFail).message ||
+          "Error al obtener los saldos iniciales";
+        return { saldos: [], error: msg };
       }
-    } catch (error) {
-      console.error("Error fetching initial balances:", error);
-      return {
-        saldos: [],
-        error: "Error de conexión al obtener saldos iniciales",
-      };
+    } catch (e) {
+      const msg = extractErrorMessage(
+        e,
+        "Error de conexión al obtener saldos iniciales"
+      );
+      console.error("Error fetching initial balances:", e);
+      return { saldos: [], error: msg };
     }
   },
 
-  // Asignar saldo inicial a un punto de atención
+  // Asignar saldo inicial (incremental) a un punto de atención
   async asignarSaldoInicial(data: {
     punto_atencion_id: string;
     moneda_id: string;
@@ -34,24 +53,33 @@ export const saldoInicialService = {
     billetes?: number;
     monedas_fisicas?: number;
     observaciones?: string;
-  }): Promise<{ saldo: SaldoInicial | null; error: string | null }> {
+  }): Promise<{
+    saldo: SaldoInicial | null;
+    error: string | null;
+    updated?: boolean;
+  }> {
     try {
-      const response = await apiService.post<{
-        saldo: SaldoInicial;
-        success: boolean;
-      }>("/saldos-iniciales", data);
+      const response = await apiService.post<
+        ApiOk<{ saldo: SaldoInicial; updated?: boolean }> | ApiFail
+      >("/saldos-iniciales", data);
 
-      if (response.success) {
-        return { saldo: response.saldo, error: null };
+      if ((response as any).success) {
+        const { saldo, updated } = response as any;
+        return { saldo, error: null, updated };
       } else {
-        return { saldo: null, error: "Error al asignar el saldo inicial" };
+        const msg =
+          (response as ApiFail).error ||
+          (response as ApiFail).message ||
+          "Error al asignar el saldo inicial";
+        return { saldo: null, error: msg };
       }
-    } catch (error) {
-      console.error("Error assigning initial balance:", error);
-      return {
-        saldo: null,
-        error: "Error de conexión al asignar saldo inicial",
-      };
+    } catch (e) {
+      const msg = extractErrorMessage(
+        e,
+        "Error de conexión al asignar saldo inicial"
+      );
+      console.error("Error assigning initial balance:", e);
+      return { saldo: null, error: msg };
     }
   },
 
@@ -64,36 +92,38 @@ export const saldoInicialService = {
       console.log(
         "🔍 saldoInicialService.getVistaSaldosPorPunto: Iniciando solicitud..."
       );
-      const response = await apiService.get<{
-        saldos: VistaSaldosPorPunto[];
-        success: boolean;
-      }>("/vista-saldos-puntos");
+      const response = await apiService.get<
+        ApiOk<{ saldos: VistaSaldosPorPunto[] }> | ApiFail
+      >("/vista-saldos-puntos");
       console.log(
         "💰 saldoInicialService.getVistaSaldosPorPunto: Respuesta recibida:",
         response
       );
 
-      if (response.success) {
+      if ((response as any).success) {
+        const saldos = (response as any).saldos ?? [];
         console.log(
-          `✅ getVistaSaldosPorPunto: ${
-            response.saldos?.length || 0
-          } saldos obtenidos:`,
-          response.saldos
+          `✅ getVistaSaldosPorPunto: ${saldos.length} saldos obtenidos`
         );
-        return { saldos: response.saldos, error: null };
+        return { saldos, error: null };
       } else {
+        const msg =
+          (response as ApiFail).error ||
+          (response as ApiFail).message ||
+          "Error al obtener la vista de saldos";
         console.error(
           "❌ getVistaSaldosPorPunto - Error en respuesta:",
           response
         );
-        return { saldos: [], error: "Error al obtener la vista de saldos" };
+        return { saldos: [], error: msg };
       }
-    } catch (error) {
-      console.error("❌ Error fetching balance view:", error);
-      return {
-        saldos: [],
-        error: "Error de conexión al obtener vista de saldos",
-      };
+    } catch (e) {
+      const msg = extractErrorMessage(
+        e,
+        "Error de conexión al obtener vista de saldos"
+      );
+      console.error("❌ Error fetching balance view:", e);
+      return { saldos: [], error: msg };
     }
   },
 
@@ -103,25 +133,29 @@ export const saldoInicialService = {
     limit = 50
   ): Promise<{ movimientos: MovimientoSaldo[]; error: string | null }> {
     try {
-      const response = await apiService.get<{
-        movimientos: MovimientoSaldo[];
-        success: boolean;
-      }>(`/movimientos-saldo/${pointId}?limit=${limit}`);
+      const response = await apiService.get<
+        ApiOk<{ movimientos: MovimientoSaldo[] }> | ApiFail
+      >(`/movimientos-saldo/${pointId}?limit=${limit}`);
 
-      if (response.success) {
-        return { movimientos: response.movimientos, error: null };
-      } else {
+      if ((response as any).success) {
         return {
-          movimientos: [],
-          error: "Error al obtener los movimientos de saldo",
+          movimientos: (response as any).movimientos ?? [],
+          error: null,
         };
+      } else {
+        const msg =
+          (response as ApiFail).error ||
+          (response as ApiFail).message ||
+          "Error al obtener los movimientos de saldo";
+        return { movimientos: [], error: msg };
       }
-    } catch (error) {
-      console.error("Error fetching balance movements:", error);
-      return {
-        movimientos: [],
-        error: "Error de conexión al obtener movimientos de saldo",
-      };
+    } catch (e) {
+      const msg = extractErrorMessage(
+        e,
+        "Error de conexión al obtener movimientos de saldo"
+      );
+      console.error("Error fetching balance movements:", e);
+      return { movimientos: [], error: msg };
     }
   },
 };
