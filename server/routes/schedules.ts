@@ -283,7 +283,10 @@ router.post(
         }
       }
 
-      // Los administrativos pueden usar cualquier punto de atención
+      // Reglas por rol para selección de puntos
+      // - OPERADOR: solo puede iniciar jornada si NO tiene otra activa o en almuerzo hoy
+      // - ADMINISTRATIVO: puede iniciar jornada en cualquier punto; múltiples administrativos pueden coexistir
+      // - ADMIN/SUPER_USUARIO: se espera usen punto principal ya asignado (validado en auth)
 
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);

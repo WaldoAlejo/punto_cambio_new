@@ -33,7 +33,8 @@
     "pm2:status": "pm2 status",
     "migrate:agencias": "npx prisma db push",
     "db:clean:dry": "tsx scripts/clean-operational-data.ts",
-    "db:clean": "tsx scripts/clean-operational-data.ts --yes"
+    "db:clean": "tsx scripts/clean-operational-data.ts --yes",
+    "db:principal:enforce": "tsx scripts/enforce-single-principal.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed-complete.ts"

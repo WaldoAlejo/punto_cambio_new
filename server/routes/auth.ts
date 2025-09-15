@@ -73,7 +73,7 @@ router.post(
 
       // Validar permisos según rol
       if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
-        // ADMIN debe tener punto_atencion_id asignado
+        // ADMIN debe tener punto_atencion_id asignado y ser el punto principal
         if (!user.punto_atencion_id) {
           logger.warn("Admin sin punto de atención asignado", {
             username,
@@ -82,6 +82,23 @@ router.post(
           res.status(403).json({
             error:
               "Administrador debe estar asociado a un punto de atención principal",
+            success: false,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+
+        const principal = await prisma.puntoAtencion.findUnique({
+          where: { id: user.punto_atencion_id },
+          select: { es_principal: true },
+        });
+        if (!principal?.es_principal) {
+          logger.warn("Admin en punto no principal", {
+            username,
+            punto_atencion_id: user.punto_atencion_id,
+          });
+          res.status(403).json({
+            error: "Administrador debe usar el punto de atención principal",
             success: false,
             timestamp: new Date().toISOString(),
           });

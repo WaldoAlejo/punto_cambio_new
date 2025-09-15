@@ -1,4 +1,3 @@
-
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import logger from "../utils/logger.js";
@@ -27,24 +26,30 @@ router.get(
       const manana = new Date(hoy);
       manana.setDate(manana.getDate() + 1);
 
+      // Reglas por rol para listar puntos disponibles:
+      // - OPERADOR: no ver puntos que estén ocupados por OTROS operadores hoy
+      // - ADMINISTRATIVO: puede ver todos los puntos activos
+      // - ADMIN/SUPER_USUARIO: listado completo para diagnóstico
+      const isAdminLike = ["ADMIN", "SUPER_USUARIO"].includes(
+        req.user?.rol || ""
+      );
+      const isOperador = req.user?.rol === "OPERADOR";
+
       const puntosLibres = await prisma.puntoAtencion.findMany({
-        where: {
-          activo: true,
-          NOT: {
-            jornadas: {
-              some: {
-                estado: "ACTIVO",
-                fecha_inicio: {
-                  gte: hoy,
-                  lt: manana,
+        where: isOperador
+          ? {
+              activo: true,
+              NOT: {
+                jornadas: {
+                  some: {
+                    estado: { in: ["ACTIVO", "ALMUERZO"] },
+                    fecha_inicio: { gte: hoy, lt: manana },
+                  },
                 },
               },
-            },
-          },
-        },
-        orderBy: {
-          nombre: "asc",
-        },
+            }
+          : { activo: true },
+        orderBy: { nombre: "asc" },
       });
 
       const formatted = puntosLibres.map((punto) => ({
@@ -110,7 +115,9 @@ router.get(
         },
       });
 
-      const puntosIds = puntosOcupados.map((j) => ({ id: j.punto_atencion_id }));
+      const puntosIds = puntosOcupados.map((j) => ({
+        id: j.punto_atencion_id,
+      }));
 
       logger.info("Puntos ocupados obtenidos", {
         count: puntosIds.length,
