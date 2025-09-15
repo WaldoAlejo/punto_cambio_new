@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { CambioDivisa, User, PuntoAtencion } from "../../types";
 import { exchangeService } from "../../services/exchangeService";
 import { ReceiptService } from "../../services/receiptService";
+import { movimientosContablesService } from "../../services/movimientosContablesService";
 import DeliveryDetailsForm from "./DeliveryDetailsForm";
 
 interface CompletePaymentFormProps {
@@ -50,9 +51,6 @@ const CompletePaymentForm = ({
 
       // Procesar contabilidad tras completar
       try {
-        const { movimientosContablesService } = await import(
-          "@/services/movimientosContablesService"
-        );
         const { result, error: contabError } =
           await movimientosContablesService.procesarMovimientosCambio(
             completedExchange,
