@@ -31,7 +31,9 @@
     "pm2:restart": "pm2 reload punto-cambio-api",
     "pm2:logs": "pm2 logs punto-cambio-api",
     "pm2:status": "pm2 status",
-    "migrate:agencias": "npx prisma db push"
+    "migrate:agencias": "npx prisma db push",
+    "db:clean:dry": "tsx scripts/clean-operational-data.ts",
+    "db:clean": "tsx scripts/clean-operational-data.ts --yes"
   },
   "prisma": {
     "seed": "tsx prisma/seed-complete.ts"
