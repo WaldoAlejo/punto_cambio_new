@@ -91,8 +91,13 @@ router.post(
         monedas_fisicas,
       } = req.body ?? {};
 
-      // Validaciones base
-      if (!punto_atencion_id || !moneda_id || cantidad_inicial === undefined) {
+      // Validaciones base: aceptar cantidad_inicial o billetes/monedas_fisicas
+      const hasCantidad =
+        cantidad_inicial !== undefined && cantidad_inicial !== null;
+      const hasDesglose =
+        billetes !== undefined || monedas_fisicas !== undefined;
+
+      if (!punto_atencion_id || !moneda_id || (!hasCantidad && !hasDesglose)) {
         return res
           .status(400)
           .json({ success: false, error: "Faltan campos obligatorios" });
