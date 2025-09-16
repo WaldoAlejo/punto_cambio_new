@@ -19,27 +19,28 @@ export const PointSelector = ({
 }: PointSelectorProps) => {
   const [availablePoints, setAvailablePoints] = useState<PuntoAtencion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isStartingSchedule, setIsStartingSchedule] = useState(false);
+  const [postingId, setPostingId] = useState<string | null>(null);
+
+  const esPrivilegiado =
+    user.rol === "ADMINISTRATIVO" ||
+    user.rol === "ADMIN" ||
+    user.rol === "SUPER_USUARIO";
 
   useEffect(() => {
     loadAvailablePoints();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadAvailablePoints = async () => {
     try {
       setIsLoading(true);
       const { points, error } = await pointService.getAllPoints();
-
       if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
+        toast({ title: "Error", description: error, variant: "destructive" });
       } else {
         setAvailablePoints(points);
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Error al cargar puntos de atención",
@@ -52,12 +53,14 @@ export const PointSelector = ({
 
   const handleStartSchedule = async (point: PuntoAtencion) => {
     try {
-      setIsStartingSchedule(true);
+      setPostingId(point.id);
 
       const scheduleData = {
         usuario_id: user.id,
         punto_atencion_id: point.id,
         fecha_inicio: new Date().toISOString(),
+        // Solo roles privilegiados envían override
+        ...(esPrivilegiado ? { override: true } : {}),
       };
 
       const { schedule, error } = await scheduleService.createOrUpdateSchedule(
@@ -65,11 +68,7 @@ export const PointSelector = ({
       );
 
       if (error) {
-        toast({
-          title: "Error",
-          description: error,
-          variant: "destructive",
-        });
+        toast({ title: "Error", description: error, variant: "destructive" });
       } else if (schedule) {
         toast({
           title: "Jornada iniciada",
@@ -77,14 +76,14 @@ export const PointSelector = ({
         });
         onPointSelected(point);
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Error al iniciar jornada",
         variant: "destructive",
       });
     } finally {
-      setIsStartingSchedule(false);
+      setPostingId(null);
     }
   };
 
@@ -92,10 +91,8 @@ export const PointSelector = ({
     return (
       <div className="flex items-center justify-center min-h-[300px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-          <p className="mt-4 text-muted-foreground">
-            Cargando puntos disponibles...
-          </p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+          <p className="mt-4 text-muted-foreground">Cargando puntos…</p>
         </div>
       </div>
     );
@@ -129,7 +126,9 @@ export const PointSelector = ({
           Seleccionar Punto de Atención
         </h2>
         <p className="text-muted-foreground text-sm">
-          Selecciona un punto de atención para iniciar tu jornada laboral.
+          {esPrivilegiado
+            ? "Puedes operar desde cualquier punto (incluido el principal), aunque esté ocupado."
+            : "Selecciona un punto libre para iniciar tu jornada."}
         </p>
       </div>
 
@@ -137,21 +136,26 @@ export const PointSelector = ({
         {availablePoints.map((point) => (
           <Card key={point.id} className="hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-2">
                 <div>
                   <CardTitle className="text-base">{point.nombre}</CardTitle>
                   <div className="mt-1 text-sm text-muted-foreground">
                     {point.direccion}
                   </div>
                 </div>
-                <Badge
-                  variant="secondary"
-                  className="bg-green-100 text-green-800 text-xs"
-                >
-                  Disponible
-                </Badge>
+
+                <div className="flex items-center gap-2">
+                  {point.es_principal ? (
+                    <Badge className="text-xs">Principal</Badge>
+                  ) : (
+                    <Badge variant="secondary" className="text-xs">
+                      Punto
+                    </Badge>
+                  )}
+                </div>
               </div>
             </CardHeader>
+
             <CardContent className="pt-0">
               <div className="space-y-3">
                 <div className="text-xs text-muted-foreground space-y-1">
@@ -172,11 +176,11 @@ export const PointSelector = ({
 
                 <Button
                   onClick={() => handleStartSchedule(point)}
-                  disabled={isStartingSchedule}
+                  disabled={postingId !== null}
                   className="w-full h-9"
                   size="sm"
                 >
-                  {isStartingSchedule ? "Iniciando..." : "Iniciar Jornada"}
+                  {postingId === point.id ? "Iniciando..." : "Iniciar Jornada"}
                 </Button>
               </div>
             </CardContent>

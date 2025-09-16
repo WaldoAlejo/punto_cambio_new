@@ -51,166 +51,114 @@ function formatPoint(
   };
 }
 
-/** Obtener todos los puntos LIBRES (activos y sin jornada ACTIVO o ALMUERZO hoy) */
+/**
+ * GET /points
+ * - ADMINISTRATIVO / ADMIN / SUPER_USUARIO -> TODOS los puntos activos (incluido principal), aunque estén “ocupados”.
+ * - OPERADOR / CONCESION -> Solo puntos LIBRES hoy (sin jornada ACTIVO/ALMUERZO) y excluye el principal para OPERADOR.
+ */
 router.get(
   "/",
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
+      const user = (req as any).user;
+      const rol: string | undefined = user?.rol;
+      const esPrivilegiado =
+        rol === "ADMINISTRATIVO" || rol === "ADMIN" || rol === "SUPER_USUARIO";
+
       const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
-      // Construir filtros según el rol del usuario
-      const whereClause: any = {
-        activo: true,
-        NOT: {
-          jornadas: {
-            some: {
-              estado: { in: ["ACTIVO", "ALMUERZO"] },
-              fecha_inicio: { gte: hoy, lt: manana },
+      res.set({
+        "Cache-Control": "no-store",
+        Pragma: "no-cache",
+      });
+
+      let puntos: PuntoAtencion[] = [];
+
+      if (esPrivilegiado) {
+        // ✅ Ver TODOS los puntos activos (incluye principal), sin filtrar por jornadas activas
+        puntos = await prisma.puntoAtencion.findMany({
+          where: { activo: true },
+          orderBy: [{ es_principal: "desc" }, { nombre: "asc" }],
+        });
+      } else {
+        // 🔒 Roles no privilegiados: listar SOLO puntos libres hoy (sin jornada ACTIVO/ALMUERZO)
+        const whereClause: any = {
+          activo: true,
+          NOT: {
+            jornadas: {
+              some: {
+                estado: { in: ["ACTIVO", "ALMUERZO"] },
+                fecha_inicio: { gte: hoy, lt: manana },
+              },
             },
           },
-        },
-      };
+        };
 
-      // Si es OPERADOR, excluir el punto principal
-      if ((req as any).user?.rol === "OPERADOR") {
-        whereClause.es_principal = false;
+        // Excluir principal para OPERADOR (mantiene tu regla existente)
+        if (rol === "OPERADOR") {
+          whereClause.es_principal = false;
+        }
+
+        puntos = await prisma.puntoAtencion.findMany({
+          where: whereClause,
+          orderBy: [{ es_principal: "desc" }, { nombre: "asc" }],
+        });
       }
 
-      console.log(
-        "🔍 Points API: Consultando puntos con filtros:",
-        whereClause
-      );
-      console.log("👤 Points API: Usuario solicitante:", {
-        id: (req as any).user?.id,
-        rol: (req as any).user?.rol,
-      });
-      console.log("📅 Points API: Rango de fechas:", {
-        hoy: hoy.toISOString(),
-        manana: manana.toISOString(),
-      });
-
-      // Stats
-      const [totalPuntos, puntosActivos] = await Promise.all([
-        prisma.puntoAtencion.count(),
-        prisma.puntoAtencion.count({ where: { activo: true } }),
-      ]);
-
-      console.log(
-        `📊 Points API: Estadísticas - Total: ${totalPuntos}, Activos: ${puntosActivos}`
-      );
-
-      // Puntos con jornadas para diagnóstico
-      const puntosConJornadas = await prisma.puntoAtencion.findMany({
-        where: {
-          activo: true,
-          jornadas: {
-            some: {
-              estado: { in: ["ACTIVO", "ALMUERZO"] },
-              fecha_inicio: { gte: hoy, lt: manana },
-            },
-          },
-        },
-        include: {
-          jornadas: {
-            where: {
-              estado: { in: ["ACTIVO", "ALMUERZO"] },
-              fecha_inicio: { gte: hoy, lt: manana },
-            },
-          },
-        },
-      });
-
-      console.log(
-        `🚫 Points API: Puntos con jornadas activas hoy: ${puntosConJornadas.length}`
-      );
-      puntosConJornadas.forEach((punto: any, index: number) => {
-        console.log(
-          `  ${index + 1}. ${punto.nombre} - Jornadas: ${punto.jornadas.length}`
-        );
-        punto.jornadas.forEach((jornada: any, jIndex: number) => {
-          console.log(
-            `    ${jIndex + 1}. Estado: ${jornada.estado}, Inicio: ${
-              jornada.fecha_inicio
-            }`
-          );
-        });
-      });
-
-      // Puntos libres
-      const puntosLibres = await prisma.puntoAtencion.findMany({
-        where: whereClause,
-        orderBy: { nombre: "asc" },
-      });
-
-      console.log(
-        `📍 Points API: Puntos libres encontrados: ${puntosLibres.length}`
-      );
-      puntosLibres.forEach((p: PuntoAtencion, index: number) => {
-        console.log(
-          `  ${index + 1}. ${p.nombre} - ${p.ciudad}, ${p.provincia} (ID: ${
-            p.id
-          })`
-        );
-      });
-
-      const formatted: PuntoAtencionOut[] = puntosLibres.map((p) =>
+      const formatted: PuntoAtencionOut[] = puntos.map((p) =>
         formatPoint(p as PuntoAtencion & PuntoAtencionExtra)
       );
 
-      console.log(
-        `✅ Puntos formateados para enviar: ${formatted.length}`,
-        formatted.map((p) => ({ id: p.id, nombre: p.nombre }))
-      );
-
-      logger.info("Puntos libres obtenidos", {
+      logger.info("GET /points", {
         count: formatted.length,
-        requestedBy: (req as any).user?.id,
-        userRole: (req as any).user?.rol,
-        filteredForOperator: (req as any).user?.rol === "OPERADOR",
-        whereClause: JSON.stringify(whereClause),
+        requestedBy: user?.id,
+        userRole: rol,
+        mode: esPrivilegiado ? "ALL_ACTIVE" : "FREE_ONLY",
       });
 
       res.status(200).json({
-        points: formatted,
         success: true,
+        points: formatted,
+        count: formatted.length,
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      logger.error("Error al obtener puntos libres", {
+      logger.error("Error en GET /points", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
         requestedBy: (req as any).user?.id,
       });
 
       res.status(500).json({
-        error: "Error al obtener puntos libres",
         success: false,
+        error: "Error al obtener puntos",
         timestamp: new Date().toISOString(),
       });
     }
   }
 );
 
-/** Obtener TODOS los puntos (para admins) — dejar UNA sola ruta /all */
+/** Obtener TODOS los puntos (ruta auxiliar) */
 router.get(
   "/all",
   authenticateToken,
-  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  requireRole(["ADMINISTRATIVO", "ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
       const todosPuntos = await prisma.puntoAtencion.findMany({
         where: { activo: true },
-        orderBy: { nombre: "asc" },
+        orderBy: [{ es_principal: "desc" }, { nombre: "asc" }],
       });
 
       const formatted: PuntoAtencionOut[] = todosPuntos.map((p) =>
         formatPoint(p as PuntoAtencion & PuntoAtencionExtra)
       );
 
-      logger.info("Todos los puntos obtenidos", {
+      logger.info("GET /points/all", {
         count: formatted.length,
         requestedBy: (req as any).user?.id,
+        userRole: (req as any).user?.rol,
       });
 
       res.status(200).json({
@@ -503,7 +451,7 @@ router.get(
     try {
       const puntosActivos = await prisma.puntoAtencion.findMany({
         where: { activo: true },
-        orderBy: { nombre: "asc" },
+        orderBy: [{ es_principal: "desc" }, { nombre: "asc" }],
       });
 
       const formatted: PuntoAtencionOut[] = puntosActivos.map((p) =>
@@ -543,31 +491,14 @@ router.get(
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
-      console.log("🔍 Points API: Obteniendo puntos para gestión de saldos");
-      console.log("👤 Points API: Usuario solicitante:", {
-        id: (req as any).user?.id,
-        rol: (req as any).user?.rol,
-      });
-
       const puntosParaSaldos = await prisma.puntoAtencion.findMany({
         where: { activo: true },
-        orderBy: { nombre: "asc" },
+        orderBy: [{ es_principal: "desc" }, { nombre: "asc" }],
       });
 
       const formatted: PuntoAtencionOut[] = puntosParaSaldos.map((p) =>
         formatPoint(p as PuntoAtencion & PuntoAtencionExtra)
       );
-
-      console.log(
-        `📍 Points API: Puntos para gestión de saldos encontrados: ${formatted.length}`
-      );
-      formatted.forEach((p: PuntoAtencionOut, index: number) => {
-        console.log(
-          `  ${index + 1}. ${p.nombre} - ${p.ciudad}, ${p.provincia} (ID: ${
-            p.id
-          })`
-        );
-      });
 
       logger.info("Puntos para gestión de saldos obtenidos", {
         count: formatted.length,

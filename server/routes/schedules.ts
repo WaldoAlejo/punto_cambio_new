@@ -13,6 +13,7 @@ import {
 
 const router = express.Router();
 
+/** Schema de entrada para crear/actualizar jornada */
 const scheduleSchema = z
   .object({
     usuario_id: z.string().uuid(),
@@ -37,6 +38,8 @@ const scheduleSchema = z
       })
       .optional()
       .nullable(),
+    /** Solo tendrá efecto para roles privilegiados; opcional */
+    override: z.boolean().optional(),
   })
   .refine(
     (data) =>
@@ -50,7 +53,9 @@ const scheduleSchema = z
     }
   );
 
-// Obtener jornadas (con filtros flexibles: fecha, from/to, estados)
+// ==============================
+// GET /schedules (listado con filtros)
+// ==============================
 router.get("/", authenticateToken, async (req, res) => {
   try {
     res.set({
@@ -62,7 +67,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
     const whereClause: Record<string, unknown> = {};
 
-    // Restricción por rol: operadores y administrativos solo ven sus propias jornadas
+    // Restricción por rol: OPERADOR y ADMINISTRATIVO solo ven sus propias jornadas
     if (req.user?.rol === "OPERADOR" || req.user?.rol === "ADMINISTRATIVO") {
       whereClause.usuario_id = req.user.id;
     }
@@ -75,7 +80,7 @@ router.get("/", authenticateToken, async (req, res) => {
       whereClause.usuario_id = req.query.usuario_id as string;
     }
 
-    // Filtros de fecha: "fecha" (día exacto) o rango "from"/"to"
+    // Filtros de fecha: "fecha" (YYYY-MM-DD) o rango "from"/"to"
     const { fecha, from, to } = req.query as {
       fecha?: string;
       from?: string;
@@ -83,7 +88,6 @@ router.get("/", authenticateToken, async (req, res) => {
     };
 
     if (fecha) {
-      // Interpretar fecha (YYYY-MM-DD) como día de Guayaquil
       const { y, m, d } = gyeParseDateOnly(fecha);
       const { gte, lt } = gyeDayRangeUtcFromYMD(y, m, d);
       whereClause.fecha_inicio = { gte, lt };
@@ -111,7 +115,6 @@ router.get("/", authenticateToken, async (req, res) => {
         .map((s) => s.trim())
         .filter(Boolean);
       if (estados.length > 0) {
-        // Prisma: estado: { in: [...] }
         (whereClause as any).estado = { in: estados };
       }
     }
@@ -125,13 +128,7 @@ router.get("/", authenticateToken, async (req, res) => {
     const schedules = await prisma.jornada.findMany({
       where: whereClause,
       include: {
-        usuario: {
-          select: {
-            id: true,
-            nombre: true,
-            username: true,
-          },
-        },
+        usuario: { select: { id: true, nombre: true, username: true } },
         puntoAtencion: {
           select: {
             id: true,
@@ -146,9 +143,7 @@ router.get("/", authenticateToken, async (req, res) => {
           },
         },
       },
-      orderBy: {
-        fecha_inicio: "desc",
-      },
+      orderBy: { fecha_inicio: "desc" },
       skip,
       take,
     });
@@ -237,7 +232,9 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 });
 
-// Crear o actualizar jornada
+// ==============================
+// POST /schedules (crear o actualizar jornada)
+// ==============================
 router.post(
   "/",
   authenticateToken,
@@ -253,8 +250,28 @@ router.post(
         fecha_salida,
         ubicacion_inicio,
         ubicacion_salida,
-      } = req.body;
+        override,
+      } = req.body as {
+        usuario_id: string;
+        punto_atencion_id: string;
+        fecha_inicio?: string;
+        fecha_almuerzo?: string;
+        fecha_regreso?: string;
+        fecha_salida?: string;
+        ubicacion_inicio?: {
+          lat: number;
+          lng: number;
+          direccion?: string;
+        } | null;
+        ubicacion_salida?: {
+          lat: number;
+          lng: number;
+          direccion?: string;
+        } | null;
+        override?: boolean;
+      };
 
+      // Operadores/Administrativos/Concesión solo gestionan sus propias jornadas
       if (
         (req.user?.rol === "OPERADOR" ||
           req.user?.rol === "ADMINISTRATIVO" ||
@@ -270,8 +287,12 @@ router.post(
         return;
       }
 
-      // Validar que los operadores y concesión no puedan usar el punto principal
-      if (req.user?.rol === "OPERADOR" || req.user?.rol === "CONCESION") {
+      const rol = req.user?.rol;
+      const esPrivilegiado =
+        rol === "ADMINISTRATIVO" || rol === "ADMIN" || rol === "SUPER_USUARIO";
+
+      // Validar que OPERADOR/CONCESION NO puedan usar el punto principal
+      if (rol === "OPERADOR" || rol === "CONCESION") {
         const puntoAtencion = await prisma.puntoAtencion.findUnique({
           where: { id: punto_atencion_id },
           select: { es_principal: true, nombre: true },
@@ -287,20 +308,14 @@ router.post(
         }
       }
 
-      // Reglas por rol para selección de puntos
-      // - OPERADOR: solo puede iniciar jornada si NO tiene otra activa o en almuerzo hoy
-      // - ADMINISTRATIVO: puede iniciar jornada en cualquier punto; múltiples administrativos pueden coexistir
-      // - ADMIN/SUPER_USUARIO: se espera usen punto principal ya asignado (validado en auth)
-
+      // Ventana del día (zona Guayaquil)
       const { gte: hoyGte, lt: hoyLt } = gyeDayRangeUtcFromDate(new Date());
 
+      // 1) Ver si el usuario ya tiene una jornada ACTIVA/ALMUERZO hoy (para update en lugar de create)
       const existingSchedule = await prisma.jornada.findFirst({
         where: {
           usuario_id,
-          fecha_inicio: {
-            gte: hoyGte,
-            lt: hoyLt,
-          },
+          fecha_inicio: { gte: hoyGte, lt: hoyLt },
           OR: [
             { estado: EstadoJornada.ACTIVO },
             { estado: EstadoJornada.ALMUERZO },
@@ -308,9 +323,37 @@ router.post(
         },
       });
 
+      // 2) Si NO hay jornada previa del usuario (vamos a CREAR) y el rol NO es privilegiado,
+      // validar que el punto NO esté ocupado por otra jornada ACTIVO/ALMUERZO hoy.
+      if (!existingSchedule && !esPrivilegiado) {
+        const puntoOcupado = await prisma.jornada.findFirst({
+          where: {
+            punto_atencion_id,
+            fecha_inicio: { gte: hoyGte, lt: hoyLt },
+            OR: [
+              { estado: EstadoJornada.ACTIVO },
+              { estado: EstadoJornada.ALMUERZO },
+            ],
+          },
+          select: { id: true },
+        });
+
+        if (puntoOcupado) {
+          res.status(409).json({
+            success: false,
+            error:
+              "Este punto ya tiene una jornada activa. Selecciona otro punto o espera a que se libere.",
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
+      // === Crear o actualizar jornada del usuario ===
       let schedule;
 
       if (existingSchedule) {
+        // UPDATE estado/fechas de la jornada ya existente del mismo usuario
         const updateData: Prisma.JornadaUpdateInput = {};
 
         if (fecha_almuerzo) {
@@ -324,6 +367,7 @@ router.post(
         if (fecha_salida) {
           updateData.fecha_salida = new Date(fecha_salida);
           updateData.estado = EstadoJornada.COMPLETADO;
+          // Al cerrar jornada, limpiar punto del usuario
           await prisma.usuario.update({
             where: { id: usuario_id },
             data: { punto_atencion_id: null },
@@ -338,13 +382,7 @@ router.post(
           where: { id: existingSchedule.id },
           data: updateData,
           include: {
-            usuario: {
-              select: {
-                id: true,
-                nombre: true,
-                username: true,
-              },
-            },
+            usuario: { select: { id: true, nombre: true, username: true } },
             puntoAtencion: {
               select: {
                 id: true,
@@ -361,22 +399,19 @@ router.post(
           },
         });
       } else {
+        // CREATE nueva jornada
+        // Para ADMINISTRATIVO/ADMIN/SUPER_USUARIO NO bloqueamos aunque haya otra jornada en el punto.
+        // Para roles no privilegiados, el bloqueo ya se realizó arriba.
         schedule = await prisma.jornada.create({
           data: {
             usuario_id,
             punto_atencion_id,
             fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : new Date(),
-            ubicacion_inicio: ubicacion_inicio || null,
+            ubicacion_inicio: (ubicacion_inicio as any) || null,
             estado: EstadoJornada.ACTIVO,
           },
           include: {
-            usuario: {
-              select: {
-                id: true,
-                nombre: true,
-                username: true,
-              },
-            },
+            usuario: { select: { id: true, nombre: true, username: true } },
             puntoAtencion: {
               select: {
                 id: true,
@@ -394,6 +429,7 @@ router.post(
         });
       }
 
+      // Si no es cierre, asociar el punto actual al usuario
       if (!fecha_salida) {
         await prisma.usuario.update({
           where: { id: usuario_id },
@@ -406,6 +442,8 @@ router.post(
         userId: usuario_id,
         action: existingSchedule ? "updated" : "created",
         requestedBy: req.user?.id,
+        role: rol,
+        overrideUsed: !!override && esPrivilegiado,
       });
 
       res.status(existingSchedule ? 200 : 201).json({
@@ -435,7 +473,9 @@ router.post(
   }
 );
 
-// Obtener jornada activa
+// ==============================
+// GET /schedules/active (jornada activa del usuario autenticado)
+// ==============================
 router.get("/active", authenticateToken, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -454,23 +494,14 @@ router.get("/active", authenticateToken, async (req, res) => {
     const activeSchedule = await prisma.jornada.findFirst({
       where: {
         usuario_id: userId,
-        fecha_inicio: {
-          gte: hoy,
-          lt: manana,
-        },
+        fecha_inicio: { gte: hoy, lt: manana },
         OR: [
           { estado: EstadoJornada.ACTIVO },
           { estado: EstadoJornada.ALMUERZO },
         ],
       },
       include: {
-        usuario: {
-          select: {
-            id: true,
-            nombre: true,
-            username: true,
-          },
-        },
+        usuario: { select: { id: true, nombre: true, username: true } },
         puntoAtencion: {
           select: {
             id: true,
@@ -522,7 +553,9 @@ router.get("/active", authenticateToken, async (req, res) => {
   }
 });
 
-// Jornadas empezadas hoy (sin salida) — útil para admins
+// ==============================
+// GET /schedules/started-today (para admins)
+// ==============================
 router.get("/started-today", authenticateToken, async (req, res) => {
   try {
     if (
@@ -565,7 +598,9 @@ router.get("/started-today", authenticateToken, async (req, res) => {
   }
 });
 
-// Historial de un usuario (con filtros de rango/estados), admins pueden consultar cualquier usuario
+// ==============================
+// GET /schedules/user/:id (historial de un usuario)
+// ==============================
 router.get("/user/:id", authenticateToken, async (req, res) => {
   try {
     const userId = req.params.id;
