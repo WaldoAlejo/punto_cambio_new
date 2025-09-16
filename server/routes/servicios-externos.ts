@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { pool } from "../lib/database.js";
+import { randomUUID } from "crypto";
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ type ServicioExterno = (typeof SERVICIOS_VALIDOS)[number];
 const TIPOS_VALIDOS = ["INGRESO", "EGRESO"] as const;
 type TipoMovimiento = (typeof TIPOS_VALIDOS)[number];
 
-/** Utilidad: asegurar ID de moneda USD (autocuración si no existe, sin requerir UNIQUE en codigo) */
+/** Utilidad: asegurar ID de moneda USD (autocuración si no existe, sin depender de UNIQUE) */
 async function ensureUsdMonedaId(client: any): Promise<string> {
   // 1) intentar obtener USD
   const sel = await client.query(
@@ -54,14 +55,12 @@ async function ensureUsdMonedaId(client: any): Promise<string> {
   );
   if (sel.rows[0]?.id) return sel.rows[0].id as string;
 
-  // 2) crear USD si no existe (sin ON CONFLICT, para no depender de UNIQUE)
-  await client.query(
-    `
+  // 2) crear USD si no existe
+  await client.query(`
     INSERT INTO "Moneda"(nombre, simbolo, codigo, activo, orden_display, comportamiento_compra, comportamiento_venta)
     SELECT 'Dólar estadounidense', '$', 'USD', true, 0, 'MULTIPLICA', 'DIVIDE'
     WHERE NOT EXISTS (SELECT 1 FROM "Moneda" WHERE codigo = 'USD');
-  `
-  );
+  `);
 
   // 3) reintentar obtener USD
   const sel2 = await client.query(
@@ -175,31 +174,28 @@ router.post(
         const delta = tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
         const saldoNuevo = saldoAnterior + delta;
 
-        // Validación opcional: evitar saldo negativo
-        // if (saldoNuevo < 0) {
-        //   throw new Error("El saldo no puede quedar negativo.");
-        // }
-
-        // Upsert saldo
+        // Upsert saldo (con id generado por si la tabla no tiene default)
         if (saldoQ.rows.length) {
           await client.query(
             'UPDATE "Saldo" SET cantidad = $1, updated_at = NOW() WHERE id = $2',
             [saldoNuevo, saldoQ.rows[0].id]
           );
         } else {
+          const saldoId = randomUUID();
           await client.query(
-            'INSERT INTO "Saldo"(punto_atencion_id, moneda_id, cantidad, billetes, monedas_fisicas, updated_at) VALUES($1,$2,$3,0,0,NOW())',
-            [puntoId, usdId, saldoNuevo]
+            'INSERT INTO "Saldo"(id, punto_atencion_id, moneda_id, cantidad, billetes, monedas_fisicas, updated_at) VALUES($1,$2,$3,$4,0,0,NOW())',
+            [saldoId, puntoId, usdId, saldoNuevo]
           );
         }
 
-        // Insert movimiento de servicio externo
-        const insMov = await client.query(
+        // Insert movimiento de servicio externo (con id generado)
+        const servicioMovimientoId = randomUUID();
+        await client.query(
           `INSERT INTO "ServicioExternoMovimiento"
-            (punto_atencion_id, servicio, tipo_movimiento, moneda_id, monto, usuario_id, fecha, descripcion, numero_referencia, comprobante_url)
-           VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7,$8,$9)
-           RETURNING id`,
+            (id, punto_atencion_id, servicio, tipo_movimiento, moneda_id, monto, usuario_id, fecha, descripcion, numero_referencia, comprobante_url)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),$8,$9,$10)`,
           [
+            servicioMovimientoId,
             puntoId,
             servicio,
             tipo_movimiento,
@@ -211,14 +207,15 @@ router.post(
             comprobante_url || null,
           ]
         );
-        const servicioMovimientoId: string = insMov.rows[0].id;
 
-        // Insert movimiento de saldo (trazabilidad)
+        // Insert movimiento de saldo (trazabilidad) con id generado
+        const movSaldoId = randomUUID();
         await client.query(
           `INSERT INTO "MovimientoSaldo"
-            (punto_atencion_id, moneda_id, tipo_movimiento, monto, saldo_anterior, saldo_nuevo, usuario_id, referencia_id, tipo_referencia, descripcion, fecha, created_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'SERVICIO_EXTERNO',$9,NOW(),NOW())`,
+            (id, punto_atencion_id, moneda_id, tipo_movimiento, monto, saldo_anterior, saldo_nuevo, usuario_id, referencia_id, tipo_referencia, descripcion, fecha, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'SERVICIO_EXTERNO',$10,NOW(),NOW())`,
           [
+            movSaldoId,
             puntoId,
             usdId,
             tipo_movimiento, // guardamos literal
