@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { pool } from "../lib/database.js";
 import { Request, Response, NextFunction, RequestHandler } from "express";
 import logger from "../utils/logger.js";
+import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
 interface AuthenticatedUser {
   id: string;
@@ -93,10 +94,7 @@ export const authenticateToken: RequestHandler = async (
 
     // --- CORRECCIÓN IMPORTANTE PARA OPERADOR ---
     if (user.rol === "OPERADOR") {
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      const manana = new Date(hoy);
-      manana.setDate(manana.getDate() + 1);
+      const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
       const jornadaQuery = await pool.query(
         'SELECT id FROM "Jornada" WHERE usuario_id = $1 AND fecha_inicio >= $2 AND fecha_inicio < $3 AND (estado = $4 OR estado = $5) LIMIT 1',

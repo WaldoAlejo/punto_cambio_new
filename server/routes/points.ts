@@ -2,6 +2,7 @@ import express from "express";
 import { PrismaClient, type PuntoAtencion } from "@prisma/client";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
+import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -56,10 +57,7 @@ router.get(
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      const manana = new Date(hoy);
-      manana.setDate(manana.getDate() + 1);
+      const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
       // Construir filtros según el rol del usuario
       const whereClause: any = {

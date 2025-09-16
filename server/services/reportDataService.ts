@@ -5,6 +5,7 @@ import {
   BalanceData,
   UserActivityData,
 } from "../types/reportTypes.js";
+import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
 const prisma = new PrismaClient();
 
@@ -218,9 +219,9 @@ export const reportDataService = {
 
     const salidasPorUsuarioYDia = new Map<string, number>();
     for (const s of salidas) {
-      const dia = new Date(s.fecha_salida);
-      dia.setHours(0, 0, 0, 0);
-      const key = `${s.usuario_id}|${dia.toISOString()}`;
+      // Normalizar clave de día por zona GYE
+      const { gte } = gyeDayRangeUtcFromDate(new Date(s.fecha_salida));
+      const key = `${s.usuario_id}|${gte.toISOString()}`;
       const mins =
         s.duracion_minutos ??
         (s.fecha_regreso
@@ -258,16 +259,18 @@ export const reportDataService = {
             )
           : 0;
 
-      // Salidas espontáneas: sumar por usuario en el día de la jornada
-      const dia = new Date(j.fecha_inicio);
-      dia.setHours(0, 0, 0, 0);
-      const key = `${j.usuario_id}|${dia.toISOString()}`;
+      // Salidas espontáneas: sumar por usuario en el día de la jornada (día GYE)
+      const { gte } = gyeDayRangeUtcFromDate(new Date(j.fecha_inicio));
+      const key = `${j.usuario_id}|${gte.toISOString()}`;
       const spontaneousMin = salidasPorUsuarioYDia.get(key) || 0;
 
       const effective = Math.max(0, totalMin - lunchMin - spontaneousMin);
 
       return {
-        date: j.fecha_inicio.toISOString().slice(0, 10),
+        // Fecha de reporte según día GYE
+        date: gyeDayRangeUtcFromDate(new Date(j.fecha_inicio))
+          .gte.toISOString()
+          .slice(0, 10),
         point: j.puntoAtencion?.nombre || "Punto desconocido",
         user: j.usuario?.nombre || "Usuario desconocido",
         username: j.usuario?.username,

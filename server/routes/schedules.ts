@@ -5,6 +5,11 @@ import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
+import {
+  gyeDayRangeUtcFromDate,
+  gyeDayRangeUtcFromYMD,
+  gyeParseDateOnly,
+} from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -78,21 +83,20 @@ router.get("/", authenticateToken, async (req, res) => {
     };
 
     if (fecha) {
-      const dia = new Date(fecha);
-      const siguienteDia = new Date(dia);
-      siguienteDia.setDate(siguienteDia.getDate() + 1);
-      whereClause.fecha_inicio = {
-        gte: dia,
-        lt: siguienteDia,
-      };
+      // Interpretar fecha (YYYY-MM-DD) como día de Guayaquil
+      const { y, m, d } = gyeParseDateOnly(fecha);
+      const { gte, lt } = gyeDayRangeUtcFromYMD(y, m, d);
+      whereClause.fecha_inicio = { gte, lt };
     } else if (from || to) {
-      const gte = from ? new Date(from) : undefined;
-      let lt: Date | undefined = undefined;
+      let gte: Date | undefined;
+      let lt: Date | undefined;
+      if (from) {
+        const { y, m, d } = gyeParseDateOnly(from);
+        ({ gte } = gyeDayRangeUtcFromYMD(y, m, d));
+      }
       if (to) {
-        const hasta = new Date(to);
-        // Incluir el día de "to" completo avanzando al siguiente día exclusivo
-        lt = new Date(hasta);
-        lt.setDate(lt.getDate() + 1);
+        const { y, m, d } = gyeParseDateOnly(to);
+        ({ lt } = gyeDayRangeUtcFromYMD(y, m, d));
       }
       whereClause.fecha_inicio = {
         ...(gte ? { gte } : {}),
@@ -288,17 +292,14 @@ router.post(
       // - ADMINISTRATIVO: puede iniciar jornada en cualquier punto; múltiples administrativos pueden coexistir
       // - ADMIN/SUPER_USUARIO: se espera usen punto principal ya asignado (validado en auth)
 
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      const manana = new Date(hoy);
-      manana.setDate(manana.getDate() + 1);
+      const { gte: hoyGte, lt: hoyLt } = gyeDayRangeUtcFromDate(new Date());
 
       const existingSchedule = await prisma.jornada.findFirst({
         where: {
           usuario_id,
           fecha_inicio: {
-            gte: hoy,
-            lt: manana,
+            gte: hoyGte,
+            lt: hoyLt,
           },
           OR: [
             { estado: EstadoJornada.ACTIVO },
@@ -448,10 +449,7 @@ router.get("/active", authenticateToken, async (req, res) => {
       return;
     }
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const manana = new Date(hoy);
-    manana.setDate(manana.getDate() + 1);
+    const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
     const activeSchedule = await prisma.jornada.findFirst({
       where: {
@@ -535,10 +533,7 @@ router.get("/started-today", authenticateToken, async (req, res) => {
       return;
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const { gte: today, lt: tomorrow } = gyeDayRangeUtcFromDate(new Date());
 
     const schedules = await prisma.jornada.findMany({
       where: {

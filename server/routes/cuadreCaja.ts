@@ -3,6 +3,7 @@ import express from "express";
 import { pool } from "../lib/database.js";
 import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
+import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -94,8 +95,7 @@ router.get("/", authenticateToken, async (req, res) => {
       .status(401)
       .json({ success: false, error: "Sin punto de atención" });
 
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
+  const { gte: hoy } = gyeDayRangeUtcFromDate(new Date());
   let fechaInicio: Date = new Date(hoy);
 
   try {
@@ -137,7 +137,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
     fechaInicio = jornadaActiva?.fecha_inicio
       ? new Date(jornadaActiva.fecha_inicio)
-      : new Date(new Date().setHours(0, 0, 0, 0));
+      : new Date(gyeDayRangeUtcFromDate(new Date()).gte);
 
     const cambiosResult = await pool.query<CambioDivisa>(
       `SELECT * FROM "CambioDivisa" WHERE punto_atencion_id = $1 AND fecha >= $2 AND estado = $3`,

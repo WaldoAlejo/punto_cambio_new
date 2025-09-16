@@ -2,6 +2,7 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
+import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -20,11 +21,8 @@ router.get(
         "Surrogate-Control": "no-store",
       });
 
-      // Obtener puntos activos que NO tienen jornada activa hoy
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      const manana = new Date(hoy);
-      manana.setDate(manana.getDate() + 1);
+      // Obtener puntos activos que NO tienen jornada activa hoy (día GYE)
+      const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
       // Reglas por rol para listar puntos disponibles:
       // - OPERADOR: no ver puntos que estén ocupados por OTROS operadores hoy
@@ -97,10 +95,7 @@ router.get(
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-      const manana = new Date(hoy);
-      manana.setDate(manana.getDate() + 1);
+      const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
       const puntosOcupados = await prisma.jornada.findMany({
         where: {

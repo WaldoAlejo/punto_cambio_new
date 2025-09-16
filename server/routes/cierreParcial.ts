@@ -39,8 +39,7 @@ router.post("/parcial", authenticateToken, async (req, res) => {
 
     const puntoAtencionId = usuario.punto_atencion_id;
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    const { gte: hoy } = gyeDayRangeUtcFromDate(new Date());
 
     // Buscar cuadre abierto
     const cuadreAbierto = await prisma.cuadreCaja.findFirst({
@@ -160,8 +159,7 @@ router.get("/pendientes", authenticateToken, async (req, res) => {
       });
     }
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    const { gte: hoy } = gyeDayRangeUtcFromDate(new Date());
 
     // Buscar cierres parciales del día
     const cierresParciales = await prisma.cuadreCaja.findMany({

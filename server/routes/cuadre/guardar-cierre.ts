@@ -2,6 +2,7 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { authenticateToken } from "../../middleware/auth.js";
 import logger from "../../utils/logger.js";
+import { gyeDayRangeUtcFromDate } from "../../utils/timezone.js";
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -18,8 +19,7 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    const { gte: hoy } = gyeDayRangeUtcFromDate(new Date());
 
     const cuadreExistente = await prisma.cuadreCaja.findFirst({
       where: {
