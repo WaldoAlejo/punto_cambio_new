@@ -75,3 +75,39 @@ export function gyeDateOnlyToUtcMidnight(dateStr: string): Date {
   const startGyeAsUtc = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
   return fromGyeClockToUtc(startGyeAsUtc);
 }
+
+/**
+ * ✅ Compatibilidad retro:
+ * Algunos módulos aún importan `gyeDayRangeUtcFromYMD`. Lo exponemos como alias
+ * con sobrecargas. El mes es **1-12** (no 0-11).
+ */
+
+// Sobrecarga 1: recibe "YYYY-MM-DD"
+export function gyeDayRangeUtcFromYMD(dateStr: string): { gte: Date; lt: Date };
+// Sobrecarga 2: recibe y, m(1-12), d
+export function gyeDayRangeUtcFromYMD(
+  y: number,
+  m: number,
+  d: number
+): { gte: Date; lt: Date };
+// Implementación
+export function gyeDayRangeUtcFromYMD(
+  a: string | number,
+  b?: number,
+  c?: number
+): { gte: Date; lt: Date } {
+  if (typeof a === "string") {
+    // "YYYY-MM-DD"
+    return gyeDayRangeUtcFromDateOnly(a);
+  }
+  if (typeof a === "number" && typeof b === "number" && typeof c === "number") {
+    const y = a;
+    const m = b; // 1-12
+    const d = c;
+    const startGyeAsUtc = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+    const gte = fromGyeClockToUtc(startGyeAsUtc);
+    const lt = new Date(gte.getTime() + 24 * 60 * 60 * 1000);
+    return { gte, lt };
+  }
+  throw new Error("Parámetros inválidos para gyeDayRangeUtcFromYMD");
+}
