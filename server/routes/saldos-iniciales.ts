@@ -190,7 +190,7 @@ router.post(
           saldoInicialResult = await tx.saldoInicial.update({
             where: { id: existingInicial.id },
             data: {
-              cantidad_inicial: baseInicial.add(decCantidad), // set explícito
+              cantidad_inicial: baseInicial.add(decCantidad).toString(), // enviar como string para PG
               observaciones:
                 observaciones ?? existingInicial.observaciones ?? null,
             },
@@ -200,7 +200,7 @@ router.post(
             data: {
               punto_atencion_id,
               moneda_id,
-              cantidad_inicial: decCantidad,
+              cantidad_inicial: decCantidad.toString(),
               asignado_por: user.id,
               observaciones: observaciones ?? null,
               activo: true,
@@ -234,9 +234,9 @@ router.post(
           saldoResult = await tx.saldo.update({
             where: { id: existingSaldo.id },
             data: {
-              cantidad: baseCantidad,
-              billetes: baseBilletes,
-              monedas_fisicas: baseMonedas,
+              cantidad: baseCantidad.toString(),
+              billetes: baseBilletes.toString(),
+              monedas_fisicas: baseMonedas.toString(),
             },
           });
         } else {
@@ -244,9 +244,9 @@ router.post(
             data: {
               punto_atencion_id,
               moneda_id,
-              cantidad: decCantidad,
-              billetes: decBilletes,
-              monedas_fisicas: decMonedas,
+              cantidad: decCantidad.toString(),
+              billetes: decBilletes.toString(),
+              monedas_fisicas: decMonedas.toString(),
             },
           });
         }
