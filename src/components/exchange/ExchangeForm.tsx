@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Moneda } from "../../types";
-import { useExchangeCalculations } from "../../hooks/useExchangeCalculations";
 import ExchangeFormFields from "./ExchangeFormFields";
 
 interface ExchangeFormProps {
@@ -90,13 +89,12 @@ const ExchangeForm = ({
     const tasaBilletes = parseFloat(rateBilletes) || 0;
     const tasaMonedas = parseFloat(rateMonedas) || 0;
 
-    // Si tenemos las monedas definidas, usar la nueva lógica
+    // Nueva lógica usando comportamiento por moneda si está disponible
     if (fromCurrency && toCurrency && currencies.length > 0) {
       const monedaOrigen = currencies.find((c) => c.id === fromCurrency);
       const monedaDestino = currencies.find((c) => c.id === toCurrency);
 
       if (monedaOrigen && monedaDestino) {
-        // Determinar el comportamiento según el tipo de operación
         const comportamientoBilletes =
           operationType === "COMPRA"
             ? monedaOrigen.comportamiento_compra
@@ -138,17 +136,16 @@ const ExchangeForm = ({
     const billetesNum = parseFloat(amountBilletes) || 0;
     const monedasNum = parseFloat(amountMonedas) || 0;
 
-    // Si no hay monto de billetes, limpia la tasa de billetes
     if (billetesNum === 0 && rateBilletes !== "") {
       setRateBilletes("");
     }
-    // Si no hay monto de monedas, limpia la tasa de monedas
     if (monedasNum === 0 && rateMonedas !== "") {
       setRateMonedas("");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amountBilletes, amountMonedas]);
 
-  // NUEVO: Validación de monedas cargadas
+  // Validación de monedas cargadas
   if (!currencies || currencies.length < 2) {
     return (
       <Card>
@@ -172,6 +169,12 @@ const ExchangeForm = ({
       toast.error(
         "Debe seleccionar qué moneda entrega el cliente y qué moneda recibe"
       );
+      return;
+    }
+
+    // Bloquear monedas iguales (alineado con backend)
+    if (fromCurrency === toCurrency) {
+      toast.error("La moneda de origen y la de destino no pueden ser iguales.");
       return;
     }
 
@@ -225,7 +228,7 @@ const ExchangeForm = ({
       return;
     }
 
-    const formData = {
+    const formData: ExchangeFormData = {
       operationType,
       fromCurrency,
       toCurrency,
@@ -288,6 +291,7 @@ const ExchangeForm = ({
             disabled={
               !fromCurrency ||
               !toCurrency ||
+              fromCurrency === toCurrency ||
               (!amountBilletes && !amountMonedas)
             }
             className="flex-1"

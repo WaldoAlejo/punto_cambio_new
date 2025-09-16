@@ -15,8 +15,7 @@ const exchangeSchema = z.object({
   monto_origen: z.number().positive(),
   monto_destino: z.number().positive(),
 
-  // Tasas diferenciadas
-  // Permitir 0 cuando no se use esa vía (billetes o monedas)
+  // Tasas diferenciadas (0 permitido cuando no aplica)
   tasa_cambio_billetes: z.number().nonnegative().default(0),
   tasa_cambio_monedas: z.number().nonnegative().default(0),
 
@@ -25,17 +24,17 @@ const exchangeSchema = z.object({
   datos_cliente: z.object({
     nombre: z.string(),
     apellido: z.string(),
-    documento: z.string(),
+    documento: z.string().optional().nullable(), // opcional; lo normalizamos a cédula si viene vacío
     cedula: z.string(),
     telefono: z.string().optional(),
   }),
 
-  // Detalles de divisas entregadas (por el cliente)
+  // Detalles de divisas entregadas (por el cliente) - MONEDA ORIGEN
   divisas_entregadas_billetes: z.number().default(0),
   divisas_entregadas_monedas: z.number().default(0),
   divisas_entregadas_total: z.number().default(0),
 
-  // Detalles de divisas recibidas (por el cliente)
+  // Detalles de divisas recibidas (por el cliente) - MONEDA DESTINO
   divisas_recibidas_billetes: z.number().default(0),
   divisas_recibidas_monedas: z.number().default(0),
   divisas_recibidas_total: z.number().default(0),
@@ -114,7 +113,7 @@ router.post(
         return;
       }
 
-      // Validación: monedas distintas
+      // Monedas deben ser distintas
       if (moneda_origen_id === moneda_destino_id) {
         res.status(400).json({
           success: false,
@@ -122,6 +121,28 @@ router.post(
           timestamp: new Date().toISOString(),
         });
         return;
+      }
+
+      // Si es transferencia, banco y número son requeridos
+      if (metodo_entrega === "transferencia") {
+        if (!transferencia_banco || !String(transferencia_banco).trim()) {
+          res.status(400).json({
+            success: false,
+            error: "Banco requerido para transferencia",
+            details: { transferencia_banco: "Requerido" },
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+        if (!transferencia_numero || !String(transferencia_numero).trim()) {
+          res.status(400).json({
+            success: false,
+            error: "Número de referencia requerido para transferencia",
+            details: { transferencia_numero: "Requerido" },
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
       }
 
       logger.info("Creando cambio de divisa", {
@@ -163,14 +184,69 @@ router.post(
         return;
       }
 
+      // Normalizar documento del cliente (si falta, usar la cédula)
+      const datos_cliente_sanitized = {
+        ...datos_cliente,
+        documento:
+          (datos_cliente?.documento &&
+            String(datos_cliente.documento).trim()) ||
+          (datos_cliente?.cedula && String(datos_cliente.cedula).trim()) ||
+          "",
+      };
+
+      // Recalcular y forzar consistencia de totales y montos
+      const entregadas_total_calc =
+        Number(divisas_entregadas_billetes || 0) +
+        Number(divisas_entregadas_monedas || 0);
+      const recibidas_total_calc =
+        Number(divisas_recibidas_billetes || 0) +
+        Number(divisas_recibidas_monedas || 0);
+
+      const monto_origen_final =
+        Number(monto_origen || 0) > 0
+          ? Number(monto_origen)
+          : entregadas_total_calc;
+      const monto_destino_final =
+        Number(monto_destino || 0) > 0
+          ? Number(monto_destino)
+          : recibidas_total_calc;
+
+      const divisas_entregadas_total_final =
+        Number(divisas_entregadas_total || 0) > 0
+          ? Number(divisas_entregadas_total)
+          : entregadas_total_calc;
+
+      const divisas_recibidas_total_final =
+        Number(divisas_recibidas_total || 0) > 0
+          ? Number(divisas_recibidas_total)
+          : recibidas_total_calc;
+
+      if (
+        !isFinite(monto_origen_final) ||
+        !isFinite(monto_destino_final) ||
+        monto_origen_final <= 0 ||
+        monto_destino_final <= 0
+      ) {
+        res.status(400).json({
+          success: false,
+          error: "Montos inválidos: deben ser mayores a 0",
+          details: {
+            monto_origen: monto_origen_final,
+            monto_destino: monto_destino_final,
+          },
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       const timestamp = new Date().getTime();
       const numeroRecibo = `CAM-${timestamp}`;
 
       console.log("💫 Creating exchange with data:", {
         moneda_origen_id,
         moneda_destino_id,
-        monto_origen: Number(monto_origen),
-        monto_destino: Number(monto_destino),
+        monto_origen: Number(monto_origen_final),
+        monto_destino: Number(monto_destino_final),
         tasa_cambio_billetes: Number(tasa_cambio_billetes),
         tasa_cambio_monedas: Number(tasa_cambio_monedas),
         tipo_operacion,
@@ -184,8 +260,8 @@ router.post(
         data: {
           moneda_origen_id,
           moneda_destino_id,
-          monto_origen: Number(monto_origen),
-          monto_destino: Number(monto_destino),
+          monto_origen: Number(monto_origen_final),
+          monto_destino: Number(monto_destino_final),
           tasa_cambio_billetes: Number(tasa_cambio_billetes),
           tasa_cambio_monedas: Number(tasa_cambio_monedas),
           tipo_operacion,
@@ -210,15 +286,15 @@ router.post(
           abono_inicial_recibido_por: abono_inicial_recibido_por ?? null,
           saldo_pendiente: saldo_pendiente ?? null,
           referencia_cambio_principal: referencia_cambio_principal ?? null,
-          cliente: `${datos_cliente.nombre} ${datos_cliente.apellido}`,
-          // Campos de divisas entregadas
-          divisas_entregadas_billetes: Number(divisas_entregadas_billetes),
-          divisas_entregadas_monedas: Number(divisas_entregadas_monedas),
-          divisas_entregadas_total: Number(divisas_entregadas_total),
-          // Campos de divisas recibidas
-          divisas_recibidas_billetes: Number(divisas_recibidas_billetes),
-          divisas_recibidas_monedas: Number(divisas_recibidas_monedas),
-          divisas_recibidas_total: Number(divisas_recibidas_total),
+          cliente: `${datos_cliente_sanitized.nombre} ${datos_cliente_sanitized.apellido}`,
+          // Campos de divisas ENTREGADAS por el cliente (origen)
+          divisas_entregadas_billetes: Number(divisas_entregadas_billetes || 0),
+          divisas_entregadas_monedas: Number(divisas_entregadas_monedas || 0),
+          divisas_entregadas_total: Number(divisas_entregadas_total_final),
+          // Campos de divisas RECIBIDAS por el cliente (destino)
+          divisas_recibidas_billetes: Number(divisas_recibidas_billetes || 0),
+          divisas_recibidas_monedas: Number(divisas_recibidas_monedas || 0),
+          divisas_recibidas_total: Number(divisas_recibidas_total_final),
         },
         include: {
           monedaOrigen: {
@@ -260,17 +336,17 @@ router.post(
         fecha: exchange.fecha,
       });
 
-      // Construir objetos de divisas para compatibilidad
+      // Construir objetos de divisas para compatibilidad (recibo)
       const divisas_entregadas = {
-        billetes: divisas_entregadas_billetes,
-        monedas: divisas_entregadas_monedas,
-        total: divisas_entregadas_total,
+        billetes: Number(divisas_entregadas_billetes || 0),
+        monedas: Number(divisas_entregadas_monedas || 0),
+        total: Number(divisas_entregadas_total_final),
       };
 
       const divisas_recibidas = {
-        billetes: divisas_recibidas_billetes,
-        monedas: divisas_recibidas_monedas,
-        total: divisas_recibidas_total,
+        billetes: Number(divisas_recibidas_billetes || 0),
+        monedas: Number(divisas_recibidas_monedas || 0),
+        total: Number(divisas_recibidas_total_final),
       };
 
       await prisma.recibo.create({
@@ -282,16 +358,16 @@ router.post(
           punto_atencion_id,
           datos_operacion: {
             ...exchange,
-            datos_cliente,
+            datos_cliente: datos_cliente_sanitized,
             divisas_entregadas,
             divisas_recibidas,
           },
         },
       });
 
-      // === Actualización contable de saldos (billetes y monedas) ===
+      // === Contabilidad de saldos (billetes / monedas) ===
       await prisma.$transaction(async (tx) => {
-        // 1) Moneda Origen: el punto RECIBE lo que el cliente entrega -> sumar
+        // 1) Moneda ORIGEN: el punto RECIBE -> sumar
         const saldoOrigen = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -302,7 +378,7 @@ router.post(
         });
         const saldoOrigenAnterior = Number(saldoOrigen?.cantidad ?? 0);
         const saldoOrigenNuevo =
-          saldoOrigenAnterior + Number(divisas_entregadas_total || 0);
+          saldoOrigenAnterior + Number(divisas_entregadas_total_final || 0);
         const billetesOrigenAnterior = Number(saldoOrigen?.billetes ?? 0);
         const monedasOrigenAnterior = Number(saldoOrigen?.monedas_fisicas ?? 0);
         const billetesOrigenNuevo =
@@ -336,7 +412,7 @@ router.post(
             punto_atencion_id,
             moneda_id: moneda_origen_id,
             tipo_movimiento: "CAMBIO_DIVISA",
-            monto: Number(divisas_entregadas_total || 0),
+            monto: Number(divisas_entregadas_total_final || 0),
             saldo_anterior: saldoOrigenAnterior,
             saldo_nuevo: saldoOrigenNuevo,
             usuario_id: req.user!.id,
@@ -346,7 +422,7 @@ router.post(
           },
         });
 
-        // 2) Moneda Destino: el punto ENTREGA lo que el cliente recibe -> restar
+        // 2) Moneda DESTINO: el punto ENTREGA -> restar
         const saldoDestino = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -356,7 +432,7 @@ router.post(
           },
         });
         const saldoDestinoAnterior = Number(saldoDestino?.cantidad ?? 0);
-        const egreso = Number(divisas_recibidas_total || 0);
+        const egreso = Number(divisas_recibidas_total_final || 0);
         if (saldoDestinoAnterior < egreso) {
           throw new Error(
             "Saldo insuficiente en moneda destino para realizar el cambio"
@@ -369,13 +445,7 @@ router.post(
         );
         const billetesDestinoEgreso = Number(divisas_recibidas_billetes || 0);
         const monedasDestinoEgreso = Number(divisas_recibidas_monedas || 0);
-        if (
-          billetesDestinoAnterior < billetesDestinoEgreso ||
-          monedasDestinoAnterior < monedasDestinoEgreso
-        ) {
-          // No forzamos fallo por desglose físico, solo advertimos; opcionalmente podría tirar error.
-          // throw new Error('Desglose físico insuficiente en billetes/monedas para la entrega');
-        }
+
         const billetesDestinoNuevo = Math.max(
           0,
           billetesDestinoAnterior - billetesDestinoEgreso
@@ -424,7 +494,7 @@ router.post(
 
       const exchangeResponse = {
         ...exchange,
-        datos_cliente,
+        datos_cliente: datos_cliente_sanitized,
         divisas_entregadas,
         divisas_recibidas,
       };
@@ -593,8 +663,6 @@ router.patch(
         return;
       }
 
-      // Actualizar el cambio a COMPLETADO sin tocar saldos ni historial.
-      // La contabilidad (saldos e historial) se procesa exclusivamente en /api/movimientos-contables/procesar-cambio.
       const updatedCambio = await prisma.cambioDivisa.update({
         where: { id },
         data: {
@@ -686,6 +754,28 @@ router.patch(
         return;
       }
 
+      // Si el método indicado es transferencia, exigir banco y número
+      if (metodo_entrega === "transferencia") {
+        if (!transferencia_banco || !String(transferencia_banco).trim()) {
+          res.status(400).json({
+            success: false,
+            error: "Banco requerido para transferencia",
+            details: { transferencia_banco: "Requerido" },
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+        if (!transferencia_numero || !String(transferencia_numero).trim()) {
+          res.status(400).json({
+            success: false,
+            error: "Número de referencia requerido para transferencia",
+            details: { transferencia_numero: "Requerido" },
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
       const numeroReciboCompletar = `COMP-${Date.now()}`;
 
       const updated = await prisma.cambioDivisa.update({
@@ -694,12 +784,16 @@ router.patch(
           estado: EstadoTransaccion.COMPLETADO,
           metodo_entrega: metodo_entrega || cambio.metodo_entrega,
           transferencia_numero:
-            metodo_entrega === "transferencia" ? transferencia_numero : null,
+            (metodo_entrega || cambio.metodo_entrega) === "transferencia"
+              ? transferencia_numero || cambio.transferencia_numero
+              : null,
           transferencia_banco:
-            metodo_entrega === "transferencia" ? transferencia_banco : null,
+            (metodo_entrega || cambio.metodo_entrega) === "transferencia"
+              ? transferencia_banco || cambio.transferencia_banco
+              : null,
           transferencia_imagen_url:
-            metodo_entrega === "transferencia"
-              ? transferencia_imagen_url
+            (metodo_entrega || cambio.metodo_entrega) === "transferencia"
+              ? transferencia_imagen_url || cambio.transferencia_imagen_url
               : null,
           divisas_recibidas_billetes:
             divisas_recibidas_billetes ?? cambio.divisas_recibidas_billetes,
@@ -775,7 +869,6 @@ router.get(
           estado: {
             in: [EstadoTransaccion.PENDIENTE],
           },
-          // Removido el filtro de saldo_pendiente > 0 para mostrar TODOS los cambios pendientes
         },
         include: {
           monedaOrigen: {
@@ -868,27 +961,13 @@ router.get(
         usuario_id: req.user.id,
       });
 
-      // Buscar en cambios de divisa por nombre completo o cédula
+      // Buscar en cambios de divisa por nombre completo
       const exchanges = await prisma.cambioDivisa.findMany({
         where: {
-          OR: [
-            {
-              cliente: {
-                contains: searchTerm,
-                mode: "insensitive",
-              },
-            },
-            {
-              // Buscar en el JSON datos_cliente si existe
-              AND: [
-                {
-                  NOT: {
-                    cliente: null,
-                  },
-                },
-              ],
-            },
-          ],
+          cliente: {
+            contains: searchTerm,
+            mode: "insensitive",
+          },
         },
         select: {
           id: true,
@@ -902,7 +981,7 @@ router.get(
         take: 20,
       });
 
-      // Buscar también en los recibos que contienen datos_cliente
+      // Buscar también en recibos con datos_cliente
       const recibos = await prisma.recibo.findMany({
         where: {
           tipo_operacion: "CAMBIO_DIVISA",
@@ -939,7 +1018,6 @@ router.get(
         take: 20,
       });
 
-      // Procesar y combinar resultados
       const clientesFromExchanges = exchanges.map((exchange) => ({
         id: exchange.id,
         nombre: exchange.cliente?.split(" ")[0] || "",
@@ -966,32 +1044,37 @@ router.get(
         };
       });
 
-      // Combinar y eliminar duplicados por cédula
+      // Combinar y deduplicar por cédula (si no hay cédula, usar nombre+apellido)
       const todosClientes = [...clientesFromExchanges, ...clientesFromRecibos];
-      const clientesUnicos = new Map();
+      const clientesUnicos = new Map<
+        string,
+        | (typeof clientesFromExchanges)[number]
+        | (typeof clientesFromRecibos)[number]
+      >();
 
       todosClientes.forEach((cliente) => {
-        const key = cliente.cedula || `${cliente.nombre}_${cliente.apellido}`;
+        const key =
+          (cliente as any).cedula || `${cliente.nombre}_${cliente.apellido}`;
         if (
           !clientesUnicos.has(key) ||
           new Date(cliente.fecha_ultima_operacion) >
-            new Date(clientesUnicos.get(key).fecha_ultima_operacion)
+            new Date((clientesUnicos.get(key) as any).fecha_ultima_operacion)
         ) {
           clientesUnicos.set(key, cliente);
         }
       });
 
       const resultados = Array.from(clientesUnicos.values())
-        .filter((cliente) => {
+        .filter((cliente: any) => {
           const nombreCompleto =
             `${cliente.nombre} ${cliente.apellido}`.toLowerCase();
-          const cedula = cliente.cedula.toLowerCase();
+          const cedula = (cliente.cedula || "").toLowerCase();
           return (
             nombreCompleto.includes(searchTerm) || cedula.includes(searchTerm)
           );
         })
         .sort(
-          (a, b) =>
+          (a: any, b: any) =>
             new Date(b.fecha_ultima_operacion).getTime() -
             new Date(a.fecha_ultima_operacion).getTime()
         )
@@ -1045,7 +1128,7 @@ router.post(
         return;
       }
 
-      // Construir movimientos esperados
+      // Construir movimientos esperados (para el endpoint contable)
       const movimientos = [
         {
           punto_atencion_id: cambio.punto_atencion_id,
@@ -1069,7 +1152,7 @@ router.post(
         },
       ];
 
-      // Evitar duplicados: verificar si ya hay movimientos con esta referencia
+      // Evitar duplicados
       const existentes = await prisma.movimientoSaldo.findMany({
         where: {
           referencia_id: cambio.id,
@@ -1086,8 +1169,6 @@ router.post(
         return;
       }
 
-      // Delegar al endpoint de contabilidad existente mediante pool
-      // Reutilizamos la misma lógica que usa el frontend
       const baseUrl =
         process.env.INTERNAL_API_BASE_URL || "http://localhost:3001/api";
       const url = `${baseUrl}/movimientos-contables/procesar-cambio`;
@@ -1106,7 +1187,6 @@ router.post(
 
       res.status(200).json({ success: true, result: response.data });
     } catch (error) {
-      // Propagar el error del endpoint de contabilidad para diagnóstico claro
       if (axios.isAxiosError(error)) {
         const status = error.response?.status || 500;
         const data = error.response?.data || { error: error.message };

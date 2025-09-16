@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
-import { CambioDivisa } from "../../types";
+import { CambioDivisa, DetalleDivisasSimple } from "../../types";
 import CurrencyDetailForm from "./CurrencyDetailForm";
 
 interface DeliveryDetailsFormProps {
@@ -14,6 +14,8 @@ interface DeliveryDetailsFormProps {
   onCancel: () => void;
   isCompletion?: boolean;
 }
+
+const EPSILON = 0.005; // tolerancia para comparación de decimales
 
 const DeliveryDetailsForm = ({
   exchange,
@@ -30,12 +32,41 @@ const DeliveryDetailsForm = ({
     null
   );
 
+  const montoAEntregar =
+    (exchange.saldo_pendiente ?? 0) > 0
+      ? Number(exchange.saldo_pendiente)
+      : Number(exchange.monto_destino);
+
   // Detalles de divisas a entregar
-  const [divisasRecibidas, setDivisasRecibidas] = useState({
-    billetes: 0,
-    monedas: 0,
-    total: exchange.saldo_pendiente || exchange.monto_destino,
-  });
+  const [divisasRecibidas, setDivisasRecibidas] =
+    useState<DetalleDivisasSimple>({
+      billetes: 0,
+      monedas: 0,
+      total: montoAEntregar,
+    });
+
+  // Si cambia el saldo pendiente / monto destino, sincroniza el total por defecto
+  useEffect(() => {
+    setDivisasRecibidas((prev) => ({
+      billetes: metodoEntrega === "transferencia" ? 0 : prev.billetes,
+      monedas: metodoEntrega === "transferencia" ? 0 : prev.monedas,
+      total:
+        metodoEntrega === "transferencia"
+          ? montoAEntregar
+          : prev.total || montoAEntregar,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exchange.saldo_pendiente, exchange.monto_destino]);
+
+  // Si cambia el método de entrega, ajusta el detalle sin perder datos innecesariamente
+  useEffect(() => {
+    setDivisasRecibidas((prev) =>
+      metodoEntrega === "transferencia"
+        ? { billetes: 0, monedas: 0, total: montoAEntregar }
+        : { ...prev, total: prev.total || montoAEntregar }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metodoEntrega]);
 
   const handleSubmit = () => {
     if (metodoEntrega === "transferencia") {
@@ -49,10 +80,8 @@ const DeliveryDetailsForm = ({
       }
     }
 
-    if (
-      divisasRecibidas.total !==
-      (exchange.saldo_pendiente || exchange.monto_destino)
-    ) {
+    // Igualdad con tolerancia para evitar errores por flotantes
+    if (Math.abs(divisasRecibidas.total - montoAEntregar) > EPSILON) {
       toast.error("El total de divisas debe coincidir con el monto a entregar");
       return;
     }
@@ -70,8 +99,6 @@ const DeliveryDetailsForm = ({
 
     onSubmit(details);
   };
-
-  const montoAEntregar = exchange.saldo_pendiente || exchange.monto_destino;
 
   return (
     <div className="space-y-6">
@@ -141,7 +168,7 @@ const DeliveryDetailsForm = ({
                 <Input
                   id="comprobante"
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf"
                   onChange={(e) =>
                     setTransferenciaImagen(e.target.files?.[0] || null)
                   }

@@ -1,12 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import {
-  User,
-  PuntoAtencion,
-  CambioDivisa,
-  DatosCliente,
-  DetalleDivisasSimple,
-} from "../types";
+import { User, PuntoAtencion, CambioDivisa, DatosCliente } from "../types";
 import { exchangeService } from "../services/exchangeService";
 import { ReceiptService } from "../services/receiptService";
 import { ExchangeCompleteData } from "../components/exchange/ExchangeSteps";
@@ -48,7 +42,8 @@ interface ExchangePayload {
   transferencia_numero?: string | null;
   transferencia_banco?: string | null;
   transferencia_imagen_url?: string | null;
-  // NUEVOS CAMPOS flujo parcial
+
+  // flujo parcial
   abono_inicial_monto?: number | null;
   abono_inicial_fecha?: string | null;
   saldo_pendiente?: number | null;
@@ -65,6 +60,19 @@ type ExchangeCompleteDataExtend = ExchangeCompleteData & {
   saldoPendiente?: number | null;
   referenciaCambioPrincipal?: string | null;
 };
+
+// --- Utilidades locales (no cambian el flujo actual) ---
+const parseNum = (v: unknown): number => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const s = v.replace(/\s+/g, "").replace(",", ".");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
+const trimOrEmpty = (v?: string | null) => (v ?? "").trim();
 
 export const useExchangeProcess = ({
   user,
@@ -87,35 +95,29 @@ export const useExchangeProcess = ({
     );
 
     try {
-      console.log("🖨️ Intentando imprimir recibo...");
       ReceiptService.printReceipt(receiptData, 2);
-
       if (showSuccessMessage) {
         toast.success("✅ Recibo enviado a impresora correctamente");
       }
-
-      // Siempre mostrar en la ventana actual como fallback/confirmación
+      // Fallback/confirmación visual
       setTimeout(() => {
         ReceiptService.showReceiptInCurrentWindow(receiptData, onReceiptClose);
-      }, 1000);
+      }, 800);
 
-      return { success: true, showModal: true }; // Impresión exitosa pero se muestra modal
+      return { success: true, showModal: true };
     } catch (error) {
       console.warn("❌ Error al imprimir recibo:", error);
-
-      // Si falla la impresión, mostrar en ventana actual
       ReceiptService.showReceiptInCurrentWindow(receiptData, onReceiptClose);
-
       toast.error(
-        "❌ Error al imprimir recibo. Se muestra en pantalla. Puede usar el botón 'Reimprimir' para intentar nuevamente."
+        "❌ Error al imprimir recibo. Se muestra en pantalla. Puede usar 'Reimprimir'."
       );
-
-      return { success: false, showModal: true }; // Impresión falló y se muestra modal
+      return { success: false, showModal: true };
     }
   };
 
   const processExchange = async (data: ExchangeCompleteDataExtend) => {
     if (isProcessing) return;
+
     if (!user) {
       toast.error("Usuario no válido, reintente sesión.");
       return;
@@ -128,133 +130,194 @@ export const useExchangeProcess = ({
     setIsProcessing(true);
 
     try {
-      const rateBilletes = parseFloat(data.exchangeData.rateBilletes);
-      const rateMonedas = parseFloat(data.exchangeData.rateMonedas);
-      const amountBilletes = parseFloat(
-        data.exchangeData.amountBilletes || "0"
-      );
-      const amountMonedas = parseFloat(data.exchangeData.amountMonedas || "0");
+      // --- Normalizar tasas y montos recibidos del paso anterior ---
+      const rateBilletes = parseNum(data.exchangeData.rateBilletes);
+      const rateMonedas = parseNum(data.exchangeData.rateMonedas);
 
-      if (
-        !data.exchangeData.fromCurrency ||
-        !data.exchangeData.toCurrency ||
-        isNaN(rateBilletes) ||
-        isNaN(rateMonedas) ||
-        (amountBilletes === 0 && amountMonedas === 0) ||
-        !data.exchangeData.operationType
-      ) {
-        toast.error("Datos incompletos o inválidos para procesar el cambio.");
+      const amountBilletes = parseNum(data.exchangeData.amountBilletes);
+      const amountMonedas = parseNum(data.exchangeData.amountMonedas);
+
+      const totalEntregado = parseNum(data.exchangeData.totalAmountEntregado); // MONEDA ORIGEN
+      const totalRecibido = parseNum(data.exchangeData.totalAmountRecibido); // MONEDA DESTINO
+
+      const fromCurrency = trimOrEmpty(data.exchangeData.fromCurrency);
+      const toCurrency = trimOrEmpty(data.exchangeData.toCurrency);
+      const opType = trimOrEmpty(data.exchangeData.operationType) as
+        | "COMPRA"
+        | "VENTA"
+        | "";
+
+      // Validaciones estrictas para evitar “faltan datos”
+      if (!fromCurrency || !toCurrency) {
+        toast.error("Debe seleccionar monedas de origen y destino.");
         setIsProcessing(false);
         return;
       }
-
-      // Bloquear monedas iguales
-      if (data.exchangeData.fromCurrency === data.exchangeData.toCurrency) {
+      if (fromCurrency === toCurrency) {
         toast.error(
           "La moneda de origen y la de destino no pueden ser iguales."
         );
         setIsProcessing(false);
         return;
       }
-
-      let transferenciaImagenUrl: string | null = null;
-      if (data.metodoEntrega === "transferencia" && data.transferenciaImagen) {
-        // Aquí podrías implementar la subida del archivo y obtener la URL
-        toast.info(
-          "El archivo de comprobante de transferencia se debe subir manualmente"
-        );
-      }
-
-      // 🔍 VALIDACIÓN DE SALDOS ANTES DE PROCESAR
-      console.log("🔍 Validando saldo antes del cambio...");
-      const {
-        valido,
-        saldo_actual,
-        error: errorSaldo,
-      } = await movimientosContablesService.validarSaldoParaCambio(
-        selectedPoint.id,
-        data.exchangeData.toCurrency, // Moneda que vamos a entregar
-        data.exchangeData.totalAmountRecibido // Monto que vamos a entregar
-      );
-
-      if (!valido) {
-        toast.error(
-          `❌ Saldo insuficiente: ${
-            errorSaldo || "No hay suficiente saldo para realizar este cambio"
-          }`
-        );
-        toast.info(`💰 Saldo actual: ${saldo_actual}`);
+      if (!opType) {
+        toast.error("Debe seleccionar el tipo de operación (COMPRA/VENTA).");
         setIsProcessing(false);
         return;
       }
 
-      console.log(
-        `✅ Saldo validado. Disponible: ${saldo_actual}, Requerido: ${data.exchangeData.totalAmountRecibido}`
-      );
+      // Al menos una vía de entrega (billetes/monedas) con monto > 0
+      if (amountBilletes <= 0 && amountMonedas <= 0) {
+        toast.error("Debe ingresar un monto en billetes o monedas.");
+        setIsProcessing(false);
+        return;
+      }
 
+      if (totalEntregado <= 0 || totalRecibido <= 0) {
+        toast.error("Montos totales inválidos. Verifique los valores.");
+        setIsProcessing(false);
+        return;
+      }
+
+      // Transferencia: validar banco y número
+      if (data.metodoEntrega === "transferencia") {
+        const banco = trimOrEmpty(data.transferenciaBanco);
+        const numero = trimOrEmpty(data.transferenciaNumero);
+        if (!banco) {
+          toast.error("Debe indicar el banco de la transferencia.");
+          setIsProcessing(false);
+          return;
+        }
+        if (!numero) {
+          toast.error("Debe indicar el número/referencia de la transferencia.");
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      // Adjuntos de transferencia: no subimos aquí (mantener flujo actual)
+      let transferenciaImagenUrl: string | null = null;
+      if (data.metodoEntrega === "transferencia" && data.transferenciaImagen) {
+        // Mantener mensaje actual (sin crear feature nuevo)
+        toast.info(
+          "El comprobante de transferencia se debe subir manualmente."
+        );
+      }
+
+      // --- Cliente: blindaje (documento = cédula si viene vacío) ---
+      const sanitizedCliente: DatosCliente = {
+        nombre: trimOrEmpty(data.customerData?.nombre),
+        apellido: trimOrEmpty(data.customerData?.apellido),
+        cedula: trimOrEmpty(data.customerData?.cedula),
+        telefono: trimOrEmpty(data.customerData?.telefono),
+        documento:
+          trimOrEmpty(data.customerData?.documento) ||
+          trimOrEmpty(data.customerData?.cedula) ||
+          "",
+      };
+
+      if (
+        !sanitizedCliente.nombre ||
+        !sanitizedCliente.apellido ||
+        !sanitizedCliente.cedula
+      ) {
+        toast.error(
+          "Complete los datos del cliente (nombre, apellido, cédula)."
+        );
+        setIsProcessing(false);
+        return;
+      }
+
+      // 🔍 VALIDACIÓN DE SALDOS ANTES DE PROCESAR (para la moneda que ENTREGAMOS)
+      const saldoCheck =
+        await movimientosContablesService.validarSaldoParaCambio(
+          selectedPoint.id,
+          toCurrency,
+          totalRecibido
+        );
+
+      if (!saldoCheck?.valido) {
+        toast.error(
+          `❌ Saldo insuficiente: ${
+            saldoCheck?.error || "No hay saldo disponible en la moneda destino."
+          }`
+        );
+        if (typeof saldoCheck?.saldo_actual === "number") {
+          toast.info(`💰 Saldo actual: ${saldoCheck.saldo_actual}`);
+        }
+        setIsProcessing(false);
+        return;
+      }
+
+      // --- Armar payload exacto para backend ---
       const exchangePayload: ExchangePayload = {
-        moneda_origen_id: data.exchangeData.fromCurrency,
-        moneda_destino_id: data.exchangeData.toCurrency,
-        monto_origen: data.exchangeData.totalAmountEntregado,
-        monto_destino: data.exchangeData.totalAmountRecibido,
+        moneda_origen_id: fromCurrency,
+        moneda_destino_id: toCurrency,
+        monto_origen: totalEntregado, // ORIGEN
+        monto_destino: totalRecibido, // DESTINO
 
-        // Tasas diferenciadas
         tasa_cambio_billetes: rateBilletes,
         tasa_cambio_monedas: rateMonedas,
 
-        // Detalles de divisas entregadas (por el cliente)
+        // ENTREGADAS por el cliente (ORIGEN)
         divisas_entregadas_billetes: amountBilletes,
         divisas_entregadas_monedas: amountMonedas,
-        divisas_entregadas_total: data.exchangeData.totalAmountEntregado,
+        divisas_entregadas_total: totalEntregado,
 
-        // Detalles de divisas recibidas (por el cliente)
-        divisas_recibidas_billetes: data.divisasRecibidas.billetes,
-        divisas_recibidas_monedas: data.divisasRecibidas.monedas,
-        divisas_recibidas_total: data.divisasRecibidas.total,
+        // RECIBIDAS por el cliente (DESTINO)
+        divisas_recibidas_billetes: parseNum(data.divisasRecibidas?.billetes),
+        divisas_recibidas_monedas: parseNum(data.divisasRecibidas?.monedas),
+        divisas_recibidas_total: parseNum(data.divisasRecibidas?.total),
 
-        tipo_operacion: data.exchangeData.operationType as "COMPRA" | "VENTA",
+        tipo_operacion: opType as "COMPRA" | "VENTA",
         punto_atencion_id: selectedPoint.id,
-        datos_cliente: data.customerData,
-        observacion: data.exchangeData.observation || undefined,
+        datos_cliente: sanitizedCliente,
+        observacion: trimOrEmpty(data.exchangeData.observation) || undefined,
         metodo_entrega: data.metodoEntrega,
         transferencia_numero:
           data.metodoEntrega === "transferencia"
-            ? data.transferenciaNumero || ""
+            ? trimOrEmpty(data.transferenciaNumero) || null
             : undefined,
         transferencia_banco:
           data.metodoEntrega === "transferencia"
-            ? data.transferenciaBanco || ""
+            ? trimOrEmpty(data.transferenciaBanco) || null
             : undefined,
         transferencia_imagen_url: transferenciaImagenUrl,
-        // --- CAMPOS DE ABONO PARCIAL ---
-        abono_inicial_monto: data.abonoInicialMonto ?? null,
-        abono_inicial_fecha: data.abonoInicialFecha ?? null,
-        saldo_pendiente: data.saldoPendiente ?? null,
-        referencia_cambio_principal: data.referenciaCambioPrincipal ?? null,
+
+        abono_inicial_monto:
+          data.abonoInicialMonto !== undefined ? data.abonoInicialMonto : null,
+        abono_inicial_fecha:
+          data.abonoInicialFecha !== undefined ? data.abonoInicialFecha : null,
+        saldo_pendiente:
+          data.saldoPendiente !== undefined ? data.saldoPendiente : null,
+        referencia_cambio_principal:
+          trimOrEmpty(data.referenciaCambioPrincipal) || null,
       };
 
+      // --- Crear cambio ---
       const { exchange: createdExchange, error } =
         await exchangeService.createExchange(exchangePayload);
 
       if (error) {
         toast.error(`Error al crear cambio: ${error}`);
+        setIsProcessing(false);
         return;
       }
-
       if (!createdExchange) {
         toast.error("No se pudo crear el cambio de divisa");
+        setIsProcessing(false);
         return;
       }
 
-      // 🎯 LÓGICA MEJORADA: Decidir si auto-completar o quedar pendiente
+      // 🎯 Decidir si auto-completar o dejar pendiente
       const shouldAutoComplete =
-        data.metodoEntrega === "efectivo" && // Solo efectivo se completa automáticamente
-        !data.saldoPendiente && // No hay saldo pendiente
-        !data.abonoInicialMonto; // No es un abono parcial
+        data.metodoEntrega === "efectivo" &&
+        !data.saldoPendiente &&
+        !data.abonoInicialMonto;
 
       if (shouldAutoComplete) {
-        // Auto-completar el cambio inmediatamente
-        console.log("🚀 Auto-completing exchange for cash transaction");
+        // IMPORTANTE: el backend ya contabliza en POST /exchanges
+        // Aquí solo cerramos (estado COMPLETADO) SIN volver a contablizar.
         const { error: closeError } =
           await exchangeService.closePendingExchange(createdExchange.id);
 
@@ -263,114 +326,56 @@ export const useExchangeProcess = ({
             `⚠️ Cambio creado pero pendiente. Debe completarlo manualmente desde "Cambios Pendientes". Error: ${closeError}`
           );
         } else {
-          // 📊 PROCESAR MOVIMIENTOS CONTABLES
-          console.log("📊 Procesando movimientos contables...");
-          try {
-            const { result: contabilidadResult, error: contabilidadError } =
-              await movimientosContablesService.procesarMovimientosCambio(
-                createdExchange,
-                user.id
-              );
-
-            if (contabilidadError) {
-              console.error("❌ Error en contabilidad:", contabilidadError);
-              toast.warning(
-                `⚠️ Cambio completado pero error en contabilidad: ${contabilidadError}`
-              );
-            } else if (contabilidadResult && contabilidadResult.success) {
-              console.log(
-                "✅ Movimientos contables procesados:",
-                contabilidadResult
-              );
-
-              // Mostrar resumen de saldos actualizados
-              const resumen = contabilidadResult.saldos_actualizados
-                .map(
-                  (s) =>
-                    `${s.moneda_id}: ${s.saldo_anterior.toFixed(
-                      2
-                    )} → ${s.saldo_nuevo.toFixed(2)}`
-                )
-                .join(", ");
-
-              toast.success(
-                `✅ Cambio completado. Saldos actualizados: ${resumen}`
-              );
-            }
-          } catch (contabilidadErr) {
-            console.error(
-              "❌ Error inesperado en contabilidad:",
-              contabilidadErr
-            );
-            toast.warning(
-              "⚠️ Cambio completado pero error al actualizar saldos"
-            );
-          }
-
-          // Disparar evento para actualizar saldos en la UI
+          // Notificar a la UI que el estado cambió
           window.dispatchEvent(new CustomEvent("exchangeCompleted"));
           window.dispatchEvent(new CustomEvent("saldosUpdated"));
+          toast.success("✅ Cambio completado.");
         }
       } else {
-        // Quedar pendiente y mostrar explicación
+        // Cambio pendiente (transferencia, saldo pendiente o abono)
         const reason =
           data.metodoEntrega === "transferencia"
             ? "transferencia bancaria"
             : data.saldoPendiente
             ? "tiene saldo pendiente"
-            : "requiere abono parcial";
-
+            : "tiene abono parcial";
         toast.info(
-          `⏳ Cambio pendiente porque es por ${reason}. Debe completarlo desde "Cambios Pendientes" cuando esté listo.`
+          `⏳ Cambio pendiente porque es por ${reason}. Complételo luego en "Cambios Pendientes".`
         );
       }
 
       onExchangeCreated(createdExchange);
 
-      // Generar e imprimir recibos
+      // Recibos (impresión + modal)
       setTimeout(() => {
-        // Función que se ejecuta cuando se cierra el modal del recibo
         const handleReceiptClose = () => {
           onResetForm();
           toast.success(
             "🎉 Operación completada exitosamente. Regresando al dashboard..."
           );
-
-          // Regresar al dashboard si se proporcionó la función
           if (onReturnToDashboard) {
-            setTimeout(() => {
-              onReturnToDashboard();
-            }, 1000);
+            setTimeout(() => onReturnToDashboard(), 800);
           }
         };
 
-        const printResult = generateReceiptAndPrint(
-          createdExchange,
-          true,
-          handleReceiptClose
-        );
-
-        // Como siempre se muestra el modal, el usuario debe cerrarlo manualmente
-        // El callback handleReceiptClose se ejecutará cuando el usuario cierre el modal
-      }, 100);
-    } catch (error) {
-      console.error("Error al procesar cambio:", error);
-      toast.error("Error inesperado al procesar el cambio");
+        generateReceiptAndPrint(createdExchange, true, handleReceiptClose);
+      }, 120);
+    } catch (err) {
+      console.error("Error al procesar cambio:", err);
+      toast.error("Error inesperado al procesar el cambio.");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Función para reimprimir recibos
+  // Reimpresión sin tocar lógica del flujo
   const reprintReceipt = (exchange: CambioDivisa) => {
     if (!selectedPoint) {
       toast.error("No hay punto de atención seleccionado");
       return;
     }
-
     try {
-      // Para reimprimir, no regresar al dashboard automáticamente
-      generateReceiptAndPrint(exchange, false); // No mostrar mensaje de éxito automático, sin callback de cierre
+      generateReceiptAndPrint(exchange, false);
       toast.success("🖨️ Recibo reenviado a impresora");
     } catch (error) {
       console.error("Error al reimprimir recibo:", error);

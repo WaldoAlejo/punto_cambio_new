@@ -16,6 +16,27 @@ interface CompletePaymentFormProps {
   onCancel: () => void;
 }
 
+type MetodoEntrega = "efectivo" | "transferencia";
+
+type DeliveryDetails = {
+  metodoEntrega: MetodoEntrega;
+  transferenciaNumero?: string;
+  transferenciaBanco?: string;
+  transferenciaImagen?: File | null;
+  // Opcionalmente puede traer desglose de lo que el cliente recibe (por compatibilidad)
+  divisasRecibidas?: { billetes: number; monedas: number; total: number };
+};
+
+const formatMoney = (n: number | null | undefined) => {
+  const v = Number(n);
+  return Number.isFinite(v)
+    ? v.toLocaleString("es-EC", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : "0,00";
+};
+
 const CompletePaymentForm = ({
   exchange,
   user,
@@ -24,10 +45,32 @@ const CompletePaymentForm = ({
   onCancel,
 }: CompletePaymentFormProps) => {
   const [step, setStep] = useState<"details" | "confirm">("details");
-  const [deliveryDetails, setDeliveryDetails] = useState<any>(null);
+  const [deliveryDetails, setDeliveryDetails] =
+    useState<DeliveryDetails | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleDeliveryDetailsSubmit = (details: any) => {
+  const clienteStr = exchange.cliente || ""; // respaldo si no viene datos_cliente
+  const nombreCliente =
+    exchange.datos_cliente?.nombre ||
+    (clienteStr ? clienteStr.split(" ")[0] : "Cliente");
+  const apellidoCliente =
+    exchange.datos_cliente?.apellido ||
+    (clienteStr ? clienteStr.split(" ").slice(1).join(" ") : "");
+
+  const montoDestino = Number(exchange.monto_destino || 0);
+  const saldoPendiente = Number(exchange.saldo_pendiente ?? 0);
+  const codigoMonedaDestino = exchange.monedaDestino?.codigo || "";
+
+  const handleDeliveryDetailsSubmit = (details: DeliveryDetails) => {
+    // Blindaje mínimo aquí (DeliveryDetailsForm ya valida, pero reforzamos)
+    if (
+      details.metodoEntrega === "transferencia" &&
+      (!details.transferenciaNumero?.trim() ||
+        !details.transferenciaBanco?.trim())
+    ) {
+      toast.error("Debe indicar número y banco para la transferencia.");
+      return;
+    }
     setDeliveryDetails(details);
     setStep("confirm");
   };
@@ -38,9 +81,19 @@ const CompletePaymentForm = ({
       return;
     }
 
+    // Validación de transferencia (doble seguro)
+    if (
+      deliveryDetails.metodoEntrega === "transferencia" &&
+      (!deliveryDetails.transferenciaNumero?.trim() ||
+        !deliveryDetails.transferenciaBanco?.trim())
+    ) {
+      toast.error("Debe indicar número y banco para la transferencia.");
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      // Completar el cambio pendiente
+      // 1) Completar el cambio pendiente en el backend
       const { exchange: completedExchange, error } =
         await exchangeService.completeExchange(exchange.id, deliveryDetails);
 
@@ -49,7 +102,7 @@ const CompletePaymentForm = ({
         return;
       }
 
-      // Procesar contabilidad tras completar
+      // 2) Procesar contabilidad (no bloquea el flujo si falla)
       try {
         const { result, error: contabError } =
           await movimientosContablesService.procesarMovimientosCambio(
@@ -62,18 +115,17 @@ const CompletePaymentForm = ({
             `⚠️ Cambio completado pero error en contabilidad: ${contabError}`
           );
         } else if (result?.success) {
-          const resumen = result.saldos_actualizados
+          const resumen = (result.saldos_actualizados || [])
             .map(
               (s: any) =>
-                `${s.moneda_id}: ${s.saldo_anterior.toFixed(
+                `${s.moneda_id}: ${Number(s.saldo_anterior || 0).toFixed(
                   2
-                )} → ${s.saldo_nuevo.toFixed(2)}`
+                )} → ${Number(s.saldo_nuevo || 0).toFixed(2)}`
             )
             .join(", ");
-          toast.success(`✅ Saldos actualizados: ${resumen}`);
+          if (resumen) toast.success(`✅ Saldos actualizados: ${resumen}`);
         }
       } catch (e) {
-        // No bloquear el flujo si falla contabilidad
         console.error(
           "Error inesperado al procesar contabilidad al completar cambio",
           e
@@ -83,16 +135,24 @@ const CompletePaymentForm = ({
         );
       }
 
-      // Generar e imprimir recibo de completación
-      const receiptData = ReceiptService.generatePartialExchangeReceipt(
-        completedExchange,
-        selectedPoint?.nombre || "N/A",
-        user.nombre,
-        false // isInitialPayment = false para completación
-      );
-      ReceiptService.printReceipt(receiptData, 2);
+      // 3) Recibo de completación
+      try {
+        // Mantener firma consistente con otros usos:
+        // generatePartialExchangeReceipt(exchange, pointName, operador, isInitialPayment, details?)
+        const receiptData = ReceiptService.generatePartialExchangeReceipt(
+          completedExchange,
+          selectedPoint?.nombre || "N/A",
+          user.nombre,
+          false,
+          undefined // para completación no enviamos payload extra
+        );
+        ReceiptService.printReceipt(receiptData, 2);
+      } catch (printErr) {
+        console.warn("Fallo al imprimir recibo de completación:", printErr);
+        toast.warning("⚠️ Cambio completado. No se pudo imprimir el recibo.");
+      }
 
-      // Disparar evento para actualizar saldos
+      // 4) Eventos para refrescar UI
       window.dispatchEvent(new CustomEvent("exchangeCompleted"));
       window.dispatchEvent(new CustomEvent("saldosUpdated"));
 
@@ -111,16 +171,15 @@ const CompletePaymentForm = ({
           <CardHeader>
             <CardTitle>Completar Cambio Pendiente</CardTitle>
             <div className="text-sm text-gray-600">
-              Cliente: {exchange.datos_cliente?.nombre}{" "}
-              {exchange.datos_cliente?.apellido}
+              Cliente: {nombreCliente} {apellidoCliente}
               <br />
-              Monto a entregar: {exchange.monto_destino.toLocaleString()}{" "}
-              {exchange.monedaDestino?.codigo}
-              <br />
-              {exchange.saldo_pendiente && exchange.saldo_pendiente > 0 && (
+              Monto a entregar: {formatMoney(montoDestino)}{" "}
+              {codigoMonedaDestino}
+              {saldoPendiente > 0 && (
                 <>
-                  Saldo pendiente: {exchange.saldo_pendiente.toLocaleString()}{" "}
-                  {exchange.monedaDestino?.codigo}
+                  <br />
+                  Saldo pendiente: {formatMoney(saldoPendiente)}{" "}
+                  {codigoMonedaDestino}
                 </>
               )}
             </div>
@@ -137,14 +196,14 @@ const CompletePaymentForm = ({
     );
   }
 
+  // Paso de confirmación
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Confirmar Completación del Cambio</CardTitle>
           <div className="text-sm text-gray-600">
-            Cliente: {exchange.datos_cliente?.nombre}{" "}
-            {exchange.datos_cliente?.apellido}
+            Cliente: {nombreCliente} {apellidoCliente}
           </div>
         </CardHeader>
         <CardContent>
@@ -157,8 +216,7 @@ const CompletePaymentForm = ({
                 <div>
                   <span className="text-gray-600">Monto total:</span>
                   <div className="font-bold text-green-700">
-                    {exchange.monto_destino.toLocaleString()}{" "}
-                    {exchange.monedaDestino?.codigo}
+                    {formatMoney(montoDestino)} {codigoMonedaDestino}
                   </div>
                 </div>
                 <div>
@@ -176,11 +234,11 @@ const CompletePaymentForm = ({
                   <div className="text-sm">
                     <div>
                       <strong>Banco:</strong>{" "}
-                      {deliveryDetails.transferenciaBanco}
+                      {deliveryDetails.transferenciaBanco || "—"}
                     </div>
                     <div>
                       <strong>Número:</strong>{" "}
-                      {deliveryDetails.transferenciaNumero}
+                      {deliveryDetails.transferenciaNumero || "—"}
                     </div>
                   </div>
                 </div>

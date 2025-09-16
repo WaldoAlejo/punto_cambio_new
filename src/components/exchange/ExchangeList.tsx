@@ -36,15 +36,57 @@ const ExchangeList = ({
     );
   }
 
-  const getCurrencyName = (currencyId: string) => {
-    const currency = currencies.find((c) => c.id === currencyId);
-    return currency ? currency.codigo : "??";
+  const getCurrencyCode = (currencyId: string) => {
+    const c = currencies.find((m) => m.id === currencyId);
+    return c ? c.codigo : "—";
   };
 
-  // Tipado correcto y robusto
   const formatMonto = (valor: number | string | null | undefined): string => {
-    const num = typeof valor === "number" ? valor : Number(valor);
+    const num =
+      typeof valor === "number"
+        ? valor
+        : valor !== null && valor !== undefined
+        ? Number(valor)
+        : NaN;
     return isNaN(num) ? "0.00" : num.toFixed(2);
+  };
+
+  const formatFecha = (iso?: string | null) => {
+    if (!iso) return "Sin fecha";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "Sin fecha";
+    return d.toLocaleString();
+  };
+
+  const getClienteNombre = (ex: CambioDivisa): string => {
+    // En /exchanges (GET) viene `cliente` (string). En la creación puede venir `datos_cliente`.
+    const nombreFromDatos =
+      ex.datos_cliente &&
+      [ex.datos_cliente.nombre, ex.datos_cliente.apellido]
+        .filter(Boolean)
+        .join(" ");
+    return (ex as any).cliente || nombreFromDatos || "Cliente";
+  };
+
+  const getTasaTexto = (ex: CambioDivisa): string => {
+    const tb = Number(ex.tasa_cambio_billetes || 0);
+    const tm = Number(ex.tasa_cambio_monedas || 0);
+    if (tb > 0 && tm > 0) return `B: ${tb} | M: ${tm}`;
+    if (tb > 0) return `Billetes: ${tb}`;
+    if (tm > 0) return `Monedas: ${tm}`;
+    return "—";
+  };
+
+  const getEstadoPill = (estado?: string) => {
+    const base =
+      "px-2 py-0.5 rounded text-xs font-medium border inline-flex items-center";
+    if (estado === "COMPLETADO") {
+      return `${base} bg-green-50 text-green-700 border-green-200`;
+    }
+    if (estado === "PENDIENTE") {
+      return `${base} bg-yellow-50 text-yellow-700 border-yellow-200`;
+    }
+    return `${base} bg-gray-50 text-gray-700 border-gray-200`;
   };
 
   return (
@@ -61,53 +103,62 @@ const ExchangeList = ({
             No hay cambios registrados
           </div>
         ) : (
-          <div className="space-y-3 max-h-80 overflow-y-auto">
+          <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
             {exchanges.map((exchange) => (
               <div
                 key={exchange.id}
                 className="border rounded-lg p-3 bg-muted/20"
               >
-                <div className="flex justify-between items-start mb-2">
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      exchange.tipo_operacion === "COMPRA"
-                        ? "bg-green-100 text-green-800"
-                        : "bg-blue-100 text-blue-800"
-                    }`}
-                  >
-                    {exchange.tipo_operacion}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {exchange.fecha
-                      ? new Date(exchange.fecha).toLocaleDateString()
-                      : "Sin fecha"}
+                <div className="flex justify-between items-start mb-2 gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        exchange.tipo_operacion === "COMPRA"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-blue-100 text-blue-800"
+                      }`}
+                      title="Tipo de operación"
+                    >
+                      {exchange.tipo_operacion}
+                    </span>
+                    <span
+                      className={getEstadoPill(exchange.estado)}
+                      title="Estado"
+                    >
+                      {exchange.estado || "—"}
+                    </span>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {formatFecha(exchange.fecha)}
                   </span>
                 </div>
+
                 <div className="text-xs space-y-1">
                   <p className="font-medium text-sm">
-                    {exchange.datos_cliente?.nombre || ""}{" "}
-                    {exchange.datos_cliente?.apellido || ""}
+                    {getClienteNombre(exchange)}
                   </p>
+
                   <p className="text-muted-foreground">
                     Cliente entregó: {formatMonto(exchange.monto_origen)}{" "}
-                    {getCurrencyName(exchange.moneda_origen_id)}
+                    {getCurrencyCode(exchange.moneda_origen_id)}
                   </p>
+
                   <p className="text-muted-foreground">
                     Cliente recibió: {formatMonto(exchange.monto_destino)}{" "}
-                    {getCurrencyName(exchange.moneda_destino_id)}
+                    {getCurrencyCode(exchange.moneda_destino_id)}
                   </p>
-                  <div className="flex justify-between items-center">
+
+                  <div className="flex justify-between items-center pt-1">
                     <span className="text-muted-foreground">
-                      Tasa:{" "}
-                      {exchange.tasa_cambio_billetes ||
-                        exchange.tasa_cambio_monedas ||
-                        0}
+                      Tasa: {getTasaTexto(exchange)}
                     </span>
                     <div className="flex items-center gap-2">
-                      {exchange.numero_recibo && (
+                      {exchange.numero_recibo ? (
                         <span className="text-muted-foreground">
                           #{exchange.numero_recibo}
                         </span>
+                      ) : (
+                        <span className="text-muted-foreground">#—</span>
                       )}
                       {onReprintReceipt && (
                         <Button
@@ -116,6 +167,7 @@ const ExchangeList = ({
                           onClick={() => onReprintReceipt(exchange)}
                           className="h-6 px-2 text-xs"
                           title="Reimprimir recibo"
+                          aria-label="Reimprimir recibo"
                         >
                           <Printer className="h-3 w-3" />
                         </Button>

@@ -194,13 +194,15 @@ const Reports = ({ user: _user }: ReportsProps) => {
                   />
                   <Select
                     value={selectedUserId || ""}
-                    onValueChange={(v) => setSelectedUserId(v || null)}
+                    onValueChange={(v) =>
+                      setSelectedUserId(v === "ALL" ? null : v)
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar usuario" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Todos</SelectItem>
+                      <SelectItem value="ALL">Todos</SelectItem>
                       {filteredUsers.map((u) => (
                         <SelectItem key={u.id} value={u.id}>
                           {u.nombre} (@{u.username})
@@ -220,13 +222,15 @@ const Reports = ({ user: _user }: ReportsProps) => {
               {reportType === "worktime" ? (
                 <Select
                   value={selectedPointId || ""}
-                  onValueChange={(v) => setSelectedPointId(v || null)}
+                  onValueChange={(v) =>
+                    setSelectedPointId(v === "ALL" ? null : v)
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Seleccionar punto" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos</SelectItem>
+                    <SelectItem value="ALL">Todos</SelectItem>
                     {points.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.nombre}

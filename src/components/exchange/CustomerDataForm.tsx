@@ -30,27 +30,67 @@ const CustomerDataForm = ({
   onCustomerData,
   initialData,
 }: CustomerDataFormProps) => {
-  // Blindaje: siempre todos los campos iniciales definidos
+  // Siempre iniciamos con todos los campos definidos para evitar undefined/null
   const [customerData, setCustomerData] = useState<DatosCliente>({
     ...emptyCustomer,
     ...initialData,
+    // Normalizamos por si initialData trae nulls
+    nombre: (initialData?.nombre ?? "").trim(),
+    apellido: (initialData?.apellido ?? "").trim(),
+    cedula: (initialData?.cedula ?? "").trim(),
+    telefono: (initialData?.telefono ?? "") || "",
+    documento:
+      (initialData?.documento ?? "").trim() ||
+      (initialData?.cedula ?? "").trim() ||
+      "",
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onCustomerData(customerData);
-  };
-
   const isFormValid = () => {
-    return !!(
-      customerData.nombre &&
-      customerData.apellido &&
-      customerData.cedula
+    return (
+      customerData.nombre.trim().length > 0 &&
+      customerData.apellido.trim().length > 0 &&
+      customerData.cedula.trim().length > 0
     );
   };
 
-  const handleCustomerSelect = (selectedCustomer: DatosCliente) => {
-    setCustomerData(selectedCustomer);
+  const handleCustomerSelect = (selected: DatosCliente) => {
+    // Blindaje: mezclamos con empty y normalizamos documento = cedula si viene vacío
+    const normalized: DatosCliente = {
+      ...emptyCustomer,
+      ...selected,
+      nombre: (selected.nombre ?? "").trim(),
+      apellido: (selected.apellido ?? "").trim(),
+      cedula: (selected.cedula ?? "").trim(),
+      telefono: (selected.telefono ?? "") || "",
+      documento:
+        (selected.documento ?? "").trim() ||
+        (selected.cedula ?? "").trim() ||
+        "",
+    };
+    setCustomerData(normalized);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Normalizamos antes de enviar al backend (evita “faltan datos” por strings vacíos/espacios)
+    const sanitized: DatosCliente = {
+      nombre: customerData.nombre.trim(),
+      apellido: customerData.apellido.trim(),
+      cedula: customerData.cedula.trim(),
+      telefono: (customerData.telefono ?? "").trim(),
+      documento:
+        (customerData.documento ?? "").trim() ||
+        customerData.cedula.trim() ||
+        "",
+    };
+
+    // Validación final en el cliente (coincide con las reglas del backend)
+    if (!sanitized.nombre || !sanitized.apellido || !sanitized.cedula) {
+      return;
+    }
+
+    onCustomerData(sanitized);
   };
 
   return (
@@ -78,8 +118,11 @@ const CustomerDataForm = ({
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Nombre *</Label>
+              <Label htmlFor="nombre" className="text-sm font-medium">
+                Nombre *
+              </Label>
               <Input
+                id="nombre"
                 value={customerData.nombre}
                 onChange={(e) =>
                   setCustomerData((prev) => ({
@@ -89,12 +132,16 @@ const CustomerDataForm = ({
                 }
                 placeholder="Nombre"
                 className="h-9"
+                autoComplete="given-name"
                 required
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Apellido *</Label>
+              <Label htmlFor="apellido" className="text-sm font-medium">
+                Apellido *
+              </Label>
               <Input
+                id="apellido"
                 value={customerData.apellido}
                 onChange={(e) =>
                   setCustomerData((prev) => ({
@@ -104,6 +151,7 @@ const CustomerDataForm = ({
                 }
                 placeholder="Apellido"
                 className="h-9"
+                autoComplete="family-name"
                 required
               />
             </div>
@@ -111,25 +159,39 @@ const CustomerDataForm = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Cédula *</Label>
+              <Label htmlFor="cedula" className="text-sm font-medium">
+                Cédula *
+              </Label>
               <Input
+                id="cedula"
+                inputMode="numeric"
                 value={customerData.cedula}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const value = e.target.value;
                   setCustomerData((prev) => ({
                     ...prev,
-                    cedula: e.target.value,
-                    documento: e.target.value,
-                  }))
-                }
+                    cedula: value,
+                    // Alineado con el backend: si documento está vacío, lo igualamos a la cédula
+                    documento:
+                      prev.documento && prev.documento.trim()
+                        ? prev.documento
+                        : value,
+                  }));
+                }}
                 placeholder="Número de cédula"
                 className="h-9"
+                autoComplete="off"
                 required
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-sm font-medium">Teléfono</Label>
+              <Label htmlFor="telefono" className="text-sm font-medium">
+                Teléfono
+              </Label>
               <Input
-                value={customerData.telefono}
+                id="telefono"
+                inputMode="tel"
+                value={customerData.telefono || ""}
                 onChange={(e) =>
                   setCustomerData((prev) => ({
                     ...prev,
@@ -138,9 +200,21 @@ const CustomerDataForm = ({
                 }
                 placeholder="Número de teléfono"
                 className="h-9"
+                autoComplete="tel"
               />
             </div>
           </div>
+
+          {/* Campo documento oculto para mantener consistencia con el backend */}
+          <input
+            type="hidden"
+            value={
+              (customerData.documento ?? "").trim() ||
+              customerData.cedula.trim() ||
+              ""
+            }
+            readOnly
+          />
 
           <Button
             type="submit"

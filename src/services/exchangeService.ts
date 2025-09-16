@@ -49,11 +49,13 @@ export interface CreateExchangeData {
 interface ExchangeResponse {
   exchange: CambioDivisa;
   success: boolean;
+  error?: string;
 }
 
 interface ExchangesResponse {
   exchanges: CambioDivisa[];
   success: boolean;
+  error?: string;
 }
 
 export interface ClienteEncontrado {
@@ -70,27 +72,102 @@ export interface ClienteEncontrado {
 interface SearchCustomersResponse {
   clientes: ClienteEncontrado[];
   success: boolean;
+  error?: string;
 }
+
+// -------- Utils locales (sin cambiar el flujo existente) --------
+const trim = (v?: string | null) => (v ?? "").trim();
+
+const toISOIfDate = (v?: string | Date | null): string | null => {
+  if (v == null) return null;
+  if (v instanceof Date) return v.toISOString();
+  const s = String(v).trim();
+  return s ? new Date(s).toISOString() : null;
+};
+
+/**
+ * Sanitiza el payload antes de enviarlo al backend para evitar rechazos por:
+ * - strings vacíos en campos opcionales (se mandan como null)
+ * - fechas tipo Date (se mandan en ISO string)
+ * - espacios en blanco en campos de texto
+ */
+const sanitizeCreatePayload = (
+  data: CreateExchangeData
+): CreateExchangeData => {
+  const isTransfer = data.metodo_entrega === "transferencia";
+
+  // Documento cae por defecto a cédula si viene vacío (coincide con backend)
+  const documento =
+    trim(data.datos_cliente.documento) || trim(data.datos_cliente.cedula) || "";
+
+  return {
+    ...data,
+    datos_cliente: {
+      nombre: trim(data.datos_cliente.nombre),
+      apellido: trim(data.datos_cliente.apellido),
+      cedula: trim(data.datos_cliente.cedula),
+      documento,
+      telefono: trim(data.datos_cliente.telefono) || undefined,
+    },
+    observacion: trim(data.observacion) || undefined,
+
+    // Solo si es transferencia dejamos los campos; si no, forzamos null
+    transferencia_banco: isTransfer
+      ? trim(data.transferencia_banco) || null
+      : null,
+    transferencia_numero: isTransfer
+      ? trim(data.transferencia_numero) || null
+      : null,
+    transferencia_imagen_url: isTransfer
+      ? trim(data.transferencia_imagen_url) || null
+      : null,
+
+    // Fechas en ISO o null
+    abono_inicial_fecha:
+      data.abono_inicial_fecha !== undefined
+        ? toISOIfDate(data.abono_inicial_fecha)
+        : null,
+
+    // Normalizamos nulos para backend (evita undefined)
+    abono_inicial_monto:
+      data.abono_inicial_monto !== undefined ? data.abono_inicial_monto : null,
+    abono_inicial_recibido_por:
+      data.abono_inicial_recibido_por !== undefined
+        ? data.abono_inicial_recibido_por
+        : null,
+    saldo_pendiente:
+      data.saldo_pendiente !== undefined ? data.saldo_pendiente : null,
+    referencia_cambio_principal: trim(data.referencia_cambio_principal) || null,
+  };
+};
 
 export const exchangeService = {
   async createExchange(
     data: CreateExchangeData
   ): Promise<{ exchange: CambioDivisa | null; error: string | null }> {
     try {
-      // Creating exchange
+      const payload = sanitizeCreatePayload(data);
+
       const response = await apiService.post<ExchangeResponse>(
         "/exchanges",
-        data
+        payload
       );
 
-      if (response.success) {
+      if (response?.success) {
         return { exchange: response.exchange, error: null };
       } else {
-        return { exchange: null, error: "Error al crear el cambio de divisa" };
+        return {
+          exchange: null,
+          error: response?.error || "Error al crear el cambio de divisa",
+        };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating exchange:", error);
-      return { exchange: null, error: "Error de conexión al crear el cambio" };
+      return {
+        exchange: null,
+        error:
+          error?.message || "Error de conexión al crear el cambio de divisa",
+      };
     }
   },
 
@@ -99,20 +176,22 @@ export const exchangeService = {
     error: string | null;
   }> {
     try {
-      // Fetching all exchanges
       const response = await apiService.get<ExchangesResponse>("/exchanges");
 
-      if (response.success) {
+      if (response?.success) {
         return { exchanges: response.exchanges, error: null };
       } else {
         return {
           exchanges: [],
-          error: "Error al obtener los cambios de divisa",
+          error: response?.error || "Error al obtener los cambios de divisa",
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching exchanges:", error);
-      return { exchanges: [], error: "Error de conexión al obtener cambios" };
+      return {
+        exchanges: [],
+        error: error?.message || "Error de conexión al obtener cambios",
+      };
     }
   },
 
@@ -120,24 +199,24 @@ export const exchangeService = {
     pointId: string
   ): Promise<{ exchanges: CambioDivisa[]; error: string | null }> {
     try {
-      // Fetching exchanges for point
       const response = await apiService.get<ExchangesResponse>(
-        `/exchanges?point_id=${pointId}`
+        `/exchanges?point_id=${encodeURIComponent(pointId)}`
       );
 
-      if (response.success) {
+      if (response?.success) {
         return { exchanges: response.exchanges, error: null };
       } else {
         return {
           exchanges: [],
-          error: "Error al obtener los cambios del punto",
+          error: response?.error || "Error al obtener los cambios del punto",
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching exchanges by point:", error);
       return {
         exchanges: [],
-        error: "Error de conexión al obtener cambios del punto",
+        error:
+          error?.message || "Error de conexión al obtener cambios del punto",
       };
     }
   },
@@ -146,24 +225,27 @@ export const exchangeService = {
     pointId: string
   ): Promise<{ exchanges: CambioDivisa[]; error: string | null }> {
     try {
-      // Fetching pending exchanges for point
       const response = await apiService.get<ExchangesResponse>(
-        `/exchanges/pending?pointId=${pointId}`
+        `/exchanges/pending?pointId=${encodeURIComponent(pointId)}`
       );
 
-      if (response.success) {
+      if (response?.success) {
         return { exchanges: response.exchanges, error: null };
       } else {
         return {
           exchanges: [],
-          error: "Error al obtener los cambios pendientes del punto",
+          error:
+            response?.error ||
+            "Error al obtener los cambios pendientes del punto",
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching pending exchanges by point:", error);
       return {
         exchanges: [],
-        error: "Error de conexión al obtener cambios pendientes del punto",
+        error:
+          error?.message ||
+          "Error de conexión al obtener cambios pendientes del punto",
       };
     }
   },
@@ -172,54 +254,81 @@ export const exchangeService = {
     exchangeId: string
   ): Promise<{ exchange: CambioDivisa | null; error: string | null }> {
     try {
-      // Closing pending exchange
       const response = await apiService.patch<ExchangeResponse>(
-        `/exchanges/${exchangeId}/cerrar`
+        `/exchanges/${encodeURIComponent(exchangeId)}/cerrar`
       );
 
-      if (response.success) {
+      if (response?.success) {
         return { exchange: response.exchange, error: null };
       } else {
-        return { exchange: null, error: "Error al cerrar el cambio pendiente" };
+        return {
+          exchange: null,
+          error: response?.error || "Error al cerrar el cambio pendiente",
+        };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error closing pending exchange:", error);
-      return { exchange: null, error: "Error de conexión al cerrar el cambio" };
+      return {
+        exchange: null,
+        error: error?.message || "Error de conexión al cerrar el cambio",
+      };
     }
   },
 
   async completeExchange(
     exchangeId: string,
-    deliveryDetails: any
+    deliveryDetails: {
+      metodoEntrega: "efectivo" | "transferencia";
+      transferenciaNumero?: string;
+      transferenciaBanco?: string;
+      transferenciaImagen?: File | null;
+      divisasRecibidas?: {
+        billetes?: number;
+        monedas?: number;
+        total?: number;
+      };
+    }
   ): Promise<{ exchange: CambioDivisa | null; error: string | null }> {
     try {
-      const response = await apiService.patch<ExchangeResponse>(
-        `/exchanges/${exchangeId}/completar`,
-        {
-          metodo_entrega: deliveryDetails.metodoEntrega,
-          transferencia_numero: deliveryDetails.transferenciaNumero,
-          transferencia_banco: deliveryDetails.transferenciaBanco,
-          transferencia_imagen_url: deliveryDetails.transferenciaImagen
+      const isTransfer = deliveryDetails.metodoEntrega === "transferencia";
+      const body = {
+        metodo_entrega: deliveryDetails.metodoEntrega,
+        transferencia_numero: isTransfer
+          ? trim(deliveryDetails.transferenciaNumero) || null
+          : null,
+        transferencia_banco: isTransfer
+          ? trim(deliveryDetails.transferenciaBanco) || null
+          : null,
+        transferencia_imagen_url: isTransfer
+          ? deliveryDetails.transferenciaImagen
             ? "uploaded"
-            : null,
-          divisas_recibidas_billetes:
-            deliveryDetails.divisasRecibidas?.billetes || 0,
-          divisas_recibidas_monedas:
-            deliveryDetails.divisasRecibidas?.monedas || 0,
-          divisas_recibidas_total: deliveryDetails.divisasRecibidas?.total || 0,
-        }
+            : null
+          : null,
+        divisas_recibidas_billetes:
+          deliveryDetails.divisasRecibidas?.billetes ?? 0,
+        divisas_recibidas_monedas:
+          deliveryDetails.divisasRecibidas?.monedas ?? 0,
+        divisas_recibidas_total: deliveryDetails.divisasRecibidas?.total ?? 0,
+      };
+
+      const response = await apiService.patch<ExchangeResponse>(
+        `/exchanges/${encodeURIComponent(exchangeId)}/completar`,
+        body
       );
 
-      if (response.success) {
+      if (response?.success) {
         return { exchange: response.exchange, error: null };
       } else {
-        return { exchange: null, error: "Error al completar el cambio" };
+        return {
+          exchange: null,
+          error: response?.error || "Error al completar el cambio",
+        };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error completing exchange:", error);
       return {
         exchange: null,
-        error: "Error de conexión al completar el cambio",
+        error: error?.message || "Error de conexión al completar el cambio",
       };
     }
   },
@@ -239,19 +348,19 @@ export const exchangeService = {
         `/exchanges/search-customers?query=${encodeURIComponent(query.trim())}`
       );
 
-      if (response.success) {
+      if (response?.success) {
         return { clientes: response.clientes, error: null };
       } else {
         return {
           clientes: [],
-          error: "Error al buscar clientes",
+          error: response?.error || "Error al buscar clientes",
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error searching customers:", error);
       return {
         clientes: [],
-        error: "Error de conexión al buscar clientes",
+        error: error?.message || "Error de conexión al buscar clientes",
       };
     }
   },

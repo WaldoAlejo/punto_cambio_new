@@ -48,6 +48,8 @@ import puntosAtencionRoutes from "./routes/puntos-atencion.js";
 import contabilidadDiariaRoutes from "./routes/contabilidad-diaria.js";
 import permissionRoutes from "./routes/permissions.js";
 import historialSaldoRoutes from "./routes/historial-saldo.js";
+// Nuevas rutas: Servicios Externos
+import serviciosExternosRoutes from "./routes/servicios-externos.js";
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
@@ -68,7 +70,7 @@ const limiter = rateLimit({
       "/api/transfers",
       "/api/servientrega",
     ];
-    return excludedPaths.some((path) => req.path.startsWith(path));
+    return excludedPaths.some((p) => req.path.startsWith(p));
   },
 });
 
@@ -93,6 +95,7 @@ app.use(
     originAgentCluster: false, // Deshabilitar Origin-Agent-Cluster header
   })
 );
+
 app.use(
   cors({
     origin: [
@@ -122,7 +125,7 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.status(200).json({
     status: "OK",
     timestamp: new Date().toISOString(),
@@ -170,41 +173,44 @@ app.use("/api/servientrega", servientregaRoutes);
 app.use("/api/puntos-atencion", puntosAtencionRoutes);
 app.use("/api/contabilidad-diaria", contabilidadDiariaRoutes);
 app.use("/api/historial-saldo", historialSaldoRoutes);
-// Nuevas rutas: Servicios Externos
-import serviciosExternosRoutes from "./routes/servicios-externos.js";
 app.use("/api/servicios-externos", serviciosExternosRoutes);
-// Permisos de salida
 app.use("/api/permissions", permissionRoutes);
 
-// Servir archivos estáticos del frontend si existe el build (independiente de NODE_ENV)
+// ------- Frontend estático (serve SPA build) -------
 try {
   const frontendDistPath = path.join(__dirname, "..", "dist");
   const indexPath = path.join(frontendDistPath, "index.html");
 
   if (fs.existsSync(indexPath)) {
-    // Servir archivos estáticos con headers específicos
+    // 1) Servir /assets primero (CSS/JS generados por Vite) para evitar que el fallback devuelva HTML
     app.use(
-      express.static(frontendDistPath, {
-        setHeaders: (res, _path) => {
-          // Evitar que el navegador fuerce HTTPS
-          res.setHeader(
-            "Content-Security-Policy",
-            "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: http: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https:;"
-          );
+      "/assets",
+      express.static(path.join(frontendDistPath, "assets"), {
+        immutable: true,
+        maxAge: "1y",
+        setHeaders: (res) => {
           res.setHeader("X-Content-Type-Options", "nosniff");
-          res.setHeader("X-Frame-Options", "SAMEORIGIN");
         },
       })
     );
 
-    // Manejar rutas SPA - todas las rutas no-API deben servir index.html
-    app.get("*", (req, res, next) => {
-      // Si es una ruta de API, continuar con el siguiente middleware
-      if (req.path.startsWith("/api/") || req.path.startsWith("/health")) {
-        return next();
-      }
+    // 2) Servir otros archivos estáticos (favicon, manifest, index.html, etc.)
+    app.use(
+      express.static(frontendDistPath, {
+        setHeaders: (res) => {
+          res.setHeader("X-Content-Type-Options", "nosniff");
+          res.setHeader("X-Frame-Options", "SAMEORIGIN");
+          // CSP adecuado para el build
+          res.setHeader(
+            "Content-Security-Policy",
+            "default-src 'self' data: http: https:; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:;"
+          );
+        },
+      })
+    );
 
-      // Para todas las demás rutas, servir index.html
+    // 3) Fallback SPA: devolver index.html para todo excepto /api, /assets y /health
+    app.get(/^\/(?!api|assets\/|health).*$/, (_req, res) => {
       res.sendFile(indexPath);
     });
 

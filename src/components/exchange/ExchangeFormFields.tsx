@@ -73,6 +73,47 @@ const ExchangeFormFields = ({
     );
   }
 
+  // Evitar seleccionar la misma moneda en origen/destino
+  const handleSelectFrom = (value: string) => {
+    setFromCurrency(value);
+    if (value === toCurrency) {
+      // Si el usuario eligió la misma, limpiamos destino para forzar corrección
+      setToCurrency("");
+    }
+  };
+  const handleSelectTo = (value: string) => {
+    setToCurrency(value);
+    if (value === fromCurrency) {
+      setFromCurrency("");
+    }
+  };
+
+  // Filtrar listas para no ofrecer la moneda ya elegida al otro lado (mejor UX)
+  const fromOptions = currencies.filter((c) => c.id !== toCurrency);
+  const toOptions = currencies.filter((c) => c.id !== fromCurrency);
+
+  // Helpers para limpiar tasas cuando no se usa el monto asociado
+  const onAmountBilletesChange = (v: string) => {
+    setAmountBilletes(v);
+    const n = parseFloat(v);
+    if (!v || isNaN(n) || n <= 0) {
+      // si ya no hay billetes, limpiar tasa de billetes para evitar validaciones confusas
+      if (rateBilletes !== "") setRateBilletes("");
+    }
+  };
+  const onAmountMonedasChange = (v: string) => {
+    setAmountMonedas(v);
+    const n = parseFloat(v);
+    if (!v || isNaN(n) || n <= 0) {
+      if (rateMonedas !== "") setRateMonedas("");
+    }
+  };
+
+  const billetesActivos =
+    !!amountBilletes && (parseFloat(amountBilletes) || 0) > 0;
+  const monedasActivas =
+    !!amountMonedas && (parseFloat(amountMonedas) || 0) > 0;
+
   return (
     <div className="space-y-4">
       {/* Tipo de operación compacto */}
@@ -96,9 +137,9 @@ const ExchangeFormFields = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <CurrencySearchSelect
-            currencies={currencies}
+            currencies={fromOptions}
             value={fromCurrency}
-            onValueChange={setFromCurrency}
+            onValueChange={handleSelectFrom}
             placeholder="Seleccionar moneda que entrega el cliente"
             label="💰 Moneda que ENTREGA el Cliente"
           />
@@ -106,9 +147,9 @@ const ExchangeFormFields = ({
 
         <div className="space-y-2">
           <CurrencySearchSelect
-            currencies={currencies}
+            currencies={toOptions}
             value={toCurrency}
-            onValueChange={setToCurrency}
+            onValueChange={handleSelectTo}
             placeholder="Seleccionar moneda que recibe el cliente"
             label="💵 Moneda que RECIBE el Cliente"
           />
@@ -126,32 +167,44 @@ const ExchangeFormFields = ({
 
       {/* Tasas diferenciadas */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label className="text-sm font-medium">
             💴 Tasa de Cambio para Billetes
           </Label>
           <Input
             type="number"
             step="0.0001"
+            min="0"
             value={rateBilletes}
             onChange={(e) => setRateBilletes(e.target.value)}
-            placeholder="0.0000"
+            placeholder={
+              billetesActivos ? "0.0000" : "Se habilita con billetes"
+            }
             className="h-10"
+            disabled={!billetesActivos}
           />
+          <p className="text-xs text-muted-foreground">
+            Solo requerida si ingresa monto en <b>billetes</b>.
+          </p>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label className="text-sm font-medium">
             🪙 Tasa de Cambio para Monedas
           </Label>
           <Input
             type="number"
             step="0.0001"
+            min="0"
             value={rateMonedas}
             onChange={(e) => setRateMonedas(e.target.value)}
-            placeholder="0.0000"
+            placeholder={monedasActivas ? "0.0000" : "Se habilita con monedas"}
             className="h-10"
+            disabled={!monedasActivas}
           />
+          <p className="text-xs text-muted-foreground">
+            Solo requerida si ingresa monto en <b>monedas</b>.
+          </p>
         </div>
       </div>
 
@@ -170,9 +223,11 @@ const ExchangeFormFields = ({
             <Label className="text-xs">💴 Billetes</Label>
             <Input
               type="number"
+              inputMode="decimal"
               step="0.01"
+              min="0"
               value={amountBilletes}
-              onChange={(e) => setAmountBilletes(e.target.value)}
+              onChange={(e) => onAmountBilletesChange(e.target.value)}
               placeholder="0.00"
               className="h-9"
             />
@@ -181,9 +236,11 @@ const ExchangeFormFields = ({
             <Label className="text-xs">🪙 Monedas</Label>
             <Input
               type="number"
+              inputMode="decimal"
               step="0.01"
+              min="0"
               value={amountMonedas}
-              onChange={(e) => setAmountMonedas(e.target.value)}
+              onChange={(e) => onAmountMonedasChange(e.target.value)}
               placeholder="0.00"
               className="h-9"
             />

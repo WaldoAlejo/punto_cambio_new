@@ -98,13 +98,16 @@ export default function ServiciosExternosHistory() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
         <div>
           <label className="text-sm">Servicio/Categoría</label>
-          <Select onValueChange={(v) => setServicio(v as any)} defaultValue="">
+          <Select
+            onValueChange={(v) => setServicio((v === "ALL" ? "" : v) as any)}
+            defaultValue="ALL"
+          >
             <SelectTrigger className="mt-1">
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
               {SERVICIOS.map((s) => (
-                <SelectItem key={s.value || "ALL"} value={s.value || ""}>
+                <SelectItem key={s.value || "ALL"} value={s.value || "ALL"}>
                   {s.label}
                 </SelectItem>
               ))}
@@ -114,13 +117,16 @@ export default function ServiciosExternosHistory() {
 
         <div>
           <label className="text-sm">Tipo</label>
-          <Select onValueChange={(v) => setTipo(v as any)} defaultValue="">
+          <Select
+            onValueChange={(v) => setTipo((v === "ALL" ? "" : v) as any)}
+            defaultValue="ALL"
+          >
             <SelectTrigger className="mt-1">
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
               {TIPOS.map((t) => (
-                <SelectItem key={t.value || "ALL"} value={t.value || ""}>
+                <SelectItem key={t.value || "ALL"} value={t.value || "ALL"}>
                   {t.label}
                 </SelectItem>
               ))}

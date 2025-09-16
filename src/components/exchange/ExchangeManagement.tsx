@@ -19,6 +19,7 @@ const ExchangeManagement = ({
   onReturnToDashboard,
 }: ExchangeManagementProps) => {
   const stepsRef = useRef<ExchangeStepsRef>(null);
+
   const {
     currencies,
     exchanges,
@@ -35,6 +36,9 @@ const ExchangeManagement = ({
     onReturnToDashboard,
   });
 
+  // Guardas de acceso: SOLO Operador / Concesión pueden operar cambios
+  const canOperate = user?.rol === "OPERADOR" || user?.rol === "CONCESION";
+
   if (!user) {
     return (
       <div className="p-6 text-center py-12 text-gray-500 text-lg">
@@ -43,11 +47,14 @@ const ExchangeManagement = ({
     );
   }
 
-  if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
+  if (!canOperate) {
     return (
       <div className="p-6 text-center py-12 text-gray-500 text-lg">
-        Los cambios de divisas solo pueden ser realizados por operadores y
-        concesiones
+        Los cambios de divisas solo pueden ser realizados por usuarios con rol{" "}
+        <span className="font-semibold">OPERADOR</span>
+        {` `}
+        {`o `}
+        <span className="font-semibold">CONCESION</span>.
       </div>
     );
   }
@@ -69,7 +76,6 @@ const ExchangeManagement = ({
     );
   }
 
-  // NUEVO: Mostrar error de carga de monedas
   if (dataError) {
     return (
       <div className="p-6 text-center py-12 text-red-500 text-lg">
@@ -78,7 +84,6 @@ const ExchangeManagement = ({
     );
   }
 
-  // NUEVO: Validar que sí existan monedas para operar
   if (!currencies || currencies.length < 2) {
     return (
       <div className="p-6 text-center py-12 text-red-500 text-lg">
@@ -91,7 +96,7 @@ const ExchangeManagement = ({
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5">
       <div className="container mx-auto p-6 space-y-8">
-        {/* Header mejorado */}
+        {/* Encabezado */}
         <div className="bg-card rounded-xl shadow-lg p-6 border border-border/50">
           <div className="flex items-center justify-between">
             <div>
@@ -112,7 +117,7 @@ const ExchangeManagement = ({
           </div>
         </div>
 
-        {/* Formulario principal - Ocupa todo el ancho disponible */}
+        {/* Formulario principal */}
         <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
           {isProcessing ? (
             <div className="text-center py-16 px-6">
@@ -137,9 +142,8 @@ const ExchangeManagement = ({
           className="bg-card rounded-xl shadow-lg border border-border/50"
         />
 
-        {/* Listas debajo del formulario - Grid de 2 columnas */}
+        {/* Listas */}
         <div className="grid lg:grid-cols-2 gap-8">
-          {/* Lista de cambios recientes */}
           <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
             <ExchangeList
               exchanges={exchanges || []}
@@ -148,7 +152,6 @@ const ExchangeManagement = ({
             />
           </div>
 
-          {/* Cambios pendientes */}
           <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
             <PendingExchangesList
               user={user}

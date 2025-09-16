@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,13 +27,13 @@ export interface ExchangeDetailsFormProps {
   transferenciaImagen: File | null;
   onTransferenciaImagenChange: (file: File | null) => void;
 
-  // NUEVOS CAMPOS DE ABONO PARCIAL
+  // Abono parcial (opcionales)
   abonoInicialMonto?: number | null;
   onAbonoInicialMontoChange?: (v: number | null) => void;
   abonoInicialFecha?: string | null;
   onAbonoInicialFechaChange?: (v: string | null) => void;
-  abonoInicialRecibidoPor?: string | null; // Solo lectura, el usuario logueado
-  onAbonoInicialRecibidoPorChange?: (v: string | null) => void; // Opcional, no recomendado usar
+  abonoInicialRecibidoPor?: string | null; // Solo lectura (usuario logueado)
+  onAbonoInicialRecibidoPorChange?: (v: string | null) => void;
   saldoPendiente?: number | null;
   onSaldoPendienteChange?: (v: number | null) => void;
   referenciaCambioPrincipal?: string | null;
@@ -68,7 +69,7 @@ const ExchangeDetailsForm = ({
   referenciaCambioPrincipal,
   onReferenciaCambioPrincipalChange,
 }: ExchangeDetailsFormProps) => {
-  // Validación para no dejar la pantalla en blanco
+  // Si no hay ninguna moneda, mostrar mensaje claro
   if (!fromCurrency && !toCurrency) {
     return (
       <div className="text-center text-red-500 p-6">
@@ -84,6 +85,25 @@ const ExchangeDetailsForm = ({
       onTransferenciaImagenChange(null);
     }
   };
+
+  // Limpiar campos de transferencia si se cambia a efectivo (evita “faltan datos” por valores residuales)
+  useEffect(() => {
+    if (metodoEntrega === "efectivo") {
+      onTransferenciaNumeroChange("");
+      onTransferenciaBancoChange("");
+      onTransferenciaImagenChange(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metodoEntrega]);
+
+  // Helper para mostrar tasas con fallback amigable
+  const fmtRate = (v: string) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n.toFixed(4) : "-";
+  };
+
+  const cambioParcialActivado =
+    abonoInicialMonto != null || saldoPendiente != null;
 
   return (
     <div className="space-y-4">
@@ -180,12 +200,8 @@ const ExchangeDetailsForm = ({
             </div>
           </div>
           <div className="mt-3 text-xs text-gray-600">
-            <div>
-              Tasa billetes: {parseFloat(exchangeData.rateBilletes).toFixed(4)}
-            </div>
-            <div>
-              Tasa monedas: {parseFloat(exchangeData.rateMonedas).toFixed(4)}
-            </div>
+            <div>Tasa billetes: {fmtRate(exchangeData.rateBilletes)}</div>
+            <div>Tasa monedas: {fmtRate(exchangeData.rateMonedas)}</div>
           </div>
         </div>
       )}
@@ -200,23 +216,21 @@ const ExchangeDetailsForm = ({
         />
       )}
 
-      {/* === CHECKBOX PARA ACTIVAR CAMBIO PARCIAL === */}
+      {/* Activar cambio parcial */}
       <div className="border rounded-xl p-3 space-y-3 bg-blue-50">
         <div className="flex items-center space-x-2">
           <input
             type="checkbox"
             id="cambio-parcial"
-            checked={abonoInicialMonto !== null || saldoPendiente !== null}
+            checked={cambioParcialActivado}
             onChange={(e) => {
               if (e.target.checked) {
-                // Activar modo parcial
                 onAbonoInicialMontoChange?.(0);
                 onSaldoPendienteChange?.(0);
                 onAbonoInicialFechaChange?.(
                   new Date().toISOString().split("T")[0]
                 );
               } else {
-                // Desactivar modo parcial
                 onAbonoInicialMontoChange?.(null);
                 onSaldoPendienteChange?.(null);
                 onAbonoInicialFechaChange?.(null);
@@ -238,8 +252,8 @@ const ExchangeDetailsForm = ({
         </p>
       </div>
 
-      {/* === CAMPOS PARA ABONO PARCIAL === */}
-      {(abonoInicialMonto !== null || saldoPendiente !== null) && (
+      {/* Campos para abono parcial */}
+      {cambioParcialActivado && (
         <div className="border rounded-xl p-3 space-y-2 bg-yellow-50">
           <Label className="font-semibold">
             📋 Detalles del cambio parcial
