@@ -299,12 +299,17 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
                 value={userSearch}
                 onChange={(e) => setUserSearch(e.target.value)}
               />
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+              <Select
+                value={selectedUserId}
+                onValueChange={(v) =>
+                  setSelectedUserId(v === "__all__" ? "" : v)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="__all__">Todos</SelectItem>
                   {filteredUsers.map((u) => (
                     <SelectItem key={u.id} value={u.id}>
                       {u.nombre} (@{u.username})
@@ -317,13 +322,15 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
               <Label>Punto (opcional)</Label>
               <Select
                 value={selectedPointId}
-                onValueChange={setSelectedPointId}
+                onValueChange={(v) =>
+                  setSelectedPointId(v === "__all__" ? "" : v)
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="__all__">Todos</SelectItem>
                   {points.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.nombre}
