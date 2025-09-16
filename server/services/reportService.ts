@@ -5,6 +5,7 @@ import {
 } from "../types/reportTypes.js";
 import { reportDataService } from "./reportDataService.js";
 import logger from "../utils/logger.js";
+import { gyeParseDateOnly, gyeDayRangeUtcFromYMD } from "../utils/timezone.js";
 
 export const reportService = {
   async generateReport(
@@ -13,9 +14,11 @@ export const reportService = {
   ): Promise<ReportData[] | SummaryReportResponse> {
     const { reportType, dateFrom, dateTo } = request;
 
-    const startDate = new Date(dateFrom);
-    const endDate = new Date(dateTo);
-    endDate.setHours(23, 59, 59, 999);
+    // Normalizar rango por día GYE
+    const { y: y1, m: m1, d: d1 } = gyeParseDateOnly(dateFrom);
+    const { y: y2, m: m2, d: d2 } = gyeParseDateOnly(dateTo);
+    const { gte: startDate } = gyeDayRangeUtcFromYMD(y1, m1, d1);
+    const { lt: endDate } = gyeDayRangeUtcFromYMD(y2, m2, d2);
 
     switch (reportType) {
       case "exchanges": {

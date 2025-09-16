@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,9 +17,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Download, FileText, Clock } from "lucide-react";
-import { User, PuntoAtencion } from "../../types";
+import { User, PuntoAtencion, Usuario } from "../../types";
 import { useToast } from "@/hooks/use-toast";
+import { userService } from "@/services/userService";
+import { pointService } from "@/services/pointService";
 
 interface TimeReportsProps {
   _user: User;
@@ -29,18 +38,56 @@ interface TimeReportsProps {
 const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [reportData, setReportData] = useState<TimeReportData[]>([]);
+  const [reportData, setReportData] = useState<WorktimeRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  interface TimeReportData {
-    fecha: string;
-    horaInicio: string;
-    horaFin: string;
-    tiempoTotal: number;
-    salidasEspontaneas: number;
-    tiempoSalidas: number;
-    tiempoEfectivo: number;
+  // Filtros adicionales
+  const [users, setUsers] = useState<Usuario[]>([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [points, setPoints] = useState<{ id: string; nombre: string }[]>([]);
+  const [selectedPointId, setSelectedPointId] = useState<string>("");
+
+  useEffect(() => {
+    // Cargar usuarios y puntos (una vez)
+    (async () => {
+      try {
+        const u = await userService.getAllUsers();
+        if (!u.error) setUsers(u.users);
+      } catch {}
+      try {
+        const p = await pointService.getAllPoints();
+        if (!p.error)
+          setPoints(p.points.map((x) => ({ id: x.id, nombre: x.nombre })));
+      } catch {}
+    })();
+  }, []);
+
+  const filteredUsers = useMemo(() => {
+    const term = userSearch.trim().toLowerCase();
+    if (!term) return users;
+    return users.filter(
+      (u) =>
+        u.nombre.toLowerCase().includes(term) ||
+        u.username.toLowerCase().includes(term)
+    );
+  }, [users, userSearch]);
+
+  // Datos recibidos desde backend (/reports worktime)
+  interface WorktimeRow {
+    date: string; // YYYY-MM-DD (día GYE)
+    point: string;
+    user: string;
+    username?: string;
+    entrada: string; // ISO
+    almuerzo?: string; // ISO
+    regreso?: string; // ISO
+    salida: string; // ISO | ""
+    estado?: string;
+    lunchMinutes: number;
+    spontaneousMinutes: number;
+    effectiveMinutes: number;
   }
 
   const generateReport = async () => {
@@ -55,29 +102,31 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
 
     setIsLoading(true);
     try {
-      // Simulated data - replace with actual service call
-      const mockData: TimeReportData[] = [
+      const token = localStorage.getItem("authToken");
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://35.238.95.118/api"}/reports`,
         {
-          fecha: "2024-01-15",
-          horaInicio: "08:00",
-          horaFin: "17:00",
-          tiempoTotal: 540,
-          salidasEspontaneas: 3,
-          tiempoSalidas: 45,
-          tiempoEfectivo: 495,
-        },
-        {
-          fecha: "2024-01-16",
-          horaInicio: "08:15",
-          horaFin: "17:00",
-          tiempoTotal: 525,
-          salidasEspontaneas: 2,
-          tiempoSalidas: 30,
-          tiempoEfectivo: 495,
-        },
-      ];
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            reportType: "worktime",
+            dateFrom,
+            dateTo,
+            // Mostrar todos por defecto: solo filtrar si se elige manualmente
+            ...(selectedUserId ? { userId: selectedUserId } : {}),
+            ...(selectedPointId ? { pointId: selectedPointId } : {}),
+          }),
+        }
+      );
 
-      setReportData(mockData);
+      const data = await response.json();
+      if (!data.success)
+        throw new Error(data.error || "Error al generar reporte");
+
+      setReportData(data.data as WorktimeRow[]);
 
       toast({
         title: "Reporte generado",
@@ -106,22 +155,80 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
     try {
       const header = [
         "Fecha",
-        "Hora Inicio",
-        "Hora Fin",
-        "Tiempo Total",
-        "Salidas",
-        "Tiempo Salidas",
-        "Tiempo Efectivo",
+        "Punto",
+        "Usuario",
+        "Username",
+        "Entrada",
+        "Almuerzo",
+        "Regreso",
+        "Salida",
+        "Almuerzo (min)",
+        "Salidas (min)",
+        "Tiempo Efectivo (min)",
+        "Estado",
       ];
       const rows = reportData.map((r) => [
-        new Date(r.fecha).toLocaleDateString(),
-        r.horaInicio,
-        r.horaFin,
-        formatMinutes(r.tiempoTotal),
-        r.salidasEspontaneas,
-        formatMinutes(r.tiempoSalidas),
-        formatMinutes(r.tiempoEfectivo),
+        r.date,
+        r.point,
+        r.user,
+        r.username ? `@${r.username}` : "",
+        r.entrada
+          ? new Date(r.entrada).toLocaleTimeString("es-EC", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "",
+        r.almuerzo
+          ? new Date(r.almuerzo).toLocaleTimeString("es-EC", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "",
+        r.regreso
+          ? new Date(r.regreso).toLocaleTimeString("es-EC", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "",
+        r.salida
+          ? new Date(r.salida).toLocaleTimeString("es-EC", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "",
+        r.lunchMinutes,
+        r.spontaneousMinutes,
+        r.effectiveMinutes,
+        r.estado ?? "",
       ]);
+      // Totales al final
+      const totalLunch = reportData.reduce(
+        (s, r) => s + (r.lunchMinutes || 0),
+        0
+      );
+      const totalSpont = reportData.reduce(
+        (s, r) => s + (r.spontaneousMinutes || 0),
+        0
+      );
+      const totalEffective = reportData.reduce(
+        (s, r) => s + (r.effectiveMinutes || 0),
+        0
+      );
+      rows.push([
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Totales:",
+        totalLunch,
+        totalSpont,
+        totalEffective,
+        "",
+      ]);
+
       const csv = [header, ...rows]
         .map((cols) =>
           cols
@@ -159,14 +266,14 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Reporte de Tiempo
+            Reporte de Horarios
           </CardTitle>
           <CardDescription>
-            Genere reportes detallados del tiempo trabajado
+            Informe administrativo de horarios por usuario y punto
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-4">
             <div className="space-y-2">
               <Label htmlFor="dateFrom">Fecha Desde</Label>
               <Input
@@ -185,7 +292,47 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
                 onChange={(e) => setDateTo(e.target.value)}
               />
             </div>
-            <div className="flex items-end">
+            <div className="space-y-2">
+              <Label>Usuario (opcional)</Label>
+              <Input
+                placeholder="Buscar nombre o username"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+              />
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  {filteredUsers.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.nombre} (@{u.username})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Punto (opcional)</Label>
+              <Select
+                value={selectedPointId}
+                onValueChange={setSelectedPointId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  {points.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end col-span-2">
               <Button
                 onClick={generateReport}
                 disabled={isLoading}
@@ -229,30 +376,94 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Fecha</TableHead>
-                  <TableHead>Hora Inicio</TableHead>
-                  <TableHead>Hora Fin</TableHead>
-                  <TableHead>Tiempo Total</TableHead>
-                  <TableHead>Salidas</TableHead>
-                  <TableHead>Tiempo Salidas</TableHead>
+                  <TableHead>Punto</TableHead>
+                  <TableHead>Usuario</TableHead>
+                  <TableHead>Username</TableHead>
+                  <TableHead>Entrada</TableHead>
+                  <TableHead>Almuerzo</TableHead>
+                  <TableHead>Regreso</TableHead>
+                  <TableHead>Salida</TableHead>
+                  <TableHead>Almuerzo (min)</TableHead>
+                  <TableHead>Salidas (min)</TableHead>
                   <TableHead>Tiempo Efectivo</TableHead>
+                  <TableHead>Estado</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {reportData.map((row, index) => (
-                  <TableRow key={index}>
-                    <TableCell>
-                      {new Date(row.fecha).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>{row.horaInicio}</TableCell>
-                    <TableCell>{row.horaFin}</TableCell>
-                    <TableCell>{formatMinutes(row.tiempoTotal)}</TableCell>
-                    <TableCell>{row.salidasEspontaneas}</TableCell>
-                    <TableCell>{formatMinutes(row.tiempoSalidas)}</TableCell>
-                    <TableCell className="font-medium">
-                      {formatMinutes(row.tiempoEfectivo)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {reportData.map((row, index) => {
+                  const fmtHM = (mins: number) => {
+                    const h = Math.floor((mins || 0) / 60);
+                    const m = Math.abs((mins || 0) % 60);
+                    return `${h}h ${m}m`;
+                  };
+                  const fmtTime = (iso?: string) =>
+                    iso
+                      ? new Date(iso).toLocaleTimeString("es-EC", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "";
+                  return (
+                    <TableRow key={index}>
+                      <TableCell>{row.date}</TableCell>
+                      <TableCell>{row.point}</TableCell>
+                      <TableCell>{row.user}</TableCell>
+                      <TableCell>
+                        {row.username ? `@${row.username}` : ""}
+                      </TableCell>
+                      <TableCell>{fmtTime(row.entrada)}</TableCell>
+                      <TableCell>{fmtTime(row.almuerzo)}</TableCell>
+                      <TableCell>{fmtTime(row.regreso)}</TableCell>
+                      <TableCell>{fmtTime(row.salida)}</TableCell>
+                      <TableCell>{fmtHM(row.lunchMinutes)}</TableCell>
+                      <TableCell>{fmtHM(row.spontaneousMinutes)}</TableCell>
+                      <TableCell className="font-medium">
+                        {fmtHM(row.effectiveMinutes)}
+                      </TableCell>
+                      <TableCell>{row.estado || ""}</TableCell>
+                    </TableRow>
+                  );
+                })}
+                {/* Totales */}
+                <TableRow>
+                  <TableCell colSpan={8} className="text-right font-semibold">
+                    Totales
+                  </TableCell>
+                  <TableCell className="font-semibold">
+                    {(() => {
+                      const t = reportData.reduce(
+                        (s, r) => s + (r.lunchMinutes || 0),
+                        0
+                      );
+                      const h = Math.floor(t / 60);
+                      const m = Math.abs(t % 60);
+                      return `${h}h ${m}m`;
+                    })()}
+                  </TableCell>
+                  <TableCell className="font-semibold">
+                    {(() => {
+                      const t = reportData.reduce(
+                        (s, r) => s + (r.spontaneousMinutes || 0),
+                        0
+                      );
+                      const h = Math.floor(t / 60);
+                      const m = Math.abs(t % 60);
+                      return `${h}h ${m}m`;
+                    })()}
+                  </TableCell>
+                  <TableCell className="font-semibold">
+                    {(() => {
+                      const t = reportData.reduce(
+                        (s, r) => s + (r.effectiveMinutes || 0),
+                        0
+                      );
+                      const h = Math.floor(t / 60);
+                      const m = Math.abs(t % 60);
+                      return `${h}h ${m}m`;
+                    })()}
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
               </TableBody>
             </Table>
           </CardContent>
