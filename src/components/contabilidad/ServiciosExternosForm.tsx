@@ -34,7 +34,8 @@ const SERVICIOS: {
   // Insumos (EGRESO)
   { value: "INSUMOS_OFICINA", label: "Insumos de oficina", isInsumo: true },
   { value: "INSUMOS_LIMPIEZA", label: "Insumos de limpieza", isInsumo: true },
-  { value: "OTROS", label: "Otros", isInsumo: true },
+  // OTROS ahora NO es Insumo (permite INGRESO/EGRESO)
+  { value: "OTROS", label: "Otros" },
 ];
 
 const schema = z.object({
@@ -50,8 +51,7 @@ const schema = z.object({
   ]),
   tipo_movimiento: z.enum(["INGRESO", "EGRESO"]),
   monto: z
-    .string()
-    .or(z.number())
+    .union([z.string(), z.number()])
     .transform((v) => (typeof v === "string" ? parseFloat(v) : v))
     .refine((v) => isFinite(v) && v > 0, {
       message: "Debe ser un número mayor a 0",
@@ -65,7 +65,7 @@ type FormValues = z.infer<typeof schema>;
 export default function ServiciosExternosForm() {
   const { user } = useAuth();
 
-  // ✅ FIX: usar solo el nombre correcto del backend
+  // ✅ usar solo el nombre correcto del backend
   const puntoAtencionId = user?.punto_atencion_id || null;
 
   const {
@@ -86,7 +86,7 @@ export default function ServiciosExternosForm() {
     [servicioActual]
   );
 
-  // Forzar EGRESO si es una categoría de insumo
+  // Si es Insumo, forzar EGRESO automáticamente
   useEffect(() => {
     if (esInsumo)
       setValue("tipo_movimiento", "EGRESO", { shouldValidate: true });
@@ -103,16 +103,12 @@ export default function ServiciosExternosForm() {
     }
     try {
       const payload = {
-        punto_atencion_id: puntoAtencionId, // el backend igualmente valida/impone este valor
+        punto_atencion_id: puntoAtencionId, // el backend siempre valida el punto del operador
         servicio: values.servicio,
         tipo_movimiento: values.tipo_movimiento,
-        monto: Number(values.monto),
-        numero_referencia: values.numero_referencia?.trim()
-          ? values.numero_referencia.trim()
-          : undefined,
-        descripcion: values.descripcion?.trim()
-          ? values.descripcion.trim()
-          : undefined,
+        monto: values.monto,
+        descripcion: values.descripcion || undefined,
+        numero_referencia: values.numero_referencia || undefined,
       };
 
       const resp = await crearMovimientoServicioExterno(payload);
@@ -136,106 +132,92 @@ export default function ServiciosExternosForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {!puntoAtencionId && (
-        <div className="text-sm text-red-600">
-          Debes iniciar jornada para registrar movimientos.
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label>Servicio / Categoría</Label>
-          <Select
-            onValueChange={(v) =>
-              setValue("servicio", v as ServicioExterno, {
-                shouldValidate: true,
-              })
-            }
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Selecciona" />
-            </SelectTrigger>
-            <SelectContent>
-              {SERVICIOS.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {errors.servicio && (
-            <p className="text-sm text-red-500">{errors.servicio.message}</p>
-          )}
-        </div>
-
-        <div>
-          <Label>Tipo de movimiento</Label>
-          <Select
-            disabled={esInsumo}
-            onValueChange={(v) =>
-              setValue("tipo_movimiento", v as TipoMovimiento, {
-                shouldValidate: true,
-              })
-            }
-            defaultValue="INGRESO"
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Selecciona" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="INGRESO">Ingreso</SelectItem>
-              <SelectItem value="EGRESO">Egreso</SelectItem>
-            </SelectContent>
-          </Select>
-          {esInsumo && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Para categorías de Insumos el movimiento se registra como EGRESO.
-            </p>
-          )}
-          {errors.tipo_movimiento && (
-            <p className="text-sm text-red-500">
-              {errors.tipo_movimiento.message}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <Label>Monto (USD)</Label>
-          <Input
-            type="number"
-            step="0.01"
-            placeholder="0.00"
-            {...register("monto")}
-          />
-          {errors.monto && (
-            <p className="text-sm text-red-500">{errors.monto.message}</p>
-          )}
-        </div>
-
-        <div>
-          <Label>N° referencia (opcional)</Label>
-          <Input
-            placeholder="Referencia / Comprobante"
-            {...register("numero_referencia")}
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <Label>Descripción (opcional)</Label>
-          <Textarea
-            rows={3}
-            placeholder="Detalle del movimiento"
-            {...register("descripcion")}
-          />
-          {errors.descripcion && (
-            <p className="text-sm text-red-500">{errors.descripcion.message}</p>
-          )}
-        </div>
+      <div>
+        <Label>Servicio / Categoría</Label>
+        <Select
+          onValueChange={(v) =>
+            setValue("servicio", v as ServicioExterno, { shouldValidate: true })
+          }
+        >
+          <SelectTrigger className="mt-1">
+            <SelectValue placeholder="Selecciona" />
+          </SelectTrigger>
+          <SelectContent>
+            {SERVICIOS.map((s) => (
+              <SelectItem key={s.value} value={s.value}>
+                {s.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {errors.servicio && (
+          <p className="text-sm text-red-500">{errors.servicio.message}</p>
+        )}
       </div>
 
-      <div className="flex gap-2">
+      <div>
+        <Label>Tipo</Label>
+        <Select
+          onValueChange={(v) =>
+            setValue("tipo_movimiento", v as TipoMovimiento, {
+              shouldValidate: true,
+            })
+          }
+          defaultValue="INGRESO"
+        >
+          <SelectTrigger className="mt-1">
+            <SelectValue placeholder="Selecciona" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="INGRESO">Ingreso</SelectItem>
+            <SelectItem value="EGRESO">Egreso</SelectItem>
+          </SelectContent>
+        </Select>
+        {esInsumo && (
+          <p className="text-xs text-muted-foreground mt-1">
+            Para categorías de Insumos el movimiento se registra como EGRESO.
+          </p>
+        )}
+        {errors.tipo_movimiento && (
+          <p className="text-sm text-red-500">
+            {errors.tipo_movimiento.message}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <Label>Monto (USD)</Label>
+        <Input
+          type="number"
+          step="0.01"
+          placeholder="0.00"
+          {...register("monto")}
+        />
+        {errors.monto && (
+          <p className="text-sm text-red-500">{errors.monto.message}</p>
+        )}
+      </div>
+
+      <div>
+        <Label>N° referencia (opcional)</Label>
+        <Input
+          placeholder="Referencia / Comprobante"
+          {...register("numero_referencia")}
+        />
+      </div>
+
+      <div className="md:max-w-[720px]">
+        <Label>Descripción (opcional)</Label>
+        <Textarea
+          placeholder="Detalle del movimiento"
+          rows={3}
+          {...register("descripcion")}
+        />
+      </div>
+
+      <div className="pt-2">
         <Button type="submit" disabled={isSubmitting}>
-          Guardar movimiento
+          {isSubmitting ? "Guardando..." : "Guardar movimiento"}
         </Button>
       </div>
     </form>

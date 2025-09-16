@@ -36,10 +36,10 @@ const SERVICIOS_VALIDOS = [
   "WESTERN",
   "PRODUBANCO",
   "BANCO_PACIFICO",
-  // Nuevas categorías para egresos
+  // Categorías de insumos y misceláneos
   "INSUMOS_OFICINA",
   "INSUMOS_LIMPIEZA",
-  "OTROS",
+  "OTROS", // <- "OTROS" ahora permite INGRESO y EGRESO
 ] as const;
 type ServicioExterno = (typeof SERVICIOS_VALIDOS)[number];
 
@@ -139,17 +139,15 @@ router.post(
         return;
       }
 
-      // Forzar EGRESO para categorías de Insumos
-      const esInsumo = [
-        "INSUMOS_OFICINA",
-        "INSUMOS_LIMPIEZA",
-        "OTROS",
-      ].includes(servicio);
+      // Forzar EGRESO **solo** para Insumos (OTROS ya NO se fuerza)
+      const esInsumo = ["INSUMOS_OFICINA", "INSUMOS_LIMPIEZA"].includes(
+        servicio
+      );
       if (esInsumo && tipo_movimiento !== "EGRESO") {
         res.status(400).json({
           success: false,
           message:
-            "Los movimientos de Insumos (Oficina/Limpieza/Otros) deben registrarse como EGRESO.",
+            "Los movimientos de Insumos (Oficina/Limpieza) deben registrarse como EGRESO.",
         });
         return;
       }
