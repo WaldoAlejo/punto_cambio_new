@@ -101,6 +101,58 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
     return `${hours}h ${mins}m`;
   };
 
+  // Exporta el informe visible a CSV (mismo comportamiento movido desde Usuarios Activos)
+  const exportReportCSV = () => {
+    try {
+      const header = [
+        "Fecha",
+        "Hora Inicio",
+        "Hora Fin",
+        "Tiempo Total",
+        "Salidas",
+        "Tiempo Salidas",
+        "Tiempo Efectivo",
+      ];
+      const rows = reportData.map((r) => [
+        new Date(r.fecha).toLocaleDateString(),
+        r.horaInicio,
+        r.horaFin,
+        formatMinutes(r.tiempoTotal),
+        r.salidasEspontaneas,
+        formatMinutes(r.tiempoSalidas),
+        formatMinutes(r.tiempoEfectivo),
+      ]);
+      const csv = [header, ...rows]
+        .map((cols) =>
+          cols
+            .map((c) => {
+              const v = String(c ?? "");
+              return v.includes(",") || v.includes("\n") || v.includes('"')
+                ? `"${v.replaceAll('"', '""')}"`
+                : v;
+            })
+            .join(",")
+        )
+        .join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `reporte_horarios_${today}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast({
+        title: "Error",
+        description: "No se pudo exportar el informe",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -157,13 +209,22 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
 
       {reportData.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Resultados del Reporte</CardTitle>
-            <CardDescription>
-              Detalle del tiempo trabajado en el período seleccionado
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Resultados del Reporte</CardTitle>
+              <CardDescription>
+                Detalle del tiempo trabajado en el período seleccionado
+              </CardDescription>
+            </div>
+            <div>
+              <Button variant="secondary" onClick={exportReportCSV}>
+                <Download className="mr-2 h-4 w-4" />
+                Exportar Informe
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
+            <h3 className="text-lg font-semibold mb-2">Informe (lista)</h3>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -194,13 +255,6 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
                 ))}
               </TableBody>
             </Table>
-
-            <div className="flex justify-end mt-4">
-              <Button variant="outline">
-                <Download className="mr-2 h-4 w-4" />
-                Exportar Excel
-              </Button>
-            </div>
           </CardContent>
         </Card>
       )}
