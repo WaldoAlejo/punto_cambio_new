@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import CurrencyBehaviorManager from "../../components/admin/CurrencyBehaviorManager";
 import { Moneda } from "../../types";
+import { apiService } from "@/services/apiService";
 
 const CurrencyBehaviorPage = () => {
   const navigate = useNavigate();
@@ -21,17 +22,17 @@ const CurrencyBehaviorPage = () => {
   const fetchCurrencies = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch("/api/currencies", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
 
-      if (!response.ok) {
-        throw new Error("Error al cargar las monedas");
+      const data = await apiService.get<{
+        currencies: Moneda[];
+        success: boolean;
+        error?: string;
+      }>("/currencies");
+
+      if (!data || data.error || data.success === false) {
+        throw new Error(data?.error || "Error al cargar las monedas");
       }
 
-      const data = await response.json();
       setCurrencies(data.currencies || []);
     } catch (error) {
       console.error("Error fetching currencies:", error);

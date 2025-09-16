@@ -260,21 +260,36 @@ router.post(
           });
         }
 
-        // (Opcional) registrar movimiento de saldo; descomenta si lo quieres persistir
-        // await tx.movimientoSaldo.create({
-        //   data: {
-        //     punto_atencion_id,
-        //     moneda_id,
-        //     tipo_movimiento: "SALDO_INICIAL",
-        //     monto: decCantidad,
-        //     saldo_anterior: new Prisma.Decimal(existingSaldo?.cantidad ?? 0),
-        //     saldo_nuevo: saldoResult.cantidad,
-        //     usuario_id: user.id,
-        //     referencia_id: saldoInicialResult.id,
-        //     tipo_referencia: "SALDO_INICIAL",
-        //     descripcion: observaciones ?? null,
-        //   },
-        // });
+        // Registrar movimiento de saldo para trazabilidad
+        await tx.movimientoSaldo.create({
+          data: {
+            punto_atencion_id,
+            moneda_id,
+            tipo_movimiento: "SALDO_INICIAL",
+            monto: decCantidad,
+            saldo_anterior: new Prisma.Decimal(existingSaldo?.cantidad ?? 0),
+            saldo_nuevo: saldoResult.cantidad,
+            usuario_id: user.id,
+            referencia_id: saldoInicialResult.id,
+            tipo_referencia: "SALDO_INICIAL",
+            descripcion: observaciones ?? null,
+          },
+        });
+
+        // Registrar historial consolidado de saldo (para auditoría)
+        await tx.historialSaldo.create({
+          data: {
+            punto_atencion_id,
+            moneda_id,
+            usuario_id: user.id,
+            cantidad_anterior: new Prisma.Decimal(existingSaldo?.cantidad ?? 0),
+            cantidad_incrementada: decCantidad,
+            cantidad_nueva: saldoResult.cantidad,
+            tipo_movimiento: "INGRESO", // corresponde a aumento de saldo
+            descripcion: observaciones ?? null,
+            numero_referencia: saldoInicialResult.id,
+          },
+        });
 
         return {
           saldoInicialResult,

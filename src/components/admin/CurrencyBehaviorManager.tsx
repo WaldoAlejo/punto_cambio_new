@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Moneda } from "../../types";
 import { obtenerDescripcionComportamiento } from "../../utils/currencyCalculations";
 import { Settings, Save, RefreshCw } from "lucide-react";
+import { apiService } from "@/services/apiService";
 
 interface CurrencyBehaviorManagerProps {
   currencies: Moneda[];
@@ -92,16 +93,14 @@ const CurrencyBehaviorManager = ({
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/currencies/${currencyId}/behavior`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(editing),
-      });
+      const res = await apiService.patch<{
+        currency: Moneda;
+        success: boolean;
+        error?: string;
+      }>(`/currencies/${currencyId}/behavior`, editing);
 
-      if (!response.ok) {
-        throw new Error("Error al actualizar comportamiento");
+      if (!res || res.success === false) {
+        throw new Error(res?.error || "Error al actualizar comportamiento");
       }
 
       toast.success("Comportamiento actualizado correctamente");
