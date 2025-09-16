@@ -54,20 +54,19 @@ router.get(
         orderBy: { created_at: "desc" },
       });
 
+      // Deja que Express serialice Dates a ISO; evita toISOString en valores inesperados/null
       res.status(200).json({
         success: true,
-        permisos: permisos.map((p: PrismaPermiso & any) => ({
-          ...p,
-          fecha_inicio: p.fecha_inicio.toISOString(),
-          fecha_fin: p.fecha_fin.toISOString(),
-          created_at: p.created_at.toISOString(),
-          updated_at: p.updated_at.toISOString(),
-          fecha_aprobacion: p.fecha_aprobacion?.toISOString() || null,
-        })),
+        permisos,
         timestamp: new Date().toISOString(),
       });
-    } catch (error) {
-      logger.error("Error listando permisos", { error });
+    } catch (error: any) {
+      logger.error("Error listando permisos", {
+        message: error?.message,
+        code: error?.code,
+        meta: error?.meta,
+        stack: error?.stack,
+      });
       res
         .status(500)
         .json({ success: false, error: "Error listando permisos" });
