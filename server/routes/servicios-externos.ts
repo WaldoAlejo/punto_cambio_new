@@ -45,16 +45,33 @@ type ServicioExterno = (typeof SERVICIOS_VALIDOS)[number];
 const TIPOS_VALIDOS = ["INGRESO", "EGRESO"] as const;
 type TipoMovimiento = (typeof TIPOS_VALIDOS)[number];
 
-/** Utilidad: obtener ID de moneda USD asegurando que todas las transacciones sean en USD */
-async function getUsdMonedaId(client: any): Promise<string> {
-  const r = await client.query(
+/** Utilidad: asegurar ID de moneda USD (autocuración si no existe, sin requerir UNIQUE en codigo) */
+async function ensureUsdMonedaId(client: any): Promise<string> {
+  // 1) intentar obtener USD
+  const sel = await client.query(
     'SELECT id FROM "Moneda" WHERE codigo = $1 LIMIT 1',
     ["USD"]
   );
-  if (r.rows.length === 0) {
-    throw new Error("No existe la moneda USD en la base de datos (codigo=USD)");
+  if (sel.rows[0]?.id) return sel.rows[0].id as string;
+
+  // 2) crear USD si no existe (sin ON CONFLICT, para no depender de UNIQUE)
+  await client.query(
+    `
+    INSERT INTO "Moneda"(nombre, simbolo, codigo, activo, orden_display, comportamiento_compra, comportamiento_venta)
+    SELECT 'Dólar estadounidense', '$', 'USD', true, 0, 'MULTIPLICA', 'DIVIDE'
+    WHERE NOT EXISTS (SELECT 1 FROM "Moneda" WHERE codigo = 'USD');
+  `
+  );
+
+  // 3) reintentar obtener USD
+  const sel2 = await client.query(
+    'SELECT id FROM "Moneda" WHERE codigo = $1 LIMIT 1',
+    ["USD"]
+  );
+  if (!sel2.rows[0]?.id) {
+    throw new Error("No se pudo crear/obtener la moneda USD");
   }
-  return r.rows[0].id as string;
+  return sel2.rows[0].id as string;
 }
 
 /** ==============================
@@ -67,12 +84,10 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       if (!isOperador(req)) {
-        res
-          .status(403)
-          .json({
-            success: false,
-            message: "Permisos insuficientes (solo OPERADOR)",
-          });
+        res.status(403).json({
+          success: false,
+          message: "Permisos insuficientes (solo OPERADOR)",
+        });
         return;
       }
 
@@ -92,7 +107,11 @@ router.post(
         comprobante_url?: string;
       };
 
-      const puntoId = req.user.punto_atencion_id;
+      const puntoId = (req as any).user?.punto_atencion_id as
+        | string
+        | null
+        | undefined;
+
       if (!puntoId) {
         res.status(400).json({
           success: false,
@@ -140,7 +159,8 @@ router.post(
       try {
         await client.query("BEGIN");
 
-        const usdId = await getUsdMonedaId(client);
+        // Asegura la moneda USD disponible
+        const usdId = await ensureUsdMonedaId(client);
 
         // Obtener saldo actual USD del punto (lock row)
         const saldoQ = await client.query(
@@ -155,12 +175,17 @@ router.post(
         const delta = tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
         const saldoNuevo = saldoAnterior + delta;
 
+        // Validación opcional: evitar saldo negativo
+        // if (saldoNuevo < 0) {
+        //   throw new Error("El saldo no puede quedar negativo.");
+        // }
+
         // Upsert saldo
         if (saldoQ.rows.length) {
-          await client.query('UPDATE "Saldo" SET cantidad = $1 WHERE id = $2', [
-            saldoNuevo,
-            saldoQ.rows[0].id,
-          ]);
+          await client.query(
+            'UPDATE "Saldo" SET cantidad = $1, updated_at = NOW() WHERE id = $2',
+            [saldoNuevo, saldoQ.rows[0].id]
+          );
         } else {
           await client.query(
             'INSERT INTO "Saldo"(punto_atencion_id, moneda_id, cantidad, billetes, monedas_fisicas, updated_at) VALUES($1,$2,$3,0,0,NOW())',
@@ -171,16 +196,16 @@ router.post(
         // Insert movimiento de servicio externo
         const insMov = await client.query(
           `INSERT INTO "ServicioExternoMovimiento"
-          (punto_atencion_id, servicio, tipo_movimiento, moneda_id, monto, usuario_id, fecha, descripcion, numero_referencia, comprobante_url)
-         VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7,$8,$9)
-         RETURNING id`,
+            (punto_atencion_id, servicio, tipo_movimiento, moneda_id, monto, usuario_id, fecha, descripcion, numero_referencia, comprobante_url)
+           VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7,$8,$9)
+           RETURNING id`,
           [
             puntoId,
             servicio,
             tipo_movimiento,
             usdId,
             montoNum,
-            req.user.id,
+            (req as any).user.id,
             descripcion || null,
             numero_referencia || null,
             comprobante_url || null,
@@ -191,8 +216,8 @@ router.post(
         // Insert movimiento de saldo (trazabilidad)
         await client.query(
           `INSERT INTO "MovimientoSaldo"
-          (punto_atencion_id, moneda_id, tipo_movimiento, monto, saldo_anterior, saldo_nuevo, usuario_id, referencia_id, tipo_referencia, descripcion, fecha, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'SERVICIO_EXTERNO',$9,NOW(),NOW())`,
+            (punto_atencion_id, moneda_id, tipo_movimiento, monto, saldo_anterior, saldo_nuevo, usuario_id, referencia_id, tipo_referencia, descripcion, fecha, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'SERVICIO_EXTERNO',$9,NOW(),NOW())`,
           [
             puntoId,
             usdId,
@@ -200,7 +225,7 @@ router.post(
             montoNum,
             saldoAnterior,
             saldoNuevo,
-            req.user.id,
+            (req as any).user.id,
             servicioMovimientoId,
             descripcion || null,
           ]
@@ -217,8 +242,11 @@ router.post(
             tipo_movimiento,
             moneda_id: usdId,
             monto: montoNum,
-            usuario_id: req.user.id,
-            usuario: { id: req.user.id, nombre: req.user.nombre },
+            usuario_id: (req as any).user.id,
+            usuario: {
+              id: (req as any).user.id,
+              nombre: (req as any).user.nombre,
+            },
             fecha: new Date().toISOString(),
             descripcion: descripcion || null,
             numero_referencia: numero_referencia || null,
@@ -254,16 +282,17 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       if (!isOperador(req)) {
-        res
-          .status(403)
-          .json({
-            success: false,
-            message: "Permisos insuficientes (solo OPERADOR)",
-          });
+        res.status(403).json({
+          success: false,
+          message: "Permisos insuficientes (solo OPERADOR)",
+        });
         return;
       }
 
-      const puntoAsignado = req.user.punto_atencion_id;
+      const puntoAsignado = (req as any).user?.punto_atencion_id as
+        | string
+        | null
+        | undefined;
       if (!puntoAsignado) {
         res.status(400).json({
           success: false,
@@ -315,16 +344,16 @@ router.get(
       const limitNum = Math.min(Math.max(parseInt(limit || "100", 10), 1), 500);
 
       const sql = `
-      SELECT
-        m.id, m.punto_atencion_id, m.servicio, m.tipo_movimiento, m.moneda_id, m.monto,
-        m.usuario_id, m.fecha, m.descripcion, m.numero_referencia, m.comprobante_url,
-        u.nombre AS usuario_nombre
-      FROM "ServicioExternoMovimiento" m
-      JOIN "Usuario" u ON u.id = m.usuario_id
-      WHERE ${where.join(" AND ")}
-      ORDER BY m.fecha DESC
-      LIMIT ${limitNum}
-    `;
+        SELECT
+          m.id, m.punto_atencion_id, m.servicio, m.tipo_movimiento, m.moneda_id, m.monto,
+          m.usuario_id, m.fecha, m.descripcion, m.numero_referencia, m.comprobante_url,
+          u.nombre AS usuario_nombre
+        FROM "ServicioExternoMovimiento" m
+        JOIN "Usuario" u ON u.id = m.usuario_id
+        WHERE ${where.join(" AND ")}
+        ORDER BY m.fecha DESC
+        LIMIT ${limitNum}
+      `;
 
       const client = await pool.connect();
       const { rows } = await client.query(sql, params);
