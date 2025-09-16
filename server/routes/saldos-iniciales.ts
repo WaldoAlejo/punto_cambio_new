@@ -195,7 +195,8 @@ router.post(
           saldoInicialResult = await tx.saldoInicial.update({
             where: { id: existingInicial.id },
             data: {
-              cantidad_inicial: baseInicial.add(decCantidad).toString(), // enviar como string para PG
+              // Enviar como Decimal directamente (evita error 22P03 en bind binario)
+              cantidad_inicial: baseInicial.add(decCantidad),
               observaciones:
                 observaciones ?? existingInicial.observaciones ?? null,
             },
@@ -205,7 +206,8 @@ router.post(
             data: {
               punto_atencion_id,
               moneda_id,
-              cantidad_inicial: decCantidad.toString(),
+              // Enviar como Decimal directamente (evita error 22P03 en bind binario)
+              cantidad_inicial: decCantidad,
               asignado_por: user.id,
               observaciones: observaciones ?? null,
               activo: true,
@@ -239,9 +241,10 @@ router.post(
           saldoResult = await tx.saldo.update({
             where: { id: existingSaldo.id },
             data: {
-              cantidad: baseCantidad.toString(),
-              billetes: baseBilletes.toString(),
-              monedas_fisicas: baseMonedas.toString(),
+              // Enviar como Decimal directamente (evita error 22P03 en bind binario)
+              cantidad: baseCantidad,
+              billetes: baseBilletes,
+              monedas_fisicas: baseMonedas,
             },
           });
         } else {
@@ -249,9 +252,10 @@ router.post(
             data: {
               punto_atencion_id,
               moneda_id,
-              cantidad: decCantidad.toString(),
-              billetes: decBilletes.toString(),
-              monedas_fisicas: decMonedas.toString(),
+              // Enviar como Decimal directamente (evita error 22P03 en bind binario)
+              cantidad: decCantidad,
+              billetes: decBilletes,
+              monedas_fisicas: decMonedas,
             },
           });
         }
