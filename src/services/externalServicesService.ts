@@ -5,12 +5,16 @@ export type ServicioExterno =
   | "BANCO_GUAYAQUIL"
   | "WESTERN"
   | "PRODUBANCO"
-  | "BANCO_PACIFICO";
+  | "BANCO_PACIFICO"
+  // Nuevas categorías de egresos:
+  | "INSUMOS_OFICINA"
+  | "INSUMOS_LIMPIEZA"
+  | "OTROS";
 
 export type TipoMovimiento = "INGRESO" | "EGRESO";
 
 export interface CrearMovimientoServicioExternoInput {
-  punto_atencion_id: string;
+  punto_atencion_id?: string; // se forzará al punto del operador en backend
   servicio: ServicioExterno;
   tipo_movimiento: TipoMovimiento;
   monto: number;
@@ -31,8 +35,9 @@ export async function crearMovimientoServicioExterno(
 
 export interface ListarMovimientosQuery {
   servicio?: ServicioExterno;
-  desde?: string; // ISO date
-  hasta?: string; // ISO date
+  tipo_movimiento?: TipoMovimiento;
+  desde?: string; // YYYY-MM-DD
+  hasta?: string; // YYYY-MM-DD
   limit?: number;
 }
 

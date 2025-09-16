@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -13,13 +13,29 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/useAuth";
 import {
   crearMovimientoServicioExterno,
   ServicioExterno,
   TipoMovimiento,
 } from "@/services/externalServicesService";
-import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
+
+const SERVICIOS: {
+  value: ServicioExterno;
+  label: string;
+  isInsumo?: boolean;
+}[] = [
+  { value: "YAGANASTE", label: "YaGanaste" },
+  { value: "BANCO_GUAYAQUIL", label: "Banco Guayaquil" },
+  { value: "WESTERN", label: "Western Union" },
+  { value: "PRODUBANCO", label: "Produbanco" },
+  { value: "BANCO_PACIFICO", label: "Banco del Pacífico" },
+  // Insumos (EGRESO)
+  { value: "INSUMOS_OFICINA", label: "Insumos de oficina", isInsumo: true },
+  { value: "INSUMOS_LIMPIEZA", label: "Insumos de limpieza", isInsumo: true },
+  { value: "OTROS", label: "Otros", isInsumo: true },
+];
 
 const schema = z.object({
   servicio: z.enum([
@@ -28,73 +44,91 @@ const schema = z.object({
     "WESTERN",
     "PRODUBANCO",
     "BANCO_PACIFICO",
+    "INSUMOS_OFICINA",
+    "INSUMOS_LIMPIEZA",
+    "OTROS",
   ]),
   tipo_movimiento: z.enum(["INGRESO", "EGRESO"]),
   monto: z
     .string()
-    .refine(
-      (v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0,
-      "Monto inválido"
-    ),
+    .or(z.number())
+    .transform((v) => (typeof v === "string" ? parseFloat(v) : v))
+    .refine((v) => isFinite(v) && v > 0, {
+      message: "Debe ser un número mayor a 0",
+    }),
   numero_referencia: z.string().optional(),
-  comprobante_url: z.string().url().optional().or(z.literal("")),
-  descripcion: z.string().min(3, "Ingrese una novedad/observación"),
+  descripcion: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 export default function ServiciosExternosForm() {
   const { user } = useAuth();
-  const { toast } = useToast();
-  const puntoAtencionId = user?.punto_atencion_id ?? "";
+
+  // ✅ FIX: usar solo el nombre correcto del backend
+  const puntoAtencionId = user?.punto_atencion_id || null;
 
   const {
     register,
     handleSubmit,
-    control,
-    reset,
-    setValue,
     formState: { errors, isSubmitting },
+    watch,
+    setValue,
+    reset,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { tipo_movimiento: "INGRESO" as TipoMovimiento },
   });
 
+  const servicioActual = watch("servicio");
+  const esInsumo = useMemo(
+    () => !!SERVICIOS.find((s) => s.value === servicioActual && s.isInsumo),
+    [servicioActual]
+  );
+
+  // Forzar EGRESO si es una categoría de insumo
+  useEffect(() => {
+    if (esInsumo)
+      setValue("tipo_movimiento", "EGRESO", { shouldValidate: true });
+  }, [esInsumo, setValue]);
+
   const onSubmit = async (values: FormValues) => {
     if (!puntoAtencionId) {
       toast({
         title: "Punto no asignado",
-        description: "Asigne un punto de atención antes de operar",
+        description: "Inicia jornada para tener un punto de atención asignado.",
         variant: "destructive",
       });
       return;
     }
     try {
-      await crearMovimientoServicioExterno({
-        punto_atencion_id: puntoAtencionId,
-        servicio: values.servicio as ServicioExterno,
-        tipo_movimiento: values.tipo_movimiento as TipoMovimiento,
-        monto: parseFloat(values.monto),
-        descripcion: values.descripcion,
-        numero_referencia: values.numero_referencia,
-        comprobante_url: values.comprobante_url || undefined,
-      });
+      const payload = {
+        punto_atencion_id: puntoAtencionId, // el backend igualmente valida/impone este valor
+        servicio: values.servicio,
+        tipo_movimiento: values.tipo_movimiento,
+        monto: Number(values.monto),
+        numero_referencia: values.numero_referencia?.trim()
+          ? values.numero_referencia.trim()
+          : undefined,
+        descripcion: values.descripcion?.trim()
+          ? values.descripcion.trim()
+          : undefined,
+      };
+
+      const resp = await crearMovimientoServicioExterno(payload);
+      if (!resp?.success) {
+        throw new Error(resp?.message || "No se pudo registrar el movimiento");
+      }
+
       toast({
         title: "Movimiento registrado",
-        description: "Se actualizó el saldo y contabilidad",
+        description: "Se guardó el movimiento correctamente.",
       });
-      reset({
-        monto: "",
-        numero_referencia: "",
-        comprobante_url: "",
-        descripcion: "",
-        tipo_movimiento: "INGRESO",
-      });
+      reset({ tipo_movimiento: esInsumo ? "EGRESO" : "INGRESO" } as any);
     } catch (e: any) {
       toast({
         title: "Error",
-        description:
-          e?.response?.data?.message || e.message || "No se pudo registrar",
+        description: e?.message || "Error al registrar movimiento",
         variant: "destructive",
       });
     }
@@ -102,73 +136,95 @@ export default function ServiciosExternosForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {!puntoAtencionId && (
+        <div className="text-sm text-red-600">
+          Debes iniciar jornada para registrar movimientos.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <Label>Servicio</Label>
+          <Label>Servicio / Categoría</Label>
           <Select
             onValueChange={(v) =>
-              setValue("servicio", v as any, { shouldValidate: true })
+              setValue("servicio", v as ServicioExterno, {
+                shouldValidate: true,
+              })
             }
           >
-            <SelectTrigger>
-              <SelectValue placeholder="Seleccione servicio" />
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Selecciona" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="YAGANASTE">YaGanaste</SelectItem>
-              <SelectItem value="BANCO_GUAYAQUIL">Banco Guayaquil</SelectItem>
-              <SelectItem value="WESTERN">Western</SelectItem>
-              <SelectItem value="PRODUBANCO">Produbanco</SelectItem>
-              <SelectItem value="BANCO_PACIFICO">Banco del Pacífico</SelectItem>
+              {SERVICIOS.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           {errors.servicio && (
             <p className="text-sm text-red-500">{errors.servicio.message}</p>
           )}
         </div>
+
         <div>
-          <Label>Tipo</Label>
+          <Label>Tipo de movimiento</Label>
           <Select
+            disabled={esInsumo}
             onValueChange={(v) =>
-              setValue("tipo_movimiento", v as any, { shouldValidate: true })
+              setValue("tipo_movimiento", v as TipoMovimiento, {
+                shouldValidate: true,
+              })
             }
             defaultValue="INGRESO"
           >
-            <SelectTrigger>
-              <SelectValue />
+            <SelectTrigger className="mt-1">
+              <SelectValue placeholder="Selecciona" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="INGRESO">Ingreso</SelectItem>
               <SelectItem value="EGRESO">Egreso</SelectItem>
             </SelectContent>
           </Select>
+          {esInsumo && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Para categorías de Insumos el movimiento se registra como EGRESO.
+            </p>
+          )}
+          {errors.tipo_movimiento && (
+            <p className="text-sm text-red-500">
+              {errors.tipo_movimiento.message}
+            </p>
+          )}
         </div>
+
         <div>
           <Label>Monto (USD)</Label>
-          <Input placeholder="0.00" {...register("monto")} />
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="0.00"
+            {...register("monto")}
+          />
           {errors.monto && (
             <p className="text-sm text-red-500">{errors.monto.message}</p>
           )}
         </div>
+
         <div>
-          <Label>Nº Referencia</Label>
-          <Input placeholder="Opcional" {...register("numero_referencia")} />
-        </div>
-        <div className="md:col-span-2">
-          <Label>Comprobante URL</Label>
+          <Label>N° referencia (opcional)</Label>
           <Input
-            placeholder="https://... (opcional)"
-            {...register("comprobante_url")}
+            placeholder="Referencia / Comprobante"
+            {...register("numero_referencia")}
           />
-          {errors.comprobante_url && (
-            <p className="text-sm text-red-500">
-              {errors.comprobante_url.message}
-            </p>
-          )}
         </div>
+
         <div className="md:col-span-2">
-          <Label>Novedad / Observación</Label>
+          <Label>Descripción (opcional)</Label>
           <Textarea
-            placeholder="¿Qué se hizo y por qué?"
+            rows={3}
+            placeholder="Detalle del movimiento"
             {...register("descripcion")}
           />
           {errors.descripcion && (
@@ -176,6 +232,7 @@ export default function ServiciosExternosForm() {
           )}
         </div>
       </div>
+
       <div className="flex gap-2">
         <Button type="submit" disabled={isSubmitting}>
           Guardar movimiento

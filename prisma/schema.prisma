@@ -667,6 +667,9 @@ enum ServicioExterno {
   WESTERN
   PRODUBANCO
   BANCO_PACIFICO
+  INSUMOS_OFICINA   // <- NUEVO
+  INSUMOS_LIMPIEZA  // <- NUEVO
+  OTROS             // <- NUEVO
 }
 
 enum RolUsuario {
