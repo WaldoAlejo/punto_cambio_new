@@ -666,4 +666,188 @@ router.get("/user/:id", authenticateToken, async (req, res) => {
   }
 });
 
+// =============================================
+// POST /schedules/reassign-point (solo ADMIN/SUPER_USUARIO)
+// Reasigna la jornada ACTIVA/ALMUERZO de hoy de un usuario a otro punto
+// para liberar el punto originalmente ocupado por error.
+// - Si no se envía destino_punto_atencion_id, se usa el punto principal.
+// - Registra historial y marca motivo/autoridad en la jornada.
+// =============================================
+const reassignSchema = z.object({
+  usuario_id: z.string().uuid(),
+  destino_punto_atencion_id: z.string().uuid().optional(),
+  motivo: z.string().max(200).optional(),
+  observaciones: z.string().max(500).optional(),
+  finalizar: z.boolean().optional(), // si true: cierra/cancela la jornada y limpia punto del usuario
+});
+
+router.post(
+  "/reassign-point",
+  authenticateToken,
+  validate(reassignSchema),
+  async (req, res) => {
+    try {
+      if (!req.user || !["ADMIN", "SUPER_USUARIO"].includes(req.user.rol)) {
+        res
+          .status(403)
+          .json({ success: false, error: "Permisos insuficientes" });
+        return;
+      }
+
+      const adminId = req.user.id;
+      const {
+        usuario_id,
+        destino_punto_atencion_id,
+        motivo,
+        observaciones,
+        finalizar,
+      } = req.body as {
+        usuario_id: string;
+        destino_punto_atencion_id?: string;
+        motivo?: string;
+        observaciones?: string;
+        finalizar?: boolean;
+      };
+
+      // Buscar jornada ACTIVA/ALMUERZO de HOY del usuario
+      const { gte: hoyGte, lt: hoyLt } = gyeDayRangeUtcFromDate(new Date());
+      const schedule = await prisma.jornada.findFirst({
+        where: {
+          usuario_id,
+          fecha_inicio: { gte: hoyGte, lt: hoyLt },
+          OR: [
+            { estado: EstadoJornada.ACTIVO },
+            { estado: EstadoJornada.ALMUERZO },
+          ],
+        },
+      });
+
+      if (!schedule) {
+        res.status(404).json({
+          success: false,
+          error: "No se encontró jornada activa de hoy para el usuario",
+        });
+        return;
+      }
+
+      // Determinar punto destino
+      let newPointId = destino_punto_atencion_id || null;
+      if (!newPointId) {
+        const principal = await prisma.puntoAtencion.findFirst({
+          where: { es_principal: true },
+          select: { id: true },
+        });
+        if (!principal) {
+          res.status(400).json({
+            success: false,
+            error:
+              "No se encontró punto principal. Especifique destino_punto_atencion_id",
+          });
+          return;
+        }
+        newPointId = principal.id;
+      } else {
+        const exists = await prisma.puntoAtencion.findUnique({
+          where: { id: newPointId },
+          select: { id: true },
+        });
+        if (!exists) {
+          res
+            .status(404)
+            .json({ success: false, error: "Punto destino no existe" });
+          return;
+        }
+      }
+
+      if (newPointId === schedule.punto_atencion_id) {
+        res.status(400).json({
+          success: false,
+          error: "La jornada ya está asignada a ese punto",
+        });
+        return;
+      }
+
+      // Transacción: actualizar jornada y usuario + historial
+      const updatedSchedule = await prisma.$transaction(async (tx) => {
+        // Historial de asignación
+        await tx.historialAsignacionPunto.create({
+          data: {
+            usuario_id,
+            punto_atencion_anterior_id: schedule.punto_atencion_id,
+            punto_atencion_nuevo_id: finalizar
+              ? schedule.punto_atencion_id
+              : newPointId!,
+            motivo_cambio:
+              motivo ||
+              (finalizar ? "CANCELACION_ADMIN" : "REASIGNACION_ADMIN"),
+            autorizado_por: adminId,
+            tipo_asignacion: "MANUAL",
+            observaciones: observaciones || null,
+          },
+        });
+
+        // Actualizar jornada del día
+        const j = await tx.jornada.update({
+          where: { id: schedule.id },
+          data: finalizar
+            ? {
+                // Cancelar/cerrar la jornada equivocada y dejar libre el punto (usuario sin punto)
+                fecha_salida: new Date(),
+                estado: EstadoJornada.CANCELADO,
+                motivo_cambio: motivo || "CANCELACION_ADMIN",
+                usuario_autorizo: adminId,
+              }
+            : {
+                // Reasignación a otro punto
+                punto_atencion_id: newPointId!,
+                motivo_cambio: motivo || "REASIGNACION_ADMIN",
+                usuario_autorizo: adminId,
+              },
+          include: {
+            usuario: { select: { id: true, nombre: true, username: true } },
+            puntoAtencion: { select: { id: true, nombre: true } },
+          },
+        });
+
+        // Reflejar asignación actual del usuario
+        await tx.usuario.update({
+          where: { id: usuario_id },
+          data: finalizar
+            ? { punto_atencion_id: null }
+            : { punto_atencion_id: newPointId! },
+        });
+
+        return j;
+      });
+
+      logger.info("Jornada reasignada por admin", {
+        scheduleId: schedule.id,
+        usuarioId: usuario_id,
+        fromPoint: schedule.punto_atencion_id,
+        toPoint: newPointId,
+        autorizadoPor: adminId,
+      });
+
+      res.status(200).json({
+        success: true,
+        schedule: {
+          ...updatedSchedule,
+          fecha_inicio: updatedSchedule.fecha_inicio.toISOString(),
+          fecha_almuerzo: updatedSchedule.fecha_almuerzo?.toISOString() || null,
+          fecha_regreso: updatedSchedule.fecha_regreso?.toISOString() || null,
+          fecha_salida: updatedSchedule.fecha_salida?.toISOString() || null,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (e) {
+      logger.error("Error en reasignación de jornada", {
+        error: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined,
+        requestedBy: req.user?.id,
+      });
+      res.status(500).json({ success: false, error: "Error interno" });
+    }
+  }
+);
+
 export default router;

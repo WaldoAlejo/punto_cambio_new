@@ -163,6 +163,33 @@ export const scheduleService = {
 
   // === Helpers opcionales para vistas de administración ===
 
+  // Reasignar jornada de hoy a otro punto (solo ADMIN/SUPER)
+  async reassignPoint(params: {
+    usuario_id: string;
+    destino_punto_atencion_id?: string;
+    motivo?: string;
+    observaciones?: string;
+    finalizar?: boolean; // si true: cancela la jornada y limpia el punto del usuario
+  }): Promise<ScheduleResult> {
+    try {
+      const response = await apiService.post<ScheduleResponse>(
+        "/schedules/reassign-point",
+        params
+      );
+      if (!response)
+        return { schedule: null, error: "Sin respuesta del servidor" };
+      if (response.error || !response.success)
+        return {
+          schedule: null,
+          error: response.error || "Error en reasignación",
+        };
+      return { schedule: response.schedule, error: null };
+    } catch (e) {
+      console.error("Error en reassignPoint:", e);
+      return { schedule: null, error: "Error de conexión con el servidor" };
+    }
+  },
+
   // Jornadas empezadas hoy (ACTIVO/ALMUERZO) — requiere ADMIN/SUPER/ADMINISTRATIVO
   async getStartedToday(): Promise<SchedulesResult> {
     try {

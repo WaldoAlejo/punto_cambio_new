@@ -7,6 +7,7 @@ import { MapPin, Clock, User, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { User as UserType } from "../../types";
 import { scheduleService } from "../../services/scheduleService";
+import FreePointButton from "./FreePointButton";
 
 interface ActiveSchedule {
   id: string;
@@ -415,13 +416,20 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <Badge variant="secondary" className="mb-1">
-                        {schedule.puntoAtencion.nombre}
-                      </Badge>
-                      <p className="text-sm text-gray-600">
-                        Trabajando: {getWorkingHours(schedule.fecha_inicio)}
-                      </p>
+                    <div className="text-right space-y-2">
+                      <div>
+                        <Badge variant="secondary" className="mb-1">
+                          {schedule.puntoAtencion.nombre}
+                        </Badge>
+                        <p className="text-sm text-gray-600">
+                          Trabajando: {getWorkingHours(schedule.fecha_inicio)}
+                        </p>
+                      </div>
+                      {/* Botón visible solo para ADMIN/SUPER: libera el punto moviendo la jornada al principal */}
+                      <FreePointButton
+                        usuarioId={schedule.usuario.id}
+                        onDone={loadActiveSchedules}
+                      />
                     </div>
                   </div>
                 </CardHeader>
