@@ -35,6 +35,7 @@ import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
 import { pointService } from "@/services/pointService";
 import { Loading } from "@/components/ui/loading";
 import { exchangeService } from "@/services/exchangeService";
+import { anularMovimientoServicioExterno } from "@/services/externalServicesService";
 
 interface HistorialMovimientosProps {
   user: User;
@@ -74,6 +75,11 @@ export const HistorialMovimientos = ({
   const [annulCambioId, setAnnulCambioId] = useState<string | null>(null);
   const [annulReason, setAnnulReason] = useState<string>("");
   const [annulLoading, setAnnulLoading] = useState<boolean>(false);
+
+  // Estado para anular ingresos/egresos de Servicios Externos (MovimientoSaldo individual)
+  const [annulMovExtId, setAnnulMovExtId] = useState<string | null>(null);
+  const [annulMovExtReason, setAnnulMovExtReason] = useState<string>("");
+  const [annulMovExtLoading, setAnnulMovExtLoading] = useState<boolean>(false);
 
   // Persistencia de filtros (localStorage)
   const storagePrefix = isAdminView ? "histMov_admin" : "histMov";
@@ -650,9 +656,20 @@ export const HistorialMovimientos = ({
                           </TableCell>
                           {(user.rol === "ADMIN" ||
                             user.rol === "SUPER_USUARIO") && (
-                            <TableCell>
-                              {/* Cuando sea un movimiento individual de CAMBIO_DIVISA, no mostramos botón aquí
-                                  porque el botón se muestra en la fila agrupada del cambio. */}
+                            <TableCell className="text-right">
+                              {mov.tipo_referencia === "SERVICIO_EXTERNO" ? (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => setAnnulMovExtId(mov.id)}
+                                >
+                                  Anular
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  —
+                                </span>
+                              )}
                             </TableCell>
                           )}
                         </TableRow>
@@ -737,6 +754,65 @@ export const HistorialMovimientos = ({
                   }}
                 >
                   {annulLoading ? "Anulando..." : "Confirmar anulación"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {annulMovExtId && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded shadow p-4 w-full max-w-md">
+              <h3 className="text-lg font-semibold mb-2">
+                Anular ingreso/egreso
+              </h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Describe el motivo de anulación. Esta acción registrará un
+                reverso contable.
+              </p>
+              <textarea
+                className="w-full border rounded p-2 h-28"
+                placeholder="Motivo de anulación"
+                value={annulMovExtReason}
+                onChange={(e) => setAnnulMovExtReason(e.target.value)}
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    if (annulMovExtLoading) return;
+                    setAnnulMovExtId(null);
+                    setAnnulMovExtReason("");
+                  }}
+                  disabled={annulMovExtLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={annulMovExtLoading || !annulMovExtReason.trim()}
+                  onClick={async () => {
+                    if (!annulMovExtId || !annulMovExtReason.trim()) return;
+                    try {
+                      setAnnulMovExtLoading(true);
+                      await anularMovimientoServicioExterno(
+                        annulMovExtId,
+                        annulMovExtReason.trim()
+                      );
+                      await cargarMovimientos(
+                        filtroMoneda === "TODAS" ? undefined : filtroMoneda,
+                        limite
+                      );
+                      setAnnulMovExtId(null);
+                      setAnnulMovExtReason("");
+                    } catch (e) {
+                      // opcional: toast de error
+                    } finally {
+                      setAnnulMovExtLoading(false);
+                    }
+                  }}
+                >
+                  {annulMovExtLoading ? "Anulando..." : "Confirmar anulación"}
                 </Button>
               </div>
             </div>
