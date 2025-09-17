@@ -34,6 +34,7 @@ import { useContabilidadDivisas } from "@/hooks/useContabilidadDivisas";
 import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
 import { pointService } from "@/services/pointService";
 import { Loading } from "@/components/ui/loading";
+import { exchangeService } from "@/services/exchangeService";
 
 interface HistorialMovimientosProps {
   user: User;
@@ -68,6 +69,11 @@ export const HistorialMovimientos = ({
   const [limite, setLimite] = useState<number>(isAdminView ? 100 : 50);
   const [filtroPunto, setFiltroPunto] = useState<string>("TODOS");
   const [puntos, setPuntos] = useState<{ id: string; nombre: string }[]>([]);
+
+  // Estado para anulación de cambios de divisa
+  const [annulCambioId, setAnnulCambioId] = useState<string | null>(null);
+  const [annulReason, setAnnulReason] = useState<string>("");
+  const [annulLoading, setAnnulLoading] = useState<boolean>(false);
 
   // Persistencia de filtros (localStorage)
   const storagePrefix = isAdminView ? "histMov_admin" : "histMov";
@@ -398,6 +404,9 @@ export const HistorialMovimientos = ({
                   <TableHead className="text-right">Saldo Nuevo</TableHead>
                   <TableHead>Usuario</TableHead>
                   <TableHead>Descripción</TableHead>
+                  {(user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") && (
+                    <TableHead>Acciones</TableHead>
+                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -548,6 +557,22 @@ export const HistorialMovimientos = ({
                                 "Cambio de divisa"}
                             </span>
                           </TableCell>
+                          {(user.rol === "ADMIN" ||
+                            user.rol === "SUPER_USUARIO") && (
+                            <TableCell>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() =>
+                                  mov.referencia_id &&
+                                  setAnnulCambioId(mov.referencia_id)
+                                }
+                                disabled={!mov.referencia_id}
+                              >
+                                Anular
+                              </Button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     } else {
@@ -623,6 +648,13 @@ export const HistorialMovimientos = ({
                               {mov.descripcion || "Sin descripción"}
                             </span>
                           </TableCell>
+                          {(user.rol === "ADMIN" ||
+                            user.rol === "SUPER_USUARIO") && (
+                            <TableCell>
+                              {/* Cuando sea un movimiento individual de CAMBIO_DIVISA, no mostramos botón aquí
+                                  porque el botón se muestra en la fila agrupada del cambio. */}
+                            </TableCell>
+                          )}
                         </TableRow>
                       );
                     }
@@ -646,6 +678,67 @@ export const HistorialMovimientos = ({
               <span className="text-gray-500">
                 Última actualización: {new Date().toLocaleTimeString()}
               </span>
+            </div>
+          </div>
+        )}
+
+        {annulCambioId && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded shadow p-4 w-full max-w-md">
+              <h3 className="text-lg font-semibold mb-2">
+                Anular cambio de divisa
+              </h3>
+              <p className="text-sm text-gray-600 mb-3">
+                Indica el motivo de la anulación. Se registrarán reversos
+                contables.
+              </p>
+              <textarea
+                className="w-full border rounded p-2 h-28"
+                placeholder="Motivo de anulación"
+                value={annulReason}
+                onChange={(e) => setAnnulReason(e.target.value)}
+              />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    if (annulLoading) return;
+                    setAnnulCambioId(null);
+                    setAnnulReason("");
+                  }}
+                  disabled={annulLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={annulLoading || !annulReason.trim()}
+                  onClick={async () => {
+                    if (!annulCambioId || !annulReason.trim()) return;
+                    try {
+                      setAnnulLoading(true);
+                      const { ok } = await exchangeService.annulExchange(
+                        annulCambioId,
+                        annulReason.trim()
+                      );
+                      if (ok) {
+                        setAnnulCambioId(null);
+                        setAnnulReason("");
+                        await cargarMovimientos(
+                          filtroMoneda === "TODAS" ? undefined : filtroMoneda,
+                          limite
+                        );
+                      }
+                    } catch (e) {
+                      // opcional: toast de error
+                    } finally {
+                      setAnnulLoading(false);
+                    }
+                  }}
+                >
+                  {annulLoading ? "Anulando..." : "Confirmar anulación"}
+                </Button>
+              </div>
             </div>
           </div>
         )}

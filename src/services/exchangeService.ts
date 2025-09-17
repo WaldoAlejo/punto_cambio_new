@@ -171,6 +171,28 @@ export const exchangeService = {
     }
   },
 
+  async annulExchange(
+    id: string,
+    motivo: string
+  ): Promise<{ ok: boolean; error: string | null }> {
+    try {
+      const response = await apiService.delete<{
+        success: boolean;
+        message?: string;
+        error?: string;
+      }>(`/exchanges/${encodeURIComponent(id)}`, { motivo });
+      if (response?.success) return { ok: true, error: null };
+      return {
+        ok: false,
+        error:
+          response?.error || response?.message || "No se pudo anular el cambio",
+      };
+    } catch (error: any) {
+      console.error("Error annulling exchange:", error);
+      return { ok: false, error: error?.message || "Error de conexión" };
+    }
+  },
+
   async getAllExchanges(): Promise<{
     exchanges: CambioDivisa[];
     error: string | null;
