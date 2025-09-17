@@ -65,7 +65,15 @@ const TransferForm = ({
 
         const { currencies: fetchedCurrencies } =
           await currencyService.getAllCurrencies();
-        setCurrencies(fetchedCurrencies.filter((currency) => currency.activo));
+        // Permitir USD aunque estuviera inactiva y mostrar todas para transferencias
+        setCurrencies(
+          [...fetchedCurrencies].sort((a, b) => {
+            // Prioriza USD arriba y luego orden alfabético por código
+            if (a.codigo === "USD" && b.codigo !== "USD") return -1;
+            if (b.codigo === "USD" && a.codigo !== "USD") return 1;
+            return a.codigo.localeCompare(b.codigo);
+          })
+        );
       } catch {
         toast.error("Error al cargar datos necesarios");
       }
