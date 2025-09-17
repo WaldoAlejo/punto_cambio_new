@@ -345,7 +345,7 @@ router.get(
           u.nombre AS usuario_nombre
         FROM "ServicioExternoMovimiento" m
         JOIN "Usuario" u ON u.id = m.usuario_id
-        WHERE ${where.join(" AND ")}
+        WHERE ${where.join(" AND ")} AND m.deleted_at IS NULL
         ORDER BY m.fecha DESC
         LIMIT ${limitNum}
       `;
@@ -376,6 +376,142 @@ router.get(
         success: false,
         message: error instanceof Error ? error.message : "Error desconocido",
       });
+    }
+  }
+);
+
+/** ==============================
+ *  DELETE /servicios-externos/movimientos/:id
+ *  Anula un movimiento (solo ADMIN/SUPER_USUARIO): soft delete + reverso de saldo + auditoría
+ *  Body: { motivo: string }
+ *  ============================== */
+router.delete(
+  "/movimientos/:id",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthenticatedUser | undefined;
+      if (!user || (user.rol !== "ADMIN" && user.rol !== "SUPER_USUARIO")) {
+        res
+          .status(403)
+          .json({
+            success: false,
+            message: "Permisos insuficientes (solo ADMIN)",
+          });
+        return;
+      }
+
+      const { id } = req.params;
+      const { motivo } = (req.body || {}) as { motivo?: string };
+      if (!motivo || !String(motivo).trim()) {
+        res
+          .status(400)
+          .json({ success: false, message: "motivo es requerido" });
+        return;
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+
+        const sel = await client.query(
+          `SELECT id, punto_atencion_id, tipo_movimiento, moneda_id, monto, deleted_at
+           FROM "ServicioExternoMovimiento" WHERE id = $1 FOR UPDATE`,
+          [id]
+        );
+        if (sel.rows.length === 0) {
+          await client.query("ROLLBACK");
+          res
+            .status(404)
+            .json({ success: false, message: "Movimiento no encontrado" });
+          return;
+        }
+        const mov = sel.rows[0];
+        if (mov.deleted_at) {
+          await client.query("ROLLBACK");
+          res
+            .status(409)
+            .json({ success: false, message: "Movimiento ya anulado" });
+          return;
+        }
+
+        // Marcar soft delete
+        await client.query(
+          `UPDATE "ServicioExternoMovimiento"
+             SET deleted_at = NOW(), deleted_by = $2, delete_reason = $3
+           WHERE id = $1`,
+          [id, user.id, motivo]
+        );
+
+        // Revertir saldo USD (mismo moneda_id que guardamos en creación)
+        const usdId = mov.moneda_id as string;
+        const puntoId = mov.punto_atencion_id as string;
+        const montoNum = Number(mov.monto);
+        const tipoOriginal = String(mov.tipo_movimiento) as
+          | "INGRESO"
+          | "EGRESO";
+        const tipoReverso = tipoOriginal === "INGRESO" ? "EGRESO" : "INGRESO";
+
+        const saldoQ = await client.query(
+          'SELECT id, cantidad FROM "Saldo" WHERE punto_atencion_id = $1 AND moneda_id = $2 FOR UPDATE',
+          [puntoId, usdId]
+        );
+        const saldoAnterior = saldoQ.rows.length
+          ? Number(saldoQ.rows[0].cantidad)
+          : 0;
+        const delta = tipoReverso === "INGRESO" ? montoNum : -montoNum;
+        const saldoNuevo = saldoAnterior + delta;
+
+        if (saldoQ.rows.length) {
+          await client.query(
+            'UPDATE "Saldo" SET cantidad = $1, updated_at = NOW() WHERE id = $2',
+            [saldoNuevo, saldoQ.rows[0].id]
+          );
+        } else {
+          // crear saldo si no existiera (escenario raro)
+          const saldoId = randomUUID();
+          await client.query(
+            'INSERT INTO "Saldo"(id, punto_atencion_id, moneda_id, cantidad, billetes, monedas_fisicas, updated_at) VALUES($1,$2,$3,$4,0,0,NOW())',
+            [saldoId, puntoId, usdId, saldoNuevo]
+          );
+        }
+
+        // Insertar movimiento de reverso
+        const movSaldoId = randomUUID();
+        await client.query(
+          `INSERT INTO "MovimientoSaldo"
+            (id, punto_atencion_id, moneda_id, tipo_movimiento, monto, saldo_anterior, saldo_nuevo, usuario_id, referencia_id, tipo_referencia, descripcion, fecha, created_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'REVERSO_SERVICIO_EXTERNO',$10,NOW(),NOW())`,
+          [
+            movSaldoId,
+            puntoId,
+            usdId,
+            tipoReverso,
+            montoNum,
+            saldoAnterior,
+            saldoNuevo,
+            user.id,
+            id,
+            `Reverso por anulación (ADMIN: ${user.nombre}) - motivo: ${motivo}`,
+          ]
+        );
+
+        await client.query("COMMIT");
+        res.json({
+          success: true,
+          message: "Movimiento anulado y saldo revertido",
+        });
+      } catch (e) {
+        await client.query("ROLLBACK");
+        throw e;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      console.error("Error anulando movimiento de servicios externos:", error);
+      res
+        .status(500)
+        .json({ success: false, message: "No se pudo anular el movimiento" });
     }
   }
 );

@@ -417,7 +417,14 @@ export interface MovimientoContableData {
   monto: number;
   usuario_id: string;
   referencia_id: string;
-  tipo_referencia: "CAMBIO_DIVISA" | "TRANSFERENCIA" | "AJUSTE_MANUAL";
+  tipo_referencia:
+    | "CAMBIO_DIVISA"
+    | "TRANSFERENCIA"
+    | "AJUSTE_MANUAL"
+    | "SALDO_INICIAL"
+    | "SERVICIO_EXTERNO"
+    | "REVERSO_CAMBIO"
+    | "REVERSO_SERVICIO_EXTERNO";
   descripcion: string;
 }
 
@@ -438,7 +445,14 @@ export interface MovimientoSaldo {
   usuario_id: string;
   usuario_nombre?: string;
   referencia_id: string;
-  tipo_referencia: "CAMBIO_DIVISA" | "TRANSFERENCIA" | "AJUSTE_MANUAL";
+  tipo_referencia:
+    | "CAMBIO_DIVISA"
+    | "TRANSFERENCIA"
+    | "AJUSTE_MANUAL"
+    | "SALDO_INICIAL"
+    | "SERVICIO_EXTERNO"
+    | "REVERSO_CAMBIO"
+    | "REVERSO_SERVICIO_EXTERNO";
   descripcion: string;
   fecha: string;
   created_at: string;

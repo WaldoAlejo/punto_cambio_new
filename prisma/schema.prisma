@@ -254,6 +254,10 @@ model CambioDivisa {
   observacion       String?
   numero_recibo     String?           @unique
   estado            EstadoTransaccion @default(COMPLETADO)
+  // Soft delete / auditoría de anulación
+  deleted_at        DateTime?
+  deleted_by        String?
+  delete_reason     String?
 
   // ==== CAMPOS PARA ENTREGA Y FLUJO PARCIAL ====
   metodo_entrega           String // "efectivo" | "transferencia"
@@ -646,6 +650,10 @@ model ServicioExternoMovimiento {
   descripcion       String?
   numero_referencia String?
   comprobante_url   String?
+  // Soft delete / auditoría de anulación
+  deleted_at        DateTime?
+  deleted_by        String?
+  delete_reason     String?
 
   puntoAtencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
   moneda        Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)

@@ -65,9 +65,54 @@ export const HistorialMovimientos = ({
 
   const [filtroMoneda, setFiltroMoneda] = useState<string>("TODAS");
   const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
-  const [limite, setLimite] = useState(50);
+  const [limite, setLimite] = useState<number>(isAdminView ? 100 : 50);
   const [filtroPunto, setFiltroPunto] = useState<string>("TODOS");
   const [puntos, setPuntos] = useState<{ id: string; nombre: string }[]>([]);
+
+  // Persistencia de filtros (localStorage)
+  const storagePrefix = isAdminView ? "histMov_admin" : "histMov";
+
+  // Cargar filtros guardados al montar/cambiar vista
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem(`${storagePrefix}_moneda`);
+      const t = localStorage.getItem(`${storagePrefix}_tipo`);
+      const p = localStorage.getItem(`${storagePrefix}_punto`);
+      const l = localStorage.getItem(`${storagePrefix}_limite`);
+
+      if (m) setFiltroMoneda(m);
+      if (t) setFiltroTipo(t);
+      if (isAdminView && p) setFiltroPunto(p);
+      if (l) {
+        const parsed = parseInt(l, 10);
+        setLimite(Number.isFinite(parsed) ? parsed : isAdminView ? 100 : 50);
+      }
+    } catch {
+      // noop
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminView]);
+
+  // Guardar filtros cuando cambian
+  useEffect(() => {
+    try {
+      localStorage.setItem(`${storagePrefix}_moneda`, filtroMoneda);
+      localStorage.setItem(`${storagePrefix}_tipo`, filtroTipo);
+      if (isAdminView) {
+        localStorage.setItem(`${storagePrefix}_punto`, filtroPunto);
+      }
+      localStorage.setItem(`${storagePrefix}_limite`, String(limite));
+    } catch {
+      // noop
+    }
+  }, [
+    filtroMoneda,
+    filtroTipo,
+    filtroPunto,
+    limite,
+    storagePrefix,
+    isAdminView,
+  ]);
 
   // Cargar puntos para filtro (solo en admin view)
   useEffect(() => {
@@ -291,21 +336,37 @@ export const HistorialMovimientos = ({
             </Select>
           </div>
 
-          <Button
-            onClick={() =>
-              cargarMovimientos(
-                filtroMoneda === "TODAS" ? undefined : filtroMoneda,
-                limite
-              )
-            }
-            disabled={isLoading}
-            className="self-end"
-          >
-            <RefreshCw
-              className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
-            />
-            Actualizar
-          </Button>
+          <div className="flex items-end gap-2">
+            <Button
+              onClick={() =>
+                cargarMovimientos(
+                  filtroMoneda === "TODAS" ? undefined : filtroMoneda,
+                  limite
+                )
+              }
+              disabled={isLoading}
+              className="self-end"
+            >
+              <RefreshCw
+                className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+              />
+              Actualizar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setFiltroMoneda("TODAS");
+                setFiltroTipo("TODOS");
+                if (isAdminView) setFiltroPunto("TODOS");
+                setLimite(isAdminView ? 100 : 50);
+                cargarMovimientos(undefined, isAdminView ? 100 : 50);
+              }}
+              className="self-end"
+            >
+              Limpiar filtros
+            </Button>
+          </div>
         </div>
 
         {/* Tabla de movimientos (agrupando cambios por transacción) */}

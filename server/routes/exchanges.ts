@@ -1211,4 +1211,164 @@ router.post(
   }
 );
 
+/** ==============================
+ *  DELETE /exchanges/:id
+ *  Anula un cambio de divisas (solo ADMIN/SUPER_USUARIO):
+ *   - Marca estado = CANCELADO y set deleted_* (soft delete)
+ *   - Reversa saldos (origen/destino)
+ *   - Inserta MovimientoSaldo de reverso para ambas monedas
+ *  Body: { motivo: string }
+ *  ============================== */
+router.delete(
+  "/:id",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+    try {
+      const user = req.user;
+      if (!user || (user.rol !== "ADMIN" && user.rol !== "SUPER_USUARIO")) {
+        res
+          .status(403)
+          .json({ success: false, error: "Permisos insuficientes" });
+        return;
+      }
+
+      const { id } = req.params;
+      const { motivo } = (req.body || {}) as { motivo?: string };
+      if (!motivo || !String(motivo).trim()) {
+        res.status(400).json({ success: false, error: "motivo es requerido" });
+        return;
+      }
+
+      const cambio = await prisma.cambioDivisa.findUnique({ where: { id } });
+      if (!cambio) {
+        res.status(404).json({ success: false, error: "Cambio no encontrado" });
+        return;
+      }
+      if (
+        (cambio as any).deleted_at ||
+        cambio.estado === EstadoTransaccion.CANCELADO
+      ) {
+        res.status(409).json({ success: false, error: "Cambio ya cancelado" });
+        return;
+      }
+
+      await prisma.$transaction(async (tx) => {
+        // 1) Soft delete + estado CANCELADO
+        await tx.cambioDivisa.update({
+          where: { id },
+          data: {
+            estado: EstadoTransaccion.CANCELADO,
+            deleted_at: new Date(),
+            deleted_by: user.id,
+            delete_reason: motivo,
+          } as any,
+        });
+
+        // 2) Reverso de saldos: destino fue EGRESO -> ahora INGRESO; origen fue INGRESO -> ahora EGRESO
+        // Destino (se entregó al cliente) => revertir con INGRESO al saldo del punto
+        const destinoSaldo = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_destino_id,
+            },
+          },
+        });
+        const destinoAnterior = Number(destinoSaldo?.cantidad ?? 0);
+        const destinoNuevo = destinoAnterior + Number(cambio.monto_destino);
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_destino_id,
+            },
+          },
+          update: { cantidad: destinoNuevo, updated_at: new Date() },
+          create: {
+            punto_atencion_id: cambio.punto_atencion_id,
+            moneda_id: cambio.moneda_destino_id,
+            cantidad: destinoNuevo,
+            billetes: 0,
+            monedas_fisicas: 0,
+            updated_at: new Date(),
+          },
+        });
+
+        // Origen (se recibió del cliente) => revertir con EGRESO desde el saldo del punto
+        const origenSaldo = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+            },
+          },
+        });
+        const origenAnterior = Number(origenSaldo?.cantidad ?? 0);
+        const origenNuevo = origenAnterior - Number(cambio.monto_origen);
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+            },
+          },
+          update: { cantidad: origenNuevo, updated_at: new Date() },
+          create: {
+            punto_atencion_id: cambio.punto_atencion_id,
+            moneda_id: cambio.moneda_origen_id,
+            cantidad: origenNuevo,
+            billetes: 0,
+            monedas_fisicas: 0,
+            updated_at: new Date(),
+          },
+        });
+
+        // 3) Insertar movimientos de reverso (dos filas)
+        await tx.movimientoSaldo.createMany({
+          data: [
+            {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_destino_id,
+              tipo_movimiento: "INGRESO",
+              monto: Number(cambio.monto_destino),
+              saldo_anterior: destinoAnterior,
+              saldo_nuevo: destinoNuevo,
+              usuario_id: user.id,
+              referencia_id: cambio.id,
+              tipo_referencia: "REVERSO_CAMBIO",
+              descripcion: `Reverso CAMBIO (destino) por anulación (ADMIN: ${user.nombre}) - motivo: ${motivo}`,
+              fecha: new Date(),
+              created_at: new Date(),
+            },
+            {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+              tipo_movimiento: "EGRESO",
+              monto: Number(cambio.monto_origen),
+              saldo_anterior: origenAnterior,
+              saldo_nuevo: origenNuevo,
+              usuario_id: user.id,
+              referencia_id: cambio.id,
+              tipo_referencia: "REVERSO_CAMBIO",
+              descripcion: `Reverso CAMBIO (origen) por anulación (ADMIN: ${user.nombre}) - motivo: ${motivo}`,
+              fecha: new Date(),
+              created_at: new Date(),
+            },
+          ],
+        });
+      });
+
+      res.json({
+        success: true,
+        message: "Cambio anulado y saldos revertidos",
+      });
+    } catch (error) {
+      logger.error("Error al anular cambio", { error });
+      res
+        .status(500)
+        .json({ success: false, error: "No se pudo anular el cambio" });
+    }
+  }
+);
+
 export default router;
