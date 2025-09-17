@@ -7,7 +7,7 @@ export interface AuthenticatedUser {
   punto_atencion_id: string | null;
 }
 
-// Datos individuales por tipo de reporte
+// Datos individuales por tipo de reporte (agregados simples)
 export interface ExchangeData {
   point: string;
   amount: number;
@@ -49,6 +49,76 @@ export interface WorkTimeData {
   effectiveMinutes: number; // (salida-entrada) - lunch - spontaneous
 }
 
+// Nuevos: Estructuras detalladas
+export interface ExchangeDetailedData {
+  id: string;
+  fecha: string; // ISO
+  punto: string;
+  usuario: string;
+  tipo_operacion: "COMPRA" | "VENTA";
+  moneda_origen: string; // CODIGO
+  moneda_destino: string; // CODIGO
+  monto_origen: number;
+  monto_destino: number;
+  tasa_billetes: number; // aplicada
+  tasa_monedas: number; // aplicada
+  rate_applied: number; // tasa efectiva calculada
+  tasa_mid: number; // promedio compra/venta del día/punto/moneda
+  spread: number; // rate_applied - tasa_mid (signo según operación)
+  margen_bruto: number; // en moneda base del cálculo
+  fuente_tasa_mid: string; // e.g., "promedio_configurado" | "promedio_operaciones"
+  metodo_entrega: string; // efectivo|transferencia
+  numero_recibo?: string | null;
+  estado: string;
+}
+
+export interface TransferDetailedData {
+  id: string;
+  fecha: string; // ISO
+  punto_origen: string;
+  punto_destino: string;
+  usuario_solicitante: string;
+  moneda: string; // CODIGO
+  monto: number;
+  estado: string;
+  numero_recibo?: string | null;
+  observaciones?: string | null;
+}
+
+export interface AccountingMovementData {
+  id: string;
+  fecha: string; // ISO
+  punto: string;
+  moneda: string; // CODIGO
+  tipo_movimiento: string;
+  monto: number;
+  saldo_anterior?: number | null;
+  saldo_nuevo?: number | null;
+  usuario: string;
+  referencia_id?: string | null;
+  tipo_referencia?: string | null;
+  numero_referencia?: string | null; // puede ser numero_recibo u otro
+  descripcion?: string | null;
+}
+
+export interface EODBalanceData {
+  fecha: string; // YYYY-MM-DD
+  punto: string;
+  moneda: string; // CODIGO
+  saldo_cierre: number;
+  diferencia?: number | null;
+}
+
+export interface PointAssignmentData {
+  fecha: string; // ISO
+  usuario: string;
+  punto_anterior?: string | null;
+  punto_nuevo: string;
+  autorizado_por?: string | null;
+  motivo?: string | null;
+  observaciones?: string | null;
+}
+
 // Datos agregados para reportes tipo summary
 export interface SummaryReportResponse {
   exchanges: ExchangeData[];
@@ -67,7 +137,12 @@ export type ReportData =
   | TransferData
   | BalanceData
   | UserActivityData
-  | WorkTimeData;
+  | WorkTimeData
+  | ExchangeDetailedData
+  | TransferDetailedData
+  | AccountingMovementData
+  | EODBalanceData
+  | PointAssignmentData;
 
 // Tipos de request
 export interface ReportRequest {
@@ -77,9 +152,17 @@ export interface ReportRequest {
     | "balances"
     | "users"
     | "summary"
-    | "worktime"; // nuevo tipo de reporte
+    | "worktime"
+    | "exchanges_detailed"
+    | "transfers_detailed"
+    | "accounting_movements"
+    | "eod_balances"
+    | "point_assignments";
   dateFrom: string;
   dateTo: string;
-  pointId?: string; // <-- Agregado
-  userId?: string; // <-- Agregado
+  pointId?: string;
+  userId?: string;
+  currencyId?: string;
+  estado?: string;
+  metodoEntrega?: "efectivo" | "transferencia";
 }

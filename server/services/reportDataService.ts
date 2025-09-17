@@ -1,9 +1,10 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, TipoOperacion } from "@prisma/client";
 import {
   ExchangeData,
   TransferData,
   BalanceData,
   UserActivityData,
+  ExchangeDetailedData,
 } from "../types/reportTypes.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
@@ -286,5 +287,135 @@ export const reportDataService = {
     });
 
     return results;
+  },
+
+  // Nuevo: Cambios detallados con tasa mid y margen
+  async getExchangesDetailedData(
+    startDate: Date,
+    endDate: Date,
+    filters?: {
+      pointId?: string;
+      userId?: string;
+      currencyId?: string; // moneda_origen o destino
+      estado?: string;
+      metodoEntrega?: "efectivo" | "transferencia";
+    }
+  ): Promise<ExchangeDetailedData[]> {
+    const where: any = {
+      fecha: { gte: startDate, lte: endDate },
+      ...(filters?.estado ? { estado: filters.estado } : {}),
+      ...(filters?.metodoEntrega
+        ? { metodo_entrega: filters.metodoEntrega }
+        : {}),
+      ...(filters?.pointId ? { punto_atencion_id: filters.pointId } : {}),
+      ...(filters?.userId ? { usuario_id: filters.userId } : {}),
+      ...(filters?.currencyId
+        ? {
+            OR: [
+              { moneda_origen_id: filters.currencyId },
+              { moneda_destino_id: filters.currencyId },
+            ],
+          }
+        : {}),
+    };
+
+    const rows = await prisma.cambioDivisa.findMany({
+      where,
+      include: {
+        puntoAtencion: { select: { id: true, nombre: true } },
+        usuario: { select: { nombre: true } },
+        monedaOrigen: { select: { id: true, codigo: true } },
+        monedaDestino: { select: { id: true, codigo: true } },
+      },
+      orderBy: { fecha: "asc" },
+    });
+
+    // Pre-agrupación por día GYE + punto + moneda para tasa_mid fallback
+    type Key = string;
+    const tasasPorGrupo = new Map<Key, { sumRates: number; count: number }>();
+
+    function keyMid(date: Date, pointId: string, currencyPair: string) {
+      const ymd = gyeDayRangeUtcFromDate(date).gte.toISOString().slice(0, 10);
+      return `${ymd}|${pointId}|${currencyPair}`;
+    }
+
+    // Recolectar tasas efectivas por operación para usar como fallback del mid
+    for (const r of rows) {
+      const isCompra = r.tipo_operacion === TipoOperacion.COMPRA;
+      const currencyPair = `${r.monedaOrigen.codigo}->${r.monedaDestino.codigo}`;
+      const rateApplied = (() => {
+        // Tasa efectiva basada en montos y comportamiento
+        const origen = Number(r.monto_origen);
+        const destino = Number(r.monto_destino);
+        if (origen <= 0 || destino <= 0) return 0;
+        // Si MULTIPLICA (p.ej. compra): destino = origen * tasa
+        // Si DIVIDE: destino = origen / tasa
+        // Para una tasa efectiva neutral sin conocer comportamiento exacto, usamos destino/origen como estimador
+        return destino / origen;
+      })();
+      const k = keyMid(r.fecha, r.punto_atencion_id, currencyPair);
+      const agg = tasasPorGrupo.get(k) || { sumRates: 0, count: 0 };
+      if (rateApplied > 0 && isFinite(rateApplied)) {
+        agg.sumRates += rateApplied;
+        agg.count += 1;
+        tasasPorGrupo.set(k, agg);
+      }
+    }
+
+    const result: ExchangeDetailedData[] = rows.map((r) => {
+      const origen = Number(r.monto_origen);
+      const destino = Number(r.monto_destino);
+      const tasaBilletes = Number(r.tasa_cambio_billetes || 0);
+      const tasaMonedas = Number(r.tasa_cambio_monedas || 0);
+
+      // Tasa efectiva aplicada por operación según montos
+      const rateApplied = origen > 0 ? destino / origen : 0;
+
+      // Obtener tasa_mid como promedio de compra/venta configuradas por punto/día.
+      // No existe tabla explícita de configuración diaria en el esquema, así que usamos fallback:
+      // promedio de rateApplied de ese punto, día GYE y par de monedas.
+      const currencyPair = `${r.monedaOrigen.codigo}->${r.monedaDestino.codigo}`;
+      const k = keyMid(r.fecha, r.punto_atencion_id, currencyPair);
+      const midAgg = tasasPorGrupo.get(k);
+      const tasaMid =
+        midAgg && midAgg.count > 0
+          ? midAgg.sumRates / midAgg.count
+          : rateApplied;
+
+      // Spread según operación: positivo si la tasa_aplicada favorece margen
+      const isVenta = r.tipo_operacion === TipoOperacion.VENTA;
+      const isCompra = r.tipo_operacion === TipoOperacion.COMPRA;
+      const spread = rateApplied - tasaMid; // referencia neutral
+
+      // Margen bruto aproximado: spread * base
+      // Base: si usamos rate = destino/origen, una aproximación simple es base = origen
+      // Signo: en venta spread>0 es favorable; en compra spread<0 es favorable -> mantenemos spread como está
+      const margen = spread * origen;
+
+      return {
+        id: r.id,
+        fecha: r.fecha.toISOString(),
+        punto: r.puntoAtencion?.nombre || "Punto desconocido",
+        usuario: r.usuario?.nombre || "Usuario desconocido",
+        tipo_operacion: r.tipo_operacion as any,
+        moneda_origen: r.monedaOrigen.codigo,
+        moneda_destino: r.monedaDestino.codigo,
+        monto_origen: origen,
+        monto_destino: destino,
+        tasa_billetes: tasaBilletes,
+        tasa_monedas: tasaMonedas,
+        rate_applied: rateApplied,
+        tasa_mid: tasaMid,
+        spread: spread,
+        margen_bruto: margen,
+        fuente_tasa_mid:
+          midAgg && midAgg.count > 0 ? "promedio_operaciones" : "auto",
+        metodo_entrega: r.metodo_entrega,
+        numero_recibo: r.numero_recibo,
+        estado: r.estado,
+      };
+    });
+
+    return result;
   },
 };

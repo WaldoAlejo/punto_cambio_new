@@ -153,6 +153,30 @@ export const reportService = {
         return reportData as ReportData[];
       }
 
+      case "exchanges_detailed": {
+        const reportData = await reportDataService.getExchangesDetailedData(
+          startDate,
+          endDate,
+          {
+            pointId: request.pointId,
+            userId: request.userId,
+            currencyId: request.currencyId,
+            estado: request.estado,
+            metodoEntrega: request.metodoEntrega,
+          }
+        );
+
+        logger.info("Reporte detallado de cambios generado", {
+          reportType,
+          dateFrom,
+          dateTo,
+          recordCount: Array.isArray(reportData) ? reportData.length : 0,
+          requestedBy: userId,
+        });
+
+        return reportData as ReportData[];
+      }
+
       default:
         throw new Error("Tipo de reporte no válido");
     }
