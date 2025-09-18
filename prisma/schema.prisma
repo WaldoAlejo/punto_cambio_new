@@ -108,11 +108,11 @@ model Moneda {
   codigo        String   @unique
   activo        Boolean  @default(true)
   orden_display Int      @default(0)
-  
+
   // Campos para configurar comportamiento de cálculo
   comportamiento_compra ComportamientoCalculo @default(MULTIPLICA)
   comportamiento_venta  ComportamientoCalculo @default(DIVIDE)
-  
+
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
@@ -176,19 +176,19 @@ model SaldoInicial {
 }
 
 model MovimientoSaldo {
-  id                String   @id @default(uuid())
+  id                String         @id @default(uuid())
   punto_atencion_id String
   moneda_id         String
-  tipo_movimiento   String // 'VENTA', 'COMPRA', 'TRANSFERENCIA_ENTRADA', 'TRANSFERENCIA_SALIDA', 'AJUSTE', 'SALDO_INICIAL'
-  monto             Decimal  @db.Decimal(15, 2)
-  saldo_anterior    Decimal  @db.Decimal(15, 2)
-  saldo_nuevo       Decimal  @db.Decimal(15, 2)
+  tipo_movimiento   TipoMovimiento  // ✅ enum coherente en todo el modelo
+  monto             Decimal         @db.Decimal(15, 2)
+  saldo_anterior    Decimal         @db.Decimal(15, 2)
+  saldo_nuevo       Decimal         @db.Decimal(15, 2)
   usuario_id        String
-  referencia_id     String? // ID de la operación relacionada
-  tipo_referencia   String? // 'CAMBIO_DIVISA', 'TRANSFERENCIA', 'AJUSTE_MANUAL'
+  referencia_id     String?         // ID de la operación relacionada
+  tipo_referencia   String?         // 'CAMBIO_DIVISA', 'TRANSFERENCIA', 'AJUSTE_MANUAL', etc.
   descripcion       String?
-  fecha             DateTime @default(now())
-  created_at        DateTime @default(now())
+  fecha             DateTime        @default(now())
+  created_at        DateTime        @default(now())
 
   puntoAtencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
   moneda        Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
@@ -198,6 +198,7 @@ model MovimientoSaldo {
   @@index([moneda_id])
   @@index([fecha])
   @@index([referencia_id, tipo_referencia])
+  @@index([punto_atencion_id, moneda_id, fecha]) // ✅ índice compuesto para performance
 }
 
 model HistorialSaldo {
@@ -230,22 +231,22 @@ model CambioDivisa {
   fecha             DateTime          @default(now())
   monto_origen      Decimal           @db.Decimal(15, 2)
   monto_destino     Decimal           @db.Decimal(15, 2)
-  
+
   // ==== TASAS DIFERENCIADAS ====
   // Tasas pueden ser 0 cuando no se usa esa vía
   tasa_cambio_billetes Decimal        @default(0) @db.Decimal(10, 6)
   tasa_cambio_monedas  Decimal        @default(0) @db.Decimal(10, 6)
-  
+
   // ==== DETALLES DE DIVISAS ENTREGADAS (por el cliente) ====
   divisas_entregadas_billetes Decimal @db.Decimal(15, 2) @default(0)
   divisas_entregadas_monedas  Decimal @db.Decimal(15, 2) @default(0)
   divisas_entregadas_total    Decimal @db.Decimal(15, 2) @default(0)
-  
+
   // ==== DETALLES DE DIVISAS RECIBIDAS (por el cliente) ====
   divisas_recibidas_billetes  Decimal @db.Decimal(15, 2) @default(0)
   divisas_recibidas_monedas   Decimal @db.Decimal(15, 2) @default(0)
   divisas_recibidas_total     Decimal @db.Decimal(15, 2) @default(0)
-  
+
   tipo_operacion    TipoOperacion
   moneda_origen_id  String
   moneda_destino_id String
@@ -274,7 +275,7 @@ model CambioDivisa {
   observacion_parcial         String?
   referencia_cambio_principal String?
   cliente                     String?
-  
+
   // ==== RECIBOS PARA ABONOS PARCIALES ====
   numero_recibo_abono         String?   @unique
   numero_recibo_completar     String?   @unique
@@ -694,6 +695,8 @@ enum TipoMovimiento {
   TRANSFERENCIA_ENTRANTE
   TRANSFERENCIA_SALIENTE
   CAMBIO_DIVISA
+  AJUSTE
+  SALDO_INICIAL
 }
 
 enum TipoOperacion {

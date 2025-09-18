@@ -3,15 +3,59 @@ import {
   MovimientoSaldo,
   CambioDivisa,
   MovimientoContableData,
-  SaldoActualizado,
   ResultadoMovimientoContable,
 } from "../types";
+
+/** Extrae mensaje legible si no viene de friendlyMessage */
+function extractMsg(err: any): string {
+  if (!err) return "Error desconocido";
+  if (err.friendlyMessage) return err.friendlyMessage;
+
+  const payload = err?.response?.data;
+  if (!payload) return err.message || "Error de red";
+
+  if (typeof payload === "string") return payload;
+  if (typeof payload?.message === "string") return payload.message;
+  if (typeof payload?.error === "string") return payload.error;
+
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    return String(payload);
+  }
+}
+
+/** Reintento exponencial simple para lecturas GET/POST livianas */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  attempts = 2,
+  baseDelayMs = 400
+): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (e: any) {
+      lastErr = e;
+      const status = e?.response?.status;
+      // No reintentar en 4xx (salvo 408) ni en errores de validación
+      const retriable =
+        !status ||
+        status >= 500 ||
+        status === 408 ||
+        e?.code === "ECONNABORTED";
+      if (!retriable || i === attempts) break;
+      await new Promise((r) => r(baseDelayMs * Math.pow(2, i))); // 400ms, 800ms, 1600ms
+    }
+  }
+  throw lastErr;
+}
 
 export const movimientosContablesService = {
   /**
    * Procesa los movimientos contables para un cambio de divisas
-   * - Resta la moneda entregada al cliente (EGRESO)
-   * - Suma la moneda recibida del cliente (INGRESO)
+   * - EGRESO: moneda que entregamos al cliente
+   * - INGRESO: moneda que recibimos del cliente
    */
   async procesarMovimientosCambio(
     cambio: CambioDivisa,
@@ -23,12 +67,12 @@ export const movimientosContablesService = {
     try {
       const movimientos: MovimientoContableData[] = [];
 
-      // 1. EGRESO: Moneda que entregamos al cliente (la que sale de nuestro saldo)
+      // 1) EGRESO: moneda entregada
       movimientos.push({
         punto_atencion_id: cambio.punto_atencion_id,
-        moneda_id: cambio.moneda_destino_id, // La moneda que entregamos
+        moneda_id: cambio.moneda_destino_id,
         tipo_movimiento: "EGRESO",
-        monto: cambio.monto_destino, // Monto que entregamos
+        monto: cambio.monto_destino,
         usuario_id,
         referencia_id: cambio.id,
         tipo_referencia: "CAMBIO_DIVISA",
@@ -37,12 +81,12 @@ export const movimientosContablesService = {
         } al cliente`,
       });
 
-      // 2. INGRESO: Moneda que recibimos del cliente (la que entra a nuestro saldo)
+      // 2) INGRESO: moneda recibida
       movimientos.push({
         punto_atencion_id: cambio.punto_atencion_id,
-        moneda_id: cambio.moneda_origen_id, // La moneda que recibimos
+        moneda_id: cambio.moneda_origen_id,
         tipo_movimiento: "INGRESO",
-        monto: cambio.monto_origen, // Monto que recibimos
+        monto: cambio.monto_origen,
         usuario_id,
         referencia_id: cambio.id,
         tipo_referencia: "CAMBIO_DIVISA",
@@ -53,10 +97,8 @@ export const movimientosContablesService = {
 
       const response = await axiosInstance.post<ResultadoMovimientoContable>(
         "/movimientos-contables/procesar-cambio",
-        {
-          cambio_id: cambio.id,
-          movimientos,
-        }
+        { cambio_id: cambio.id, movimientos },
+        { timeout: 12000 }
       );
 
       return { result: response.data, error: null };
@@ -64,9 +106,7 @@ export const movimientosContablesService = {
       console.error("Error al procesar movimientos contables:", error);
       return {
         result: null,
-        error:
-          error.response?.data?.message ||
-          "Error al procesar movimientos contables",
+        error: extractMsg(error) || "Error al procesar movimientos contables",
       };
     }
   },
@@ -79,22 +119,28 @@ export const movimientosContablesService = {
     moneda_id: string
   ): Promise<{ saldo: number | null; error: string | null }> {
     try {
-      const response = await axiosInstance.get<{ saldo: number }>(
-        `/saldos-actuales/${punto_atencion_id}/${moneda_id}`
+      const response = await withRetry(
+        () =>
+          axiosInstance.get<{ saldo: number }>(
+            `/saldos-actuales/${punto_atencion_id}/${moneda_id}`,
+            { timeout: 10000 }
+          ),
+        2
       );
-
       return { saldo: response.data.saldo, error: null };
     } catch (error: any) {
       console.error("Error al obtener saldo actual:", error);
       return {
         saldo: null,
-        error: error.response?.data?.message || "Error al obtener saldo actual",
+        error: extractMsg(error) || "Error al obtener saldo actual",
       };
     }
   },
 
   /**
-   * Obtiene todos los saldos actuales de un punto de atención
+   * Obtiene todos los saldos actuales de un punto de atención.
+   * - Usa endpoint principal /saldos-actuales/:punto (timeout 15s)
+   * - Si falla/timeout, Fallback a /vista-saldos-puntos/:punto (timeout 8s)
    */
   async getSaldosActualesPorPunto(punto_atencion_id: string): Promise<{
     saldos: Array<{
@@ -105,22 +151,49 @@ export const movimientosContablesService = {
     error: string | null;
   }> {
     try {
-      const response = await axiosInstance.get<{
-        saldos: Array<{
-          moneda_id: string;
-          moneda_codigo: string;
-          saldo: number;
-        }>;
-      }>(`/saldos-actuales/${punto_atencion_id}`);
+      // 1) Intento principal (con reintento)
+      const main = await withRetry(
+        () =>
+          axiosInstance.get<{
+            saldos: Array<{
+              moneda_id: string;
+              moneda_codigo: string;
+              saldo: number;
+            }>;
+          }>(`/saldos-actuales/${punto_atencion_id}`, { timeout: 15000 }),
+        1
+      );
+      return { saldos: main.data.saldos, error: null };
+    } catch (errorMain: any) {
+      console.warn(
+        "getSaldosActualesPorPunto: endpoint principal falló, probando fallback...",
+        errorMain?.message || errorMain
+      );
 
-      return { saldos: response.data.saldos, error: null };
-    } catch (error: any) {
-      console.error("Error al obtener saldos actuales:", error);
-      return {
-        saldos: null,
-        error:
-          error.response?.data?.message || "Error al obtener saldos actuales",
-      };
+      // 2) Fallback rápido
+      try {
+        const fallback = await axiosInstance.get<{
+          saldos: Array<{
+            moneda_id: string;
+            moneda_codigo: string;
+            saldo: number;
+          }>;
+        }>(`/vista-saldos-puntos/${punto_atencion_id}`, { timeout: 8000 });
+
+        return { saldos: fallback.data.saldos, error: null };
+      } catch (errorFallback: any) {
+        console.error("Error al obtener saldos (principal y fallback):", {
+          principal: extractMsg(errorMain),
+          fallback: extractMsg(errorFallback),
+        });
+        return {
+          saldos: null,
+          error:
+            extractMsg(errorFallback) ||
+            extractMsg(errorMain) ||
+            "Error al obtener saldos actuales",
+        };
+      }
     }
   },
 
@@ -137,11 +210,15 @@ export const movimientosContablesService = {
         valido: boolean;
         saldo_actual: number;
         mensaje: string;
-      }>("/movimientos-contables/validar-saldo", {
-        punto_atencion_id,
-        moneda_id: moneda_destino_id,
-        monto_requerido: monto_destino,
-      });
+      }>(
+        "/movimientos-contables/validar-saldo",
+        {
+          punto_atencion_id,
+          moneda_id: moneda_destino_id,
+          monto_requerido: monto_destino,
+        },
+        { timeout: 12000 }
+      );
 
       return {
         valido: response.data.valido,
@@ -153,7 +230,7 @@ export const movimientosContablesService = {
       return {
         valido: false,
         saldo_actual: 0,
-        error: error.response?.data?.message || "Error al validar saldo",
+        error: extractMsg(error) || "Error al validar saldo",
       };
     }
   },
@@ -167,24 +244,24 @@ export const movimientosContablesService = {
     limit = 50
   ): Promise<{ movimientos: MovimientoSaldo[] | null; error: string | null }> {
     try {
-      const params = new URLSearchParams({
-        limit: limit.toString(),
-      });
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (moneda_id) params.append("moneda_id", moneda_id);
 
-      if (moneda_id) {
-        params.append("moneda_id", moneda_id);
-      }
-
-      const response = await axiosInstance.get<{
-        movimientos: MovimientoSaldo[];
-      }>(`/movimientos-contables/${punto_atencion_id}?${params}`);
+      const response = await withRetry(
+        () =>
+          axiosInstance.get<{ movimientos: MovimientoSaldo[] }>(
+            `/movimientos-contables/${punto_atencion_id}?${params.toString()}`,
+            { timeout: 12000 }
+          ),
+        1
+      );
 
       return { movimientos: response.data.movimientos, error: null };
     } catch (error: any) {
       console.error("Error al obtener historial de movimientos:", error);
       return {
         movimientos: null,
-        error: error.response?.data?.message || "Error al obtener historial",
+        error: extractMsg(error) || "Error al obtener historial",
       };
     }
   },

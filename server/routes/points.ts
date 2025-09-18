@@ -3,9 +3,9 @@ import { PrismaClient, type PuntoAtencion } from "@prisma/client";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import prisma from "../lib/prisma.js";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 /** Campos extra de agencia que quieres exponer sin “augmentar” Prisma globalmente */
 type PuntoAtencionExtra = {

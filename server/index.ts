@@ -54,13 +54,16 @@ import serviciosExternosRoutes from "./routes/servicios-externos.js";
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
 
+// Si estás detrás de un proxy (NGINX / GCP LB), esto hace que rate limit use la IP real
+app.set("trust proxy", 1);
+
 // Rate limiting - Configuración más permisiva para aplicación interna
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 1000, // 1000 peticiones por IP en 15 minutos (más permisivo)
   message: "Too many requests from this IP, please try again later.",
-  standardHeaders: true, // Incluir headers de rate limit
-  legacyHeaders: false, // Deshabilitar headers legacy
+  standardHeaders: true,
+  legacyHeaders: false,
   skip: (req) => {
     // Excluir rutas críticas del rate limiting
     const excludedPaths = [
@@ -69,12 +72,15 @@ const limiter = rateLimit({
       "/api/exchanges",
       "/api/transfers",
       "/api/servientrega",
+      // ✅ agregadas para no bloquear saldos
+      "/api/saldos-actuales",
+      "/api/vista-saldos-puntos",
     ];
     return excludedPaths.some((p) => req.path.startsWith(p));
   },
 });
 
-// Middleware
+// Middleware de seguridad (CSP relajada para permitir API cross-port y HMR)
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -83,7 +89,17 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'", "https:"],
         scriptSrc: ["'self'"],
         imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'"],
+        // 👇 Permite fetch hacia el API en otro puerto y WebSocket en dev
+        connectSrc: [
+          "'self'",
+          "http://localhost:3001",
+          "http://localhost:5173",
+          "ws://localhost:5173",
+          "http://34.70.184.11:3001",
+          "http://34.70.184.11:8080",
+          "http://34.70.184.11",
+          "https://34.70.184.11", // por si activas SSL
+        ],
         fontSrc: ["'self'", "https:", "data:"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
@@ -92,10 +108,11 @@ app.use(
     },
     crossOriginOpenerPolicy: false, // Deshabilitar COOP para HTTP
     hsts: false, // Deshabilitar HSTS para permitir HTTP
-    originAgentCluster: false, // Deshabilitar Origin-Agent-Cluster header
+    originAgentCluster: false,
   })
 );
 
+// CORS (añadí variantes https por si activas SSL)
 app.use(
   cors({
     origin: [
@@ -103,9 +120,13 @@ app.use(
       "http://localhost:3000",
       "http://localhost:3001",
       "http://localhost:8080",
-      "http://34.70.184.11:3001", // IP pública puerto 3001 (producción)
-      "http://34.70.184.11:8080", // IP pública frontend puerto 8080
-      "http://34.70.184.11", // IP pública frontend puerto 80
+      "https://localhost:5173",
+      "https://localhost:3000",
+      "https://localhost:8080",
+      "http://34.70.184.11:3001", // API
+      "http://34.70.184.11:8080", // Front
+      "http://34.70.184.11", // Front :80
+      "https://34.70.184.11", // SSL (si lo habilitas)
     ],
     credentials: true,
   })
@@ -182,7 +203,7 @@ try {
   const indexPath = path.join(frontendDistPath, "index.html");
 
   if (fs.existsSync(indexPath)) {
-    // 1) Servir /assets primero (CSS/JS generados por Vite) para evitar que el fallback devuelva HTML
+    // 1) /assets con cache fuerte
     app.use(
       "/assets",
       express.static(path.join(frontendDistPath, "assets"), {
@@ -194,22 +215,29 @@ try {
       })
     );
 
-    // 2) Servir otros archivos estáticos (favicon, manifest, index.html, etc.)
+    // 2) Otros archivos estáticos (CSP apta para SPA que llama a API en otro puerto)
     app.use(
       express.static(frontendDistPath, {
         setHeaders: (res) => {
           res.setHeader("X-Content-Type-Options", "nosniff");
           res.setHeader("X-Frame-Options", "SAMEORIGIN");
-          // CSP adecuado para el build
           res.setHeader(
             "Content-Security-Policy",
-            "default-src 'self' data: http: https:; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; font-src 'self' data: https:;"
+            [
+              "default-src 'self' data: http: https:",
+              "script-src 'self' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline' https:",
+              "img-src 'self' data: https:",
+              "font-src 'self' data: https:",
+              // 👇 importante para fetch hacia 3001, websockets y Vite dev
+              "connect-src 'self' http://34.70.184.11:3001 http://34.70.184.11:8080 http://34.70.184.11 http://localhost:3001 http://localhost:5173 ws://localhost:5173 https://34.70.184.11",
+            ].join("; ")
           );
         },
       })
     );
 
-    // 3) Fallback SPA: devolver index.html para todo excepto /api, /assets y /health
+    // 3) Fallback SPA
     app.get(/^\/(?!api|assets\/|health).*$/, (_req, res) => {
       res.sendFile(indexPath);
     });
