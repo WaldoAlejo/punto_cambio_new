@@ -34,7 +34,9 @@
     "migrate:agencias": "npx prisma db push",
     "db:clean:dry": "tsx scripts/clean-operational-data.ts",
     "db:clean": "tsx scripts/clean-operational-data.ts --yes",
-    "db:principal:enforce": "tsx scripts/enforce-single-principal.ts"
+    "db:principal:enforce": "tsx scripts/enforce-single-principal.ts",
+    "db:backdate:dry": "tsx scripts/backdate-today-to-yesterday.ts",
+    "db:backdate:apply": "tsx scripts/backdate-today-to-yesterday.ts --apply"
   },
   "prisma": {
     "seed": "tsx prisma/seed-complete.ts"
