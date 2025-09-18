@@ -2,9 +2,7 @@ import express from "express";
 import logger from "../utils/logger.js";
 import { transferValidationService } from "../services/transferValidationService.js";
 import { transferCreationService } from "../services/transferCreationService.js";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma.js";
 
 interface AuthenticatedUser {
   id: string;

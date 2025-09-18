@@ -1,11 +1,10 @@
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Endpoint para obtener puntos libres (sin jornada activa)
 router.get(

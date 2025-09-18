@@ -1,10 +1,9 @@
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Obtener todas las monedas (acceso para todos los usuarios autenticados)
 router.get(

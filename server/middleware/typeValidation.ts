@@ -1,8 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-
-const prisma = new PrismaClient();
 
 /**
  * Middleware para validar que el usuario existe y está activo

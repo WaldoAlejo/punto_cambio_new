@@ -1,4 +1,5 @@
-import { PrismaClient, TipoOperacion } from "@prisma/client";
+import { TipoOperacion } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import {
   ExchangeData,
   TransferData,
@@ -7,8 +8,6 @@ import {
   ExchangeDetailedData,
 } from "../types/reportTypes.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
-
-const prisma = new PrismaClient();
 
 export const reportDataService = {
   async getExchangesData(

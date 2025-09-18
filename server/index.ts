@@ -108,6 +108,23 @@ app.use(
       "http://34.70.184.11", // IP pública frontend puerto 80
     ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "Expires",
+      "Cache-Control",
+      "Pragma",
+      "X-Requested-With",
+      "Accept",
+    ],
+    exposedHeaders: [
+      "Content-Length",
+      "X-RateLimit-Limit",
+      "X-RateLimit-Remaining",
+      "X-RateLimit-Reset",
+    ],
+    maxAge: 86400, // cache preflight 24h
   })
 );
 app.use(limiter);

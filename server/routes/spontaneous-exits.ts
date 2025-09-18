@@ -1,12 +1,11 @@
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Schema para crear salida espontánea
 const createExitSchema = z.object({
