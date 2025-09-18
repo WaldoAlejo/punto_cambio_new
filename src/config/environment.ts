@@ -1,42 +1,7 @@
 /**
- * Configuración centralizada de variables de entorno (Vite)
- * - Robusta frente a variables faltantes
- * - Helpers para parsear listas/booleanos/números
- * - Limpia la API_URL (sin trailing slash)
+ * Configuración centralizada de variables de entorno
  */
 
-type MaybeStr = string | undefined;
-
-/** Helpers seguros */
-const toString = (v: unknown, fallback = ""): string =>
-  typeof v === "string" && v.length > 0 ? v : fallback;
-
-const toBool = (v: unknown, fallback = false): boolean => {
-  if (typeof v === "boolean") return v;
-  if (typeof v === "string") {
-    const s = v.toLowerCase().trim();
-    if (["1", "true", "yes", "y", "on"].includes(s)) return true;
-    if (["0", "false", "no", "n", "off"].includes(s)) return false;
-  }
-  return fallback;
-};
-
-const toNumber = (v: unknown, fallback = 0): number => {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-};
-
-/** Lista segura: evita `.split` sobre undefined */
-export const toList = (val?: string, sep = ","): string[] =>
-  toString(val, "")
-    .split(sep)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-/** Quita trailing slashes de una URL base */
-const stripTrailingSlash = (url: string): string => url.replace(/\/+$/, "");
-
-/** Tipado de la configuración expuesta a la app */
 interface EnvironmentConfig {
   API_URL: string;
   NODE_ENV: string;
@@ -46,13 +11,13 @@ interface EnvironmentConfig {
   APP_VERSION: string;
 }
 
-/** Validación en desarrollo (no rompas prod por una env faltante) */
+// Validar variables de entorno requeridas
 const requiredEnvVars = ["VITE_API_URL"] as const;
 
 function validateEnvironment(): void {
-  const missing = requiredEnvVars.filter((k) => !import.meta.env[k]);
+  const missing = requiredEnvVars.filter((envVar) => !import.meta.env[envVar]);
+
   if (missing.length > 0) {
-    // Log claro, pero error solo en dev
     console.error("Variables de entorno faltantes:", missing);
     throw new Error(
       `Variables de entorno requeridas faltantes: ${missing.join(", ")}`
@@ -60,30 +25,21 @@ function validateEnvironment(): void {
   }
 }
 
+// Validar en desarrollo
 if (import.meta.env.DEV) {
-  try {
-    validateEnvironment();
-  } catch (e) {
-    // Deja el throw en dev para corregir rápido
-    throw e;
-  }
+  validateEnvironment();
 }
 
-/** Construcción segura de valores */
-const rawApi: MaybeStr = import.meta.env.VITE_API_URL;
-const defaultApi = "http://34.70.184.11:3001/api";
-const API_URL = stripTrailingSlash(toString(rawApi, defaultApi));
-
 export const env: EnvironmentConfig = {
-  API_URL,
-  NODE_ENV: toString(import.meta.env.NODE_ENV, "development"),
-  IS_DEVELOPMENT: Boolean(import.meta.env.DEV),
-  IS_PRODUCTION: Boolean(import.meta.env.PROD),
-  APP_NAME: toString(import.meta.env.VITE_APP_NAME, "Punto Cambio"),
-  APP_VERSION: toString(import.meta.env.VITE_APP_VERSION, "1.0.0"),
+  API_URL: import.meta.env.VITE_API_URL || "http://34.70.184.11:3001/api",
+  NODE_ENV: import.meta.env.NODE_ENV || "development",
+  IS_DEVELOPMENT: import.meta.env.DEV || false,
+  IS_PRODUCTION: import.meta.env.PROD || false,
+  APP_NAME: import.meta.env.VITE_APP_NAME || "Punto Cambio",
+  APP_VERSION: import.meta.env.VITE_APP_VERSION || "1.0.0",
 };
 
-/** Logging útil en dev */
+// Logging de configuración en desarrollo
 if (env.IS_DEVELOPMENT) {
   console.log("🔧 Configuración de entorno:", {
     API_URL: env.API_URL,
@@ -92,6 +48,3 @@ if (env.IS_DEVELOPMENT) {
     APP_VERSION: env.APP_VERSION,
   });
 }
-
-/** Exporta helpers por si los necesitas en otros módulos */
-export const envHelpers = { toList, toBool, toNumber, stripTrailingSlash };

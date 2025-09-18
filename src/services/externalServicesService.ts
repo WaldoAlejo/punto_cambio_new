@@ -51,14 +51,3 @@ export async function listarMovimientosServiciosExternos(
   );
   return data;
 }
-
-export async function anularMovimientoServicioExterno(
-  id: string,
-  motivo: string
-) {
-  const { data } = await axiosInstance.delete(
-    `/servicios-externos/movimientos/${id}`,
-    { data: { motivo } }
-  );
-  return data;
-}

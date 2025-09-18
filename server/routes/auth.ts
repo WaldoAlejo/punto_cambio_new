@@ -1,43 +1,16 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
-import jwt from "jsonwebtoken";
-import prisma from "../lib/prisma.js";
+import { PrismaClient } from "@prisma/client";
 import logger from "../utils/logger.js";
-import { generateToken } from "../middleware/auth.js";
+import { generateToken, authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { loginSchema, type LoginRequest } from "../schemas/validation.js";
 
 const router = express.Router();
+const prisma = new PrismaClient();
 
-const JWT_SECRET =
-  process.env.JWT_SECRET ||
-  process.env.JWT_SECRET_KEY ||
-  "your-super-secret-key-change-in-production";
-const JWT_EXPIRES = process.env.JWT_EXPIRES_IN || "12h";
-
-// ---------- Utils ----------
-function extractToken(req: express.Request): string | null {
-  const h = req.get("authorization") || req.get("Authorization");
-  if (h && h.startsWith("Bearer ")) return h.slice(7);
-  // Si manejas cookie:
-  // // @ts-ignore
-  // if (req.cookies?.authToken) return String(req.cookies.authToken);
-  return null;
-}
-
-function toAuthUser(u: any) {
-  return {
-    id: u.id,
-    username: u.username,
-    nombre: u.nombre,
-    rol: u.rol,
-    activo: u.activo,
-    punto_atencion_id: u.punto_atencion_id,
-  };
-}
-
-// ---------- Rate limiting estricto para /login ----------
+// Rate limiting estricto para login
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 5,
@@ -47,7 +20,6 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// ---------- POST /api/auth/login ----------
 router.post(
   "/login",
   loginLimiter,
@@ -63,12 +35,16 @@ router.post(
       });
 
       const { username, password } = req.body as LoginRequest;
+
       logger.info("Intento de login", { username, ip: req.ip });
 
-      // username case-insensitive
+      // Buscar usuario con case-insensitive (username ya viene en minúsculas del schema)
       const user = await prisma.usuario.findFirst({
         where: {
-          username: { equals: username, mode: "insensitive" },
+          username: {
+            equals: username,
+            mode: "insensitive", // Búsqueda case-insensitive
+          },
           activo: true,
         },
       });
@@ -84,6 +60,7 @@ router.post(
       }
 
       const passwordMatch = await bcrypt.compare(password, user.password);
+
       if (!passwordMatch) {
         logger.warn("Contraseña incorrecta", { username, ip: req.ip });
         res.status(401).json({
@@ -94,10 +71,14 @@ router.post(
         return;
       }
 
-      // Reglas para ADMIN / SUPER_USUARIO: debe estar en punto principal
+      // Validar permisos según rol
       if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
+        // ADMIN debe tener punto_atencion_id asignado y ser el punto principal
         if (!user.punto_atencion_id) {
-          logger.warn("Admin sin punto asignado", { username, ip: req.ip });
+          logger.warn("Admin sin punto de atención asignado", {
+            username,
+            ip: req.ip,
+          });
           res.status(403).json({
             error:
               "Administrador debe estar asociado a un punto de atención principal",
@@ -106,12 +87,13 @@ router.post(
           });
           return;
         }
+
         const principal = await prisma.puntoAtencion.findUnique({
           where: { id: user.punto_atencion_id },
           select: { es_principal: true },
         });
         if (!principal?.es_principal) {
-          logger.warn("Admin en punto NO principal", {
+          logger.warn("Admin en punto no principal", {
             username,
             punto_atencion_id: user.punto_atencion_id,
           });
@@ -124,27 +106,24 @@ router.post(
         }
       }
 
-      // Jornada activa solo aplica a OPERADOR
-      let jornadaActiva: {
-        id: string;
-        punto_atencion_id: string | null;
-      } | null = null;
-
+      // Buscar si tiene jornada activa (solo para OPERADOR)
+      let jornadaActiva = null;
       if (user.rol === "OPERADOR") {
         jornadaActiva = await prisma.jornada.findFirst({
           where: {
             usuario_id: user.id,
             fecha_salida: null,
-            // (opcional) estado in ["ACTIVO","ALMUERZO"]
           },
-          select: { id: true, punto_atencion_id: true },
+          select: {
+            id: true,
+            punto_atencion_id: true,
+          },
         });
       }
 
-      // Firma token (usa generateToken para mantener compatibilidad { userId })
       const token = generateToken(user.id);
+      const { password: _, ...userWithoutPassword } = user;
 
-      const { password: _pwd, ...userWithoutPassword } = user;
       logger.info("Login exitoso", {
         userId: user.id,
         username,
@@ -184,85 +163,35 @@ router.post(
   }
 );
 
-// ---------- GET /api/auth/verify (no usa authenticateToken; NUNCA 500) ----------
+// Verificación de token
 router.get(
   "/verify",
+  authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
-    const start = Date.now();
     try {
-      res.set({
-        "Cache-Control":
-          "no-store, no-cache, must-revalidate, proxy-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-        "Surrogate-Control": "no-store",
-      });
-
-      if (!JWT_SECRET) {
-        // Config mala: repórtalo como inválido para no romper UI
-        res.status(200).json({
+      if (!req.user) {
+        res.status(401).json({
+          error: "Usuario no válido",
           valid: false,
-          user: null,
-          error: "Token inválido o expirado",
-        });
-        return;
-      }
-
-      const token = extractToken(req);
-      if (!token) {
-        res.status(200).json({
-          valid: false,
-          user: null,
-          error: "Token inválido o expirado",
-        });
-        return;
-      }
-
-      let payload: any;
-      try {
-        payload = jwt.verify(token, JWT_SECRET);
-      } catch {
-        res.status(200).json({
-          valid: false,
-          user: null,
-          error: "Token inválido o expirado",
-        });
-        return;
-      }
-
-      const user = await prisma.usuario.findUnique({
-        where: { id: payload.userId as string },
-        select: {
-          id: true,
-          username: true,
-          nombre: true,
-          rol: true,
-          activo: true,
-          punto_atencion_id: true,
-          created_at: true,
-          updated_at: true,
-        },
-      });
-
-      if (!user || !user.activo) {
-        res.status(200).json({
-          valid: false,
-          user: null,
-          error: "Token inválido o expirado",
         });
         return;
       }
 
       logger.info("Token verificado exitosamente", {
-        userId: user.id,
-        username: user.username,
+        userId: req.user.id,
+        username: req.user.username,
       });
 
       res.status(200).json({
         user: {
-          ...toAuthUser(user),
-          created_at: user.created_at.toISOString(),
-          updated_at: user.updated_at.toISOString(),
+          id: req.user.id,
+          username: req.user.username,
+          nombre: req.user.nombre,
+          rol: req.user.rol,
+          activo: req.user.activo,
+          punto_atencion_id: req.user.punto_atencion_id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         },
         valid: true,
         timestamp: new Date().toISOString(),
@@ -273,15 +202,10 @@ router.get(
         ip: req.ip,
       });
 
-      // JAMÁS 500: evita romper el arranque del frontend
-      res.status(200).json({
-        error: "Error de verificación (servidor)",
+      res.status(500).json({
+        error: "Error interno del servidor",
         valid: false,
-        user: null,
       });
-    } finally {
-      const ms = Date.now() - start;
-      logger.info("/auth/verify tiempo de respuesta", { ms });
     }
   }
 );

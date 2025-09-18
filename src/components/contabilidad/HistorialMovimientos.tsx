@@ -34,8 +34,6 @@ import { useContabilidadDivisas } from "@/hooks/useContabilidadDivisas";
 import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
 import { pointService } from "@/services/pointService";
 import { Loading } from "@/components/ui/loading";
-import { exchangeService } from "@/services/exchangeService";
-import { anularMovimientoServicioExterno } from "@/services/externalServicesService";
 
 interface HistorialMovimientosProps {
   user: User;
@@ -67,64 +65,9 @@ export const HistorialMovimientos = ({
 
   const [filtroMoneda, setFiltroMoneda] = useState<string>("TODAS");
   const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
-  const [limite, setLimite] = useState<number>(isAdminView ? 100 : 50);
+  const [limite, setLimite] = useState(50);
   const [filtroPunto, setFiltroPunto] = useState<string>("TODOS");
   const [puntos, setPuntos] = useState<{ id: string; nombre: string }[]>([]);
-
-  // Estado para anulación de cambios de divisa
-  const [annulCambioId, setAnnulCambioId] = useState<string | null>(null);
-  const [annulReason, setAnnulReason] = useState<string>("");
-  const [annulLoading, setAnnulLoading] = useState<boolean>(false);
-
-  // Estado para anular ingresos/egresos de Servicios Externos (MovimientoSaldo individual)
-  const [annulMovExtId, setAnnulMovExtId] = useState<string | null>(null);
-  const [annulMovExtReason, setAnnulMovExtReason] = useState<string>("");
-  const [annulMovExtLoading, setAnnulMovExtLoading] = useState<boolean>(false);
-
-  // Persistencia de filtros (localStorage)
-  const storagePrefix = isAdminView ? "histMov_admin" : "histMov";
-
-  // Cargar filtros guardados al montar/cambiar vista
-  useEffect(() => {
-    try {
-      const m = localStorage.getItem(`${storagePrefix}_moneda`);
-      const t = localStorage.getItem(`${storagePrefix}_tipo`);
-      const p = localStorage.getItem(`${storagePrefix}_punto`);
-      const l = localStorage.getItem(`${storagePrefix}_limite`);
-
-      if (m) setFiltroMoneda(m);
-      if (t) setFiltroTipo(t);
-      if (isAdminView && p) setFiltroPunto(p);
-      if (l) {
-        const parsed = parseInt(l, 10);
-        setLimite(Number.isFinite(parsed) ? parsed : isAdminView ? 100 : 50);
-      }
-    } catch {
-      // noop
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdminView]);
-
-  // Guardar filtros cuando cambian
-  useEffect(() => {
-    try {
-      localStorage.setItem(`${storagePrefix}_moneda`, filtroMoneda);
-      localStorage.setItem(`${storagePrefix}_tipo`, filtroTipo);
-      if (isAdminView) {
-        localStorage.setItem(`${storagePrefix}_punto`, filtroPunto);
-      }
-      localStorage.setItem(`${storagePrefix}_limite`, String(limite));
-    } catch {
-      // noop
-    }
-  }, [
-    filtroMoneda,
-    filtroTipo,
-    filtroPunto,
-    limite,
-    storagePrefix,
-    isAdminView,
-  ]);
 
   // Cargar puntos para filtro (solo en admin view)
   useEffect(() => {
@@ -348,37 +291,21 @@ export const HistorialMovimientos = ({
             </Select>
           </div>
 
-          <div className="flex items-end gap-2">
-            <Button
-              onClick={() =>
-                cargarMovimientos(
-                  filtroMoneda === "TODAS" ? undefined : filtroMoneda,
-                  limite
-                )
-              }
-              disabled={isLoading}
-              className="self-end"
-            >
-              <RefreshCw
-                className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
-              />
-              Actualizar
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setFiltroMoneda("TODAS");
-                setFiltroTipo("TODOS");
-                if (isAdminView) setFiltroPunto("TODOS");
-                setLimite(isAdminView ? 100 : 50);
-                cargarMovimientos(undefined, isAdminView ? 100 : 50);
-              }}
-              className="self-end"
-            >
-              Limpiar filtros
-            </Button>
-          </div>
+          <Button
+            onClick={() =>
+              cargarMovimientos(
+                filtroMoneda === "TODAS" ? undefined : filtroMoneda,
+                limite
+              )
+            }
+            disabled={isLoading}
+            className="self-end"
+          >
+            <RefreshCw
+              className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+            />
+            Actualizar
+          </Button>
         </div>
 
         {/* Tabla de movimientos (agrupando cambios por transacción) */}
@@ -410,9 +337,6 @@ export const HistorialMovimientos = ({
                   <TableHead className="text-right">Saldo Nuevo</TableHead>
                   <TableHead>Usuario</TableHead>
                   <TableHead>Descripción</TableHead>
-                  {(user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") && (
-                    <TableHead>Acciones</TableHead>
-                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -563,22 +487,6 @@ export const HistorialMovimientos = ({
                                 "Cambio de divisa"}
                             </span>
                           </TableCell>
-                          {(user.rol === "ADMIN" ||
-                            user.rol === "SUPER_USUARIO") && (
-                            <TableCell>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() =>
-                                  mov.referencia_id &&
-                                  setAnnulCambioId(mov.referencia_id)
-                                }
-                                disabled={!mov.referencia_id}
-                              >
-                                Anular
-                              </Button>
-                            </TableCell>
-                          )}
                         </TableRow>
                       );
                     } else {
@@ -654,24 +562,6 @@ export const HistorialMovimientos = ({
                               {mov.descripcion || "Sin descripción"}
                             </span>
                           </TableCell>
-                          {(user.rol === "ADMIN" ||
-                            user.rol === "SUPER_USUARIO") && (
-                            <TableCell className="text-right">
-                              {mov.tipo_referencia === "SERVICIO_EXTERNO" ? (
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => setAnnulMovExtId(mov.id)}
-                                >
-                                  Anular
-                                </Button>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">
-                                  —
-                                </span>
-                              )}
-                            </TableCell>
-                          )}
                         </TableRow>
                       );
                     }
@@ -695,126 +585,6 @@ export const HistorialMovimientos = ({
               <span className="text-gray-500">
                 Última actualización: {new Date().toLocaleTimeString()}
               </span>
-            </div>
-          </div>
-        )}
-
-        {annulCambioId && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded shadow p-4 w-full max-w-md">
-              <h3 className="text-lg font-semibold mb-2">
-                Anular cambio de divisa
-              </h3>
-              <p className="text-sm text-gray-600 mb-3">
-                Indica el motivo de la anulación. Se registrarán reversos
-                contables.
-              </p>
-              <textarea
-                className="w-full border rounded p-2 h-28"
-                placeholder="Motivo de anulación"
-                value={annulReason}
-                onChange={(e) => setAnnulReason(e.target.value)}
-              />
-              <div className="mt-4 flex justify-end gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    if (annulLoading) return;
-                    setAnnulCambioId(null);
-                    setAnnulReason("");
-                  }}
-                  disabled={annulLoading}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  variant="destructive"
-                  disabled={annulLoading || !annulReason.trim()}
-                  onClick={async () => {
-                    if (!annulCambioId || !annulReason.trim()) return;
-                    try {
-                      setAnnulLoading(true);
-                      const { ok } = await exchangeService.annulExchange(
-                        annulCambioId,
-                        annulReason.trim()
-                      );
-                      if (ok) {
-                        setAnnulCambioId(null);
-                        setAnnulReason("");
-                        await cargarMovimientos(
-                          filtroMoneda === "TODAS" ? undefined : filtroMoneda,
-                          limite
-                        );
-                      }
-                    } catch (e) {
-                      // opcional: toast de error
-                    } finally {
-                      setAnnulLoading(false);
-                    }
-                  }}
-                >
-                  {annulLoading ? "Anulando..." : "Confirmar anulación"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {annulMovExtId && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded shadow p-4 w-full max-w-md">
-              <h3 className="text-lg font-semibold mb-2">
-                Anular ingreso/egreso
-              </h3>
-              <p className="text-sm text-gray-600 mb-3">
-                Describe el motivo de anulación. Esta acción registrará un
-                reverso contable.
-              </p>
-              <textarea
-                className="w-full border rounded p-2 h-28"
-                placeholder="Motivo de anulación"
-                value={annulMovExtReason}
-                onChange={(e) => setAnnulMovExtReason(e.target.value)}
-              />
-              <div className="mt-4 flex justify-end gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    if (annulMovExtLoading) return;
-                    setAnnulMovExtId(null);
-                    setAnnulMovExtReason("");
-                  }}
-                  disabled={annulMovExtLoading}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  variant="destructive"
-                  disabled={annulMovExtLoading || !annulMovExtReason.trim()}
-                  onClick={async () => {
-                    if (!annulMovExtId || !annulMovExtReason.trim()) return;
-                    try {
-                      setAnnulMovExtLoading(true);
-                      await anularMovimientoServicioExterno(
-                        annulMovExtId,
-                        annulMovExtReason.trim()
-                      );
-                      await cargarMovimientos(
-                        filtroMoneda === "TODAS" ? undefined : filtroMoneda,
-                        limite
-                      );
-                      setAnnulMovExtId(null);
-                      setAnnulMovExtReason("");
-                    } catch (e) {
-                      // opcional: toast de error
-                    } finally {
-                      setAnnulMovExtLoading(false);
-                    }
-                  }}
-                >
-                  {annulMovExtLoading ? "Anulando..." : "Confirmar anulación"}
-                </Button>
-              </div>
             </div>
           </div>
         )}

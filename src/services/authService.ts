@@ -1,7 +1,6 @@
 import { env } from "../config/environment";
 
 const API_BASE_URL = env.API_URL;
-const DEFAULT_TIMEOUT_MS = 15000; // 15s para evitar colgado en /auth/verify
 
 export interface LoginCredentials {
   username: string;
@@ -39,18 +38,6 @@ interface TokenVerificationResponse {
   error?: string;
 }
 
-function fetchWithTimeout(
-  input: RequestInfo | URL,
-  init?: RequestInit,
-  timeoutMs = DEFAULT_TIMEOUT_MS
-) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(input, { ...init, signal: controller.signal }).finally(() =>
-    clearTimeout(id)
-  );
-}
-
 export const authService = {
   async login(credentials: LoginCredentials): Promise<{
     user: AuthUser | null;
@@ -58,7 +45,7 @@ export const authService = {
     error: string | null;
   }> {
     try {
-      const response = await fetchWithTimeout(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -106,10 +93,7 @@ export const authService = {
       localStorage.setItem("authToken", data.token);
 
       return { user: data.user, token: data.token, error: null };
-    } catch (error: any) {
-      if (error?.name === "AbortError") {
-        return { user: null, token: null, error: "Tiempo de espera agotado" };
-      }
+    } catch (error) {
       if (error instanceof TypeError && error.message.includes("fetch")) {
         return {
           user: null,
@@ -132,7 +116,7 @@ export const authService = {
       if (!token) {
         return { user: null, valid: false, error: "No token found" };
       }
-      const response = await fetchWithTimeout(`${API_BASE_URL}/auth/verify`, {
+      const response = await fetch(`${API_BASE_URL}/auth/verify`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -153,10 +137,7 @@ export const authService = {
 
       const data = await response.json();
       return { user: data.user, valid: true };
-    } catch (error: any) {
-      if (error?.name === "AbortError") {
-        return { user: null, valid: false, error: "Tiempo de espera agotado" };
-      }
+    } catch {
       return { user: null, valid: false, error: "Network error" };
     }
   },

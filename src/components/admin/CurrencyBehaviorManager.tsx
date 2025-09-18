@@ -21,13 +21,16 @@ import { obtenerDescripcionComportamiento } from "../../utils/currencyCalculatio
 import { Settings, Save, RefreshCw } from "lucide-react";
 import { apiService } from "@/services/apiService";
 
-interface Props {
+interface CurrencyBehaviorManagerProps {
   currencies: Moneda[];
   onUpdate?: () => void;
 }
 
-const CurrencyBehaviorManager = ({ currencies, onUpdate }: Props) => {
-  const [editing, setEditing] = useState<
+const CurrencyBehaviorManager = ({
+  currencies,
+  onUpdate,
+}: CurrencyBehaviorManagerProps) => {
+  const [editingCurrencies, setEditingCurrencies] = useState<
     Record<
       string,
       {
@@ -39,196 +42,228 @@ const CurrencyBehaviorManager = ({ currencies, onUpdate }: Props) => {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const initial: Record<
+    // Inicializar el estado con los valores actuales
+    const initialState: Record<
       string,
       {
         comportamiento_compra: "MULTIPLICA" | "DIVIDE";
         comportamiento_venta: "MULTIPLICA" | "DIVIDE";
       }
     > = {};
-    currencies.forEach((c) => {
-      initial[c.id] = {
-        comportamiento_compra: c.comportamiento_compra,
-        comportamiento_venta: c.comportamiento_venta,
+
+    currencies.forEach((currency) => {
+      initialState[currency.id] = {
+        comportamiento_compra: currency.comportamiento_compra,
+        comportamiento_venta: currency.comportamiento_venta,
       };
     });
-    setEditing(initial);
+
+    setEditingCurrencies(initialState);
   }, [currencies]);
 
-  const handleChange = (
-    id: string,
+  const handleBehaviorChange = (
+    currencyId: string,
     type: "compra" | "venta",
     value: "MULTIPLICA" | "DIVIDE"
   ) => {
-    setEditing((prev) => ({
+    setEditingCurrencies((prev) => ({
       ...prev,
-      [id]: { ...prev[id], [`comportamiento_${type}`]: value },
+      [currencyId]: {
+        ...prev[currencyId],
+        [`comportamiento_${type}`]: value,
+      },
     }));
   };
 
-  const hasChanges = (id: string) => {
-    const original = currencies.find((c) => c.id === id);
-    const current = editing[id];
-    if (!original || !current) return false;
+  const hasChanges = (currencyId: string) => {
+    const currency = currencies.find((c) => c.id === currencyId);
+    const editing = editingCurrencies[currencyId];
+
+    if (!currency || !editing) return false;
+
     return (
-      original.comportamiento_compra !== current.comportamiento_compra ||
-      original.comportamiento_venta !== current.comportamiento_venta
+      currency.comportamiento_compra !== editing.comportamiento_compra ||
+      currency.comportamiento_venta !== editing.comportamiento_venta
     );
   };
 
-  const saveChanges = async (id: string) => {
-    if (!editing[id]) return;
+  const saveChanges = async (currencyId: string) => {
+    const editing = editingCurrencies[currencyId];
+    if (!editing) return;
+
     setIsLoading(true);
     try {
       const res = await apiService.patch<{
         currency: Moneda;
         success: boolean;
         error?: string;
-      }>(`/currencies/${id}/behavior`, editing[id]);
-      if (!res || res.success === false)
+      }>(`/currencies/${currencyId}/behavior`, editing);
+
+      if (!res || res.success === false) {
         throw new Error(res?.error || "Error al actualizar comportamiento");
+      }
+
       toast.success("Comportamiento actualizado correctamente");
       onUpdate?.();
-    } catch (err) {
+    } catch (error) {
       toast.error("Error al actualizar comportamiento");
-      console.error(err);
+      console.error("Error:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const resetChanges = (id: string) => {
-    const original = currencies.find((c) => c.id === id);
-    if (!original) return;
-    setEditing((prev) => ({
+  const resetChanges = (currencyId: string) => {
+    const currency = currencies.find((c) => c.id === currencyId);
+    if (!currency) return;
+
+    setEditingCurrencies((prev) => ({
       ...prev,
-      [id]: {
-        comportamiento_compra: original.comportamiento_compra,
-        comportamiento_venta: original.comportamiento_venta,
+      [currencyId]: {
+        comportamiento_compra: currency.comportamiento_compra,
+        comportamiento_venta: currency.comportamiento_venta,
       },
     }));
   };
 
-  const getColor = (behavior: "MULTIPLICA" | "DIVIDE") =>
-    behavior === "MULTIPLICA"
+  const getBehaviorColor = (behavior: "MULTIPLICA" | "DIVIDE") => {
+    return behavior === "MULTIPLICA"
       ? "bg-green-100 text-green-800"
       : "bg-blue-100 text-blue-800";
+  };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-          <Settings className="h-5 w-5" /> Configuración de Comportamientos
+        <CardTitle className="flex items-center gap-2">
+          <Settings className="h-5 w-5" />
+          Configuración de Comportamientos de Divisas
         </CardTitle>
-        <CardDescription className="text-sm sm:text-base">
-          Defina cómo se calculan los montos de compra y venta.
+        <CardDescription>
+          Configure cómo se calculan los montos para cada divisa en operaciones
+          de compra y venta.
+          <br />
+          <strong>MULTIPLICA:</strong> Monto × Tasa | <strong>DIVIDE:</strong>{" "}
+          Monto ÷ Tasa
         </CardDescription>
       </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {currencies.map((currency) => {
+            const editing = editingCurrencies[currency.id];
+            const changed = hasChanges(currency.id);
 
-      <CardContent className="space-y-4">
-        {currencies.map((c) => {
-          const current = editing[c.id];
-          if (!current) return null;
-          const changed = hasChanges(c.id);
+            if (!editing) return null;
 
-          return (
-            <div
-              key={c.id}
-              className="border rounded-lg p-4 space-y-3 shadow-sm bg-white"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div>
-                  <h3 className="font-medium text-base sm:text-lg">
-                    {c.codigo} - {c.nombre}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    {obtenerDescripcionComportamiento(c)}
-                  </p>
+            return (
+              <div
+                key={currency.id}
+                className="border rounded-lg p-4 space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium">
+                      {currency.codigo} - {currency.nombre}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {obtenerDescripcionComportamiento(currency)}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge
+                      className={getBehaviorColor(
+                        currency.comportamiento_compra
+                      )}
+                    >
+                      Compra: {currency.comportamiento_compra}
+                    </Badge>
+                    <Badge
+                      className={getBehaviorColor(
+                        currency.comportamiento_venta
+                      )}
+                    >
+                      Venta: {currency.comportamiento_venta}
+                    </Badge>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Badge className={getColor(c.comportamiento_compra)}>
-                    Compra: {c.comportamiento_compra}
-                  </Badge>
-                  <Badge className={getColor(c.comportamiento_venta)}>
-                    Venta: {c.comportamiento_venta}
-                  </Badge>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Comportamiento en COMPRA
+                    </label>
+                    <Select
+                      value={editing.comportamiento_compra}
+                      onValueChange={(value: "MULTIPLICA" | "DIVIDE") =>
+                        handleBehaviorChange(currency.id, "compra", value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MULTIPLICA">
+                          MULTIPLICA (Monto × Tasa)
+                        </SelectItem>
+                        <SelectItem value="DIVIDE">
+                          DIVIDE (Monto ÷ Tasa)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Comportamiento en VENTA
+                    </label>
+                    <Select
+                      value={editing.comportamiento_venta}
+                      onValueChange={(value: "MULTIPLICA" | "DIVIDE") =>
+                        handleBehaviorChange(currency.id, "venta", value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MULTIPLICA">
+                          MULTIPLICA (Monto × Tasa)
+                        </SelectItem>
+                        <SelectItem value="DIVIDE">
+                          DIVIDE (Monto ÷ Tasa)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
+
+                {changed && (
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      size="sm"
+                      onClick={() => saveChanges(currency.id)}
+                      disabled={isLoading}
+                      className="flex items-center gap-1"
+                    >
+                      <Save className="h-3 w-3" />
+                      Guardar Cambios
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => resetChanges(currency.id)}
+                      disabled={isLoading}
+                      className="flex items-center gap-1"
+                    >
+                      <RefreshCw className="h-3 w-3" />
+                      Descartar
+                    </Button>
+                  </div>
+                )}
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
-                    Comportamiento COMPRA
-                  </label>
-                  <Select
-                    value={current.comportamiento_compra}
-                    onValueChange={(v: "MULTIPLICA" | "DIVIDE") =>
-                      handleChange(c.id, "compra", v)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MULTIPLICA">
-                        MULTIPLICA (Monto × Tasa)
-                      </SelectItem>
-                      <SelectItem value="DIVIDE">
-                        DIVIDE (Monto ÷ Tasa)
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-sm font-medium">
-                    Comportamiento VENTA
-                  </label>
-                  <Select
-                    value={current.comportamiento_venta}
-                    onValueChange={(v: "MULTIPLICA" | "DIVIDE") =>
-                      handleChange(c.id, "venta", v)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MULTIPLICA">
-                        MULTIPLICA (Monto × Tasa)
-                      </SelectItem>
-                      <SelectItem value="DIVIDE">
-                        DIVIDE (Monto ÷ Tasa)
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {changed && (
-                <div className="flex flex-wrap gap-2 pt-2">
-                  <Button
-                    size="sm"
-                    onClick={() => saveChanges(c.id)}
-                    disabled={isLoading}
-                    className="flex items-center gap-1"
-                  >
-                    <Save className="h-4 w-4" /> Guardar
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => resetChanges(c.id)}
-                    disabled={isLoading}
-                    className="flex items-center gap-1"
-                  >
-                    <RefreshCw className="h-4 w-4" /> Descartar
-                  </Button>
-                </div>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </CardContent>
     </Card>
   );

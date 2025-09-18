@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   listarMovimientosServiciosExternos,
-  anularMovimientoServicioExterno,
   ServicioExterno,
   TipoMovimiento,
 } from "@/services/externalServicesService";
@@ -60,9 +59,6 @@ export default function ServiciosExternosHistory() {
   const [tipo, setTipo] = useState<"" | TipoMovimiento>("");
   const [desde, setDesde] = useState<string>("");
   const [hasta, setHasta] = useState<string>("");
-
-  const [anulandoId, setAnulandoId] = useState<string | null>(null);
-  const [motivoAnulacion, setMotivoAnulacion] = useState<string>("");
 
   const canQuery = useMemo(() => !!pointId, [pointId]);
 
@@ -178,9 +174,6 @@ export default function ServiciosExternosHistory() {
               <th className="p-2 text-left">Referencia</th>
               <th className="p-2 text-left">Descripción</th>
               <th className="p-2 text-left">Usuario</th>
-              {(user?.rol === "ADMIN" || user?.rol === "SUPER_USUARIO") && (
-                <th className="p-2 text-left">Acciones</th>
-              )}
             </tr>
           </thead>
           <tbody>
@@ -206,73 +199,11 @@ export default function ServiciosExternosHistory() {
                 </td>
                 <td className="p-2">{it.descripcion || "-"}</td>
                 <td className="p-2">{it.usuario?.nombre || "-"}</td>
-                {(user?.rol === "ADMIN" || user?.rol === "SUPER_USUARIO") && (
-                  <td className="p-2">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setAnulandoId(it.id)}
-                      >
-                        Anular
-                      </Button>
-                    </div>
-                  </td>
-                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
-      {/* Modal simple para motivo */}
-      {anulandoId && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded shadow p-4 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-2">Anular movimiento</h3>
-            <p className="text-sm text-gray-600 mb-3">
-              Describe el motivo de anulación. Esta acción registrará un reverso
-              contable.
-            </p>
-            <textarea
-              className="w-full border rounded p-2 h-28"
-              placeholder="Motivo de anulación"
-              value={motivoAnulacion}
-              onChange={(e) => setMotivoAnulacion(e.target.value)}
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setAnulandoId(null);
-                  setMotivoAnulacion("");
-                }}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={async () => {
-                  if (!motivoAnulacion.trim()) return;
-                  try {
-                    await anularMovimientoServicioExterno(
-                      anulandoId,
-                      motivoAnulacion.trim()
-                    );
-                    setAnulandoId(null);
-                    setMotivoAnulacion("");
-                    await fetchData();
-                  } catch (e) {
-                    // opcional: mostrar toast de error
-                  }
-                }}
-              >
-                Confirmar anulación
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

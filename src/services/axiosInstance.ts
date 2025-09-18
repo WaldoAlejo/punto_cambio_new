@@ -41,7 +41,7 @@ function extractServerMessage(data: unknown): string {
 
 export const axiosInstance = axios.create({
   baseURL: env.API_URL,
-  timeout: 30000, // 30s → si el back corta antes (statement_timeout), la UX no se bloquee
+  timeout: 30000, // 30 segundos
   headers: {
     "Content-Type": "application/json",
   },
@@ -121,38 +121,36 @@ axiosInstance.interceptors.response.use(
       }
     }
 
-    // Normalizar mensaje amigable para UI (toasts, banners)
+    // Normalizar mensaje amigable en el propio error para usar en UI (toasts, etc.)
     (error as any).friendlyMessage =
       status === 0 || !status
         ? "No hay conexión con el servidor. Verifica tu red."
         : serverMsg || error.message;
 
-    // === Manejo de autenticación: tratar 401 y 403 ===
-    // Solo cerramos sesión si el backend confirma que el token no sirve y es un endpoint de /auth
-    if (status === 401 || status === 403) {
-      const urlStr = `${error.config?.baseURL || ""}${error.config?.url || ""}`;
-      const isAuthEndpoint =
-        urlStr.includes("/auth/verify") || urlStr.includes("/auth/login");
-      if (isAuthEndpoint) {
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("puntoAtencionSeleccionado");
-        const isOnLogin = window.location.pathname.includes("/login");
-        if (!isOnLogin) {
-          window.location.href = "/login";
-        }
-      } else {
-        console.warn("401/403 en endpoint no-auth, manteniendo sesión.", {
-          url: urlStr,
-        });
+    // Manejar errores de autenticación
+    if (status === 401) {
+      // Limpiar token inválido
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("puntoAtencionSeleccionado");
+
+      // Redirigir al login si no estamos ya ahí
+      if (!window.location.pathname.includes("/login")) {
+        window.location.href = "/login";
       }
-      return Promise.reject(error);
     }
 
-    // Manejo específico por códigos comunes (no afectan sesión)
+    // Manejo específico por códigos comunes
     switch (status) {
       case 400:
       case 422:
+        // Validaciones del backend
         console.error("Validación fallida:", serverMsg);
+        break;
+      case 403:
+        console.error(
+          "Acceso denegado:",
+          serverMsg || "Permisos insuficientes."
+        );
         break;
       case 404:
         console.error("No encontrado:", serverMsg || "Recurso no encontrado.");
@@ -170,12 +168,12 @@ axiosInstance.interceptors.response.use(
         );
         break;
       case 500:
-        // ✅ Verás el mensaje real del servidor
+        // ✅ Aquí verás el mensaje real (antes veías "Object")
         console.error("Error interno del servidor:", serverMsg);
         break;
       default:
         if (!status) {
-          // Timeout o red caída, NO tocar sesión
+          // Timeout o red caida
           if ((error as any).code === "ECONNABORTED") {
             console.error("La petición excedió el tiempo de espera.");
           } else {

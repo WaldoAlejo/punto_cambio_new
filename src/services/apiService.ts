@@ -1,7 +1,6 @@
 import { env } from "../config/environment";
 
 const API_BASE_URL = env.API_URL;
-const DEFAULT_TIMEOUT_MS = 30000; // Evita requests colgados indefinidamente
 
 export class ApiError extends Error {
   status: number;
@@ -56,30 +55,10 @@ class ApiService {
     return response.json();
   }
 
-  // Wrapper de fetch con timeout usando AbortController
-  private async fetchWithTimeout(
-    input: RequestInfo | URL,
-    init?: RequestInit,
-    timeoutMs: number = DEFAULT_TIMEOUT_MS
-  ): Promise<Response> {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      return await fetch(input, { ...init, signal: controller.signal });
-    } catch (err: any) {
-      if (err?.name === "AbortError") {
-        throw new ApiError("Tiempo de espera agotado", 0);
-      }
-      throw err;
-    } finally {
-      clearTimeout(id);
-    }
-  }
-
   async get<T>(endpoint: string): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
     console.warn(`[API] GET ${cleanEndpoint}`);
-    const res = await this.fetchWithTimeout(`${API_BASE_URL}${cleanEndpoint}`, {
+    const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       method: "GET",
       headers: this.getHeaders(),
     });
@@ -89,7 +68,7 @@ class ApiService {
   async post<T>(endpoint: string, data: unknown): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
     console.warn(`[API] POST ${cleanEndpoint}`, data);
-    const res = await this.fetchWithTimeout(`${API_BASE_URL}${cleanEndpoint}`, {
+    const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       method: "POST",
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -100,7 +79,7 @@ class ApiService {
   async put<T>(endpoint: string, data: unknown): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
     console.warn(`[API] PUT ${cleanEndpoint}`, data);
-    const res = await this.fetchWithTimeout(`${API_BASE_URL}${cleanEndpoint}`, {
+    const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       method: "PUT",
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -111,7 +90,7 @@ class ApiService {
   async patch<T>(endpoint: string, data?: unknown): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
     console.warn(`[API] PATCH ${cleanEndpoint}`, data);
-    const res = await this.fetchWithTimeout(`${API_BASE_URL}${cleanEndpoint}`, {
+    const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       method: "PATCH",
       headers: this.getHeaders(),
       ...(data ? { body: JSON.stringify(data) } : {}),
@@ -122,7 +101,7 @@ class ApiService {
   async delete<T>(endpoint: string): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
     console.warn(`[API] DELETE ${cleanEndpoint}`);
-    const res = await this.fetchWithTimeout(`${API_BASE_URL}${cleanEndpoint}`, {
+    const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       method: "DELETE",
       headers: this.getHeaders(),
     });

@@ -5,11 +5,15 @@ import { Button } from "../ui/button";
 import { toast } from "react-hot-toast";
 
 interface Props {
-  usuarioId: string; // ID del usuario a liberar del punto
-  destinoPuntoId?: string; // Punto destino opcional; si no existe, se libera el punto
-  onDone?: () => void; // Callback tras éxito
+  usuarioId: string; // usuario a liberar del punto
+  destinoPuntoId?: string; // opcional, si no se pasa se usa el punto principal
+  onDone?: () => void; // callback tras éxito
 }
 
+/**
+ * Botón para ADMIN/SUPER que envía la jornada activa del usuario al punto principal
+ * (o a un punto destino), liberando así el punto en el que se quedó por error.
+ */
 const FreePointButton: React.FC<Props> = ({
   usuarioId,
   destinoPuntoId,
@@ -25,28 +29,27 @@ const FreePointButton: React.FC<Props> = ({
       toast.error("No tiene permisos para esta acción");
       return;
     }
-
     setLoading(true);
     try {
       const { error } = await scheduleService.reassignPoint({
         usuario_id: usuarioId,
-        finalizar: !destinoPuntoId, // si no se indica destino, cancelamos jornada y liberamos punto
-        destino_punto_atencion_id: destinoPuntoId,
+        // Para liberar completamente y forzar nueva selección al reingreso:
+        finalizar: !destinoPuntoId, // si no se indica destino, cancelamos jornada y limpiamos punto
+        destino_punto_atencion_id: destinoPuntoId, // si se envía, reasigna en lugar de cancelar
         motivo: destinoPuntoId ? "REASIGNACION_ADMIN" : "CANCELACION_ADMIN",
         observaciones: "Liberar punto por selección equivocada",
       });
-
       if (error) {
         toast.error(error);
       } else {
         toast.success(
           destinoPuntoId
-            ? "Jornada reasignada correctamente"
+            ? "Jornada reasignada"
             : "Jornada cancelada y punto liberado"
         );
         onDone?.();
       }
-    } catch {
+    } catch (e) {
       toast.error("Error al liberar punto");
     } finally {
       setLoading(false);
@@ -59,19 +62,11 @@ const FreePointButton: React.FC<Props> = ({
     <Button
       onClick={handleClick}
       disabled={loading}
+      variant="destructive"
       size="sm"
-      className="bg-red-600 hover:bg-red-700 text-white"
-      title={
-        destinoPuntoId
-          ? "Reasignar jornada a otro punto"
-          : "Liberar punto actual"
-      }
+      title="Mover jornada al punto principal para liberar"
     >
-      {loading
-        ? "Procesando..."
-        : destinoPuntoId
-        ? "Reasignar Punto"
-        : "Liberar Punto"}
+      {loading ? "Liberando..." : "Liberar Punto"}
     </Button>
   );
 };
