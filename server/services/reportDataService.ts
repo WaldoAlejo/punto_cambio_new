@@ -6,6 +6,10 @@ import {
   BalanceData,
   UserActivityData,
   ExchangeDetailedData,
+  TransferDetailedData,
+  AccountingMovementData,
+  EODBalanceData,
+  PointAssignmentData,
 } from "../types/reportTypes.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
@@ -18,7 +22,7 @@ export const reportDataService = {
       where: {
         fecha: {
           gte: startDate,
-          lte: endDate,
+          lt: endDate,
         },
         estado: "COMPLETADO",
       },
@@ -67,7 +71,7 @@ export const reportDataService = {
       where: {
         fecha: {
           gte: startDate,
-          lte: endDate,
+          lt: endDate,
         },
         estado: "APROBADO",
       },
@@ -301,7 +305,7 @@ export const reportDataService = {
     }
   ): Promise<ExchangeDetailedData[]> {
     const where: any = {
-      fecha: { gte: startDate, lte: endDate },
+      fecha: { gte: startDate, lt: endDate },
       ...(filters?.estado ? { estado: filters.estado } : {}),
       ...(filters?.metodoEntrega
         ? { metodo_entrega: filters.metodoEntrega }
@@ -340,16 +344,11 @@ export const reportDataService = {
 
     // Recolectar tasas efectivas por operación para usar como fallback del mid
     for (const r of rows) {
-      const isCompra = r.tipo_operacion === TipoOperacion.COMPRA;
       const currencyPair = `${r.monedaOrigen.codigo}->${r.monedaDestino.codigo}`;
       const rateApplied = (() => {
-        // Tasa efectiva basada en montos y comportamiento
         const origen = Number(r.monto_origen);
         const destino = Number(r.monto_destino);
         if (origen <= 0 || destino <= 0) return 0;
-        // Si MULTIPLICA (p.ej. compra): destino = origen * tasa
-        // Si DIVIDE: destino = origen / tasa
-        // Para una tasa efectiva neutral sin conocer comportamiento exacto, usamos destino/origen como estimador
         return destino / origen;
       })();
       const k = keyMid(r.fecha, r.punto_atencion_id, currencyPair);
@@ -366,13 +365,7 @@ export const reportDataService = {
       const destino = Number(r.monto_destino);
       const tasaBilletes = Number(r.tasa_cambio_billetes || 0);
       const tasaMonedas = Number(r.tasa_cambio_monedas || 0);
-
-      // Tasa efectiva aplicada por operación según montos
       const rateApplied = origen > 0 ? destino / origen : 0;
-
-      // Obtener tasa_mid como promedio de compra/venta configuradas por punto/día.
-      // No existe tabla explícita de configuración diaria en el esquema, así que usamos fallback:
-      // promedio de rateApplied de ese punto, día GYE y par de monedas.
       const currencyPair = `${r.monedaOrigen.codigo}->${r.monedaDestino.codigo}`;
       const k = keyMid(r.fecha, r.punto_atencion_id, currencyPair);
       const midAgg = tasasPorGrupo.get(k);
@@ -380,15 +373,7 @@ export const reportDataService = {
         midAgg && midAgg.count > 0
           ? midAgg.sumRates / midAgg.count
           : rateApplied;
-
-      // Spread según operación: positivo si la tasa_aplicada favorece margen
-      const isVenta = r.tipo_operacion === TipoOperacion.VENTA;
-      const isCompra = r.tipo_operacion === TipoOperacion.COMPRA;
-      const spread = rateApplied - tasaMid; // referencia neutral
-
-      // Margen bruto aproximado: spread * base
-      // Base: si usamos rate = destino/origen, una aproximación simple es base = origen
-      // Signo: en venta spread>0 es favorable; en compra spread<0 es favorable -> mantenemos spread como está
+      const spread = rateApplied - tasaMid;
       const margen = spread * origen;
 
       return {
@@ -416,5 +401,186 @@ export const reportDataService = {
     });
 
     return result;
+  },
+
+  // Transferencias detalladas
+  async getTransfersDetailedData(
+    startDate: Date,
+    endDate: Date,
+    filters?: {
+      pointId?: string;
+      userId?: string;
+      estado?: string;
+      currencyId?: string;
+    }
+  ): Promise<TransferDetailedData[]> {
+    const where: any = {
+      fecha: { gte: startDate, lt: endDate },
+      ...(filters?.estado ? { estado: filters.estado } : {}),
+      ...(filters?.currencyId ? { moneda_id: filters.currencyId } : {}),
+      ...(filters?.userId ? { solicitado_por: filters.userId } : {}),
+      ...(filters?.pointId ? { destino_id: filters.pointId } : {}),
+    };
+
+    const rows = await prisma.transferencia.findMany({
+      where,
+      include: {
+        origen: { select: { nombre: true } },
+        destino: { select: { nombre: true } },
+        usuarioSolicitante: { select: { nombre: true } },
+        moneda: { select: { codigo: true } },
+      },
+      orderBy: { fecha: "asc" },
+    });
+
+    return rows.map((r) => ({
+      id: r.id,
+      fecha: r.fecha.toISOString(),
+      punto_origen: r.origen?.nombre || "(N/A)",
+      punto_destino: r.destino?.nombre || "Punto desconocido",
+      usuario_solicitante:
+        r.usuarioSolicitante?.nombre || "Usuario desconocido",
+      moneda: r.moneda.codigo,
+      monto: Number(r.monto),
+      estado: r.estado,
+      numero_recibo: r.numero_recibo,
+      observaciones: r.observaciones_aprobacion || r.descripcion || null,
+    }));
+  },
+
+  // Movimientos contables (MovimientoSaldo)
+  async getAccountingMovementsData(
+    startDate: Date,
+    endDate: Date,
+    filters?: {
+      pointId?: string;
+      userId?: string;
+      currencyId?: string;
+      tipoReferencia?: string;
+    }
+  ): Promise<AccountingMovementData[]> {
+    const where: any = {
+      fecha: { gte: startDate, lt: endDate },
+      ...(filters?.pointId ? { punto_atencion_id: filters.pointId } : {}),
+      ...(filters?.userId ? { usuario_id: filters.userId } : {}),
+      ...(filters?.currencyId ? { moneda_id: filters.currencyId } : {}),
+      ...(filters?.tipoReferencia
+        ? { tipo_referencia: filters.tipoReferencia }
+        : {}),
+    };
+
+    const rows = await prisma.movimientoSaldo.findMany({
+      where,
+      include: {
+        puntoAtencion: { select: { nombre: true } },
+        moneda: { select: { codigo: true } },
+        usuario: { select: { nombre: true } },
+      },
+      orderBy: { fecha: "asc" },
+    });
+
+    const refIds = rows
+      .map((r) => r.referencia_id)
+      .filter((x): x is string => !!x);
+    let recibosMap = new Map<string, string>();
+    if (refIds.length > 0) {
+      const recibos = await prisma.recibo.findMany({
+        where: { referencia_id: { in: Array.from(new Set(refIds)) } },
+        select: { referencia_id: true, numero_recibo: true },
+      });
+      recibosMap = new Map(
+        recibos.map((r) => [r.referencia_id, r.numero_recibo])
+      );
+    }
+
+    return rows.map((r) => ({
+      id: r.id,
+      fecha: r.fecha.toISOString(),
+      punto: r.puntoAtencion?.nombre || "Punto desconocido",
+      moneda: r.moneda.codigo,
+      tipo_movimiento: r.tipo_movimiento,
+      monto: Number(r.monto),
+      saldo_anterior: Number(r.saldo_anterior),
+      saldo_nuevo: Number(r.saldo_nuevo),
+      usuario: r.usuario?.nombre || "Usuario desconocido",
+      referencia_id: r.referencia_id || null,
+      tipo_referencia: r.tipo_referencia || null,
+      numero_referencia: r.referencia_id
+        ? recibosMap.get(r.referencia_id) || null
+        : null,
+      descripcion: r.descripcion || null,
+    }));
+  },
+
+  // Saldos de cierre por día (CuadreCaja + Detalle)
+  async getEodBalancesData(
+    startDate: Date,
+    endDate: Date,
+    filters?: { pointId?: string }
+  ): Promise<EODBalanceData[]> {
+    const where: any = {
+      fecha: { gte: startDate, lt: endDate },
+      ...(filters?.pointId ? { punto_atencion_id: filters.pointId } : {}),
+    };
+
+    const rows = await prisma.cuadreCaja.findMany({
+      where,
+      include: {
+        puntoAtencion: { select: { nombre: true } },
+        detalles: { include: { moneda: { select: { codigo: true } } } },
+      },
+      orderBy: { fecha: "asc" },
+    });
+
+    const result: EODBalanceData[] = [];
+    for (const c of rows) {
+      const ymd = gyeDayRangeUtcFromDate(c.fecha_cierre || c.fecha)
+        .gte.toISOString()
+        .slice(0, 10);
+      for (const d of c.detalles) {
+        result.push({
+          fecha: ymd,
+          punto: c.puntoAtencion?.nombre || "Punto desconocido",
+          moneda: d.moneda.codigo,
+          saldo_cierre: Number(d.saldo_cierre),
+          diferencia: Number(d.diferencia),
+        });
+      }
+    }
+
+    return result;
+  },
+
+  // Historial de asignaciones de punto
+  async getPointAssignmentsData(
+    startDate: Date,
+    endDate: Date,
+    filters?: { userId?: string }
+  ): Promise<PointAssignmentData[]> {
+    const where: any = {
+      fecha_asignacion: { gte: startDate, lt: endDate },
+      ...(filters?.userId ? { usuario_id: filters.userId } : {}),
+    };
+
+    const rows = await prisma.historialAsignacionPunto.findMany({
+      where,
+      include: {
+        usuario: { select: { nombre: true } },
+        puntoAnterior: { select: { nombre: true } },
+        puntoNuevo: { select: { nombre: true } },
+        usuarioAutorizador: { select: { nombre: true } },
+      },
+      orderBy: { fecha_asignacion: "asc" },
+    });
+
+    return rows.map((r) => ({
+      fecha: r.fecha_asignacion.toISOString(),
+      usuario: r.usuario?.nombre || "Usuario desconocido",
+      punto_anterior: r.puntoAnterior?.nombre || null,
+      punto_nuevo: r.puntoNuevo?.nombre || "Punto desconocido",
+      autorizado_por: r.usuarioAutorizador?.nombre || null,
+      motivo: r.motivo_cambio || null,
+      observaciones: r.observaciones || null,
+    }));
   },
 };

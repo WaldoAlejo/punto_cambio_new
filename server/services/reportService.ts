@@ -177,6 +177,80 @@ export const reportService = {
         return reportData as ReportData[];
       }
 
+      case "transfers_detailed": {
+        const reportData = await reportDataService.getTransfersDetailedData(
+          startDate,
+          endDate,
+          {
+            pointId: request.pointId,
+            userId: request.userId,
+            estado: request.estado,
+            currencyId: request.currencyId,
+          }
+        );
+        logger.info("Reporte detallado de transferencias generado", {
+          reportType,
+          dateFrom,
+          dateTo,
+          recordCount: Array.isArray(reportData) ? reportData.length : 0,
+          requestedBy: userId,
+        });
+        return reportData as ReportData[];
+      }
+
+      case "accounting_movements": {
+        const reportData = await reportDataService.getAccountingMovementsData(
+          startDate,
+          endDate,
+          {
+            pointId: request.pointId,
+            userId: request.userId,
+            currencyId: request.currencyId,
+            tipoReferencia: request.estado, // reutilizamos 'estado' como filtro libre si se requiere
+          }
+        );
+        logger.info("Reporte de movimientos contables generado", {
+          reportType,
+          dateFrom,
+          dateTo,
+          recordCount: Array.isArray(reportData) ? reportData.length : 0,
+          requestedBy: userId,
+        });
+        return reportData as ReportData[];
+      }
+
+      case "eod_balances": {
+        const reportData = await reportDataService.getEodBalancesData(
+          startDate,
+          endDate,
+          { pointId: request.pointId }
+        );
+        logger.info("Reporte de saldos de cierre generado", {
+          reportType,
+          dateFrom,
+          dateTo,
+          recordCount: Array.isArray(reportData) ? reportData.length : 0,
+          requestedBy: userId,
+        });
+        return reportData as ReportData[];
+      }
+
+      case "point_assignments": {
+        const reportData = await reportDataService.getPointAssignmentsData(
+          startDate,
+          endDate,
+          { userId: request.userId }
+        );
+        logger.info("Reporte de asignaciones de punto generado", {
+          reportType,
+          dateFrom,
+          dateTo,
+          recordCount: Array.isArray(reportData) ? reportData.length : 0,
+          requestedBy: userId,
+        });
+        return reportData as ReportData[];
+      }
+
       default:
         throw new Error("Tipo de reporte no válido");
     }
