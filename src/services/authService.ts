@@ -1,3 +1,4 @@
+// src/services/authService.ts
 import { env } from "../config/environment";
 
 const API_BASE_URL = env.API_URL;
@@ -39,7 +40,9 @@ interface TokenVerificationResponse {
 }
 
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<{
+  async login(
+    credentials: LoginCredentials
+  ): Promise<{
     user: AuthUser | null;
     token: string | null;
     error: string | null;
@@ -49,9 +52,7 @@ export const authService = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
+          // IMPORTANTE: No enviar Expires/Pragma/Cache-Control en la solicitud
         },
         body: JSON.stringify(credentials),
       });
@@ -94,7 +95,10 @@ export const authService = {
 
       return { user: data.user, token: data.token, error: null };
     } catch (error) {
-      if (error instanceof TypeError && error.message.includes("fetch")) {
+      if (
+        error instanceof TypeError &&
+        String(error.message || "").includes("fetch")
+      ) {
         return {
           user: null,
           token: null,
@@ -116,14 +120,13 @@ export const authService = {
       if (!token) {
         return { user: null, valid: false, error: "No token found" };
       }
+
       const response = await fetch(`${API_BASE_URL}/auth/verify`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
+          // IMPORTANTE: No enviar Expires/Pragma/Cache-Control en la solicitud
         },
       });
 

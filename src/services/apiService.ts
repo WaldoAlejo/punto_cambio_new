@@ -1,3 +1,4 @@
+// src/services/apiService.ts
 import { env } from "../config/environment";
 
 const API_BASE_URL = env.API_URL;
@@ -14,13 +15,24 @@ export class ApiError extends Error {
 }
 
 class ApiService {
-  private getHeaders(): HeadersInit {
+  /**
+   * Construye headers según el método/cuerpo:
+   * - Authorization si existe token
+   * - Content-Type solo cuando hay body (evita preflight innecesario en GET/DELETE)
+   */
+  private getHeaders(hasBody: boolean): HeadersInit {
     const token = localStorage.getItem("authToken");
-    return {
-      "Content-Type": "application/json",
-      "Cache-Control": "no-cache",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
+    const headers: Record<string, string> = {};
+
+    if (hasBody) {
+      headers["Content-Type"] = "application/json";
+    }
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    // IMPORTANTE: no enviar headers de caché en la solicitud (Cache-Control/Pragma/Expires)
+    return headers;
   }
 
   private async parseMaybeJson(res: Response) {
@@ -42,7 +54,6 @@ class ApiService {
   ): Promise<T> {
     if (!response.ok) {
       const body = await this.parseMaybeJson(response);
-      // Log con el cuerpo real del error del backend
       console.error(`[API] ${response.status} error on ${endpoint}:`, body);
 
       const message =
@@ -52,7 +63,13 @@ class ApiService {
 
       throw new ApiError(message, response.status, body);
     }
-    return response.json();
+
+    // Intentar parsear JSON; si no es JSON, devolver texto
+    const ct = response.headers.get("content-type") || "";
+    if (ct.includes("application/json")) {
+      return (await response.json()) as T;
+    }
+    return (await this.parseMaybeJson(response)) as T;
   }
 
   async get<T>(endpoint: string): Promise<T> {
@@ -60,7 +77,7 @@ class ApiService {
     console.warn(`[API] GET ${cleanEndpoint}`);
     const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       method: "GET",
-      headers: this.getHeaders(),
+      headers: this.getHeaders(false), // sin Content-Type en GET
     });
     return this.handleResponse<T>(res, cleanEndpoint);
   }
@@ -70,7 +87,7 @@ class ApiService {
     console.warn(`[API] POST ${cleanEndpoint}`, data);
     const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       method: "POST",
-      headers: this.getHeaders(),
+      headers: this.getHeaders(true), // con Content-Type
       body: JSON.stringify(data),
     });
     return this.handleResponse<T>(res, cleanEndpoint);
@@ -81,7 +98,7 @@ class ApiService {
     console.warn(`[API] PUT ${cleanEndpoint}`, data);
     const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       method: "PUT",
-      headers: this.getHeaders(),
+      headers: this.getHeaders(true), // con Content-Type
       body: JSON.stringify(data),
     });
     return this.handleResponse<T>(res, cleanEndpoint);
@@ -90,10 +107,11 @@ class ApiService {
   async patch<T>(endpoint: string, data?: unknown): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
     console.warn(`[API] PATCH ${cleanEndpoint}`, data);
+    const hasBody = data !== undefined;
     const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       method: "PATCH",
-      headers: this.getHeaders(),
-      ...(data ? { body: JSON.stringify(data) } : {}),
+      headers: this.getHeaders(hasBody), // Content-Type solo si hay body
+      ...(hasBody ? { body: JSON.stringify(data) } : {}),
     });
     return this.handleResponse<T>(res, cleanEndpoint);
   }
@@ -103,7 +121,7 @@ class ApiService {
     console.warn(`[API] DELETE ${cleanEndpoint}`);
     const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       method: "DELETE",
-      headers: this.getHeaders(),
+      headers: this.getHeaders(false), // sin Content-Type en DELETE
     });
     return this.handleResponse<T>(res, cleanEndpoint);
   }
