@@ -1,14 +1,13 @@
 import express from "express";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { generateToken, authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { loginSchema, type LoginRequest } from "../schemas/validation.js";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Rate limiting estricto para login
 const loginLimiter = rateLimit({
