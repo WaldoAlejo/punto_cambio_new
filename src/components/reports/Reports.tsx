@@ -481,18 +481,42 @@ const Reports = ({ user: _user }: ReportsProps) => {
                 <table className="w-full border-collapse border border-gray-300">
                   <thead>
                     <tr className="bg-gray-50">
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Fecha</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Punto</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Usuario</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Username</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Entrada</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Almuerzo</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Regreso</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Salida</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Almuerzo (min)</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Salidas (min)</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Tiempo Efectivo</th>
-                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">Estado</th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Fecha
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Punto
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Usuario
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Username
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Entrada
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Almuerzo
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Regreso
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Salida
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Almuerzo (min)
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Salidas (min)
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Tiempo Efectivo
+                      </th>
+                      <th className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        Estado
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -504,22 +528,49 @@ const Reports = ({ user: _user }: ReportsProps) => {
                       };
                       const fmtTime = (iso?: string) =>
                         iso
-                          ? new Date(iso).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })
+                          ? new Date(iso).toLocaleTimeString("es-EC", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
                           : "";
                       return (
                         <tr key={index} className="hover:bg-gray-50">
-                          <td className="border border-gray-300 px-4 py-2">{row.date}</td>
-                          <td className="border border-gray-300 px-4 py-2">{row.point}</td>
-                          <td className="border border-gray-300 px-4 py-2">{row.user}</td>
-                          <td className="border border-gray-300 px-4 py-2">{row.username ? `@${row.username}` : ""}</td>
-                          <td className="border border-gray-300 px-4 py-2">{fmtTime(row.entrada)}</td>
-                          <td className="border border-gray-300 px-4 py-2">{fmtTime(row.almuerzo)}</td>
-                          <td className="border border-gray-300 px-4 py-2">{fmtTime(row.regreso)}</td>
-                          <td className="border border-gray-300 px-4 py-2">{fmtTime(row.salida)}</td>
-                          <td className="border border-gray-300 px-4 py-2">{fmtHM(row.lunchMinutes)}</td>
-                          <td className="border border-gray-300 px-4 py-2">{fmtHM(row.spontaneousMinutes)}</td>
-                          <td className="border border-gray-300 px-4 py-2 font-semibold">{fmtHM(row.effectiveMinutes)}</td>
-                          <td className="border border-gray-300 px-4 py-2">{row.estado || ""}</td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {row.date}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {row.point}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {row.user}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {row.username ? `@${row.username}` : ""}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtTime(row.entrada)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtTime(row.almuerzo)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtTime(row.regreso)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtTime(row.salida)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtHM(row.lunchMinutes)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {fmtHM(row.spontaneousMinutes)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2 font-semibold">
+                            {fmtHM(row.effectiveMinutes)}
+                          </td>
+                          <td className="border border-gray-300 px-4 py-2">
+                            {row.estado || ""}
+                          </td>
                         </tr>
                       );
                     })}
@@ -550,7 +601,10 @@ const Reports = ({ user: _user }: ReportsProps) => {
                         "numero_recibo",
                         "estado",
                       ].map((h) => (
-                        <th key={h} className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        <th
+                          key={h}
+                          className="border border-gray-300 px-4 py-2 text-left font-semibold"
+                        >
                           {h.replace(/_/g, " ")}
                         </th>
                       ))}
@@ -559,23 +613,57 @@ const Reports = ({ user: _user }: ReportsProps) => {
                   <tbody>
                     {reportData.map((row: any, index) => (
                       <tr key={row.id || index} className="hover:bg-gray-50">
-                        <td className="border border-gray-300 px-4 py-2">{new Date(row.fecha).toLocaleString("es-EC")}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.punto}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.usuario}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.tipo_operacion}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.moneda_origen}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.moneda_destino}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.monto_origen?.toLocaleString()}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.monto_destino?.toLocaleString()}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.tasa_billetes}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.tasa_monedas}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.rate_applied}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.tasa_mid}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.spread}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.margen_bruto?.toLocaleString()}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.metodo_entrega}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.numero_recibo || ""}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.estado}</td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {new Date(row.fecha).toLocaleString("es-EC")}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.punto}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.usuario}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.tipo_operacion}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.moneda_origen}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.moneda_destino}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.monto_origen?.toLocaleString()}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.monto_destino?.toLocaleString()}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.tasa_billetes}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.tasa_monedas}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.rate_applied}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.tasa_mid}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.spread}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.margen_bruto?.toLocaleString()}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.metodo_entrega}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.numero_recibo || ""}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.estado}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -597,7 +685,10 @@ const Reports = ({ user: _user }: ReportsProps) => {
                         "numero_recibo",
                         "observaciones",
                       ].map((h) => (
-                        <th key={h} className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                        <th
+                          key={h}
+                          className="border border-gray-300 px-4 py-2 text-left font-semibold"
+                        >
                           {h.replace(/_/g, " ")}
                         </th>
                       ))}
@@ -606,15 +697,33 @@ const Reports = ({ user: _user }: ReportsProps) => {
                   <tbody>
                     {reportData.map((row: any, index) => (
                       <tr key={row.id || index} className="hover:bg-gray-50">
-                        <td className="border border-gray-300 px-4 py-2">{new Date(row.fecha).toLocaleString("es-EC")}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.punto_origen}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.punto_destino}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.usuario_solicitante}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.moneda}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.monto?.toLocaleString()}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.estado}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.numero_recibo || ""}</td>
-                        <td className="border border-gray-300 px-4 py-2">{row.observaciones || ""}</td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {new Date(row.fecha).toLocaleString("es-EC")}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.punto_origen}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.punto_destino}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.usuario_solicitante}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.moneda}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.monto?.toLocaleString()}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.estado}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.numero_recibo || ""}
+                        </td>
+                        <td className="border border-gray-300 px-4 py-2">
+                          {row.observaciones || ""}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -627,7 +736,10 @@ const Reports = ({ user: _user }: ReportsProps) => {
                     <tr className="bg-gray-50">
                       {reportData.length > 0 &&
                         Object.keys(reportData[0]).map((key) => (
-                          <th key={key} className="border border-gray-300 px-4 py-2 text-left font-semibold">
+                          <th
+                            key={key}
+                            className="border border-gray-300 px-4 py-2 text-left font-semibold"
+                          >
                             {key.charAt(0).toUpperCase() + key.slice(1)}
                           </th>
                         ))}
@@ -637,8 +749,13 @@ const Reports = ({ user: _user }: ReportsProps) => {
                     {reportData.map((row, index) => (
                       <tr key={index} className="hover:bg-gray-50">
                         {Object.values(row).map((value, cellIndex) => (
-                          <td key={cellIndex} className="border border-gray-300 px-4 py-2">
-                            {typeof value === "object" && value !== null ? JSON.stringify(value) : String(value)}
+                          <td
+                            key={cellIndex}
+                            className="border border-gray-300 px-4 py-2"
+                          >
+                            {typeof value === "object" && value !== null
+                              ? JSON.stringify(value)
+                              : String(value)}
                           </td>
                         ))}
                       </tr>
@@ -646,7 +763,7 @@ const Reports = ({ user: _user }: ReportsProps) => {
                   </tbody>
                 </table>
               </div>
-            )
+            )}
           </CardContent>
         </Card>
       )}
