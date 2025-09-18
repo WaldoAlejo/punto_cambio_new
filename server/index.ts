@@ -54,13 +54,13 @@ import serviciosExternosRoutes from "./routes/servicios-externos.js";
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
 
-// Si estás detrás de un proxy (NGINX / GCP LB), esto hace que rate limit use la IP real
+// Si estás detrás de un proxy (NGINX / GCP LB), usa la IP real para rate-limit/logs
 app.set("trust proxy", 1);
 
-// Rate limiting - Configuración más permisiva para aplicación interna
+// Rate limiting - Config interno permisivo
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 1000, // 1000 peticiones por IP en 15 minutos (más permisivo)
+  max: 1000, // 1000 peticiones por IP en 15 minutos
   message: "Too many requests from this IP, please try again later.",
   standardHeaders: true,
   legacyHeaders: false,
@@ -72,7 +72,7 @@ const limiter = rateLimit({
       "/api/exchanges",
       "/api/transfers",
       "/api/servientrega",
-      // ✅ agregadas para no bloquear saldos
+      // para vistas de saldos
       "/api/saldos-actuales",
       "/api/vista-saldos-puntos",
     ];
@@ -80,16 +80,16 @@ const limiter = rateLimit({
   },
 });
 
-// Middleware de seguridad (CSP relajada para permitir API cross-port y HMR)
+// Middleware de seguridad (CSP relajada para API cross-port y HMR)
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https:"],
-        scriptSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-eval'"], // Vite dev / bundles
         imgSrc: ["'self'", "data:", "https:"],
-        // 👇 Permite fetch hacia el API en otro puerto y WebSocket en dev
+        // Permite fetch hacia el API en otro puerto y WebSocket en dev
         connectSrc: [
           "'self'",
           "http://localhost:3001",
@@ -98,7 +98,7 @@ app.use(
           "http://34.70.184.11:3001",
           "http://34.70.184.11:8080",
           "http://34.70.184.11",
-          "https://34.70.184.11", // por si activas SSL
+          "https://34.70.184.11",
         ],
         fontSrc: ["'self'", "https:", "data:"],
         objectSrc: ["'none'"],
@@ -106,13 +106,14 @@ app.use(
         frameSrc: ["'self'"],
       },
     },
-    crossOriginOpenerPolicy: false, // Deshabilitar COOP para HTTP
-    hsts: false, // Deshabilitar HSTS para permitir HTTP
+    crossOriginOpenerPolicy: false, // para HTTP / iframes
+    crossOriginEmbedderPolicy: false, // evita COEP issues en dev
+    hsts: false, // deshabilitar HSTS si sirves por HTTP
     originAgentCluster: false,
   })
 );
 
-// CORS (añadí variantes https por si activas SSL)
+// CORS (añade allowedHeaders + exposedHeaders)
 app.use(
   cors({
     origin: [
@@ -129,8 +130,15 @@ app.use(
       "https://34.70.184.11", // SSL (si lo habilitas)
     ],
     credentials: true,
+    allowedHeaders: ["Authorization", "Content-Type"], // 👈 imprescindible para Bearer
+    exposedHeaders: [
+      "X-RateLimit-Limit",
+      "X-RateLimit-Remaining",
+      "X-RateLimit-Reset",
+    ], // si tu frontend lee estos headers
   })
 );
+
 app.use(limiter);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -145,7 +153,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
+// Health check
 app.get("/health", (_req, res) => {
   res.status(200).json({
     status: "OK",
@@ -154,7 +162,7 @@ app.get("/health", (_req, res) => {
   });
 });
 
-// Rate limit status endpoint
+// Rate limit status
 app.get("/api/rate-limit-status", (req, res) => {
   const rateLimitHeaders = {
     limit: res.get("X-RateLimit-Limit"),
@@ -229,7 +237,7 @@ try {
               "style-src 'self' 'unsafe-inline' https:",
               "img-src 'self' data: https:",
               "font-src 'self' data: https:",
-              // 👇 importante para fetch hacia 3001, websockets y Vite dev
+              // importante para fetch hacia 3001, websockets y Vite dev
               "connect-src 'self' http://34.70.184.11:3001 http://34.70.184.11:8080 http://34.70.184.11 http://localhost:3001 http://localhost:5173 ws://localhost:5173 https://34.70.184.11",
             ].join("; ")
           );

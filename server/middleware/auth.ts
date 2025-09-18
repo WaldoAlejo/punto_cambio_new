@@ -1,9 +1,12 @@
 import jwt from "jsonwebtoken";
+import type { Request, Response, NextFunction, RequestHandler } from "express";
 import { pool } from "../lib/database.js";
-import { Request, Response, NextFunction, RequestHandler } from "express";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
+// ------------------------------
+// Tipos y augmentations
+// ------------------------------
 interface AuthenticatedUser {
   id: string;
   username: string;
@@ -20,19 +23,49 @@ declare module "express-serve-static-core" {
   }
 }
 
-// Usando conexión directa a PostgreSQL
+// ------------------------------
+// Config JWT
+// ------------------------------
 const JWT_SECRET =
-  process.env.JWT_SECRET || "your-super-secret-key-change-in-production";
+  process.env.JWT_SECRET ||
+  process.env.JWT_SECRET_KEY ||
+  "your-super-secret-key-change-in-production";
 
-// Middleware para validar JWT
+if (!process.env.JWT_SECRET && !process.env.JWT_SECRET_KEY) {
+  logger.warn(
+    "[AUTH] JWT secret no configurado por variable de entorno. Usando valor por defecto (INSEGURO)."
+  );
+}
+
+// ------------------------------
+// Utilidades
+// ------------------------------
+/** Extrae Bearer token del header Authorization o de una cookie `authToken` si la usas */
+export function extractToken(req: Request): string | null {
+  const h = req.get("authorization") || req.get("Authorization");
+  if (h && h.startsWith("Bearer ")) return h.slice(7);
+  // Si manejas token por cookie, descomenta:
+  // // @ts-ignore
+  // if (req.cookies?.authToken) return String(req.cookies.authToken);
+  return null;
+}
+
+// ------------------------------
+// Middleware principal
+// ------------------------------
+/**
+ * Autentica al usuario mediante JWT, carga datos mínimos desde la BD
+ * y aplica reglas de negocio básicas:
+ *  - OPERADOR: si hoy no tiene jornada ACTIVA/ALMUERZO, limpia punto_atencion_id
+ *  - ADMIN / SUPER_USUARIO: requiere tener punto principal (puedes mover esta validación a rutas críticas si prefieres)
+ */
 export const authenticateToken: RequestHandler = async (
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const authHeader = req.headers["authorization"];
-    const token = authHeader && authHeader.split(" ")[1];
+    const token = extractToken(req);
 
     if (!token) {
       logger.warn("Acceso sin token", { ip: req.ip, url: req.originalUrl });
@@ -44,13 +77,16 @@ export const authenticateToken: RequestHandler = async (
       return;
     }
 
-    let decoded;
+    let decoded: { userId: string };
     try {
       decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-      logger.info("JWT decoded", { userId: decoded.userId });
+      logger.info("JWT decodificado", { userId: decoded.userId });
     } catch (jwtError) {
-      logger.error("JWT verification failed", { error: jwtError });
-      res.status(403).json({
+      logger.warn("Fallo verificación JWT", {
+        error: jwtError instanceof Error ? jwtError.message : String(jwtError),
+      });
+      // Token inválido o expirado => 401
+      res.status(401).json({
         error: "Token inválido",
         success: false,
         timestamp: new Date().toISOString(),
@@ -58,16 +94,18 @@ export const authenticateToken: RequestHandler = async (
       return;
     }
 
+    // Buscar usuario
     const t0 = Date.now();
     const userQuery = await pool.query(
       'SELECT id, username, nombre, rol, activo, punto_atencion_id FROM "Usuario" WHERE id = $1',
       [decoded.userId]
     );
-    const user = userQuery.rows[0];
+    const user: AuthenticatedUser | undefined = userQuery.rows[0];
     const t1 = Date.now();
 
-    logger.info("Resultado de búsqueda de usuario en BD", {
-      user,
+    logger.info("Consulta de usuario", {
+      userId: decoded.userId,
+      encontrado: !!user,
       ms: t1 - t0,
     });
 
@@ -85,10 +123,7 @@ export const authenticateToken: RequestHandler = async (
     }
 
     if (!user.activo) {
-      logger.warn("Usuario inactivo", {
-        userId: decoded.userId,
-        ip: req.ip,
-      });
+      logger.warn("Usuario inactivo", { userId: user.id, ip: req.ip });
       res.status(401).json({
         error: "Usuario inactivo",
         success: false,
@@ -97,7 +132,7 @@ export const authenticateToken: RequestHandler = async (
       return;
     }
 
-    // --- CORRECCIÓN IMPORTANTE PARA OPERADOR ---
+    // --------- Regla para OPERADOR: mantener punto sano contra jornadas ----------
     if (user.rol === "OPERADOR") {
       const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
@@ -108,13 +143,15 @@ export const authenticateToken: RequestHandler = async (
       );
       const jornadaHoy = jornadaQuery.rows[0];
       const tJ1 = Date.now();
-      logger.info("Chequeo jornada activa operador", {
+
+      logger.info("Chequeo jornada ACTIVA/ALMUERZO (OPERADOR)", {
+        userId: user.id,
+        tieneJornada: !!jornadaHoy,
         ms: tJ1 - tJ0,
-        jornada: !!jornadaHoy,
       });
 
       if (!jornadaHoy) {
-        // Limpiar en BD solo si está asignado
+        // Si estaba apuntado a un punto, limpiar (consistencia)
         if (user.punto_atencion_id) {
           await pool.query(
             'UPDATE "Usuario" SET punto_atencion_id = NULL WHERE id = $1',
@@ -125,13 +162,13 @@ export const authenticateToken: RequestHandler = async (
       }
     }
 
-    // --- VALIDACIÓN PARA ADMIN ---
+    // --------- Regla para ADMIN / SUPER_USUARIO ----------
+    // Si prefieres no bloquear todo en middleware, mueve estas validaciones a endpoints críticos (ej. abrir/cerrar caja).
     if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
       if (!user.punto_atencion_id) {
-        logger.warn("Admin sin punto de atención asignado en middleware", {
+        logger.warn("Admin sin punto de atención asignado", {
           userId: user.id,
           rol: user.rol,
-          ip: req.ip,
         });
         res.status(403).json({
           error:
@@ -142,14 +179,14 @@ export const authenticateToken: RequestHandler = async (
         return;
       }
 
-      // Verificar que el punto asignado sea el principal
       const principalQuery = await pool.query(
         'SELECT es_principal FROM "PuntoAtencion" WHERE id = $1',
         [user.punto_atencion_id]
       );
       const esPrincipal = principalQuery.rows[0]?.es_principal === true;
+
       if (!esPrincipal) {
-        logger.warn("Admin asignado a punto no principal", {
+        logger.warn("Admin asignado a punto NO principal", {
           userId: user.id,
           rol: user.rol,
           punto_atencion_id: user.punto_atencion_id,
@@ -163,13 +200,12 @@ export const authenticateToken: RequestHandler = async (
       }
     }
 
-    // Nota: usuarios ADMINISTRATIVO pueden operar desde cualquier punto y no requieren punto_atencion_id fijo
-    // --- FIN CORRECCIÓN ---
-
+    // OK
     req.user = user;
-    logger.info("Usuario autenticado correctamente", { userId: user.id });
+    logger.info("Usuario autenticado", { userId: user.id, rol: user.rol });
     next();
   } catch (error) {
+    // Cualquier error inesperado aquí => 500
     logger.error("Error en autenticación", {
       error: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
@@ -185,7 +221,9 @@ export const authenticateToken: RequestHandler = async (
   }
 };
 
-// Middleware para verificar roles
+// ------------------------------
+// Middleware de autorización por rol
+// ------------------------------
 export const requireRole = (roles: string[]): RequestHandler => {
   return (req: Request, res: Response, next: NextFunction): void => {
     logger.info("=== ROLE CHECK START ===", {
@@ -226,10 +264,11 @@ export const requireRole = (roles: string[]): RequestHandler => {
   };
 };
 
-// Generar JWT
+// ------------------------------
+// Utilidad para emitir JWT
+// ------------------------------
 export const generateToken = (userId: string): string => {
-  logger.info("Generando token JWT para usuario", { userId });
+  logger.info("Generando token JWT", { userId });
   const token = jwt.sign({ userId }, JWT_SECRET, { expiresIn: "24h" });
-  logger.info("Token generado correctamente");
   return token;
 };
