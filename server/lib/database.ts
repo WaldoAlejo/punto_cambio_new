@@ -21,11 +21,27 @@ const pool = new Pool({
     process.env.NODE_ENV === "production"
       ? { rejectUnauthorized: false }
       : false,
+  // Opcional: ajustar pool para evitar saturación
+  max: Number(process.env.PGPOOL_MAX || 10),
+  idleTimeoutMillis: Number(process.env.PGPOOL_IDLE || 30000),
+  connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS || 5000),
 });
 
-// Verificar la conexión a la base de datos
-pool.on("connect", () => {
+// Verificar la conexión a la base de datos y fijar timeouts de sesión
+pool.on("connect", (client) => {
   console.log("Conexión a la base de datos establecida correctamente");
+  // Evita queries colgados indefinidamente
+  const statementTimeoutMs = Number(
+    process.env.DB_STATEMENT_TIMEOUT_MS || 8000
+  );
+  const idleInTxTimeoutMs = Number(process.env.DB_IDLE_TX_TIMEOUT_MS || 5000);
+  client
+    .query(
+      `SET statement_timeout = ${statementTimeoutMs}; SET idle_in_transaction_session_timeout = ${idleInTxTimeoutMs};`
+    )
+    .catch((e) =>
+      console.warn("No se pudo establecer timeouts de sesión en PG:", e.message)
+    );
 });
 
 pool.on("error", (err) => {

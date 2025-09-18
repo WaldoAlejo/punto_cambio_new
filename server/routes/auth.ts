@@ -168,6 +168,7 @@ router.get(
   "/verify",
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
+    const start = Date.now();
     try {
       if (!req.user) {
         res.status(401).json({
@@ -206,6 +207,9 @@ router.get(
         error: "Error interno del servidor",
         valid: false,
       });
+    } finally {
+      const ms = Date.now() - start;
+      logger.info("/auth/verify tiempo de respuesta", { ms });
     }
   }
 );

@@ -58,13 +58,18 @@ export const authenticateToken: RequestHandler = async (
       return;
     }
 
+    const t0 = Date.now();
     const userQuery = await pool.query(
       'SELECT id, username, nombre, rol, activo, punto_atencion_id FROM "Usuario" WHERE id = $1',
       [decoded.userId]
     );
     const user = userQuery.rows[0];
+    const t1 = Date.now();
 
-    logger.info("Resultado de búsqueda de usuario en BD", { user });
+    logger.info("Resultado de búsqueda de usuario en BD", {
+      user,
+      ms: t1 - t0,
+    });
 
     if (!user) {
       logger.warn("Token con usuario no encontrado", {
@@ -96,11 +101,17 @@ export const authenticateToken: RequestHandler = async (
     if (user.rol === "OPERADOR") {
       const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
+      const tJ0 = Date.now();
       const jornadaQuery = await pool.query(
         'SELECT id FROM "Jornada" WHERE usuario_id = $1 AND fecha_inicio >= $2 AND fecha_inicio < $3 AND (estado = $4 OR estado = $5) LIMIT 1',
         [user.id, hoy, manana, "ACTIVO", "ALMUERZO"]
       );
       const jornadaHoy = jornadaQuery.rows[0];
+      const tJ1 = Date.now();
+      logger.info("Chequeo jornada activa operador", {
+        ms: tJ1 - tJ0,
+        jornada: !!jornadaHoy,
+      });
 
       if (!jornadaHoy) {
         // Limpiar en BD solo si está asignado

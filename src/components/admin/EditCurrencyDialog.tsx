@@ -13,7 +13,7 @@ import { Moneda } from "../../types";
 import { currencyService } from "../../services/currencyService";
 import { toast } from "@/hooks/use-toast";
 
-interface EditCurrencyDialogProps {
+interface Props {
   currency: Moneda;
   isOpen: boolean;
   onClose: () => void;
@@ -25,7 +25,7 @@ const EditCurrencyDialog = ({
   isOpen,
   onClose,
   onCurrencyUpdated,
-}: EditCurrencyDialogProps) => {
+}: Props) => {
   const [formData, setFormData] = useState({
     codigo: currency.codigo,
     nombre: currency.nombre,
@@ -35,22 +35,24 @@ const EditCurrencyDialog = ({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setFormData({
-      codigo: currency.codigo,
-      nombre: currency.nombre,
-      simbolo: currency.simbolo,
-      orden_display: currency.orden_display,
-    });
+    if (currency) {
+      setFormData({
+        codigo: currency.codigo,
+        nombre: currency.nombre,
+        simbolo: currency.simbolo,
+        orden_display: currency.orden_display,
+      });
+    }
   }, [currency]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       [e.target.name]:
         e.target.name === "orden_display"
           ? parseInt(e.target.value) || 0
           : e.target.value,
-    });
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,8 +78,8 @@ const EditCurrencyDialog = ({
         title: "Moneda actualizada",
         description: `Moneda ${updated.nombre} actualizada correctamente`,
       });
-      onClose();
       onCurrencyUpdated();
+      onClose();
     } catch {
       toast({
         title: "Error",
@@ -91,15 +93,16 @@ const EditCurrencyDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="max-w-lg w-full">
         <DialogHeader>
           <DialogTitle>Editar Moneda</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Código (3 letras)</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="codigo">Código (3 letras)</Label>
               <Input
+                id="codigo"
                 name="codigo"
                 value={formData.codigo}
                 onChange={handleChange}
@@ -107,9 +110,10 @@ const EditCurrencyDialog = ({
                 disabled={loading}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Símbolo</Label>
+            <div className="space-y-1">
+              <Label htmlFor="simbolo">Símbolo</Label>
               <Input
+                id="simbolo"
                 name="simbolo"
                 value={formData.simbolo}
                 onChange={handleChange}
@@ -117,9 +121,10 @@ const EditCurrencyDialog = ({
                 disabled={loading}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Orden</Label>
+            <div className="space-y-1">
+              <Label htmlFor="orden_display">Orden</Label>
               <Input
+                id="orden_display"
                 name="orden_display"
                 type="number"
                 value={formData.orden_display}
@@ -129,16 +134,17 @@ const EditCurrencyDialog = ({
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>Nombre Completo</Label>
+          <div className="space-y-1">
+            <Label htmlFor="nombre">Nombre Completo</Label>
             <Input
+              id="nombre"
               name="nombre"
               value={formData.nombre}
               onChange={handleChange}
               disabled={loading}
             />
           </div>
-          <DialogFooter className="mt-4 flex gap-2 justify-end">
+          <DialogFooter className="mt-4 flex flex-wrap gap-2 justify-end">
             <Button
               type="button"
               variant="outline"

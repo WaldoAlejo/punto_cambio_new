@@ -9,24 +9,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PuntoAtencion, Agencia } from "../../types";
+import { PuntoAtencion } from "../../types";
 import { pointService } from "../../services/pointService";
 import { AgenciaSelector } from "@/components/ui/AgenciaSelector";
 import { toast } from "@/hooks/use-toast";
 
-interface EditPointDialogProps {
+interface Props {
   point: PuntoAtencion;
   isOpen: boolean;
   onClose: () => void;
   onPointUpdated: () => void;
 }
 
-const EditPointDialog = ({
-  point,
-  isOpen,
-  onClose,
-  onPointUpdated,
-}: EditPointDialogProps) => {
+const EditPointDialog = ({ point, isOpen, onClose, onPointUpdated }: Props) => {
   const [formData, setFormData] = useState({
     nombre: point.nombre,
     direccion: point.direccion,
@@ -39,7 +34,7 @@ const EditPointDialog = ({
   });
   const [loading, setLoading] = useState(false);
 
-  // ✅ Resetear formulario al cambiar de punto o abrir modal
+  // Resetear formulario cuando cambia el punto o se abre el modal
   useEffect(() => {
     if (isOpen) {
       setFormData({
@@ -56,7 +51,7 @@ const EditPointDialog = ({
   }, [point, isOpen]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -105,18 +100,20 @@ const EditPointDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-2xl w-full max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>Editar Punto de Atención</DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto pr-2">
+        {/* Contenido con scroll si es necesario */}
+        <div className="flex-1 overflow-y-auto pr-1">
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Información básica en grid */}
+            {/* Nombre y ciudad */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Nombre *</Label>
+              <div className="space-y-1">
+                <Label htmlFor="nombre">Nombre *</Label>
                 <Input
+                  id="nombre"
                   name="nombre"
                   value={formData.nombre}
                   onChange={handleChange}
@@ -124,9 +121,10 @@ const EditPointDialog = ({
                   placeholder="Nombre del punto de atención"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Ciudad *</Label>
+              <div className="space-y-1">
+                <Label htmlFor="ciudad">Ciudad *</Label>
                 <Input
+                  id="ciudad"
                   name="ciudad"
                   value={formData.ciudad}
                   onChange={handleChange}
@@ -137,9 +135,10 @@ const EditPointDialog = ({
             </div>
 
             {/* Dirección completa */}
-            <div className="space-y-2">
-              <Label>Dirección *</Label>
+            <div className="space-y-1">
+              <Label htmlFor="direccion">Dirección *</Label>
               <Input
+                id="direccion"
                 name="direccion"
                 value={formData.direccion}
                 onChange={handleChange}
@@ -150,9 +149,10 @@ const EditPointDialog = ({
 
             {/* Provincia, código postal y teléfono */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Provincia *</Label>
+              <div className="space-y-1">
+                <Label htmlFor="provincia">Provincia *</Label>
                 <Input
+                  id="provincia"
                   name="provincia"
                   value={formData.provincia}
                   onChange={handleChange}
@@ -160,9 +160,10 @@ const EditPointDialog = ({
                   placeholder="Provincia"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Código Postal</Label>
+              <div className="space-y-1">
+                <Label htmlFor="codigo_postal">Código Postal</Label>
                 <Input
+                  id="codigo_postal"
                   name="codigo_postal"
                   value={formData.codigo_postal}
                   onChange={handleChange}
@@ -170,9 +171,10 @@ const EditPointDialog = ({
                   placeholder="Código postal"
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Teléfono</Label>
+              <div className="space-y-1">
+                <Label htmlFor="telefono">Teléfono</Label>
                 <Input
+                  id="telefono"
                   name="telefono"
                   value={formData.telefono}
                   onChange={handleChange}
@@ -186,13 +188,13 @@ const EditPointDialog = ({
             <div className="border-t pt-4">
               <AgenciaSelector
                 value={formData.servientrega_agencia_nombre}
-                onAgenciaSelect={(agencia) => {
-                  setFormData({
-                    ...formData,
+                onAgenciaSelect={(agencia) =>
+                  setFormData((prev) => ({
+                    ...prev,
                     servientrega_agencia_codigo: agencia?.tipo_cs || "",
                     servientrega_agencia_nombre: agencia?.nombre || "",
-                  });
-                }}
+                  }))
+                }
                 placeholder="Seleccionar agencia de Servientrega..."
                 disabled={loading}
               />

@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   ReactNode,
+  useRef,
 } from "react";
 import { authService, AuthUser } from "../services/authService";
 import { scheduleService } from "../services/scheduleService";
@@ -34,6 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [selectedPoint, setSelectedPointState] = useState<PuntoAtencion | null>(
     null
   );
+  const didInit = useRef(false); // evita dobles llamados por StrictMode
 
   useEffect(() => {
     const storedPoint = localStorage.getItem("puntoAtencionSeleccionado");
@@ -59,9 +61,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [selectedPoint]);
 
   useEffect(() => {
+    if (didInit.current) return;
+    didInit.current = true;
+
     const initializeAuth = async () => {
       try {
-        const { user: verifiedUser, valid } = await authService.verifyToken();
+        const {
+          user: verifiedUser,
+          valid,
+          error,
+        } = await authService.verifyToken();
         if (valid && verifiedUser) {
           setUser(verifiedUser);
 
@@ -102,11 +111,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               }
             }
           }
-        } else {
+        } else if (error === "Token inválido o expirado") {
+          // Solo limpiar token cuando el backend dice 401/403
           authService.removeStoredToken();
+        } else {
+          // Errores de red/timeout: no limpiar token; permitir reintentar luego
+          console.warn("verifyToken no válido pero sin 401/403:", error);
         }
-      } catch {
-        authService.removeStoredToken();
+      } catch (e) {
+        // No eliminar token en errores inesperados de red
+        console.warn("initializeAuth error:", e);
       } finally {
         setIsLoading(false);
       }
