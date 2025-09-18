@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => {
       assetsDir: "assets", // explícito (default), asegura /assets/...
       emptyOutDir: true,
       sourcemap: mode !== "production",
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 5000,
       rollupOptions: {
         output: {
           manualChunks: {

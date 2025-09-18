@@ -12,8 +12,8 @@ const router = express.Router();
 const exchangeSchema = z.object({
   moneda_origen_id: z.string().uuid(),
   moneda_destino_id: z.string().uuid(),
-  monto_origen: z.number().positive(),
-  monto_destino: z.number().positive(),
+  monto_origen: z.number().nonnegative(),
+  monto_destino: z.number().nonnegative(),
 
   // Tasas diferenciadas (0 permitido cuando no aplica)
   tasa_cambio_billetes: z.number().nonnegative().default(0),
@@ -618,6 +618,7 @@ router.get(
 
       res.status(500).json({
         error: "Error al obtener cambios de divisa",
+        details: error instanceof Error ? error.message : String(error),
         success: false,
         timestamp: new Date().toISOString(),
       });
@@ -923,6 +924,7 @@ router.get(
       res.status(500).json({
         success: false,
         error: "Error interno del servidor",
+        details: error instanceof Error ? error.message : String(error),
       });
     }
   }
