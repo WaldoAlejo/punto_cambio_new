@@ -2,7 +2,7 @@ import express from "express";
 import { EstadoTransaccion, TipoOperacion } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
 import axios from "axios";
@@ -1209,6 +1209,176 @@ router.post(
       res
         .status(500)
         .json({ success: false, error: "No se pudo recontabilizar" });
+    }
+  }
+);
+
+// Eliminar un cambio de divisa (solo ADMIN)
+router.delete(
+  "/:id",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+
+      // Cargar cambio
+      const cambio = await prisma.cambioDivisa.findUnique({ where: { id } });
+      if (!cambio) {
+        res.status(404).json({ success: false, error: "Cambio no encontrado" });
+        return;
+      }
+
+      // Restringir a operaciones del mismo día (zona GYE)
+      try {
+        const { gyeDayRangeUtcFromDate } = await import("../utils/timezone.js");
+        const { gte, lt } = gyeDayRangeUtcFromDate(new Date());
+        const fecha = new Date(cambio.fecha);
+        if (!(fecha >= gte && fecha < lt)) {
+          res.status(400).json({
+            success: false,
+            error: "Solo se pueden eliminar cambios del día actual",
+          });
+          return;
+        }
+      } catch (e) {
+        // Si util falla, no arriesgar: bloquear por seguridad
+        res.status(400).json({
+          success: false,
+          error: "Restricción de día no disponible. Intente más tarde.",
+        });
+        return;
+      }
+
+      // Iniciar transacción para revertir saldos y borrar recibos relacionados
+      await prisma.$transaction(async (tx) => {
+        // 1) Revertir efecto en saldos según lo registrado
+        // Moneda ORIGEN: en creación sumamos ENTREGADAS -> revertimos restando
+        const saldoOrigen = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+            },
+          },
+        });
+        const origenAnterior = Number(saldoOrigen?.cantidad ?? 0);
+        const origenNuevo = Math.max(
+          0,
+          origenAnterior -
+            Number(cambio.divisas_entregadas_total || cambio.monto_origen || 0)
+        );
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+            },
+          },
+          update: { cantidad: origenNuevo },
+          create: {
+            punto_atencion_id: cambio.punto_atencion_id,
+            moneda_id: cambio.moneda_origen_id,
+            cantidad: origenNuevo,
+            billetes: 0,
+            monedas_fisicas: 0,
+          },
+        });
+        await tx.movimientoSaldo.create({
+          data: {
+            punto_atencion_id: cambio.punto_atencion_id,
+            moneda_id: cambio.moneda_origen_id,
+            tipo_movimiento: "AJUSTE",
+            monto: -Number(
+              cambio.divisas_entregadas_total || cambio.monto_origen || 0
+            ),
+            saldo_anterior: origenAnterior,
+            saldo_nuevo: origenNuevo,
+            usuario_id: req.user!.id,
+            referencia_id: cambio.id,
+            tipo_referencia: "CAMBIO_DIVISA",
+            descripcion: `Reverso eliminación cambio (origen) #${
+              cambio.numero_recibo || ""
+            }`,
+          },
+        });
+
+        // Moneda DESTINO: en creación restamos RECIBIDAS -> revertimos sumando
+        const saldoDestino = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_destino_id,
+            },
+          },
+        });
+        const destinoAnterior = Number(saldoDestino?.cantidad ?? 0);
+        const sumDest = Number(
+          cambio.divisas_recibidas_total || cambio.monto_destino || 0
+        );
+        const destinoNuevo = destinoAnterior + sumDest;
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_destino_id,
+            },
+          },
+          update: { cantidad: destinoNuevo },
+          create: {
+            punto_atencion_id: cambio.punto_atencion_id,
+            moneda_id: cambio.moneda_destino_id,
+            cantidad: destinoNuevo,
+            billetes: 0,
+            monedas_fisicas: 0,
+          },
+        });
+        await tx.movimientoSaldo.create({
+          data: {
+            punto_atencion_id: cambio.punto_atencion_id,
+            moneda_id: cambio.moneda_destino_id,
+            tipo_movimiento: "AJUSTE",
+            monto: sumDest,
+            saldo_anterior: destinoAnterior,
+            saldo_nuevo: destinoNuevo,
+            usuario_id: req.user!.id,
+            referencia_id: cambio.id,
+            tipo_referencia: "CAMBIO_DIVISA",
+            descripcion: `Reverso eliminación cambio (destino) #${
+              cambio.numero_recibo || ""
+            }`,
+          },
+        });
+
+        // 2) Eliminar recibos vinculados (si existen)
+        await tx.recibo.deleteMany({
+          where: {
+            OR: [
+              { referencia_id: cambio.id },
+              { numero_recibo: cambio.numero_recibo || undefined },
+              { numero_recibo: cambio.numero_recibo_abono || undefined },
+              { numero_recibo: cambio.numero_recibo_completar || undefined },
+            ].filter(Boolean) as any,
+          },
+        });
+
+        // 3) Eliminar el cambio en sí
+        await tx.cambioDivisa.delete({ where: { id: cambio.id } });
+      });
+
+      logger.info("Cambio de divisa eliminado por admin", {
+        cambio_id: id,
+        user_id: req.user?.id,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      logger.error("Error eliminando cambio de divisa", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      res
+        .status(500)
+        .json({ success: false, error: "No se pudo eliminar el cambio" });
     }
   }
 );

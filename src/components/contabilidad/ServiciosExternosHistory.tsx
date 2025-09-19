@@ -14,6 +14,10 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { eliminarMovimientoServicioExterno } from "@/services/externalServicesService";
+import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
 type Row = {
   id: string;
@@ -51,6 +55,7 @@ const TIPOS: { value: "" | TipoMovimiento; label: string }[] = [
 export default function ServiciosExternosHistory() {
   const { user } = useAuth();
   const pointId = user?.punto_atencion_id || null;
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
 
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(false);
@@ -174,6 +179,7 @@ export default function ServiciosExternosHistory() {
               <th className="p-2 text-left">Referencia</th>
               <th className="p-2 text-left">Descripción</th>
               <th className="p-2 text-left">Usuario</th>
+              <th className="p-2 text-right">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -199,11 +205,56 @@ export default function ServiciosExternosHistory() {
                 </td>
                 <td className="p-2">{it.descripcion || "-"}</td>
                 <td className="p-2">{it.usuario?.nombre || "-"}</td>
+                <td className="p-2 text-right">
+                  {user?.rol === "ADMIN" || user?.rol === "SUPER_USUARIO" ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => {
+                        showConfirmation(
+                          "Eliminar movimiento",
+                          "¿Eliminar este movimiento? Esto revertirá el saldo con un ajuste.",
+                          async () => {
+                            try {
+                              const resp =
+                                await eliminarMovimientoServicioExterno(it.id);
+                              if (resp?.success) {
+                                toast.success("Movimiento eliminado");
+                                setRows((prev) =>
+                                  prev.filter((r) => r.id !== it.id)
+                                );
+                              } else {
+                                toast.error(
+                                  resp?.error || "No se pudo eliminar"
+                                );
+                              }
+                            } catch (e: any) {
+                              toast.error(
+                                e?.friendlyMessage ||
+                                  e?.message ||
+                                  "Error de conexión"
+                              );
+                            }
+                          },
+                          "destructive"
+                        );
+                      }}
+                      title="Eliminar movimiento"
+                      aria-label="Eliminar movimiento"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <ConfirmationDialog />
     </div>
   );
 }

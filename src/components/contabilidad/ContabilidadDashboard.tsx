@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Tabs removidos
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -19,6 +19,14 @@ import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
 import { currencyService } from "@/services/currencyService";
 import SaldosDivisasEnTiempoReal from "./SaldosDivisasEnTiempoReal";
 import HistorialMovimientos from "./HistorialMovimientos";
+
+// NUEVOS imports para colapsables y switch
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Switch } from "@/components/ui/switch";
 
 interface ContabilidadDashboardProps {
   user: User;
@@ -71,6 +79,10 @@ export const ContabilidadDashboard = ({
   const [totalesPorMoneda, setTotalesPorMoneda] = useState<
     { codigo: string; total: number }[]
   >([]);
+
+  // VISIBILIDAD de secciones (novedad)
+  const [showMovimientos, setShowMovimientos] = useState(true);
+  const [showSaldos, setShowSaldos] = useState(false); // saldos cerrado por defecto
 
   // Cargar monedas si no se proporcionaron
   useEffect(() => {
@@ -172,7 +184,7 @@ export const ContabilidadDashboard = ({
         monedaPrincipalSaldo: usdSaldo,
       });
     }
-  }, [movimientos, saldos]);
+  }, [movimientos, saldos, isAdminView]);
 
   // Escuchar eventos de actualización de saldos
   useEffect(() => {
@@ -229,6 +241,7 @@ export const ContabilidadDashboard = ({
 
   return (
     <div className="p-6 space-y-6">
+      {/* Encabezado + botón de refresco */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -399,32 +412,104 @@ export const ContabilidadDashboard = ({
         </CardContent>
       </Card>
 
-      {/* Tabs principales */}
-      <Tabs defaultValue="saldos" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="saldos">Saldos en Tiempo Real</TabsTrigger>
-          <TabsTrigger value="movimientos">
-            Historial de Movimientos
-          </TabsTrigger>
-        </TabsList>
+      {/* =========================
+          TOOLBAR PEGAJOSO DE FILTROS
+          ========================= */}
+      <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/50 border rounded-md">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Mostrar</span>
+            {/* Switches de visibilidad */}
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 text-sm">
+                <Switch
+                  checked={showMovimientos}
+                  onCheckedChange={setShowMovimientos}
+                />
+                <span>Movimientos</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={showSaldos} onCheckedChange={setShowSaldos} />
+                <span>Saldos por divisa</span>
+              </label>
+            </div>
+          </div>
 
-        <TabsContent value="saldos" className="space-y-4">
-          <SaldosDivisasEnTiempoReal
-            user={user}
-            selectedPoint={selectedPoint}
-            isAdminView={isAdminView}
-          />
-        </TabsContent>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                refresh?.();
+              }}
+            >
+              <RefreshCw
+                className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+              />
+            </Button>
+          </div>
+        </div>
+      </div>
 
-        <TabsContent value="movimientos" className="space-y-4">
-          <HistorialMovimientos
-            user={user}
-            selectedPoint={selectedPoint}
-            currencies={currencies}
-            isAdminView={isAdminView}
-          />
-        </TabsContent>
-      </Tabs>
+      {/* Sección: Historial de Movimientos (abierta por defecto) */}
+      <Collapsible open={showMovimientos} onOpenChange={setShowMovimientos}>
+        <Card className="mt-3">
+          <CardHeader className="flex flex-row items-center justify-between py-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Historial de Movimientos
+            </CardTitle>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm">
+                {showMovimientos ? "Ocultar" : "Mostrar"}
+              </Button>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <HistorialMovimientos
+                user={user}
+                selectedPoint={selectedPoint}
+                currencies={currencies}
+                isAdminView={isAdminView}
+              />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* Sección: Saldos por divisa (cerrada por defecto) */}
+      <Collapsible open={showSaldos} onOpenChange={setShowSaldos}>
+        <Card className="mt-3">
+          <CardHeader className="flex flex-row items-center justify-between py-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Saldos por divisa (en tiempo real)
+              {isAdminView && (
+                <Badge variant="secondary" className="ml-2">
+                  Vista Admin
+                </Badge>
+              )}
+            </CardTitle>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm">
+                {showSaldos ? "Ocultar" : "Mostrar"}
+              </Button>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent className="pt-0">
+              <SaldosDivisasEnTiempoReal
+                user={user}
+                selectedPoint={selectedPoint}
+                isAdminView={isAdminView}
+                // Si luego quieres vista resumida primero, puedes pasar "compact"
+                // compact
+              />
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Información adicional */}
       <Card>

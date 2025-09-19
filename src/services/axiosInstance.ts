@@ -41,10 +41,8 @@ function extractServerMessage(data: unknown): string {
 
 export const axiosInstance = axios.create({
   baseURL: env.API_URL,
-  timeout: 30000, // 30 segundos
-  headers: {
-    "Content-Type": "application/json",
-  },
+  timeout: 60000, // 60 segundos (evitar falsos timeouts mientras optimizamos backend)
+  // No establecer Content-Type global para evitar preflights en GET/DELETE
 });
 
 // Interceptor para adjuntar el token y algunos headers útiles
@@ -52,11 +50,20 @@ axiosInstance.interceptors.request.use(
   (config) => {
     const token = getToken();
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      // Solo usar Authorization; no forzar Content-Type salvo que haya body
+      (config.headers as any).Authorization = `Bearer ${token}`;
     }
 
-    // Header opcional para trazabilidad en logs de servidor
-    (config.headers as any)["X-Client-Time"] = new Date().toISOString();
+    // Evitar enviar Content-Type si no hay body (GET/DELETE)
+    const hasBody = !!config.data;
+    if (!hasBody) {
+      if (config.headers) {
+        delete (config.headers as any)["Content-Type"];
+      }
+    }
+
+    // Header opcional para trazabilidad en logs de servidor (desactivado para evitar CORS)
+    // (config.headers as any)["X-Client-Time"] = new Date().toISOString();
 
     // Log de requests en desarrollo
     if (env.IS_DEVELOPMENT) {

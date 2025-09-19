@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,174 +10,206 @@ import {
   DollarSign,
   Calculator,
   BarChart3,
+  AlertTriangle,
+  ArrowUp,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, VistaSaldosPorPunto } from "../../types";
 import { saldoInicialService } from "../../services/saldoInicialService";
 import ContabilidadDiaria from "./ContabilidadDiaria";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
+/** =========================
+ *  Props
+ *  ========================= */
 interface BalanceDashboardProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
 }
 
+/** =========================
+ *  Helpers
+ *  ========================= */
+const formatMoney = (n: number, symbol = "$") =>
+  `${symbol}${new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(n || 0))}`;
+
+const getStatus = (s: VistaSaldosPorPunto) => {
+  if (Number(s.saldo_inicial) === 0) return "Sin configurar";
+  if (Number(s.diferencia) > 0) return "Excedente";
+  if (Number(s.diferencia) < 0) return "Déficit";
+  return "Equilibrado";
+};
+
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case "Sin configurar":
+      return { variant: "secondary" as const, tone: "text-gray-600" };
+    case "Excedente":
+      return { variant: "default" as const, tone: "text-green-700" };
+    case "Déficit":
+      return { variant: "destructive" as const, tone: "text-red-700" };
+    case "Equilibrado":
+      return { variant: "outline" as const, tone: "text-amber-700" };
+    default:
+      return { variant: "secondary" as const, tone: "text-gray-600" };
+  }
+};
+
+const diffIcon = (d: number) =>
+  d > 0 ? (
+    <TrendingUp className="h-4 w-4 text-green-600" />
+  ) : d < 0 ? (
+    <TrendingDown className="h-4 w-4 text-red-600" />
+  ) : (
+    <DollarSign className="h-4 w-4 text-gray-600" />
+  );
+
+/** =========================
+ *  Component
+ *  ========================= */
 const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
   const [saldos, setSaldos] = useState<VistaSaldosPorPunto[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
-  useEffect(() => {
-    if (selectedPoint) {
-      loadSaldos();
+  // UX: auto-refresh y controles de filtro
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [tab, setTab] = useState<"saldos" | "contabilidad">("saldos");
 
-      // Configurar auto-refresh cada 30 segundos
-      const interval = setInterval(() => {
-        loadSaldos();
-      }, 30000);
+  // Moneda seleccionada: por requerimiento, USD (principal) por defecto
+  const [selectedCurrency, setSelectedCurrency] = useState<string>("USD");
+  const [onlyNonZeroDiff, setOnlyNonZeroDiff] = useState<boolean>(false);
 
-      return () => clearInterval(interval);
-    }
-    return undefined;
-  }, [selectedPoint]);
-
-  // Escuchar eventos de cambios de divisas completados y transferencias aprobadas
-  useEffect(() => {
-    const handleExchangeCompleted = () => {
-      console.log("🔄 Exchange completed, refreshing balances...");
-      loadSaldos();
-    };
-
-    const handleTransferApproved = () => {
-      console.log("🔄 Transfer approved, refreshing balances...");
-      loadSaldos();
-    };
-
-    // Escuchar eventos personalizados
-    window.addEventListener("exchangeCompleted", handleExchangeCompleted);
-    window.addEventListener("transferApproved", handleTransferApproved);
-
-    return () => {
-      window.removeEventListener("exchangeCompleted", handleExchangeCompleted);
-      window.removeEventListener("transferApproved", handleTransferApproved);
-    };
-  }, []);
-
-  const loadSaldos = async () => {
+  /** ===== Fetch ===== */
+  const loadSaldos = useCallback(async () => {
     if (!selectedPoint) return;
-
     setLoading(true);
     try {
-      console.log("Loading balances for point:", selectedPoint.id);
-      const response = await saldoInicialService.getVistaSaldosPorPunto();
-      console.log("Balance response:", response);
-
-      if (response.error) {
-        console.error("Balance service error:", response.error);
+      const resp = await saldoInicialService.getVistaSaldosPorPunto();
+      if (resp.error) {
         toast({
           title: "Error",
-          description: response.error,
+          description: resp.error,
           variant: "destructive",
         });
-      } else {
-        // Filtrar solo los saldos del punto seleccionado y que tengan saldo inicial > 0
-        const saldosPunto = response.saldos.filter(
-          (s) =>
-            s.punto_atencion_id === selectedPoint.id &&
-            Number(s.saldo_inicial) > 0
-        );
-        console.log("Filtered balances:", saldosPunto);
-        setSaldos(saldosPunto);
-        setLastUpdate(new Date());
+        return;
       }
-    } catch (error) {
-      console.error("Error loading balances:", error);
+      const items = (resp.saldos || []).filter(
+        (s: VistaSaldosPorPunto) => s.punto_atencion_id === selectedPoint.id
+      );
+      setSaldos(items);
+      setLastUpdate(new Date());
+    } catch (e: any) {
       toast({
         title: "Error",
-        description: `Error inesperado: ${
-          error instanceof Error ? error.message : "Error desconocido"
-        }`,
+        description:
+          e?.message || "Error inesperado al cargar los saldos del punto.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedPoint]);
 
-  const getBalanceStatus = (saldo: VistaSaldosPorPunto) => {
-    if (Number(saldo.saldo_inicial) === 0) return "Sin configurar";
-    if (Number(saldo.diferencia) > 0) return "Excedente";
-    if (Number(saldo.diferencia) < 0) return "Déficit";
-    return "Equilibrado";
-  };
+  /** ===== Auto refresh (30s) + visibilidad ===== */
+  useEffect(() => {
+    if (!selectedPoint) return;
+    loadSaldos();
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Sin configurar":
-        return "secondary";
-      case "Excedente":
-        return "default";
-      case "Déficit":
-        return "destructive";
-      case "Equilibrado":
-        return "outline";
-      default:
-        return "secondary";
-    }
-  };
+    let interval: number | undefined;
+    const tick = () => {
+      if (autoRefresh && !document.hidden) loadSaldos();
+    };
+    interval = window.setInterval(tick, 30000);
 
-  const getBalanceIcon = (diferencia: number) => {
-    if (diferencia > 0)
-      return <TrendingUp className="h-4 w-4 text-green-600" />;
-    if (diferencia < 0)
-      return <TrendingDown className="h-4 w-4 text-red-600" />;
-    return <DollarSign className="h-4 w-4 text-gray-600" />;
-  };
+    const onVis = () => {
+      if (!document.hidden && autoRefresh) loadSaldos();
+    };
+    document.addEventListener("visibilitychange", onVis);
 
+    return () => {
+      if (interval) clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [selectedPoint, autoRefresh, loadSaldos]);
+
+  /** ===== Eventos globales ===== */
+  useEffect(() => {
+    const onExchange = () => loadSaldos();
+    const onTransfer = () => loadSaldos();
+    window.addEventListener("exchangeCompleted", onExchange);
+    window.addEventListener("transferApproved", onTransfer);
+    return () => {
+      window.removeEventListener("exchangeCompleted", onExchange);
+      window.removeEventListener("transferApproved", onTransfer);
+    };
+  }, [loadSaldos]);
+
+  /** ===== Opciones de moneda (para selector) ===== */
+  const currencyOptions = useMemo(() => {
+    const set = new Set<string>();
+    saldos.forEach((s) => set.add(s.moneda_codigo));
+    const list = Array.from(set);
+    // USD primero, luego alfabético
+    list.sort((a, b) =>
+      a === "USD" ? -1 : b === "USD" ? 1 : a.localeCompare(b)
+    );
+    return list;
+  }, [saldos]);
+
+  /** ===== Derivados por filtros ===== */
+  const sortedSaldos = useMemo(() => {
+    const base = saldos.filter((s) => s.moneda_codigo === selectedCurrency);
+    // (Opcional) en el futuro podrías tener múltiples por misma moneda; ordena por símbolo/alfabético si aplica
+    return [...base].sort((a, b) =>
+      a.moneda_nombre.localeCompare(b.moneda_nombre)
+    );
+  }, [saldos, selectedCurrency]);
+
+  const filteredSaldos = useMemo(() => {
+    if (!onlyNonZeroDiff) return sortedSaldos;
+    return sortedSaldos.filter((s) => Number(s.diferencia || 0) !== 0);
+  }, [sortedSaldos, onlyNonZeroDiff]);
+
+  const totalDiff = useMemo(
+    () => filteredSaldos.reduce((acc, s) => acc + Number(s.diferencia || 0), 0),
+    [filteredSaldos]
+  );
+
+  /** ===== Guard ===== */
   if (!selectedPoint) {
     return (
       <div className="p-6">
         <div className="text-center py-12">
           <p className="text-gray-500 text-lg">
-            Debe seleccionar un punto de atención para ver los saldos
+            Debe seleccionar un punto de atención para ver los saldos.
           </p>
         </div>
       </div>
     );
   }
 
-  if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800">
-              Saldos por Moneda
-            </h2>
-            <p className="text-gray-600">
-              {selectedPoint.nombre} - {selectedPoint.ciudad}
-            </p>
-          </div>
-        </div>
-        <div className="flex justify-center items-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Cargando saldos...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  /** ===== UI ===== */
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="text-2xl font-bold text-gray-800">
             Dashboard Operativo
           </h2>
           <div className="flex items-center gap-2 text-gray-600">
             <span>
-              {selectedPoint.nombre} - {selectedPoint.ciudad}
+              {selectedPoint.nombre} • {selectedPoint.ciudad}
             </span>
             {lastUpdate && (
               <span className="text-xs text-gray-500">
@@ -186,9 +218,76 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
             )}
           </div>
         </div>
+
+        <div className="flex items-center gap-2">
+          {/* Moneda principal por defecto (USD) + selector de divisa */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-600">Moneda</span>
+            <Select
+              value={selectedCurrency}
+              onValueChange={(v) => setSelectedCurrency(v)}
+            >
+              <SelectTrigger className="h-8 w-44">
+                <SelectValue placeholder="Selecciona divisa" />
+              </SelectTrigger>
+              <SelectContent>
+                {currencyOptions.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                    {c === "USD" ? " (principal)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Badge
+            variant={onlyNonZeroDiff ? "default" : "outline"}
+            className="cursor-pointer"
+            onClick={() => setOnlyNonZeroDiff((v) => !v)}
+            title="Mostrar solo saldos con diferencia ≠ 0"
+          >
+            ≠ 0
+          </Badge>
+
+          <Badge
+            variant={autoRefresh ? "default" : "outline"}
+            className="cursor-pointer"
+            onClick={() => setAutoRefresh((v) => !v)}
+            title="Conmuta auto-actualización (30s)"
+          >
+            🔄 Auto {autoRefresh ? "ON" : "OFF"}
+          </Badge>
+
+          <Button
+            onClick={loadSaldos}
+            disabled={loading}
+            variant="outline"
+            size="sm"
+          >
+            <RefreshCw
+              className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
+            />
+            Actualizar
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            title="Ir arriba"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="saldos" className="w-full">
+      <Tabs
+        defaultValue="saldos"
+        value={tab}
+        onValueChange={(v) => setTab(v as any)}
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="saldos" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
@@ -200,39 +299,24 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
           </TabsTrigger>
         </TabsList>
 
+        {/* ================= SALDOS ================= */}
         <TabsContent value="saldos" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                🔄 Auto-actualización: 30s
-              </div>
-              <Button
-                onClick={loadSaldos}
-                disabled={loading}
-                variant="outline"
-                size="sm"
-              >
-                <RefreshCw
-                  className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
-                />
-                Actualizar
-              </Button>
-            </div>
-          </div>
-
-          {/* Resumen General */}
+          {/* Resumen: basado en lo que se ve (moneda seleccionada y filtro) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Total de Monedas
+                  Moneda seleccionada
                 </CardTitle>
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{saldos.length}</div>
+                <div className="text-2xl font-bold">
+                  {selectedCurrency}{" "}
+                  {selectedCurrency === "USD" ? "• Principal" : ""}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Monedas configuradas
+                  Cambia la divisa desde el selector
                 </p>
               </CardContent>
             </Card>
@@ -240,33 +324,21 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  Balance General
+                  Balance General ({selectedCurrency})
                 </CardTitle>
-                {getBalanceIcon(
-                  saldos.reduce(
-                    (total, saldo) => total + Number(saldo.diferencia),
-                    0
-                  )
-                )}
+                {diffIcon(totalDiff)}
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
-                  {saldos.reduce(
-                    (total, saldo) => total + Number(saldo.diferencia),
-                    0
-                  ) >= 0
-                    ? "+"
-                    : ""}
-                  $
-                  {Number(
-                    saldos.reduce(
-                      (total, saldo) => total + Number(saldo.diferencia),
-                      0
-                    )
-                  ).toFixed(2)}
+                <div
+                  className={`text-2xl font-bold ${
+                    totalDiff >= 0 ? "text-green-700" : "text-red-700"
+                  }`}
+                >
+                  {totalDiff >= 0 ? "+" : ""}
+                  {formatMoney(Math.abs(totalDiff))}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Diferencia total vs inicial
+                  Diferencia total vs inicial (filtrados)
                 </p>
               </CardContent>
             </Card>
@@ -291,121 +363,128 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
             </Card>
           </div>
 
-          {/* Detalle por Moneda */}
-          <div className="grid gap-4">
-            {saldos.length === 0 ? (
-              <Card>
-                <CardContent className="flex items-center justify-center py-12">
-                  <div className="text-center">
-                    <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg">
-                      No hay saldos configurados
-                    </p>
-                    <p className="text-gray-400 text-sm">
-                      Contacte al administrador para configurar los saldos
-                      iniciales
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              saldos.map((saldo) => (
-                <Card
-                  key={`${saldo.punto_atencion_id}-${saldo.moneda_id}`}
-                  className="transition-all duration-200 hover:shadow-md"
-                >
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-lg">
-                          {saldo.moneda_codigo} - {saldo.moneda_nombre}
+          {/* Detalle por Moneda (sólo la seleccionada) */}
+          {loading && filteredSaldos.length === 0 ? (
+            <Card>
+              <CardContent className="flex items-center justify-center py-16">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+                  <p className="text-gray-600">Cargando saldos…</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : filteredSaldos.length === 0 ? (
+            <Card>
+              <CardContent className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-3" />
+                  <p className="text-gray-600 text-base">
+                    No hay saldos que coincidan con los filtros.
+                  </p>
+                  <p className="text-gray-400 text-sm">
+                    Revisa la divisa seleccionada o desactiva “≠ 0”.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+              {filteredSaldos.map((s) => {
+                const status = getStatus(s);
+                const badge = getStatusBadge(status);
+                const diff = Number(s.diferencia || 0);
+
+                return (
+                  <Card
+                    key={`${s.punto_atencion_id}-${s.moneda_id}`}
+                    className="transition-all duration-200 hover:shadow-lg rounded-xl border"
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <CardTitle
+                          className="text-sm font-semibold truncate"
+                          title={`${s.moneda_codigo} • ${s.moneda_nombre}`}
+                        >
+                          {s.moneda_codigo} • {s.moneda_nombre}
                         </CardTitle>
-                        <p className="text-sm text-gray-500">
-                          Símbolo: {saldo.moneda_simbolo}
-                        </p>
+                        <Badge variant={badge.variant} className="text-[11px]">
+                          {status}
+                        </Badge>
                       </div>
-                      <Badge variant={getStatusColor(getBalanceStatus(saldo))}>
-                        {getBalanceStatus(saldo)}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-blue-50 p-3 rounded-lg">
-                        <p className="text-sm text-blue-600 font-medium">
-                          Saldo Inicial
-                        </p>
-                        <p className="text-lg font-bold text-blue-800">
-                          {saldo.moneda_simbolo}
-                          {Number(saldo.saldo_inicial).toFixed(2)}
-                        </p>
-                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="rounded-md border bg-blue-50/60 p-2">
+                            <p className="text-[11px] text-blue-700">
+                              Saldo Inicial
+                            </p>
+                            <p className="text-lg font-bold text-blue-900">
+                              {formatMoney(
+                                Number(s.saldo_inicial || 0),
+                                s.moneda_simbolo
+                              )}
+                            </p>
+                          </div>
+                          <div className="rounded-md border bg-green-50/60 p-2">
+                            <p className="text-[11px] text-green-700">
+                              Saldo Actual
+                            </p>
+                            <p className="text-lg font-bold text-green-900">
+                              {formatMoney(
+                                Number(s.saldo_actual || 0),
+                                s.moneda_simbolo
+                              )}
+                            </p>
+                          </div>
+                        </div>
 
-                      <div className="bg-green-50 p-3 rounded-lg">
-                        <p className="text-sm text-green-600 font-medium">
-                          Saldo Actual
-                        </p>
-                        <p className="text-lg font-bold text-green-800">
-                          {saldo.moneda_simbolo}
-                          {Number(saldo.saldo_actual).toFixed(2)}
-                        </p>
-                      </div>
-
-                      <div
-                        className={`p-3 rounded-lg ${
-                          Number(saldo.diferencia) >= 0
-                            ? "bg-green-50"
-                            : "bg-red-50"
-                        }`}
-                      >
-                        <p
-                          className={`text-sm font-medium ${
-                            Number(saldo.diferencia) >= 0
-                              ? "text-green-600"
-                              : "text-red-600"
+                        <div
+                          className={`rounded-md border p-2 flex items-center justify-between ${
+                            diff >= 0 ? "bg-green-50/70" : "bg-red-50/70"
                           }`}
                         >
-                          Diferencia
-                        </p>
-                        <p
-                          className={`text-lg font-bold ${
-                            Number(saldo.diferencia) >= 0
-                              ? "text-green-800"
-                              : "text-red-800"
-                          }`}
-                        >
-                          {Number(saldo.diferencia) >= 0 ? "+" : ""}
-                          {saldo.moneda_simbolo}
-                          {Number(saldo.diferencia).toFixed(2)}
-                        </p>
-                      </div>
+                          <div>
+                            <p
+                              className={`text-[11px] font-medium ${
+                                diff >= 0 ? "text-green-700" : "text-red-700"
+                              }`}
+                            >
+                              Diferencia
+                            </p>
+                            <p
+                              className={`text-base font-bold ${
+                                diff >= 0 ? "text-green-800" : "text-red-800"
+                              }`}
+                            >
+                              {diff >= 0 ? "+" : ""}
+                              {formatMoney(Math.abs(diff), s.moneda_simbolo)}
+                            </p>
+                          </div>
+                          {diffIcon(diff)}
+                        </div>
 
-                      <div className="bg-gray-50 p-3 rounded-lg">
-                        <p className="text-sm text-gray-600 font-medium">
-                          Físico
-                        </p>
-                        <p className="text-sm text-gray-800">
-                          {saldo.billetes} billetes
-                        </p>
-                        <p className="text-sm text-gray-800">
-                          {saldo.monedas_fisicas} monedas
-                        </p>
-                      </div>
-                    </div>
+                        <div className="rounded-md bg-gray-50 p-2 text-xs text-gray-600">
+                          Físico: <b>{s.billetes}</b> billetes •{" "}
+                          <b>{s.monedas_fisicas}</b> monedas
+                        </div>
 
-                    {saldo.ultima_actualizacion && (
-                      <div className="mt-3 pt-3 border-t text-xs text-gray-500">
-                        Última actualización:{" "}
-                        {new Date(saldo.ultima_actualizacion).toLocaleString()}
+                        {s.ultima_actualizacion && (
+                          <div className="pt-1 text-[11px] text-gray-500">
+                            Última actualización:{" "}
+                            {new Date(s.ultima_actualizacion).toLocaleString()}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </TabsContent>
 
+        {/* ============== CONTABILIDAD ============== */}
         <TabsContent value="contabilidad">
           <ContabilidadDiaria user={user} selectedPoint={selectedPoint} />
         </TabsContent>

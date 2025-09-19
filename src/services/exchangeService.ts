@@ -364,4 +364,40 @@ export const exchangeService = {
       };
     }
   },
+
+  async deleteExchange(
+    id: string
+  ): Promise<{ success: boolean; error: string | null }> {
+    try {
+      const resp = await apiService.delete<{
+        success: boolean;
+        error?: string;
+      }>(`/exchanges/${encodeURIComponent(id)}`);
+      if (resp && (resp as any).success) {
+        return { success: true, error: null };
+      }
+      return {
+        success: false,
+        error: (resp as any)?.error || "No se pudo eliminar",
+      };
+    } catch (error: any) {
+      console.error("Error deleting exchange:", error);
+      // Mapear 400 a mensaje amigable específico
+      if (typeof error?.status === "number" && error.status === 400) {
+        const serverMsg = error?.payload?.error || error?.message || "";
+        if (
+          /Solo se pueden eliminar (cambios|movimientos) del día actual/i.test(
+            serverMsg
+          )
+        ) {
+          return {
+            success: false,
+            error: "Solo puedes eliminar registros del día de hoy",
+          };
+        }
+        return { success: false, error: serverMsg || "Solicitud inválida" };
+      }
+      return { success: false, error: error?.message || "Error de conexión" };
+    }
+  },
 };

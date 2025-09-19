@@ -26,15 +26,25 @@ interface SaldosDivisasEnTiempoRealProps {
   selectedPoint: PuntoAtencion | null;
   className?: string;
   isAdminView?: boolean;
+  compact?: boolean;
 }
+
+type AnySaldo = {
+  moneda_id: string;
+  moneda_codigo: string;
+  saldo: number;
+  punto_id?: string;
+  punto_nombre?: string;
+};
 
 export const SaldosDivisasEnTiempoReal = ({
   user,
   selectedPoint,
   className = "",
   isAdminView = false,
+  compact = true, // por defecto compacto
 }: SaldosDivisasEnTiempoRealProps) => {
-  // Usar hook apropiado según si es vista de administrador
+  // Hooks de datos
   const contabilidadNormal = useContabilidadDivisas({ user, selectedPoint });
   const contabilidadAdmin = useContabilidadAdmin({ user });
 
@@ -47,29 +57,27 @@ export const SaldosDivisasEnTiempoReal = ({
       }
     : contabilidadNormal;
 
+  // Estado UI
   const [autoRefresh, setAutoRefresh] = useState(true);
-
-  // Filtros (solo relevantes en vista admin)
+  const [expanded, setExpanded] = useState(!compact);
   const [selectedPointId, setSelectedPointId] = useState<string>("ALL");
   const [selectedCurrencyId, setSelectedCurrencyId] = useState<string>("ALL");
 
-  // Construir opciones desde los saldos consolidados
+  // Opciones para filtros (admin)
   const pointOptions = useMemo(() => {
     if (!isAdminView) return [] as { id: string; nombre: string }[];
     const map = new Map<string, string>();
     (saldos as SaldoConsolidado[]).forEach((s: any) => {
-      if ("punto_id" in s)
-        map.set((s as any).punto_id, (s as any).punto_nombre);
+      if (s.punto_id && s.punto_nombre) map.set(s.punto_id, s.punto_nombre);
     });
     return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }));
   }, [saldos, isAdminView]);
 
   const currencyOptions = useMemo(() => {
     const map = new Map<string, string>();
-    saldos.forEach((s: any) => {
-      map.set(s.moneda_id, s.moneda_codigo);
-    });
-    // Orden: USD primero
+    (saldos as AnySaldo[]).forEach((s) =>
+      map.set(s.moneda_id, s.moneda_codigo)
+    );
     return Array.from(map.entries())
       .map(([id, codigo]) => ({ id, codigo }))
       .sort((a, b) =>
@@ -77,26 +85,29 @@ export const SaldosDivisasEnTiempoReal = ({
       );
   }, [saldos]);
 
-  // Lista filtrada según selección
+  // Filtro aplicado
   const filteredSaldos = useMemo(() => {
-    let list = saldos;
-    if (isAdminView) {
-      if (selectedPointId !== "ALL") {
-        list = list.filter((s: any) => (s as any).punto_id === selectedPointId);
-      }
+    let list = saldos as AnySaldo[];
+    if (isAdminView && selectedPointId !== "ALL") {
+      list = list.filter((s) => s.punto_id === selectedPointId);
     }
     if (selectedCurrencyId !== "ALL") {
-      list = list.filter((s: any) => s.moneda_id === selectedCurrencyId);
+      list = list.filter((s) => s.moneda_id === selectedCurrencyId);
     }
-    return list;
+    // Orden: USD primero; luego alfabético de código
+    return [...list].sort((a, b) => {
+      if (a.moneda_codigo === "USD" && b.moneda_codigo !== "USD") return -1;
+      if (b.moneda_codigo === "USD" && a.moneda_codigo !== "USD") return 1;
+      return a.moneda_codigo.localeCompare(b.moneda_codigo);
+    });
   }, [saldos, isAdminView, selectedPointId, selectedCurrencyId]);
 
-  // Resumen por divisa (para vista consolidada)
+  // Resumen por divisa
   const resumenPorDivisa = useMemo(() => {
     const map = new Map<string, number>();
-    filteredSaldos.forEach((s: any) => {
-      map.set(s.moneda_codigo, (map.get(s.moneda_codigo) || 0) + s.saldo);
-    });
+    filteredSaldos.forEach((s) =>
+      map.set(s.moneda_codigo, (map.get(s.moneda_codigo) || 0) + s.saldo)
+    );
     return Array.from(map.entries())
       .map(([codigo, total]) => ({ codigo, total }))
       .sort((a, b) =>
@@ -104,36 +115,19 @@ export const SaldosDivisasEnTiempoReal = ({
       );
   }, [filteredSaldos]);
 
-  // Agrupar por punto para vista admin cuando se muestran todos los puntos
-  const groupedByPoint = useMemo(() => {
-    if (!isAdminView || selectedPointId !== "ALL") return null;
-    const groups = new Map<string, { nombre: string; items: any[] }>();
-    (filteredSaldos as any[]).forEach((s: any) => {
-      const pid = s.punto_id as string;
-      const pname = s.punto_nombre as string;
-      if (!groups.has(pid)) groups.set(pid, { nombre: pname, items: [] });
-      groups.get(pid)!.items.push(s);
-    });
-    // Ordenar internamente: USD primero, luego alfabético
-    groups.forEach((g) => {
-      g.items.sort((a, b) =>
-        a.moneda_codigo === "USD"
-          ? -1
-          : b.moneda_codigo === "USD"
-          ? 1
-          : a.moneda_codigo.localeCompare(b.moneda_codigo)
-      );
-    });
-    return Array.from(groups.entries()).map(([id, val]) => ({ id, ...val }));
-  }, [filteredSaldos, isAdminView, selectedPointId]);
-
-  // Auto-refresh cada 30 segundos
+  // Auto-refresh inteligente
   useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(() => {
-      refresh();
-    }, 30000);
-    return () => clearInterval(interval);
+    let interval: number | undefined;
+    const run = () => autoRefresh && !document.hidden && refresh();
+    if (autoRefresh) interval = window.setInterval(run, 30000);
+    const onVis = () => {
+      if (!document.hidden && autoRefresh) refresh();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      if (interval) clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [autoRefresh, refresh]);
 
   const formatCurrency = (amount: number, codigo: string) => {
@@ -152,10 +146,10 @@ export const SaldosDivisasEnTiempoReal = ({
 
   const getSaldoStatus = (saldo: number) => {
     if (saldo <= 0)
-      return { color: "destructive", icon: AlertTriangle, text: "Sin saldo" };
+      return { tone: "red", text: "Sin saldo", Icon: AlertTriangle };
     if (saldo < 1000)
-      return { color: "warning", icon: TrendingDown, text: "Saldo bajo" };
-    return { color: "success", icon: TrendingUp, text: "Saldo normal" };
+      return { tone: "yellow", text: "Saldo bajo", Icon: TrendingDown };
+    return { tone: "green", text: "Saldo normal", Icon: TrendingUp };
   };
 
   if (!selectedPoint && !isAdminView) {
@@ -182,11 +176,10 @@ export const SaldosDivisasEnTiempoReal = ({
           <div className="flex items-center gap-2 flex-wrap">
             {isAdminView && (
               <div className="flex items-center gap-2">
-                {/* Filtro por punto */}
                 <div className="w-56">
                   <Select
                     value={selectedPointId}
-                    onValueChange={(v) => setSelectedPointId(v)}
+                    onValueChange={setSelectedPointId}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Filtrar por punto" />
@@ -201,12 +194,10 @@ export const SaldosDivisasEnTiempoReal = ({
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Filtro por divisa */}
                 <div className="w-48">
                   <Select
                     value={selectedCurrencyId}
-                    onValueChange={(v) => setSelectedCurrencyId(v)}
+                    onValueChange={setSelectedCurrencyId}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Filtrar por divisa" />
@@ -236,19 +227,30 @@ export const SaldosDivisasEnTiempoReal = ({
                 className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
               />
             </Button>
+
             <Badge
               variant={autoRefresh ? "default" : "outline"}
               className="cursor-pointer"
-              onClick={() => setAutoRefresh(!autoRefresh)}
+              onClick={() => setAutoRefresh((v) => !v)}
             >
               Auto-refresh {autoRefresh ? "ON" : "OFF"}
             </Badge>
+
+            {compact && (
+              <Badge
+                variant={expanded ? "default" : "outline"}
+                className="cursor-pointer"
+                onClick={() => setExpanded((v) => !v)}
+              >
+                {expanded ? "Detalle" : "Resumen"}
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
 
       <CardContent>
-        {isLoading && saldos.length === 0 ? (
+        {isLoading && (saldos?.length ?? 0) === 0 ? (
           <Loading text="Cargando saldos..." className="py-8" />
         ) : error ? (
           <div className="text-center py-8">
@@ -258,276 +260,146 @@ export const SaldosDivisasEnTiempoReal = ({
               Reintentar
             </Button>
           </div>
-        ) : filteredSaldos.length === 0 ? (
+        ) : (filteredSaldos?.length ?? 0) === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>No hay saldos para los filtros seleccionados</p>
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Resumen por divisa cuando se ven múltiples puntos */}
-            {isAdminView &&
-              selectedPointId === "ALL" &&
-              resumenPorDivisa.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                  {resumenPorDivisa.map((t) => (
-                    <div
-                      key={t.codigo}
-                      className="p-3 border rounded-md bg-white"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs text-gray-500">{t.codigo}</p>
-                          <p className="text-lg font-semibold">
-                            {formatCurrency(t.total, t.codigo)}
-                          </p>
-                        </div>
-                        <DollarSign className="h-5 w-5 text-gray-400" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-            {/* Vista agrupada por punto cuando se ven todos los puntos */}
-            {isAdminView && selectedPointId === "ALL" && groupedByPoint && (
-              <div className="space-y-6">
-                {groupedByPoint.map((group) => (
-                  <div key={group.id} className="space-y-3">
+            {/* Resumen por divisa (chips/cards pequeñas) */}
+            {resumenPorDivisa.length > 0 && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+                {resumenPorDivisa.map((t) => (
+                  <div
+                    key={t.codigo}
+                    className="p-2 border rounded-md bg-white"
+                  >
                     <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-800">
-                        {group.nombre}
-                      </h3>
-                      <Badge variant="outline">
-                        {group.items.length} divisa
-                        {group.items.length !== 1 ? "s" : ""}
-                      </Badge>
+                      <span className="text-[11px] uppercase tracking-wide text-gray-500">
+                        {t.codigo}
+                      </span>
+                      <DollarSign className="h-3.5 w-3.5 text-gray-400" />
                     </div>
-
-                    {/* USD primero */}
-                    {group.items
-                      .filter((saldo: any) => saldo.moneda_codigo === "USD")
-                      .map((saldo: any) => {
-                        const status = getSaldoStatus(saldo.saldo);
-                        const StatusIcon = status.icon;
-                        return (
-                          <div
-                            key={saldo.moneda_id + "-usd"}
-                            className="flex items-center justify-between p-4 border rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 border-green-200"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-green-100 rounded-full">
-                                <DollarSign className="h-5 w-5 text-green-600" />
-                              </div>
-                              <div>
-                                <h4 className="font-semibold text-green-800">
-                                  {saldo.moneda_codigo} (Principal)
-                                </h4>
-                                <p className="text-sm text-green-600">
-                                  {group.nombre}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-2xl font-bold text-green-800">
-                                {formatCurrency(
-                                  saldo.saldo,
-                                  saldo.moneda_codigo
-                                )}
-                              </p>
-                              <div className="flex items-center gap-1 justify-end mt-1">
-                                <StatusIcon className="h-4 w-4 text-green-600" />
-                                <span className="text-sm text-green-600">
-                                  {status.text}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                    {/* Otras monedas */}
-                    {group.items
-                      .filter((saldo: any) => saldo.moneda_codigo !== "USD")
-                      .map((saldo: any) => {
-                        const status = getSaldoStatus(saldo.saldo);
-                        const StatusIcon = status.icon;
-                        return (
-                          <div
-                            key={saldo.moneda_id}
-                            className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-blue-100 rounded-full">
-                                <DollarSign className="h-5 w-5 text-blue-600" />
-                              </div>
-                              <div>
-                                <h4 className="font-semibold">
-                                  {saldo.moneda_codigo}
-                                </h4>
-                                <p className="text-sm text-muted-foreground">
-                                  {group.nombre}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-xl font-bold">
-                                {formatCurrency(
-                                  saldo.saldo,
-                                  saldo.moneda_codigo
-                                )}
-                              </p>
-                              <div className="flex items-center gap-1 justify-end mt-1">
-                                <StatusIcon
-                                  className={`h-4 w-4 ${
-                                    status.color === "destructive"
-                                      ? "text-red-500"
-                                      : status.color === "warning"
-                                      ? "text-yellow-500"
-                                      : "text-green-500"
-                                  }`}
-                                />
-                                <span
-                                  className={`text-sm ${
-                                    status.color === "destructive"
-                                      ? "text-red-500"
-                                      : status.color === "warning"
-                                      ? "text-yellow-500"
-                                      : "text-green-500"
-                                  }`}
-                                >
-                                  {status.text}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div className="mt-1 text-[13px] font-semibold">
+                      {formatCurrency(t.total, t.codigo)}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* Vista normal o admin con punto específico */}
-            {(!isAdminView || selectedPointId !== "ALL") && (
-              <div className="space-y-4">
-                {/* Saldo principal (USD) primero */}
-                {filteredSaldos
-                  .filter((saldo: any) => saldo.moneda_codigo === "USD")
-                  .map((saldo: any) => {
-                    const status = getSaldoStatus(saldo.saldo);
-                    const StatusIcon = status.icon;
-                    return (
-                      <div
-                        key={saldo.moneda_id + "-usd-single"}
-                        className="flex items-center justify-between p-4 border rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 border-green-200"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-green-100 rounded-full">
-                            <DollarSign className="h-5 w-5 text-green-600" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-green-800">
-                              {saldo.moneda_codigo} (Principal)
-                            </h3>
-                            <p className="text-sm text-green-600">
-                              {isAdminView && "punto_nombre" in saldo
-                                ? (saldo as any).punto_nombre
-                                : "Moneda base del sistema"}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-green-800">
-                            {formatCurrency(saldo.saldo, saldo.moneda_codigo)}
-                          </p>
-                          <div className="flex items-center gap-1 justify-end mt-1">
-                            <StatusIcon className="h-4 w-4 text-green-600" />
-                            <span className="text-sm text-green-600">
-                              {status.text}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+            {/* Si compacto y no expandido, termina aquí */}
+            {compact && !expanded ? (
+              <div className="text-right text-xs text-gray-500">
+                Última actualización: {new Date().toLocaleTimeString()}
+              </div>
+            ) : (
+              <>
+                {/* Tarjetas pequeñas por saldo (grid responsivo) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+                  {filteredSaldos.map((saldo) => {
+                    const { tone, text, Icon } = getSaldoStatus(saldo.saldo);
+                    const toneClasses =
+                      tone === "green"
+                        ? "border-green-200 bg-green-50/60"
+                        : tone === "yellow"
+                        ? "border-yellow-200 bg-yellow-50/60"
+                        : "border-red-200 bg-red-50/60";
 
-                {/* Otras monedas */}
-                {filteredSaldos
-                  .filter((saldo: any) => saldo.moneda_codigo !== "USD")
-                  .sort((a: any, b: any) =>
-                    a.moneda_codigo.localeCompare(b.moneda_codigo)
-                  )
-                  .map((saldo: any) => {
-                    const status = getSaldoStatus(saldo.saldo);
-                    const StatusIcon = status.icon;
                     return (
                       <div
-                        key={saldo.moneda_id}
-                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                        key={`${saldo.moneda_id}-${saldo.punto_id ?? "single"}`}
+                        className={`rounded-lg border ${toneClasses} p-3 hover:shadow-sm transition-shadow`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-100 rounded-full">
-                            <DollarSign className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 rounded-full bg-white/70 border">
+                              <DollarSign
+                                className={`h-4 w-4 ${
+                                  tone === "red"
+                                    ? "text-red-600"
+                                    : tone === "yellow"
+                                    ? "text-yellow-600"
+                                    : "text-green-600"
+                                }`}
+                              />
+                            </div>
+                            <div className="text-sm font-medium">
                               {saldo.moneda_codigo}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {isAdminView && "punto_nombre" in saldo
-                                ? (saldo as any).punto_nombre
-                                : "Moneda secundaria"}
-                            </p>
+                              {saldo.moneda_codigo === "USD" && (
+                                <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-white/80 border text-green-700">
+                                  Principal
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xl font-bold">
-                            {formatCurrency(saldo.saldo, saldo.moneda_codigo)}
-                          </p>
-                          <div className="flex items-center gap-1 justify-end mt-1">
-                            <StatusIcon
-                              className={`h-4 w-4 ${
-                                status.color === "destructive"
-                                  ? "text-red-500"
-                                  : status.color === "warning"
-                                  ? "text-yellow-500"
-                                  : "text-green-500"
-                              }`}
-                            />
+                          <Badge variant="outline" className="gap-1">
+                            <Icon className="h-3.5 w-3.5" />
                             <span
-                              className={`text-sm ${
-                                status.color === "destructive"
-                                  ? "text-red-500"
-                                  : status.color === "warning"
-                                  ? "text-yellow-500"
-                                  : "text-green-500"
-                              }`}
+                              className={
+                                tone === "red"
+                                  ? "text-red-700"
+                                  : tone === "yellow"
+                                  ? "text-yellow-700"
+                                  : "text-green-700"
+                              }
                             >
-                              {status.text}
+                              {text}
                             </span>
-                          </div>
+                          </Badge>
                         </div>
+
+                        <div
+                          className={`mt-2 ${
+                            saldo.moneda_codigo === "USD"
+                              ? "text-2xl"
+                              : "text-xl"
+                          } font-bold ${
+                            tone === "red"
+                              ? "text-red-700"
+                              : tone === "yellow"
+                              ? "text-yellow-700"
+                              : "text-green-800"
+                          }`}
+                        >
+                          {formatCurrency(saldo.saldo, saldo.moneda_codigo)}
+                        </div>
+
+                        {isAdminView && saldo.punto_nombre && (
+                          <div className="mt-1 text-xs text-gray-600 line-clamp-1">
+                            {saldo.punto_nombre}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
+                </div>
 
-                {/* Resumen total */}
-                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-600">
-                      Total de monedas configuradas:
-                    </span>
-                    <Badge variant="outline">
-                      {filteredSaldos.length} moneda
-                      {filteredSaldos.length !== 1 ? "s" : ""}
+                <div className="flex items-center justify-between mt-2">
+                  <div className="text-xs text-gray-500">
+                    {filteredSaldos.length} saldo
+                    {filteredSaldos.length !== 1 ? "s" : ""} • última
+                    actualización: {new Date().toLocaleTimeString()}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={refresh}>
+                      <RefreshCw
+                        className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+                      />
+                    </Button>
+                    <Badge
+                      variant="outline"
+                      className="cursor-pointer"
+                      onClick={() =>
+                        window.scrollTo({ top: 0, behavior: "smooth" })
+                      }
+                    >
+                      Ir arriba
                     </Badge>
                   </div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    Última actualización: {new Date().toLocaleTimeString()}
-                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
         )}

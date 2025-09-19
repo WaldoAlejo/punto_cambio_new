@@ -6,19 +6,25 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Printer } from "lucide-react";
+import { Printer, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { exchangeService } from "@/services/exchangeService";
+import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { CambioDivisa, Moneda } from "../../types";
 
 interface ExchangeListProps {
   exchanges: CambioDivisa[];
   currencies: Moneda[];
   onReprintReceipt?: (exchange: CambioDivisa) => void;
+  onDeleted?: (id: string) => void;
 }
 
 const ExchangeList = ({
   exchanges,
   currencies,
   onReprintReceipt,
+  onDeleted,
 }: ExchangeListProps) => {
   if (!exchanges || !currencies) {
     return (
@@ -89,6 +95,29 @@ const ExchangeList = ({
     return `${base} bg-gray-50 text-gray-700 border-gray-200`;
   };
 
+  const { user } = useAuth();
+
+  const canDelete = user?.rol === "ADMIN" || user?.rol === "SUPER_USUARIO";
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
+
+  const handleDelete = (id: string) => {
+    if (!canDelete) return;
+    showConfirmation(
+      "Eliminar cambio",
+      "¿Eliminar este cambio? Esto revertirá saldos con un ajuste.",
+      async () => {
+        const { success, error } = await exchangeService.deleteExchange(id);
+        if (success) {
+          onDeleted?.(id);
+          toast.success("Cambio eliminado correctamente");
+        } else {
+          toast.error(error || "No se pudo eliminar");
+        }
+      },
+      "destructive"
+    );
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -128,9 +157,23 @@ const ExchangeList = ({
                       {exchange.estado || "—"}
                     </span>
                   </div>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {formatFecha(exchange.fecha)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {formatFecha(exchange.fecha)}
+                    </span>
+                    {canDelete && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => handleDelete(exchange.id)}
+                        title="Eliminar cambio"
+                        aria-label="Eliminar cambio"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="text-xs space-y-1">
@@ -180,6 +223,7 @@ const ExchangeList = ({
           </div>
         )}
       </CardContent>
+      <ConfirmationDialog />
     </Card>
   );
 };

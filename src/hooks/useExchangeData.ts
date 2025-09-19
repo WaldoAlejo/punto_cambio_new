@@ -60,10 +60,15 @@ export const useExchangeData = (selectedPoint: PuntoAtencion | null) => {
     setExchanges((prev) => [nuevo, ...prev]);
   };
 
+  const removeExchange = (id: string) => {
+    setExchanges((prev) => prev.filter((e) => e.id !== id));
+  };
+
   return {
     currencies,
     exchanges,
     addExchange,
+    removeExchange,
     isLoadingCurrencies,
     error, // NUEVO: para manejar errores en la UI
   };

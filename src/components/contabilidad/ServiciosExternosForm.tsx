@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
 import {
   crearMovimientoServicioExterno,
@@ -39,58 +40,70 @@ const SERVICIOS: {
 ];
 
 const schema = z.object({
-  servicio: z.enum([
-    "YAGANASTE",
-    "BANCO_GUAYAQUIL",
-    "WESTERN",
-    "PRODUBANCO",
-    "BANCO_PACIFICO",
-    "INSUMOS_OFICINA",
-    "INSUMOS_LIMPIEZA",
-    "OTROS",
-  ]),
-  tipo_movimiento: z.enum(["INGRESO", "EGRESO"]),
-  monto: z
-    .union([z.string(), z.number()])
-    .transform((v) => (typeof v === "string" ? parseFloat(v) : v))
-    .refine((v) => isFinite(v) && v > 0, {
-      message: "Debe ser un número mayor a 0",
-    }),
-  numero_referencia: z.string().optional(),
-  descripcion: z.string().optional(),
+  servicio: z.enum(
+    [
+      "YAGANASTE",
+      "BANCO_GUAYAQUIL",
+      "WESTERN",
+      "PRODUBANCO",
+      "BANCO_PACIFICO",
+      "INSUMOS_OFICINA",
+      "INSUMOS_LIMPIEZA",
+      "OTROS",
+    ],
+    { required_error: "Selecciona un servicio o categoría" }
+  ),
+  tipo_movimiento: z.enum(["INGRESO", "EGRESO"], {
+    required_error: "Selecciona el tipo de movimiento",
+  }),
+  monto: z.coerce
+    .number({ invalid_type_error: "Debe ser un número" })
+    .gt(0, { message: "Debe ser un número mayor a 0" }),
+  numero_referencia: z.string().trim().optional(),
+  descripcion: z.string().trim().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
 
 export default function ServiciosExternosForm() {
   const { user } = useAuth();
-
-  // ✅ usar solo el nombre correcto del backend
   const puntoAtencionId = user?.punto_atencion_id || null;
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
+    control,
     watch,
     setValue,
     reset,
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { tipo_movimiento: "INGRESO" as TipoMovimiento },
+    defaultValues: {
+      servicio: undefined,
+      tipo_movimiento: "INGRESO",
+      monto: undefined as unknown as number,
+      numero_referencia: "",
+      descripcion: "",
+    },
+    mode: "onTouched",
+    reValidateMode: "onChange",
   });
 
   const servicioActual = watch("servicio");
+  const tipoActual = watch("tipo_movimiento");
+
   const esInsumo = useMemo(
     () => !!SERVICIOS.find((s) => s.value === servicioActual && s.isInsumo),
     [servicioActual]
   );
 
-  // Si es Insumo, forzar EGRESO automáticamente
+  // Si es Insumo, forzar EGRESO automáticamente y bloquear el Select de tipo
   useEffect(() => {
-    if (esInsumo)
+    if (esInsumo && tipoActual !== "EGRESO") {
       setValue("tipo_movimiento", "EGRESO", { shouldValidate: true });
-  }, [esInsumo, setValue]);
+    }
+  }, [esInsumo, tipoActual, setValue]);
 
   const onSubmit = async (values: FormValues) => {
     if (!puntoAtencionId) {
@@ -103,7 +116,7 @@ export default function ServiciosExternosForm() {
     }
     try {
       const payload = {
-        punto_atencion_id: puntoAtencionId, // el backend siempre valida el punto del operador
+        punto_atencion_id: puntoAtencionId,
         servicio: values.servicio,
         tipo_movimiento: values.tipo_movimiento,
         monto: values.monto,
@@ -120,7 +133,15 @@ export default function ServiciosExternosForm() {
         title: "Movimiento registrado",
         description: "Se guardó el movimiento correctamente.",
       });
-      reset({ tipo_movimiento: esInsumo ? "EGRESO" : "INGRESO" } as any);
+
+      // Reset limpio: tipo por defecto según si es insumo
+      reset({
+        servicio: undefined,
+        tipo_movimiento: esInsumo ? "EGRESO" : "INGRESO",
+        monto: undefined as unknown as number,
+        numero_referencia: "",
+        descripcion: "",
+      });
     } catch (e: any) {
       toast({
         title: "Error",
@@ -130,74 +151,113 @@ export default function ServiciosExternosForm() {
     }
   };
 
+  // Formatear monto a 2 decimales al salir del input (sin romper el valor numérico)
+  const onMontoBlur: React.FocusEventHandler<HTMLInputElement> = (e) => {
+    const raw = e.target.value?.replace(",", ".") ?? "";
+    const num = parseFloat(raw);
+    if (!isNaN(num) && isFinite(num) && num > 0) {
+      const fixed = Number(num.toFixed(2));
+      // Actualiza el valor RHF y también el input visible
+      setValue("monto", fixed, { shouldValidate: true, shouldDirty: true });
+      e.target.value = fixed.toFixed(2);
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+      {/* Servicio / Categoría */}
       <div>
-        <Label>Servicio / Categoría</Label>
-        <Select
-          onValueChange={(v) =>
-            setValue("servicio", v as ServicioExterno, { shouldValidate: true })
-          }
-        >
-          <SelectTrigger className="mt-1">
-            <SelectValue placeholder="Selecciona" />
-          </SelectTrigger>
-          <SelectContent>
-            {SERVICIOS.map((s) => (
-              <SelectItem key={s.value} value={s.value}>
-                {s.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Label>Servicio / Categoría</Label>
+          {esInsumo && (
+            <Badge variant="secondary" className="text-xs">
+              Insumo • EGRESO forzado
+            </Badge>
+          )}
+        </div>
+        <Controller
+          name="servicio"
+          control={control}
+          render={({ field }) => (
+            <Select
+              value={field.value}
+              onValueChange={(v) => field.onChange(v as ServicioExterno)}
+            >
+              <SelectTrigger className="mt-1" aria-invalid={!!errors.servicio}>
+                <SelectValue placeholder="Selecciona" />
+              </SelectTrigger>
+              <SelectContent>
+                {SERVICIOS.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
         {errors.servicio && (
-          <p className="text-sm text-red-500">{errors.servicio.message}</p>
+          <p className="text-sm text-red-500 mt-1">{errors.servicio.message}</p>
         )}
       </div>
 
+      {/* Tipo */}
       <div>
         <Label>Tipo</Label>
-        <Select
-          onValueChange={(v) =>
-            setValue("tipo_movimiento", v as TipoMovimiento, {
-              shouldValidate: true,
-            })
-          }
-          defaultValue="INGRESO"
-        >
-          <SelectTrigger className="mt-1">
-            <SelectValue placeholder="Selecciona" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="INGRESO">Ingreso</SelectItem>
-            <SelectItem value="EGRESO">Egreso</SelectItem>
-          </SelectContent>
-        </Select>
+        <Controller
+          name="tipo_movimiento"
+          control={control}
+          render={({ field }) => (
+            <Select
+              value={field.value}
+              onValueChange={(v) => field.onChange(v as TipoMovimiento)}
+              disabled={esInsumo}
+            >
+              <SelectTrigger
+                className="mt-1"
+                aria-invalid={!!errors.tipo_movimiento}
+              >
+                <SelectValue placeholder="Selecciona" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="INGRESO">Ingreso</SelectItem>
+                <SelectItem value="EGRESO">Egreso</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
         {esInsumo && (
           <p className="text-xs text-muted-foreground mt-1">
-            Para categorías de Insumos el movimiento se registra como EGRESO.
+            Esta categoría es de Insumos, el movimiento se registra como{" "}
+            <b>EGRESO</b>.
           </p>
         )}
         {errors.tipo_movimiento && (
-          <p className="text-sm text-red-500">
+          <p className="text-sm text-red-500 mt-1">
             {errors.tipo_movimiento.message}
           </p>
         )}
       </div>
 
+      {/* Monto */}
       <div>
         <Label>Monto (USD)</Label>
         <Input
           type="number"
           step="0.01"
+          min="0.01"
+          inputMode="decimal"
           placeholder="0.00"
+          aria-invalid={!!errors.monto}
           {...register("monto")}
+          onBlur={onMontoBlur}
         />
         {errors.monto && (
-          <p className="text-sm text-red-500">{errors.monto.message}</p>
+          <p className="text-sm text-red-500 mt-1">{errors.monto.message}</p>
         )}
       </div>
 
+      {/* Referencia */}
       <div>
         <Label>N° referencia (opcional)</Label>
         <Input
@@ -206,6 +266,7 @@ export default function ServiciosExternosForm() {
         />
       </div>
 
+      {/* Descripción */}
       <div className="md:max-w-[720px]">
         <Label>Descripción (opcional)</Label>
         <Textarea
@@ -215,6 +276,7 @@ export default function ServiciosExternosForm() {
         />
       </div>
 
+      {/* Submit */}
       <div className="pt-2">
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Guardando..." : "Guardar movimiento"}

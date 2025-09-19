@@ -1,5 +1,5 @@
 import express, { Request, Response } from "express";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { pool } from "../lib/database.js";
 import { randomUUID } from "crypto";
 
@@ -376,6 +376,130 @@ router.get(
         success: false,
         message: error instanceof Error ? error.message : "Error desconocido",
       });
+    }
+  }
+);
+
+/** ==============================
+ *  DELETE /servicios-externos/movimientos/:id
+ *  Elimina un movimiento de servicio externo (solo ADMIN/SUPER_USUARIO)
+ *  - Revierte el saldo con un ajuste inverso
+ *  ============================== */
+router.delete(
+  "/movimientos/:id",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const { id } = req.params;
+
+      await client.query("BEGIN");
+
+      // Obtener movimiento y datos necesarios
+      const sel = await client.query(
+        `SELECT id, punto_atencion_id, moneda_id, monto, tipo_movimiento, usuario_id, fecha
+         FROM "ServicioExternoMovimiento" WHERE id = $1 FOR UPDATE`,
+        [id]
+      );
+      if (sel.rows.length === 0) {
+        await client.query("ROLLBACK");
+        res
+          .status(404)
+          .json({ success: false, error: "Movimiento no encontrado" });
+        return;
+      }
+      const mov = sel.rows[0];
+
+      // Restringir a movimientos del mismo día (zona GYE)
+      try {
+        const { gyeDayRangeUtcFromDate } = await import("../utils/timezone.js");
+        const { gte, lt } = gyeDayRangeUtcFromDate(new Date());
+        const fecha = new Date(mov.fecha);
+        if (!(fecha >= gte && fecha < lt)) {
+          await client.query("ROLLBACK");
+          res.status(400).json({
+            success: false,
+            error: "Solo se pueden eliminar movimientos del día actual",
+          });
+          return;
+        }
+      } catch (e) {
+        await client.query("ROLLBACK");
+        res.status(400).json({
+          success: false,
+          error: "Restricción de día no disponible. Intente más tarde.",
+        });
+        return;
+      }
+
+      // Obtener saldo actual
+      const saldoQ = await client.query(
+        'SELECT id, cantidad FROM "Saldo" WHERE punto_atencion_id = $1 AND moneda_id = $2 FOR UPDATE',
+        [mov.punto_atencion_id, mov.moneda_id]
+      );
+      const saldoAnterior = saldoQ.rows.length
+        ? parseFloat(saldoQ.rows[0].cantidad)
+        : 0;
+
+      // Calcular ajuste inverso: si fue INGRESO, ahora restamos; si fue EGRESO, ahora sumamos
+      const delta =
+        mov.tipo_movimiento === "INGRESO"
+          ? -Number(mov.monto)
+          : Number(mov.monto);
+      const saldoNuevo = Math.max(0, saldoAnterior + delta);
+
+      if (saldoQ.rows.length) {
+        await client.query(
+          'UPDATE "Saldo" SET cantidad = $1, updated_at = NOW() WHERE id = $2',
+          [saldoNuevo, saldoQ.rows[0].id]
+        );
+      } else {
+        const saldoId = randomUUID();
+        await client.query(
+          'INSERT INTO "Saldo"(id, punto_atencion_id, moneda_id, cantidad, billetes, monedas_fisicas, updated_at) VALUES($1,$2,$3,$4,0,0,NOW())',
+          [saldoId, mov.punto_atencion_id, mov.moneda_id, saldoNuevo]
+        );
+      }
+
+      // Registrar ajuste en MovimientoSaldo
+      const movSaldoId = randomUUID();
+      await client.query(
+        `INSERT INTO "MovimientoSaldo"
+          (id, punto_atencion_id, moneda_id, tipo_movimiento, monto, saldo_anterior, saldo_nuevo, usuario_id, referencia_id, tipo_referencia, descripcion, fecha, created_at)
+         VALUES ($1,$2,$3,'AJUSTE',$4,$5,$6,$7,$8,'SERVICIO_EXTERNO',$9,NOW(),NOW())`,
+        [
+          movSaldoId,
+          mov.punto_atencion_id,
+          mov.moneda_id,
+          delta,
+          saldoAnterior,
+          saldoNuevo,
+          (req as any).user.id,
+          mov.id,
+          `Reverso eliminación servicio externo ${mov.tipo_movimiento}`,
+        ]
+      );
+
+      // Eliminar movimiento
+      await client.query(
+        'DELETE FROM "ServicioExternoMovimiento" WHERE id = $1',
+        [id]
+      );
+
+      await client.query("COMMIT");
+      res.json({ success: true });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error(
+        "Error eliminando movimiento de servicios externos:",
+        error
+      );
+      res
+        .status(500)
+        .json({ success: false, error: "No se pudo eliminar el movimiento" });
+    } finally {
+      client.release();
     }
   }
 );

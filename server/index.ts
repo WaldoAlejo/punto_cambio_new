@@ -117,6 +117,8 @@ app.use(
       "Pragma",
       "X-Requested-With",
       "Accept",
+      "X-Client-Time",
+      "x-client-time",
     ],
     exposedHeaders: [
       "Content-Length",

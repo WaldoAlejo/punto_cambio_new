@@ -51,3 +51,30 @@ export async function listarMovimientosServiciosExternos(
   );
   return data;
 }
+
+export async function eliminarMovimientoServicioExterno(id: string) {
+  try {
+    const { data } = await axiosInstance.delete(
+      `/servicios-externos/movimientos/${id}`
+    );
+    return data;
+  } catch (error: any) {
+    // Mapear 400 a mensaje amigable específico
+    if (error?.response?.status === 400) {
+      const serverMsg = error?.response?.data?.error || error?.friendlyMessage;
+      if (
+        /Solo se pueden eliminar (cambios|movimientos) del día actual/i.test(
+          serverMsg || ""
+        )
+      ) {
+        throw Object.assign(
+          new Error("Solo puedes eliminar registros del día de hoy"),
+          {
+            friendlyMessage: "Solo puedes eliminar registros del día de hoy",
+          }
+        );
+      }
+    }
+    throw error;
+  }
+}

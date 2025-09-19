@@ -25,6 +25,7 @@ const ExchangeManagement = ({
     exchanges,
     isLoadingCurrencies,
     addExchange,
+    removeExchange,
     error: dataError,
   } = useExchangeData(selectedPoint);
 
@@ -149,6 +150,7 @@ const ExchangeManagement = ({
               exchanges={exchanges || []}
               currencies={currencies}
               onReprintReceipt={reprintReceipt}
+              onDeleted={(id) => removeExchange(id)}
             />
           </div>
 

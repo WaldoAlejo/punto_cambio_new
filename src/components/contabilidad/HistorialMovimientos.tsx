@@ -1,17 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -20,577 +11,521 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
+  CalendarDays,
+  Loader2,
   RefreshCw,
-  TrendingUp,
-  TrendingDown,
-  ArrowRightLeft,
-  Filter,
-  Calendar,
-  DollarSign,
+  Search,
+  Wallet,
+  Download,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
-import { User, PuntoAtencion, MovimientoSaldo, Moneda } from "@/types";
+import { User, PuntoAtencion, Moneda } from "@/types";
 import { useContabilidadDivisas } from "@/hooks/useContabilidadDivisas";
 import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
-import { pointService } from "@/services/pointService";
 import { Loading } from "@/components/ui/loading";
+
+// Dropdown con checkboxes (shadcn)
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuCheckboxItem,
+} from "@/components/ui/dropdown-menu";
 
 interface HistorialMovimientosProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
-  currencies: Moneda[];
-  className?: string;
+  currencies?: Moneda[];
   isAdminView?: boolean;
 }
 
-export const HistorialMovimientos = ({
+type Movimiento = {
+  id: string;
+  fecha: string | Date;
+  tipo_movimiento:
+    | "INGRESO"
+    | "EGRESO"
+    | "TRANSFERENCIA_ENTRANTE"
+    | "TRANSFERENCIA_SALIENTE";
+  tipo_referencia?: string | null;
+  referencia_id?: string | null;
+  moneda_codigo: string;
+  monto: number;
+  punto_nombre?: string;
+  descripcion?: string | null;
+};
+
+export default function HistorialMovimientos({
   user,
   selectedPoint,
   currencies,
-  className = "",
   isAdminView = false,
-}: HistorialMovimientosProps) => {
-  // Usar hook apropiado según si es vista de administrador
-  const contabilidadNormal = useContabilidadDivisas({ user, selectedPoint });
-  const contabilidadAdmin = useContabilidadAdmin({ user });
+}: HistorialMovimientosProps) {
+  const normal = useContabilidadDivisas({ user, selectedPoint });
+  const admin = useContabilidadAdmin({ user });
 
-  const { movimientos, isLoading, error, cargarMovimientos } = isAdminView
+  const { movimientos, isLoading, error, refresh } = isAdminView
     ? {
-        movimientos: contabilidadAdmin.movimientosConsolidados,
-        isLoading: contabilidadAdmin.isLoading,
-        error: contabilidadAdmin.error,
-        cargarMovimientos: contabilidadAdmin.cargarMovimientosConsolidados,
+        movimientos: admin.movimientosConsolidados as Movimiento[],
+        isLoading: admin.isLoading,
+        error: admin.error,
+        refresh: admin.refresh,
       }
-    : contabilidadNormal;
+    : (normal as any);
 
-  const [filtroMoneda, setFiltroMoneda] = useState<string>("TODAS");
-  const [filtroTipo, setFiltroTipo] = useState<string>("TODOS");
-  const [limite, setLimite] = useState(50);
-  const [filtroPunto, setFiltroPunto] = useState<string>("TODOS");
-  const [puntos, setPuntos] = useState<{ id: string; nombre: string }[]>([]);
+  // ===== UI State =====
+  const [query, setQuery] = useState("");
+  const [pageSize, setPageSize] = useState(25);
+  const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<"fecha" | "monto">("fecha");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [tipo, setTipo] = useState<"ALL" | Movimiento["tipo_movimiento"]>(
+    "ALL"
+  );
+  const [moneda, setMoneda] = useState<string>("ALL");
 
-  // Cargar puntos para filtro (solo en admin view)
+  // Columnas opcionales para CSV
+  const [csvCols, setCsvCols] = useState({
+    id: false,
+    tipoRef: false,
+    refId: false,
+  });
+
+  // Reset paginación si cambian filtros
   useEffect(() => {
-    const loadPoints = async () => {
-      if (!isAdminView) return;
-      const { points } = await pointService.getAllPointsForAdmin();
-      setPuntos(
-        (points || []).map((p: any) => ({ id: p.id, nombre: p.nombre }))
-      );
-    };
-    loadPoints();
-  }, [isAdminView]);
+    setPage(1);
+  }, [query, pageSize, sortKey, sortDir, tipo, moneda]);
 
-  // Cargar movimientos cuando cambien los filtros
-  useEffect(() => {
-    if (isAdminView || selectedPoint) {
-      const monedaId = filtroMoneda === "TODAS" ? undefined : filtroMoneda;
-      // Para admin, cargar todos y luego filtrar por punto en cliente
-      cargarMovimientos(monedaId, limite);
-    }
-  }, [
-    isAdminView,
-    selectedPoint,
-    filtroMoneda,
-    filtroPunto,
-    limite,
-    cargarMovimientos,
-  ]);
+  // ===== Opciones de divisa usando currencies si está disponible =====
+  const monedaOptions = useMemo(() => {
+    const set = new Set<string>();
+    (movimientos ?? []).forEach((m: any) => set.add(m.moneda_codigo));
+    let list = Array.from(set);
 
-  const getTipoMovimientoIcon = (tipo: string) => {
-    switch (tipo) {
-      case "INGRESO":
-        return <TrendingUp className="h-4 w-4 text-green-600" />;
-      case "EGRESO":
-        return <TrendingDown className="h-4 w-4 text-red-600" />;
-      case "CAMBIO_DIVISA":
-        return <ArrowRightLeft className="h-4 w-4 text-blue-600" />;
-      case "TRANSFERENCIA_ENTRANTE":
-        return <TrendingUp className="h-4 w-4 text-purple-600" />;
-      case "TRANSFERENCIA_SALIENTE":
-        return <TrendingDown className="h-4 w-4 text-orange-600" />;
-      default:
-        return <DollarSign className="h-4 w-4 text-gray-600" />;
-    }
-  };
-
-  const getTipoMovimientoBadge = (tipo: string) => {
-    const config = {
-      INGRESO: {
-        variant: "default" as const,
-        color: "bg-green-100 text-green-800",
-        label: "Ingreso",
-      },
-      EGRESO: {
-        variant: "destructive" as const,
-        color: "bg-red-100 text-red-800",
-        label: "Egreso",
-      },
-      CAMBIO_DIVISA: {
-        variant: "default" as const,
-        color: "bg-blue-100 text-blue-800",
-        label: "Cambio",
-      },
-      TRANSFERENCIA_ENTRANTE: {
-        variant: "default" as const,
-        color: "bg-purple-100 text-purple-800",
-        label: "Transf. Entrada",
-      },
-      TRANSFERENCIA_SALIENTE: {
-        variant: "outline" as const,
-        color: "bg-orange-100 text-orange-800",
-        label: "Transf. Salida",
-      },
-    };
-
-    const conf = config[tipo as keyof typeof config] || {
-      variant: "outline" as const,
-      color: "bg-gray-100 text-gray-800",
-      label: tipo,
-    };
-
-    return (
-      <Badge variant={conf.variant} className={conf.color}>
-        {conf.label}
-      </Badge>
-    );
-  };
-
-  const formatCurrency = (amount: number, monedaCodigo?: string) => {
-    if (monedaCodigo === "USD") {
-      return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: "USD",
-        minimumFractionDigits: 2,
-      }).format(amount);
+    // Si tenemos currencies, usamos su orden
+    if (currencies?.length) {
+      const order = new Map<string, number>();
+      currencies.forEach((c, i) => order.set(c.codigo, i));
+      list.sort((a, b) => {
+        const ia = a === "USD" ? -1 : order.get(a) ?? Number.MAX_SAFE_INTEGER;
+        const ib = b === "USD" ? -1 : order.get(b) ?? Number.MAX_SAFE_INTEGER;
+        return ia - ib || a.localeCompare(b);
+      });
+    } else {
+      // Si no hay currencies, USD primero y resto alfabético
+      list.sort((a, b) => (a === "USD" ? -1 : a.localeCompare(b)));
     }
 
-    return new Intl.NumberFormat("es-ES", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount);
-  };
+    return ["ALL", ...list];
+  }, [movimientos, currencies]);
 
-  const movimientosFiltrados = useMemo(() => {
-    return movimientos.filter((mov) => {
-      if (filtroTipo !== "TODOS" && mov.tipo_movimiento !== filtroTipo) {
-        return false;
-      }
-      if (isAdminView && filtroPunto !== "TODOS") {
-        // punto_id agregado en hook admin
-        if ((mov as any).punto_id !== filtroPunto) return false;
-      }
-      return true;
+  // ===== Filtrado y orden =====
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const arr = (movimientos ?? []) as Movimiento[];
+    let base = arr.filter((m) => {
+      if (tipo !== "ALL" && m.tipo_movimiento !== tipo) return false;
+      if (moneda !== "ALL" && m.moneda_codigo !== moneda) return false;
+      if (!q) return true;
+      const hay = `${m.descripcion ?? ""} ${m.tipo_movimiento} ${
+        m.tipo_referencia ?? ""
+      } ${m.moneda_codigo} ${m.punto_nombre ?? ""}`.toLowerCase();
+      return hay.includes(q);
     });
-  }, [movimientos, filtroTipo, filtroPunto, isAdminView]);
 
-  if (!selectedPoint && !isAdminView) {
-    return (
-      <Card className={className}>
-        <CardContent className="p-6 text-center text-muted-foreground">
-          Seleccione un punto de atención para ver el historial
-        </CardContent>
-      </Card>
-    );
-  }
+    base.sort((a, b) => {
+      if (sortKey === "fecha") {
+        const da = new Date(a.fecha).getTime();
+        const db = new Date(b.fecha).getTime();
+        return sortDir === "asc" ? da - db : db - da;
+      } else {
+        return sortDir === "asc" ? a.monto - b.monto : b.monto - a.monto;
+      }
+    });
+
+    return base;
+  }, [movimientos, query, tipo, moneda, sortKey, sortDir]);
+
+  // ===== Paginación =====
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const current = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  // ===== Helpers =====
+  const fmtMoney = (n: number, code: string) =>
+    code === "USD"
+      ? new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(n)
+      : new Intl.NumberFormat("es-ES", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(n);
+
+  const tipoBadgeClass = (t: Movimiento["tipo_movimiento"]) =>
+    t === "INGRESO" || t === "TRANSFERENCIA_ENTRANTE"
+      ? "bg-green-100 text-green-700"
+      : "bg-red-100 text-red-700";
+
+  // ===== CSV Export =====
+  const csvEscape = (val: unknown) => {
+    if (val === null || val === undefined) return "";
+    const s = String(val);
+    if (/[",\n]/.test(s)) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+
+  const buildCsv = (rows: Movimiento[], admin: boolean) => {
+    const headersBase = ["Fecha", "Tipo", "Moneda", "Monto"];
+    const headersExtra = [
+      ...(admin ? ["Punto"] : []),
+      "Descripción",
+      ...(csvCols.id ? ["ID"] : []),
+      ...(csvCols.tipoRef ? ["Tipo referencia"] : []),
+      ...(csvCols.refId ? ["Referencia ID"] : []),
+    ];
+    const headers = [...headersBase, ...headersExtra];
+
+    const lines = rows.map((m) => {
+      const fecha = new Date(m.fecha).toISOString(); // formato estable
+      const base = [
+        csvEscape(fecha),
+        csvEscape(m.tipo_movimiento),
+        csvEscape(m.moneda_codigo),
+        String(m.monto),
+      ];
+      const extra = [
+        ...(admin ? [csvEscape(m.punto_nombre ?? "")] : []),
+        csvEscape(m.descripcion ?? ""),
+        ...(csvCols.id ? [csvEscape(m.id)] : []),
+        ...(csvCols.tipoRef ? [csvEscape(m.tipo_referencia ?? "")] : []),
+        ...(csvCols.refId ? [csvEscape(m.referencia_id ?? "")] : []),
+      ];
+      return [...base, ...extra].join(",");
+    });
+
+    return [headers.join(","), ...lines].join("\n");
+  };
+
+  const downloadCsv = (filename: string, csv: string) => {
+    // BOM para Excel UTF-8
+    const blob = new Blob(["\uFEFF" + csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportPage = () => {
+    const csv = buildCsv(current, !!isAdminView);
+    const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    downloadCsv(`movimientos_pagina_${page}_${ts}.csv`, csv);
+  };
+
+  const handleExportAll = () => {
+    const csv = buildCsv(filtered, !!isAdminView);
+    const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    downloadCsv(`movimientos_filtrados_${ts}.csv`, csv);
+  };
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-blue-600" />
-          {isAdminView
-            ? "Historial de Movimientos - Contabilidad General"
-            : `Historial de Movimientos - ${selectedPoint?.nombre}`}
-        </CardTitle>
-      </CardHeader>
+    <Card>
+      <CardHeader className="pb-2 sticky top-0 z-[1] bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 rounded-t-md">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-base font-semibold flex items-center gap-2">
+            <Wallet className="h-5 w-5" />
+            Historial de Movimientos
+          </CardTitle>
 
-      <CardContent>
-        {/* Filtros */}
-        <div className="flex gap-4 mb-6 flex-wrap">
-          <div className="flex-1 min-w-48">
-            <Label className="text-sm">Moneda</Label>
-            <Select value={filtroMoneda} onValueChange={setFiltroMoneda}>
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccionar moneda" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="TODAS">Todas las monedas</SelectItem>
-                {currencies
-                  .slice()
-                  .sort((a, b) =>
-                    a.codigo === "USD" ? -1 : a.codigo.localeCompare(b.codigo)
-                  )
-                  .map((currency) => (
-                    <SelectItem key={currency.id} value={currency.id}>
-                      {currency.codigo} - {currency.nombre}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {isAdminView && (
-            <div className="flex-1 min-w-48">
-              <Label className="text-sm">Punto de Atención</Label>
-              <Select value={filtroPunto} onValueChange={setFiltroPunto}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar punto" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TODOS">Todos los puntos</SelectItem>
-                  {puntos
-                    .slice()
-                    .sort((a, b) => a.nombre.localeCompare(b.nombre))
-                    .map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.nombre}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Buscar */}
+            <div className="relative">
+              <Search className="h-4 w-4 absolute left-2 top-2.5 text-gray-400" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar descripción, punto, tipo…"
+                className="pl-8 w-64 h-9"
+              />
             </div>
-          )}
 
-          <div className="flex-1 min-w-48">
-            <Label className="text-sm">Tipo de Movimiento</Label>
-            <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-              <SelectTrigger>
-                <SelectValue placeholder="Tipo de movimiento" />
+            {/* Tipo */}
+            <Select value={tipo} onValueChange={(v: any) => setTipo(v)}>
+              <SelectTrigger className="w-40 h-9">
+                <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="TODOS">Todos los tipos</SelectItem>
-                <SelectItem value="INGRESO">Ingresos</SelectItem>
-                <SelectItem value="EGRESO">Egresos</SelectItem>
-                <SelectItem value="CAMBIO_DIVISA">Cambios de Divisa</SelectItem>
+                <SelectItem value="ALL">Todos</SelectItem>
+                <SelectItem value="INGRESO">Ingreso</SelectItem>
+                <SelectItem value="EGRESO">Egreso</SelectItem>
                 <SelectItem value="TRANSFERENCIA_ENTRANTE">
-                  Transferencias Entrantes
+                  Transf. entrante
                 </SelectItem>
                 <SelectItem value="TRANSFERENCIA_SALIENTE">
-                  Transferencias Salientes
+                  Transf. saliente
                 </SelectItem>
               </SelectContent>
             </Select>
-          </div>
 
-          <div className="flex-1 min-w-32">
-            <Label className="text-sm">Límite</Label>
-            <Select
-              value={limite.toString()}
-              onValueChange={(value) => setLimite(parseInt(value))}
-            >
-              <SelectTrigger>
-                <SelectValue />
+            {/* Moneda */}
+            <Select value={moneda} onValueChange={setMoneda}>
+              <SelectTrigger className="w-36 h-9">
+                <SelectValue placeholder="Moneda" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="25">25 registros</SelectItem>
-                <SelectItem value="50">50 registros</SelectItem>
-                <SelectItem value="100">100 registros</SelectItem>
-                <SelectItem value="200">200 registros</SelectItem>
+                {monedaOptions.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m === "ALL" ? "Todas" : m}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-          </div>
 
-          <Button
-            onClick={() =>
-              cargarMovimientos(
-                filtroMoneda === "TODAS" ? undefined : filtroMoneda,
-                limite
-              )
-            }
-            disabled={isLoading}
-            className="self-end"
-          >
-            <RefreshCw
-              className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
-            />
-            Actualizar
-          </Button>
-        </div>
+            {/* Orden */}
+            <Select value={sortKey} onValueChange={(v: any) => setSortKey(v)}>
+              <SelectTrigger className="w-36 h-9">
+                <SelectValue placeholder="Ordenar por" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="fecha">Fecha</SelectItem>
+                <SelectItem value="monto">Monto</SelectItem>
+              </SelectContent>
+            </Select>
 
-        {/* Tabla de movimientos (agrupando cambios por transacción) */}
-        {isLoading ? (
-          <Loading text="Cargando movimientos..." className="py-8" />
-        ) : error ? (
-          <div className="text-center py-8">
-            <p className="text-destructive mb-4">{error}</p>
-            <Button onClick={() => cargarMovimientos()} variant="outline">
-              Reintentar
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-9 w-9"
+              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+              title={sortDir === "asc" ? "Ascendente" : "Descendente"}
+            >
+              {sortDir === "asc" ? (
+                <ArrowUpNarrowWide className="h-4 w-4" />
+              ) : (
+                <ArrowDownWideNarrow className="h-4 w-4" />
+              )}
             </Button>
-          </div>
-        ) : movimientosFiltrados.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Filter className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No hay movimientos que coincidan con los filtros</p>
-          </div>
-        ) : (
-          <div className="border rounded-lg">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Moneda</TableHead>
-                  {isAdminView && <TableHead>Punto</TableHead>}
-                  <TableHead className="text-right">Monto</TableHead>
-                  <TableHead className="text-right">Saldo Anterior</TableHead>
-                  <TableHead className="text-right">Saldo Nuevo</TableHead>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Descripción</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {/**
-                 * Agrupar por referencia de cambio para mostrar una sola fila con Ingreso/Egreso
-                 * Solo aplica para tipo_referencia === "CAMBIO_DIVISA"
-                 */}
-                {(() => {
-                  const rows: JSX.Element[] = [];
-                  const seenCambio = new Set<string>();
 
-                  for (const mov of movimientosFiltrados) {
-                    if (
-                      mov.tipo_referencia === "CAMBIO_DIVISA" &&
-                      mov.referencia_id
-                    ) {
-                      if (seenCambio.has(mov.referencia_id)) continue;
-                      seenCambio.add(mov.referencia_id);
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refresh}
+              disabled={isLoading}
+              className="h-9"
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
 
-                      const relacionados = movimientosFiltrados.filter(
-                        (m) =>
-                          m.tipo_referencia === "CAMBIO_DIVISA" &&
-                          m.referencia_id === mov.referencia_id
-                      );
-
-                      const ingreso = relacionados.find(
-                        (m) => m.tipo_movimiento === "INGRESO"
-                      );
-                      const egreso = relacionados.find(
-                        (m) => m.tipo_movimiento === "EGRESO"
-                      );
-
-                      const fechaBase =
-                        ingreso?.fecha || egreso?.fecha || mov.fecha;
-
-                      rows.push(
-                        <TableRow key={`cambio-${mov.referencia_id}`}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <ArrowRightLeft className="h-4 w-4 text-blue-600" />
-                              <span className="text-sm">
-                                {format(
-                                  parseISO(fechaBase),
-                                  "yyyy-MM-dd HH:mm"
-                                )}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {getTipoMovimientoBadge("CAMBIO_DIVISA")}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col gap-1">
-                              {ingreso && (
-                                <Badge variant="outline">
-                                  {ingreso.moneda?.codigo || "N/A"}
-                                </Badge>
-                              )}
-                              {egreso && (
-                                <Badge variant="outline" className="opacity-80">
-                                  {egreso.moneda?.codigo || "N/A"}
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          {isAdminView && (
-                            <TableCell>
-                              <Badge variant="secondary">
-                                {"punto_nombre" in mov
-                                  ? (mov as any).punto_nombre
-                                  : "N/A"}
-                              </Badge>
-                            </TableCell>
-                          )}
-                          <TableCell className="text-right">
-                            <div className="flex flex-col items-end">
-                              {ingreso && (
-                                <span className="font-semibold text-green-600">
-                                  +
-                                  {formatCurrency(
-                                    Math.abs(ingreso.monto),
-                                    ingreso.moneda?.codigo
-                                  )}
-                                </span>
-                              )}
-                              {egreso && (
-                                <span className="font-semibold text-red-600">
-                                  -
-                                  {formatCurrency(
-                                    Math.abs(egreso.monto),
-                                    egreso.moneda?.codigo
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            <div className="flex flex-col items-end">
-                              {ingreso && (
-                                <span>
-                                  {formatCurrency(
-                                    ingreso.saldo_anterior,
-                                    ingreso.moneda?.codigo
-                                  )}
-                                </span>
-                              )}
-                              {egreso && (
-                                <span>
-                                  {formatCurrency(
-                                    egreso.saldo_anterior,
-                                    egreso.moneda?.codigo
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            <div className="flex flex-col items-end">
-                              {ingreso && (
-                                <span>
-                                  {formatCurrency(
-                                    ingreso.saldo_nuevo,
-                                    ingreso.moneda?.codigo
-                                  )}
-                                </span>
-                              )}
-                              {egreso && (
-                                <span>
-                                  {formatCurrency(
-                                    egreso.saldo_nuevo,
-                                    egreso.moneda?.codigo
-                                  )}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm">
-                              {ingreso?.usuario?.nombre ||
-                                egreso?.usuario?.nombre ||
-                                "Sistema"}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground">
-                              {ingreso?.descripcion ||
-                                egreso?.descripcion ||
-                                "Cambio de divisa"}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    } else {
-                      // Fila normal para otros movimientos
-                      rows.push(
-                        <TableRow key={mov.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {getTipoMovimientoIcon(mov.tipo_movimiento)}
-                              <span className="text-sm">
-                                {format(
-                                  parseISO(mov.fecha),
-                                  "yyyy-MM-dd HH:mm"
-                                )}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {getTipoMovimientoBadge(mov.tipo_movimiento)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">
-                              {mov.moneda?.codigo || "N/A"}
-                            </Badge>
-                          </TableCell>
-                          {isAdminView && (
-                            <TableCell>
-                              <Badge variant="secondary">
-                                {"punto_nombre" in mov
-                                  ? (mov as any).punto_nombre
-                                  : "N/A"}
-                              </Badge>
-                            </TableCell>
-                          )}
-                          <TableCell className="text-right">
-                            <span
-                              className={`font-semibold ${
-                                mov.tipo_movimiento === "INGRESO" ||
-                                mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE"
-                                  ? "text-green-600"
-                                  : "text-red-600"
-                              }`}
-                            >
-                              {mov.tipo_movimiento === "INGRESO" ||
-                              mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE"
-                                ? "+"
-                                : "-"}
-                              {formatCurrency(
-                                Math.abs(mov.monto),
-                                mov.moneda?.codigo
-                              )}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {formatCurrency(
-                              mov.saldo_anterior,
-                              mov.moneda?.codigo
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {formatCurrency(
-                              mov.saldo_nuevo,
-                              mov.moneda?.codigo
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm">
-                              {mov.usuario?.nombre || "Sistema"}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground">
-                              {mov.descripcion || "Sin descripción"}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      );
+            {/* Exportar CSV - Página / Todos + Campos */}
+            <div className="flex items-center gap-1">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    Campos CSV
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Incluir columnas</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                    checked={csvCols.id}
+                    onCheckedChange={(v) =>
+                      setCsvCols((s) => ({ ...s, id: Boolean(v) }))
                     }
-                  }
+                  >
+                    ID
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={csvCols.tipoRef}
+                    onCheckedChange={(v) =>
+                      setCsvCols((s) => ({ ...s, tipoRef: Boolean(v) }))
+                    }
+                  >
+                    Tipo de referencia
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={csvCols.refId}
+                    onCheckedChange={(v) =>
+                      setCsvCols((s) => ({ ...s, refId: Boolean(v) }))
+                    }
+                  >
+                    Referencia ID
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
-                  return rows;
-                })()}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-
-        {/* Resumen */}
-        {movimientosFiltrados.length > 0 && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-600">
-                Mostrando {movimientosFiltrados.length} de {movimientos.length}{" "}
-                movimientos
-              </span>
-              <span className="text-gray-500">
-                Última actualización: {new Date().toLocaleTimeString()}
-              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                onClick={handleExportPage}
+                disabled={current.length === 0}
+                title="Exportar CSV (página actual)"
+              >
+                <Download className="h-4 w-4 mr-1" />
+                Página
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                onClick={handleExportAll}
+                disabled={filtered.length === 0}
+                title="Exportar CSV (todos los resultados)"
+              >
+                <Download className="h-4 w-4 mr-1" />
+                Todo
+              </Button>
             </div>
           </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="pt-3">
+        {isLoading && (movimientos?.length ?? 0) === 0 ? (
+          <Loading text="Cargando movimientos..." className="py-10" />
+        ) : error ? (
+          <div className="text-center py-10 text-red-600">{error}</div>
+        ) : (movimientos?.length ?? 0) === 0 ? (
+          <div className="text-center py-10 text-muted-foreground">
+            No hay movimientos
+          </div>
+        ) : (
+          <>
+            {/* Tabla */}
+            <div className="w-full overflow-auto rounded-md border">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 sticky top-0 z-[1]">
+                  <tr className="text-left">
+                    <th className="px-3 py-2 font-medium">
+                      <CalendarDays className="inline h-4 w-4 mr-1" />
+                      Fecha
+                    </th>
+                    <th className="px-3 py-2 font-medium">Tipo</th>
+                    <th className="px-3 py-2 font-medium">Moneda</th>
+                    <th className="px-3 py-2 font-medium text-right">Monto</th>
+                    {isAdminView && (
+                      <th className="px-3 py-2 font-medium">Punto</th>
+                    )}
+                    <th className="px-3 py-2 font-medium">Descripción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {current.map((m) => (
+                    <tr key={m.id} className="border-t hover:bg-gray-50">
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {new Date(m.fecha).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs ${tipoBadgeClass(
+                            m.tipo_movimiento
+                          )}`}
+                        >
+                          {m.tipo_movimiento.replace("_", " ")}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">{m.moneda_codigo}</td>
+                      <td className="px-3 py-2 text-right font-semibold">
+                        {fmtMoney(m.monto, m.moneda_codigo)}
+                      </td>
+                      {isAdminView && (
+                        <td className="px-3 py-2">{m.punto_nombre ?? "—"}</td>
+                      )}
+                      <td className="px-3 py-2 max-w-[320px]">
+                        <div className="line-clamp-2 text-muted-foreground">
+                          {m.descripcion ?? "—"}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Paginación */}
+            <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+              <div className="text-xs text-gray-600">
+                Mostrando <b>{current.length}</b> de <b>{total}</b> registros •
+                Página <b>{page}</b> de <b>{totalPages}</b>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(v) => setPageSize(Number(v))}
+                >
+                  <SelectTrigger className="h-8 w-28">
+                    <SelectValue placeholder="Tamaño" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[10, 25, 50, 100].map((n) => (
+                      <SelectItem key={n} value={String(n)}>
+                        {n} / pág
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 1}
+                    onClick={() => setPage(1)}
+                  >
+                    ⏮
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    ◀
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    ▶
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === totalPages}
+                    onClick={() => setPage(totalPages)}
+                  >
+                    ⏭
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
   );
-};
-
-export default HistorialMovimientos;
+}
