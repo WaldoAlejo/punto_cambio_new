@@ -6,6 +6,10 @@ import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
 import axios from "axios";
+import {
+  todayGyeDateOnly,
+  gyeDayRangeUtcFromDateOnly,
+} from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -634,8 +638,35 @@ router.get(
         whereClause.usuario_id = req.user.id;
       }
 
+      // Date scoping: default to today's GYE day unless date/from/to provided
+      const { date, from, to } = req.query as {
+        date?: string;
+        from?: string;
+        to?: string;
+      };
+
+      let gte: Date;
+      let lt: Date;
+      if (from || to) {
+        // Range mode: inclusive of entire days from 'from' to 'to'
+        const fromStr = (from || (to as string)) as string; // if only 'to' provided, use it for both
+        const toStr = (to || (from as string)) as string; // if only 'from' provided, use it for both
+        const rFrom = gyeDayRangeUtcFromDateOnly(fromStr).gte;
+        const rTo = gyeDayRangeUtcFromDateOnly(toStr).lt; // end of day for 'to'
+        gte = rFrom;
+        lt = rTo;
+      } else {
+        const dateStr = (date && String(date)) || todayGyeDateOnly();
+        const r = gyeDayRangeUtcFromDateOnly(dateStr);
+        gte = r.gte;
+        lt = r.lt;
+      }
+
       const exchanges = await prisma.cambioDivisa.findMany({
-        where: whereClause,
+        where: {
+          ...whereClause,
+          fecha: { gte, lt },
+        },
         include: {
           monedaOrigen: {
             select: {

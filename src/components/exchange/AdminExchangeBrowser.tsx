@@ -39,6 +39,10 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>("ALL");
   const [valueMin, setValueMin] = useState<string>("");
   const [valueMax, setValueMax] = useState<string>("");
+  // Filtros de fecha: por día o rango
+  const [date, setDate] = useState<string>("");
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,33 +85,43 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
     setOperators(activeOperators);
   }, []);
 
-  const loadExchanges = useCallback(async (pointId: string) => {
-    setError(null);
-    try {
-      if (pointId && pointId !== "ALL") {
-        const { exchanges, error } = await exchangeService.getExchangesByPoint(
-          pointId
-        );
-        if (error) {
-          setExchanges([]);
-          setError(error);
+  const loadExchanges = useCallback(
+    async (pointId: string) => {
+      setError(null);
+      try {
+        const dateParams = date
+          ? { date }
+          : fromDate || toDate
+          ? { from: fromDate || undefined, to: toDate || undefined }
+          : undefined;
+
+        if (pointId && pointId !== "ALL") {
+          const { exchanges, error } =
+            await exchangeService.getExchangesByPoint(pointId, dateParams);
+          if (error) {
+            setExchanges([]);
+            setError(error);
+          } else {
+            setExchanges(exchanges);
+          }
         } else {
-          setExchanges(exchanges);
+          const { exchanges, error } = await exchangeService.getAllExchanges(
+            dateParams
+          );
+          if (error) {
+            setExchanges([]);
+            setError(error);
+          } else {
+            setExchanges(exchanges);
+          }
         }
-      } else {
-        const { exchanges, error } = await exchangeService.getAllExchanges();
-        if (error) {
-          setExchanges([]);
-          setError(error);
-        } else {
-          setExchanges(exchanges);
-        }
+      } catch (e: any) {
+        setError(e?.message || "Error al cargar cambios");
+        setExchanges([]);
       }
-    } catch (e: any) {
-      setError(e?.message || "Error al cargar cambios");
-      setExchanges([]);
-    }
-  }, []);
+    },
+    [date, fromDate, toDate]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -253,6 +267,65 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
                   onChange={(e) => setValueMax(e.target.value)}
                   className="w-[120px]"
                 />
+              </div>
+
+              {/* Filtros de fecha: por día o rango */}
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  placeholder="YYYY-MM-DD"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-[150px]"
+                />
+                <span className="text-muted-foreground text-xs">o</span>
+                <Input
+                  type="date"
+                  placeholder="Desde"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="w-[150px]"
+                />
+                <span className="text-muted-foreground text-xs">a</span>
+                <Input
+                  type="date"
+                  placeholder="Hasta"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="w-[150px]"
+                />
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    // Si se establece una fecha exacta, limpiamos el rango
+                    if (date) {
+                      setFromDate("");
+                      setToDate("");
+                    }
+                    setIsRefreshing(true);
+                    await loadExchanges(selectedPointId);
+                    setIsRefreshing(false);
+                  }}
+                  disabled={isLoading || isRefreshing}
+                  className="whitespace-nowrap"
+                >
+                  Aplicar
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={async () => {
+                    setDate("");
+                    setFromDate("");
+                    setToDate("");
+                    setIsRefreshing(true);
+                    await loadExchanges(selectedPointId);
+                    setIsRefreshing(false);
+                  }}
+                  disabled={isLoading || isRefreshing}
+                  className="whitespace-nowrap"
+                >
+                  Limpiar
+                </Button>
               </div>
 
               <Button

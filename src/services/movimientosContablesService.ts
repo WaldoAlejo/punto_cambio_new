@@ -164,7 +164,8 @@ export const movimientosContablesService = {
   async getHistorialMovimientos(
     punto_atencion_id: string,
     moneda_id?: string,
-    limit = 50
+    limit = 50,
+    opts?: { date?: string; from?: string; to?: string }
   ): Promise<{ movimientos: MovimientoSaldo[] | null; error: string | null }> {
     try {
       const params = new URLSearchParams({
@@ -174,6 +175,9 @@ export const movimientosContablesService = {
       if (moneda_id) {
         params.append("moneda_id", moneda_id);
       }
+      if (opts?.date) params.append("date", opts.date);
+      if (opts?.from) params.append("from", opts.from);
+      if (opts?.to) params.append("to", opts.to);
 
       const response = await axiosInstance.get<{
         movimientos: MovimientoSaldo[];

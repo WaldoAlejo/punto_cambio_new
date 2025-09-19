@@ -171,12 +171,21 @@ export const exchangeService = {
     }
   },
 
-  async getAllExchanges(): Promise<{
+  async getAllExchanges(params?: {
+    date?: string;
+    from?: string;
+    to?: string;
+  }): Promise<{
     exchanges: CambioDivisa[];
     error: string | null;
   }> {
     try {
-      const response = await apiService.get<ExchangesResponse>("/exchanges");
+      const qs = new URLSearchParams();
+      if (params?.date) qs.set("date", params.date);
+      if (params?.from) qs.set("from", params.from);
+      if (params?.to) qs.set("to", params.to);
+      const url = qs.toString() ? `/exchanges?${qs}` : "/exchanges";
+      const response = await apiService.get<ExchangesResponse>(url);
 
       if (response?.success) {
         return { exchanges: response.exchanges, error: null };
@@ -196,11 +205,17 @@ export const exchangeService = {
   },
 
   async getExchangesByPoint(
-    pointId: string
+    pointId: string,
+    params?: { date?: string; from?: string; to?: string }
   ): Promise<{ exchanges: CambioDivisa[]; error: string | null }> {
     try {
+      const qs = new URLSearchParams();
+      qs.set("point_id", pointId);
+      if (params?.date) qs.set("date", params.date);
+      if (params?.from) qs.set("from", params.from);
+      if (params?.to) qs.set("to", params.to);
       const response = await apiService.get<ExchangesResponse>(
-        `/exchanges?point_id=${encodeURIComponent(pointId)}`
+        `/exchanges?${qs.toString()}`
       );
 
       if (response?.success) {

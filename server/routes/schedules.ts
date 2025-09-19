@@ -13,6 +13,27 @@ import {
 
 const router = express.Router();
 
+/** =========================
+ * Utilidades de roles exentos de caja
+ * ========================= */
+const ROLES_EXENTOS_CIERRE = new Set([
+  "ADMINISTRATIVO", // Administrativo
+  "ADMIN", // Administrador
+  "SUPER_USUARIO", // Super Usuario
+  "SUPER USUARIO", // por si llega con espacio
+]);
+
+function normalizaRol(rol?: string) {
+  return (rol || "")
+    .normalize("NFKD")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+function esExentoDeCaja(rol?: string) {
+  return ROLES_EXENTOS_CIERRE.has(normalizaRol(rol));
+}
+
 /** Schema de entrada para crear/actualizar jornada */
 const scheduleSchema = z
   .object({
@@ -365,25 +386,28 @@ router.post(
           updateData.estado = EstadoJornada.ACTIVO;
         }
         if (fecha_salida) {
-          // Bloquear cierre manual si no hay cierre de caja CERRADO hoy para este punto y usuario
-          const { gte } = gyeDayRangeUtcFromDate(new Date());
-          const cierreHoy = await prisma.cuadreCaja.findFirst({
-            where: {
-              usuario_id: usuario_id,
-              punto_atencion_id,
-              fecha: { gte },
-              estado: "CERRADO",
-            },
-          });
-          if (!cierreHoy) {
-            res.status(400).json({
-              success: false,
-              error:
-                "Debe realizar el cierre de caja diario antes de finalizar su jornada",
+          // === AJUSTE: exentos cierran jornada sin exigir cierre de caja ===
+          if (!esExentoDeCaja(req.user?.rol)) {
+            // Para roles que sí manejan caja, mantener la verificación de cierre diario
+            const { gte } = gyeDayRangeUtcFromDate(new Date());
+            const cierreHoy = await prisma.cuadreCaja.findFirst({
+              where: {
+                usuario_id: usuario_id,
+                punto_atencion_id,
+                fecha: { gte },
+                estado: "CERRADO",
+              },
             });
-            return;
+            if (!cierreHoy) {
+              res.status(400).json({
+                success: false,
+                error:
+                  "Debe realizar el cierre de caja diario antes de finalizar su jornada",
+              });
+              return;
+            }
           }
-
+          // Finalizar jornada (para exentos y para quienes ya cerraron caja)
           updateData.fecha_salida = new Date(fecha_salida);
           updateData.estado = EstadoJornada.COMPLETADO;
           // Al cerrar jornada, limpiar punto del usuario
@@ -463,6 +487,7 @@ router.post(
         requestedBy: req.user?.id,
         role: rol,
         overrideUsed: !!override && esPrivilegiado,
+        exentoCaja: esExentoDeCaja(rol),
       });
 
       res.status(existingSchedule ? 200 : 201).json({

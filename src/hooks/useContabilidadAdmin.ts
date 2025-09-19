@@ -86,7 +86,11 @@ export const useContabilidadAdmin = ({
 
   // Cargar movimientos consolidados de todos los puntos
   const cargarMovimientosConsolidados = useCallback(
-    async (moneda_id?: string, limit = 100) => {
+    async (
+      moneda_id?: string,
+      limit = 100,
+      opts?: { date?: string; from?: string; to?: string }
+    ) => {
       try {
         if (!isAdmin) {
           setMovimientosConsolidados([]);
@@ -112,7 +116,8 @@ export const useContabilidadAdmin = ({
             await movimientosContablesService.getHistorialMovimientos(
               punto.id,
               moneda_id,
-              limit
+              limit,
+              opts
             );
 
           if (movimientosError) {

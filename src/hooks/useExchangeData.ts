@@ -29,12 +29,17 @@ export const useExchangeData = (selectedPoint: PuntoAtencion | null) => {
       }
     };
 
-    const loadExchanges = async () => {
+    const loadExchanges = async (opts?: {
+      date?: string;
+      from?: string;
+      to?: string;
+    }) => {
       try {
         setError(null); // limpia error previo
         if (selectedPoint) {
           const { exchanges } = await exchangeService.getExchangesByPoint(
-            selectedPoint.id
+            selectedPoint.id,
+            opts
           );
           setExchanges(exchanges);
         }
@@ -71,5 +76,8 @@ export const useExchangeData = (selectedPoint: PuntoAtencion | null) => {
     removeExchange,
     isLoadingCurrencies,
     error, // NUEVO: para manejar errores en la UI
+    // Permitir a consumidores recargar con rango de fechas
+    reload: (opts?: { date?: string; from?: string; to?: string }) =>
+      loadExchanges(opts),
   };
 };

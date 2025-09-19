@@ -57,7 +57,11 @@ export const useContabilidadDivisas = ({
 
   // Cargar historial de movimientos
   const cargarMovimientos = useCallback(
-    async (moneda_id?: string, limit = 50) => {
+    async (
+      moneda_id?: string,
+      limit = 50,
+      opts?: { date?: string; from?: string; to?: string }
+    ) => {
       if (!selectedPoint) return;
 
       try {
@@ -65,7 +69,8 @@ export const useContabilidadDivisas = ({
           await movimientosContablesService.getHistorialMovimientos(
             selectedPoint.id,
             moneda_id,
-            limit
+            limit,
+            opts
           );
 
         if (movimientosError) {

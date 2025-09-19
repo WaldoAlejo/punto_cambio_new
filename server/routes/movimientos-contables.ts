@@ -3,6 +3,10 @@ import type { Request, Response } from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { pool } from "../lib/database.js";
 import { randomUUID } from "crypto";
+import {
+  todayGyeDateOnly,
+  gyeDayRangeUtcFromDateOnly,
+} from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -35,7 +39,31 @@ router.get(
       WHERE ms.punto_atencion_id = $1
     `;
 
-      const params = [pointId];
+      const params: any[] = [pointId];
+
+      // Date scoping: default to today's GYE day unless date/from/to provided
+      const { date, from, to } = req.query as {
+        date?: string;
+        from?: string;
+        to?: string;
+      };
+      let gte: Date;
+      let lt: Date;
+      if (from || to) {
+        const fromStr = (from || (to as string)) as string;
+        const toStr = (to || (from as string)) as string;
+        gte = gyeDayRangeUtcFromDateOnly(fromStr).gte;
+        lt = gyeDayRangeUtcFromDateOnly(toStr).lt;
+      } else {
+        const dateStr = (date && String(date)) || todayGyeDateOnly();
+        const r = gyeDayRangeUtcFromDateOnly(dateStr);
+        gte = r.gte;
+        lt = r.lt;
+      }
+      query += ` AND ms.fecha >= $${params.length + 1} AND ms.fecha < $${
+        params.length + 2
+      }`;
+      params.push(gte, lt);
 
       // Filtrar por moneda si se especifica
       if (moneda_id) {
