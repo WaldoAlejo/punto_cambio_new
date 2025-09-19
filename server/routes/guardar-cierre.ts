@@ -138,6 +138,7 @@ router.post("/", authenticateToken, async (req, res) => {
       });
     }
 
+    // Al cerrar caja, finalizamos la jornada activa del usuario
     await prisma.jornada.updateMany({
       where: {
         usuario_id: usuario.id,
@@ -150,6 +151,7 @@ router.post("/", authenticateToken, async (req, res) => {
       },
     });
 
+    // Liberar el punto de atención para el usuario
     await prisma.usuario.update({
       where: { id: usuario.id },
       data: { punto_atencion_id: null },

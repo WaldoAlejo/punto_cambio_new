@@ -19,6 +19,9 @@ import { emitPointSelected } from "@/lib/pointEvents";
 const ExchangeManagement = React.lazy(
   () => import("../exchange/ExchangeManagement")
 );
+const AdminExchangeBrowser = React.lazy(
+  () => import("../exchange/AdminExchangeBrowser")
+);
 const PendingExchangesList = React.lazy(
   () => import("../exchange/PendingExchangesList")
 );
@@ -173,11 +176,13 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView]);
 
-  /** Back/forward: URL -> VIEW */
+  /** Back/forward: URL -> VIEW (only when URL changes) */
   useEffect(() => {
     const qp = searchParams.get("view");
-    if (qp && VALID_VIEWS.has(qp) && qp !== activeView) setActiveView(qp);
-  }, [searchParams, activeView]);
+    if (qp && VALID_VIEWS.has(qp)) {
+      setActiveView((prev) => (prev !== qp ? qp : prev));
+    }
+  }, [searchParams]);
 
   /** Sync de selectedPoint -> URL & localStorage (sin reload) */
   useEffect(() => {
@@ -228,13 +233,16 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   const renderContent = useCallback(() => {
     switch (activeView) {
       case "exchanges":
-        if (!isOperador)
+        if (!isOperador && !isAdmin)
           return (
             <Unauthorized
-              message="Solo los operadores pueden acceder al módulo de cambio de divisas"
+              message="Solo los operadores o administradores pueden acceder al módulo de cambio de divisas"
               onGoBack={() => setActiveView("dashboard")}
             />
           );
+        if (isAdmin) {
+          return <AdminExchangeBrowser user={user} />;
+        }
         return (
           <ExchangeManagement
             user={user}

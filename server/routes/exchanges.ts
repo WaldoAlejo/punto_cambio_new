@@ -76,7 +76,7 @@ router.post(
   validate(exchangeSchema),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
-      const {
+      let {
         moneda_origen_id,
         moneda_destino_id,
         monto_origen,
@@ -103,6 +103,80 @@ router.post(
         saldo_pendiente,
         referencia_cambio_principal,
       } = req.body;
+
+      // Normalización de par con USD para evitar inversiones por error en selección
+      // Regla:
+      // - COMPRA: el cliente entrega divisa (no USD) y recibe USD
+      // - VENTA: el cliente entrega USD y recibe divisa (no USD)
+      // Si viene invertido y una de las monedas es USD, intercambiamos origen/destino y sus montos/detalles
+      try {
+        const usdMoneda = await prisma.moneda.findFirst({
+          where: { codigo: "USD" },
+        });
+        if (
+          usdMoneda &&
+          (moneda_origen_id === usdMoneda.id ||
+            moneda_destino_id === usdMoneda.id)
+        ) {
+          const isCompra = tipo_operacion === "COMPRA";
+          const isVenta = tipo_operacion === "VENTA";
+
+          if (isCompra) {
+            // USD debe ser DESTINO
+            if (moneda_origen_id === usdMoneda.id) {
+              // Swap monedas
+              [moneda_origen_id, moneda_destino_id] = [
+                moneda_destino_id,
+                moneda_origen_id,
+              ];
+              // Swap montos totales
+              [monto_origen, monto_destino] = [monto_destino, monto_origen];
+              // Swap detalles de divisas
+              [divisas_entregadas_billetes, divisas_recibidas_billetes] = [
+                divisas_recibidas_billetes,
+                divisas_entregadas_billetes,
+              ];
+              [divisas_entregadas_monedas, divisas_recibidas_monedas] = [
+                divisas_recibidas_monedas,
+                divisas_entregadas_monedas,
+              ];
+              [divisas_entregadas_total, divisas_recibidas_total] = [
+                divisas_recibidas_total,
+                divisas_entregadas_total,
+              ];
+            }
+          } else if (isVenta) {
+            // USD debe ser ORIGEN
+            if (moneda_destino_id === usdMoneda.id) {
+              // Swap monedas
+              [moneda_origen_id, moneda_destino_id] = [
+                moneda_destino_id,
+                moneda_origen_id,
+              ];
+              // Swap montos totales
+              [monto_origen, monto_destino] = [monto_destino, monto_origen];
+              // Swap detalles de divisas
+              [divisas_entregadas_billetes, divisas_recibidas_billetes] = [
+                divisas_recibidas_billetes,
+                divisas_entregadas_billetes,
+              ];
+              [divisas_entregadas_monedas, divisas_recibidas_monedas] = [
+                divisas_recibidas_monedas,
+                divisas_entregadas_monedas,
+              ];
+              [divisas_entregadas_total, divisas_recibidas_total] = [
+                divisas_recibidas_total,
+                divisas_entregadas_total,
+              ];
+            }
+          }
+        }
+      } catch (e) {
+        // Si falla la normalización, continuamos sin bloquear la operación
+        logger.warn("No se pudo normalizar par USD (continuando)", {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
 
       if (!req.user?.id) {
         res.status(401).json({

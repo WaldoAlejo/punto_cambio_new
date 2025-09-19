@@ -365,6 +365,25 @@ router.post(
           updateData.estado = EstadoJornada.ACTIVO;
         }
         if (fecha_salida) {
+          // Bloquear cierre manual si no hay cierre de caja CERRADO hoy para este punto y usuario
+          const { gte } = gyeDayRangeUtcFromDate(new Date());
+          const cierreHoy = await prisma.cuadreCaja.findFirst({
+            where: {
+              usuario_id: usuario_id,
+              punto_atencion_id,
+              fecha: { gte },
+              estado: "CERRADO",
+            },
+          });
+          if (!cierreHoy) {
+            res.status(400).json({
+              success: false,
+              error:
+                "Debe realizar el cierre de caja diario antes de finalizar su jornada",
+            });
+            return;
+          }
+
           updateData.fecha_salida = new Date(fecha_salida);
           updateData.estado = EstadoJornada.COMPLETADO;
           // Al cerrar jornada, limpiar punto del usuario

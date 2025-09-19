@@ -1,5 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -92,6 +93,27 @@ const ExchangeFormFields = ({
   const fromOptions = currencies.filter((c) => c.id !== toCurrency);
   const toOptions = currencies.filter((c) => c.id !== fromCurrency);
 
+  // Detección de inversión USD según tipo de operación
+  const usdCurrency = currencies.find((c) => c.codigo === "USD");
+  const isUSDFrom = !!usdCurrency && fromCurrency === usdCurrency.id;
+  const isUSDTo = !!usdCurrency && toCurrency === usdCurrency.id;
+  const usdInversion =
+    !!usdCurrency &&
+    ((operationType === "COMPRA" && isUSDFrom) ||
+      (operationType === "VENTA" && isUSDTo));
+
+  const fixUSDInversion = () => {
+    // Intercambia origen/destino y limpia montos/tasas para evitar unidades equivocadas
+    const prevFrom = fromCurrency;
+    const prevTo = toCurrency;
+    setFromCurrency(prevTo);
+    setToCurrency(prevFrom);
+    setAmountBilletes("");
+    setAmountMonedas("");
+    setRateBilletes("");
+    setRateMonedas("");
+  };
+
   // Helpers para limpiar tasas cuando no se usa el monto asociado
   const onAmountBilletesChange = (v: string) => {
     setAmountBilletes(v);
@@ -155,6 +177,28 @@ const ExchangeFormFields = ({
           />
         </div>
       </div>
+
+      {/* Aviso y corrección si USD está invertido con respecto al tipo */}
+      {usdInversion && (
+        <div className="p-3 border border-yellow-300 bg-yellow-50 rounded-md text-sm flex items-start justify-between gap-3">
+          <div>
+            <p className="font-medium text-yellow-800">
+              Detección de inversión USD para {operationType}.
+            </p>
+            <p className="text-yellow-800/90">
+              Para {operationType === "COMPRA" ? "COMPRA" : "VENTA"}, USD debe
+              ser{" "}
+              {operationType === "COMPRA"
+                ? "moneda de DESTINO"
+                : "moneda de ORIGEN"}
+              .
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={fixUSDInversion}>
+            Corregir
+          </Button>
+        </div>
+      )}
 
       {/* Información del comportamiento de cálculo */}
       {fromCurrency && toCurrency && (

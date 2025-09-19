@@ -1,5 +1,5 @@
 // src/types/events.d.ts
-import type { PointSelectedDetail } from "@/lib/events/pointEvents";
+import type { PointSelectedDetail } from "@/lib/pointEvents";
 
 declare global {
   interface WindowEventMap {

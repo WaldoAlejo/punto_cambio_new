@@ -275,18 +275,18 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     });
 
     if (invalidBalances.length > 0) {
-      const proceed = window.confirm(
-        `⚠️ Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
-          .map(
-            (d) =>
-              `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(
-                2
-              )}, Ingresado ${calculateUserTotal(d.moneda_id).toFixed(2)}`
-          )
-          .join("\n")}\n\n¿Desea continuar de todas formas?`
-      );
-
-      if (!proceed) return;
+      const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
+        .map(
+          (d) =>
+            `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(
+              2
+            )}, Ingresado ${calculateUserTotal(d.moneda_id).toFixed(2)}`
+        )
+        .join(
+          "\n"
+        )}\n\nRegistre el servicio externo (USD) o el cambio de divisa faltante y vuelva a intentar.`;
+      toast({ title: "No cuadra", description: msg, variant: "destructive" });
+      return;
     }
 
     // Preparar detalles del cuadre con los datos del usuario
@@ -659,6 +659,12 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 >
                   Realizar Cierre Diario
                 </Button>
+
+                {/* Sugerencia: accesos rápidos para cuadrar */}
+                <div className="mt-3 text-xs text-gray-600 text-center">
+                  Si no cuadra, registre un movimiento en Servicios Externos
+                  (USD) o agregue el Cambio de Divisa faltante.
+                </div>
               </div>
             )}
           </CardContent>

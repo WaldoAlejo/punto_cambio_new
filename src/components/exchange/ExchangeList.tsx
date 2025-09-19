@@ -18,6 +18,8 @@ interface ExchangeListProps {
   currencies: Moneda[];
   onReprintReceipt?: (exchange: CambioDivisa) => void;
   onDeleted?: (id: string) => void;
+  showPointName?: boolean;
+  showUserName?: boolean;
 }
 
 const ExchangeList = ({
@@ -25,6 +27,8 @@ const ExchangeList = ({
   currencies,
   onReprintReceipt,
   onDeleted,
+  showPointName = false,
+  showUserName = false,
 }: ExchangeListProps) => {
   if (!exchanges || !currencies) {
     return (
@@ -109,6 +113,9 @@ const ExchangeList = ({
         const { success, error } = await exchangeService.deleteExchange(id);
         if (success) {
           onDeleted?.(id);
+          try {
+            window.dispatchEvent(new CustomEvent("saldosUpdated"));
+          } catch {}
           toast.success("Cambio eliminado correctamente");
         } else {
           toast.error(error || "No se pudo eliminar");
@@ -192,9 +199,19 @@ const ExchangeList = ({
                   </p>
 
                   <div className="flex justify-between items-center pt-1">
-                    <span className="text-muted-foreground">
-                      Tasa: {getTasaTexto(exchange)}
-                    </span>
+                    <div className="flex items-center gap-3 text-muted-foreground">
+                      <span>Tasa: {getTasaTexto(exchange)}</span>
+                      {showPointName && exchange.puntoAtencion?.nombre && (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200">
+                          Punto: {exchange.puntoAtencion.nombre}
+                        </span>
+                      )}
+                      {showUserName && exchange.usuario?.nombre && (
+                        <span className="inline-flex items-center text-xs px-2 py-0.5 bg-slate-50 text-slate-700 rounded border border-slate-200">
+                          Operador: {exchange.usuario.nombre}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       {exchange.numero_recibo ? (
                         <span className="text-muted-foreground">

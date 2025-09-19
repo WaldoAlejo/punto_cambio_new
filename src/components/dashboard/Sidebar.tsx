@@ -120,6 +120,12 @@ const Sidebar = ({
       label: "Reportes Generales",
       color: "text-red-600",
     },
+    // Acceso a cambios para ver/eliminar
+    {
+      id: "exchanges",
+      label: "Cambios (admin)",
+      color: "text-blue-700",
+    },
     // Separador visual
     {
       id: "separator-1",

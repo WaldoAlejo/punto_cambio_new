@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,6 +37,7 @@ import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 export const UserManagement = () => {
   const { user: currentUser } = useAuth();
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
+
   const [users, setUsers] = useState<Usuario[]>([]);
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -54,29 +55,57 @@ export const UserManagement = () => {
     password: "",
   });
 
+  // Caches para evitar llamar de nuevo si ya se cargó en esta sesión
+  const usersCacheRef = useRef<Usuario[] | null>(null);
+  const pointsCacheRef = useRef<PuntoAtencion[] | null>(null);
+  const mountedRef = useRef<boolean>(false);
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
   const loadData = async () => {
+    if (!mountedRef.current) return;
     setIsLoading(true);
     setError(null);
-    try {
-      const [usersResult, pointsResult] = await Promise.all([
-        userService.getAllUsers(),
-        pointService.getAllPoints(),
-      ]);
 
-      setUsers(usersResult.users);
-      setPoints(pointsResult.points);
+    try {
+      // 1) Users (usar cache si existe)
+      let loadedUsers: Usuario[] | null = usersCacheRef.current;
+      if (!loadedUsers) {
+        const usersResult = await userService.getAllUsers();
+        loadedUsers = usersResult.users;
+        usersCacheRef.current = loadedUsers;
+      }
+      if (!mountedRef.current) return;
+      setUsers(loadedUsers || []);
+
+      // pequeño respiro para no disparar al rate-limit
+      await sleep(300);
+
+      // 2) Points (usar cache si existe)
+      let loadedPoints: PuntoAtencion[] | null = pointsCacheRef.current;
+      if (!loadedPoints) {
+        const pointsResult = await pointService.getAllPoints();
+        loadedPoints = pointsResult.points;
+        pointsCacheRef.current = loadedPoints;
+      }
+      if (!mountedRef.current) return;
+      setPoints(loadedPoints || []);
     } catch (err) {
       console.error("Error loading data:", err);
       const errorMessage = "Error al cargar datos";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    mountedRef.current = true;
     loadData();
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,6 +146,10 @@ export const UserManagement = () => {
         return;
       }
 
+      // Invalida caches para forzar recarga fresca
+      usersCacheRef.current = null;
+      pointsCacheRef.current = null;
+
       await loadData();
       setFormData({
         username: "",
@@ -149,6 +182,11 @@ export const UserManagement = () => {
       async () => {
         try {
           await userService.toggleUserStatus(user.id);
+
+          // Invalida caches y recarga
+          usersCacheRef.current = null;
+          pointsCacheRef.current = null;
+
           await loadData();
           toast.success(
             `✅ Usuario ${user.nombre} ${
@@ -169,6 +207,7 @@ export const UserManagement = () => {
       ADMIN: "Administrador",
       OPERADOR: "Operador",
       CONCESION: "Concesión",
+      ADMINISTRATIVO: "Administrativo",
     };
     return roles[rol] || rol;
   };
@@ -452,7 +491,12 @@ export const UserManagement = () => {
           user={editingUser}
           isOpen={true}
           onClose={() => setEditingUser(null)}
-          onUserUpdated={loadData}
+          onUserUpdated={() => {
+            // invalidar cache y recargar
+            usersCacheRef.current = null;
+            pointsCacheRef.current = null;
+            loadData();
+          }}
           currentUser={currentUser!}
         />
       )}

@@ -250,20 +250,20 @@ const TimeTracker = ({
   const handleFinalizarJornada = () => {
     if (jornadaActual.estado !== "TRABAJANDO") return;
 
+    // En lugar de terminar directo, redirigimos al cierre diario
     showConfirmation(
-      "Confirmar finalización de jornada",
-      "¿Está seguro de finalizar su jornada laboral? Esta acción no se puede deshacer.",
+      "Cierre requerido",
+      "Para finalizar su jornada debe realizar primero el cierre de caja diario.",
       async () => {
-        const ahora = new Date().toISOString();
         try {
-          await guardarJornadaBackend({
-            usuario_id: user.id,
-            punto_atencion_id: selectedPoint?.id,
-            fecha_salida: ahora,
-          });
-          toast.success(`🏁 Jornada finalizada a las ${formatearHora(ahora)}`);
+          // Redirige a la vista de cierre diario en el Dashboard
+          const url = new URL(window.location.href);
+          url.searchParams.set("view", "daily-close");
+          window.history.pushState({}, "", url.toString());
+          window.dispatchEvent(new Event("popstate"));
+          toast.info("Vaya a Cierre Diario para finalizar su jornada.");
         } catch {
-          // Error manejado en guardarJornadaBackend
+          toast.info("Vaya a Cierre Diario para finalizar su jornada.");
         }
       }
     );

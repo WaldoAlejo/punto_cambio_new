@@ -37,7 +37,8 @@ const ExchangeManagement = ({
     onReturnToDashboard,
   });
 
-  // Guardas de acceso: SOLO Operador / Concesión pueden operar cambios
+  // Guardas de acceso: Operador / Concesión operan; Admin puede ver listas y eliminar
+  const isAdmin = user?.rol === "ADMIN" || user?.rol === "SUPER_USUARIO";
   const canOperate = user?.rol === "OPERADOR" || user?.rol === "CONCESION";
 
   if (!user) {
@@ -48,7 +49,7 @@ const ExchangeManagement = ({
     );
   }
 
-  if (!canOperate) {
+  if (!canOperate && !isAdmin) {
     return (
       <div className="p-6 text-center py-12 text-gray-500 text-lg">
         Los cambios de divisas solo pueden ser realizados por usuarios con rol{" "}

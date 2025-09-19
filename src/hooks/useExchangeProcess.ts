@@ -309,6 +309,11 @@ export const useExchangeProcess = ({
         return;
       }
 
+      // Notificar de inmediato para refrescar saldos y listas, incluso si queda pendiente
+      try {
+        window.dispatchEvent(new CustomEvent("saldosUpdated"));
+      } catch {}
+
       // 🎯 Decidir si auto-completar o dejar pendiente
       const shouldAutoComplete =
         data.metodoEntrega === "efectivo" &&

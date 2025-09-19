@@ -13,10 +13,16 @@ if (fs.existsSync(".env.local")) {
   dotenv.config();
 }
 
-import express from "express";
+import express, {
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import rateLimit, {
+  type Options as RateLimitOptions,
+} from "express-rate-limit";
 import path from "path";
 import { fileURLToPath } from "url";
 import logger from "./utils/logger.js";
@@ -54,25 +60,76 @@ import serviciosExternosRoutes from "./routes/servicios-externos.js";
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
 
-// Rate limiting - Configuración más permisiva para aplicación interna
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 1000, // 1000 peticiones por IP en 15 minutos (más permisivo)
-  message: "Too many requests from this IP, please try again later.",
-  standardHeaders: true, // Incluir headers de rate limit
-  legacyHeaders: false, // Deshabilitar headers legacy
-  skip: (req) => {
-    // Excluir rutas críticas del rate limiting
-    const excludedPaths = [
-      "/health",
-      "/api/auth/verify",
-      "/api/exchanges",
-      "/api/transfers",
-      "/api/servientrega",
-    ];
-    return excludedPaths.some((p) => req.path.startsWith(p));
-  },
+// MUY IMPORTANTE cuando hay LB / proxy (GCP / Nginx / Ingress)
+app.set("trust proxy", 1);
+
+// ===== Rate limiting =====
+
+// Genera una “clave” por usuario si existe (mejor que por IP del LB)
+const keyGenerator: RateLimitOptions["keyGenerator"] = (
+  req: Request
+): string => {
+  // Si tu middleware de auth adjunta user en req (p.ej. req.user.id), úsalo:
+  // @ts-ignore
+  const userId = req.user?.id || (req as any).userId;
+  if (userId) return `user:${userId}`;
+
+  // Usa el token para diferenciar (sin guardar PII)
+  const auth = req.get("authorization");
+  if (auth) return `auth:${auth}`;
+
+  // Fallback a IP (ya confiable por trust proxy)
+  return `ip:${req.ip}`;
+};
+
+// Handler 429 que incluye Retry-After (tu front lo usa para backoff)
+const rateLimit429Handler: RateLimitOptions["handler"] = (
+  _req: Request,
+  res: Response,
+  _next: NextFunction,
+  options
+) => {
+  const retryAfterSec = Math.ceil((options.windowMs ?? 60_000) / 1000);
+  res.setHeader("Retry-After", String(retryAfterSec));
+  return res.status(options.statusCode ?? 429).json({
+    error: "Too Many Requests",
+    message: "Too many requests from this source. Please try again later.",
+    retryAfterSeconds: retryAfterSec,
+    timestamp: new Date().toISOString(),
+  });
+};
+
+// Rutas a excluir del limitador global
+const excludedPaths = [
+  "/health",
+  "/api/auth/verify",
+  "/api/exchanges",
+  "/api/transfers",
+  "/api/servientrega",
+];
+
+// Limiter global (más permisivo y con keyGenerator por user/token)
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 2000,
+  standardHeaders: true, // RateLimit-* headers
+  legacyHeaders: false,
+  keyGenerator,
+  handler: rateLimit429Handler,
+  skip: (req) => excludedPaths.some((p) => req.path.startsWith(p)),
 });
+
+// Limiter relajado para endpoints muy usados en el panel
+const relaxedLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 6000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator,
+  handler: rateLimit429Handler,
+});
+
+app.use(globalLimiter);
 
 // Middleware
 app.use(
@@ -125,11 +182,15 @@ app.use(
       "X-RateLimit-Limit",
       "X-RateLimit-Remaining",
       "X-RateLimit-Reset",
+      "RateLimit-Limit",
+      "RateLimit-Remaining",
+      "RateLimit-Reset",
+      "Retry-After",
     ],
     maxAge: 86400, // cache preflight 24h
   })
 );
-app.use(limiter);
+
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -155,9 +216,10 @@ app.get("/health", (_req, res) => {
 // Rate limit status endpoint
 app.get("/api/rate-limit-status", (req, res) => {
   const rateLimitHeaders = {
-    limit: res.get("X-RateLimit-Limit"),
-    remaining: res.get("X-RateLimit-Remaining"),
-    reset: res.get("X-RateLimit-Reset"),
+    limit: res.get("X-RateLimit-Limit") || res.get("RateLimit-Limit"),
+    remaining:
+      res.get("X-RateLimit-Remaining") || res.get("RateLimit-Remaining"),
+    reset: res.get("X-RateLimit-Reset") || res.get("RateLimit-Reset"),
   };
 
   res.json({
@@ -168,15 +230,19 @@ app.get("/api/rate-limit-status", (req, res) => {
   });
 });
 
-// API Routes
+// ===== API Routes =====
+
+// Rutas con uso intensivo en panel: aplicar relaxedLimiter ANTES de las rutas
+app.use("/api/users", relaxedLimiter, userRoutes);
+app.use("/api/points", relaxedLimiter, pointRoutes);
+app.use("/api/transfer-approvals", relaxedLimiter, transferApprovalRoutes);
+
+// Resto de rutas
 app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/points", pointRoutes);
 app.use("/api/currencies", currencyRoutes);
 app.use("/api/currencies", currencyBehaviorRoutes);
 app.use("/api/balances", balanceRoutes);
 app.use("/api/transfers", transferRoutes);
-app.use("/api/transfer-approvals", transferApprovalRoutes);
 app.use("/api/exchanges", exchangeRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/spontaneous-exits", spontaneousExitRoutes);
@@ -245,30 +311,23 @@ try {
 }
 
 // Error handling middleware
-app.use(
-  (
-    err: unknown,
-    req: express.Request,
-    res: express.Response,
-    _next: express.NextFunction
-  ) => {
-    const error = err instanceof Error ? err : new Error("Unknown error");
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  const error = err instanceof Error ? err : new Error("Unknown error");
 
-    logger.error("Unhandled error", {
-      error: error.message,
-      stack: error.stack,
-      url: req.url,
-      method: req.method,
-      ip: req.ip,
-      timestamp: new Date().toISOString(),
-    });
+  logger.error("Unhandled error", {
+    error: error.message,
+    stack: error.stack,
+    url: req.url,
+    method: req.method,
+    ip: req.ip,
+    timestamp: new Date().toISOString(),
+  });
 
-    res.status(500).json({
-      error: "Internal server error",
-      timestamp: new Date().toISOString(),
-    });
-  }
-);
+  res.status(500).json({
+    error: "Internal server error",
+    timestamp: new Date().toISOString(),
+  });
+});
 
 // 404 handler solo para rutas de API
 app.use("/api/*", (req, res) => {
