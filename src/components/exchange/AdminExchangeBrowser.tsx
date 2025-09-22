@@ -19,6 +19,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { RefreshCw, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface AdminExchangeBrowserProps {
   user: User;
@@ -147,8 +148,16 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
           await import("@/services/externalServicesService")
         ).listarMovimientosServiciosExternosAdmin(params);
         setExternalServices(success ? movimientos : []);
-      } catch (e) {
+        if (!success) {
+          toast.error("No se pudieron cargar los servicios externos");
+        }
+      } catch (e: any) {
         setExternalServices([]);
+        toast.error(
+          e?.friendlyMessage ||
+            e?.message ||
+            "Error cargando servicios externos"
+        );
       }
     },
     [extDesde, extHasta]
@@ -532,9 +541,34 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
                                 ?.nombre || it.punto_atencion_id}
                             </td>
                             <td className="p-2">{it.servicio}</td>
-                            <td className="p-2">{it.tipo_movimiento}</td>
+                            <td className="p-2">
+                              <Badge
+                                variant={
+                                  it.tipo_movimiento === "INGRESO"
+                                    ? "secondary"
+                                    : "destructive"
+                                }
+                                className={
+                                  it.tipo_movimiento === "INGRESO"
+                                    ? "bg-green-100 text-green-800 border-green-200"
+                                    : "bg-red-100 text-red-800 border-red-200"
+                                }
+                              >
+                                {it.tipo_movimiento === "INGRESO"
+                                  ? "Ingreso"
+                                  : "Egreso"}
+                              </Badge>
+                            </td>
                             <td className="p-2 text-right">
-                              {Number(it.monto).toFixed(2)}
+                              <span
+                                className={
+                                  it.tipo_movimiento === "INGRESO"
+                                    ? "text-green-700"
+                                    : "text-red-700"
+                                }
+                              >
+                                {Number(it.monto).toFixed(2)}
+                              </span>
                             </td>
                             <td className="p-2">
                               {it.numero_referencia?.trim()

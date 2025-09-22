@@ -234,9 +234,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     return bills + coins;
   };
 
+  // Permitir hasta ±1.00 USD de ajuste; otras divisas deben cuadrar (±0.01)
+  const getTolerance = (detalle: CuadreDetalle) =>
+    detalle.codigo === "USD" ? 1.0 : 0.01;
+
   const validateBalance = (detalle: CuadreDetalle, userTotal: number) => {
     const difference = Math.abs(userTotal - detalle.saldo_cierre);
-    const tolerance = 0.01; // Tolerancia de 1 centavo
+    const tolerance = getTolerance(detalle);
     return difference <= tolerance;
   };
 
@@ -268,7 +272,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       return;
     }
 
-    // Validar que los saldos cuadren (opcional - mostrar advertencia pero permitir continuar)
+    // Validación estricta: todas las divisas deben cuadrar con tolerancia por divisa (USD ±1.00, otras ±0.01)
     const invalidBalances = cuadreData.detalles.filter((detalle) => {
       const userTotal = calculateUserTotal(detalle.moneda_id);
       return !validateBalance(detalle, userTotal);
@@ -276,12 +280,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
     if (invalidBalances.length > 0) {
       const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
-        .map(
-          (d) =>
-            `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(
-              2
-            )}, Ingresado ${calculateUserTotal(d.moneda_id).toFixed(2)}`
-        )
+        .map((d) => {
+          const userTotal = calculateUserTotal(d.moneda_id);
+          const tolerance = getTolerance(d).toFixed(2);
+          return `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(
+            2
+          )}, Ingresado ${userTotal.toFixed(2)} (tolerancia ±${tolerance})`;
+        })
         .join(
           "\n"
         )}\n\nRegistre el servicio externo (USD) o el cambio de divisa faltante y vuelva a intentar.`;
@@ -322,27 +327,33 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       const res = await fetch(
         `${
           import.meta.env.VITE_API_URL || "http://35.238.95.118/api"
-        }/cuadre-caja`,
+        }/guardar-cierre`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify({ ...requestBody, tipo_cierre: "CERRADO" }),
         }
       );
 
       const data = await res.json();
 
-      if (!data.success) {
+      if (!res.ok || !data.success) {
         throw new Error(data.error || "Error inesperado");
       }
 
-      setTodayClose(data.cuadre);
+      setTodayClose({
+        // Minimal representation for post-success UX
+        id: data.cuadre_id,
+        estado: "CERRADO",
+        observaciones: requestBody.observaciones,
+      } as unknown as CuadreCaja);
       toast({
         title: "Cierre realizado",
-        description: "El cierre diario se ha guardado correctamente",
+        description:
+          "El cierre diario se ha guardado correctamente y la jornada fue finalizada.",
       });
     } catch (error) {
       console.error("💥 Error in performDailyClose:", error);

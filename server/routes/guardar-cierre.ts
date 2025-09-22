@@ -89,6 +89,34 @@ router.post("/", authenticateToken, async (req, res) => {
 
     let cuadre;
 
+    // Validación de tolerancia: USD ±1.00, otras ±0.01 por divisa
+    const monedas = await prisma.moneda.findMany({
+      where: { activo: true },
+      select: { id: true, codigo: true },
+    });
+    const monedaPorId = new Map(monedas.map((m) => [m.id, m.codigo]));
+
+    const diferenciasInvalidas = detalles.filter((d) => {
+      const codigo = monedaPorId.get(d.moneda_id);
+      const tolerance = codigo === "USD" ? 1.0 : 0.01;
+      const diff = Math.abs((d.conteo_fisico || 0) - (d.saldo_cierre || 0));
+      return diff > tolerance + 1e-9; // margen numérico
+    });
+
+    if (diferenciasInvalidas.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Las diferencias superan la tolerancia permitida. Registre el servicio externo (USD) o el cambio de divisa faltante.",
+        detalles_invalidos: diferenciasInvalidas.map((d) => ({
+          moneda_id: d.moneda_id,
+          esperado: d.saldo_cierre,
+          ingresado: d.conteo_fisico,
+          codigo: monedaPorId.get(d.moneda_id) || "",
+        })),
+      });
+    }
+
     if (cuadreExistente) {
       cuadre = await prisma.cuadreCaja.update({
         where: { id: cuadreExistente.id },
