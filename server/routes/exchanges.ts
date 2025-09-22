@@ -43,8 +43,14 @@ const exchangeSchema = z.object({
   divisas_recibidas_monedas: z.number().default(0),
   divisas_recibidas_total: z.number().default(0),
 
+  // Control de entrega USD
+  metodo_entrega: z
+    .enum(["efectivo", "transferencia", "mixto"])
+    .default("efectivo"),
+  usd_entregado_efectivo: z.number().optional().nullable(),
+  usd_entregado_transfer: z.number().optional().nullable(),
+
   observacion: z.string().optional(),
-  metodo_entrega: z.enum(["efectivo", "transferencia"]),
   transferencia_numero: z.string().optional().nullable(),
   transferencia_banco: z.string().optional().nullable(),
   transferencia_imagen_url: z.string().optional().nullable(),
@@ -98,6 +104,8 @@ router.post(
         divisas_recibidas_total,
         observacion,
         metodo_entrega,
+        usd_entregado_efectivo,
+        usd_entregado_transfer,
         transferencia_numero,
         transferencia_banco,
         transferencia_imagen_url,
@@ -117,17 +125,39 @@ router.post(
         const usdMoneda = await prisma.moneda.findFirst({
           where: { codigo: "USD" },
         });
+
+        // Normalizar valores de entrega USD segun metodo
+        if (metodo_entrega === "efectivo") {
+          usd_entregado_efectivo = Number(divisas_recibidas_total || 0);
+          usd_entregado_transfer = 0;
+        } else if (metodo_entrega === "transferencia") {
+          usd_entregado_efectivo = 0;
+          usd_entregado_transfer = Number(divisas_recibidas_total || 0);
+        } else if (metodo_entrega === "mixto") {
+          // Si llegan ambos, se respetan; si solo uno, el otro va a 0
+          usd_entregado_efectivo = Number(usd_entregado_efectivo || 0);
+          usd_entregado_transfer = Number(usd_entregado_transfer || 0);
+          // Ajuste por seguridad: la suma no debe exceder el total a entregar
+          const totalUsd = Number(divisas_recibidas_total || 0);
+          if (usd_entregado_efectivo + usd_entregado_transfer > totalUsd) {
+            usd_entregado_transfer = Math.max(
+              0,
+              totalUsd - usd_entregado_efectivo
+            );
+          }
+        }
         if (
           usdMoneda &&
           (moneda_origen_id === usdMoneda.id ||
             moneda_destino_id === usdMoneda.id)
         ) {
+          const usdMonedaId = usdMoneda.id;
           const isCompra = tipo_operacion === "COMPRA";
           const isVenta = tipo_operacion === "VENTA";
 
           if (isCompra) {
             // USD debe ser DESTINO
-            if (moneda_origen_id === usdMoneda.id) {
+            if (moneda_origen_id === usdMonedaId) {
               // Swap monedas
               [moneda_origen_id, moneda_destino_id] = [
                 moneda_destino_id,
@@ -347,16 +377,18 @@ router.post(
           punto_atencion_id,
           observacion: observacion || null,
           numero_recibo: numeroRecibo,
-          estado: EstadoTransaccion.PENDIENTE,
+          // Para que contabilice en el día y cierre: marcar como COMPLETADO
+          estado: EstadoTransaccion.COMPLETADO,
           metodo_entrega,
           transferencia_numero:
-            metodo_entrega === "transferencia" ? transferencia_numero : null,
+            metodo_entrega !== "efectivo" ? transferencia_numero : null,
           transferencia_banco:
-            metodo_entrega === "transferencia" ? transferencia_banco : null,
+            metodo_entrega !== "efectivo" ? transferencia_banco : null,
           transferencia_imagen_url:
-            metodo_entrega === "transferencia"
-              ? transferencia_imagen_url
-              : null,
+            metodo_entrega !== "efectivo" ? transferencia_imagen_url : null,
+          // Detalle USD entregado: efectivo vs transferencia
+          usd_entregado_efectivo: usd_entregado_efectivo ?? null,
+          usd_entregado_transfer: usd_entregado_transfer ?? null,
           abono_inicial_monto: abono_inicial_monto ?? null,
           abono_inicial_fecha: abono_inicial_fecha
             ? new Date(abono_inicial_fecha)
@@ -500,7 +532,7 @@ router.post(
           },
         });
 
-        // 2) Moneda DESTINO: el punto ENTREGA -> restar
+        // 2) Moneda DESTINO (USD): el punto ENTREGA -> restar efectivo y/o bancos según método
         const saldoDestino = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -510,13 +542,26 @@ router.post(
           },
         });
         const saldoDestinoAnterior = Number(saldoDestino?.cantidad ?? 0);
-        const egreso = Number(divisas_recibidas_total_final || 0);
-        if (saldoDestinoAnterior < egreso) {
+        const bancosAnterior = Number(saldoDestino?.bancos ?? 0);
+
+        const egresoEfectivo = Number(usd_entregado_efectivo || 0);
+        const egresoTransfer = Number(usd_entregado_transfer || 0);
+        const egresoTotal = egresoEfectivo + egresoTransfer;
+
+        if (saldoDestinoAnterior < egresoEfectivo) {
           throw new Error(
-            "Saldo insuficiente en moneda destino para realizar el cambio"
+            "Saldo efectivo insuficiente en moneda destino para realizar el cambio"
           );
         }
-        const saldoDestinoNuevo = saldoDestinoAnterior - egreso;
+        if (bancosAnterior < egresoTransfer) {
+          throw new Error(
+            "Saldo en bancos insuficiente para realizar el cambio por transferencia"
+          );
+        }
+
+        const saldoDestinoNuevo = saldoDestinoAnterior - egresoEfectivo;
+        const bancosNuevo = bancosAnterior - egresoTransfer;
+
         const billetesDestinoAnterior = Number(saldoDestino?.billetes ?? 0);
         const monedasDestinoAnterior = Number(
           saldoDestino?.monedas_fisicas ?? 0
@@ -544,6 +589,7 @@ router.post(
             cantidad: saldoDestinoNuevo,
             billetes: billetesDestinoNuevo,
             monedas_fisicas: monedasDestinoNuevo,
+            bancos: bancosNuevo,
           },
           create: {
             punto_atencion_id,
@@ -551,23 +597,47 @@ router.post(
             cantidad: saldoDestinoNuevo,
             billetes: billetesDestinoNuevo,
             monedas_fisicas: monedasDestinoNuevo,
+            bancos: bancosNuevo,
           },
         });
 
-        await tx.movimientoSaldo.create({
-          data: {
-            punto_atencion_id,
-            moneda_id: moneda_destino_id,
-            tipo_movimiento: "CAMBIO_DIVISA",
-            monto: -egreso,
-            saldo_anterior: saldoDestinoAnterior,
-            saldo_nuevo: saldoDestinoNuevo,
-            usuario_id: req.user!.id,
-            referencia_id: exchange.id,
-            tipo_referencia: "CAMBIO_DIVISA",
-            descripcion: `Egreso por cambio - Entregado al cliente (${numeroRecibo})`,
-          },
-        });
+        // Movimiento por efectivo
+        if (egresoEfectivo > 0) {
+          await tx.movimientoSaldo.create({
+            data: {
+              punto_atencion_id,
+              moneda_id: moneda_destino_id,
+              tipo_movimiento: "CAMBIO_DIVISA",
+              monto: -egresoEfectivo,
+              saldo_anterior: saldoDestinoAnterior,
+              saldo_nuevo: saldoDestinoNuevo,
+              usuario_id: req.user!.id,
+              referencia_id: exchange.id,
+              tipo_referencia: "CAMBIO_DIVISA",
+              descripcion: `Egreso por cambio (EFECTIVO) - Entregado al cliente (${numeroRecibo})`,
+            },
+          });
+        }
+
+        // Movimiento por bancos (registro de control)
+        if (egresoTransfer > 0) {
+          await tx.movimientoSaldo.create({
+            data: {
+              punto_atencion_id,
+              moneda_id: moneda_destino_id,
+              tipo_movimiento: "CAMBIO_DIVISA",
+              monto: 0, // No afecta saldo efectivo reportado
+              saldo_anterior: saldoDestinoAnterior, // mantenemos para referencia del efectivo
+              saldo_nuevo: saldoDestinoNuevo,
+              usuario_id: req.user!.id,
+              referencia_id: exchange.id,
+              tipo_referencia: "CAMBIO_DIVISA",
+              descripcion: `Egreso por cambio (BANCOS) - Transferencia ${
+                transferencia_banco || ""
+              } ${transferencia_numero || ""}`.trim(),
+            },
+          });
+        }
       });
 
       const exchangeResponse = {

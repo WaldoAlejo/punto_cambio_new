@@ -2,6 +2,7 @@ import express from "express";
 import prisma from "../lib/prisma.js";
 import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
+import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -40,14 +41,15 @@ router.post("/", authenticateToken, async (req, res) => {
 
     const puntoAtencionId = usuario.punto_atencion_id;
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    // Usar ventana de día GYE para evitar problemas de zona horaria
+    const { gte: hoyGte, lt: hoyLt } = gyeDayRangeUtcFromDate(new Date());
 
     const cuadreCerradoHoy = await prisma.cuadreCaja.findFirst({
       where: {
         punto_atencion_id: puntoAtencionId,
         fecha: {
-          gte: hoy,
+          gte: hoyGte,
+          lt: hoyLt,
         },
         estado: "CERRADO",
       },
@@ -64,7 +66,8 @@ router.post("/", authenticateToken, async (req, res) => {
       where: {
         punto_atencion_id: puntoAtencionId,
         fecha: {
-          gte: hoy,
+          gte: hoyGte,
+          lt: hoyLt,
         },
         estado: "ABIERTO",
       },

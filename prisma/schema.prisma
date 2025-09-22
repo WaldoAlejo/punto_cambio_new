@@ -143,6 +143,7 @@ model Saldo {
   cantidad          Decimal  @default(0) @db.Decimal(15, 2)
   billetes          Decimal  @default(0) @db.Decimal(15, 2)
   monedas_fisicas   Decimal  @default(0) @db.Decimal(15, 2)
+  bancos            Decimal  @default(0) @db.Decimal(15, 2)
   updated_at        DateTime @updatedAt
 
   puntoAtencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
@@ -256,10 +257,14 @@ model CambioDivisa {
   estado            EstadoTransaccion @default(COMPLETADO)
 
   // ==== CAMPOS PARA ENTREGA Y FLUJO PARCIAL ====
-  metodo_entrega           String // "efectivo" | "transferencia"
+  metodo_entrega           String // "efectivo" | "transferencia" | "mixto"
   transferencia_numero     String? // Número transferencia si aplica
   transferencia_banco      String? // Banco transferencia si aplica
   transferencia_imagen_url String? // URL del comprobante, si aplica
+
+  // ==== DETALLE DE ENTREGA EN USD ====
+  usd_entregado_efectivo   Decimal? @db.Decimal(15, 2) // parte en efectivo
+  usd_entregado_transfer   Decimal? @db.Decimal(15, 2) // parte por transferencia (control bancos)
 
   // ==== CAMPOS PARA CAMBIO PARCIAL O DIFERIDO ====
   abono_inicial_monto         Decimal?  @db.Decimal(15, 2)

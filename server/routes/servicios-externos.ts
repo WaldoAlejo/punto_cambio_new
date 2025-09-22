@@ -504,4 +504,98 @@ router.delete(
   }
 );
 
+/** ==============================
+ *  GET /servicios-externos/admin/movimientos
+ *  Lista movimientos (admin) opcionalmente filtrando por punto y otros filtros
+ *  Roles: ADMIN, SUPER_USUARIO
+ *  ============================== */
+router.get(
+  "/admin/movimientos",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const { pointId, servicio, tipo_movimiento, desde, hasta, limit } =
+        req.query as {
+          pointId?: string;
+          servicio?: ServicioExterno;
+          tipo_movimiento?: TipoMovimiento;
+          desde?: string;
+          hasta?: string;
+          limit?: string;
+        };
+
+      const where: string[] = [];
+      const params: any[] = [];
+      let i = 1;
+
+      if (pointId && pointId !== "ALL") {
+        where.push(`m.punto_atencion_id = $${i++}`);
+        params.push(pointId);
+      }
+      if (servicio && SERVICIOS_VALIDOS.includes(servicio)) {
+        where.push(`m.servicio = $${i++}`);
+        params.push(servicio);
+      }
+      if (tipo_movimiento && TIPOS_VALIDOS.includes(tipo_movimiento)) {
+        where.push(`m.tipo_movimiento = $${i++}`);
+        params.push(tipo_movimiento);
+      }
+      if (desde) {
+        where.push(`m.fecha >= $${i++}`);
+        params.push(new Date(`${desde}T00:00:00.000Z`));
+      }
+      if (hasta) {
+        where.push(`m.fecha <= $${i++}`);
+        params.push(new Date(`${hasta}T23:59:59.999Z`));
+      }
+
+      const limitNum = Math.min(Math.max(parseInt(limit || "100", 10), 1), 500);
+
+      const sql = `
+        SELECT
+          m.id, m.punto_atencion_id, m.servicio, m.tipo_movimiento, m.moneda_id, m.monto,
+          m.usuario_id, m.fecha, m.descripcion, m.numero_referencia, m.comprobante_url,
+          u.nombre AS usuario_nombre
+        FROM "ServicioExternoMovimiento" m
+        JOIN "Usuario" u ON u.id = m.usuario_id
+        ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+        ORDER BY m.fecha DESC
+        LIMIT ${limitNum}
+      `;
+
+      const { rows } = await client.query(sql, params);
+
+      const movimientos = rows.map((row: any) => ({
+        id: row.id,
+        punto_atencion_id: row.punto_atencion_id,
+        servicio: row.servicio,
+        tipo_movimiento: row.tipo_movimiento,
+        moneda_id: row.moneda_id,
+        monto: Number(row.monto),
+        usuario_id: row.usuario_id,
+        fecha: new Date(row.fecha).toISOString(),
+        descripcion: row.descripcion,
+        numero_referencia: row.numero_referencia,
+        comprobante_url: row.comprobante_url,
+        usuario: { id: row.usuario_id, nombre: row.usuario_nombre },
+      }));
+
+      res.json({ success: true, movimientos });
+    } catch (error) {
+      console.error(
+        "Error listando movimientos de servicios externos (admin):",
+        error
+      );
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Error desconocido",
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
 export default router;

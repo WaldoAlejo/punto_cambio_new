@@ -52,6 +52,23 @@ export async function listarMovimientosServiciosExternos(
   return data;
 }
 
+export async function listarMovimientosServiciosExternosAdmin(params: {
+  pointId?: string; // 'ALL' para todos
+  servicio?: ServicioExterno;
+  tipo_movimiento?: TipoMovimiento;
+  desde?: string; // YYYY-MM-DD
+  hasta?: string; // YYYY-MM-DD
+  limit?: number;
+}) {
+  const { data } = await axiosInstance.get(
+    `/servicios-externos/admin/movimientos`,
+    {
+      params,
+    }
+  );
+  return data as { success: boolean; movimientos: any[] };
+}
+
 export async function eliminarMovimientoServicioExterno(id: string) {
   try {
     const { data } = await axiosInstance.delete(
