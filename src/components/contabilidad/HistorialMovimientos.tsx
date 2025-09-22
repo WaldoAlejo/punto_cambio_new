@@ -87,6 +87,11 @@ export default function HistorialMovimientos({
   );
   const [moneda, setMoneda] = useState<string>("ALL");
 
+  // Filtros de fecha (opcional): día exacto o rango
+  const [date, setDate] = useState<string>("");
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
+
   // Columnas opcionales para CSV
   const [csvCols, setCsvCols] = useState({
     id: false,
@@ -98,6 +103,13 @@ export default function HistorialMovimientos({
   useEffect(() => {
     setPage(1);
   }, [query, pageSize, sortKey, sortDir, tipo, moneda]);
+
+  const buildDateOpts = () => {
+    if (date) return { date } as const;
+    if (fromDate || toDate)
+      return { from: fromDate || undefined, to: toDate || undefined } as const;
+    return undefined;
+  };
 
   // ===== Opciones de divisa usando currencies si está disponible =====
   const monedaOptions = useMemo(() => {
@@ -322,10 +334,87 @@ export default function HistorialMovimientos({
               )}
             </Button>
 
+            {/* Filtros de fecha: día exacto o rango */}
+            <div className="flex items-center gap-2">
+              <Input
+                type="date"
+                placeholder="YYYY-MM-DD"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="h-9 w-[150px]"
+              />
+              <span className="text-muted-foreground text-xs">o</span>
+              <Input
+                type="date"
+                placeholder="Desde"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="h-9 w-[150px]"
+              />
+              <span className="text-muted-foreground text-xs">a</span>
+              <Input
+                type="date"
+                placeholder="Hasta"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="h-9 w-[150px]"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-9"
+                onClick={() => {
+                  if (date) {
+                    setFromDate("");
+                    setToDate("");
+                  }
+                  // Usar hooks de datos para recargar con filtros
+                  if (isAdminView) {
+                    admin.cargarMovimientosConsolidados(
+                      undefined,
+                      100,
+                      buildDateOpts()
+                    );
+                  } else {
+                    normal.cargarMovimientos(undefined, 50, buildDateOpts());
+                  }
+                }}
+              >
+                Aplicar
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9"
+                onClick={() => {
+                  setDate("");
+                  setFromDate("");
+                  setToDate("");
+                  if (isAdminView) {
+                    admin.cargarMovimientosConsolidados(
+                      undefined,
+                      100,
+                      undefined
+                    );
+                  } else {
+                    normal.cargarMovimientos(undefined, 50, undefined);
+                  }
+                }}
+              >
+                Limpiar
+              </Button>
+            </div>
+
             <Button
               variant="outline"
               size="sm"
-              onClick={refresh}
+              onClick={() => {
+                if (isAdminView) {
+                  admin.refresh();
+                } else {
+                  normal.cargarMovimientos();
+                }
+              }}
               disabled={isLoading}
               className="h-9"
             >
