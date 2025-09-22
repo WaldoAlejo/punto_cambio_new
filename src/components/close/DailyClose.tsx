@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -45,7 +47,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     };
   } | null>(null);
   const [userAdjustments, setUserAdjustments] = useState<{
-    [key: string]: { bills: string; coins: string };
+    [key: string]: { bills: string; coins: string; note?: string };
   }>({});
   const [todayClose, setTodayClose] = useState<CuadreCaja | null>(null);
   const [hasActiveJornada, setHasActiveJornada] = useState<boolean | null>(
@@ -167,7 +169,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
             // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
             const initialAdjustments: {
-              [key: string]: { bills: string; coins: string };
+              [key: string]: { bills: string; coins: string; note?: string };
             } = {};
             data.data.detalles.forEach((detalle: CuadreDetalle) => {
               // Inicializar con el saldo esperado dividido entre billetes y monedas
@@ -175,6 +177,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               initialAdjustments[detalle.moneda_id] = {
                 bills: detalle.saldo_cierre.toFixed(2),
                 coins: "0.00",
+                note: "",
               };
             });
             setUserAdjustments(initialAdjustments);
@@ -212,9 +215,20 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
   const handleUserAdjustment = (
     monedaId: string,
-    type: "bills" | "coins",
+    type: "bills" | "coins" | "note",
     value: string
   ) => {
+    if (type === "note") {
+      setUserAdjustments((prev) => ({
+        ...prev,
+        [monedaId]: {
+          ...prev[monedaId],
+          note: value,
+        },
+      }));
+      return;
+    }
+
     // No permitir valores negativos
     const numValue = parseFloat(value);
     if (numValue < 0) return;
@@ -302,6 +316,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       monedas: parseInt(userAdjustments[detalle.moneda_id]?.coins || "0"),
       saldo_apertura: detalle.saldo_apertura,
       saldo_cierre: detalle.saldo_cierre,
+      observaciones_detalle: userAdjustments[detalle.moneda_id]?.note || "",
     }));
 
     console.log("📊 Detalles prepared:", detalles);
@@ -641,21 +656,65 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                               Billetes + Monedas
                             </span>
                           </Label>
-                          <div
-                            className={`h-10 px-3 py-2 border rounded-md flex items-center font-bold ${
-                              !isValid
-                                ? "bg-red-50 border-red-300 text-red-700"
-                                : "bg-gray-50"
-                            }`}
-                          >
-                            {userTotal.toFixed(2)}
-                            {!isValid && (
-                              <span className="ml-2 text-xs">
-                                (Diff:{" "}
-                                {(userTotal - detalle.saldo_cierre).toFixed(2)})
-                              </span>
-                            )}
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`h-10 px-3 py-2 border rounded-md flex items-center font-bold ${
+                                !isValid
+                                  ? "bg-red-50 border-red-300 text-red-700"
+                                  : "bg-gray-50"
+                              }`}
+                            >
+                              {userTotal.toFixed(2)}
+                            </div>
+                            {(() => {
+                              const diff = parseFloat(
+                                (userTotal - detalle.saldo_cierre).toFixed(2)
+                              );
+                              const abs = Math.abs(diff);
+                              const tol = getTolerance(detalle);
+                              const within = abs <= tol;
+                              const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
+                              const color = within
+                                ? diff === 0
+                                  ? "bg-gray-200 text-gray-800 border-gray-300"
+                                  : "bg-green-100 text-green-800 border-green-300"
+                                : "bg-red-100 text-red-800 border-red-300";
+                              const label = `${sign}${abs.toFixed(2)}`;
+                              return (
+                                <Badge
+                                  className={`border ${color} whitespace-nowrap`}
+                                  variant={within ? "secondary" : "destructive"}
+                                  title={`Diferencia vs esperado (tolerancia ±${tol.toFixed(
+                                    2
+                                  )})`}
+                                >
+                                  Diff: {label}
+                                </Badge>
+                              );
+                            })()}
                           </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">
+                            📝 Nota u observación
+                            <span className="text-xs text-gray-500 block">
+                              (opcional, visible en el cierre)
+                            </span>
+                          </Label>
+                          <Textarea
+                            rows={2}
+                            placeholder="Ej: Diferencia por redondeo o conteo"
+                            value={
+                              userAdjustments[detalle.moneda_id]?.note || ""
+                            }
+                            onChange={(e) =>
+                              handleUserAdjustment(
+                                detalle.moneda_id,
+                                "note",
+                                e.target.value
+                              )
+                            }
+                          />
                         </div>
                       </div>
                     </div>

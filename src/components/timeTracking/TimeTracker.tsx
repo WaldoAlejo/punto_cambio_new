@@ -247,16 +247,33 @@ const TimeTracker = ({
     }
   };
 
-  const handleFinalizarJornada = () => {
+  const handleFinalizarJornada = async () => {
     if (jornadaActual.estado !== "TRABAJANDO") return;
 
-    // En lugar de terminar directo, redirigimos al cierre diario
+    // Solo OPERADOR necesita cierre de caja. Otros roles pueden finalizar directo.
+    const requiereCierre = user.rol === "OPERADOR";
+
+    if (!requiereCierre) {
+      try {
+        const ahora = new Date().toISOString();
+        await guardarJornadaBackend({
+          usuario_id: user.id,
+          punto_atencion_id: selectedPoint?.id,
+          fecha_salida: ahora,
+        });
+        toast.success(`✅ Jornada finalizada a las ${formatearHora(ahora)}`);
+      } catch {
+        // Error manejado en guardarJornadaBackend
+      }
+      return;
+    }
+
+    // Operador: pedir cierre de caja
     showConfirmation(
       "Cierre requerido",
       "Para finalizar su jornada debe realizar primero el cierre de caja diario.",
       async () => {
         try {
-          // Redirige a la vista de cierre diario en el Dashboard
           const url = new URL(window.location.href);
           url.searchParams.set("view", "daily-close");
           window.history.pushState({}, "", url.toString());
