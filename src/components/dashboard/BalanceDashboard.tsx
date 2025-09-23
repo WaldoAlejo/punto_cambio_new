@@ -84,6 +84,14 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
   // UX: auto-refresh y controles de filtro
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [tab, setTab] = useState<"saldos" | "contabilidad">("saldos");
+  const isPrivileged = user.rol === "ADMIN" || user.rol === "SUPER_USUARIO";
+
+  // En roles no privilegiados, forzar pestaña 'saldos'
+  useEffect(() => {
+    if (!isPrivileged && tab === "contabilidad") {
+      setTab("saldos");
+    }
+  }, [isPrivileged, tab]);
 
   // Moneda seleccionada: por requerimiento, USD (principal) por defecto
   const [selectedCurrency, setSelectedCurrency] = useState<string>("USD");
@@ -288,15 +296,24 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
         onValueChange={(v) => setTab(v as any)}
         className="w-full"
       >
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList
+          className={`grid w-full ${
+            isPrivileged ? "grid-cols-2" : "grid-cols-1"
+          }`}
+        >
           <TabsTrigger value="saldos" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             Saldos por Moneda
           </TabsTrigger>
-          <TabsTrigger value="contabilidad" className="flex items-center gap-2">
-            <Calculator className="h-4 w-4" />
-            Contabilidad Diaria
-          </TabsTrigger>
+          {isPrivileged && (
+            <TabsTrigger
+              value="contabilidad"
+              className="flex items-center gap-2"
+            >
+              <Calculator className="h-4 w-4" />
+              Contabilidad Diaria
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ================= SALDOS ================= */}
@@ -485,9 +502,11 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
         </TabsContent>
 
         {/* ============== CONTABILIDAD ============== */}
-        <TabsContent value="contabilidad">
-          <ContabilidadDiaria user={user} selectedPoint={selectedPoint} />
-        </TabsContent>
+        {isPrivileged && (
+          <TabsContent value="contabilidad">
+            <ContabilidadDiaria user={user} selectedPoint={selectedPoint} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
