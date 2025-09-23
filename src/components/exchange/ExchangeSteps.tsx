@@ -1,6 +1,6 @@
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
 import CustomerDataForm from "./CustomerDataForm";
-import ExchangeForm, { ExchangeFormData } from "./ExchangeForm";
+import ExchangeForm, { ExchangeFormData as BaseExchangeFormData } from "./ExchangeForm";
 import ExchangeDetailsForm from "./ExchangeDetailsForm";
 import { DatosCliente, DetalleDivisasSimple, Moneda, User } from "../../types";
 
@@ -27,6 +27,12 @@ export interface ExchangeCompleteData {
   abonoInicialRecibidoPor?: string | null;
   saldoPendiente?: number | null;
   referenciaCambioPrincipal?: string | null;
+}
+
+// Extiende ExchangeFormData para incluir las propiedades faltantes
+interface ExchangeFormData extends BaseExchangeFormData {
+  esCambioParcial?: boolean;
+  montoAEntregar?: number;
 }
 
 export interface ExchangeStepsRef {

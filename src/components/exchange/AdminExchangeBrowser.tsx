@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import ExchangeList from "./ExchangeList";
+import PartialExchangesList from "./PartialExchangesList"; // <--- AGREGA ESTA LÍNEA
 import {
   Select,
   SelectContent,
@@ -506,11 +507,8 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
                 <CardContent>
                   <PartialExchangesList
                     exchanges={partialExchanges}
-                    currencies={currencies}
-                    onCompleted={(id) => {
-                      setPartialExchanges((prev) =>
-                        prev.filter((e) => e.id !== id)
-                      );
+                    onCompleted={(id: string) => {
+                      setPartialExchanges((prev) => prev.filter((e) => e.id !== id));
                       toast.success("Cambio parcial completado");
                     }}
                     showPointName

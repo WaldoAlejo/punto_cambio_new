@@ -52,7 +52,6 @@ interface PartialExchange {
 
 interface PartialExchangesListProps {
   exchanges: PartialExchange[];
-  currencies: any[];
   onCompleted: (id: string) => void;
   showPointName?: boolean;
   showUserName?: boolean;
@@ -60,7 +59,6 @@ interface PartialExchangesListProps {
 
 const PartialExchangesList = ({
   exchanges,
-  currencies,
   onCompleted,
   showPointName = false,
   showUserName = false,
