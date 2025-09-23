@@ -46,6 +46,7 @@ interface ExchangePayload {
   // flujo parcial
   abono_inicial_monto?: number | null;
   abono_inicial_fecha?: string | null;
+  abono_inicial_recibido_por?: string | null;
   saldo_pendiente?: number | null;
   referencia_cambio_principal?: string | null;
 }
@@ -57,6 +58,7 @@ type ExchangeCompleteDataExtend = ExchangeCompleteData & {
   transferenciaImagen?: File | null;
   abonoInicialMonto?: number | null;
   abonoInicialFecha?: string | null;
+  abonoInicialRecibidoPor?: string | null;
   saldoPendiente?: number | null;
   referenciaCambioPrincipal?: string | null;
 };
@@ -288,6 +290,12 @@ export const useExchangeProcess = ({
           data.abonoInicialMonto !== undefined ? data.abonoInicialMonto : null,
         abono_inicial_fecha:
           data.abonoInicialFecha !== undefined ? data.abonoInicialFecha : null,
+        abono_inicial_recibido_por:
+          data.abonoInicialRecibidoPor !== undefined &&
+          data.abonoInicialMonto &&
+          data.abonoInicialMonto > 0
+            ? user.id // Siempre enviar el ID del usuario actual
+            : null,
         saldo_pendiente:
           data.saldoPendiente !== undefined ? data.saldoPendiente : null,
         referencia_cambio_principal:

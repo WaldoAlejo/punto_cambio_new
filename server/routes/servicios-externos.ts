@@ -598,4 +598,419 @@ router.get(
   }
 );
 
+/** ==============================
+ *  POST /servicios-externos/cierre/abrir
+ *  Abre el cierre diario (crea registro ABIERTO si no existe) — USD only
+ *  Roles: OPERADOR (solo su punto), ADMIN, SUPER_USUARIO, ADMINISTRATIVO
+ *  ============================== */
+router.post(
+  "/cierre/abrir",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const user: any = (req as any).user || {};
+      const rol: string = user.rol;
+      const isAdmin = ["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"].includes(
+        rol
+      );
+
+      // Punto a operar
+      let pointId: string | undefined = req.body?.pointId;
+      if (!isAdmin) {
+        pointId = user.punto_atencion_id;
+      }
+      if (!pointId) {
+        res.status(400).json({
+          success: false,
+          error:
+            "Debes tener un punto de atención asignado para abrir el cierre diario.",
+        });
+        return;
+      }
+
+      // Fecha del cierre: día actual GYE
+      const { gyeDayRangeUtcFromDate } = await import("../utils/timezone.js");
+      const { gte, lt } = gyeDayRangeUtcFromDate(new Date());
+
+      await client.query("BEGIN");
+
+      // Buscar si ya existe cierre del día
+      const sel = await client.query(
+        `SELECT id, fecha, estado FROM "ServicioExternoCierreDiario"
+         WHERE punto_atencion_id = $1 AND fecha >= $2 AND fecha < $3
+         LIMIT 1`,
+        [pointId, gte, lt]
+      );
+
+      if (sel.rows.length > 0) {
+        await client.query("COMMIT");
+        res.json({ success: true, cierre: sel.rows[0] });
+        return;
+      }
+
+      const insert = await client.query(
+        `INSERT INTO "ServicioExternoCierreDiario"
+          (punto_atencion_id, usuario_id, fecha, estado, created_at, updated_at)
+         VALUES ($1, $2, CURRENT_DATE, 'ABIERTO', NOW(), NOW())
+         RETURNING id, fecha, estado`,
+        [pointId, user.id]
+      );
+
+      await client.query("COMMIT");
+      res.status(201).json({ success: true, cierre: insert.rows[0] });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error("Error abriendo cierre servicios externos:", error);
+      res
+        .status(500)
+        .json({ success: false, error: "No se pudo abrir el cierre" });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/** ==============================
+ *  GET /servicios-externos/cierre/status
+ *  Estado del cierre y resumen de movimientos USD del día
+ *  Roles: OPERADOR (solo su punto), ADMIN, SUPER_USUARIO, ADMINISTRATIVO
+ *  ============================== */
+router.get(
+  "/cierre/status",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const user: any = (req as any).user || {};
+      const rol: string = user.rol;
+      const isAdmin = ["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"].includes(
+        rol
+      );
+
+      // Punto/fecha
+      const queryPointId = String((req.query as any)?.pointId || "").trim();
+      let pointId: string | undefined = queryPointId || undefined;
+      if (!isAdmin) pointId = user.punto_atencion_id;
+      if (!pointId) {
+        res.status(400).json({
+          success: false,
+          error:
+            "Debes tener un punto de atención asignado para consultar el estado de cierre.",
+        });
+        return;
+      }
+
+      const fechaStr = String((req.query as any)?.fecha || "").trim();
+      const {
+        gyeDayRangeUtcFromDate,
+        gyeParseDateOnly,
+        gyeDayRangeUtcFromYMD,
+      } = await import("../utils/timezone.js");
+      let gte: Date, lt: Date;
+      if (fechaStr) {
+        const { y, m, d } = gyeParseDateOnly(fechaStr);
+        ({ gte, lt } = gyeDayRangeUtcFromYMD(y, m, d));
+      } else {
+        ({ gte, lt } = gyeDayRangeUtcFromDate(new Date()));
+      }
+
+      await client.query("BEGIN");
+
+      // Asegurar moneda USD
+      const usdId = await (async () => {
+        // inline reuse of ensureUsdMonedaId implementation
+        const sel = await client.query(
+          'SELECT id FROM "Moneda" WHERE codigo = $1 LIMIT 1',
+          ["USD"]
+        );
+        if (sel.rows[0]?.id) return sel.rows[0].id as string;
+        await client.query(`
+          INSERT INTO "Moneda"(nombre, simbolo, codigo, activo, orden_display, comportamiento_compra, comportamiento_venta)
+          SELECT 'Dólar estadounidense', '$', 'USD', true, 0, 'MULTIPLICA', 'DIVIDE'
+          WHERE NOT EXISTS (SELECT 1 FROM "Moneda" WHERE codigo = 'USD');
+        `);
+        const sel2 = await client.query(
+          'SELECT id FROM "Moneda" WHERE codigo = $1 LIMIT 1',
+          ["USD"]
+        );
+        if (!sel2.rows[0]?.id) throw new Error("No se pudo obtener USD");
+        return sel2.rows[0].id as string;
+      })();
+
+      // Cierre del día
+      const cierreQ = await client.query(
+        `SELECT id, fecha, estado, observaciones, fecha_cierre, cerrado_por
+         FROM "ServicioExternoCierreDiario"
+         WHERE punto_atencion_id = $1 AND fecha >= $2 AND fecha < $3
+         LIMIT 1`,
+        [pointId, gte, lt]
+      );
+      const cierre = cierreQ.rows[0] || null;
+
+      // Detalles (si existe)
+      let detalles: any[] = [];
+      if (cierre) {
+        const detQ = await client.query(
+          `SELECT servicio, moneda_id, monto_movimientos, monto_validado, diferencia, observaciones
+           FROM "ServicioExternoDetalleCierre"
+           WHERE cierre_id = $1
+           ORDER BY servicio`,
+          [cierre.id]
+        );
+        detalles = detQ.rows.map((r: any) => ({
+          servicio: r.servicio,
+          moneda_id: r.moneda_id,
+          monto_movimientos: Number(r.monto_movimientos),
+          monto_validado: Number(r.monto_validado),
+          diferencia: Number(r.diferencia),
+          observaciones: r.observaciones,
+        }));
+      }
+
+      // Resumen de movimientos netos (INGRESO - EGRESO) USD del día por servicio
+      const movQ = await client.query(
+        `SELECT servicio,
+                SUM(CASE WHEN tipo_movimiento = 'INGRESO' THEN monto ELSE -monto END) AS neto
+         FROM "ServicioExternoMovimiento"
+         WHERE punto_atencion_id = $1 AND moneda_id = $2 AND fecha >= $3 AND fecha < $4
+         GROUP BY servicio
+         ORDER BY servicio`,
+        [pointId, usdId, gte, lt]
+      );
+      const resumen_movimientos = movQ.rows.map((r: any) => ({
+        servicio: r.servicio,
+        neto: Number(r.neto),
+      }));
+
+      await client.query("COMMIT");
+      res.json({ success: true, cierre, detalles, resumen_movimientos });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error(
+        "Error consultando status cierre servicios externos:",
+        error
+      );
+      res
+        .status(500)
+        .json({ success: false, error: "No se pudo obtener el estado" });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/** ==============================
+ *  POST /servicios-externos/cierre/cerrar
+ *  Cierra el día validando tolerancia ±1.00 USD por servicio
+ *  Roles: OPERADOR (solo su punto), ADMIN, SUPER_USUARIO, ADMINISTRATIVO
+ *  Body: { detalles: [{ servicio, monto_validado, observaciones? }], observaciones? }
+ *  ============================== */
+router.post(
+  "/cierre/cerrar",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const user: any = (req as any).user || {};
+      const rol: string = user.rol;
+      const isAdmin = ["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"].includes(
+        rol
+      );
+
+      // Punto a operar
+      let pointId: string | undefined = req.body?.pointId;
+      if (!isAdmin) pointId = user.punto_atencion_id;
+      if (!pointId) {
+        res.status(400).json({
+          success: false,
+          error:
+            "Debes tener un punto de atención asignado para cerrar el día.",
+        });
+        return;
+      }
+
+      const detallesInput: Array<{
+        servicio: string;
+        monto_validado: number;
+        observaciones?: string;
+      }> = Array.isArray(req.body?.detalles) ? req.body.detalles : [];
+      const obsGeneral: string | undefined =
+        req.body?.observaciones || undefined;
+
+      const { gyeDayRangeUtcFromDate } = await import("../utils/timezone.js");
+      const { gte, lt } = gyeDayRangeUtcFromDate(new Date());
+
+      await client.query("BEGIN");
+
+      // Asegurar USD
+      const usdId = await (async () => {
+        const sel = await client.query(
+          'SELECT id FROM "Moneda" WHERE codigo = $1 LIMIT 1',
+          ["USD"]
+        );
+        if (sel.rows[0]?.id) return sel.rows[0].id as string;
+        await client.query(`
+          INSERT INTO "Moneda"(nombre, simbolo, codigo, activo, orden_display, comportamiento_compra, comportamiento_venta)
+          SELECT 'Dólar estadounidense', '$', 'USD', true, 0, 'MULTIPLICA', 'DIVIDE'
+          WHERE NOT EXISTS (SELECT 1 FROM "Moneda" WHERE codigo = 'USD');
+        `);
+        const sel2 = await client.query(
+          'SELECT id FROM "Moneda" WHERE codigo = $1 LIMIT 1',
+          ["USD"]
+        );
+        if (!sel2.rows[0]?.id) throw new Error("No se pudo obtener USD");
+        return sel2.rows[0].id as string;
+      })();
+
+      // Obtener/crear cierre ABIERTO del día
+      let cierreId: string | null = null;
+      let estadoCierre: string | null = null;
+      {
+        const sel = await client.query(
+          `SELECT id, estado FROM "ServicioExternoCierreDiario"
+           WHERE punto_atencion_id = $1 AND fecha >= $2 AND fecha < $3
+           LIMIT 1`,
+          [pointId, gte, lt]
+        );
+        if (sel.rows.length === 0) {
+          const ins = await client.query(
+            `INSERT INTO "ServicioExternoCierreDiario"
+              (punto_atencion_id, usuario_id, fecha, estado, created_at, updated_at, observaciones)
+             VALUES ($1, $2, CURRENT_DATE, 'ABIERTO', NOW(), NOW(), $3)
+             RETURNING id, estado`,
+            [pointId, user.id, obsGeneral || null]
+          );
+          cierreId = ins.rows[0].id;
+          estadoCierre = ins.rows[0].estado;
+        } else {
+          cierreId = sel.rows[0].id;
+          estadoCierre = sel.rows[0].estado;
+        }
+      }
+
+      if (estadoCierre === "CERRADO") {
+        await client.query("ROLLBACK");
+        res
+          .status(400)
+          .json({ success: false, error: "El día ya está cerrado" });
+        return;
+      }
+
+      // Resumen neto movimientos por servicio (USD)
+      const movQ = await client.query(
+        `SELECT servicio,
+                SUM(CASE WHEN tipo_movimiento = 'INGRESO' THEN monto ELSE -monto END) AS neto
+         FROM "ServicioExternoMovimiento"
+         WHERE punto_atencion_id = $1 AND moneda_id = $2 AND fecha >= $3 AND fecha < $4
+         GROUP BY servicio`,
+        [pointId, usdId, gte, lt]
+      );
+      const netoByServicio: Record<string, number> = {};
+      movQ.rows.forEach(
+        (r: any) => (netoByServicio[r.servicio] = Number(r.neto))
+      );
+
+      // Unificar servicios (los informados + los que tienen neto)
+      const serviciosSet = new Set<string>([
+        ...Object.keys(netoByServicio),
+        ...detallesInput.map((d) => d.servicio),
+      ]);
+
+      // Validar tolerancia y preparar detalles
+      const TOL = 1.0;
+      const detalles: Array<{
+        servicio: string;
+        monto_movimientos: number;
+        monto_validado: number;
+        diferencia: number;
+        observaciones?: string;
+      }> = [];
+      const errores: Array<{ servicio: string; diferencia: number }> = [];
+
+      for (const servicio of serviciosSet) {
+        const neto = Number(netoByServicio[servicio] || 0);
+        const input = detallesInput.find((d) => d.servicio === servicio);
+        const validado = Number(input?.monto_validado || 0);
+        const diff = Number((validado - neto).toFixed(2));
+        detalles.push({
+          servicio,
+          monto_movimientos: Number(neto.toFixed(2)),
+          monto_validado: Number(validado.toFixed(2)),
+          diferencia: diff,
+          observaciones: input?.observaciones,
+        });
+        if (Math.abs(diff) > TOL) {
+          errores.push({ servicio, diferencia: diff });
+        }
+      }
+
+      if (errores.length > 0) {
+        await client.query("ROLLBACK");
+        res.status(400).json({
+          success: false,
+          error:
+            "Las diferencias por servicio exceden la tolerancia de ±1.00 USD",
+          detalles: errores,
+        });
+        return;
+      }
+
+      // Limpiar detalles previos (si hubiese) y reinsertar
+      await client.query(
+        'DELETE FROM "ServicioExternoDetalleCierre" WHERE cierre_id = $1',
+        [cierreId]
+      );
+      for (const d of detalles) {
+        await client.query(
+          `INSERT INTO "ServicioExternoDetalleCierre"
+            (cierre_id, servicio, moneda_id, monto_movimientos, monto_validado, diferencia, observaciones)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [
+            cierreId,
+            d.servicio,
+            usdId,
+            d.monto_movimientos,
+            d.monto_validado,
+            d.diferencia,
+            d.observaciones || null,
+          ]
+        );
+      }
+
+      // Actualizar cabecera a CERRADO
+      await client.query(
+        `UPDATE "ServicioExternoCierreDiario"
+           SET estado = 'CERRADO', fecha_cierre = NOW(), cerrado_por = $1,
+               observaciones = COALESCE($2, observaciones),
+               diferencias_reportadas = $3::jsonb,
+               updated_at = NOW()
+         WHERE id = $4`,
+        [
+          user.id,
+          obsGeneral || null,
+          JSON.stringify({
+            resumen: detalles.map((d) => ({
+              servicio: d.servicio,
+              diferencia: d.diferencia,
+            })),
+          }),
+          cierreId,
+        ]
+      );
+
+      await client.query("COMMIT");
+      res.json({ success: true, cierre_id: cierreId });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error("Error cerrando cierre servicios externos:", error);
+      res
+        .status(500)
+        .json({ success: false, error: "No se pudo cerrar el día" });
+    } finally {
+      client.release();
+    }
+  }
+);
+
 export default router;

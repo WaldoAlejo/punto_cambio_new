@@ -51,12 +51,15 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
   const [error, setError] = useState<string | null>(null);
 
   // Tab servicios externos (admin)
-  const [activeTab, setActiveTab] = useState<"cambios" | "serviciosExternos">(
-    "cambios"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "cambios" | "cambiosParciales" | "serviciosExternos"
+  >("cambios");
   const [externalServices, setExternalServices] = useState<any[]>([]);
   const [extDesde, setExtDesde] = useState<string>("");
   const [extHasta, setExtHasta] = useState<string>("");
+
+  // Cambios parciales
+  const [partialExchanges, setPartialExchanges] = useState<any[]>([]);
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
 
   const isAdmin = useMemo(
@@ -163,6 +166,33 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
     [extDesde, extHasta]
   );
 
+  const loadPartialExchanges = useCallback(async (pointId?: string) => {
+    try {
+      const response = await fetch(
+        `/api/exchanges/partial?pointId=${pointId || "ALL"}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Error al cargar cambios parciales");
+      }
+
+      const data = await response.json();
+      setPartialExchanges(data.success ? data.exchanges : []);
+
+      if (!data.success) {
+        toast.error("No se pudieron cargar los cambios parciales");
+      }
+    } catch (e: any) {
+      setPartialExchanges([]);
+      toast.error(e?.message || "Error cargando cambios parciales");
+    }
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     (async () => {
@@ -186,6 +216,10 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
       setIsRefreshing(true);
       if (activeTab === "cambios") {
         await loadExchanges(selectedPointId);
+      } else if (activeTab === "cambiosParciales") {
+        await loadPartialExchanges(
+          selectedPointId === "ALL" ? undefined : selectedPointId
+        );
       } else {
         await loadExternalServices(
           selectedPointId === "ALL" ? (undefined as any) : selectedPointId
@@ -193,7 +227,13 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
       }
       setIsRefreshing(false);
     })();
-  }, [selectedPointId, activeTab, loadExchanges, loadExternalServices]);
+  }, [
+    selectedPointId,
+    activeTab,
+    loadExchanges,
+    loadExternalServices,
+    loadPartialExchanges,
+  ]);
 
   const handleDeleted = (id: string) => {
     setExchanges((prev) => prev.filter((e) => e.id !== id));
@@ -380,6 +420,10 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
                   setIsRefreshing(true);
                   if (activeTab === "cambios") {
                     await loadExchanges(selectedPointId);
+                  } else if (activeTab === "cambiosParciales") {
+                    await loadPartialExchanges(
+                      selectedPointId === "ALL" ? undefined : selectedPointId
+                    );
                   } else {
                     await loadExternalServices(
                       selectedPointId === "ALL"
@@ -408,6 +452,9 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
             <TabsList className="mb-2">
               <TabsTrigger value="cambios">Cambios</TabsTrigger>
+              <TabsTrigger value="cambiosParciales">
+                Cambios Parciales
+              </TabsTrigger>
               <TabsTrigger value="serviciosExternos">
                 Servicios Externos
               </TabsTrigger>
@@ -434,6 +481,38 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
                     onDeleted={handleDeleted}
                     onReprintReceipt={undefined}
                     /* Mostrar punto y usuario al admin */
+                    showPointName
+                    showUserName
+                  />
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tab: Cambios Parciales */}
+            <div role="tabpanel" hidden={activeTab !== "cambiosParciales"}>
+              <Card className="overflow-hidden">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">
+                    Cambios Parciales{" "}
+                    {selectedPointId === "ALL"
+                      ? "(Todos los puntos)"
+                      : "(Punto seleccionado)"}
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Cambios con saldo pendiente que requieren completar la
+                    entrega
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <PartialExchangesList
+                    exchanges={partialExchanges}
+                    currencies={currencies}
+                    onCompleted={(id) => {
+                      setPartialExchanges((prev) =>
+                        prev.filter((e) => e.id !== id)
+                      );
+                      toast.success("Cambio parcial completado");
+                    }}
                     showPointName
                     showUserName
                   />

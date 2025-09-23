@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, CuadreCaja } from "../../types";
+import ExternalServicesClose from "./ExternalServicesClose";
 
 interface DailyCloseProps {
   user: User;
@@ -450,6 +451,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           Punto: {selectedPoint.nombre} - {new Date().toLocaleDateString()}
         </div>
       </div>
+
+      {/* Cierre de Servicios Externos (USD) */}
+      <ExternalServicesClose user={user} selectedPoint={selectedPoint} />
 
       {loading ? (
         <Card>

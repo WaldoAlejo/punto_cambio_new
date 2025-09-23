@@ -1,11 +1,12 @@
-import { useState, forwardRef, useImperativeHandle } from "react";
+import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
 import CustomerDataForm from "./CustomerDataForm";
 import ExchangeForm, { ExchangeFormData } from "./ExchangeForm";
 import ExchangeDetailsForm from "./ExchangeDetailsForm";
-import { DatosCliente, DetalleDivisasSimple, Moneda } from "../../types";
+import { DatosCliente, DetalleDivisasSimple, Moneda, User } from "../../types";
 
 interface ExchangeStepsProps {
   currencies: Moneda[];
+  user: User;
   onComplete: (data: ExchangeCompleteData) => void;
 }
 
@@ -33,7 +34,7 @@ export interface ExchangeStepsRef {
 }
 
 const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
-  ({ currencies, onComplete }, ref) => {
+  ({ currencies, user, onComplete }, ref) => {
     const [step, setStep] = useState<"customer" | "exchange" | "details">(
       "customer"
     );
@@ -81,6 +82,51 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
     const [referenciaCambioPrincipal, setReferenciaCambioPrincipal] = useState<
       string | null
     >(null);
+
+    // === Efectos ===
+    // Auto-llenar "Recibido por" cuando se activa el cambio parcial
+    useEffect(() => {
+      if (
+        exchangeData?.esCambioParcial &&
+        abonoInicialMonto &&
+        abonoInicialMonto > 0
+      ) {
+        if (!abonoInicialRecibidoPor) {
+          // Mostrar el nombre del usuario pero internamente manejar el ID
+          setAbonoInicialRecibidoPor(user.nombre || user.username || user.id);
+        }
+        if (!abonoInicialFecha) {
+          setAbonoInicialFecha(new Date().toISOString().split("T")[0]);
+        }
+      }
+    }, [
+      exchangeData?.esCambioParcial,
+      abonoInicialMonto,
+      abonoInicialRecibidoPor,
+      abonoInicialFecha,
+      user.id,
+      user.nombre,
+      user.username,
+    ]);
+
+    // Calcular automáticamente el saldo pendiente
+    useEffect(() => {
+      if (
+        exchangeData?.esCambioParcial &&
+        exchangeData?.montoAEntregar &&
+        abonoInicialMonto !== null &&
+        abonoInicialMonto !== undefined
+      ) {
+        const saldoCalculado = exchangeData.montoAEntregar - abonoInicialMonto;
+        setSaldoPendiente(saldoCalculado > 0 ? saldoCalculado : 0);
+      } else if (!exchangeData?.esCambioParcial) {
+        setSaldoPendiente(null);
+      }
+    }, [
+      exchangeData?.esCambioParcial,
+      exchangeData?.montoAEntregar,
+      abonoInicialMonto,
+    ]);
 
     // === Handlers ===
     const handleCustomerDataSubmit = (data: DatosCliente) => {
@@ -141,8 +187,6 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
       setAbonoInicialFecha(v);
     const handleAbonoInicialRecibidoPorChange = (v: string | null) =>
       setAbonoInicialRecibidoPor(v);
-    const handleSaldoPendienteChange = (v: number | null) =>
-      setSaldoPendiente(v);
     const handleReferenciaCambioPrincipalChange = (v: string | null) =>
       setReferenciaCambioPrincipal(v);
 
@@ -267,7 +311,7 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
               handleAbonoInicialRecibidoPorChange
             }
             saldoPendiente={saldoPendiente}
-            onSaldoPendienteChange={handleSaldoPendienteChange}
+            onSaldoPendienteChange={undefined}
             referenciaCambioPrincipal={referenciaCambioPrincipal}
             onReferenciaCambioPrincipalChange={
               handleReferenciaCambioPrincipalChange

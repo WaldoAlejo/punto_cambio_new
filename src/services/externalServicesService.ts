@@ -95,3 +95,55 @@ export async function eliminarMovimientoServicioExterno(id: string) {
     throw error;
   }
 }
+
+// =============== CIERRES (USD, tolerancia ±1.00) ===============
+export async function abrirCierreServiciosExternos(params?: {
+  pointId?: string;
+}) {
+  const { data } = await axiosInstance.post(
+    `/servicios-externos/cierre/abrir`,
+    params || {}
+  );
+  return data as { success: boolean; cierre: any };
+}
+
+export async function statusCierreServiciosExternos(params?: {
+  pointId?: string;
+  fecha?: string; // YYYY-MM-DD
+}) {
+  const { data } = await axiosInstance.get(
+    `/servicios-externos/cierre/status`,
+    {
+      params,
+    }
+  );
+  return data as {
+    success: boolean;
+    cierre: any | null;
+    detalles: Array<{
+      servicio: string;
+      moneda_id: string;
+      monto_movimientos: number;
+      monto_validado: number;
+      diferencia: number;
+      observaciones?: string;
+    }>;
+    resumen_movimientos: Array<{ servicio: string; neto: number }>;
+  };
+}
+
+export async function cerrarCierreServiciosExternos(payload: {
+  pointId?: string;
+  detalles: Array<{
+    servicio: ServicioExterno;
+    monto_validado: number;
+    observaciones?: string;
+  }>;
+  observaciones?: string;
+}) {
+  const { data } = await axiosInstance.post(
+    `/servicios-externos/cierre/cerrar`,
+    payload
+  );
+  return data as { success: boolean; cierre_id: string };
+}

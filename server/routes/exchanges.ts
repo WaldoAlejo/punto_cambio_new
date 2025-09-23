@@ -56,7 +56,7 @@ const exchangeSchema = z.object({
   transferencia_imagen_url: z.string().optional().nullable(),
   abono_inicial_monto: z.number().optional().nullable(),
   abono_inicial_fecha: z.string().optional().nullable(),
-  abono_inicial_recibido_por: z.string().uuid().optional().nullable(),
+  abono_inicial_recibido_por: z.string().optional().nullable(),
   saldo_pendiente: z.number().optional().nullable(),
   referencia_cambio_principal: z.string().optional().nullable(),
 });
@@ -377,8 +377,11 @@ router.post(
           punto_atencion_id,
           observacion: observacion || null,
           numero_recibo: numeroRecibo,
-          // Para que contabilice en el día y cierre: marcar como COMPLETADO
-          estado: EstadoTransaccion.COMPLETADO,
+          // Si tiene saldo pendiente, marcar como PENDIENTE, sino COMPLETADO
+          estado:
+            saldo_pendiente && saldo_pendiente > 0
+              ? EstadoTransaccion.PENDIENTE
+              : EstadoTransaccion.COMPLETADO,
           metodo_entrega,
           transferencia_numero:
             metodo_entrega !== "efectivo" ? transferencia_numero : null,
@@ -1095,6 +1098,214 @@ router.get(
       logger.error("Error fetching pending exchanges", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
+      });
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+);
+
+// Endpoint para obtener cambios parciales (con saldo pendiente)
+router.get(
+  "/partial",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+    try {
+      const { pointId } = req.query;
+
+      // Solo admin y super usuario pueden ver cambios parciales de todos los puntos
+      const isAdmin =
+        req.user?.rol === "ADMIN" || req.user?.rol === "SUPER_USUARIO";
+
+      let whereClause: any = {
+        saldo_pendiente: {
+          gt: 0,
+        },
+        estado: EstadoTransaccion.PENDIENTE, // Solo cambios pendientes
+      };
+
+      // Si no es admin, solo puede ver los de su punto
+      if (!isAdmin && pointId) {
+        whereClause.punto_atencion_id = pointId as string;
+      } else if (isAdmin && pointId && pointId !== "ALL") {
+        whereClause.punto_atencion_id = pointId as string;
+      }
+
+      const exchanges = await prisma.cambioDivisa.findMany({
+        where: whereClause,
+        include: {
+          monedaOrigen: {
+            select: {
+              id: true,
+              nombre: true,
+              codigo: true,
+              simbolo: true,
+            },
+          },
+          monedaDestino: {
+            select: {
+              id: true,
+              nombre: true,
+              codigo: true,
+              simbolo: true,
+            },
+          },
+          usuario: {
+            select: {
+              id: true,
+              nombre: true,
+              username: true,
+            },
+          },
+          puntoAtencion: {
+            select: {
+              id: true,
+              nombre: true,
+            },
+          },
+        },
+        orderBy: {
+          fecha: "desc",
+        },
+      });
+
+      logger.info("Cambios parciales obtenidos", {
+        count: exchanges.length,
+        pointId,
+        requestedBy: req.user?.id,
+      });
+
+      res.json({
+        success: true,
+        exchanges,
+      });
+    } catch (error) {
+      logger.error("Error fetching partial exchanges", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+);
+
+// Endpoint para completar un cambio parcial
+router.patch(
+  "/:id/complete-partial",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { completado_por_usuario_id } = req.body;
+
+      // Solo admin y super usuario pueden completar cambios parciales
+      const isAdmin =
+        req.user?.rol === "ADMIN" || req.user?.rol === "SUPER_USUARIO";
+
+      if (!isAdmin) {
+        res.status(403).json({
+          success: false,
+          error: "Solo administradores pueden completar cambios parciales",
+        });
+        return;
+      }
+
+      // Verificar que el cambio existe y tiene saldo pendiente
+      const exchange = await prisma.cambioDivisa.findUnique({
+        where: { id },
+        include: {
+          monedaDestino: {
+            select: {
+              codigo: true,
+              simbolo: true,
+            },
+          },
+        },
+      });
+
+      if (!exchange) {
+        res.status(404).json({
+          success: false,
+          error: "Cambio no encontrado",
+        });
+        return;
+      }
+
+      if (!exchange.saldo_pendiente || exchange.saldo_pendiente.lte(0)) {
+        res.status(400).json({
+          success: false,
+          error: "Este cambio no tiene saldo pendiente",
+        });
+        return;
+      }
+
+      // Actualizar el cambio para completarlo
+      const updatedExchange = await prisma.cambioDivisa.update({
+        where: { id },
+        data: {
+          saldo_pendiente: 0,
+          fecha_completado: new Date(),
+          estado: EstadoTransaccion.COMPLETADO,
+        },
+        include: {
+          monedaOrigen: {
+            select: {
+              id: true,
+              nombre: true,
+              codigo: true,
+              simbolo: true,
+            },
+          },
+          monedaDestino: {
+            select: {
+              id: true,
+              nombre: true,
+              codigo: true,
+              simbolo: true,
+            },
+          },
+          usuario: {
+            select: {
+              id: true,
+              nombre: true,
+              username: true,
+            },
+          },
+          puntoAtencion: {
+            select: {
+              id: true,
+              nombre: true,
+            },
+          },
+        },
+      });
+
+      logger.info("Cambio parcial completado", {
+        exchangeId: id,
+        saldoCompletado: exchange.saldo_pendiente,
+        completadoPor: req.user?.id,
+        moneda: exchange.monedaDestino?.codigo,
+      });
+
+      res.json({
+        success: true,
+        exchange: updatedExchange,
+        message: `Cambio parcial completado. Saldo de ${
+          exchange.monedaDestino?.simbolo || ""
+        }${exchange.saldo_pendiente} entregado.`,
+      });
+    } catch (error) {
+      logger.error("Error completing partial exchange", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        exchangeId: req.params.id,
       });
       res.status(500).json({
         success: false,

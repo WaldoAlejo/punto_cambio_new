@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import CurrencyDetailForm from "./CurrencyDetailForm";
-import { DetalleDivisasSimple, Moneda } from "../../types";
+import { DetalleDivisasSimple, Moneda, User } from "../../types";
 import { ExchangeFormData } from "./ExchangeForm";
 
 export interface ExchangeDetailsFormProps {
@@ -297,6 +297,8 @@ const ExchangeDetailsForm = ({
                   type="text"
                   value={abonoInicialRecibidoPor ?? ""}
                   readOnly
+                  placeholder="Se auto-completará con el usuario actual"
+                  className="bg-gray-100"
                 />
               </div>
             )}
@@ -308,13 +310,13 @@ const ExchangeDetailsForm = ({
                   value={saldoPendiente ?? ""}
                   min={0}
                   step="0.01"
-                  placeholder="Ingrese saldo pendiente"
-                  onChange={(e) =>
-                    onSaldoPendienteChange(
-                      e.target.value ? parseFloat(e.target.value) : null
-                    )
-                  }
+                  placeholder="Se calcula automáticamente"
+                  readOnly
+                  className="bg-gray-100"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Se calcula automáticamente: Monto a entregar - Abono inicial
+                </p>
               </div>
             )}
             {onReferenciaCambioPrincipalChange && (

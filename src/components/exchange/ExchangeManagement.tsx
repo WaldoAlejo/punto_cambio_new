@@ -132,6 +132,7 @@ const ExchangeManagement = ({
             <ExchangeSteps
               ref={stepsRef}
               currencies={currencies}
+              user={user}
               onComplete={processExchange}
             />
           )}
