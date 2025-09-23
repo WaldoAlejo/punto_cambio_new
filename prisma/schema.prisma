@@ -29,29 +29,33 @@ model Usuario {
   created_at        DateTime   @default(now())
   updated_at        DateTime   @updatedAt
 
-  puntoAtencion             PuntoAtencion?             @relation(fields: [punto_atencion_id], references: [id], onDelete: SetNull)
-  jornadas                  Jornada[]
-  cambios                   CambioDivisa[]
-  movimientos               Movimiento[]
-  solicitudes               SolicitudSaldo[]
-  cuadresCaja               CuadreCaja[]
-  historialSaldos           HistorialSaldo[]
-  transferenciasAprobadas   Transferencia[]            @relation("UsuarioAprobador")
-  transferenciasSolicitadas Transferencia[]            @relation("UsuarioSolicitante")
-  transferenciasRechazadas  Transferencia[]            @relation("UsuarioRechazador")
-  recibos                   Recibo[]
-  salidasEspontaneas        SalidaEspontanea[]
-  salidasAprobadas          SalidaEspontanea[]         @relation("UsuarioAprobadorSalida")
-  cuadresCierreParcial      CuadreCaja[]               @relation("UsuarioCierreParcial")
-  historialAsignaciones     HistorialAsignacionPunto[] @relation("UsuarioAsignacion")
-  historialAutorizados      HistorialAsignacionPunto[] @relation("UsuarioAutorizador")
-  saldosAsignados           SaldoInicial[]             @relation("UsuarioAsignadorSaldo")
-  movimientosSaldo          MovimientoSaldo[]
-  cierresDiarios            CierreDiario[]
-  cierresDiariosRealizados  CierreDiario[]             @relation("UsuarioCerrador")
-  servicioExternoMovimientos ServicioExternoMovimiento[]
-  permisos                  Permiso[]
-  permisosAprobados         Permiso[]                  @relation("UsuarioAprobadorPermiso")
+  puntoAtencion                           PuntoAtencion?                @relation(fields: [punto_atencion_id], references: [id], onDelete: SetNull)
+  jornadas                                Jornada[]
+  cambios                                 CambioDivisa[]
+  movimientos                             Movimiento[]
+  solicitudes                             SolicitudSaldo[]
+  cuadresCaja                             CuadreCaja[]
+  historialSaldos                         HistorialSaldo[]
+  transferenciasAprobadas                 Transferencia[]               @relation("UsuarioAprobador")
+  transferenciasSolicitadas               Transferencia[]               @relation("UsuarioSolicitante")
+  transferenciasRechazadas                Transferencia[]               @relation("UsuarioRechazador")
+  recibos                                 Recibo[]
+  salidasEspontaneas                      SalidaEspontanea[]
+  salidasAprobadas                        SalidaEspontanea[]            @relation("UsuarioAprobadorSalida")
+  cuadresCierreParcial                    CuadreCaja[]                  @relation("UsuarioCierreParcial")
+  historialAsignaciones                   HistorialAsignacionPunto[]    @relation("UsuarioAsignacion")
+  historialAutorizados                    HistorialAsignacionPunto[]    @relation("UsuarioAutorizador")
+  saldosAsignados                         SaldoInicial[]                @relation("UsuarioAsignadorSaldo")
+  movimientosSaldo                        MovimientoSaldo[]
+  cierresDiarios                          CierreDiario[]
+  cierresDiariosRealizados                CierreDiario[]                @relation("UsuarioCerrador")
+  servicioExternoMovimientos              ServicioExternoMovimiento[]
+  // Back-relations for Servicio Externo models
+  servicioExternoAsignacionesAsignadas    ServicioExternoAsignacion[]
+  servicioExternoCierresDiarios           ServicioExternoCierreDiario[]
+  servicioExternoCierresDiariosRealizados ServicioExternoCierreDiario[] @relation("UsuarioCerradorServiciosExternos")
+  permisos                                Permiso[]
+  permisosAprobados                       Permiso[]                     @relation("UsuarioAprobadorPermiso")
 
   @@index([username])
   @@index([punto_atencion_id])
@@ -80,53 +84,61 @@ model PuntoAtencion {
   cambios                         CambioDivisa[]
   movimientos                     Movimiento[]
   solicitudes                     SolicitudSaldo[]
-  transferenciasOrigen            Transferencia[]              @relation("TransferenciasOrigen")
-  transferenciasDestino           Transferencia[]              @relation("TransferenciasDestino")
+  transferenciasOrigen            Transferencia[]               @relation("TransferenciasOrigen")
+  transferenciasDestino           Transferencia[]               @relation("TransferenciasDestino")
   cuadresCaja                     CuadreCaja[]
   historialSaldos                 HistorialSaldo[]
   recibos                         Recibo[]
   salidasEspontaneas              SalidaEspontanea[]
-  historialAsignacionesAnteriores HistorialAsignacionPunto[]   @relation("PuntoAnterior")
-  historialAsignacionesNuevas     HistorialAsignacionPunto[]   @relation("PuntoNuevo")
+  historialAsignacionesAnteriores HistorialAsignacionPunto[]    @relation("PuntoAnterior")
+  historialAsignacionesNuevas     HistorialAsignacionPunto[]    @relation("PuntoNuevo")
   saldosServientrega              ServientregaSaldo[]
   historialSaldosServientrega     ServientregaHistorialSaldo[]
   solicitudesSaldoServientrega    ServientregaSolicitudSaldo[] // ✅ AGREGADO
   guiasServientrega               ServientregaGuia[]
   cierresDiarios                  CierreDiario[]
   servicioExternoMovimientos      ServicioExternoMovimiento[]
+  // Back-relations for Servicio Externo models
+  servicioExternoSaldos           ServicioExternoSaldo[]
+  servicioExternoAsignaciones     ServicioExternoAsignacion[]
+  servicioExternoCierresDiarios   ServicioExternoCierreDiario[]
   permisos                        Permiso[]
 
+  @@unique([nombre])
   @@index([ciudad])
   @@index([activo])
-  @@unique([nombre])
 }
 
 model Moneda {
-  id            String   @id @default(uuid())
+  id            String  @id @default(uuid())
   nombre        String
   simbolo       String
-  codigo        String   @unique
-  activo        Boolean  @default(true)
-  orden_display Int      @default(0)
-  
+  codigo        String  @unique
+  activo        Boolean @default(true)
+  orden_display Int     @default(0)
+
   // Campos para configurar comportamiento de cálculo
   comportamiento_compra ComportamientoCalculo @default(MULTIPLICA)
   comportamiento_venta  ComportamientoCalculo @default(DIVIDE)
-  
-  created_at    DateTime @default(now())
-  updated_at    DateTime @updatedAt
 
-  saldos           Saldo[]
-  saldosIniciales  SaldoInicial[]
-  movimientosSaldo MovimientoSaldo[]
-  cambiosOrigen    CambioDivisa[]      @relation("MonedaOrigen")
-  cambiosDestino   CambioDivisa[]      @relation("MonedaDestino")
-  movimientos      Movimiento[]
-  solicitudes      SolicitudSaldo[]
-  transferencias   Transferencia[]
-  historialSaldos  HistorialSaldo[]
-  detallesCuadre   DetalleCuadreCaja[]
-  servicioExternoMovimientos ServicioExternoMovimiento[]
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  saldos                        Saldo[]
+  saldosIniciales               SaldoInicial[]
+  movimientosSaldo              MovimientoSaldo[]
+  cambiosOrigen                 CambioDivisa[]                 @relation("MonedaOrigen")
+  cambiosDestino                CambioDivisa[]                 @relation("MonedaDestino")
+  movimientos                   Movimiento[]
+  solicitudes                   SolicitudSaldo[]
+  transferencias                Transferencia[]
+  historialSaldos               HistorialSaldo[]
+  detallesCuadre                DetalleCuadreCaja[]
+  servicioExternoMovimientos    ServicioExternoMovimiento[]
+  // Back-relations for Servicio Externo models
+  servicioExternoSaldos         ServicioExternoSaldo[]
+  servicioExternoAsignaciones   ServicioExternoAsignacion[]
+  servicioExternoDetallesCierre ServicioExternoDetalleCierre[]
 
   @@index([codigo])
   @@index([activo])
@@ -227,26 +239,26 @@ model HistorialSaldo {
 // Modelos de operaciones
 // ============================
 model CambioDivisa {
-  id                String            @id @default(uuid())
-  fecha             DateTime          @default(now())
-  monto_origen      Decimal           @db.Decimal(15, 2)
-  monto_destino     Decimal           @db.Decimal(15, 2)
-  
+  id            String   @id @default(uuid())
+  fecha         DateTime @default(now())
+  monto_origen  Decimal  @db.Decimal(15, 2)
+  monto_destino Decimal  @db.Decimal(15, 2)
+
   // ==== TASAS DIFERENCIADAS ====
   // Tasas pueden ser 0 cuando no se usa esa vía
-  tasa_cambio_billetes Decimal        @default(0) @db.Decimal(10, 6)
-  tasa_cambio_monedas  Decimal        @default(0) @db.Decimal(10, 6)
-  
+  tasa_cambio_billetes Decimal @default(0) @db.Decimal(10, 6)
+  tasa_cambio_monedas  Decimal @default(0) @db.Decimal(10, 6)
+
   // ==== DETALLES DE DIVISAS ENTREGADAS (por el cliente) ====
-  divisas_entregadas_billetes Decimal @db.Decimal(15, 2) @default(0)
-  divisas_entregadas_monedas  Decimal @db.Decimal(15, 2) @default(0)
-  divisas_entregadas_total    Decimal @db.Decimal(15, 2) @default(0)
-  
+  divisas_entregadas_billetes Decimal @default(0) @db.Decimal(15, 2)
+  divisas_entregadas_monedas  Decimal @default(0) @db.Decimal(15, 2)
+  divisas_entregadas_total    Decimal @default(0) @db.Decimal(15, 2)
+
   // ==== DETALLES DE DIVISAS RECIBIDAS (por el cliente) ====
-  divisas_recibidas_billetes  Decimal @db.Decimal(15, 2) @default(0)
-  divisas_recibidas_monedas   Decimal @db.Decimal(15, 2) @default(0)
-  divisas_recibidas_total     Decimal @db.Decimal(15, 2) @default(0)
-  
+  divisas_recibidas_billetes Decimal @default(0) @db.Decimal(15, 2)
+  divisas_recibidas_monedas  Decimal @default(0) @db.Decimal(15, 2)
+  divisas_recibidas_total    Decimal @default(0) @db.Decimal(15, 2)
+
   tipo_operacion    TipoOperacion
   moneda_origen_id  String
   moneda_destino_id String
@@ -263,8 +275,8 @@ model CambioDivisa {
   transferencia_imagen_url String? // URL del comprobante, si aplica
 
   // ==== DETALLE DE ENTREGA EN USD ====
-  usd_entregado_efectivo   Decimal? @db.Decimal(15, 2) // parte en efectivo
-  usd_entregado_transfer   Decimal? @db.Decimal(15, 2) // parte por transferencia (control bancos)
+  usd_entregado_efectivo Decimal? @db.Decimal(15, 2) // parte en efectivo
+  usd_entregado_transfer Decimal? @db.Decimal(15, 2) // parte por transferencia (control bancos)
 
   // ==== CAMPOS PARA CAMBIO PARCIAL O DIFERIDO ====
   abono_inicial_monto         Decimal?  @db.Decimal(15, 2)
@@ -275,11 +287,11 @@ model CambioDivisa {
   observacion_parcial         String?
   referencia_cambio_principal String?
   cliente                     String?
-  
+
   // ==== RECIBOS PARA ABONOS PARCIALES ====
-  numero_recibo_abono         String?   @unique
-  numero_recibo_completar     String?   @unique
-  fecha_completado            DateTime?
+  numero_recibo_abono     String?   @unique
+  numero_recibo_completar String?   @unique
+  fecha_completado        DateTime?
   // ==== FIN CAMPOS ====
 
   monedaOrigen  Moneda        @relation("MonedaOrigen", fields: [moneda_origen_id], references: [id], onDelete: Restrict)
@@ -537,9 +549,9 @@ model ServientregaSolicitudSaldo {
   punto_atencion_nombre String
   monto_requerido       Decimal   @db.Decimal(15, 2)
   estado                String    @default("PENDIENTE") // PENDIENTE, APROBADA, RECHAZADA
-  observaciones         String?   // Observaciones del operador
+  observaciones         String? // Observaciones del operador
   creado_en             DateTime  @default(now())
-  aprobado_por          String?   // Usuario administrador que aprobó o rechazó
+  aprobado_por          String? // Usuario administrador que aprobó o rechazó
   aprobado_en           DateTime? // Fecha de aprobación/rechazo
 
   punto_atencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
@@ -612,21 +624,21 @@ model ServientregaSolicitudAnulacion {
 }
 
 model CierreDiario {
-  id                      String    @id @default(uuid())
-  fecha                   DateTime  @db.Date
-  punto_atencion_id       String
-  usuario_id              String
-  observaciones           String?
-  estado                  String    @default("ABIERTO") // ABIERTO, CERRADO
-  fecha_cierre            DateTime?
-  cerrado_por             String?
-  diferencias_reportadas  Json?
-  created_at              DateTime  @default(now())
-  updated_at              DateTime  @updatedAt
+  id                     String    @id @default(uuid())
+  fecha                  DateTime  @db.Date
+  punto_atencion_id      String
+  usuario_id             String
+  observaciones          String?
+  estado                 String    @default("ABIERTO") // ABIERTO, CERRADO
+  fecha_cierre           DateTime?
+  cerrado_por            String?
+  diferencias_reportadas Json?
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
 
-  puntoAtencion           PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
-  usuario                 Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
-  usuarioCerrador         Usuario?      @relation("UsuarioCerrador", fields: [cerrado_por], references: [id], onDelete: Restrict)
+  puntoAtencion   PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  usuario         Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  usuarioCerrador Usuario?      @relation("UsuarioCerrador", fields: [cerrado_por], references: [id], onDelete: Restrict)
 
   @@unique([fecha, punto_atencion_id])
   @@index([fecha])
@@ -640,14 +652,14 @@ model CierreDiario {
 // ============================
 
 model ServicioExternoMovimiento {
-  id                String           @id @default(uuid())
+  id                String          @id @default(uuid())
   punto_atencion_id String
   servicio          ServicioExterno
   tipo_movimiento   TipoMovimiento
   moneda_id         String
-  monto             Decimal          @db.Decimal(15, 2)
+  monto             Decimal         @db.Decimal(15, 2)
   usuario_id        String
-  fecha             DateTime         @default(now())
+  fecha             DateTime        @default(now())
   descripcion       String?
   numero_referencia String?
   comprobante_url   String?
@@ -663,8 +675,95 @@ model ServicioExternoMovimiento {
 }
 
 // ============================
+// Saldos/Asignaciones/Cierres Servicios Externos
+// ============================
+
+model ServicioExternoSaldo {
+  id                String          @id @default(uuid())
+  punto_atencion_id String
+  servicio          ServicioExterno
+  moneda_id         String
+  cantidad          Decimal         @default(0) @db.Decimal(15, 2)
+  updated_at        DateTime        @updatedAt
+
+  puntoAtencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  moneda        Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
+
+  @@unique([punto_atencion_id, servicio, moneda_id])
+  @@index([punto_atencion_id])
+  @@index([servicio])
+}
+
+model ServicioExternoAsignacion {
+  id                String                 @id @default(uuid())
+  punto_atencion_id String
+  servicio          ServicioExterno
+  moneda_id         String
+  monto             Decimal                @db.Decimal(15, 2)
+  tipo              TipoAsignacionServicio
+  observaciones     String?
+  asignado_por      String
+  fecha             DateTime               @default(now())
+
+  puntoAtencion    PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  moneda           Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
+  usuarioAsignador Usuario       @relation(fields: [asignado_por], references: [id])
+
+  // Nota: la unicidad parcial (solo un INICIAL por punto/servicio/moneda) se valida en aplicación o con migración SQL
+  @@index([punto_atencion_id])
+  @@index([servicio])
+  @@index([tipo])
+}
+
+model ServicioExternoCierreDiario {
+  id                     String    @id @default(uuid())
+  fecha                  DateTime  @db.Date
+  punto_atencion_id      String
+  usuario_id             String
+  observaciones          String?
+  estado                 String    @default("ABIERTO") // ABIERTO, CERRADO
+  fecha_cierre           DateTime?
+  cerrado_por            String?
+  diferencias_reportadas Json?
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+
+  puntoAtencion   PuntoAtencion                  @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  usuario         Usuario                        @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  usuarioCerrador Usuario?                       @relation("UsuarioCerradorServiciosExternos", fields: [cerrado_por], references: [id], onDelete: Restrict)
+  detalles        ServicioExternoDetalleCierre[]
+
+  @@unique([fecha, punto_atencion_id])
+  @@index([fecha])
+  @@index([punto_atencion_id])
+  @@index([estado])
+}
+
+model ServicioExternoDetalleCierre {
+  id                String          @id @default(uuid())
+  cierre_id         String
+  servicio          ServicioExterno
+  moneda_id         String
+  monto_movimientos Decimal         @default(0) @db.Decimal(15, 2)
+  monto_validado    Decimal         @default(0) @db.Decimal(15, 2)
+  diferencia        Decimal         @default(0) @db.Decimal(15, 2)
+  observaciones     String?
+
+  cierre ServicioExternoCierreDiario @relation(fields: [cierre_id], references: [id], onDelete: Cascade)
+  moneda Moneda                      @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
+
+  @@index([cierre_id])
+  @@index([servicio])
+}
+
+// ============================
 // Enums
 // ============================
+
+enum TipoAsignacionServicio {
+  INICIAL
+  RECARGA
+}
 
 enum ServicioExterno {
   YAGANASTE
@@ -672,9 +771,9 @@ enum ServicioExterno {
   WESTERN
   PRODUBANCO
   BANCO_PACIFICO
-  INSUMOS_OFICINA   // <- NUEVO
-  INSUMOS_LIMPIEZA  // <- NUEVO
-  OTROS             // <- NUEVO
+  INSUMOS_OFICINA // <- NUEVO
+  INSUMOS_LIMPIEZA // <- NUEVO
+  OTROS // <- NUEVO
 }
 
 enum RolUsuario {
@@ -772,24 +871,24 @@ enum EstadoPermiso {
 }
 
 model Permiso {
-  id                 String         @id @default(uuid())
-  usuario_id         String
-  punto_atencion_id  String?
-  tipo               PermisoTipo
-  fecha_inicio       DateTime
-  fecha_fin          DateTime
-  descripcion        String?
-  archivo_url        String?
-  archivo_nombre     String?
-  estado             EstadoPermiso  @default(PENDIENTE)
-  aprobado_por       String?
-  fecha_aprobacion   DateTime?
-  created_at         DateTime       @default(now())
-  updated_at         DateTime       @updatedAt
+  id                String        @id @default(uuid())
+  usuario_id        String
+  punto_atencion_id String?
+  tipo              PermisoTipo
+  fecha_inicio      DateTime
+  fecha_fin         DateTime
+  descripcion       String?
+  archivo_url       String?
+  archivo_nombre    String?
+  estado            EstadoPermiso @default(PENDIENTE)
+  aprobado_por      String?
+  fecha_aprobacion  DateTime?
+  created_at        DateTime      @default(now())
+  updated_at        DateTime      @updatedAt
 
-  usuario        Usuario        @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
-  puntoAtencion  PuntoAtencion? @relation(fields: [punto_atencion_id], references: [id], onDelete: SetNull)
-  aprobador      Usuario?       @relation("UsuarioAprobadorPermiso", fields: [aprobado_por], references: [id], onDelete: SetNull)
+  usuario       Usuario        @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  puntoAtencion PuntoAtencion? @relation(fields: [punto_atencion_id], references: [id], onDelete: SetNull)
+  aprobador     Usuario?       @relation("UsuarioAprobadorPermiso", fields: [aprobado_por], references: [id], onDelete: SetNull)
 
   @@index([usuario_id])
   @@index([estado])

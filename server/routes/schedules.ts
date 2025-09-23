@@ -386,9 +386,9 @@ router.post(
           updateData.estado = EstadoJornada.ACTIVO;
         }
         if (fecha_salida) {
-          // === AJUSTE: exentos cierran jornada sin exigir cierre de caja ===
+          // === AJUSTE: exentos cierran jornada sin exigir cierres ===
           if (!esExentoDeCaja(req.user?.rol)) {
-            // Para roles que sí manejan caja, mantener la verificación de cierre diario
+            // Para roles que sí manejan caja, verificar Cierre de Caja (divisas)
             const { gte } = gyeDayRangeUtcFromDate(new Date());
             const cierreHoy = await prisma.cuadreCaja.findFirst({
               where: {
@@ -406,8 +406,41 @@ router.post(
               });
               return;
             }
+
+            // Verificar Cierre de Servicios Externos (bloqueo siempre)
+            try {
+              const { pool } = await import("../lib/database.js");
+              const client = await pool.connect();
+              try {
+                const { rows } = await client.query(
+                  `SELECT 1 FROM "ServicioExternoCierreDiario"
+                   WHERE punto_atencion_id = $1
+                     AND fecha = CURRENT_DATE
+                     AND estado = 'CERRADO'
+                   LIMIT 1`,
+                  [punto_atencion_id]
+                );
+                if (rows.length === 0) {
+                  res.status(400).json({
+                    success: false,
+                    error:
+                      "Debe realizar el cierre diario de Servicios Externos antes de finalizar su jornada",
+                  });
+                  return;
+                }
+              } finally {
+                client.release();
+              }
+            } catch (e) {
+              res.status(500).json({
+                success: false,
+                error:
+                  "No se pudo validar el cierre de Servicios Externos. Intente nuevamente.",
+              });
+              return;
+            }
           }
-          // Finalizar jornada (para exentos y para quienes ya cerraron caja)
+          // Finalizar jornada (para exentos y para quienes ya cerraron cierres requeridos)
           updateData.fecha_salida = new Date(fecha_salida);
           updateData.estado = EstadoJornada.COMPLETADO;
           // Al cerrar jornada, limpiar punto del usuario
