@@ -1065,7 +1065,7 @@ router.get(
         JOIN "PuntoAtencion" pa ON sem.punto_atencion_id = pa.id
         JOIN "Usuario" u ON sem.usuario_id = u.id
         ${whereClause}
-        ORDER BY sem.fecha DESC, sem.created_at DESC
+        ORDER BY sem.fecha DESC
         LIMIT 500
       `;
 
@@ -1143,13 +1143,21 @@ router.post(
   async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
-      const { punto_atencion_id, servicio, monto_asignado, creado_por } =
-        req.body as {
-          punto_atencion_id?: string;
-          servicio?: ServicioExterno;
-          monto_asignado?: number;
-          creado_por?: string;
-        };
+      const {
+        punto_atencion_id,
+        servicio,
+        monto_asignado,
+        creado_por,
+        tipo_asignacion,
+        observaciones,
+      } = req.body as {
+        punto_atencion_id?: string;
+        servicio?: ServicioExterno;
+        monto_asignado?: number;
+        creado_por?: string;
+        tipo_asignacion?: string;
+        observaciones?: string;
+      };
 
       // Validaciones
       if (!punto_atencion_id || !servicio || !monto_asignado || !creado_por) {
@@ -1195,36 +1203,40 @@ router.post(
 
       const puntoNombre = puntoCheck.rows[0].nombre;
 
+      // Obtener moneda USD (asumimos USD por defecto)
+      const usdId = await ensureUsdMonedaId(client);
+
       // Crear registro de asignación en historial
       const asignacionId = randomUUID();
       await client.query(
         `INSERT INTO "ServicioExternoAsignacion" 
-         (id, punto_atencion_id, punto_atencion_nombre, servicio, monto_asignado, creado_por, creado_en)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+         (id, punto_atencion_id, servicio, moneda_id, monto, tipo, observaciones, asignado_por, fecha)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
         [
           asignacionId,
           punto_atencion_id,
-          puntoNombre,
           servicio,
+          usdId,
           monto_asignado,
+          tipo_asignacion || "INICIAL",
+          observaciones || null,
           creado_por,
         ]
       );
 
       // Actualizar o crear saldo del servicio para el punto
       const saldoCheck = await client.query(
-        `SELECT id, saldo_actual FROM "ServicioExternoSaldoPunto" 
-         WHERE punto_atencion_id = $1 AND servicio = $2`,
-        [punto_atencion_id, servicio]
+        `SELECT id, cantidad FROM "ServicioExternoSaldo" 
+         WHERE punto_atencion_id = $1 AND servicio = $2 AND moneda_id = $3`,
+        [punto_atencion_id, servicio, usdId]
       );
 
       if (saldoCheck.rows.length > 0) {
         // Actualizar saldo existente
-        const nuevoSaldo =
-          Number(saldoCheck.rows[0].saldo_actual) + monto_asignado;
+        const nuevoSaldo = Number(saldoCheck.rows[0].cantidad) + monto_asignado;
         await client.query(
-          `UPDATE "ServicioExternoSaldoPunto" 
-           SET saldo_actual = $1, updated_at = NOW() 
+          `UPDATE "ServicioExternoSaldo" 
+           SET cantidad = $1, updated_at = NOW() 
            WHERE id = $2`,
           [nuevoSaldo, saldoCheck.rows[0].id]
         );
@@ -1232,10 +1244,10 @@ router.post(
         // Crear nuevo saldo
         const saldoId = randomUUID();
         await client.query(
-          `INSERT INTO "ServicioExternoSaldoPunto" 
-           (id, punto_atencion_id, punto_atencion_nombre, servicio, saldo_actual, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-          [saldoId, punto_atencion_id, puntoNombre, servicio, monto_asignado]
+          `INSERT INTO "ServicioExternoSaldo" 
+           (id, punto_atencion_id, servicio, moneda_id, cantidad, updated_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())`,
+          [saldoId, punto_atencion_id, servicio, usdId, monto_asignado]
         );
       }
 
@@ -1282,12 +1294,13 @@ router.get(
     try {
       const query = `
         SELECT 
-          punto_atencion_id,
-          punto_atencion_nombre,
-          servicio,
-          saldo_actual
-        FROM "ServicioExternoSaldoPunto"
-        ORDER BY punto_atencion_nombre, servicio
+          s.punto_atencion_id,
+          p.nombre as punto_atencion_nombre,
+          s.servicio,
+          s.cantidad as saldo_actual
+        FROM "ServicioExternoSaldo" s
+        JOIN "PuntoAtencion" p ON p.id = s.punto_atencion_id
+        ORDER BY p.nombre, s.servicio
       `;
 
       const result = await client.query(query);
@@ -1326,14 +1339,18 @@ router.get(
     try {
       const query = `
         SELECT 
-          id,
-          punto_atencion_nombre,
-          servicio,
-          monto_asignado,
-          creado_por,
-          creado_en
-        FROM "ServicioExternoAsignacion"
-        ORDER BY creado_en DESC
+          a.id,
+          p.nombre as punto_atencion_nombre,
+          a.servicio,
+          a.monto as monto_asignado,
+          u.nombre as creado_por,
+          a.fecha as creado_en,
+          a.tipo,
+          a.observaciones
+        FROM "ServicioExternoAsignacion" a
+        JOIN "PuntoAtencion" p ON p.id = a.punto_atencion_id
+        JOIN "Usuario" u ON u.id = a.asignado_por
+        ORDER BY a.fecha DESC
         LIMIT 100
       `;
 
@@ -1348,6 +1365,8 @@ router.get(
           monto_asignado: Number(row.monto_asignado),
           creado_por: row.creado_por,
           creado_en: row.creado_en,
+          tipo: row.tipo,
+          observaciones: row.observaciones,
         })),
       });
     } catch (error) {
