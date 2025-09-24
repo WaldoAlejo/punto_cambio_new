@@ -17,7 +17,7 @@ async function validarBalancesRapido() {
     console.log("🔍 Validación rápida de balances (primeros 5)...\n");
 
     // Obtener solo los primeros 5 balances para prueba
-    const balances = await prisma.balance.findMany({
+    const balances = await prisma.saldo.findMany({
       take: 5,
       include: {
         puntoAtencion: { select: { nombre: true } },
@@ -53,7 +53,7 @@ async function validarBalancesRapido() {
       });
 
       if (saldoInicial) {
-        resultado.saldo_esperado = Number(saldoInicial.cantidad);
+        resultado.saldo_esperado = Number(saldoInicial.cantidad_inicial);
         console.log(
           `   💰 Saldo inicial: ${resultado.saldo_esperado.toLocaleString()}`
         );
