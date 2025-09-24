@@ -1073,7 +1073,16 @@ router.get(
 
       res.json({
         success: true,
-        movimientos: result.rows,
+        movimientos: result.rows.map((row) => ({
+          id: row.id,
+          servicio: row.servicio,
+          tipo: row.tipo,
+          monto: Number(row.monto),
+          descripcion: row.descripcion,
+          punto_atencion_nombre: row.punto_atencion_nombre,
+          creado_por: row.creado_por,
+          creado_en: row.creado_en,
+        })),
       });
     } catch (error) {
       console.error("Error al obtener movimientos:", error);
