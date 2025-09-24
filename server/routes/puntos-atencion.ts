@@ -18,9 +18,12 @@ router.get("/", authenticateToken, async (req, res) => {
         direccion,
         ciudad,
         provincia,
+        codigo_postal,
         telefono,
-        email,
+        servientrega_agencia_codigo,
+        servientrega_agencia_nombre,
         activo,
+        es_principal,
         created_at,
         updated_at
       FROM "PuntoAtencion"
@@ -55,9 +58,12 @@ router.get("/:id", authenticateToken, async (req, res) => {
         direccion,
         ciudad,
         provincia,
+        codigo_postal,
         telefono,
-        email,
+        servientrega_agencia_codigo,
+        servientrega_agencia_nombre,
         activo,
+        es_principal,
         created_at,
         updated_at
       FROM "PuntoAtencion"
@@ -90,7 +96,17 @@ router.get("/:id", authenticateToken, async (req, res) => {
 // Crear nuevo punto de atención
 router.post("/", authenticateToken, async (req, res) => {
   try {
-    const { nombre, direccion, ciudad, provincia, telefono, email } = req.body;
+    const {
+      nombre,
+      direccion,
+      ciudad,
+      provincia,
+      codigo_postal,
+      telefono,
+      servientrega_agencia_codigo,
+      servientrega_agencia_nombre,
+      es_principal,
+    } = req.body;
 
     // Validaciones básicas
     if (!nombre || !direccion || !ciudad || !provincia) {
@@ -102,9 +118,9 @@ router.post("/", authenticateToken, async (req, res) => {
     }
 
     const query = `
-      INSERT INTO "PuntoAtencion" (nombre, direccion, ciudad, provincia, telefono, email, activo)
-      VALUES ($1, $2, $3, $4, $5, $6, true)
-      RETURNING id, nombre, direccion, ciudad, provincia, telefono, email, activo, created_at, updated_at
+      INSERT INTO "PuntoAtencion" (nombre, direccion, ciudad, provincia, codigo_postal, telefono, servientrega_agencia_codigo, servientrega_agencia_nombre, es_principal, activo)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+      RETURNING id, nombre, direccion, ciudad, provincia, codigo_postal, telefono, servientrega_agencia_codigo, servientrega_agencia_nombre, es_principal, activo, created_at, updated_at
     `;
 
     const result = await pool.query(query, [
@@ -112,8 +128,11 @@ router.post("/", authenticateToken, async (req, res) => {
       direccion,
       ciudad,
       provincia,
+      codigo_postal || null,
       telefono || null,
-      email || null,
+      servientrega_agencia_codigo || null,
+      servientrega_agencia_nombre || null,
+      es_principal || false,
     ]);
 
     res.json({
@@ -135,8 +154,18 @@ router.post("/", authenticateToken, async (req, res) => {
 router.put("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, direccion, ciudad, provincia, telefono, email, activo } =
-      req.body;
+    const {
+      nombre,
+      direccion,
+      ciudad,
+      provincia,
+      codigo_postal,
+      telefono,
+      servientrega_agencia_codigo,
+      servientrega_agencia_nombre,
+      es_principal,
+      activo,
+    } = req.body;
 
     // Verificar que el punto existe
     const existsQuery = `SELECT id FROM "PuntoAtencion" WHERE id = $1`;
@@ -165,12 +194,15 @@ router.put("/:id", authenticateToken, async (req, res) => {
         direccion = $3,
         ciudad = $4,
         provincia = $5,
-        telefono = $6,
-        email = $7,
-        activo = $8,
+        codigo_postal = $6,
+        telefono = $7,
+        servientrega_agencia_codigo = $8,
+        servientrega_agencia_nombre = $9,
+        es_principal = $10,
+        activo = $11,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $1
-      RETURNING id, nombre, direccion, ciudad, provincia, telefono, email, activo, created_at, updated_at
+      RETURNING id, nombre, direccion, ciudad, provincia, codigo_postal, telefono, servientrega_agencia_codigo, servientrega_agencia_nombre, es_principal, activo, created_at, updated_at
     `;
 
     const result = await pool.query(query, [
@@ -179,8 +211,11 @@ router.put("/:id", authenticateToken, async (req, res) => {
       direccion,
       ciudad,
       provincia,
+      codigo_postal || null,
       telefono || null,
-      email || null,
+      servientrega_agencia_codigo || null,
+      servientrega_agencia_nombre || null,
+      es_principal !== undefined ? es_principal : false,
       activo !== undefined ? activo : true,
     ]);
 
