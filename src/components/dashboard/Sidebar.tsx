@@ -202,6 +202,18 @@ const Sidebar = ({
       label: "Informes Servientrega",
       color: "text-purple-600",
     },
+    // Separador visual
+    {
+      id: "separator-4",
+      label: "---",
+      color: "",
+    },
+    // Administración de servicios externos
+    {
+      id: "servicios-externos-admin",
+      label: "Admin Servicios Externos",
+      color: "text-emerald-700",
+    },
   ];
 
   const renderMenuItem = (item: MenuItem) => {

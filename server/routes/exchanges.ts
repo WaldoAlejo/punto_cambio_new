@@ -361,7 +361,12 @@ router.post(
         usuario_id: req.user.id,
         punto_atencion_id,
         numeroRecibo,
-        estado: EstadoTransaccion.PENDIENTE,
+        abono_inicial_monto,
+        saldo_pendiente,
+        estado:
+          saldo_pendiente && saldo_pendiente > 0
+            ? EstadoTransaccion.PENDIENTE
+            : EstadoTransaccion.COMPLETADO,
       });
 
       const exchange = await prisma.cambioDivisa.create({
@@ -1047,6 +1052,9 @@ router.get(
           punto_atencion_id: pointId as string,
           estado: {
             in: [EstadoTransaccion.PENDIENTE],
+          },
+          saldo_pendiente: {
+            gt: 0,
           },
         },
         include: {

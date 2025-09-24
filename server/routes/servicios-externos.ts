@@ -1013,4 +1013,123 @@ router.post(
   }
 );
 
+/** ==============================
+ *  GET /servicios-externos/movimientos
+ *  Lista movimientos con filtros para administración
+ *  Roles: ADMIN, SUPER_USUARIO, ADMINISTRATIVO
+ *  ============================== */
+router.get(
+  "/movimientos",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const { punto_id, servicio, fecha_desde, fecha_hasta } = req.query;
+
+      let whereClause = "WHERE 1=1";
+      const params: any[] = [];
+      let paramCount = 0;
+
+      if (punto_id && punto_id !== "todos") {
+        whereClause += ` AND sem.punto_atencion_id = $${++paramCount}`;
+        params.push(punto_id);
+      }
+
+      if (servicio && servicio !== "todos") {
+        whereClause += ` AND sem.servicio = $${++paramCount}`;
+        params.push(servicio);
+      }
+
+      if (fecha_desde) {
+        whereClause += ` AND sem.fecha >= $${++paramCount}`;
+        params.push(fecha_desde);
+      }
+
+      if (fecha_hasta) {
+        whereClause += ` AND sem.fecha <= $${++paramCount}`;
+        params.push(fecha_hasta);
+      }
+
+      const query = `
+        SELECT 
+          sem.id,
+          sem.servicio,
+          sem.tipo_movimiento as tipo,
+          sem.monto,
+          sem.descripcion,
+          sem.fecha as creado_en,
+          pa.nombre as punto_atencion_nombre,
+          u.nombre as creado_por
+        FROM "ServicioExternoMovimiento" sem
+        JOIN "PuntoAtencion" pa ON sem.punto_atencion_id = pa.id
+        JOIN "Usuario" u ON sem.usuario_id = u.id
+        ${whereClause}
+        ORDER BY sem.fecha DESC, sem.created_at DESC
+        LIMIT 500
+      `;
+
+      const result = await client.query(query, params);
+
+      res.json({
+        success: true,
+        movimientos: result.rows,
+      });
+    } catch (error) {
+      console.error("Error al obtener movimientos:", error);
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/** ==============================
+ *  GET /servicios-externos/saldos
+ *  Obtiene saldos actuales por servicio
+ *  Roles: ADMIN, SUPER_USUARIO, ADMINISTRATIVO
+ *  ============================== */
+router.get(
+  "/saldos",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      // Obtener saldos netos por servicio
+      const query = `
+        SELECT 
+          servicio,
+          SUM(CASE WHEN tipo_movimiento = 'INGRESO' THEN monto ELSE -monto END) as saldo_actual,
+          MAX(fecha) as ultimo_movimiento
+        FROM "ServicioExternoMovimiento"
+        GROUP BY servicio
+        ORDER BY servicio
+      `;
+
+      const result = await client.query(query);
+
+      res.json({
+        success: true,
+        saldos: result.rows.map((row) => ({
+          servicio: row.servicio,
+          saldo_actual: Number(row.saldo_actual || 0),
+          ultimo_movimiento: row.ultimo_movimiento,
+        })),
+      });
+    } catch (error) {
+      console.error("Error al obtener saldos:", error);
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
 export default router;

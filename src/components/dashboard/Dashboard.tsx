@@ -85,6 +85,9 @@ const CurrencyManagement = React.lazy(() =>
 const ServiciosExternosPage = React.lazy(
   () => import("../contabilidad/ServiciosExternosPage")
 );
+const ServiciosExternosAdmin = React.lazy(
+  () => import("../admin/ServiciosExternosAdmin")
+);
 
 /** Utils */
 const STORAGE_KEY_VIEW = "pc_active_view";
@@ -114,6 +117,7 @@ const VALID_VIEWS = new Set<string>([
   "contabilidad-divisas",
   "contabilidad-general",
   "servicios-externos",
+  "servicios-externos-admin",
 ]);
 
 function getInitialView(
@@ -381,6 +385,11 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isOperador)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
         return <ServiciosExternosPage />;
+
+      case "servicios-externos-admin":
+        if (!isAdmin)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <ServiciosExternosAdmin />;
 
       default:
         if (isOperador) {

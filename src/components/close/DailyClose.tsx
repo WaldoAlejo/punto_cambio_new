@@ -271,52 +271,65 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       return;
     }
 
-    // Validar que todos los saldos estén completos
-    const incompleteBalances = cuadreData.detalles.some(
-      (detalle) =>
-        !userAdjustments[detalle.moneda_id]?.bills ||
-        !userAdjustments[detalle.moneda_id]?.coins
-    );
+    // Si no hay detalles de divisas, permitir cierre solo con servicios externos
+    if (cuadreData.detalles.length === 0) {
+      console.log(
+        "📝 Cierre sin movimientos de divisas, solo servicios externos"
+      );
+    } else {
+      // Validar que todos los saldos estén completos solo si hay detalles
+      const incompleteBalances = cuadreData.detalles.some(
+        (detalle) =>
+          !userAdjustments[detalle.moneda_id]?.bills ||
+          !userAdjustments[detalle.moneda_id]?.coins
+      );
 
-    if (incompleteBalances) {
-      toast({
-        title: "Error",
-        description: "Debe completar todos los saldos antes del cierre",
-        variant: "destructive",
-      });
-      return;
+      if (incompleteBalances) {
+        toast({
+          title: "Error",
+          description: "Debe completar todos los saldos antes del cierre",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     // Validación estricta: todas las divisas deben cuadrar con tolerancia por divisa (USD ±1.00, otras ±0.01)
-    const invalidBalances = cuadreData.detalles.filter((detalle) => {
-      const userTotal = calculateUserTotal(detalle.moneda_id);
-      return !validateBalance(detalle, userTotal);
-    });
+    // Solo validar si hay detalles de divisas
+    if (cuadreData.detalles.length > 0) {
+      const invalidBalances = cuadreData.detalles.filter((detalle) => {
+        const userTotal = calculateUserTotal(detalle.moneda_id);
+        return !validateBalance(detalle, userTotal);
+      });
 
-    if (invalidBalances.length > 0) {
-      const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
-        .map((d) => {
-          const userTotal = calculateUserTotal(d.moneda_id);
-          const tolerance = getTolerance(d).toFixed(2);
-          return `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(
-            2
-          )}, Ingresado ${userTotal.toFixed(2)} (tolerancia ±${tolerance})`;
-        })
-        .join(
-          "\n"
-        )}\n\nRegistre el servicio externo (USD) o el cambio de divisa faltante y vuelva a intentar.`;
-      toast({ title: "No cuadra", description: msg, variant: "destructive" });
-      return;
+      if (invalidBalances.length > 0) {
+        const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
+          .map((d) => {
+            const userTotal = calculateUserTotal(d.moneda_id);
+            const tolerance = getTolerance(d).toFixed(2);
+            return `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(
+              2
+            )}, Ingresado ${userTotal.toFixed(2)} (tolerancia ±${tolerance})`;
+          })
+          .join(
+            "\n"
+          )}\n\nRegistre el servicio externo (USD) o el cambio de divisa faltante y vuelva a intentar.`;
+        toast({ title: "No cuadra", description: msg, variant: "destructive" });
+        return;
+      }
     }
 
     // Preparar detalles del cuadre con los datos del usuario
     const detalles = cuadreData.detalles.map((detalle) => ({
       moneda_id: detalle.moneda_id,
       conteo_fisico: calculateUserTotal(detalle.moneda_id),
-      billetes: parseInt(userAdjustments[detalle.moneda_id]?.bills || "0"),
-      monedas: parseInt(userAdjustments[detalle.moneda_id]?.coins || "0"),
+      billetes: parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0"),
+      monedas: parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0"),
       saldo_apertura: detalle.saldo_apertura,
       saldo_cierre: detalle.saldo_cierre,
+      ingresos_periodo: detalle.ingresos_periodo || 0,
+      egresos_periodo: detalle.egresos_periodo || 0,
+      movimientos_periodo: detalle.movimientos_periodo || 0,
       observaciones_detalle: userAdjustments[detalle.moneda_id]?.note || "",
     }));
 
@@ -507,10 +520,19 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
             {cuadreData?.detalles.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500">
-                  No hay divisas para cerrar hoy. Realice alguna operación de
-                  cambio de divisas primero.
-                </p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-blue-800 mb-2">
+                    ✅ Cierre sin Movimientos de Divisas
+                  </h3>
+                  <p className="text-blue-700 mb-4">
+                    No se registraron cambios de divisas hoy, pero puede
+                    proceder con el cierre.
+                  </p>
+                  <p className="text-sm text-blue-600">
+                    El cierre incluirá únicamente los servicios externos
+                    registrados arriba.
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -729,7 +751,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                   onClick={performDailyClose}
                   className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
                   size="lg"
-                  disabled={!cuadreData?.detalles.length}
+                  disabled={false}
                 >
                   Realizar Cierre Diario
                 </Button>

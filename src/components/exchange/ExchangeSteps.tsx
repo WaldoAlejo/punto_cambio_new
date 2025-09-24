@@ -1,6 +1,8 @@
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
 import CustomerDataForm from "./CustomerDataForm";
-import ExchangeForm, { ExchangeFormData as BaseExchangeFormData } from "./ExchangeForm";
+import ExchangeForm, {
+  ExchangeFormData as BaseExchangeFormData,
+} from "./ExchangeForm";
 import ExchangeDetailsForm from "./ExchangeDetailsForm";
 import { DatosCliente, DetalleDivisasSimple, Moneda, User } from "../../types";
 
@@ -98,12 +100,16 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
         abonoInicialMonto > 0
       ) {
         if (!abonoInicialRecibidoPor) {
-          // Mostrar el nombre del usuario pero internamente manejar el ID
+          // Mostrar el nombre del usuario para la UI
           setAbonoInicialRecibidoPor(user.nombre || user.username || user.id);
         }
         if (!abonoInicialFecha) {
           setAbonoInicialFecha(new Date().toISOString().split("T")[0]);
         }
+      } else if (!exchangeData?.esCambioParcial) {
+        // Limpiar campos si no es cambio parcial
+        setAbonoInicialRecibidoPor(null);
+        setAbonoInicialFecha(null);
       }
     }, [
       exchangeData?.esCambioParcial,
