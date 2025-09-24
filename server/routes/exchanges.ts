@@ -540,7 +540,7 @@ router.post(
           },
         });
 
-        // 2) Moneda DESTINO (USD): el punto ENTREGA -> restar efectivo y/o bancos según método
+        // 2) Moneda DESTINO: el punto ENTREGA -> restar efectivo y/o bancos según método
         const saldoDestino = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -552,9 +552,40 @@ router.post(
         const saldoDestinoAnterior = Number(saldoDestino?.cantidad ?? 0);
         const bancosAnterior = Number(saldoDestino?.bancos ?? 0);
 
-        const egresoEfectivo = Number(usd_entregado_efectivo || 0);
-        const egresoTransfer = Number(usd_entregado_transfer || 0);
-        const egresoTotal = egresoEfectivo + egresoTransfer;
+        // Determinar si la moneda destino es USD para usar los campos específicos de USD
+        const isDestinoUSD = monedaDestino.codigo === "USD";
+
+        let egresoEfectivo, egresoTransfer, egresoTotal;
+
+        if (isDestinoUSD) {
+          // Si la moneda destino es USD, usar los campos específicos de USD
+          egresoEfectivo = Number(usd_entregado_efectivo || 0);
+          egresoTransfer = Number(usd_entregado_transfer || 0);
+          egresoTotal = egresoEfectivo + egresoTransfer;
+        } else {
+          // Si la moneda destino NO es USD, usar el total de divisas recibidas
+          // y distribuir según el método de entrega
+          const totalEgreso = Number(divisas_recibidas_total_final || 0);
+
+          if (metodo_entrega === "efectivo") {
+            egresoEfectivo = totalEgreso;
+            egresoTransfer = 0;
+          } else if (metodo_entrega === "transferencia") {
+            egresoEfectivo = 0;
+            egresoTransfer = totalEgreso;
+          } else if (metodo_entrega === "mixto") {
+            // Para mixto, usar los valores USD si están disponibles, sino distribuir proporcionalmente
+            egresoEfectivo = Number(usd_entregado_efectivo || 0);
+            egresoTransfer = Number(usd_entregado_transfer || 0);
+            // Si no suman el total, ajustar
+            if (egresoEfectivo + egresoTransfer !== totalEgreso) {
+              egresoEfectivo = totalEgreso / 2; // Distribución por defecto
+              egresoTransfer = totalEgreso / 2;
+            }
+          }
+
+          egresoTotal = egresoEfectivo + egresoTransfer;
+        }
 
         if (saldoDestinoAnterior < egresoEfectivo) {
           throw new Error(
@@ -634,8 +665,8 @@ router.post(
               punto_atencion_id,
               moneda_id: moneda_destino_id,
               tipo_movimiento: "CAMBIO_DIVISA",
-              monto: 0, // No afecta saldo efectivo reportado
-              saldo_anterior: saldoDestinoAnterior, // mantenemos para referencia del efectivo
+              monto: -egresoTransfer, // Registrar el egreso por transferencia
+              saldo_anterior: bancosAnterior, // referencia del saldo en bancos
               saldo_nuevo: saldoDestinoNuevo,
               usuario_id: req.user!.id,
               referencia_id: exchange.id,
