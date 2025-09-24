@@ -56,6 +56,7 @@ model Usuario {
   servicioExternoCierresDiariosRealizados ServicioExternoCierreDiario[] @relation("UsuarioCerradorServiciosExternos")
   permisos                                Permiso[]
   permisosAprobados                       Permiso[]                     @relation("UsuarioAprobadorPermiso")
+  abonosInicialesRecibidos                CambioDivisa[]                @relation("AbonoInicialRecibidoPor")
 
   @@index([username])
   @@index([punto_atencion_id])
@@ -298,6 +299,7 @@ model CambioDivisa {
   monedaDestino Moneda        @relation("MonedaDestino", fields: [moneda_destino_id], references: [id], onDelete: Restrict)
   usuario       Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
   puntoAtencion PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
+  abonoInicialRecibidoPorUsuario Usuario? @relation("AbonoInicialRecibidoPor", fields: [abono_inicial_recibido_por], references: [id], onDelete: SetNull)
 
   @@index([fecha])
   @@index([punto_atencion_id])

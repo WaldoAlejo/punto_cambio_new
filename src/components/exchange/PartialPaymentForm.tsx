@@ -51,7 +51,7 @@ const PartialPaymentForm = ({
   const [partialPayment, setPartialPayment] = useState<PartialPaymentData>({
     initialPayment: 0,
     pendingBalance: Number(exchange.monto_destino) || 0,
-    receivedBy: user?.nombre || "",
+    receivedBy: user?.nombre || user?.username || "",
     observations: "",
   });
 
@@ -82,6 +82,12 @@ const PartialPaymentForm = ({
       toast.error("Debe seleccionar un punto de atención");
       return;
     }
+    if (!user || (!user.nombre && !user.username)) {
+      toast.error(
+        "Error: Usuario no identificado. Por favor, inicie sesión nuevamente."
+      );
+      return;
+    }
 
     const totalDestino = Number(exchange.monto_destino) || 0;
     const initial = Number(partialPayment.initialPayment) || 0;
@@ -95,46 +101,82 @@ const PartialPaymentForm = ({
       return;
     }
     if (!partialPayment.receivedBy.trim()) {
-      toast.error("Debe especificar quién recibe el abono");
+      toast.error(
+        "Error: No se pudo identificar el operador que recibe el abono"
+      );
       return;
     }
 
     try {
-      // Generar recibo del abono parcial
-      const receiptData = ReceiptService.generatePartialExchangeReceipt(
-        exchange,
-        selectedPoint?.nombre || "N/A",
-        user.nombre,
-        true,
+      // Registrar el abono parcial en el backend
+      const response = await fetch(
+        `/api/exchanges/${exchange.id}/register-partial-payment`,
         {
-          initialPayment: clamp2(initial),
-          pendingBalance: clamp2(partialPayment.pendingBalance),
-          receivedBy: partialPayment.receivedBy.trim(),
-          observations: partialPayment.observations.trim(),
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+          body: JSON.stringify({
+            abono_inicial_monto: clamp2(initial),
+            abono_inicial_fecha: new Date().toISOString(),
+            observacion_parcial: partialPayment.observations.trim() || null,
+          }),
         }
       );
 
-      // Imprimir con fallback en pantalla
-      try {
-        ReceiptService.printReceipt(receiptData, 2);
-        toast.success("✅ Recibo de abono enviado a impresora");
-      } catch (e) {
-        console.warn("Error al imprimir, mostrando en pantalla:", e);
-        toast.error("Impresión falló. Mostrando recibo en pantalla.");
-      } finally {
-        // Siempre mostramos en pantalla como confirmación
-        setTimeout(() => {
-          ReceiptService.showReceiptInCurrentWindow(receiptData);
-        }, 400);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Error al registrar el abono parcial"
+        );
       }
 
-      // NOTA: No persistimos en backend porque no existe endpoint de abonos parciales.
-      // Mantener este flujo hasta que se agregue soporte en el servidor.
+      const data = await response.json();
 
-      // Notificar UI para refrescar (si están escuchando estos eventos)
-      window.dispatchEvent(new CustomEvent("exchangeCompleted"));
+      if (data.success) {
+        // Generar recibo del abono parcial
+        const receiptData = ReceiptService.generatePartialExchangeReceipt(
+          exchange,
+          selectedPoint?.nombre || "N/A",
+          user.nombre,
+          true,
+          {
+            initialPayment: clamp2(initial),
+            pendingBalance: clamp2(partialPayment.pendingBalance),
+            receivedBy: partialPayment.receivedBy.trim(),
+            observations: partialPayment.observations.trim(),
+          }
+        );
 
-      onComplete();
+        // Imprimir con fallback en pantalla
+        try {
+          ReceiptService.printReceipt(receiptData, 2);
+          toast.success(
+            "✅ Abono parcial registrado y recibo enviado a impresora"
+          );
+        } catch (e) {
+          console.warn("Error al imprimir, mostrando en pantalla:", e);
+          toast.success(
+            "✅ Abono parcial registrado. Impresión falló, mostrando recibo en pantalla."
+          );
+        } finally {
+          // Siempre mostramos en pantalla como confirmación
+          setTimeout(() => {
+            ReceiptService.showReceiptInCurrentWindow(receiptData);
+          }, 400);
+        }
+
+        // Notificar UI para refrescar
+        window.dispatchEvent(new CustomEvent("exchangeCompleted"));
+        window.dispatchEvent(new CustomEvent("saldosUpdated"));
+
+        onComplete();
+      } else {
+        throw new Error(
+          data.error || "Error desconocido al registrar el abono"
+        );
+      }
     } catch (error) {
       console.error("Error al procesar abono parcial:", error);
       toast.error("Error al procesar el abono parcial");
@@ -219,15 +261,18 @@ const PartialPaymentForm = ({
               <Input
                 id="receivedBy"
                 value={partialPayment.receivedBy}
-                onChange={(e) =>
-                  setPartialPayment((prev) => ({
-                    ...prev,
-                    receivedBy: e.target.value,
-                  }))
-                }
-                placeholder="Nombre de quien recibe el abono"
-                className="h-10"
+                readOnly
+                disabled
+                placeholder="Operador que recibe el abono"
+                className="h-10 bg-gray-50 text-gray-700"
+                title={`Operador: ${
+                  user?.nombre || user?.username || "Usuario no identificado"
+                }`}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Operador actual:{" "}
+                {user?.nombre || user?.username || "No identificado"}
+              </p>
             </div>
 
             <div>

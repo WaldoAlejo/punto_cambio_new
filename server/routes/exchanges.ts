@@ -1174,6 +1174,13 @@ router.get(
               nombre: true,
             },
           },
+          abonoInicialRecibidoPorUsuario: {
+            select: {
+              id: true,
+              nombre: true,
+              username: true,
+            },
+          },
         },
         orderBy: {
           fecha: "desc",
@@ -1311,6 +1318,142 @@ router.patch(
       });
     } catch (error) {
       logger.error("Error completing partial exchange", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        exchangeId: req.params.id,
+      });
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+);
+
+// Endpoint para registrar un abono parcial
+router.patch(
+  "/:id/register-partial-payment",
+  authenticateToken,
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const { abono_inicial_monto, abono_inicial_fecha, observacion_parcial } =
+        req.body;
+
+      // Verificar que el cambio existe
+      const exchange = await prisma.cambioDivisa.findUnique({
+        where: { id },
+        include: {
+          monedaDestino: {
+            select: {
+              codigo: true,
+              simbolo: true,
+            },
+          },
+        },
+      });
+
+      if (!exchange) {
+        res.status(404).json({
+          success: false,
+          error: "Cambio no encontrado",
+        });
+        return;
+      }
+
+      // Verificar que el cambio no esté ya completado
+      if (exchange.estado === EstadoTransaccion.COMPLETADO) {
+        res.status(400).json({
+          success: false,
+          error: "Este cambio ya está completado",
+        });
+        return;
+      }
+
+      // Validar el monto del abono
+      const abonoMonto = Number(abono_inicial_monto);
+      const montoDestino = Number(exchange.monto_destino);
+
+      if (abonoMonto <= 0 || abonoMonto >= montoDestino) {
+        res.status(400).json({
+          success: false,
+          error: "El monto del abono debe ser mayor a 0 y menor al monto total",
+        });
+        return;
+      }
+
+      // Calcular saldo pendiente
+      const saldoPendiente = montoDestino - abonoMonto;
+
+      // Actualizar el cambio con la información del abono parcial
+      const updatedExchange = await prisma.cambioDivisa.update({
+        where: { id },
+        data: {
+          abono_inicial_monto: abonoMonto,
+          abono_inicial_fecha: new Date(abono_inicial_fecha),
+          abono_inicial_recibido_por: req.user?.id, // ID del usuario que recibe el abono
+          saldo_pendiente: saldoPendiente,
+          observacion_parcial: observacion_parcial || null,
+          estado: EstadoTransaccion.PENDIENTE, // Mantener como pendiente hasta completar
+        },
+        include: {
+          monedaOrigen: {
+            select: {
+              id: true,
+              nombre: true,
+              codigo: true,
+              simbolo: true,
+            },
+          },
+          monedaDestino: {
+            select: {
+              id: true,
+              nombre: true,
+              codigo: true,
+              simbolo: true,
+            },
+          },
+          usuario: {
+            select: {
+              id: true,
+              nombre: true,
+              username: true,
+            },
+          },
+          puntoAtencion: {
+            select: {
+              id: true,
+              nombre: true,
+            },
+          },
+          abonoInicialRecibidoPorUsuario: {
+            select: {
+              id: true,
+              nombre: true,
+              username: true,
+            },
+          },
+        },
+      });
+
+      logger.info("Abono parcial registrado", {
+        exchangeId: id,
+        abonoMonto,
+        saldoPendiente,
+        recibidoPor: req.user?.id,
+        moneda: exchange.monedaDestino?.codigo,
+      });
+
+      res.json({
+        success: true,
+        exchange: updatedExchange,
+        message: `Abono parcial registrado. Saldo pendiente: ${
+          exchange.monedaDestino?.simbolo || ""
+        }${saldoPendiente.toFixed(2)}`,
+      });
+    } catch (error) {
+      logger.error("Error registering partial payment", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
         exchangeId: req.params.id,
