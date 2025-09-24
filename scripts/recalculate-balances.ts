@@ -14,7 +14,7 @@
  * en el cálculo de egresos para monedas no-USD en cambios de divisas.
  */
 
-import { PrismaClient, Decimal } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -323,7 +323,7 @@ async function main() {
 
     // 7. PASO 4: Procesar operaciones de servicios externos
     console.log("\n4️⃣ Procesando servicios externos...");
-    const serviciosExternos = await prisma.servicioExternoOperacion.findMany({
+    const serviciosExternos = await prisma.servicioExternoMovimiento.findMany({
       include: {
         puntoAtencion: { select: { nombre: true } },
         moneda: { select: { codigo: true } },
@@ -337,25 +337,33 @@ async function main() {
 
       if (balance) {
         const monto = Number(servicio.monto);
+        let montoFinal = monto;
 
-        // Los servicios externos generalmente son ingresos (comisiones)
-        balance.cantidad += monto;
-        balance.billetes += monto; // Asumimos que las comisiones se reciben en efectivo
+        // Determinar si es ingreso o egreso basado en tipo_movimiento
+        if (servicio.tipo_movimiento === "EGRESO") {
+          montoFinal = -monto;
+        }
+
+        balance.cantidad += montoFinal;
+        balance.billetes += montoFinal; // Asumimos que se maneja en efectivo
 
         balance.movimientos.push({
           tipo: `SERVICIO_EXTERNO_${servicio.servicio}`,
-          monto: monto,
-          descripcion: `Comisión por ${servicio.servicio} - ${
+          monto: montoFinal,
+          descripcion: `${servicio.tipo_movimiento} - ${servicio.servicio} - ${
             servicio.descripcion || ""
           }`,
           fecha: servicio.fecha,
           referencia: servicio.id,
         });
 
+        const signo = montoFinal > 0 ? "+" : "";
         console.log(
           `   💼 ${servicio.puntoAtencion.nombre} - ${
             servicio.moneda.codigo
-          }: +${monto.toLocaleString()} (${servicio.servicio})`
+          }: ${signo}${montoFinal.toLocaleString()} (${servicio.servicio} - ${
+            servicio.tipo_movimiento
+          })`
         );
       }
     }
@@ -496,10 +504,10 @@ async function main() {
           await prisma.saldo.update({
             where: { id: balanceActual.id },
             data: {
-              cantidad: new Decimal(cantidadCalculada),
-              billetes: new Decimal(billetesCalculados),
-              monedas_fisicas: new Decimal(monedasCalculadas),
-              bancos: new Decimal(bancosCalculados),
+              cantidad: cantidadCalculada,
+              billetes: billetesCalculados,
+              monedas_fisicas: monedasCalculadas,
+              bancos: bancosCalculados,
             },
           });
 
@@ -518,10 +526,10 @@ async function main() {
             data: {
               punto_atencion_id: balanceCalculado.punto_atencion_id,
               moneda_id: balanceCalculado.moneda_id,
-              cantidad: new Decimal(cantidadCalculada),
-              billetes: new Decimal(billetesCalculados),
-              monedas_fisicas: new Decimal(monedasCalculadas),
-              bancos: new Decimal(bancosCalculados),
+              cantidad: cantidadCalculada,
+              billetes: billetesCalculados,
+              monedas_fisicas: monedasCalculadas,
+              bancos: bancosCalculados,
             },
           });
 
