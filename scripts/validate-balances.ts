@@ -213,23 +213,32 @@ async function validarBalances() {
       }
 
       // 6. Analizar servicios externos
-      const serviciosExternos = await prisma.servicioExternoOperacion.findMany({
-        where: {
-          punto_atencion_id: balance.punto_atencion_id,
-          moneda_id: balance.moneda_id,
-        },
-      });
+      const serviciosExternos = await prisma.servicioExternoMovimiento.findMany(
+        {
+          where: {
+            punto_atencion_id: balance.punto_atencion_id,
+            moneda_id: balance.moneda_id,
+          },
+        }
+      );
 
       let totalServicios = 0;
       for (const servicio of serviciosExternos) {
-        totalServicios += Number(servicio.monto);
+        // Determinar si es ingreso o egreso basado en tipo_movimiento
+        const monto = Number(servicio.monto);
+        if (servicio.tipo_movimiento === "INGRESO") {
+          totalServicios += monto;
+        } else if (servicio.tipo_movimiento === "EGRESO") {
+          totalServicios -= monto;
+        }
         resultado.movimientos_analizados++;
       }
 
-      if (totalServicios > 0) {
+      if (totalServicios !== 0) {
         resultado.saldo_esperado += totalServicios;
+        const signo = totalServicios > 0 ? "+" : "";
         console.log(
-          `   💼 Total servicios externos: +${totalServicios.toLocaleString()}`
+          `   💼 Total servicios externos: ${signo}${totalServicios.toLocaleString()}`
         );
       }
 
