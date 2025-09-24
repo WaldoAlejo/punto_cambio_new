@@ -1132,4 +1132,372 @@ router.get(
   }
 );
 
+/** ==============================
+ *  POST /servicios-externos/asignar-saldo
+ *  Asigna saldo específico de un servicio a un punto de atención (solo ADMIN/SUPER_USUARIO)
+ *  ============================== */
+router.post(
+  "/asignar-saldo",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const { punto_atencion_id, servicio, monto_asignado, creado_por } =
+        req.body as {
+          punto_atencion_id?: string;
+          servicio?: ServicioExterno;
+          monto_asignado?: number;
+          creado_por?: string;
+        };
+
+      // Validaciones
+      if (!punto_atencion_id || !servicio || !monto_asignado || !creado_por) {
+        res.status(400).json({
+          success: false,
+          error:
+            "Todos los campos son obligatorios: punto_atencion_id, servicio, monto_asignado, creado_por",
+        });
+        return;
+      }
+
+      if (!SERVICIOS_VALIDOS.includes(servicio)) {
+        res.status(400).json({
+          success: false,
+          error: "Servicio no válido",
+        });
+        return;
+      }
+
+      if (monto_asignado <= 0) {
+        res.status(400).json({
+          success: false,
+          error: "El monto debe ser mayor a 0",
+        });
+        return;
+      }
+
+      await client.query("BEGIN");
+
+      // Verificar que el punto de atención existe
+      const puntoCheck = await client.query(
+        'SELECT id, nombre FROM "PuntoAtencion" WHERE id = $1',
+        [punto_atencion_id]
+      );
+
+      if (puntoCheck.rows.length === 0) {
+        res.status(404).json({
+          success: false,
+          error: "Punto de atención no encontrado",
+        });
+        return;
+      }
+
+      const puntoNombre = puntoCheck.rows[0].nombre;
+
+      // Crear registro de asignación en historial
+      const asignacionId = randomUUID();
+      await client.query(
+        `INSERT INTO "ServicioExternoAsignacion" 
+         (id, punto_atencion_id, punto_atencion_nombre, servicio, monto_asignado, creado_por, creado_en)
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
+        [
+          asignacionId,
+          punto_atencion_id,
+          puntoNombre,
+          servicio,
+          monto_asignado,
+          creado_por,
+        ]
+      );
+
+      // Actualizar o crear saldo del servicio para el punto
+      const saldoCheck = await client.query(
+        `SELECT id, saldo_actual FROM "ServicioExternoSaldoPunto" 
+         WHERE punto_atencion_id = $1 AND servicio = $2`,
+        [punto_atencion_id, servicio]
+      );
+
+      if (saldoCheck.rows.length > 0) {
+        // Actualizar saldo existente
+        const nuevoSaldo =
+          Number(saldoCheck.rows[0].saldo_actual) + monto_asignado;
+        await client.query(
+          `UPDATE "ServicioExternoSaldoPunto" 
+           SET saldo_actual = $1, updated_at = NOW() 
+           WHERE id = $2`,
+          [nuevoSaldo, saldoCheck.rows[0].id]
+        );
+      } else {
+        // Crear nuevo saldo
+        const saldoId = randomUUID();
+        await client.query(
+          `INSERT INTO "ServicioExternoSaldoPunto" 
+           (id, punto_atencion_id, punto_atencion_nombre, servicio, saldo_actual, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+          [saldoId, punto_atencion_id, puntoNombre, servicio, monto_asignado]
+        );
+      }
+
+      await client.query("COMMIT");
+
+      res.status(201).json({
+        success: true,
+        message: `Saldo de $${monto_asignado.toFixed(
+          2
+        )} asignado correctamente para ${servicio} en ${puntoNombre}`,
+        asignacion: {
+          id: asignacionId,
+          punto_atencion_id,
+          punto_atencion_nombre: puntoNombre,
+          servicio,
+          monto_asignado,
+          creado_por,
+          creado_en: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      console.error("Error al asignar saldo:", error);
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/** ==============================
+ *  GET /servicios-externos/saldos-por-punto
+ *  Obtiene saldos de servicios externos por punto de atención (solo ADMIN/SUPER_USUARIO)
+ *  ============================== */
+router.get(
+  "/saldos-por-punto",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const query = `
+        SELECT 
+          punto_atencion_id,
+          punto_atencion_nombre,
+          servicio,
+          saldo_actual
+        FROM "ServicioExternoSaldoPunto"
+        ORDER BY punto_atencion_nombre, servicio
+      `;
+
+      const result = await client.query(query);
+
+      res.json({
+        success: true,
+        saldos: result.rows.map((row) => ({
+          punto_atencion_id: row.punto_atencion_id,
+          punto_atencion_nombre: row.punto_atencion_nombre,
+          servicio: row.servicio,
+          saldo_actual: Number(row.saldo_actual || 0),
+        })),
+      });
+    } catch (error) {
+      console.error("Error al obtener saldos por punto:", error);
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/** ==============================
+ *  GET /servicios-externos/historial-asignaciones
+ *  Obtiene historial de asignaciones de saldos (solo ADMIN/SUPER_USUARIO)
+ *  ============================== */
+router.get(
+  "/historial-asignaciones",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const query = `
+        SELECT 
+          id,
+          punto_atencion_nombre,
+          servicio,
+          monto_asignado,
+          creado_por,
+          creado_en
+        FROM "ServicioExternoAsignacion"
+        ORDER BY creado_en DESC
+        LIMIT 100
+      `;
+
+      const result = await client.query(query);
+
+      res.json({
+        success: true,
+        historial: result.rows.map((row) => ({
+          id: row.id,
+          punto_atencion_nombre: row.punto_atencion_nombre,
+          servicio: row.servicio,
+          monto_asignado: Number(row.monto_asignado),
+          creado_por: row.creado_por,
+          creado_en: row.creado_en,
+        })),
+      });
+    } catch (error) {
+      console.error("Error al obtener historial de asignaciones:", error);
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+// ============================
+// RUTA TEMPORAL PARA MIGRACIÓN
+// ============================
+
+/**
+ * POST /servicios-externos/migrate-tables
+ * Ejecuta la migración para crear las tablas de servicios externos
+ * NOTA: Esta es una ruta temporal que se puede eliminar después de ejecutar la migración
+ */
+router.post(
+  "/migrate-tables",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    const client = await pool.connect();
+
+    try {
+      console.log("🚀 Iniciando migración de tablas de servicios externos...");
+
+      // Script SQL para crear las tablas
+      const sqlScript = `
+        DO $$
+        BEGIN
+            -- Crear tabla ServicioExternoSaldo si no existe
+            IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'ServicioExternoSaldo') THEN
+                CREATE TABLE "ServicioExternoSaldo" (
+                    "id" TEXT NOT NULL,
+                    "punto_atencion_id" TEXT NOT NULL,
+                    "servicio" TEXT NOT NULL,
+                    "moneda_id" TEXT NOT NULL,
+                    "cantidad" DECIMAL(15,2) NOT NULL DEFAULT 0,
+                    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                    CONSTRAINT "ServicioExternoSaldo_pkey" PRIMARY KEY ("id")
+                );
+
+                -- Crear índices para ServicioExternoSaldo
+                CREATE UNIQUE INDEX "ServicioExternoSaldo_punto_atencion_id_servicio_moneda_id_key" ON "ServicioExternoSaldo"("punto_atencion_id", "servicio", "moneda_id");
+                CREATE INDEX "ServicioExternoSaldo_punto_atencion_id_idx" ON "ServicioExternoSaldo"("punto_atencion_id");
+                CREATE INDEX "ServicioExternoSaldo_servicio_idx" ON "ServicioExternoSaldo"("servicio");
+
+                -- Agregar foreign keys para ServicioExternoSaldo
+                ALTER TABLE "ServicioExternoSaldo" ADD CONSTRAINT "ServicioExternoSaldo_punto_atencion_id_fkey" FOREIGN KEY ("punto_atencion_id") REFERENCES "PuntoAtencion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "ServicioExternoSaldo" ADD CONSTRAINT "ServicioExternoSaldo_moneda_id_fkey" FOREIGN KEY ("moneda_id") REFERENCES "Moneda"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+                RAISE NOTICE 'Tabla ServicioExternoSaldo creada exitosamente';
+            ELSE
+                RAISE NOTICE 'Tabla ServicioExternoSaldo ya existe';
+            END IF;
+
+            -- Crear tabla ServicioExternoAsignacion si no existe
+            IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'ServicioExternoAsignacion') THEN
+                CREATE TABLE "ServicioExternoAsignacion" (
+                    "id" TEXT NOT NULL,
+                    "punto_atencion_id" TEXT NOT NULL,
+                    "servicio" TEXT NOT NULL,
+                    "moneda_id" TEXT NOT NULL,
+                    "monto" DECIMAL(15,2) NOT NULL,
+                    "tipo" TEXT NOT NULL,
+                    "observaciones" TEXT,
+                    "asignado_por" TEXT NOT NULL,
+                    "fecha" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                    CONSTRAINT "ServicioExternoAsignacion_pkey" PRIMARY KEY ("id")
+                );
+
+                -- Crear índices para ServicioExternoAsignacion
+                CREATE INDEX "ServicioExternoAsignacion_punto_atencion_id_idx" ON "ServicioExternoAsignacion"("punto_atencion_id");
+                CREATE INDEX "ServicioExternoAsignacion_servicio_idx" ON "ServicioExternoAsignacion"("servicio");
+                CREATE INDEX "ServicioExternoAsignacion_tipo_idx" ON "ServicioExternoAsignacion"("tipo");
+
+                -- Agregar foreign keys para ServicioExternoAsignacion
+                ALTER TABLE "ServicioExternoAsignacion" ADD CONSTRAINT "ServicioExternoAsignacion_punto_atencion_id_fkey" FOREIGN KEY ("punto_atencion_id") REFERENCES "PuntoAtencion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "ServicioExternoAsignacion" ADD CONSTRAINT "ServicioExternoAsignacion_moneda_id_fkey" FOREIGN KEY ("moneda_id") REFERENCES "Moneda"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "ServicioExternoAsignacion" ADD CONSTRAINT "ServicioExternoAsignacion_asignado_por_fkey" FOREIGN KEY ("asignado_por") REFERENCES "Usuario"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+                RAISE NOTICE 'Tabla ServicioExternoAsignacion creada exitosamente';
+            ELSE
+                RAISE NOTICE 'Tabla ServicioExternoAsignacion ya existe';
+            END IF;
+
+            -- Verificar que los enums necesarios existan
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ServicioExterno') THEN
+                CREATE TYPE "ServicioExterno" AS ENUM (
+                    'YAGANASTE',
+                    'BANCO_GUAYAQUIL',
+                    'WESTERN',
+                    'PRODUBANCO',
+                    'BANCO_PACIFICO',
+                    'INSUMOS_OFICINA',
+                    'INSUMOS_LIMPIEZA',
+                    'OTROS'
+                );
+                RAISE NOTICE 'Enum ServicioExterno creado exitosamente';
+            ELSE
+                RAISE NOTICE 'Enum ServicioExterno ya existe';
+            END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TipoAsignacionServicio') THEN
+                CREATE TYPE "TipoAsignacionServicio" AS ENUM (
+                    'INICIAL',
+                    'RECARGA'
+                );
+                RAISE NOTICE 'Enum TipoAsignacionServicio creado exitosamente';
+            ELSE
+                RAISE NOTICE 'Enum TipoAsignacionServicio ya existe';
+            END IF;
+
+            RAISE NOTICE 'Script de creación de tablas de servicios externos completado exitosamente';
+        END
+        $$;
+      `;
+
+      // Ejecutar el script
+      await client.query(sqlScript);
+
+      console.log("✅ Migración completada exitosamente");
+
+      res.json({
+        success: true,
+        message:
+          "Migración de tablas de servicios externos completada exitosamente",
+        tables_created: ["ServicioExternoSaldo", "ServicioExternoAsignacion"],
+        enums_created: ["ServicioExterno", "TipoAsignacionServicio"],
+      });
+    } catch (error) {
+      console.error("❌ Error durante la migración:", error);
+      res.status(500).json({
+        success: false,
+        error: "Error durante la migración de tablas",
+        details: error instanceof Error ? error.message : "Error desconocido",
+      });
+    } finally {
+      client.release();
+    }
+  }
+);
+
 export default router;

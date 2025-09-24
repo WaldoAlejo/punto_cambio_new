@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Migración Servicios Externos</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+        background-color: #f5f5f5;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        color: #333;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .form-group {
+        margin-bottom: 20px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: #555;
+      }
+      input[type="text"],
+      input[type="password"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 16px;
+      }
+      button {
+        background-color: #007bff;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 16px;
+        width: 100%;
+        margin-top: 10px;
+      }
+      button:hover {
+        background-color: #0056b3;
+      }
+      button:disabled {
+        background-color: #6c757d;
+        cursor: not-allowed;
+      }
+      .result {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 4px;
+        display: none;
+      }
+      .success {
+        background-color: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+      }
+      .error {
+        background-color: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+      }
+      .loading {
+        background-color: #d1ecf1;
+        border: 1px solid #bee5eb;
+        color: #0c5460;
+      }
+      .info {
+        background-color: #e2e3e5;
+        border: 1px solid #d6d8db;
+        color: #383d41;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+      }
+      pre {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🚀 Migración de Servicios Externos</h1>
+
+      <div class="info">
+        <strong>ℹ️ Información:</strong><br />
+        Esta herramienta ejecutará la migración para crear las tablas necesarias
+        para la funcionalidad de asignación de saldos de servicios externos.<br /><br />
+        <strong>Tablas que se crearán:</strong>
+        <ul>
+          <li>ServicioExternoSaldo - Para almacenar saldos actuales</li>
+          <li>ServicioExternoAsignacion - Para historial de asignaciones</li>
+        </ul>
+      </div>
+
+      <form id="migrationForm">
+        <div class="form-group">
+          <label for="apiUrl">URL de la API:</label>
+          <input
+            type="text"
+            id="apiUrl"
+            value="http://34.70.184.11:3001/api"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="username">Usuario:</label>
+          <input
+            type="text"
+            id="username"
+            placeholder="Tu usuario de administrador"
+            required
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Contraseña:</label>
+          <input
+            type="password"
+            id="password"
+            placeholder="Tu contraseña"
+            required
+          />
+        </div>
+
+        <button type="submit" id="migrateBtn">Ejecutar Migración</button>
+      </form>
+
+      <div id="result" class="result"></div>
+    </div>
+
+    <script>
+      document
+        .getElementById("migrationForm")
+        .addEventListener("submit", async function (e) {
+          e.preventDefault();
+
+          const apiUrl = document.getElementById("apiUrl").value;
+          const username = document.getElementById("username").value;
+          const password = document.getElementById("password").value;
+          const resultDiv = document.getElementById("result");
+          const migrateBtn = document.getElementById("migrateBtn");
+
+          // Mostrar estado de carga
+          resultDiv.className = "result loading";
+          resultDiv.style.display = "block";
+          resultDiv.innerHTML = "⏳ Ejecutando migración...";
+          migrateBtn.disabled = true;
+
+          try {
+            // Paso 1: Autenticarse
+            console.log("🔐 Autenticando usuario...");
+            const loginResponse = await fetch(`${apiUrl}/auth/login`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ username, password }),
+            });
+
+            if (!loginResponse.ok) {
+              throw new Error(
+                `Error de autenticación: ${loginResponse.status}`
+              );
+            }
+
+            const loginData = await loginResponse.json();
+            const token = loginData.token;
+
+            if (!token) {
+              throw new Error("No se recibió token de autenticación");
+            }
+
+            console.log("✅ Autenticación exitosa");
+            resultDiv.innerHTML = "🔐 Autenticado. Ejecutando migración...";
+
+            // Paso 2: Ejecutar migración
+            console.log("🚀 Ejecutando migración...");
+            const migrateResponse = await fetch(
+              `${apiUrl}/servicios-externos/migrate-tables`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+            const migrateData = await migrateResponse.json();
+
+            if (!migrateResponse.ok) {
+              throw new Error(
+                migrateData.error || `Error HTTP: ${migrateResponse.status}`
+              );
+            }
+
+            // Éxito
+            resultDiv.className = "result success";
+            resultDiv.innerHTML = `
+                    <h3>✅ Migración Completada Exitosamente</h3>
+                    <p><strong>Mensaje:</strong> ${migrateData.message}</p>
+                    <p><strong>Tablas creadas:</strong></p>
+                    <ul>
+                        ${migrateData.tables_created
+                          .map((table) => `<li>${table}</li>`)
+                          .join("")}
+                    </ul>
+                    <p><strong>Enums creados:</strong></p>
+                    <ul>
+                        ${migrateData.enums_created
+                          .map((enumType) => `<li>${enumType}</li>`)
+                          .join("")}
+                    </ul>
+                    <p><strong>🎉 ¡La funcionalidad de asignación de saldos ya está disponible!</strong></p>
+                `;
+          } catch (error) {
+            console.error("❌ Error durante la migración:", error);
+            resultDiv.className = "result error";
+            resultDiv.innerHTML = `
+                    <h3>❌ Error durante la migración</h3>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p>Por favor, verifica:</p>
+                    <ul>
+                        <li>Que la URL de la API sea correcta</li>
+                        <li>Que tus credenciales sean válidas</li>
+                        <li>Que tengas permisos de administrador</li>
+                        <li>Que el servidor esté funcionando</li>
+                    </ul>
+                `;
+          } finally {
+            migrateBtn.disabled = false;
+          }
+        });
+    </script>
+  </body>
+</html>
