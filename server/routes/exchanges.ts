@@ -555,7 +555,9 @@ router.post(
         // Determinar si la moneda destino es USD para usar los campos específicos de USD
         const isDestinoUSD = monedaDestino.codigo === "USD";
 
-        let egresoEfectivo, egresoTransfer, egresoTotal;
+        let egresoEfectivo: number = 0;
+        let egresoTransfer: number = 0;
+        let egresoTotal: number = 0;
 
         if (isDestinoUSD) {
           // Si la moneda destino es USD, usar los campos específicos de USD
@@ -582,6 +584,10 @@ router.post(
               egresoEfectivo = totalEgreso / 2; // Distribución por defecto
               egresoTransfer = totalEgreso / 2;
             }
+          } else {
+            // Caso por defecto: tratar como efectivo
+            egresoEfectivo = totalEgreso;
+            egresoTransfer = 0;
           }
 
           egresoTotal = egresoEfectivo + egresoTransfer;
