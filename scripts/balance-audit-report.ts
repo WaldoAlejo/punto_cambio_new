@@ -206,9 +206,9 @@ async function generarReporteAuditoria() {
         // 5. Obtener transferencias salientes
         const transferenciasOut = await prisma.transferencia.findMany({
           where: {
-            punto_origen_id: punto.id,
+            origen_id: punto.id,
             moneda_id: moneda.id,
-            estado: "COMPLETADA",
+            estado: "APROBADO",
           },
           include: {
             puntoDestino: { select: { nombre: true } },
@@ -240,9 +240,9 @@ async function generarReporteAuditoria() {
         // 6. Obtener transferencias entrantes
         const transferenciasIn = await prisma.transferencia.findMany({
           where: {
-            punto_destino_id: punto.id,
+            destino_id: punto.id,
             moneda_id: moneda.id,
-            estado: "COMPLETADA",
+            estado: "APROBADO",
           },
           include: {
             puntoOrigen: { select: { nombre: true } },

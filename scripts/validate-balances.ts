@@ -171,9 +171,9 @@ async function validarBalances() {
       // 4. Analizar transferencias salientes
       const transferenciasOut = await prisma.transferencia.findMany({
         where: {
-          punto_origen_id: balance.punto_atencion_id,
+          origen_id: balance.punto_atencion_id,
           moneda_id: balance.moneda_id,
-          estado: "COMPLETADA",
+          estado: "APROBADO",
         },
       });
 
@@ -193,9 +193,9 @@ async function validarBalances() {
       // 5. Analizar transferencias entrantes
       const transferenciasIn = await prisma.transferencia.findMany({
         where: {
-          punto_destino_id: balance.punto_atencion_id,
+          destino_id: balance.punto_atencion_id,
           moneda_id: balance.moneda_id,
-          estado: "COMPLETADA",
+          estado: "APROBADO",
         },
       });
 

@@ -257,7 +257,7 @@ async function main() {
     // 6. PASO 3: Procesar transferencias
     console.log("\n3️⃣ Procesando transferencias...");
     const transferencias = await prisma.transferencia.findMany({
-      where: { estado: "COMPLETADA" },
+      where: { estado: "APROBADO" },
       include: {
         puntoOrigen: { select: { nombre: true } },
         puntoDestino: { select: { nombre: true } },
@@ -270,7 +270,7 @@ async function main() {
       const monto = Number(transferencia.monto);
 
       // Egreso del punto origen
-      const keyOrigen = `${transferencia.punto_origen_id}-${transferencia.moneda_id}`;
+      const keyOrigen = `${transferencia.origen_id}-${transferencia.moneda_id}`;
       const balanceOrigen = balancesCalculados.get(keyOrigen);
 
       if (balanceOrigen) {
@@ -295,7 +295,7 @@ async function main() {
       }
 
       // Ingreso al punto destino
-      const keyDestino = `${transferencia.punto_destino_id}-${transferencia.moneda_id}`;
+      const keyDestino = `${transferencia.destino_id}-${transferencia.moneda_id}`;
       const balanceDestino = balancesCalculados.get(keyDestino);
 
       if (balanceDestino) {
