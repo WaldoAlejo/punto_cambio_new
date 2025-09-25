@@ -50,9 +50,18 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
       },
       include: {
         moneda: true,
-        punto_atencion: true,
+        puntoAtencion: true,
       },
     });
+
+    if (!saldoActual) {
+      console.log("❌ No se encontró saldo en USD para AMAZONAS");
+      return;
+    }
+
+    console.log(
+      `💰 Saldo actual en ${saldoActual.puntoAtencion.nombre}: $${saldoActual.monto} ${saldoActual.moneda.codigo}`
+    );
 
     // 3. Todos los movimientos de saldo
     console.log("📊 Consultando todos los movimientos de saldo...");
@@ -65,7 +74,7 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
       },
       include: {
         moneda: true,
-        punto_atencion: true,
+        puntoAtencion: true,
         usuario: true,
       },
       orderBy: {
@@ -107,7 +116,7 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
       include: {
         servicio_externo: true,
         moneda: true,
-        punto_atencion: true,
+        puntoAtencion: true,
         usuario: true,
       },
       orderBy: {
@@ -148,7 +157,7 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
       },
       include: {
         moneda: true,
-        punto_atencion: true,
+        puntoAtencion: true,
         usuario: true,
       },
       orderBy: {
@@ -212,7 +221,7 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
       },
       include: {
         moneda: true,
-        punto_atencion: true,
+        puntoAtencion: true,
         usuario: true,
       },
       orderBy: {
