@@ -43,7 +43,10 @@
     "balance:fix": "tsx scripts/fix-balances.ts",
     "balance:completo": "tsx scripts/calcular-balance-completo.ts",
     "investigar:amazonas": "tsx scripts/investigar-descuadre-amazonas.ts",
-    "buscar:13.12": "tsx scripts/buscar-13-12-dolares.ts"
+    "buscar:13.12": "tsx scripts/buscar-13-12-dolares.ts",
+    "ajustar:amazonas": "tsx scripts/ajustar-saldo-amazonas.ts",
+    "ajustar:amazonas:fix-teorico": "tsx scripts/ajustar-saldo-amazonas.ts --fix=to-theoretical",
+    "ajustar:amazonas:fix-actual": "tsx scripts/ajustar-saldo-amazonas.ts --fix=to-current"
   },
   "prisma": {
     "seed": "tsx prisma/seed-complete.ts"
