@@ -15,11 +15,6 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 // Configurar Prisma para usar la base de datos correcta
 const prisma = new PrismaClient({
@@ -154,8 +149,7 @@ async function main() {
         puntoAtencion: { select: { nombre: true } },
         monedaOrigen: { select: { codigo: true } },
         monedaDestino: { select: { codigo: true } },
-        divisasEntregadas: true,
-        divisasRecibidas: true,
+        usuario: { select: { nombre: true } },
       },
       orderBy: { fecha: "asc" },
     });
@@ -166,19 +160,19 @@ async function main() {
       const balanceOrigen = balancesCalculados.get(keyOrigen);
 
       if (balanceOrigen) {
-        // Sumar lo que entregó el cliente
-        const ingresoEfectivo = Number(cambio.usd_entregado_efectivo || 0);
-        const ingresoTransfer = Number(cambio.usd_entregado_transfer || 0);
-        const ingresoTotal = ingresoEfectivo + ingresoTransfer;
+        // Usar divisas_entregadas (lo que el cliente nos entregó)
+        const ingresoBilletes = Number(cambio.divisas_entregadas_billetes || 0);
+        const ingresoMonedas = Number(cambio.divisas_entregadas_monedas || 0);
+        const ingresoTotal = Number(cambio.divisas_entregadas_total || 0);
 
         balanceOrigen.cantidad += ingresoTotal;
-        balanceOrigen.billetes += ingresoEfectivo;
-        balanceOrigen.bancos += ingresoTransfer;
+        balanceOrigen.billetes += ingresoBilletes;
+        balanceOrigen.monedas_fisicas += ingresoMonedas;
 
         balanceOrigen.movimientos.push({
           tipo: `CAMBIO_DIVISA_INGRESO_${cambio.tipo_operacion}`,
           monto: ingresoTotal,
-          descripcion: `Ingreso por ${cambio.tipo_operacion} - Recibo: ${cambio.numero_recibo} (Efectivo: ${ingresoEfectivo}, Transfer: ${ingresoTransfer})`,
+          descripcion: `Ingreso por ${cambio.tipo_operacion} - Recibo: ${cambio.numero_recibo} (Billetes: ${ingresoBilletes}, Monedas: ${ingresoMonedas})`,
           fecha: cambio.fecha,
           referencia: cambio.id,
         });
@@ -195,52 +189,33 @@ async function main() {
       const balanceDestino = balancesCalculados.get(keyDestino);
 
       if (balanceDestino) {
+        // Usar divisas_recibidas (lo que nosotros entregamos al cliente)
+        const egresoBilletes = Number(cambio.divisas_recibidas_billetes || 0);
+        const egresoMonedas = Number(cambio.divisas_recibidas_monedas || 0);
+        const egresoTotal = Number(cambio.divisas_recibidas_total || 0);
+
+        // Determinar distribución según método de entrega
         let egresoEfectivo = 0;
         let egresoTransfer = 0;
-        let billetesEgreso = 0;
-        let monedasEgreso = 0;
 
-        // LÓGICA CORREGIDA: Usar campos apropiados según la moneda destino
-        if (cambio.monedaDestino.codigo === "USD") {
-          // Para USD, usar los campos específicos de USD
-          egresoEfectivo = Number(cambio.usd_entregado_efectivo || 0);
-          egresoTransfer = Number(cambio.usd_entregado_transfer || 0);
+        if (cambio.metodo_entrega === "efectivo") {
+          egresoEfectivo = egresoTotal;
+        } else if (cambio.metodo_entrega === "transferencia") {
+          egresoTransfer = egresoTotal;
         } else {
-          // Para otras monedas, usar divisas_recibidas_total_final y distribuir según método
-          const totalEgreso = Number(cambio.divisas_recibidas_total_final || 0);
-
-          if (cambio.metodo_entrega === "efectivo") {
-            egresoEfectivo = totalEgreso;
-          } else if (cambio.metodo_entrega === "transferencia") {
-            egresoTransfer = totalEgreso;
-          } else if (cambio.metodo_entrega === "mixto") {
-            // Para mixto, necesitamos los detalles de divisas recibidas
-            const divisasRecibidas = cambio.divisasRecibidas || [];
-            for (const divisa of divisasRecibidas) {
-              if (divisa.tipo_entrega === "efectivo") {
-                egresoEfectivo += Number(divisa.cantidad || 0);
-              } else if (divisa.tipo_entrega === "transferencia") {
-                egresoTransfer += Number(divisa.cantidad || 0);
-              }
-            }
-          }
+          // Para otros métodos, asumir efectivo por defecto
+          egresoEfectivo = egresoTotal;
         }
 
-        // Obtener billetes y monedas físicas del egreso
-        billetesEgreso = Number(cambio.divisas_recibidas_billetes || 0);
-        monedasEgreso = Number(cambio.divisas_recibidas_monedas || 0);
-
-        const egresoTotal = egresoEfectivo + egresoTransfer;
-
         balanceDestino.cantidad -= egresoTotal;
-        balanceDestino.billetes -= billetesEgreso;
-        balanceDestino.monedas_fisicas -= monedasEgreso;
+        balanceDestino.billetes -= egresoBilletes;
+        balanceDestino.monedas_fisicas -= egresoMonedas;
         balanceDestino.bancos -= egresoTransfer;
 
         balanceDestino.movimientos.push({
           tipo: `CAMBIO_DIVISA_EGRESO_${cambio.tipo_operacion}`,
           monto: -egresoTotal,
-          descripcion: `Egreso por ${cambio.tipo_operacion} - Recibo: ${cambio.numero_recibo} (Efectivo: ${egresoEfectivo}, Transfer: ${egresoTransfer}, Billetes: ${billetesEgreso}, Monedas: ${monedasEgreso})`,
+          descripcion: `Egreso por ${cambio.tipo_operacion} - Recibo: ${cambio.numero_recibo} (Billetes: ${egresoBilletes}, Monedas: ${egresoMonedas}, Método: ${cambio.metodo_entrega})`,
           fecha: cambio.fecha,
           referencia: cambio.id,
         });
@@ -259,11 +234,11 @@ async function main() {
     const transferencias = await prisma.transferencia.findMany({
       where: { estado: "APROBADO" },
       include: {
-        puntoOrigen: { select: { nombre: true } },
-        puntoDestino: { select: { nombre: true } },
+        origen: { select: { nombre: true } },
+        destino: { select: { nombre: true } },
         moneda: { select: { codigo: true } },
       },
-      orderBy: { fecha_solicitud: "asc" },
+      orderBy: { fecha: "asc" },
     });
 
     for (const transferencia of transferencias) {
@@ -281,14 +256,14 @@ async function main() {
           tipo: "TRANSFERENCIA_SALIDA",
           monto: -monto,
           descripcion: `Transferencia enviada a ${
-            transferencia.puntoDestino.nombre
-          } - ${transferencia.observaciones || ""}`,
-          fecha: transferencia.fecha_solicitud,
+            transferencia.destino.nombre
+          } - ${transferencia.descripcion || ""}`,
+          fecha: transferencia.fecha,
           referencia: transferencia.id,
         });
 
         console.log(
-          `   📤 ${transferencia.puntoOrigen.nombre} - ${
+          `   📤 ${transferencia.origen?.nombre || "N/A"} - ${
             transferencia.moneda.codigo
           }: -${monto.toLocaleString()}`
         );
@@ -306,14 +281,14 @@ async function main() {
           tipo: "TRANSFERENCIA_ENTRADA",
           monto: monto,
           descripcion: `Transferencia recibida de ${
-            transferencia.puntoOrigen.nombre
-          } - ${transferencia.observaciones || ""}`,
-          fecha: transferencia.fecha_solicitud,
+            transferencia.origen?.nombre || "N/A"
+          } - ${transferencia.descripcion || ""}`,
+          fecha: transferencia.fecha,
           referencia: transferencia.id,
         });
 
         console.log(
-          `   📥 ${transferencia.puntoDestino.nombre} - ${
+          `   📥 ${transferencia.destino.nombre} - ${
             transferencia.moneda.codigo
           }: +${monto.toLocaleString()}`
         );
@@ -426,7 +401,8 @@ async function main() {
     }
 
     // Procesar cada balance calculado
-    for (const [key, balanceCalculado] of balancesCalculados) {
+    const balanceEntries = Array.from(balancesCalculados.entries());
+    for (const [key, balanceCalculado] of balanceEntries) {
       const balanceActual = balancesActualesMap.get(key);
 
       // Solo procesar si hay movimientos o si existe un balance actual
@@ -593,8 +569,6 @@ async function main() {
 }
 
 // Ejecutar el script
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch(console.error);
-}
+main().catch(console.error);
 
 export { main as recalculateBalances };
