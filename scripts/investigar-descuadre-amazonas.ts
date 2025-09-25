@@ -1,4 +1,4 @@
-import { PrismaClient, Decimal } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -175,15 +175,17 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
     });
 
     const verificacionIntegridad = {
-      saldoInicial: saldoActual?.saldo_inicial || new Decimal(0),
-      sumaMovimientos: sumMovimientos._sum.monto || new Decimal(0),
-      saldoActual: saldoActual?.saldo_actual || new Decimal(0),
-      saldoCalculado: (saldoActual?.saldo_inicial || new Decimal(0)).plus(
-        sumMovimientos._sum.monto || new Decimal(0)
-      ),
-      diferenciaEncontrada: (saldoActual?.saldo_actual || new Decimal(0)).minus(
-        (saldoActual?.saldo_inicial || new Decimal(0)).plus(
-          sumMovimientos._sum.monto || new Decimal(0)
+      saldoInicial: saldoActual?.saldo_inicial || new Prisma.Decimal(0),
+      sumaMovimientos: sumMovimientos._sum.monto || new Prisma.Decimal(0),
+      saldoActual: saldoActual?.saldo_actual || new Prisma.Decimal(0),
+      saldoCalculado: (
+        saldoActual?.saldo_inicial || new Prisma.Decimal(0)
+      ).plus(sumMovimientos._sum.monto || new Prisma.Decimal(0)),
+      diferenciaEncontrada: (
+        saldoActual?.saldo_actual || new Prisma.Decimal(0)
+      ).minus(
+        (saldoActual?.saldo_inicial || new Prisma.Decimal(0)).plus(
+          sumMovimientos._sum.monto || new Prisma.Decimal(0)
         )
       ),
     };
@@ -199,14 +201,14 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
         OR: [
           {
             monto: {
-              gte: new Decimal(13.0),
-              lte: new Decimal(13.25),
+              gte: new Prisma.Decimal(13.0),
+              lte: new Prisma.Decimal(13.25),
             },
           },
           {
             monto: {
-              gte: new Decimal(-13.25),
-              lte: new Decimal(-13.0),
+              gte: new Prisma.Decimal(-13.25),
+              lte: new Prisma.Decimal(-13.0),
             },
           },
         ],
@@ -231,15 +233,15 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
           {
             moneda_origen: { codigo: "USD" },
             monto_origen: {
-              gte: new Decimal(13.0),
-              lte: new Decimal(13.25),
+              gte: new Prisma.Decimal(13.0),
+              lte: new Prisma.Decimal(13.25),
             },
           },
           {
             moneda_destino: { codigo: "USD" },
             monto_destino: {
-              gte: new Decimal(13.0),
-              lte: new Decimal(13.25),
+              gte: new Prisma.Decimal(13.0),
+              lte: new Prisma.Decimal(13.25),
             },
           },
         ],

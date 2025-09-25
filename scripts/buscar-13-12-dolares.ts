@@ -1,4 +1,4 @@
-import { PrismaClient, Decimal } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -33,7 +33,10 @@ async function buscarMonto1312() {
       where: {
         punto_atencion_id: puntoAmazonas.id,
         moneda: { codigo: "USD" },
-        OR: [{ monto: new Decimal(13.12) }, { monto: new Decimal(-13.12) }],
+        OR: [
+          { monto: new Prisma.Decimal(13.12) },
+          { monto: new Prisma.Decimal(-13.12) },
+        ],
       },
       include: {
         usuario: true,
@@ -70,11 +73,11 @@ async function buscarMonto1312() {
         OR: [
           {
             moneda_origen: { codigo: "USD" },
-            monto_origen: new Decimal(13.12),
+            monto_origen: new Prisma.Decimal(13.12),
           },
           {
             moneda_destino: { codigo: "USD" },
-            monto_destino: new Decimal(13.12),
+            monto_destino: new Prisma.Decimal(13.12),
           },
         ],
       },
@@ -107,7 +110,10 @@ async function buscarMonto1312() {
       where: {
         punto_atencion_id: puntoAmazonas.id,
         moneda: { codigo: "USD" },
-        OR: [{ monto: new Decimal(13.12) }, { monto: new Decimal(-13.12) }],
+        OR: [
+          { monto: new Prisma.Decimal(13.12) },
+          { monto: new Prisma.Decimal(-13.12) },
+        ],
       },
       include: {
         servicio_externo: true,
@@ -142,7 +148,7 @@ async function buscarMonto1312() {
           { punto_destino_id: puntoAmazonas.id },
         ],
         moneda: { codigo: "USD" },
-        monto: new Decimal(13.12),
+        monto: new Prisma.Decimal(13.12),
         estado: "APROBADA",
       },
       include: {
@@ -185,14 +191,14 @@ async function buscarMonto1312() {
         OR: [
           {
             monto: {
-              gte: new Decimal(13.0),
-              lte: new Decimal(13.25),
+              gte: new Prisma.Decimal(13.0),
+              lte: new Prisma.Decimal(13.25),
             },
           },
           {
             monto: {
-              gte: new Decimal(-13.25),
-              lte: new Decimal(-13.0),
+              gte: new Prisma.Decimal(-13.25),
+              lte: new Prisma.Decimal(-13.0),
             },
           },
         ],
