@@ -78,7 +78,7 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
         usuario: true,
       },
       orderBy: {
-        created_at: "desc",
+        fecha: "desc",
       },
     });
 
@@ -114,13 +114,12 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
         },
       },
       include: {
-        servicio_externo: true,
         moneda: true,
         puntoAtencion: true,
         usuario: true,
       },
       orderBy: {
-        created_at: "desc",
+        fecha: "desc",
       },
     });
 
@@ -161,7 +160,7 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
         usuario: true,
       },
       orderBy: {
-        created_at: "desc",
+        fecha: "desc",
       },
       take: 20,
     });
@@ -225,7 +224,7 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
         usuario: true,
       },
       orderBy: {
-        created_at: "desc",
+        fecha: "desc",
       },
     });
 
