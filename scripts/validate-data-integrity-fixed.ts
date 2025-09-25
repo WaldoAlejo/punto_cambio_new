@@ -267,7 +267,7 @@ async function validateDataIntegrity() {
 }
 
 // Ejecutar si es llamado directamente
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   validateDataIntegrity()
     .then(() => {
       console.log("\n✅ Validación completada.");
