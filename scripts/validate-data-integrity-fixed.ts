@@ -149,7 +149,9 @@ async function validateDataIntegrity() {
     // Cambios con puntos de atención inexistentes
     const cambiosHuerfanos = await prisma.cambioDivisa.count({
       where: {
-        puntoAtencion: null,
+        puntoAtencion: {
+          is: null,
+        },
       },
     });
 
