@@ -81,6 +81,10 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
+  // Estado para balance completo
+  const [balanceCompleto, setBalanceCompleto] = useState<any>(null);
+  const [loadingBalanceCompleto, setLoadingBalanceCompleto] = useState(false);
+
   // UX: auto-refresh y controles de filtro
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [tab, setTab] = useState<"saldos" | "contabilidad">("saldos");
@@ -128,19 +132,55 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
     }
   }, [selectedPoint]);
 
+  /** ===== Fetch Balance Completo ===== */
+  const loadBalanceCompleto = useCallback(async () => {
+    if (!selectedPoint) return;
+    setLoadingBalanceCompleto(true);
+    try {
+      const response = await fetch(
+        `/api/balance-completo/punto/${selectedPoint.id}`
+      );
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      const data = await response.json();
+      if (data.success) {
+        setBalanceCompleto(data.data);
+      } else {
+        throw new Error(data.error || "Error al cargar balance completo");
+      }
+    } catch (e: any) {
+      toast({
+        title: "Error",
+        description:
+          e?.message || "Error inesperado al cargar el balance completo.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingBalanceCompleto(false);
+    }
+  }, [selectedPoint]);
+
   /** ===== Auto refresh (30s) + visibilidad ===== */
   useEffect(() => {
     if (!selectedPoint) return;
     loadSaldos();
+    loadBalanceCompleto();
 
     let interval: number | undefined;
     const tick = () => {
-      if (autoRefresh && !document.hidden) loadSaldos();
+      if (autoRefresh && !document.hidden) {
+        loadSaldos();
+        loadBalanceCompleto();
+      }
     };
     interval = window.setInterval(tick, 30000);
 
     const onVis = () => {
-      if (!document.hidden && autoRefresh) loadSaldos();
+      if (!document.hidden && autoRefresh) {
+        loadSaldos();
+        loadBalanceCompleto();
+      }
     };
     document.addEventListener("visibilitychange", onVis);
 
@@ -148,19 +188,25 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
       if (interval) clearInterval(interval);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [selectedPoint, autoRefresh, loadSaldos]);
+  }, [selectedPoint, autoRefresh, loadSaldos, loadBalanceCompleto]);
 
   /** ===== Eventos globales ===== */
   useEffect(() => {
-    const onExchange = () => loadSaldos();
-    const onTransfer = () => loadSaldos();
+    const onExchange = () => {
+      loadSaldos();
+      loadBalanceCompleto();
+    };
+    const onTransfer = () => {
+      loadSaldos();
+      loadBalanceCompleto();
+    };
     window.addEventListener("exchangeCompleted", onExchange);
     window.addEventListener("transferApproved", onTransfer);
     return () => {
       window.removeEventListener("exchangeCompleted", onExchange);
       window.removeEventListener("transferApproved", onTransfer);
     };
-  }, [loadSaldos]);
+  }, [loadSaldos, loadBalanceCompleto]);
 
   /** ===== Opciones de moneda (para selector) ===== */
   const currencyOptions = useMemo(() => {
@@ -268,13 +314,18 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
           </Badge>
 
           <Button
-            onClick={loadSaldos}
-            disabled={loading}
+            onClick={() => {
+              loadSaldos();
+              loadBalanceCompleto();
+            }}
+            disabled={loading || loadingBalanceCompleto}
             variant="outline"
             size="sm"
           >
             <RefreshCw
-              className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
+              className={`h-4 w-4 mr-2 ${
+                loading || loadingBalanceCompleto ? "animate-spin" : ""
+              }`}
             />
             Actualizar
           </Button>
@@ -379,6 +430,121 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Balance Completo del Punto */}
+          {balanceCompleto && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5" />
+                  Balance Completo - {selectedPoint.nombre}
+                  {loadingBalanceCompleto && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <p className="text-sm text-blue-600 font-medium">
+                      Cambios de Divisas
+                    </p>
+                    <p className="text-2xl font-bold text-blue-800">
+                      {balanceCompleto.actividad.cambiosDivisas}
+                    </p>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <p className="text-sm text-green-600 font-medium">
+                      Servicios Externos
+                    </p>
+                    <p className="text-2xl font-bold text-green-800">
+                      {balanceCompleto.actividad.serviciosExternos}
+                    </p>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <p className="text-sm text-purple-600 font-medium">
+                      Transferencias
+                    </p>
+                    <p className="text-2xl font-bold text-purple-800">
+                      {balanceCompleto.actividad.transferenciasOrigen +
+                        balanceCompleto.actividad.transferenciasDestino}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600 font-medium">
+                      Total Movimientos
+                    </p>
+                    <p className="text-2xl font-bold text-gray-800">
+                      {balanceCompleto.actividad.totalMovimientos}
+                    </p>
+                  </div>
+                </div>
+
+                {balanceCompleto.balancesPorMoneda &&
+                  balanceCompleto.balancesPorMoneda.length > 0 && (
+                    <div>
+                      <h4 className="text-lg font-semibold mb-3">
+                        Balance por Moneda
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {balanceCompleto.balancesPorMoneda.map(
+                          (balance: any) => (
+                            <div
+                              key={balance.moneda_codigo}
+                              className="border rounded-lg p-3"
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium">
+                                  {balance.moneda_codigo}
+                                </span>
+                                <span
+                                  className={`font-bold ${
+                                    balance.balance >= 0
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  }`}
+                                >
+                                  {balance.balance >= 0 ? "+" : ""}
+                                  {formatMoney(balance.balance)}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-600 space-y-1">
+                                <div>
+                                  Cambios: -
+                                  {formatMoney(
+                                    balance.detalles.cambiosDivisasOrigen
+                                  )}{" "}
+                                  / +
+                                  {formatMoney(
+                                    balance.detalles.cambiosDivisasDestino
+                                  )}
+                                </div>
+                                <div>
+                                  Servicios: +
+                                  {formatMoney(
+                                    balance.detalles.serviciosExternosIngresos
+                                  )}{" "}
+                                  / -
+                                  {formatMoney(
+                                    balance.detalles.serviciosExternosEgresos
+                                  )}
+                                </div>
+                                <div>
+                                  Transferencias:{" "}
+                                  {formatMoney(
+                                    balance.detalles.transferenciasNetas
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Detalle por Moneda (sólo la seleccionada) */}
           {loading && filteredSaldos.length === 0 ? (

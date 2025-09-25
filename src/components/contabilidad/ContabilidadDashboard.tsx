@@ -84,6 +84,11 @@ export const ContabilidadDashboard = ({
   const [showMovimientos, setShowMovimientos] = useState(true);
   const [showSaldos, setShowSaldos] = useState(false); // saldos cerrado por defecto
 
+  // Estado para balance completo
+  const [balanceCompleto, setBalanceCompleto] = useState<any>(null);
+  const [loadingBalanceCompleto, setLoadingBalanceCompleto] = useState(false);
+  const [showBalanceCompleto, setShowBalanceCompleto] = useState(true);
+
   // Cargar monedas si no se proporcionaron
   useEffect(() => {
     const loadCurrencies = async () => {

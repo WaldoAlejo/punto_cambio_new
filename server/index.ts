@@ -57,6 +57,7 @@ import historialSaldoRoutes from "./routes/historial-saldo.js";
 // Nuevas rutas: Servicios Externos
 import serviciosExternosRoutes from "./routes/servicios-externos.js";
 import guardarCierreRoutes from "./routes/guardar-cierre.js";
+import balanceCompletoRoutes from "./routes/balance-completo.js";
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
@@ -262,6 +263,7 @@ app.use("/api/historial-saldo", historialSaldoRoutes);
 app.use("/api/servicios-externos", serviciosExternosRoutes);
 app.use("/api/permissions", permissionRoutes);
 app.use("/api/guardar-cierre", guardarCierreRoutes);
+app.use("/api/balance-completo", balanceCompletoRoutes);
 
 // ------- Frontend estático (serve SPA build) -------
 try {
