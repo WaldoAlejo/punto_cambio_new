@@ -1,8 +1,8 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient, Prisma, RolUsuario } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Utilidad decimal segura
+// Decimal helper
 const D = (n: Prisma.Decimal | number | string | null | undefined) =>
   new Prisma.Decimal(n ?? 0);
 
@@ -14,11 +14,59 @@ const getArg = (key: string) => {
   return hit ? hit.split("=")[1] : undefined;
 };
 
-// Configuración (puedes override con env o flags)
+// Config
 const PUNTO_NAME = process.env.PUNTO_NAME || getArg("--punto") || "AMAZONAS";
 const MONEDA_COD = process.env.MONEDA_COD || getArg("--moneda") || "USD";
 const FIX_MODE: FixMode =
   (getArg("--fix") as FixMode) || ((process.env.FIX_MODE as FixMode) ?? "none"); // none | to-theoretical | to-current
+const USUARIO_ID_FLAG = process.env.USUARIO_ID || getArg("--usuario-id");
+
+// ────────────────────────────────────────────────────────────────────────────────
+// Resolver usuario_id válido para registrar el movimiento
+// ────────────────────────────────────────────────────────────────────────────────
+async function resolveUsuarioId(puntoId: string): Promise<string> {
+  // 1) Si viene por flag/env, validar existencia
+  if (USUARIO_ID_FLAG) {
+    const u = await prisma.usuario.findUnique({
+      where: { id: USUARIO_ID_FLAG },
+    });
+    if (!u) {
+      throw new Error(
+        `El usuario pasado (--usuario-id=${USUARIO_ID_FLAG}) no existe.`
+      );
+    }
+    return u.id;
+  }
+
+  // 2) SUPER_USUARIO del mismo punto
+  const suMismoPunto = await prisma.usuario.findFirst({
+    where: { activo: true, rol: "SUPER_USUARIO", punto_atencion_id: puntoId },
+    select: { id: true },
+  });
+  if (suMismoPunto) return suMismoPunto.id;
+
+  // 3) Cualquier SUPER_USUARIO activo
+  const su = await prisma.usuario.findFirst({
+    where: { activo: true, rol: "SUPER_USUARIO" },
+    select: { id: true },
+  });
+  if (su) return su.id;
+
+  // 4) Cualquier ADMIN activo
+  const admin = await prisma.usuario.findFirst({
+    where: { activo: true, rol: "ADMIN" },
+    select: { id: true },
+  });
+  if (admin) return admin.id;
+
+  // Nada encontrado → error con guía
+  throw new Error(
+    "No se encontró un usuario activo con rol SUPER_USUARIO o ADMIN para registrar el ajuste.\n" +
+      "Soluciones:\n" +
+      "  - Pasa un usuario explícito: --usuario-id=<UUID>\n" +
+      "  - Crea/activa un SUPER_USUARIO o ADMIN en la base.\n"
+  );
+}
 
 async function main() {
   console.log("🔧 Ajuste de saldo");
@@ -106,9 +154,6 @@ async function main() {
   }
 
   // 5) Preparar el movimiento de ajuste (no se ejecuta en dry-run)
-  // Usamos tipo_movimiento (string libre) "AJUSTE_CONTABLE".
-  // saldo_nuevo = saldo_actual + monto_ajuste (si fijamos al teórico).
-  // Para el modo to-current, el movimiento es inverso, de modo que el saldo teórico pase a igualar al actual.
   const ahora = new Date();
   const montoAjuste = FIX_MODE === "to-theoretical" ? delta : delta.negated();
   const tipoAjuste = "AJUSTE_CONTABLE";
@@ -132,6 +177,10 @@ async function main() {
     );
     return;
   }
+
+  // 5.1) Resolver usuario_id válido (evita P2003)
+  const usuarioId = await resolveUsuarioId(punto.id);
+  console.log(`👤 Usuario para registrar el ajuste: ${usuarioId}`);
 
   // 6) Ejecutar transacción de ajuste
   console.log("\n🚀 Ejecutando ajuste en base de datos...");
@@ -158,7 +207,7 @@ async function main() {
         monto: montoAjuste,
         saldo_anterior: saldoAnterior,
         saldo_nuevo: FIX_MODE === "to-theoretical" ? saldoNuevo : saldoAnterior,
-        usuario_id: "00000000-0000-0000-0000-000000000000", // TODO: reemplazar por UUID de usuario SISTEMA
+        usuario_id: usuarioId,
         referencia_id: saldoInicial.id,
         tipo_referencia: "SALDO_INICIAL_ACTIVO",
         descripcion: `${descripcionBase}. Cálculo a ${ahora.toISOString()}.`,
