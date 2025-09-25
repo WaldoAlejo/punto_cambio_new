@@ -2,292 +2,277 @@ import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+type Decimalish = Prisma.Decimal | number | string;
+
 interface DescuadreReport {
-  puntoInfo: any;
-  saldoActual: any;
+  puntoInfo: {
+    id: string;
+    nombre: string;
+    ciudad: string;
+    estado?: unknown;
+  };
+  saldoActual: {
+    cantidad: Prisma.Decimal;
+    billetes: Prisma.Decimal;
+    monedas_fisicas: Prisma.Decimal;
+    bancos: Prisma.Decimal;
+    updated_at: Date;
+    moneda: { id: string; codigo: string; nombre: string };
+    puntoAtencion: { id: string; nombre: string };
+  } | null;
+  saldoInicialActivo: {
+    cantidad_inicial: Prisma.Decimal;
+    fecha_asignacion: Date;
+    id: string;
+  } | null;
   movimientosRecientes: any[];
   cambiosDivisas: any[];
   serviciosExternos: any[];
   transferencias: any[];
   historialSaldo: any[];
-  verificacionIntegridad: any;
+  verificacionIntegridad: {
+    saldoInicial: Prisma.Decimal;
+    sumaMovimientos: Prisma.Decimal;
+    saldoActual: Prisma.Decimal;
+    saldoCalculado: Prisma.Decimal;
+    diferenciaEncontrada: Prisma.Decimal;
+  };
   movimientosSospechosos: any[];
   cambiosSospechosos: any[];
-  resumenDia: any;
+  resumenDia: {
+    cambiosDivisas: number;
+    serviciosExternos: number;
+    transferencias: number;
+    movimientosSaldo: number;
+  };
+}
+
+function D(n: Decimalish) {
+  return new Prisma.Decimal(n ?? 0);
 }
 
 async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
   console.log("🔍 Iniciando investigación de descuadre en AMAZONAS...");
 
-  try {
-    // 1. Información básica del punto AMAZONAS
-    console.log("📍 Buscando información del punto AMAZONAS...");
-    const puntoInfo = await prisma.puntoAtencion.findFirst({
-      where: {
-        nombre: {
-          contains: "AMAZONAS",
-          mode: "insensitive",
-        },
-      },
-    });
+  // 1) Punto AMAZONAS
+  console.log("📍 Buscando información del punto AMAZONAS...");
+  const puntoInfo = await prisma.puntoAtencion.findFirst({
+    where: { nombre: { contains: "AMAZONAS", mode: "insensitive" } },
+    select: { id: true, nombre: true, ciudad: true, activo: true },
+  });
+  if (!puntoInfo) throw new Error("No se encontró el punto AMAZONAS");
+  console.log(`✅ Punto encontrado: ${puntoInfo.nombre} (ID: ${puntoInfo.id})`);
 
-    if (!puntoInfo) {
-      throw new Error("No se encontró el punto AMAZONAS");
-    }
+  // 2) Saldo actual USD
+  console.log("💰 Consultando saldo actual en USD...");
+  const saldoActual = await prisma.saldo.findFirst({
+    where: {
+      punto_atencion_id: puntoInfo.id,
+      moneda: { codigo: "USD" },
+    },
+    include: {
+      moneda: true,
+      puntoAtencion: true,
+    },
+  });
 
-    console.log(
-      `✅ Punto encontrado: ${puntoInfo.nombre} (ID: ${puntoInfo.id})`
-    );
-
-    // 2. Saldo actual en USD
-    console.log("💰 Consultando saldo actual en USD...");
-    const saldoActual = await prisma.saldo.findFirst({
-      where: {
-        punto_atencion_id: puntoInfo.id,
-        moneda: {
-          codigo: "USD",
-        },
-      },
-      include: {
-        moneda: true,
-        puntoAtencion: true,
-      },
-    });
-
-    if (!saldoActual) {
-      console.log("❌ No se encontró saldo en USD para AMAZONAS");
-      return;
-    }
-
-    console.log(
-      `💰 Saldo actual en ${saldoActual.puntoAtencion.nombre}: $${saldoActual.monto} ${saldoActual.moneda.codigo}`
-    );
-
-    // 3. Todos los movimientos de saldo
-    console.log("📊 Consultando todos los movimientos de saldo...");
-    const movimientosRecientes = await prisma.movimientoSaldo.findMany({
-      where: {
-        punto_atencion_id: puntoInfo.id,
-        moneda: {
-          codigo: "USD",
-        },
-      },
-      include: {
-        moneda: true,
-        puntoAtencion: true,
-        usuario: true,
-      },
-      orderBy: {
-        fecha: "desc",
-      },
-    });
-
-    // 4. Todos los cambios de divisas completados
-    console.log("🔄 Consultando todos los cambios de divisas...");
-    const cambiosDivisas = await prisma.cambioDivisa.findMany({
-      where: {
-        punto_atencion_id: puntoInfo.id,
-        estado: "COMPLETADO",
-        OR: [
-          { monedaOrigen: { codigo: "USD" } },
-          { monedaDestino: { codigo: "USD" } },
-        ],
-      },
-      include: {
-        monedaOrigen: true,
-        monedaDestino: true,
-        puntoAtencion: true,
-        usuario: true,
-      },
-      orderBy: {
-        fecha: "desc",
-      },
-    });
-
-    // 5. Todos los servicios externos
-    console.log("🏪 Consultando todos los servicios externos...");
-    const serviciosExternos = await prisma.servicioExternoMovimiento.findMany({
-      where: {
-        punto_atencion_id: puntoInfo.id,
-        moneda: {
-          codigo: "USD",
-        },
-      },
-      include: {
-        moneda: true,
-        puntoAtencion: true,
-        usuario: true,
-      },
-      orderBy: {
-        fecha: "desc",
-      },
-    });
-
-    // 6. Todas las transferencias
-    console.log("↔️ Consultando todas las transferencias...");
-    const transferencias = await prisma.transferencia.findMany({
-      where: {
-        OR: [{ origen_id: puntoInfo.id }, { destino_id: puntoInfo.id }],
-        moneda: {
-          codigo: "USD",
-        },
-        estado: "APROBADA",
-      },
-      include: {
-        origen: true,
-        destino: true,
-        moneda: true,
-        usuarioSolicitante: true,
-        usuarioAprobador: true,
-      },
-      orderBy: {
-        fecha_aprobacion: "desc",
-      },
-    });
-
-    // 7. Historial de saldo (últimos 20 registros)
-    console.log("📜 Consultando historial de saldo...");
-    const historialSaldo = await prisma.historialSaldo.findMany({
-      where: {
-        punto_atencion_id: puntoInfo.id,
-        moneda: {
-          codigo: "USD",
-        },
-      },
-      include: {
-        moneda: true,
-        puntoAtencion: true,
-        usuario: true,
-      },
-      orderBy: {
-        fecha: "desc",
-      },
-      take: 20,
-    });
-
-    // 8. Verificación de integridad
-    console.log("🔍 Verificando integridad de saldos...");
-    const sumMovimientos = await prisma.movimientoSaldo.aggregate({
-      where: {
-        punto_atencion_id: puntoInfo.id,
-        moneda: {
-          codigo: "USD",
-        },
-      },
-      _sum: {
-        monto: true,
-      },
-    });
-
-    const verificacionIntegridad = {
-      saldoInicial: saldoActual?.saldo_inicial || new Prisma.Decimal(0),
-      sumaMovimientos: sumMovimientos._sum.monto || new Prisma.Decimal(0),
-      saldoActual: saldoActual?.saldo_actual || new Prisma.Decimal(0),
-      saldoCalculado: (
-        saldoActual?.saldo_inicial || new Prisma.Decimal(0)
-      ).plus(sumMovimientos._sum.monto || new Prisma.Decimal(0)),
-      diferenciaEncontrada: (
-        saldoActual?.saldo_actual || new Prisma.Decimal(0)
-      ).minus(
-        (saldoActual?.saldo_inicial || new Prisma.Decimal(0)).plus(
-          sumMovimientos._sum.monto || new Prisma.Decimal(0)
-        )
-      ),
-    };
-
-    // 9. Movimientos sospechosos (cercanos a $13.12)
-    console.log("🚨 Buscando movimientos sospechosos...");
-    const movimientosSospechosos = await prisma.movimientoSaldo.findMany({
-      where: {
-        punto_atencion_id: puntoInfo.id,
-        moneda: {
-          codigo: "USD",
-        },
-        OR: [
-          {
-            monto: {
-              gte: new Prisma.Decimal(13.0),
-              lte: new Prisma.Decimal(13.25),
-            },
-          },
-          {
-            monto: {
-              gte: new Prisma.Decimal(-13.25),
-              lte: new Prisma.Decimal(-13.0),
-            },
-          },
-        ],
-      },
-      include: {
-        moneda: true,
-        puntoAtencion: true,
-        usuario: true,
-      },
-      orderBy: {
-        fecha: "desc",
-      },
-    });
-
-    // 10. Cambios con montos sospechosos
-    console.log("🔄 Buscando cambios con montos sospechosos...");
-    const cambiosSospechosos = await prisma.cambioDivisa.findMany({
-      where: {
-        punto_atencion_id: puntoInfo.id,
-        estado: "COMPLETADO",
-        OR: [
-          {
-            monedaOrigen: { codigo: "USD" },
-            monto_origen: {
-              gte: new Prisma.Decimal(13.0),
-              lte: new Prisma.Decimal(13.25),
-            },
-          },
-          {
-            monedaDestino: { codigo: "USD" },
-            monto_destino: {
-              gte: new Prisma.Decimal(13.0),
-              lte: new Prisma.Decimal(13.25),
-            },
-          },
-        ],
-      },
-      include: {
-        monedaOrigen: true,
-        monedaDestino: true,
-        puntoAtencion: true,
-        usuario: true,
-      },
-      orderBy: {
-        fecha: "desc",
-      },
-    });
-
-    // 11. Resumen general
-    console.log("📋 Generando resumen general...");
-    const resumenDia = {
-      cambiosDivisas: cambiosDivisas.length,
-      serviciosExternos: serviciosExternos.length,
-      transferencias: transferencias.length,
-      movimientosSaldo: movimientosRecientes.length,
-    };
-
-    return {
-      puntoInfo,
-      saldoActual,
-      movimientosRecientes,
-      cambiosDivisas,
-      serviciosExternos,
-      transferencias,
-      historialSaldo,
-      verificacionIntegridad,
-      movimientosSospechosos,
-      cambiosSospechosos,
-      resumenDia,
-    };
-  } catch (error) {
-    console.error("❌ Error durante la investigación:", error);
-    throw error;
+  if (!saldoActual) {
+    throw new Error("No se encontró saldo en USD para AMAZONAS");
   }
+
+  console.log(
+    `💰 Saldo actual en ${saldoActual.puntoAtencion.nombre}: $${saldoActual.cantidad} ${saldoActual.moneda.codigo}`
+  );
+
+  // 2.1) SaldoInicial activo USD (el “vigente”)
+  console.log("📜 Buscando saldo inicial activo (USD)...");
+  const saldoInicialActivo = await prisma.saldoInicial.findFirst({
+    where: {
+      punto_atencion_id: puntoInfo.id,
+      activo: true,
+      moneda: { codigo: "USD" },
+    },
+    orderBy: { fecha_asignacion: "desc" },
+    select: {
+      id: true,
+      cantidad_inicial: true,
+      fecha_asignacion: true,
+    },
+  });
+
+  // 3) Movimientos de saldo USD
+  console.log("📊 Consultando todos los movimientos de saldo...");
+  const movimientosRecientes = await prisma.movimientoSaldo.findMany({
+    where: {
+      punto_atencion_id: puntoInfo.id,
+      moneda: { codigo: "USD" },
+    },
+    include: {
+      moneda: true,
+      puntoAtencion: true,
+      usuario: true,
+    },
+    orderBy: { fecha: "desc" },
+  });
+
+  // 4) Cambios de divisas (COMPLETADO) donde intervenga USD
+  console.log("🔄 Consultando todos los cambios de divisas...");
+  const cambiosDivisas = await prisma.cambioDivisa.findMany({
+    where: {
+      punto_atencion_id: puntoInfo.id,
+      estado: "COMPLETADO",
+      OR: [
+        { monedaOrigen: { codigo: "USD" } },
+        { monedaDestino: { codigo: "USD" } },
+      ],
+    },
+    include: {
+      monedaOrigen: true,
+      monedaDestino: true,
+      puntoAtencion: true,
+      usuario: true,
+    },
+    orderBy: { fecha: "desc" },
+  });
+
+  // 5) Servicios externos USD
+  console.log("🏪 Consultando todos los servicios externos...");
+  const serviciosExternos = await prisma.servicioExternoMovimiento.findMany({
+    where: {
+      punto_atencion_id: puntoInfo.id,
+      moneda: { codigo: "USD" },
+    },
+    include: {
+      moneda: true,
+      puntoAtencion: true,
+      usuario: true,
+    },
+    orderBy: { fecha: "desc" },
+  });
+
+  // 6) Transferencias USD (APROBADO)
+  console.log("↔️ Consultando todas las transferencias aprobadas...");
+  const transferencias = await prisma.transferencia.findMany({
+    where: {
+      OR: [{ origen_id: puntoInfo.id }, { destino_id: puntoInfo.id }],
+      moneda: { codigo: "USD" },
+      estado: "APROBADO",
+    },
+    include: {
+      origen: true,
+      destino: true,
+      moneda: true,
+      usuarioSolicitante: true,
+      usuarioAprobador: true,
+    },
+    orderBy: { fecha_aprobacion: "desc" },
+  });
+
+  // 7) Historial de saldo (últimos 20)
+  console.log("📜 Consultando historial de saldo...");
+  const historialSaldo = await prisma.historialSaldo.findMany({
+    where: {
+      punto_atencion_id: puntoInfo.id,
+      moneda: { codigo: "USD" },
+    },
+    include: {
+      moneda: true,
+      puntoAtencion: true,
+      usuario: true,
+    },
+    orderBy: { fecha: "desc" },
+    take: 20,
+  });
+
+  // 8) Verificación de integridad
+  console.log("🔍 Verificando integridad de saldos...");
+  const sumMovimientos = await prisma.movimientoSaldo.aggregate({
+    where: {
+      punto_atencion_id: puntoInfo.id,
+      moneda: { codigo: "USD" },
+    },
+    _sum: { monto: true },
+  });
+
+  const saldoInicial = D(saldoInicialActivo?.cantidad_inicial ?? 0);
+  const sumaMovs = D(sumMovimientos._sum.monto ?? 0);
+  const saldoActualCantidad = D(saldoActual.cantidad);
+
+  const saldoCalculado = saldoInicial.plus(sumaMovs);
+  const diferenciaEncontrada = saldoActualCantidad.minus(saldoCalculado);
+
+  const verificacionIntegridad = {
+    saldoInicial,
+    sumaMovimientos: sumaMovs,
+    saldoActual: saldoActualCantidad,
+    saldoCalculado,
+    diferenciaEncontrada,
+  };
+
+  // 9) Movimientos sospechosos (~13.12)
+  console.log("🚨 Buscando movimientos sospechosos...");
+  const movimientosSospechosos = await prisma.movimientoSaldo.findMany({
+    where: {
+      punto_atencion_id: puntoInfo.id,
+      moneda: { codigo: "USD" },
+      OR: [
+        { monto: { gte: D(13.0), lte: D(13.25) } },
+        { monto: { gte: D(-13.25), lte: D(-13.0) } },
+      ],
+    },
+    include: { moneda: true, puntoAtencion: true, usuario: true },
+    orderBy: { fecha: "desc" },
+  });
+
+  // 10) Cambios sospechosos con montos ~13.12 en origen o destino USD
+  console.log("🔄 Buscando cambios con montos sospechosos...");
+  const cambiosSospechosos = await prisma.cambioDivisa.findMany({
+    where: {
+      punto_atencion_id: puntoInfo.id,
+      estado: "COMPLETADO",
+      OR: [
+        {
+          monedaOrigen: { codigo: "USD" },
+          monto_origen: { gte: D(13.0), lte: D(13.25) },
+        },
+        {
+          monedaDestino: { codigo: "USD" },
+          monto_destino: { gte: D(13.0), lte: D(13.25) },
+        },
+      ],
+    },
+    include: {
+      monedaOrigen: true,
+      monedaDestino: true,
+      puntoAtencion: true,
+      usuario: true,
+    },
+    orderBy: { fecha: "desc" },
+  });
+
+  // 11) Resumen
+  console.log("📋 Generando resumen general...");
+  const resumenDia = {
+    cambiosDivisas: cambiosDivisas.length,
+    serviciosExternos: serviciosExternos.length,
+    transferencias: transferencias.length,
+    movimientosSaldo: movimientosRecientes.length,
+  };
+
+  return {
+    puntoInfo,
+    saldoActual,
+    saldoInicialActivo,
+    movimientosRecientes,
+    cambiosDivisas,
+    serviciosExternos,
+    transferencias,
+    historialSaldo,
+    verificacionIntegridad,
+    movimientosSospechosos,
+    cambiosSospechosos,
+    resumenDia,
+  };
 }
 
 function imprimirReporte(reporte: DescuadreReport) {
@@ -300,17 +285,27 @@ function imprimirReporte(reporte: DescuadreReport) {
   console.log(`   Nombre: ${reporte.puntoInfo.nombre}`);
   console.log(`   Ciudad: ${reporte.puntoInfo.ciudad}`);
   console.log(`   ID: ${reporte.puntoInfo.id}`);
-  console.log(`   Estado: ${reporte.puntoInfo.estado}`);
 
   // Saldo actual
   console.log("\n💰 SALDO ACTUAL USD:");
   if (reporte.saldoActual) {
-    console.log(`   Saldo Inicial: $${reporte.saldoActual.saldo_inicial}`);
-    console.log(`   Saldo Actual: $${reporte.saldoActual.saldo_actual}`);
-    console.log(`   Diferencia: $${reporte.saldoActual.diferencia}`);
+    console.log(`   Cantidad total: $${reporte.saldoActual.cantidad}`);
+    console.log(
+      `   Detalle → Billetes: $${reporte.saldoActual.billetes} | Monedas: $${reporte.saldoActual.monedas_fisicas} | Bancos: $${reporte.saldoActual.bancos}`
+    );
     console.log(`   Última actualización: ${reporte.saldoActual.updated_at}`);
   } else {
     console.log("   ⚠️ No se encontró registro de saldo USD");
+  }
+
+  // Saldo inicial activo
+  console.log("\n🧭 SALDO INICIAL ACTIVO (USD):");
+  if (reporte.saldoInicialActivo) {
+    console.log(
+      `   Asignado: $${reporte.saldoInicialActivo.cantidad_inicial} el ${reporte.saldoInicialActivo.fecha_asignacion}`
+    );
+  } else {
+    console.log("   ⚠️ No hay SaldoInicial activo para USD");
   }
 
   // Verificación de integridad
@@ -354,9 +349,7 @@ function imprimirReporte(reporte: DescuadreReport) {
         }`
       );
       console.log(
-        `      Fecha: ${mov.created_at} | Usuario: ${
-          mov.usuario?.nombre || "N/A"
-        }`
+        `      Fecha: ${mov.fecha} | Usuario: ${mov.usuario?.nombre || "N/A"}`
       );
       console.log(`      Descripción: ${mov.descripcion || "N/A"}`);
       console.log(
@@ -374,13 +367,15 @@ function imprimirReporte(reporte: DescuadreReport) {
   console.log("\n🔄 CAMBIOS DE DIVISAS SOSPECHOSOS:");
   if (reporte.cambiosSospechosos.length > 0) {
     reporte.cambiosSospechosos.forEach((cambio, index) => {
-      console.log(`   ${index + 1}. Operación: ${cambio.numero_operacion}`);
+      const tasa =
+        Number(D(cambio.monto_origen)) !== 0
+          ? D(cambio.monto_destino).div(D(cambio.monto_origen))
+          : D(0);
+      console.log(`   ${index + 1}. Recibo: ${cambio.numero_recibo || "—"}`);
       console.log(
-        `      ${cambio.moneda_origen.codigo} $${cambio.monto_origen} → ${cambio.moneda_destino.codigo} $${cambio.monto_destino}`
+        `      ${cambio.monedaOrigen.codigo} $${cambio.monto_origen} → ${cambio.monedaDestino.codigo} $${cambio.monto_destino}`
       );
-      console.log(
-        `      Tasa: ${cambio.tasa_cambio} | Fecha: ${cambio.completed_at}`
-      );
+      console.log(`      Tasa (dest/orig): ${tasa} | Fecha: ${cambio.fecha}`);
       console.log(`      Usuario: ${cambio.usuario?.nombre || "N/A"}`);
       console.log("");
     });
@@ -388,15 +383,13 @@ function imprimirReporte(reporte: DescuadreReport) {
     console.log("   ✅ No se encontraron cambios sospechosos");
   }
 
-  // Todos los movimientos
-  console.log("\n📊 TODOS LOS MOVIMIENTOS DE SALDO:");
+  // Todos los movimientos (muestra 20)
+  console.log("\n📊 TODOS LOS MOVIMIENTOS DE SALDO (últimos 20):");
   if (reporte.movimientosRecientes.length > 0) {
     console.log(`   Total: ${reporte.movimientosRecientes.length} movimientos`);
     reporte.movimientosRecientes.slice(0, 20).forEach((mov, index) => {
       console.log(
-        `   ${index + 1}. $${mov.monto} | ${mov.tipo_movimiento} | ${
-          mov.created_at
-        }`
+        `   ${index + 1}. $${mov.monto} | ${mov.tipo_movimiento} | ${mov.fecha}`
       );
       console.log(`      Saldo: $${mov.saldo_anterior} → $${mov.saldo_nuevo}`);
       console.log(`      ${mov.descripcion || "Sin descripción"}`);
@@ -449,7 +442,6 @@ async function main() {
   }
 }
 
-// Ejecutar solo si es llamado directamente
 if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }

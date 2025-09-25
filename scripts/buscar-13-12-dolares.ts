@@ -2,32 +2,31 @@ import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+function D(n: Prisma.Decimal | number | string | null | undefined) {
+  return new Prisma.Decimal(n ?? 0);
+}
+
 async function buscarMonto1312() {
   console.log(
     "🔍 Buscando específicamente el monto de $13.12 en AMAZONAS...\n"
   );
 
   try {
-    // Buscar el punto AMAZONAS
+    // 0) Punto AMAZONAS
     const puntoAmazonas = await prisma.puntoAtencion.findFirst({
-      where: {
-        nombre: {
-          contains: "AMAZONAS",
-          mode: "insensitive",
-        },
-      },
+      where: { nombre: { contains: "AMAZONAS", mode: "insensitive" } },
+      select: { id: true, nombre: true },
     });
 
     if (!puntoAmazonas) {
       console.log("❌ No se encontró el punto AMAZONAS");
       return;
     }
-
     console.log(
       `📍 Punto encontrado: ${puntoAmazonas.nombre} (ID: ${puntoAmazonas.id})\n`
     );
 
-    // 1. Buscar movimientos de saldo exactos de $13.12
+    // 1) MOVIMIENTOS DE SALDO exactos 13.12
     console.log("💰 MOVIMIENTOS DE SALDO CON $13.12:");
     const movimientos1312 = await prisma.movimientoSaldo.findMany({
       where: {
@@ -38,11 +37,8 @@ async function buscarMonto1312() {
           { monto: new Prisma.Decimal(-13.12) },
         ],
       },
-      include: {
-        usuario: true,
-        moneda: true,
-      },
-      orderBy: { created_at: "desc" },
+      include: { usuario: true, moneda: true, puntoAtencion: true },
+      orderBy: { fecha: "desc" },
     });
 
     if (movimientos1312.length > 0) {
@@ -50,21 +46,22 @@ async function buscarMonto1312() {
         console.log(`${index + 1}. ID: ${mov.id}`);
         console.log(`   Monto: $${mov.monto}`);
         console.log(`   Tipo: ${mov.tipo_movimiento}`);
-        console.log(`   Fecha: ${mov.created_at}`);
+        console.log(`   Fecha: ${mov.fecha}`);
         console.log(`   Usuario: ${mov.usuario?.nombre || "N/A"}`);
         console.log(`   Descripción: ${mov.descripcion || "N/A"}`);
         console.log(
-          `   Referencia: ${mov.tipo_referencia} - ${mov.referencia_id}`
+          `   Referencia: ${mov.tipo_referencia || "N/A"} - ${
+            mov.referencia_id || "N/A"
+          }`
         );
         console.log(`   Saldo anterior: $${mov.saldo_anterior}`);
-        console.log(`   Saldo nuevo: $${mov.saldo_nuevo}`);
-        console.log("");
+        console.log(`   Saldo nuevo: $${mov.saldo_nuevo}\n`);
       });
     } else {
       console.log("   ❌ No se encontraron movimientos exactos de $13.12\n");
     }
 
-    // 2. Buscar cambios de divisas con $13.12
+    // 2) CAMBIOS DE DIVISAS con 13.12 en origen/destino USD
     console.log("🔄 CAMBIOS DE DIVISAS CON $13.12:");
     const cambios1312 = await prisma.cambioDivisa.findMany({
       where: {
@@ -85,6 +82,7 @@ async function buscarMonto1312() {
         monedaOrigen: true,
         monedaDestino: true,
         usuario: true,
+        puntoAtencion: true,
       },
       orderBy: { fecha: "desc" },
     });
@@ -97,14 +95,13 @@ async function buscarMonto1312() {
         );
         console.log(`   Tasa billetes: ${cambio.tasa_cambio_billetes}`);
         console.log(`   Fecha: ${cambio.fecha_completado || cambio.fecha}`);
-        console.log(`   Usuario: ${cambio.usuario?.nombre || "N/A"}`);
-        console.log("");
+        console.log(`   Usuario: ${cambio.usuario?.nombre || "N/A"}\n`);
       });
     } else {
       console.log("   ❌ No se encontraron cambios exactos de $13.12\n");
     }
 
-    // 3. Buscar servicios externos con $13.12
+    // 3) SERVICIOS EXTERNOS con 13.12
     console.log("🏪 SERVICIOS EXTERNOS CON $13.12:");
     const servicios1312 = await prisma.servicioExternoMovimiento.findMany({
       where: {
@@ -115,38 +112,32 @@ async function buscarMonto1312() {
           { monto: new Prisma.Decimal(-13.12) },
         ],
       },
-      include: {
-        servicio_externo: true,
-        usuario: true,
-      },
-      orderBy: { created_at: "desc" },
+      include: { usuario: true, moneda: true, puntoAtencion: true },
+      orderBy: { fecha: "desc" },
     });
 
     if (servicios1312.length > 0) {
       servicios1312.forEach((servicio, index) => {
-        console.log(
-          `${index + 1}. Servicio: ${servicio.servicio_externo.nombre}`
-        );
+        console.log(`${index + 1}. Servicio: ${servicio.servicio}`); // enum ServicioExterno
         console.log(`   Monto: $${servicio.monto}`);
         console.log(`   Tipo: ${servicio.tipo_movimiento}`);
-        console.log(`   Fecha: ${servicio.created_at}`);
+        console.log(`   Fecha: ${servicio.fecha}`);
         console.log(`   Usuario: ${servicio.usuario?.nombre || "N/A"}`);
         console.log(`   Descripción: ${servicio.descripcion || "N/A"}`);
-        console.log(`   Referencia: ${servicio.numero_referencia || "N/A"}`);
-        console.log("");
+        console.log(`   Referencia: ${servicio.numero_referencia || "N/A"}\n`);
       });
     } else {
       console.log("   ❌ No se encontraron servicios exactos de $13.12\n");
     }
 
-    // 4. Buscar transferencias con $13.12
+    // 4) TRANSFERENCIAS con 13.12 (APROBADO)
     console.log("↔️ TRANSFERENCIAS CON $13.12:");
     const transferencias1312 = await prisma.transferencia.findMany({
       where: {
         OR: [{ origen_id: puntoAmazonas.id }, { destino_id: puntoAmazonas.id }],
         moneda: { codigo: "USD" },
         monto: new Prisma.Decimal(13.12),
-        estado: "APROBADA",
+        estado: "APROBADO",
       },
       include: {
         origen: true,
@@ -173,16 +164,14 @@ async function buscarMonto1312() {
         console.log(
           `   Aprobador: ${transfer.usuarioAprobador?.nombre || "N/A"}`
         );
-        console.log(`   Descripción: ${transfer.descripcion || "N/A"}`);
-        console.log("");
+        console.log(`   Descripción: ${transfer.descripcion || "N/A"}\n`);
       });
     } else {
       console.log("   ❌ No se encontraron transferencias exactas de $13.12\n");
     }
 
-    // 5. Buscar montos cercanos (entre $13.00 y $13.25)
+    // 5) Cercanos 13.00 a 13.25
     console.log("🔍 MONTOS CERCANOS A $13.12 (entre $13.00 y $13.25):");
-
     const movimientosCercanos = await prisma.movimientoSaldo.findMany({
       where: {
         punto_atencion_id: puntoAmazonas.id,
@@ -202,10 +191,8 @@ async function buscarMonto1312() {
           },
         ],
       },
-      include: {
-        usuario: true,
-      },
-      orderBy: { created_at: "desc" },
+      include: { usuario: true },
+      orderBy: { fecha: "desc" },
       take: 10,
     });
 
@@ -214,39 +201,74 @@ async function buscarMonto1312() {
       movimientosCercanos.forEach((mov, index) => {
         console.log(
           `   ${index + 1}. $${mov.monto} | ${mov.tipo_movimiento} | ${
-            mov.created_at
+            mov.fecha
           }`
         );
         console.log(`      ${mov.descripcion || "Sin descripción"}`);
       });
       console.log("");
+    } else {
+      console.log(
+        "   — No se hallaron movimientos cercanos en el último rango consultado\n"
+      );
     }
 
-    // 6. Verificar saldo actual
+    // 6) SALDO ACTUAL y verificación contra saldo inicial + movimientos
     console.log("💰 SALDO ACTUAL USD EN AMAZONAS:");
     const saldoActual = await prisma.saldo.findFirst({
-      where: {
-        punto_atencion_id: puntoAmazonas.id,
-        moneda: { codigo: "USD" },
-      },
-      include: {
-        moneda: true,
-      },
+      where: { punto_atencion_id: puntoAmazonas.id, moneda: { codigo: "USD" } },
+      include: { moneda: true },
     });
 
     if (saldoActual) {
-      console.log(`   Saldo Inicial: $${saldoActual.saldo_inicial}`);
-      console.log(`   Saldo Actual: $${saldoActual.saldo_actual}`);
-      console.log(`   Diferencia: $${saldoActual.diferencia}`);
+      console.log(
+        `   Cantidad total: $${saldoActual.cantidad} ${saldoActual.moneda.codigo}`
+      );
       console.log(`   Última actualización: ${saldoActual.updated_at}`);
 
-      // Calcular si la diferencia es exactamente $13.12
-      const diferencia = Number(saldoActual.diferencia);
-      if (Math.abs(diferencia - 13.12) < 0.01) {
-        console.log("   🎯 ¡LA DIFERENCIA COINCIDE EXACTAMENTE CON $13.12!");
-      } else if (Math.abs(diferencia + 13.12) < 0.01) {
-        console.log("   🎯 ¡LA DIFERENCIA COINCIDE EXACTAMENTE CON -$13.12!");
+      const saldoInicialActivo = await prisma.saldoInicial.findFirst({
+        where: {
+          punto_atencion_id: puntoAmazonas.id,
+          activo: true,
+          moneda: { codigo: "USD" },
+        },
+        orderBy: { fecha_asignacion: "desc" },
+        select: { cantidad_inicial: true, fecha_asignacion: true },
+      });
+
+      const sumMovimientos = await prisma.movimientoSaldo.aggregate({
+        where: {
+          punto_atencion_id: puntoAmazonas.id,
+          moneda: { codigo: "USD" },
+        },
+        _sum: { monto: true },
+      });
+
+      const saldoInicial = D(saldoInicialActivo?.cantidad_inicial ?? 0);
+      const sumaMovs = D(sumMovimientos._sum.monto ?? 0);
+      const saldoTeorico = saldoInicial.plus(sumaMovs);
+      const diferencia = D(saldoActual.cantidad).minus(saldoTeorico);
+
+      if (saldoInicialActivo) {
+        console.log(
+          `   Saldo inicial activo: $${saldoInicial} (asignado ${saldoInicialActivo.fecha_asignacion})`
+        );
+      } else {
+        console.log("   ⚠️ No hay saldo inicial activo registrado en USD");
       }
+      console.log(`   Suma de movimientos: $${sumaMovs}`);
+      console.log(`   Saldo teórico (inicial + movimientos): $${saldoTeorico}`);
+      console.log(`   Diferencia encontrada: $${diferencia}`);
+
+      // ¿Coincide con 13.12?
+      const diffNum = Number(diferencia);
+      if (Math.abs(diffNum - 13.12) < 0.01) {
+        console.log("   🎯 ¡La diferencia coincide exactamente con $13.12!");
+      } else if (Math.abs(diffNum + 13.12) < 0.01) {
+        console.log("   🎯 ¡La diferencia coincide exactamente con -$13.12!");
+      }
+    } else {
+      console.log("   ⚠️ No se encontró registro de saldo USD para el punto");
     }
 
     console.log("\n" + "=".repeat(60));
@@ -270,9 +292,9 @@ async function buscarMonto1312() {
       console.log("❌ No se encontraron transacciones exactas de $13.12");
       console.log("💡 El descuadre podría ser resultado de:");
       console.log("   - Suma de múltiples transacciones pequeñas");
-      console.log("   - Error de redondeo en cálculos");
+      console.log("   - Errores de redondeo");
       console.log("   - Transacción manual no registrada correctamente");
-      console.log("   - Diferencia en tasas de cambio");
+      console.log("   - Diferencias en tasas de cambio");
     }
   } catch (error) {
     console.error("❌ Error durante la búsqueda:", error);
