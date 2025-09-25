@@ -146,11 +146,17 @@ async function validateDataIntegrity() {
     // 5. Validar registros huérfanos
     console.log("5️⃣ Validando registros huérfanos...");
 
+    // Obtener todos los IDs de puntos de atención válidos
+    const puntosAtencionValidos = await prisma.puntoAtencion.findMany({
+      select: { id: true },
+    });
+    const idsValidos = puntosAtencionValidos.map((p) => p.id);
+
     // Cambios con puntos de atención inexistentes
     const cambiosHuerfanos = await prisma.cambioDivisa.count({
       where: {
-        puntoAtencion: {
-          is: null,
+        punto_atencion_id: {
+          notIn: idsValidos,
         },
       },
     });
