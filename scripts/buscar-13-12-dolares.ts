@@ -72,31 +72,31 @@ async function buscarMonto1312() {
         estado: "COMPLETADO",
         OR: [
           {
-            moneda_origen: { codigo: "USD" },
+            monedaOrigen: { codigo: "USD" },
             monto_origen: new Prisma.Decimal(13.12),
           },
           {
-            moneda_destino: { codigo: "USD" },
+            monedaDestino: { codigo: "USD" },
             monto_destino: new Prisma.Decimal(13.12),
           },
         ],
       },
       include: {
-        moneda_origen: true,
-        moneda_destino: true,
+        monedaOrigen: true,
+        monedaDestino: true,
         usuario: true,
       },
-      orderBy: { completed_at: "desc" },
+      orderBy: { fecha: "desc" },
     });
 
     if (cambios1312.length > 0) {
       cambios1312.forEach((cambio, index) => {
-        console.log(`${index + 1}. Operación: ${cambio.numero_operacion}`);
+        console.log(`${index + 1}. Recibo: ${cambio.numero_recibo || "N/A"}`);
         console.log(
-          `   ${cambio.moneda_origen.codigo} $${cambio.monto_origen} → ${cambio.moneda_destino.codigo} $${cambio.monto_destino}`
+          `   ${cambio.monedaOrigen.codigo} $${cambio.monto_origen} → ${cambio.monedaDestino.codigo} $${cambio.monto_destino}`
         );
-        console.log(`   Tasa: ${cambio.tasa_cambio}`);
-        console.log(`   Fecha: ${cambio.completed_at}`);
+        console.log(`   Tasa billetes: ${cambio.tasa_cambio_billetes}`);
+        console.log(`   Fecha: ${cambio.fecha_completado || cambio.fecha}`);
         console.log(`   Usuario: ${cambio.usuario?.nombre || "N/A"}`);
         console.log("");
       });
@@ -143,38 +143,37 @@ async function buscarMonto1312() {
     console.log("↔️ TRANSFERENCIAS CON $13.12:");
     const transferencias1312 = await prisma.transferencia.findMany({
       where: {
-        OR: [
-          { punto_origen_id: puntoAmazonas.id },
-          { punto_destino_id: puntoAmazonas.id },
-        ],
+        OR: [{ origen_id: puntoAmazonas.id }, { destino_id: puntoAmazonas.id }],
         moneda: { codigo: "USD" },
         monto: new Prisma.Decimal(13.12),
         estado: "APROBADA",
       },
       include: {
-        punto_origen: true,
-        punto_destino: true,
-        usuario_creador: true,
-        usuario_aprobador: true,
+        origen: true,
+        destino: true,
+        usuarioSolicitante: true,
+        usuarioAprobador: true,
       },
-      orderBy: { approved_at: "desc" },
+      orderBy: { fecha_aprobacion: "desc" },
     });
 
     if (transferencias1312.length > 0) {
       transferencias1312.forEach((transfer, index) => {
         console.log(
-          `${index + 1}. Transferencia: ${transfer.numero_transferencia}`
+          `${index + 1}. Transferencia: ${transfer.numero_recibo || "N/A"}`
         );
         console.log(
-          `   ${transfer.punto_origen.nombre} → ${transfer.punto_destino.nombre}`
+          `   ${transfer.origen?.nombre || "N/A"} → ${transfer.destino.nombre}`
         );
         console.log(`   Monto: $${transfer.monto}`);
-        console.log(`   Fecha aprobación: ${transfer.approved_at}`);
-        console.log(`   Creador: ${transfer.usuario_creador?.nombre || "N/A"}`);
+        console.log(`   Fecha aprobación: ${transfer.fecha_aprobacion}`);
         console.log(
-          `   Aprobador: ${transfer.usuario_aprobador?.nombre || "N/A"}`
+          `   Solicitante: ${transfer.usuarioSolicitante?.nombre || "N/A"}`
         );
-        console.log(`   Motivo: ${transfer.motivo || "N/A"}`);
+        console.log(
+          `   Aprobador: ${transfer.usuarioAprobador?.nombre || "N/A"}`
+        );
+        console.log(`   Descripción: ${transfer.descripcion || "N/A"}`);
         console.log("");
       });
     } else {

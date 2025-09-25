@@ -80,18 +80,18 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
         punto_atencion_id: puntoInfo.id,
         estado: "COMPLETADO",
         OR: [
-          { moneda_origen: { codigo: "USD" } },
-          { moneda_destino: { codigo: "USD" } },
+          { monedaOrigen: { codigo: "USD" } },
+          { monedaDestino: { codigo: "USD" } },
         ],
       },
       include: {
-        moneda_origen: true,
-        moneda_destino: true,
-        punto_atencion: true,
+        monedaOrigen: true,
+        monedaDestino: true,
+        puntoAtencion: true,
         usuario: true,
       },
       orderBy: {
-        completed_at: "desc",
+        fecha: "desc",
       },
     });
 
@@ -119,24 +119,21 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
     console.log("↔️ Consultando todas las transferencias...");
     const transferencias = await prisma.transferencia.findMany({
       where: {
-        OR: [
-          { punto_origen_id: puntoInfo.id },
-          { punto_destino_id: puntoInfo.id },
-        ],
+        OR: [{ origen_id: puntoInfo.id }, { destino_id: puntoInfo.id }],
         moneda: {
           codigo: "USD",
         },
         estado: "APROBADA",
       },
       include: {
-        punto_origen: true,
-        punto_destino: true,
+        origen: true,
+        destino: true,
         moneda: true,
-        usuario_creador: true,
-        usuario_aprobador: true,
+        usuarioSolicitante: true,
+        usuarioAprobador: true,
       },
       orderBy: {
-        approved_at: "desc",
+        fecha_aprobacion: "desc",
       },
     });
 
@@ -231,14 +228,14 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
         estado: "COMPLETADO",
         OR: [
           {
-            moneda_origen: { codigo: "USD" },
+            monedaOrigen: { codigo: "USD" },
             monto_origen: {
               gte: new Prisma.Decimal(13.0),
               lte: new Prisma.Decimal(13.25),
             },
           },
           {
-            moneda_destino: { codigo: "USD" },
+            monedaDestino: { codigo: "USD" },
             monto_destino: {
               gte: new Prisma.Decimal(13.0),
               lte: new Prisma.Decimal(13.25),
@@ -247,13 +244,13 @@ async function investigarDescuadreAmazonas(): Promise<DescuadreReport> {
         ],
       },
       include: {
-        moneda_origen: true,
-        moneda_destino: true,
-        punto_atencion: true,
+        monedaOrigen: true,
+        monedaDestino: true,
+        puntoAtencion: true,
         usuario: true,
       },
       orderBy: {
-        completed_at: "desc",
+        fecha: "desc",
       },
     });
 
