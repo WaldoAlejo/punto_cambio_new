@@ -96,26 +96,7 @@ async function validateDataIntegrity() {
     // 3. Validar consistencia de saldos (cantidad = billetes + monedas_fisicas + bancos)
     console.log("3️⃣ Validando consistencia de saldos...");
 
-    const saldosInconsistentes = await prisma.saldo.findMany({
-      where: {
-        NOT: {
-          cantidad: {
-            equals: prisma.$queryRaw`billetes + monedas_fisicas + bancos`,
-          },
-        },
-      },
-      select: {
-        id: true,
-        cantidad: true,
-        billetes: true,
-        monedas_fisicas: true,
-        bancos: true,
-        puntoAtencion: { select: { nombre: true } },
-        moneda: { select: { codigo: true } },
-      },
-    });
-
-    // Como la consulta anterior puede no funcionar, hagamos una verificación manual
+    // Verificación manual de consistencia
     const todosSaldos = await prisma.saldo.findMany({
       select: {
         id: true,
