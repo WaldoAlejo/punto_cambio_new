@@ -1,6 +1,6 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
-import { pool } from "../lib/database.js";
+import prisma from "../lib/prisma.js";
 
 const router = express.Router();
 
@@ -26,85 +26,67 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
     // Sanitización y límites de paginación
     const pageNum = Math.max(1, parseInt(page || "1", 10));
     const sizeNum = Math.min(200, Math.max(1, parseInt(pageSize || "50", 10)));
-    const offset = (pageNum - 1) * sizeNum;
+    const skip = (pageNum - 1) * sizeNum;
+    const take = sizeNum;
 
-    // Construir SQL dinámico con parámetros
-    const whereClauses: string[] = ["hs.punto_atencion_id = $1"]; // $1 siempre es pointId
-    const params: any[] = [pointId];
-
-    let paramIndex = params.length + 1;
+    // Construir where dinámico
+    const where: any = { punto_atencion_id: pointId };
 
     if (monedaId) {
-      whereClauses.push(`hs.moneda_id = $${paramIndex++}`);
-      params.push(monedaId);
-    }
-    if (from) {
-      whereClauses.push(`hs.fecha >= $${paramIndex++}`);
-      params.push(new Date(from));
-    }
-    if (to) {
-      whereClauses.push(`hs.fecha <= $${paramIndex++}`);
-      params.push(new Date(to));
+      where.moneda_id = monedaId;
     }
 
-    // Conteo total
-    const countQuery = `
-      SELECT COUNT(*)::int AS total
-      FROM "HistorialSaldo" hs
-      WHERE ${whereClauses.join(" AND ")}
-    `;
+    // Filtros de fecha (UTC). Si quieres incluir todo el día en 'to',
+    // puedes usar fin de día: new Date(`${to}T23:59:59.999Z`)
+    if (from || to) {
+      where.fecha = {};
+      if (from) where.fecha.gte = new Date(from as string);
+      if (to) where.fecha.lte = new Date(to as string);
+    }
 
-    const countResult = await pool.query(countQuery, params);
-    const total: number = countResult.rows[0]?.total ?? 0;
+    // Conteo total y datos paginados en paralelo
+    const [total, rows] = await Promise.all([
+      prisma.historialSaldo.count({ where }),
+      prisma.historialSaldo.findMany({
+        where,
+        orderBy: { fecha: "desc" },
+        skip,
+        take,
+        include: {
+          moneda: {
+            select: { id: true, nombre: true, codigo: true, simbolo: true },
+          },
+          usuario: { select: { id: true, nombre: true } },
+          puntoAtencion: { select: { id: true, nombre: true } },
+        },
+      }),
+    ]);
 
-    // Datos paginados
-    const dataParams = params.slice();
-    const limitIndex = dataParams.length + 1;
-    const offsetIndex = dataParams.length + 2;
-    dataParams.push(sizeNum, offset);
-
-    const dataQuery = `
-      SELECT 
-        hs.*,
-        m.nombre AS moneda_nombre, m.codigo AS moneda_codigo, m.simbolo AS moneda_simbolo,
-        u.nombre AS usuario_nombre,
-        pa.nombre AS punto_nombre
-      FROM "HistorialSaldo" hs
-      JOIN "Moneda" m ON hs.moneda_id = m.id
-      JOIN "Usuario" u ON hs.usuario_id = u.id
-      JOIN "PuntoAtencion" pa ON hs.punto_atencion_id = pa.id
-      WHERE ${whereClauses.join(" AND ")}
-      ORDER BY hs.fecha DESC
-      LIMIT $${limitIndex} OFFSET $${offsetIndex}
-    `;
-
-    const dataResult = await pool.query(dataQuery, dataParams);
-
-    const historial = dataResult.rows.map((row: any) => ({
+    const historial = rows.map((row) => ({
       id: row.id,
       punto_atencion_id: row.punto_atencion_id,
       moneda_id: row.moneda_id,
       usuario_id: row.usuario_id,
-      cantidad_anterior: row.cantidad_anterior,
-      cantidad_incrementada: row.cantidad_incrementada,
-      cantidad_nueva: row.cantidad_nueva,
+      cantidad_anterior: Number(row.cantidad_anterior),
+      cantidad_incrementada: Number(row.cantidad_incrementada),
+      cantidad_nueva: Number(row.cantidad_nueva),
       tipo_movimiento: row.tipo_movimiento,
-      fecha: row.fecha,
-      descripcion: row.descripcion,
-      numero_referencia: row.numero_referencia,
+      fecha: row.fecha, // ya es Date; si prefieres string ISO: row.fecha.toISOString()
+      descripcion: row.descripcion ?? null,
+      numero_referencia: row.numero_referencia ?? null,
       moneda: {
-        id: row.moneda_id,
-        nombre: row.moneda_nombre,
-        codigo: row.moneda_codigo,
-        simbolo: row.moneda_simbolo,
+        id: row.moneda.id,
+        nombre: row.moneda.nombre,
+        codigo: row.moneda.codigo,
+        simbolo: row.moneda.simbolo,
       },
       usuario: {
-        id: row.usuario_id,
-        nombre: row.usuario_nombre,
+        id: row.usuario.id,
+        nombre: row.usuario.nombre,
       },
       puntoAtencion: {
-        id: row.punto_atencion_id,
-        nombre: row.punto_nombre,
+        id: row.puntoAtencion.id,
+        nombre: row.puntoAtencion.nombre,
       },
     }));
 

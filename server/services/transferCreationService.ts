@@ -2,6 +2,7 @@ import {
   TipoMovimiento,
   TipoTransferencia,
   Transferencia,
+  TipoViaTransferencia,
 } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
@@ -17,6 +18,115 @@ export interface TransferData {
   numero_recibo: string;
   estado: "PENDIENTE";
   fecha: Date;
+  via?: TipoViaTransferencia | null;
+}
+
+async function getSaldo(
+  pointId: string,
+  monedaId: string
+): Promise<{ id: string | null; cantidad: number; bancos: number }> {
+  const s = await prisma.saldo.findUnique({
+    where: {
+      punto_atencion_id_moneda_id: {
+        punto_atencion_id: pointId,
+        moneda_id: monedaId,
+      },
+    },
+    select: { id: true, cantidad: true, bancos: true },
+  });
+  return {
+    id: s?.id ?? null,
+    cantidad: Number(s?.cantidad ?? 0),
+    bancos: Number(s?.bancos ?? 0),
+  };
+}
+
+async function upsertSaldoEfectivo(
+  pointId: string,
+  monedaId: string,
+  nuevoEfectivo: number
+) {
+  const { id } = await getSaldo(pointId, monedaId);
+  if (id) {
+    await prisma.saldo.update({
+      where: {
+        punto_atencion_id_moneda_id: {
+          punto_atencion_id: pointId,
+          moneda_id: monedaId,
+        },
+      },
+      data: { cantidad: nuevoEfectivo },
+    });
+  } else {
+    await prisma.saldo.create({
+      data: {
+        punto_atencion_id: pointId,
+        moneda_id: monedaId,
+        cantidad: nuevoEfectivo,
+        billetes: 0,
+        monedas_fisicas: 0,
+        bancos: 0,
+      },
+    });
+  }
+}
+
+async function upsertSaldoBanco(
+  pointId: string,
+  monedaId: string,
+  nuevoBanco: number
+) {
+  const { id } = await getSaldo(pointId, monedaId);
+  if (id) {
+    await prisma.saldo.update({
+      where: {
+        punto_atencion_id_moneda_id: {
+          punto_atencion_id: pointId,
+          moneda_id: monedaId,
+        },
+      },
+      data: { bancos: nuevoBanco },
+    });
+  } else {
+    await prisma.saldo.create({
+      data: {
+        punto_atencion_id: pointId,
+        moneda_id: monedaId,
+        cantidad: 0,
+        billetes: 0,
+        monedas_fisicas: 0,
+        bancos: nuevoBanco,
+      },
+    });
+  }
+}
+
+async function logMovimientoSaldo(args: {
+  punto_atencion_id: string;
+  moneda_id: string;
+  tipo_movimiento: "INGRESO" | "EGRESO" | "AJUSTE";
+  monto: number;
+  saldo_anterior: number;
+  saldo_nuevo: number;
+  usuario_id: string;
+  referencia_id: string;
+  tipo_referencia: "TRANSFERENCIA";
+  descripcion?: string;
+}) {
+  await prisma.movimientoSaldo.create({
+    data: {
+      punto_atencion_id: args.punto_atencion_id,
+      moneda_id: args.moneda_id,
+      tipo_movimiento: args.tipo_movimiento,
+      monto: args.monto,
+      saldo_anterior: args.saldo_anterior,
+      saldo_nuevo: args.saldo_nuevo,
+      usuario_id: args.usuario_id,
+      referencia_id: args.referencia_id,
+      tipo_referencia: args.tipo_referencia,
+      descripcion: args.descripcion ?? null,
+    },
+  });
 }
 
 export const transferCreationService = {
@@ -41,28 +151,108 @@ export const transferCreationService = {
       },
     });
 
-    logger.info("Transferencia creada en BD:", { ...newTransfer });
+    logger.info("Transferencia creada en BD:", { id: newTransfer.id });
     return newTransfer;
   },
 
-  async createMovement(data: {
-    punto_atencion_id: string;
-    usuario_id: string;
+  async contabilizarEntradaDestino(args: {
+    destino_id: string;
     moneda_id: string;
-    monto: number;
-    tipo_transferencia: TipoTransferencia;
+    usuario_id: string;
+    transferencia: Transferencia;
     numero_recibo: string;
+    via: TipoViaTransferencia;
+    monto: number;
+    monto_efectivo?: number;
+    monto_banco?: number;
   }) {
+    const {
+      destino_id,
+      moneda_id,
+      usuario_id,
+      transferencia,
+      numero_recibo,
+      via,
+    } = args;
+    let efectivo = 0;
+    let banco = 0;
+
+    if (via === "EFECTIVO") {
+      efectivo = args.monto;
+    } else if (via === "BANCO") {
+      banco = args.monto;
+    } else {
+      // MIXTO
+      const me = Number(args.monto_efectivo ?? NaN);
+      const mb = Number(args.monto_banco ?? NaN);
+      if (
+        Number.isFinite(me) &&
+        Number.isFinite(mb) &&
+        me >= 0 &&
+        mb >= 0 &&
+        +(me + mb).toFixed(2) <= +args.monto.toFixed(2)
+      ) {
+        efectivo = +me.toFixed(2);
+        banco = +mb.toFixed(2);
+      } else {
+        // Split 50/50 si no viene desglose válido
+        const half = Math.round((args.monto / 2) * 100) / 100;
+        efectivo = half;
+        banco = +(+args.monto - half).toFixed(2);
+      }
+    }
+
+    // === EFECTIVO (afecta cuadre)
+    if (efectivo > 0) {
+      const { cantidad: antEf } = await getSaldo(destino_id, moneda_id);
+      const nuevoEf = +(antEf + efectivo).toFixed(2);
+      await upsertSaldoEfectivo(destino_id, moneda_id, nuevoEf);
+
+      await logMovimientoSaldo({
+        punto_atencion_id: destino_id,
+        moneda_id,
+        tipo_movimiento: "INGRESO",
+        monto: efectivo,
+        saldo_anterior: antEf,
+        saldo_nuevo: nuevoEf,
+        usuario_id,
+        referencia_id: transferencia.id,
+        tipo_referencia: "TRANSFERENCIA",
+        descripcion: `Transferencia (EFECTIVO) ${numero_recibo}`,
+      });
+    }
+
+    // === BANCO (solo control)
+    if (banco > 0) {
+      const { bancos: antBk } = await getSaldo(destino_id, moneda_id);
+      const nuevoBk = +(antBk + banco).toFixed(2);
+      await upsertSaldoBanco(destino_id, moneda_id, nuevoBk);
+
+      await logMovimientoSaldo({
+        punto_atencion_id: destino_id,
+        moneda_id,
+        tipo_movimiento: "INGRESO",
+        monto: banco,
+        saldo_anterior: antBk,
+        saldo_nuevo: nuevoBk,
+        usuario_id,
+        referencia_id: transferencia.id,
+        tipo_referencia: "TRANSFERENCIA",
+        descripcion: `Transferencia (BANCO) ${numero_recibo}`,
+      });
+    }
+
+    // Registrar movimiento “operacional” (para listados rápidos)
     try {
       await prisma.movimiento.create({
         data: {
-          punto_atencion_id: data.punto_atencion_id,
-          usuario_id: data.usuario_id,
-          moneda_id: data.moneda_id,
-          monto: data.monto,
+          punto_atencion_id: destino_id,
+          usuario_id,
+          moneda_id,
+          monto: args.monto,
           tipo: TipoMovimiento.TRANSFERENCIA_ENTRANTE,
-          descripcion: `Transferencia ${data.tipo_transferencia} - ${data.numero_recibo}`,
-          numero_recibo: data.numero_recibo,
+          descripcion: `Transferencia ${args.via} - ${numero_recibo}`,
+          numero_recibo: numero_recibo,
         },
       });
       logger.info("Movimiento registrado exitosamente");
@@ -82,6 +272,9 @@ export const transferCreationService = {
     responsable_movilizacion?: object;
     tipo_transferencia: TipoTransferencia;
     monto: number;
+    via: TipoViaTransferencia;
+    monto_efectivo?: number;
+    monto_banco?: number;
   }) {
     try {
       await prisma.recibo.create({
@@ -97,6 +290,9 @@ export const transferCreationService = {
             responsable_movilizacion: data.responsable_movilizacion || null,
             tipo_transferencia: data.tipo_transferencia,
             monto: data.monto,
+            via: data.via,
+            monto_efectivo: data.monto_efectivo ?? null,
+            monto_banco: data.monto_banco ?? null,
             fecha: new Date().toISOString(),
           },
         },
@@ -109,3 +305,5 @@ export const transferCreationService = {
     }
   },
 };
+
+export default transferCreationService;

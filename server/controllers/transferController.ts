@@ -1,8 +1,9 @@
 import express from "express";
 import logger from "../utils/logger.js";
 import { transferValidationService } from "../services/transferValidationService.js";
-import { transferCreationService } from "../services/transferCreationService.js";
+import transferCreationService from "../services/transferCreationService.js";
 import prisma from "../lib/prisma.js";
+import { TipoViaTransferencia } from "@prisma/client";
 
 interface AuthenticatedUser {
   id: string;
@@ -17,7 +18,7 @@ interface AuthenticatedRequest extends express.Request {
   user?: AuthenticatedUser;
 }
 
-export const transferController = {
+const controller = {
   async createTransfer(
     req: AuthenticatedRequest,
     res: express.Response
@@ -32,45 +33,54 @@ export const transferController = {
         descripcion,
         detalle_divisas,
         responsable_movilizacion,
+        via = "EFECTIVO",
+        monto_efectivo,
+        monto_banco,
       } = req.body;
 
       logger.info("=== CREAR TRANSFERENCIA EN SERVIDOR ===", {
         usuarioId: req.user?.id,
-        datosRecibidos: req.body,
+        datosRecibidos: { ...req.body },
       });
 
-      // Validaciones
+      // Validaciones de negocio
       const userValidation = await transferValidationService.validateUser(
         req.user?.id
       );
       if (!userValidation.success) {
-        res.status(401).json({
-          error: userValidation.error,
-          success: false,
-          timestamp: new Date().toISOString(),
-        });
+        res
+          .status(401)
+          .json({
+            error: userValidation.error,
+            success: false,
+            timestamp: new Date().toISOString(),
+          });
         return;
       }
 
       const destinationValidation =
         await transferValidationService.validateDestination(destino_id);
       if (!destinationValidation.success) {
-        res.status(400).json({
-          error: destinationValidation.error,
-          success: false,
-          timestamp: new Date().toISOString(),
-        });
+        res
+          .status(400)
+          .json({
+            error: destinationValidation.error,
+            success: false,
+            timestamp: new Date().toISOString(),
+          });
         return;
       }
 
       const currencyValidation =
         await transferValidationService.validateCurrency(moneda_id);
       if (!currencyValidation.success) {
-        res.status(400).json({
-          error: currencyValidation.error,
-          success: false,
-          timestamp: new Date().toISOString(),
-        });
+        res
+          .status(400)
+          .json({
+            error: currencyValidation.error,
+            success: false,
+            timestamp: new Date().toISOString(),
+          });
         return;
       }
 
@@ -78,27 +88,31 @@ export const transferController = {
         origen_id
       );
       if (!originValidation.success) {
-        res.status(400).json({
-          error: originValidation.error,
-          success: false,
-          timestamp: new Date().toISOString(),
-        });
+        res
+          .status(400)
+          .json({
+            error: originValidation.error,
+            success: false,
+            timestamp: new Date().toISOString(),
+          });
         return;
       }
 
       if (!req.user) {
-        res.status(401).json({
-          error: "Usuario no autenticado",
-          success: false,
-          timestamp: new Date().toISOString(),
-        });
+        res
+          .status(401)
+          .json({
+            error: "Usuario no autenticado",
+            success: false,
+            timestamp: new Date().toISOString(),
+          });
         return;
       }
 
       // Crear transferencia
       const numeroRecibo = transferCreationService.generateReceiptNumber();
 
-      const transferData = {
+      const newTransfer = await transferCreationService.createTransfer({
         origen_id: origen_id || null,
         destino_id,
         moneda_id,
@@ -107,23 +121,25 @@ export const transferController = {
         solicitado_por: req.user.id,
         descripcion: descripcion || null,
         numero_recibo: numeroRecibo,
-        estado: "PENDIENTE" as const,
+        estado: "PENDIENTE",
         fecha: new Date(),
-      };
-
-      const newTransfer = await transferCreationService.createTransfer(
-        transferData
-      );
-
-      await transferCreationService.createMovement({
-        punto_atencion_id: destino_id,
-        usuario_id: req.user.id,
-        moneda_id,
-        monto,
-        tipo_transferencia,
-        numero_recibo: numeroRecibo,
+        via: via as TipoViaTransferencia,
       });
 
+      // Contabilizar en saldos del DESTINO (efectivo y/o banco)
+      await transferCreationService.contabilizarEntradaDestino({
+        destino_id,
+        moneda_id,
+        usuario_id: req.user.id,
+        transferencia: newTransfer,
+        numero_recibo: numeroRecibo,
+        via: via as TipoViaTransferencia,
+        monto,
+        monto_efectivo,
+        monto_banco,
+      });
+
+      // Recibo
       await transferCreationService.createReceipt({
         numero_recibo: numeroRecibo,
         usuario_id: req.user.id,
@@ -133,11 +149,14 @@ export const transferController = {
         responsable_movilizacion,
         tipo_transferencia,
         monto,
+        via: via as TipoViaTransferencia,
+        monto_efectivo,
+        monto_banco,
       });
 
       const formattedTransfer = {
         ...newTransfer,
-        solicitado_por: req.user.id, // <-- Devuelve siempre el id
+        solicitado_por: req.user.id,
         monto: parseFloat(newTransfer.monto.toString()),
         fecha: newTransfer.fecha.toISOString(),
         fecha_aprobacion: newTransfer.fecha_aprobacion?.toISOString() || null,
@@ -145,19 +164,19 @@ export const transferController = {
         responsable_movilizacion: responsable_movilizacion || null,
       };
 
-      logger.info("Transferencia creada exitosamente", {
+      logger.info("Transferencia creada y contabilizada", {
         transferId: newTransfer.id,
         createdBy: req.user.id,
         amount: monto,
         type: tipo_transferencia,
+        via,
         numeroRecibo,
-        saved: true,
       });
 
       res.status(201).json({
         transfer: formattedTransfer,
         success: true,
-        message: "Transferencia creada y guardada exitosamente",
+        message: "Transferencia creada, contabilizada y recibo generado",
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
@@ -240,3 +259,5 @@ export const transferController = {
     }
   },
 };
+
+export default controller;

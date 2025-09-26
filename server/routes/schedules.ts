@@ -17,10 +17,10 @@ const router = express.Router();
  * Utilidades de roles exentos de caja
  * ========================= */
 const ROLES_EXENTOS_CIERRE = new Set([
-  "ADMINISTRATIVO", // Administrativo
-  "ADMIN", // Administrador
-  "SUPER_USUARIO", // Super Usuario
-  "SUPER USUARIO", // por si llega con espacio
+  "ADMINISTRATIVO",
+  "ADMIN",
+  "SUPER_USUARIO",
+  "SUPER USUARIO",
 ]);
 
 function normalizaRol(rol?: string) {
@@ -407,35 +407,23 @@ router.post(
               return;
             }
 
-            // Verificar Cierre de Servicios Externos (bloqueo siempre)
-            try {
-              const { pool } = await import("../lib/database.js");
-              const client = await pool.connect();
-              try {
-                const { rows } = await client.query(
-                  `SELECT 1 FROM "ServicioExternoCierreDiario"
-                   WHERE punto_atencion_id = $1
-                     AND fecha = CURRENT_DATE
-                     AND estado = 'CERRADO'
-                   LIMIT 1`,
-                  [punto_atencion_id]
-                );
-                if (rows.length === 0) {
-                  res.status(400).json({
-                    success: false,
-                    error:
-                      "Debe realizar el cierre diario de Servicios Externos antes de finalizar su jornada",
-                  });
-                  return;
-                }
-              } finally {
-                client.release();
+            // Verificar Cierre de Servicios Externos (todo en Prisma)
+            const { gte: seGte, lt: seLt } = gyeDayRangeUtcFromDate(new Date());
+            const cierreSE = await prisma.servicioExternoCierreDiario.findFirst(
+              {
+                where: {
+                  punto_atencion_id,
+                  fecha: { gte: seGte, lt: seLt },
+                  estado: "CERRADO",
+                },
+                select: { id: true },
               }
-            } catch (e) {
-              res.status(500).json({
+            );
+            if (!cierreSE) {
+              res.status(400).json({
                 success: false,
                 error:
-                  "No se pudo validar el cierre de Servicios Externos. Intente nuevamente.",
+                  "Debe realizar el cierre diario de Servicios Externos antes de finalizar su jornada",
               });
               return;
             }
@@ -476,8 +464,6 @@ router.post(
         });
       } else {
         // CREATE nueva jornada
-        // Para ADMINISTRATIVO/ADMIN/SUPER_USUARIO NO bloqueamos aunque haya otra jornada en el punto.
-        // Para roles no privilegiados, el bloqueo ya se realizó arriba.
         schedule = await prisma.jornada.create({
           data: {
             usuario_id,

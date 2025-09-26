@@ -1,6 +1,5 @@
 import express, { Request, Response } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
-import { pool } from "../lib/database.js";
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 
@@ -25,9 +24,6 @@ const toNumber = (v: any): number => {
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // Tipos de Request
-interface GetSaldosParams {
-  pointId: string;
-}
 interface PostSaldoBody {
   punto_atencion_id: string;
   moneda_id: string;
@@ -41,24 +37,38 @@ interface PostSaldoBody {
 router.get<{ pointId: string }>(
   "/:pointId",
   authenticateToken,
-  async (req, res) => {
+  async (req: Request<{ pointId: string }>, res: Response) => {
     try {
       const { pointId } = req.params;
 
-      const query = `
-      SELECT 
-        si.id, si.punto_atencion_id, si.moneda_id, si.cantidad_inicial,
-        si.asignado_por, si.observaciones, si.activo, si.created_at,
-        m.nombre AS moneda_nombre, m.codigo AS moneda_codigo, m.simbolo AS moneda_simbolo,
-        pa.nombre AS punto_nombre, pa.ciudad
-      FROM "SaldoInicial" si
-      JOIN "Moneda" m ON si.moneda_id = m.id
-      JOIN "PuntoAtencion" pa ON si.punto_atencion_id = pa.id
-      WHERE si.punto_atencion_id = $1 AND si.activo = true
-      ORDER BY si.created_at DESC
-    `;
-      const result = await pool.query(query, [pointId]);
-      return res.json({ success: true, saldos: result.rows });
+      const rows = await prisma.saldoInicial.findMany({
+        where: { punto_atencion_id: pointId, activo: true },
+        orderBy: { created_at: "desc" },
+        include: {
+          moneda: {
+            select: { id: true, nombre: true, codigo: true, simbolo: true },
+          },
+          puntoAtencion: { select: { id: true, nombre: true, ciudad: true } },
+        },
+      });
+
+      const saldos = rows.map((si) => ({
+        id: si.id,
+        punto_atencion_id: si.punto_atencion_id,
+        moneda_id: si.moneda_id,
+        cantidad_inicial: si.cantidad_inicial,
+        asignado_por: si.asignado_por,
+        observaciones: si.observaciones,
+        activo: si.activo,
+        created_at: si.created_at,
+        moneda_nombre: si.moneda?.nombre,
+        moneda_codigo: si.moneda?.codigo,
+        moneda_simbolo: si.moneda?.simbolo,
+        punto_nombre: si.puntoAtencion?.nombre,
+        ciudad: si.puntoAtencion?.ciudad,
+      }));
+
+      return res.json({ success: true, saldos });
     } catch (error) {
       console.error("GET /saldos-iniciales/:pointId error:", error);
       return res.status(500).json({
@@ -105,8 +115,7 @@ router.post(
       if (!req.user?.id) {
         return res.status(401).json({ success: false, error: "No autorizado" });
       }
-      // A partir de aquí, req.user está definido por los middlewares
-      const user = req.user as NonNullable<typeof req.user>;
+      const user = req.user!;
 
       // Validar punto y moneda existen y están activos
       const [punto, moneda] = await Promise.all([
@@ -195,7 +204,6 @@ router.post(
           saldoInicialResult = await tx.saldoInicial.update({
             where: { id: existingInicial.id },
             data: {
-              // Enviar como Decimal directamente (evita error 22P03 en bind binario)
               cantidad_inicial: baseInicial.add(decCantidad),
               observaciones:
                 observaciones ?? existingInicial.observaciones ?? null,
@@ -206,7 +214,6 @@ router.post(
             data: {
               punto_atencion_id,
               moneda_id,
-              // Enviar como Decimal directamente (evita error 22P03 en bind binario)
               cantidad_inicial: decCantidad,
               asignado_por: user.id,
               observaciones: observaciones ?? null,
@@ -241,7 +248,6 @@ router.post(
           saldoResult = await tx.saldo.update({
             where: { id: existingSaldo.id },
             data: {
-              // Enviar como Decimal directamente (evita error 22P03 en bind binario)
               cantidad: baseCantidad,
               billetes: baseBilletes,
               monedas_fisicas: baseMonedas,
@@ -252,7 +258,6 @@ router.post(
             data: {
               punto_atencion_id,
               moneda_id,
-              // Enviar como Decimal directamente (evita error 22P03 en bind binario)
               cantidad: decCantidad,
               billetes: decBilletes,
               monedas_fisicas: decMonedas,
@@ -309,7 +314,6 @@ router.post(
         updated: resultado.updated,
       });
     } catch (error: any) {
-      // Prisma codes más comunes
       const code = error?.code as string | undefined;
       const meta = error?.meta;
 

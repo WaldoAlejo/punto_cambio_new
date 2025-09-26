@@ -1,21 +1,23 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
-import { PrismaClient, Decimal } from "@prisma/client";
+import prisma from "../lib/prisma.js";
+import { Prisma } from "@prisma/client";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
-interface BalanceMoneda {
+type D = Prisma.Decimal;
+
+interface BalanceMonedaRaw {
   monedaId: string;
   codigo: string;
   nombre: string;
-  balance: Decimal;
+  balance: D;
   detalles: {
-    cambiosDivisasOrigen: Decimal;
-    cambiosDivisasDestino: Decimal;
-    serviciosExternosIngresos: Decimal;
-    serviciosExternosEgresos: Decimal;
-    transferenciasNetas: Decimal;
+    cambiosDivisasOrigen: D; // (salidas) se mostrará en negativo
+    cambiosDivisasDestino: D; // (entradas)
+    serviciosExternosIngresos: D;
+    serviciosExternosEgresos: D; // se mostrará en negativo
+    transferenciasNetas: D; // destino - origen
   };
 }
 
@@ -37,12 +39,19 @@ interface BalancePorPunto {
   totalMovimientos: number;
 }
 
-// GET /api/balance-completo - Balance completo del sistema
+/** Helpers numéricos */
+const d0 = () => new Prisma.Decimal(0);
+const toNum = (x: D | null | undefined) => Number((x ?? d0()).toString());
+
+/* ============================================================================
+   GET /api/balance-completo
+   Resumen general y balance por moneda (agregado sistema)
+============================================================================ */
 router.get("/", authenticateToken, async (req, res) => {
   try {
     console.log("🔍 Calculando balance completo del sistema...");
 
-    // 1. Resumen general
+    // 1) Resumen general (paralelo)
     const [
       cambiosDivisas,
       serviciosExternos,
@@ -50,19 +59,11 @@ router.get("/", authenticateToken, async (req, res) => {
       puntosActivos,
       monedasActivas,
     ] = await Promise.all([
-      prisma.cambioDivisa.count({
-        where: { estado: "COMPLETADO" },
-      }),
+      prisma.cambioDivisa.count({ where: { estado: "COMPLETADO" } }),
       prisma.servicioExternoMovimiento.count(),
-      prisma.transferencia.count({
-        where: { estado: "APROBADO" },
-      }),
-      prisma.puntoAtencion.count({
-        where: { activo: true },
-      }),
-      prisma.moneda.count({
-        where: { activo: true },
-      }),
+      prisma.transferencia.count({ where: { estado: "APROBADO" } }),
+      prisma.puntoAtencion.count({ where: { activo: true } }),
+      prisma.moneda.count({ where: { activo: true } }),
     ]);
 
     const resumenGeneral: ResumenGeneral = {
@@ -73,127 +74,132 @@ router.get("/", authenticateToken, async (req, res) => {
       totalMonedasActivas: monedasActivas,
     };
 
-    // 2. Balance por moneda
+    // 2) Balance por moneda (solo activas)
     const monedas = await prisma.moneda.findMany({
       where: { activo: true },
       orderBy: { codigo: "asc" },
+      select: { id: true, codigo: true, nombre: true },
     });
 
-    const balancesPorMoneda: BalanceMoneda[] = [];
+    const balancesRaw: BalanceMonedaRaw[] = [];
 
     for (const moneda of monedas) {
-      // Cambios de divisas - moneda origen (salidas)
-      const cambiosOrigen = await prisma.cambioDivisa.aggregate({
-        where: {
-          moneda_origen_id: moneda.id,
-          estado: "COMPLETADO",
-        },
-        _sum: {
-          monto_origen: true,
-        },
-      });
-
-      // Cambios de divisas - moneda destino (entradas)
-      const cambiosDestino = await prisma.cambioDivisa.aggregate({
-        where: {
-          moneda_destino_id: moneda.id,
-          estado: "COMPLETADO",
-        },
-        _sum: {
-          monto_destino: true,
-        },
-      });
-
-      // Servicios externos - ingresos
-      const serviciosIngresos =
-        await prisma.servicioExternoMovimiento.aggregate({
+      // Ejecutar agregados en paralelo para esta moneda
+      const [
+        // Cambios: moneda como ORIGEN (salida) y DESTINO (entrada)
+        cambiosOrigenAgg,
+        cambiosDestinoAgg,
+        // Servicios externos: ingresos/egresos
+        serviciosIngresosAgg,
+        serviciosEgresosAgg,
+        // Transferencias separadas
+        sumDestAgg, // entradas por destino (destino_id es obligatorio en el schema)
+        sumOrigAgg, // salidas por origen (origen_id nullable; filtramos no-nulo)
+      ] = await Promise.all([
+        prisma.cambioDivisa.aggregate({
+          where: { moneda_origen_id: moneda.id, estado: "COMPLETADO" },
+          _sum: { monto_origen: true },
+        }),
+        prisma.cambioDivisa.aggregate({
+          where: { moneda_destino_id: moneda.id, estado: "COMPLETADO" },
+          _sum: { monto_destino: true },
+        }),
+        prisma.servicioExternoMovimiento.aggregate({
+          where: { moneda_id: moneda.id, tipo_movimiento: "INGRESO" },
+          _sum: { monto: true },
+        }),
+        prisma.servicioExternoMovimiento.aggregate({
+          where: { moneda_id: moneda.id, tipo_movimiento: "EGRESO" },
+          _sum: { monto: true },
+        }),
+        // ➤ FIX 1: NO filtrar destino_id not null (campo no es null); basta por moneda/estado
+        prisma.transferencia.aggregate({
+          where: { estado: "APROBADO", moneda_id: moneda.id },
+          _sum: { monto: true },
+        }),
+        // origen_id sí es nullable; filtramos explícitamente no-nulo
+        prisma.transferencia.aggregate({
           where: {
+            estado: "APROBADO",
             moneda_id: moneda.id,
-            tipo_movimiento: "INGRESO",
+            origen_id: { not: null },
           },
-          _sum: {
-            monto: true,
-          },
-        });
+          _sum: { monto: true },
+        }),
+      ]);
 
-      // Servicios externos - egresos
-      const serviciosEgresos = await prisma.servicioExternoMovimiento.aggregate(
-        {
-          where: {
-            moneda_id: moneda.id,
-            tipo_movimiento: "EGRESO",
-          },
-          _sum: {
-            monto: true,
-          },
-        }
-      );
-
-      // Calcular totales
-      const cambiosDivisasOrigen =
-        cambiosOrigen._sum.monto_origen || new Decimal(0);
+      const cambiosDivisasOrigen = cambiosOrigenAgg._sum.monto_origen ?? d0();
       const cambiosDivisasDestino =
-        cambiosDestino._sum.monto_destino || new Decimal(0);
-      const serviciosExternosIngresos =
-        serviciosIngresos._sum.monto || new Decimal(0);
-      const serviciosExternosEgresos =
-        serviciosEgresos._sum.monto || new Decimal(0);
+        cambiosDestinoAgg._sum.monto_destino ?? d0();
+      const serviciosExternosIngresos = serviciosIngresosAgg._sum.monto ?? d0();
+      const serviciosExternosEgresos = serviciosEgresosAgg._sum.monto ?? d0();
 
-      // Balance total = -salidas + entradas + ingresos - egresos
+      // ➤ FIX 2: _sum puede ser undefined; usar optional chaining y nullish coalescing
+      const transferIn = (sumDestAgg._sum?.monto as D | undefined) ?? d0();
+      const transferOut = (sumOrigAgg._sum?.monto as D | undefined) ?? d0();
+      const transferenciasNetas = transferIn.minus(transferOut); // destino - origen
+
+      // Balance total = entradas - salidas
       const balance = cambiosDivisasDestino
-        .minus(cambiosDivisasOrigen)
         .plus(serviciosExternosIngresos)
-        .minus(serviciosExternosEgresos);
+        .plus(transferIn)
+        .minus(cambiosDivisasOrigen)
+        .minus(serviciosExternosEgresos)
+        .minus(transferOut);
 
-      // Solo incluir monedas con movimientos
-      if (
+      // Incluir solo monedas con movimiento
+      const hasMovement =
         !balance.equals(0) ||
         !cambiosDivisasOrigen.equals(0) ||
         !cambiosDivisasDestino.equals(0) ||
         !serviciosExternosIngresos.equals(0) ||
-        !serviciosExternosEgresos.equals(0)
-      ) {
-        balancesPorMoneda.push({
+        !serviciosExternosEgresos.equals(0) ||
+        !transferenciasNetas.equals(0);
+
+      if (hasMovement) {
+        balancesRaw.push({
           monedaId: moneda.id,
           codigo: moneda.codigo,
           nombre: moneda.nombre,
           balance,
           detalles: {
-            cambiosDivisasOrigen: cambiosDivisasOrigen.negated(), // Mostrar como negativo
+            cambiosDivisasOrigen, // lo mostraremos en negativo
             cambiosDivisasDestino,
             serviciosExternosIngresos,
-            serviciosExternosEgresos: serviciosExternosEgresos.negated(), // Mostrar como negativo
-            transferenciasNetas: new Decimal(0),
+            serviciosExternosEgresos, // lo mostraremos en negativo
+            transferenciasNetas,
           },
         });
       }
     }
 
-    // Ordenar por balance (mayor a menor)
-    balancesPorMoneda.sort((a, b) => b.balance.minus(a.balance).toNumber());
+    // Ordenar por balance desc
+    balancesRaw.sort((a, b) => b.balance.minus(a.balance).toNumber());
 
     console.log(
-      `✅ Balance calculado: ${balancesPorMoneda.length} monedas con movimientos`
+      `✅ Balance calculado: ${balancesRaw.length} monedas con movimientos`
     );
 
     res.json({
       success: true,
       data: {
         resumenGeneral,
-        balancesPorMoneda: balancesPorMoneda.map((balance) => ({
-          ...balance,
-          balance: balance.balance.toNumber(),
+        balancesPorMoneda: balancesRaw.map((b) => ({
+          monedaId: b.monedaId,
+          codigo: b.codigo,
+          nombre: b.nombre,
+          balance: toNum(b.balance),
           detalles: {
-            cambiosDivisasOrigen:
-              balance.detalles.cambiosDivisasOrigen.toNumber(),
-            cambiosDivisasDestino:
-              balance.detalles.cambiosDivisasDestino.toNumber(),
-            serviciosExternosIngresos:
-              balance.detalles.serviciosExternosIngresos.toNumber(),
-            serviciosExternosEgresos:
-              balance.detalles.serviciosExternosEgresos.toNumber(),
-            transferenciasNetas:
-              balance.detalles.transferenciasNetas.toNumber(),
+            // Mostrar salidas como negativas (convención visual)
+            cambiosDivisasOrigen: -toNum(b.detalles.cambiosDivisasOrigen),
+            cambiosDivisasDestino: toNum(b.detalles.cambiosDivisasDestino),
+            serviciosExternosIngresos: toNum(
+              b.detalles.serviciosExternosIngresos
+            ),
+            serviciosExternosEgresos: -toNum(
+              b.detalles.serviciosExternosEgresos
+            ),
+            transferenciasNetas: toNum(b.detalles.transferenciasNetas),
           },
         })),
         timestamp: new Date().toISOString(),
@@ -209,17 +215,19 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/balance-completo/punto/:pointId - Balance completo por punto específico
+/* ============================================================================
+   GET /api/balance-completo/punto/:pointId
+   Resumen de actividad por punto (conteos)
+============================================================================ */
 router.get("/punto/:pointId", authenticateToken, async (req, res) => {
   try {
     const { pointId } = req.params;
     console.log(`🔍 Calculando balance completo para punto: ${pointId}`);
 
-    // Obtener información del punto
     const punto = await prisma.puntoAtencion.findUnique({
       where: { id: pointId },
+      select: { id: true, nombre: true },
     });
-
     if (!punto) {
       return res.status(404).json({
         success: false,
@@ -227,7 +235,6 @@ router.get("/punto/:pointId", authenticateToken, async (req, res) => {
       });
     }
 
-    // Actividad del punto
     const [
       cambiosDivisas,
       serviciosExternos,
@@ -235,27 +242,16 @@ router.get("/punto/:pointId", authenticateToken, async (req, res) => {
       transferenciasDestino,
     ] = await Promise.all([
       prisma.cambioDivisa.count({
-        where: {
-          punto_atencion_id: pointId,
-          estado: "COMPLETADO",
-        },
+        where: { punto_atencion_id: pointId, estado: "COMPLETADO" },
       }),
       prisma.servicioExternoMovimiento.count({
-        where: {
-          punto_atencion_id: pointId,
-        },
+        where: { punto_atencion_id: pointId },
       }),
       prisma.transferencia.count({
-        where: {
-          origen_id: pointId,
-          estado: "APROBADO",
-        },
+        where: { origen_id: pointId, estado: "APROBADO" },
       }),
       prisma.transferencia.count({
-        where: {
-          destino_id: pointId,
-          estado: "APROBADO",
-        },
+        where: { destino_id: pointId, estado: "APROBADO" },
       }),
     ]);
 

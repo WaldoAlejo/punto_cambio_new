@@ -2,23 +2,34 @@ import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
-import { transferController } from "../controllers/transferController.js";
+import transferController from "../controllers/transferController.js";
 
 const router = express.Router();
 
-// Schema para crear transferencias - más flexible
+// Schema para crear transferencias
 const createTransferSchema = z.object({
   origen_id: z.string().uuid().optional().nullable(),
   destino_id: z.string().uuid(),
   moneda_id: z.string().uuid(),
   monto: z.number().positive(),
+
   tipo_transferencia: z.enum([
     "ENTRE_PUNTOS",
     "DEPOSITO_MATRIZ",
     "RETIRO_GERENCIA",
     "DEPOSITO_GERENCIA",
   ]),
+
+  // NUEVO: vía de la transferencia
+  via: z.enum(["EFECTIVO", "BANCO", "MIXTO"]).optional().default("EFECTIVO"),
+
+  // Desglose opcional para MIXTO (si no viene, se reparte 50/50)
+  monto_efectivo: z.number().min(0).optional(),
+  monto_banco: z.number().min(0).optional(),
+
   descripcion: z.string().optional().nullable(),
+
+  // opcional: detalle físico para soporte de remisión (no afecta lógica)
   detalle_divisas: z
     .object({
       billetes: z.number().min(0),
@@ -36,7 +47,7 @@ const createTransferSchema = z.object({
     .optional(),
 });
 
-// Endpoint para crear transferencia
+// Crear transferencia
 router.post(
   "/",
   authenticateToken,
@@ -44,7 +55,7 @@ router.post(
   transferController.createTransfer
 );
 
-// Endpoint para obtener transferencias (solo autenticados)
+// Listar transferencias
 router.get("/", authenticateToken, transferController.getAllTransfers);
 
 export default router;

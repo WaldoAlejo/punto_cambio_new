@@ -1,59 +1,66 @@
-import express from 'express';
-import { authenticateToken } from '../middleware/auth.js';
-import { pool } from '../lib/database.js';
+import express from "express";
+import { authenticateToken } from "../middleware/auth.js";
+import prisma from "../lib/prisma.js";
 
 const router = express.Router();
 
-// Obtener movimientos de saldo por punto
-router.get('/:pointId', authenticateToken, async (req, res) => {
+// Obtener movimientos de saldo por punto (Prisma)
+router.get("/:pointId", authenticateToken, async (req, res) => {
   try {
     const { pointId } = req.params;
-    const { limit = 50 } = req.query;
+    const rawLimit = parseInt(String(req.query.limit ?? "50"), 10);
+    const take = Math.min(Math.max(isNaN(rawLimit) ? 50 : rawLimit, 1), 500);
 
-    const query = `
-      SELECT ms.*, 
-             m.nombre as moneda_nombre, m.codigo as moneda_codigo, m.simbolo as moneda_simbolo,
-             u.nombre as usuario_nombre,
-             pa.nombre as punto_nombre
-      FROM "MovimientoSaldo" ms
-      JOIN "Moneda" m ON ms.moneda_id = m.id
-      JOIN "Usuario" u ON ms.usuario_id = u.id
-      JOIN "PuntoAtencion" pa ON ms.punto_atencion_id = pa.id
-      WHERE ms.punto_atencion_id = $1
-      ORDER BY ms.fecha DESC
-      LIMIT $2
-    `;
+    const movimientos = await prisma.movimientoSaldo.findMany({
+      where: { punto_atencion_id: pointId },
+      orderBy: { fecha: "desc" },
+      take,
+      include: {
+        moneda: {
+          select: { id: true, nombre: true, codigo: true, simbolo: true },
+        },
+        usuario: { select: { id: true, nombre: true } },
+        puntoAtencion: { select: { id: true, nombre: true } },
+      },
+    });
 
-    const result = await pool.query(query, [pointId, parseInt(limit as string)]);
-
-    // Formatear los resultados para incluir los objetos anidados
-    const movimientos = result.rows.map(row => ({
-      ...row,
+    const payload = movimientos.map((ms) => ({
+      id: ms.id,
+      punto_atencion_id: ms.punto_atencion_id,
+      moneda_id: ms.moneda_id,
+      tipo_movimiento: ms.tipo_movimiento,
+      // Prisma.Decimal -> number
+      monto: parseFloat(ms.monto.toString()),
+      saldo_anterior: parseFloat(ms.saldo_anterior.toString()),
+      saldo_nuevo: parseFloat(ms.saldo_nuevo.toString()),
+      usuario_id: ms.usuario_id,
+      referencia_id: ms.referencia_id,
+      tipo_referencia: ms.tipo_referencia,
+      descripcion: ms.descripcion,
+      fecha: ms.fecha, // si prefieres ISO: ms.fecha.toISOString()
+      created_at: ms.created_at,
       moneda: {
-        id: row.moneda_id,
-        nombre: row.moneda_nombre,
-        codigo: row.moneda_codigo,
-        simbolo: row.moneda_simbolo
+        id: ms.moneda.id,
+        nombre: ms.moneda.nombre,
+        codigo: ms.moneda.codigo,
+        simbolo: ms.moneda.simbolo,
       },
       usuario: {
-        id: row.usuario_id,
-        nombre: row.usuario_nombre
+        id: ms.usuario.id,
+        nombre: ms.usuario.nombre,
       },
       puntoAtencion: {
-        id: row.punto_atencion_id,
-        nombre: row.punto_nombre
-      }
+        id: ms.puntoAtencion.id,
+        nombre: ms.puntoAtencion.nombre,
+      },
     }));
 
-    res.json({
-      success: true,
-      movimientos
-    });
+    res.json({ success: true, movimientos: payload });
   } catch (error) {
-    console.error('Error in balance movements route:', error);
+    console.error("Error in balance movements route (Prisma):", error);
     res.status(500).json({
       success: false,
-      error: 'Error interno del servidor'
+      error: "Error interno del servidor",
     });
   }
 });

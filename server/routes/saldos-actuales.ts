@@ -1,45 +1,36 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
-import { pool } from "../lib/database.js";
+import prisma from "../lib/prisma.js";
 
 const router = express.Router();
 
-// Obtener saldos actuales por punto de atención
+/**
+ * GET /saldos-actuales/:pointId
+ * Saldos actuales por punto de atención (todas las monedas)
+ */
 router.get("/:pointId", authenticateToken, async (req, res) => {
   try {
     const { pointId } = req.params;
 
-    console.log(`🔍 Obteniendo saldos actuales para punto: ${pointId}`);
+    const saldos = await prisma.saldo.findMany({
+      where: { punto_atencion_id: pointId },
+      include: {
+        moneda: {
+          select: { id: true, codigo: true, nombre: true, simbolo: true },
+        },
+      },
+      orderBy: { moneda: { codigo: "asc" } },
+    });
 
-    const query = `
-      SELECT 
-        s.moneda_id,
-        m.codigo as moneda_codigo,
-        m.nombre as moneda_nombre,
-        m.simbolo as moneda_simbolo,
-        COALESCE(s.cantidad, 0) as saldo
-      FROM "Saldo" s
-      JOIN "Moneda" m ON s.moneda_id = m.id
-      WHERE s.punto_atencion_id = $1
-      ORDER BY m.codigo
-    `;
-
-    const result = await pool.query(query, [pointId]);
-
-    const saldos = result.rows.map((row) => ({
-      moneda_id: row.moneda_id,
-      moneda_codigo: row.moneda_codigo,
-      moneda_nombre: row.moneda_nombre,
-      moneda_simbolo: row.moneda_simbolo,
-      saldo: parseFloat(row.saldo),
+    const payload = saldos.map((s) => ({
+      moneda_id: s.moneda_id,
+      moneda_codigo: s.moneda?.codigo ?? null,
+      moneda_nombre: s.moneda?.nombre ?? null,
+      moneda_simbolo: s.moneda?.simbolo ?? null,
+      saldo: parseFloat(s.cantidad.toString()),
     }));
 
-    console.log(`✅ Saldos obtenidos: ${saldos.length} monedas`);
-
-    res.json({
-      success: true,
-      saldos,
-    });
+    res.json({ success: true, saldos: payload });
   } catch (error) {
     console.error("Error al obtener saldos actuales:", error);
     res.status(500).json({
@@ -50,27 +41,28 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
   }
 });
 
-// Obtener saldo actual de una moneda específica en un punto
+/**
+ * GET /saldos-actuales/:pointId/:monedaId
+ * Saldo actual de una moneda específica en un punto
+ */
 router.get("/:pointId/:monedaId", authenticateToken, async (req, res) => {
   try {
     const { pointId, monedaId } = req.params;
 
-    console.log(`🔍 Obteniendo saldo específico:`, { pointId, monedaId });
+    const saldo = await prisma.saldo.findUnique({
+      where: {
+        // Composite unique de tu schema: @@unique([punto_atencion_id, moneda_id])
+        punto_atencion_id_moneda_id: {
+          punto_atencion_id: pointId,
+          moneda_id: monedaId,
+        },
+      },
+      include: {
+        moneda: { select: { codigo: true, nombre: true, simbolo: true } },
+      },
+    });
 
-    const query = `
-      SELECT 
-        s.cantidad as saldo,
-        m.codigo as moneda_codigo,
-        m.nombre as moneda_nombre,
-        m.simbolo as moneda_simbolo
-      FROM "Saldo" s
-      JOIN "Moneda" m ON s.moneda_id = m.id
-      WHERE s.punto_atencion_id = $1 AND s.moneda_id = $2
-    `;
-
-    const result = await pool.query(query, [pointId, monedaId]);
-
-    if (result.rows.length === 0) {
+    if (!saldo) {
       return res.json({
         success: true,
         saldo: 0,
@@ -79,20 +71,12 @@ router.get("/:pointId/:monedaId", authenticateToken, async (req, res) => {
       });
     }
 
-    const row = result.rows[0];
-    const saldo = parseFloat(row.saldo);
-
-    console.log(`✅ Saldo específico obtenido:`, {
-      moneda_codigo: row.moneda_codigo,
-      saldo,
-    });
-
     res.json({
       success: true,
-      saldo,
-      moneda_codigo: row.moneda_codigo,
-      moneda_nombre: row.moneda_nombre,
-      moneda_simbolo: row.moneda_simbolo,
+      saldo: parseFloat(saldo.cantidad.toString()),
+      moneda_codigo: saldo.moneda?.codigo ?? null,
+      moneda_nombre: saldo.moneda?.nombre ?? null,
+      moneda_simbolo: saldo.moneda?.simbolo ?? null,
     });
   } catch (error) {
     console.error("Error al obtener saldo específico:", error);

@@ -276,6 +276,7 @@ model Transferencia {
   fecha_rechazo            DateTime?
   descripcion              String?
   numero_recibo            String?             @unique
+  via                      TipoViaTransferencia?           // <<< NUEVO
   observaciones_aprobacion String?
   usuarioAprobador         Usuario?            @relation("UsuarioAprobador", fields: [aprobado_por], references: [id])
   destino                  PuntoAtencion       @relation("TransferenciasDestino", fields: [destino_id], references: [id])
@@ -744,6 +745,12 @@ enum TipoTransferencia {
   DEPOSITO_MATRIZ
   RETIRO_GERENCIA
   DEPOSITO_GERENCIA
+}
+
+enum TipoViaTransferencia {
+  EFECTIVO
+  BANCO
+  MIXTO
 }
 
 enum EstadoTransferencia {
