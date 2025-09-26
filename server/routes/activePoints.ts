@@ -3,67 +3,100 @@ import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import { EstadoJornada } from "@prisma/client";
 
 const router = express.Router();
 
-// Endpoint para obtener puntos libres (sin jornada activa)
+// Estados que bloquean el punto (ocupado)
+const ESTADOS_OCUPADOS: EstadoJornada[] = [
+  EstadoJornada.ACTIVO,
+  EstadoJornada.ALMUERZO,
+];
+
+/** Util: setea cabeceras no-cache */
+function setNoCache(res: express.Response) {
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+    Pragma: "no-cache",
+    Expires: "0",
+    "Surrogate-Control": "no-store",
+  });
+}
+
+/** Serialización segura de fechas */
+function toISO(d: Date | null | undefined) {
+  return d instanceof Date ? d.toISOString() : null;
+}
+
+/**
+ * GET /api/points
+ * Puntos libres (sin jornada en estado ACTIVO/ALMUERZO en el día GYE)
+ * Reglas por rol:
+ *  - OPERADOR: ver solo puntos activos que NO estén ocupados hoy.
+ *  - ADMINISTRATIVO / ADMIN / SUPER_USUARIO: por defecto ver puntos activos (diagnóstico).
+ */
 router.get(
   "/",
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
-      res.set({
-        "Cache-Control":
-          "no-store, no-cache, must-revalidate, proxy-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-        "Surrogate-Control": "no-store",
-      });
+      setNoCache(res);
 
-      // Obtener puntos activos que NO tienen jornada activa hoy (día GYE)
       const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
-      // Reglas por rol para listar puntos disponibles:
-      // - OPERADOR: no ver puntos que estén ocupados por OTROS operadores hoy
-      // - ADMINISTRATIVO: puede ver todos los puntos activos
-      // - ADMIN/SUPER_USUARIO: listado completo para diagnóstico
-      const isAdminLike = ["ADMIN", "SUPER_USUARIO"].includes(
-        req.user?.rol || ""
-      );
-      const isOperador = req.user?.rol === "OPERADOR";
+      const rol = req.user?.rol || "";
+      const isOperador = rol === "OPERADOR";
+      const isAdminLike =
+        rol === "ADMIN" || rol === "SUPER_USUARIO" || rol === "ADMINISTRATIVO";
 
-      const puntosLibres = await prisma.puntoAtencion.findMany({
-        where: isOperador
-          ? {
-              activo: true,
-              NOT: {
-                jornadas: {
-                  some: {
-                    estado: { in: ["ACTIVO", "ALMUERZO"] },
-                    fecha_inicio: { gte: hoy, lt: manana },
-                  },
-                },
-              },
-            }
-          : { activo: true },
+      // Base: puntos activos
+      const whereOperador = {
+        activo: true,
+        NOT: {
+          jornadas: {
+            some: {
+              estado: { in: ESTADOS_OCUPADOS },
+              fecha_inicio: { gte: hoy, lt: manana },
+            },
+          },
+        },
+      };
+
+      const whereAdminLike = { activo: true };
+
+      const puntos = await prisma.puntoAtencion.findMany({
+        where: isOperador ? whereOperador : whereAdminLike,
+        select: {
+          id: true,
+          nombre: true,
+          direccion: true,
+          ciudad: true,
+          provincia: true,
+          codigo_postal: true,
+          telefono: true,
+          activo: true,
+          created_at: true,
+          updated_at: true,
+        },
         orderBy: { nombre: "asc" },
       });
 
-      const formatted = puntosLibres.map((punto) => ({
-        id: punto.id,
-        nombre: punto.nombre,
-        direccion: punto.direccion,
-        ciudad: punto.ciudad,
-        provincia: punto.provincia,
-        codigo_postal: punto.codigo_postal,
-        telefono: punto.telefono,
-        activo: punto.activo,
-        created_at: punto.created_at.toISOString(),
-        updated_at: punto.updated_at.toISOString(),
+      const formatted = puntos.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        direccion: p.direccion,
+        ciudad: p.ciudad,
+        provincia: p.provincia,
+        codigo_postal: p.codigo_postal,
+        telefono: p.telefono,
+        activo: p.activo,
+        created_at: toISO(p.created_at),
+        updated_at: toISO(p.updated_at),
       }));
 
       logger.info("Puntos libres obtenidos", {
         count: formatted.length,
+        role: rol,
         requestedBy: req.user?.id,
       });
 
@@ -88,30 +121,36 @@ router.get(
   }
 );
 
-// Endpoint para obtener puntos ocupados
+/**
+ * GET /api/points/occupied
+ * Lista IDs de puntos ocupados hoy (ACTIVO o ALMUERZO en el día GYE)
+ */
 router.get(
   "/occupied",
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
+      setNoCache(res);
+
       const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
-      const puntosOcupados = await prisma.jornada.findMany({
+      // Distinct por punto para evitar duplicados si hay más de una jornada sobre el mismo punto
+      const jornadas = await prisma.jornada.findMany({
         where: {
-          estado: "ACTIVO",
-          fecha_inicio: {
-            gte: hoy,
-            lt: manana,
-          },
+          estado: { in: ESTADOS_OCUPADOS },
+          fecha_inicio: { gte: hoy, lt: manana },
         },
         select: {
           punto_atencion_id: true,
         },
       });
 
-      const puntosIds = puntosOcupados.map((j) => ({
-        id: j.punto_atencion_id,
-      }));
+      // De-dup en memoria (por si la versión de Prisma no soporta distinct en este modelo)
+      const ocupadosSet = new Set<string>();
+      for (const j of jornadas) {
+        if (j.punto_atencion_id) ocupadosSet.add(j.punto_atencion_id);
+      }
+      const puntosIds = Array.from(ocupadosSet).map((id) => ({ id }));
 
       logger.info("Puntos ocupados obtenidos", {
         count: puntosIds.length,
