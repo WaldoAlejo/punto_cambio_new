@@ -17,6 +17,7 @@ import { User, PuntoAtencion, Moneda } from "@/types";
 import { useContabilidadDivisas } from "@/hooks/useContabilidadDivisas";
 import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
 import { currencyService } from "@/services/currencyService";
+import { gyeDayRangeUtcFromDate } from "@/utils/timezone";
 import SaldosDivisasEnTiempoReal from "./SaldosDivisasEnTiempoReal";
 import HistorialMovimientos from "./HistorialMovimientos";
 
@@ -120,17 +121,15 @@ export const ContabilidadDashboard = ({
 
   // Calcular estadísticas
   useEffect(() => {
-    if (movimientos.length > 0 && saldos.length > 0) {
-      const hoy = new Date();
-      const inicioHoy = new Date(
-        hoy.getFullYear(),
-        hoy.getMonth(),
-        hoy.getDate()
-      );
+    // Usar timezone de Guayaquil para determinar "hoy"
+    const hoy = new Date();
+    const { gte: inicioHoy, lt: finHoy } = gyeDayRangeUtcFromDate(hoy);
 
-      const movimientosHoy = movimientos.filter(
-        (mov) => new Date(mov.fecha) >= inicioHoy
-      );
+    if (movimientos.length > 0 || saldos.length > 0) {
+      const movimientosHoy = movimientos.filter((mov) => {
+        const fechaMov = new Date(mov.fecha);
+        return fechaMov >= inicioHoy && fechaMov < finHoy;
+      });
 
       const ingresos = movimientosHoy
         .filter(
@@ -163,10 +162,9 @@ export const ContabilidadDashboard = ({
       const saldosNegativos = saldos.filter((s) => s.saldo < 0).length;
 
       // Suma USD en todos los puntos (vista admin) o solo del punto (vista normal)
+      const saldosUSD = saldos.filter((s) => s.moneda_codigo === "USD");
       const usdSaldo = isAdminView
-        ? saldos
-            .filter((s) => s.moneda_codigo === "USD")
-            .reduce((acc, s) => acc + s.saldo, 0)
+        ? saldosUSD.reduce((acc, s) => acc + s.saldo, 0)
         : saldos.find((s) => s.moneda_codigo === "USD")?.saldo || 0;
 
       // Totales por moneda (para tarjetas por divisa)
