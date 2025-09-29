@@ -6,14 +6,13 @@
 // ==============================
 
 export const PRODUCTO_MERCANCIA = "MERCANCIA PREMIER" as const;
-export const PRODUCTO_DOCUMENTOS = "DOCUMENTOS" as const;
+export const PRODUCTO_DOCUMENTO = "DOCUMENTO" as const; // ← singular (alineado al WS)
 export type ProductoServientrega =
   | typeof PRODUCTO_MERCANCIA
-  | typeof PRODUCTO_DOCUMENTOS;
+  | typeof PRODUCTO_DOCUMENTO;
 
 export const SERVIENTREGA_CONFIG = {
   // Valores por defecto
-  DEFAULT_EMPAQUE: "AISLANTE DE HUMEDAD",
   DEFAULT_PRODUCTO: PRODUCTO_MERCANCIA as ProductoServientrega, // Solo 2 opciones según la doc
 
   // Códigos postales por defecto (para internacional si no vienen)
@@ -24,11 +23,11 @@ export const SERVIENTREGA_CONFIG = {
   UMBRAL_SALDO_BAJO: 2.0,
   PESO_MINIMO: 0.5,
 
-  // Tipos de empaque válidos (UI)
+  // Tipos de empaque válidos (UI) — NO se manda por defecto al WS
   TIPOS_EMPAQUE: ["SOBRE", "CAJA", "AISLANTE DE HUMEDAD", "BOLSA"] as const,
 
   // Productos válidos (UI) — ALINEADO A DOC OFICIAL
-  PRODUCTOS: [PRODUCTO_MERCANCIA, PRODUCTO_DOCUMENTOS] as const,
+  PRODUCTOS: [PRODUCTO_MERCANCIA, PRODUCTO_DOCUMENTO] as const,
 };
 
 // Normalizador (compatible ES5/ES2015): elimina diacríticos sin usar \p{...}
@@ -47,14 +46,14 @@ const toNum = (v: any, d = 0) => {
 // Normaliza cualquier input a uno de los DOS productos válidos
 export const normalizarProducto = (raw?: string): ProductoServientrega => {
   const c = clean(raw || "");
-  if (c === PRODUCTO_DOCUMENTOS) return PRODUCTO_DOCUMENTOS;
+  if (c === PRODUCTO_DOCUMENTO) return PRODUCTO_DOCUMENTO;
   // Cualquier otro valor cae a MERCANCIA PREMIER por defecto
   return PRODUCTO_MERCANCIA;
 };
 
-// Helper para saber si es DOCUMENTOS
+// Helper para saber si es DOCUMENTO
 export const esDocumento = (raw?: string) =>
-  normalizarProducto(raw) === PRODUCTO_DOCUMENTOS;
+  normalizarProducto(raw) === PRODUCTO_DOCUMENTO;
 
 // ==============================
 // Tipos de ayuda (opcionales)
@@ -81,7 +80,7 @@ export type TarifaInput = {
     ancho: number;
     largo: number;
   };
-  empaque?: { tipo_empaque?: string };
+  empaque?: { tipo_empaque?: string }; // opcional
   nombre_producto?: string; // se normaliza a 2 opciones
   recoleccion?: boolean;
 };
@@ -151,10 +150,14 @@ export const formatearPayloadTarifa = (data: TarifaInput) => {
     largo: String(toNum(data?.medidas?.largo, 0)),
     recoleccion: data?.recoleccion ? "SI" : "NO",
     nombre_producto: producto, // SOLO 2 valores válidos
-    empaque:
-      clean(data?.empaque?.tipo_empaque || "") ||
-      SERVIENTREGA_CONFIG.DEFAULT_EMPAQUE,
+    // ⚠️ empaque: NO se envía por defecto
   };
+
+  // Solo incluir empaque si fue provisto y no está vacío
+  const empaque = clean(data?.empaque?.tipo_empaque || "");
+  if (empaque) {
+    (basePayload as any).empaque = empaque;
+  }
 
   if (esInternacional) {
     return {
@@ -227,7 +230,7 @@ export const formatearPayloadGuia = (data: GuiaInput) => {
   )}`;
 
   // Documento: medidas a 0 y peso mínimo
-  const isDoc = producto === PRODUCTO_DOCUMENTOS;
+  const isDoc = producto === PRODUCTO_DOCUMENTO;
 
   return {
     tipo: "GeneracionGuia",

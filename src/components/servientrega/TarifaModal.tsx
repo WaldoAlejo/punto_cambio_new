@@ -1,5 +1,7 @@
 "use client";
 
+import React, { useEffect, useMemo, useState } from "react";
+import axiosInstance from "@/services/axiosInstance";
 import {
   Dialog,
   DialogContent,
@@ -26,15 +28,14 @@ import {
 type NumStr = number | string | null | undefined;
 
 interface TarifaServientrega {
-  // Campos que suelen venir (a veces como string)
   flete?: NumStr;
   valor_declarado?: NumStr;
-  tiempo?: string; // suele venir como "1", "2", etc.
+  tiempo?: string;
   valor_empaque?: NumStr;
   valor_empaque_iva?: NumStr;
   total_empaque?: NumStr;
   trayecto?: string;
-  prima?: NumStr; // seguro
+  prima?: NumStr;
   peso?: NumStr;
   volumen?: NumStr;
   peso_cobrar?: NumStr;
@@ -43,7 +44,14 @@ interface TarifaServientrega {
   tarifa12?: NumStr;
   tiva?: NumStr;
   gtotal?: NumStr;
-  total_transacion?: NumStr; // valor real a cobrar
+  total_transacion?: NumStr;
+}
+
+interface PuntoAtencion {
+  id: string;
+  nombre: string;
+  ciudad?: string;
+  provincia?: string;
 }
 
 interface TarifaModalProps {
@@ -52,8 +60,15 @@ interface TarifaModalProps {
   onConfirm?: () => void;
   tarifa: TarifaServientrega | null;
   loading?: boolean;
+
+  // Saldo
   saldoDisponible?: number;
+
+  // NUEVO: si ya tienes el nombre, lo sigues pasando
   puntoAtencionNombre?: string;
+
+  // NUEVO: si solo tienes el id, pásalo y el modal resolverá el nombre
+  puntoAtencionId?: string;
 }
 
 function toNumber(v: NumStr, fallback = 0): number {
@@ -85,6 +100,27 @@ function getTrayectoColor(trayecto?: string) {
   }
 }
 
+/** Cache simple en memoria para no pedir los puntos muchas veces en la misma sesión */
+const puntosCache: { list?: PuntoAtencion[]; at?: number } = {};
+
+async function fetchPuntos(): Promise<PuntoAtencion[]> {
+  // Reutiliza 60s
+  const now = Date.now();
+  if (puntosCache.list && puntosCache.at && now - puntosCache.at < 60_000) {
+    return puntosCache.list;
+  }
+  const { data } = await axiosInstance.get("/servientrega/remitente/puntos");
+  const list: PuntoAtencion[] = (data?.puntos || []).map((p: any) => ({
+    id: p.id,
+    nombre: p.nombre,
+    ciudad: p.ciudad,
+    provincia: p.provincia,
+  }));
+  puntosCache.list = list;
+  puntosCache.at = now;
+  return list;
+}
+
 export default function TarifaModal({
   isOpen,
   onClose,
@@ -93,15 +129,54 @@ export default function TarifaModal({
   loading = false,
   saldoDisponible,
   puntoAtencionNombre,
+  puntoAtencionId,
 }: TarifaModalProps) {
-  if (!tarifa) return null;
+  const [paNombre, setPaNombre] = useState<string | undefined>(
+    puntoAtencionNombre
+  );
+  const [resolviendoNombre, setResolviendoNombre] = useState(false);
 
-  const totalTransaccion = toNumber(tarifa.total_transacion);
-  const gtotal = toNumber(tarifa.gtotal);
+  // Intenta resolver el nombre si:
+  // - el modal está abierto
+  // - no nos pasaron el nombre ya listo
+  // - sí tenemos un id de punto
+  useEffect(() => {
+    let mounted = true;
+
+    async function resolveNombre() {
+      if (!isOpen || paNombre || !puntoAtencionId) return;
+      setResolviendoNombre(true);
+      try {
+        const puntos = await fetchPuntos();
+        const match = puntos.find((p) => p.id === puntoAtencionId);
+        if (mounted) {
+          setPaNombre(match?.nombre || undefined);
+        }
+      } catch (e) {
+        // Silencioso en UI; puedes loguear si quieres
+        console.warn("No se pudo resolver nombre del punto:", e);
+      } finally {
+        if (mounted) setResolviendoNombre(false);
+      }
+    }
+
+    resolveNombre();
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, puntoAtencionId]);
+
+  const totalTransaccion = toNumber(tarifa?.total_transacion);
+  const gtotal = toNumber(tarifa?.gtotal);
   const costoEnvio = totalTransaccion > 0 ? totalTransaccion : gtotal;
 
-  const saldoDespues =
-    saldoDisponible !== undefined ? saldoDisponible - costoEnvio : undefined;
+  const saldoDespues = useMemo(() => {
+    if (saldoDisponible === undefined) return undefined;
+    return saldoDisponible - costoEnvio;
+  }, [saldoDisponible, costoEnvio]);
+
+  if (!tarifa) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -138,7 +213,7 @@ export default function TarifaModal({
                     </span>
                   </div>
                   <div className="text-xl font-semibold text-orange-600">
-                    {pluralDias(tarifa.tiempo)}
+                    {pluralDias(tarifa?.tiempo)}
                   </div>
                 </div>
 
@@ -149,8 +224,8 @@ export default function TarifaModal({
                       Trayecto
                     </span>
                   </div>
-                  <Badge className={getTrayectoColor(tarifa.trayecto)}>
-                    {tarifa.trayecto || "—"}
+                  <Badge className={getTrayectoColor(tarifa?.trayecto)}>
+                    {tarifa?.trayecto || "—"}
                   </Badge>
                 </div>
               </div>
@@ -169,50 +244,50 @@ export default function TarifaModal({
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Flete base:</span>
                   <span className="font-medium">
-                    {formatCurrency(tarifa.flete)}
+                    {formatCurrency(tarifa?.flete)}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Empaque:</span>
                   <span className="font-medium">
-                    {formatCurrency(tarifa.valor_empaque)}
+                    {formatCurrency(tarifa?.valor_empaque)}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">IVA empaque:</span>
                   <span className="font-medium">
-                    {formatCurrency(tarifa.valor_empaque_iva)}
+                    {formatCurrency(tarifa?.valor_empaque_iva)}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Total empaque:</span>
                   <span className="font-medium">
-                    {formatCurrency(tarifa.total_empaque)}
+                    {formatCurrency(tarifa?.total_empaque)}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Prima (seguro):</span>
                   <span className="font-medium">
-                    {formatCurrency(tarifa.prima)}
+                    {formatCurrency(tarifa?.prima)}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">IVA (flete/servicios):</span>
                   <span className="font-medium">
-                    {formatCurrency(tarifa.tiva)}
+                    {formatCurrency(tarifa?.tiva)}
                   </span>
                 </div>
 
-                {toNumber(tarifa.descuento) > 0 && (
+                {toNumber(tarifa?.descuento) > 0 && (
                   <div className="flex justify-between items-center text-green-600">
                     <span>Descuento:</span>
                     <span className="font-medium">
-                      -{formatCurrency(tarifa.descuento)}
+                      -{formatCurrency(tarifa?.descuento)}
                     </span>
                   </div>
                 )}
@@ -221,7 +296,7 @@ export default function TarifaModal({
 
                 <div className="flex justify-between items-center text-lg font-semibold">
                   <span>Subtotal:</span>
-                  <span>{formatCurrency(tarifa.gtotal)}</span>
+                  <span>{formatCurrency(tarifa?.gtotal)}</span>
                 </div>
 
                 <div className="flex justify-between items-center text-xl font-bold text-primary">
@@ -245,21 +320,21 @@ export default function TarifaModal({
                   <div className="flex justify-between">
                     <span className="text-gray-600">Peso real:</span>
                     <span className="font-medium">
-                      {toNumber(tarifa.peso).toFixed(2)} kg
+                      {toNumber(tarifa?.peso).toFixed(2)} kg
                     </span>
                   </div>
 
                   <div className="flex justify-between">
                     <span className="text-gray-600">Peso a cobrar:</span>
                     <span className="font-medium">
-                      {toNumber(tarifa.peso_cobrar).toFixed(2)} kg
+                      {toNumber(tarifa?.peso_cobrar).toFixed(2)} kg
                     </span>
                   </div>
 
                   <div className="flex justify-between">
                     <span className="text-gray-600">Volumen:</span>
                     <span className="font-medium">
-                      {toNumber(tarifa.volumen).toFixed(3)} m³
+                      {toNumber(tarifa?.volumen).toFixed(3)} m³
                     </span>
                   </div>
                 </div>
@@ -268,21 +343,21 @@ export default function TarifaModal({
                   <div className="flex justify-between">
                     <span className="text-gray-600">Valor declarado:</span>
                     <span className="font-medium">
-                      {formatCurrency(tarifa.valor_declarado)}
+                      {formatCurrency(tarifa?.valor_declarado)}
                     </span>
                   </div>
 
                   <div className="flex justify-between">
                     <span className="text-gray-600">Tarifa sin IVA:</span>
                     <span className="font-medium">
-                      {formatCurrency(tarifa.tarifa0)}
+                      {formatCurrency(tarifa?.tarifa0)}
                     </span>
                   </div>
 
                   <div className="flex justify-between">
                     <span className="text-gray-600">Tarifa con IVA:</span>
                     <span className="font-medium">
-                      {formatCurrency(tarifa.tarifa12)}
+                      {formatCurrency(tarifa?.tarifa12)}
                     </span>
                   </div>
                 </div>
@@ -300,10 +375,25 @@ export default function TarifaModal({
                 </h3>
 
                 <div className="space-y-3">
-                  {puntoAtencionNombre && (
+                  {(paNombre || puntoAtencionId) && (
                     <div className="flex justify-between items-center">
                       <span className="text-gray-600">Punto de atención:</span>
-                      <span className="font-medium">{puntoAtencionNombre}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">
+                          {paNombre ? paNombre : "Resolviendo..."}
+                        </span>
+                        {resolviendoNombre && (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                        {puntoAtencionId && (
+                          <Badge
+                            variant="outline"
+                            title={`ID: ${puntoAtencionId}`}
+                          >
+                            ID
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   )}
 
