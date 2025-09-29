@@ -132,7 +132,8 @@ function getInitialView(
   const isAdmin = user.rol === "ADMIN" || user.rol === "SUPER_USUARIO";
   const isOperador = user.rol === "OPERADOR";
   const isConcesion = user.rol === "CONCESION";
-  if (isAdmin) return "contabilidad-general";
+  // Cambio: Los administradores ahora van al dashboard por defecto
+  if (isAdmin) return "dashboard";
   if (isConcesion) return "servientrega";
   if (isOperador && selectedPoint) return "dashboard";
   return "dashboard";

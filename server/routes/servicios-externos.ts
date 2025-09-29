@@ -326,6 +326,10 @@ router.get(
         take,
         include: {
           usuario: { select: { id: true, nombre: true } },
+          moneda: {
+            select: { id: true, nombre: true, codigo: true, simbolo: true },
+          },
+          puntoAtencion: { select: { id: true, nombre: true } },
         },
       });
 
@@ -344,6 +348,16 @@ router.get(
         usuario: {
           id: r.usuario?.id || r.usuario_id,
           nombre: r.usuario?.nombre || "",
+        },
+        moneda: {
+          id: r.moneda?.id || r.moneda_id,
+          nombre: r.moneda?.nombre || "",
+          codigo: r.moneda?.codigo || "",
+          simbolo: r.moneda?.simbolo || "",
+        },
+        puntoAtencion: {
+          id: r.puntoAtencion?.id || r.punto_atencion_id,
+          nombre: r.puntoAtencion?.nombre || "",
         },
       }));
 
@@ -511,6 +525,10 @@ router.get(
         take,
         include: {
           usuario: { select: { id: true, nombre: true } },
+          moneda: {
+            select: { id: true, nombre: true, codigo: true, simbolo: true },
+          },
+          puntoAtencion: { select: { id: true, nombre: true } },
         },
       });
 
@@ -529,6 +547,16 @@ router.get(
         usuario: {
           id: r.usuario?.id || r.usuario_id,
           nombre: r.usuario?.nombre || "",
+        },
+        moneda: {
+          id: r.moneda?.id || r.moneda_id,
+          nombre: r.moneda?.nombre || "",
+          codigo: r.moneda?.codigo || "",
+          simbolo: r.moneda?.simbolo || "",
+        },
+        puntoAtencion: {
+          id: r.puntoAtencion?.id || r.punto_atencion_id,
+          nombre: r.puntoAtencion?.nombre || "",
         },
       }));
 

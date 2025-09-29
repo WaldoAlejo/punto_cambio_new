@@ -115,9 +115,13 @@ export class ReceiptService {
       detalles: {
         tipoOperacion: exchange.tipo_operacion,
         montoOrigen: Number(exchange.monto_origen) || 0,
-        monedaOrigen: exchange.monedaOrigen?.codigo || "",
+        monedaOrigen:
+          exchange.monedaOrigen?.nombre || exchange.monedaOrigen?.codigo || "",
         montoDestino: montoMostrar,
-        monedaDestino: exchange.monedaDestino?.codigo || "",
+        monedaDestino:
+          exchange.monedaDestino?.nombre ||
+          exchange.monedaDestino?.codigo ||
+          "",
         tasaCambioBilletes: Number(exchange.tasa_cambio_billetes) || 0,
         tasaCambioMonedas: Number(exchange.tasa_cambio_monedas) || 0,
         observacion: observacionCompleta,
@@ -156,9 +160,13 @@ export class ReceiptService {
       detalles: {
         tipoOperacion: exchange.tipo_operacion,
         montoOrigen: Number(exchange.monto_origen) || 0,
-        monedaOrigen: exchange.monedaOrigen?.codigo || "",
+        monedaOrigen:
+          exchange.monedaOrigen?.nombre || exchange.monedaOrigen?.codigo || "",
         montoDestino: Number(exchange.monto_destino) || 0,
-        monedaDestino: exchange.monedaDestino?.codigo || "",
+        monedaDestino:
+          exchange.monedaDestino?.nombre ||
+          exchange.monedaDestino?.codigo ||
+          "",
 
         // Tasas diferenciadas
         tasaCambioBilletes: Number(exchange.tasa_cambio_billetes) || 0,
@@ -200,7 +208,7 @@ export class ReceiptService {
       detalles: {
         tipoTransferencia: transfer.tipo_transferencia,
         monto: transfer.monto,
-        moneda: transfer.moneda?.codigo || "",
+        moneda: transfer.moneda?.nombre || transfer.moneda?.codigo || "",
         origen: transfer.origen?.nombre || "Matriz",
         destino: transfer.destino?.nombre || "",
         estado: transfer.estado,

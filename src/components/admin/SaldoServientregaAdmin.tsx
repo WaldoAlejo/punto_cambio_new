@@ -24,6 +24,8 @@ interface PuntoAtencion {
   nombre: string;
   ciudad: string;
   provincia: string;
+  servientrega_agencia_codigo?: string;
+  servientrega_agencia_nombre?: string;
 }
 
 interface SaldoResponse {
@@ -472,11 +474,32 @@ export default function SaldoServientregaAdmin() {
                 key={punto.id}
                 className="border rounded-lg p-6 bg-white shadow-sm space-y-4"
               >
-                <div className="mb-2">
-                  <span className="font-semibold text-lg">{punto.nombre}</span>
-                  <span className="ml-2 text-gray-500">
-                    {punto.ciudad}, {punto.provincia}
-                  </span>
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-lg">
+                      {punto.nombre}
+                    </span>
+                    <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full">
+                      📦 Servientrega
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <div>
+                      📍 {punto.ciudad}, {punto.provincia}
+                    </div>
+                    {punto.servientrega_agencia_codigo && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-cyan-600 font-medium">
+                          🏢{" "}
+                          {punto.servientrega_agencia_nombre ||
+                            "Agencia Servientrega"}
+                        </span>
+                        <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                          {punto.servientrega_agencia_codigo}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Saldo actual */}

@@ -373,7 +373,7 @@ export class ServientregaDBService {
   // ===== PUNTOS DE ATENCIÓN =====
   async obtenerPuntosAtencion() {
     console.log(
-      "🔍 ServientregaDBService: Iniciando consulta de puntos de atención..."
+      "🔍 ServientregaDBService: Iniciando consulta de puntos de atención con agencia Servientrega..."
     );
 
     // Primero verificar cuántos puntos hay en total
@@ -381,10 +381,69 @@ export class ServientregaDBService {
     const puntosActivos = await prisma.puntoAtencion.count({
       where: { activo: true },
     });
+    // Contar puntos con agencia Servientrega válida (excluyendo espacios)
+    const puntosConServientregaResult = await prisma.$queryRaw<
+      Array<{ count: bigint }>
+    >`
+      SELECT COUNT(*) as count
+      FROM "PuntoAtencion"
+      WHERE activo = true
+        AND servientrega_agencia_codigo IS NOT NULL
+        AND servientrega_agencia_codigo != ''
+        AND TRIM(servientrega_agencia_codigo) != ''
+    `;
+    const puntosConServientrega = Number(puntosConServientregaResult[0].count);
 
     console.log(
-      `📊 ServientregaDBService: Estadísticas de puntos - Total: ${totalPuntos}, Activos: ${puntosActivos}`
+      `📊 ServientregaDBService: Estadísticas de puntos - Total: ${totalPuntos}, Activos: ${puntosActivos}, Con Servientrega: ${puntosConServientrega}`
     );
+
+    // Primero obtener TODOS los puntos activos para debug
+    const todosPuntosActivos = await prisma.puntoAtencion.findMany({
+      select: {
+        id: true,
+        nombre: true,
+        ciudad: true,
+        provincia: true,
+        activo: true,
+        servientrega_agencia_codigo: true,
+        servientrega_agencia_nombre: true,
+      },
+      where: {
+        activo: true,
+      },
+      orderBy: [{ provincia: "asc" }, { ciudad: "asc" }, { nombre: "asc" }],
+    });
+
+    console.log(
+      `🔍 DEBUG: Todos los puntos activos (${todosPuntosActivos.length}):`
+    );
+    todosPuntosActivos.forEach((punto, index) => {
+      const codigo = punto.servientrega_agencia_codigo;
+      let codigoInfo = "NULL";
+      if (codigo !== null) {
+        if (codigo === "") {
+          codigoInfo = "EMPTY_STRING";
+        } else if (codigo.trim() === "") {
+          codigoInfo = `ONLY_SPACES (length: ${codigo.length})`;
+        } else {
+          codigoInfo = `"${codigo.trim()}" (original length: ${
+            codigo.length
+          }, trimmed length: ${codigo.trim().length})`;
+        }
+      }
+
+      console.log(
+        `  ${index + 1}. ${punto.nombre} - ${punto.ciudad}, ${punto.provincia}`
+      );
+      console.log(`     Agencia código: ${codigoInfo}`);
+      console.log(
+        `     Agencia nombre: ${punto.servientrega_agencia_nombre || "NULL"}`
+      );
+    });
+
+    // TEMPORAL: Usar filtro Prisma simple primero para debug
+    console.log("🔍 TEMPORAL: Usando filtro Prisma simple para debug...");
 
     const puntos = await prisma.puntoAtencion.findMany({
       select: {
@@ -396,31 +455,83 @@ export class ServientregaDBService {
         codigo_postal: true,
         telefono: true,
         activo: true,
+        servientrega_agencia_codigo: true,
+        servientrega_agencia_nombre: true,
       },
       where: {
         activo: true,
+        servientrega_agencia_codigo: {
+          not: null,
+        },
       },
       orderBy: [{ provincia: "asc" }, { ciudad: "asc" }, { nombre: "asc" }],
     });
 
     console.log(
-      `📍 ServientregaDBService: Consulta completada - ${puntos.length} puntos activos encontrados:`
+      `🔍 Filtro Prisma simple (NOT NULL): ${puntos.length} puntos encontrados`
     );
-    puntos.forEach((punto, index) => {
+
+    // Filtrar manualmente los que tienen espacios en blanco
+    const puntosFiltrados = puntos.filter((punto) => {
+      const codigo = punto.servientrega_agencia_codigo;
+      return codigo && codigo.trim() !== "";
+    });
+
+    console.log(
+      `🔍 Después de filtrar espacios manualmente: ${puntosFiltrados.length} puntos`
+    );
+
+    // Usar los puntos filtrados
+    const puntosFinales = puntosFiltrados;
+
+    console.log(
+      `🎯 Resultado final: ${puntosFinales.length} puntos después del filtrado`
+    );
+
+    // Debug adicional: verificar si el filtrado está funcionando
+    if (puntosFinales.length !== 5) {
+      console.warn(
+        `⚠️ PROBLEMA DETECTADO: Se esperaban 5 puntos pero se obtuvieron ${puntosFinales.length}`
+      );
+
+      console.log("🔍 Analizando cada punto filtrado:");
+      puntosFinales.forEach((p, i) => {
+        const codigo = p.servientrega_agencia_codigo;
+        console.log(
+          `  ${i + 1}. ${p.nombre} - Código: "${codigo}" (length: ${
+            codigo?.length || 0
+          }, trimmed: "${codigo?.trim()}")`
+        );
+      });
+    }
+
+    console.log(
+      `📍 ServientregaDBService: Consulta completada - ${puntosFinales.length} puntos con agencia Servientrega encontrados:`
+    );
+    puntosFinales.forEach((punto, index) => {
       console.log(
         `  ${index + 1}. ${punto.nombre} - ${punto.ciudad}, ${
           punto.provincia
-        } (ID: ${punto.id})`
+        } (ID: ${punto.id}) - Agencia: "${
+          punto.servientrega_agencia_codigo?.trim() || "N/A"
+        }"`
       );
     });
 
-    if (puntos.length === 0) {
+    if (puntosFinales.length === 0) {
       console.warn(
-        "⚠️ ServientregaDBService: No se encontraron puntos de atención activos"
+        "⚠️ ServientregaDBService: No se encontraron puntos de atención activos con agencia Servientrega asignada"
       );
     }
 
-    return puntos;
+    // Limpiar los datos antes de devolverlos (trim de espacios)
+    return puntosFinales.map((punto) => ({
+      ...punto,
+      servientrega_agencia_codigo:
+        punto.servientrega_agencia_codigo?.trim() || null,
+      servientrega_agencia_nombre:
+        punto.servientrega_agencia_nombre?.trim() || null,
+    }));
   }
 
   // ===== INFORMES Y ESTADÍSTICAS =====

@@ -57,18 +57,15 @@ async function upsertSaldoEfectivoYBancos(
         },
       },
       data: {
-        cantidad:
-          typeof data.cantidad === "number"
-            ? round2(data.cantidad)
-            : existing.cantidad,
-        billetes:
-          typeof data.billetes === "number"
-            ? round2(data.billetes)
-            : existing.billetes,
-        monedas_fisicas:
-          typeof data.monedas_fisicas === "number"
-            ? round2(data.monedas_fisicas)
-            : existing.monedas_fisicas,
+        ...(typeof data.cantidad === "number" && {
+          cantidad: round2(data.cantidad),
+        }),
+        ...(typeof data.billetes === "number" && {
+          billetes: round2(data.billetes),
+        }),
+        ...(typeof data.monedas_fisicas === "number" && {
+          monedas_fisicas: round2(data.monedas_fisicas),
+        }),
         ...(typeof existing.bancos !== "undefined"
           ? {
               bancos:
@@ -123,6 +120,7 @@ async function logMovimientoSaldo(
       saldo_anterior: round2(data.saldo_anterior),
       saldo_nuevo: round2(data.saldo_nuevo),
       descripcion: data.descripcion || null,
+      created_at: new Date(),
     },
   });
 }
@@ -132,8 +130,8 @@ async function logMovimientoSaldo(
 const exchangeSchema = z.object({
   moneda_origen_id: z.string().uuid(),
   moneda_destino_id: z.string().uuid(),
-  monto_origen: z.number().positive(), // antes nonnegative
-  monto_destino: z.number().positive(), // antes nonnegative
+  monto_origen: z.number().positive(),
+  monto_destino: z.number().positive(),
 
   tasa_cambio_billetes: z.number().nonnegative().default(0),
   tasa_cambio_monedas: z.number().nonnegative().default(0),
@@ -385,7 +383,7 @@ router.post(
       }
 
       function convertir(
-        tipo: TipoOperacion,
+        _tipo: TipoOperacion,
         modo: RateMode,
         montoOrigen: number,
         tasa: number,
@@ -406,7 +404,7 @@ router.post(
             return { montoDestinoCalc: montoOrigen / tasa };
           return { montoDestinoCalc: montoOrigen * tasa };
         }
-        // Cross (no USD): no forzamos cálculo (requiere cross-rates)
+        // Cross (no USD): no forzamos cálculo
         return { montoDestinoCalc: 0 };
       }
 
@@ -560,7 +558,36 @@ router.post(
             divisas_recibidas_monedas: round2(num(divisas_recibidas_monedas)),
             divisas_recibidas_total: round2(divisas_recibidas_total_final),
           },
-          include: {
+          select: {
+            id: true,
+            fecha: true,
+            tipo_operacion: true,
+            estado: true,
+            monto_origen: true,
+            monto_destino: true,
+            tasa_cambio_billetes: true,
+            tasa_cambio_monedas: true,
+            observacion: true,
+            numero_recibo: true,
+            numero_recibo_abono: true,
+            numero_recibo_completar: true,
+            cliente: true,
+            divisas_entregadas_total: true,
+            divisas_entregadas_billetes: true,
+            divisas_entregadas_monedas: true,
+            divisas_recibidas_total: true,
+            divisas_recibidas_billetes: true,
+            divisas_recibidas_monedas: true,
+            saldo_pendiente: true,
+            abono_inicial_monto: true,
+            abono_inicial_fecha: true,
+            fecha_completado: true,
+            metodo_entrega: true,
+            transferencia_banco: true,
+            transferencia_numero: true,
+            transferencia_imagen_url: true,
+            usd_entregado_efectivo: true,
+            usd_entregado_transfer: true,
             monedaOrigen: {
               select: { id: true, nombre: true, codigo: true, simbolo: true },
             },
@@ -820,14 +847,16 @@ router.get(
       const whereClause: ExchangeWhereClause = {};
       if (req.query.point_id)
         whereClause.punto_atencion_id = String(req.query.point_id);
+
+      // ✅ Fix TS2345: evitar .includes con tipo estrecho
+      const estadoParam = req.query.estado as EstadoTransaccion | undefined;
       if (
-        req.query.estado &&
-        [EstadoTransaccion.PENDIENTE, EstadoTransaccion.COMPLETADO].includes(
-          req.query.estado as any
-        )
+        estadoParam === EstadoTransaccion.PENDIENTE ||
+        estadoParam === EstadoTransaccion.COMPLETADO
       ) {
-        whereClause.estado = req.query.estado as EstadoTransaccion;
+        whereClause.estado = estadoParam;
       }
+
       if (req.user.rol === "OPERADOR") whereClause.usuario_id = req.user.id;
 
       const { date, from, to } = req.query as {
@@ -850,7 +879,36 @@ router.get(
 
       const exchanges = await prisma.cambioDivisa.findMany({
         where: { ...whereClause, fecha: { gte, lt } },
-        include: {
+        select: {
+          id: true,
+          fecha: true,
+          tipo_operacion: true,
+          estado: true,
+          monto_origen: true,
+          monto_destino: true,
+          tasa_cambio_billetes: true,
+          tasa_cambio_monedas: true,
+          observacion: true,
+          numero_recibo: true,
+          numero_recibo_abono: true,
+          numero_recibo_completar: true,
+          cliente: true,
+          divisas_entregadas_total: true,
+          divisas_entregadas_billetes: true,
+          divisas_entregadas_monedas: true,
+          divisas_recibidas_total: true,
+          divisas_recibidas_billetes: true,
+          divisas_recibidas_monedas: true,
+          saldo_pendiente: true,
+          abono_inicial_monto: true,
+          abono_inicial_fecha: true,
+          fecha_completado: true,
+          metodo_entrega: true,
+          transferencia_banco: true,
+          transferencia_numero: true,
+          transferencia_imagen_url: true,
+          usd_entregado_efectivo: true,
+          usd_entregado_transfer: true,
           monedaOrigen: {
             select: { id: true, nombre: true, codigo: true, simbolo: true },
           },
@@ -916,14 +974,44 @@ router.patch(
           numero_recibo_completar: numeroReciboCierre,
           fecha_completado: new Date(),
         },
+        select: {
+          id: true,
+          fecha: true,
+          tipo_operacion: true,
+          estado: true,
+          monto_origen: true,
+          monto_destino: true,
+          tasa_cambio_billetes: true,
+          tasa_cambio_monedas: true,
+          observacion: true,
+          numero_recibo: true,
+          numero_recibo_abono: true,
+          numero_recibo_completar: true,
+          cliente: true,
+          divisas_entregadas_total: true,
+          divisas_recibidas_total: true,
+          saldo_pendiente: true,
+          abono_inicial_monto: true,
+          abono_inicial_fecha: true,
+          fecha_completado: true,
+          monedaOrigen: {
+            select: { id: true, nombre: true, codigo: true, simbolo: true },
+          },
+          monedaDestino: {
+            select: { id: true, nombre: true, codigo: true, simbolo: true },
+          },
+          usuario: { select: { id: true, nombre: true, username: true } },
+          puntoAtencion: { select: { id: true, nombre: true } },
+        },
       });
+
       await prisma.recibo.create({
         data: {
           numero_recibo: numeroReciboCierre,
           tipo_operacion: "CAMBIO_DIVISA",
           referencia_id: updated.id,
           usuario_id: req.user.id,
-          punto_atencion_id: updated.punto_atencion_id,
+          punto_atencion_id: cambio.punto_atencion_id,
           datos_operacion: updated,
         },
       });
@@ -1032,7 +1120,30 @@ router.patch(
           numero_recibo_completar: numeroReciboCompletar,
           fecha_completado: new Date(),
         },
-        include: {
+        select: {
+          id: true,
+          fecha: true,
+          tipo_operacion: true,
+          estado: true,
+          monto_origen: true,
+          monto_destino: true,
+          tasa_cambio_billetes: true,
+          tasa_cambio_monedas: true,
+          observacion: true,
+          numero_recibo: true,
+          numero_recibo_abono: true,
+          numero_recibo_completar: true,
+          cliente: true,
+          divisas_entregadas_total: true,
+          divisas_recibidas_total: true,
+          saldo_pendiente: true,
+          abono_inicial_monto: true,
+          abono_inicial_fecha: true,
+          fecha_completado: true,
+          metodo_entrega: true,
+          transferencia_banco: true,
+          transferencia_numero: true,
+          transferencia_imagen_url: true,
           monedaOrigen: {
             select: { id: true, nombre: true, codigo: true, simbolo: true },
           },
@@ -1050,7 +1161,7 @@ router.patch(
           tipo_operacion: "CAMBIO_DIVISA",
           referencia_id: updated.id,
           usuario_id: req.user.id,
-          punto_atencion_id: updated.punto_atencion_id,
+          punto_atencion_id: cambio.punto_atencion_id,
           datos_operacion: updated,
         },
       });
@@ -1090,7 +1201,30 @@ router.get(
           estado: EstadoTransaccion.PENDIENTE,
           saldo_pendiente: { gt: 0 },
         },
-        include: {
+        select: {
+          id: true,
+          fecha: true,
+          tipo_operacion: true,
+          estado: true,
+          monto_origen: true,
+          monto_destino: true,
+          tasa_cambio_billetes: true,
+          tasa_cambio_monedas: true,
+          observacion: true,
+          numero_recibo: true,
+          numero_recibo_abono: true,
+          numero_recibo_completar: true,
+          cliente: true,
+          divisas_entregadas_total: true,
+          divisas_entregadas_billetes: true,
+          divisas_entregadas_monedas: true,
+          divisas_recibidas_total: true,
+          divisas_recibidas_billetes: true,
+          divisas_recibidas_monedas: true,
+          saldo_pendiente: true,
+          abono_inicial_monto: true,
+          abono_inicial_fecha: true,
+          fecha_completado: true,
           monedaOrigen: {
             select: { id: true, nombre: true, codigo: true, simbolo: true },
           },
@@ -1134,7 +1268,31 @@ router.get(
 
       const exchanges = await prisma.cambioDivisa.findMany({
         where,
-        include: {
+        select: {
+          id: true,
+          fecha: true,
+          tipo_operacion: true,
+          estado: true,
+          monto_origen: true,
+          monto_destino: true,
+          tasa_cambio_billetes: true,
+          tasa_cambio_monedas: true,
+          observacion: true,
+          numero_recibo: true,
+          numero_recibo_abono: true,
+          numero_recibo_completar: true,
+          cliente: true,
+          divisas_entregadas_total: true,
+          divisas_entregadas_billetes: true,
+          divisas_entregadas_monedas: true,
+          divisas_recibidas_total: true,
+          divisas_recibidas_billetes: true,
+          divisas_recibidas_monedas: true,
+          saldo_pendiente: true,
+          abono_inicial_monto: true,
+          abono_inicial_fecha: true,
+          fecha_completado: true,
+          observacion_parcial: true,
           monedaOrigen: {
             select: { id: true, nombre: true, codigo: true, simbolo: true },
           },
@@ -1177,13 +1335,20 @@ router.patch(
 
       const exchange = await prisma.cambioDivisa.findUnique({
         where: { id },
-        include: { monedaDestino: { select: { codigo: true, simbolo: true } } },
+        select: {
+          id: true,
+          estado: true,
+          monto_destino: true,
+          saldo_pendiente: true,
+          monedaDestino: { select: { codigo: true, simbolo: true } },
+        },
       });
       if (!exchange) {
         res.status(404).json({ success: false, error: "Cambio no encontrado" });
         return;
       }
-      if (!(exchange.saldo_pendiente && exchange.saldo_pendiente.gt(0))) {
+      const sp = Number(exchange.saldo_pendiente || 0);
+      if (!(sp > 0)) {
         res.status(400).json({
           success: false,
           error: "Este cambio no tiene saldo pendiente",
@@ -1198,7 +1363,30 @@ router.patch(
           fecha_completado: new Date(),
           estado: EstadoTransaccion.COMPLETADO,
         },
-        include: {
+        select: {
+          id: true,
+          fecha: true,
+          tipo_operacion: true,
+          estado: true,
+          monto_origen: true,
+          monto_destino: true,
+          tasa_cambio_billetes: true,
+          tasa_cambio_monedas: true,
+          observacion: true,
+          numero_recibo: true,
+          numero_recibo_abono: true,
+          numero_recibo_completar: true,
+          cliente: true,
+          divisas_entregadas_total: true,
+          divisas_entregadas_billetes: true,
+          divisas_entregadas_monedas: true,
+          divisas_recibidas_total: true,
+          divisas_recibidas_billetes: true,
+          divisas_recibidas_monedas: true,
+          saldo_pendiente: true,
+          abono_inicial_monto: true,
+          abono_inicial_fecha: true,
+          fecha_completado: true,
           monedaOrigen: {
             select: { id: true, nombre: true, codigo: true, simbolo: true },
           },
@@ -1213,9 +1401,7 @@ router.patch(
       res.json({
         success: true,
         exchange: updated,
-        message: `Cambio parcial completado. Saldo de ${
-          exchange.monedaDestino?.simbolo || ""
-        }${exchange.saldo_pendiente}`,
+        message: `Cambio parcial completado.`,
       });
     } catch (error) {
       logger.error("Error completing partial exchange", {
@@ -1239,7 +1425,12 @@ router.patch(
 
       const exchange = await prisma.cambioDivisa.findUnique({
         where: { id },
-        include: { monedaDestino: { select: { codigo: true, simbolo: true } } },
+        select: {
+          id: true,
+          estado: true,
+          monto_destino: true,
+          monedaDestino: { select: { codigo: true, simbolo: true } },
+        },
       });
       if (!exchange) {
         res.status(404).json({ success: false, error: "Cambio no encontrado" });
@@ -1275,7 +1466,31 @@ router.patch(
           observacion_parcial: observacion_parcial || null,
           estado: EstadoTransaccion.PENDIENTE,
         },
-        include: {
+        select: {
+          id: true,
+          fecha: true,
+          tipo_operacion: true,
+          estado: true,
+          monto_origen: true,
+          monto_destino: true,
+          tasa_cambio_billetes: true,
+          tasa_cambio_monedas: true,
+          observacion: true,
+          numero_recibo: true,
+          numero_recibo_abono: true,
+          numero_recibo_completar: true,
+          cliente: true,
+          divisas_entregadas_total: true,
+          divisas_entregadas_billetes: true,
+          divisas_entregadas_monedas: true,
+          divisas_recibidas_total: true,
+          divisas_recibidas_billetes: true,
+          divisas_recibidas_monedas: true,
+          saldo_pendiente: true,
+          abono_inicial_monto: true,
+          abono_inicial_fecha: true,
+          fecha_completado: true,
+          observacion_parcial: true,
           monedaOrigen: {
             select: { id: true, nombre: true, codigo: true, simbolo: true },
           },
@@ -1293,9 +1508,9 @@ router.patch(
       res.json({
         success: true,
         exchange: updated,
-        message: `Abono registrado. Saldo pendiente: ${
-          exchange.monedaDestino?.simbolo || ""
-        }${saldoPendiente.toFixed(2)}`,
+        message: `Abono registrado. Saldo pendiente: ${saldoPendiente.toFixed(
+          2
+        )}`,
       });
     } catch (error) {
       logger.error("Error registering partial payment", {
