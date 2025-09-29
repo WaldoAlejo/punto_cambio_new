@@ -23,15 +23,11 @@ export const SERVIENTREGA_CONFIG = {
   PRODUCTOS: ["PREMIER", "ESTANDAR", "EXPRESS"],
 };
 
-// Función para obtener credenciales (en producción desde env)
+// Función para obtener credenciales (usando credenciales de prueba según documentación)
 export const getCredenciales = () => {
   return {
-    usuingreso:
-      process.env.NEXT_PUBLIC_SERVIENTREGA_USUARIO ||
-      SERVIENTREGA_CONFIG.USUARIO_PRUEBA,
-    contrasenha:
-      process.env.NEXT_PUBLIC_SERVIENTREGA_CONTRASENA ||
-      SERVIENTREGA_CONFIG.CONTRASENA_PRUEBA,
+    usuingreso: "PRUEBA", // Credenciales de prueba según documentación
+    contrasenha: "s12345ABCDe", // Credenciales de prueba según documentación
   };
 };
 

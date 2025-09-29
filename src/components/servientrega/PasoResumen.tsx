@@ -150,23 +150,34 @@ export default function PasoResumen({
         const resultado = Array.isArray(res.data) ? res.data[0] : res.data;
 
         console.log("📥 Respuesta de tarifa (PasoResumen):", res.data);
+        console.log("🔍 Resultado procesado:", resultado);
+
         if (!resultado || resultado.flete === undefined) {
+          console.error("❌ Respuesta inválida de Servientrega:", resultado);
           toast.error("No se pudo calcular la tarifa. Verifica los datos.");
           setTarifa(null);
           return;
         }
-        setTarifa({
+
+        // Procesar todos los campos de la respuesta de Servientrega
+        const tarifaProcesada = {
           ...resultado,
           flete: Number(resultado.flete) || 0,
           valor_empaque: Number(resultado.valor_empaque) || 0,
           valor_declarado: Number(resultado.valor_declarado) || 0,
-          seguro: resultado.seguro
-            ? Number(resultado.seguro)
-            : medidas?.valor_seguro || 0,
-          peso_vol: resultado.peso_vol
-            ? Number(resultado.peso_vol)
-            : calcularPesoVolumetrico(),
-        });
+          seguro: Number(resultado.prima) || Number(resultado.seguro) || 0,
+          prima: Number(resultado.prima) || 0,
+          peso_vol:
+            Number(resultado.peso_vol) ||
+            Number(resultado.volumen) ||
+            calcularPesoVolumetrico(),
+          total_transacion: Number(resultado.total_transacion) || 0,
+          gtotal: Number(resultado.gtotal) || 0,
+          tiempo: resultado.tiempo || "1-2 días hábiles",
+        };
+
+        console.log("💰 Tarifa procesada:", tarifaProcesada);
+        setTarifa(tarifaProcesada);
       } catch (err) {
         console.error("Error al obtener tarifa:", err);
         toast.error("Error al calcular la tarifa. Intenta nuevamente.");
@@ -180,12 +191,25 @@ export default function PasoResumen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
 
-  // Total calculado
+  // Total calculado - incluye flete, empaque y seguro
   const calcularTotal = (): string => {
     if (!tarifa) return "0.00";
+
+    // Si la respuesta de Servientrega incluye el total calculado, usarlo
+    if (tarifa.total_transacion && Number(tarifa.total_transacion) > 0) {
+      return Number(tarifa.total_transacion).toFixed(2);
+    }
+
+    if (tarifa.gtotal && Number(tarifa.gtotal) > 0) {
+      return Number(tarifa.gtotal).toFixed(2);
+    }
+
+    // Fallback: calcular manualmente
     const flete = Number(tarifa.flete) || 0;
     const empaque = Number(tarifa.valor_empaque) || 0;
-    return (flete + empaque).toFixed(2);
+    const seguro = Number(tarifa.seguro) || Number(tarifa.prima) || 0;
+
+    return (flete + empaque + seguro).toFixed(2);
   };
 
   // Valida saldo antes de permitir confirmar
@@ -292,31 +316,43 @@ export default function PasoResumen({
         </Seccion>
 
         {tarifa && (
-          <Seccion titulo="💰 Tarifa estimada">
+          <Seccion titulo="💰 Costos">
             <Campo
               label="Flete"
-              value={`$${Number(tarifa.flete).toFixed(2)}`}
+              value={`$${Number(tarifa.flete || 0).toFixed(2)}`}
             />
             <Campo
-              label="Valor Empaque"
-              value={`$${Number(tarifa.valor_empaque).toFixed(2)}`}
+              label="Empaque"
+              value={`$${Number(tarifa.valor_empaque || 0).toFixed(2)}`}
             />
             <Campo
-              label="Valor Declarado"
-              value={`$${Number(tarifa.valor_declarado).toFixed(2)}`}
+              label="Seguro"
+              value={`$${Number(tarifa.seguro || tarifa.prima || 0).toFixed(
+                2
+              )}`}
             />
-            <Campo
-              label="Seguro calculado"
-              value={`$${tarifa.seguro ?? medidas?.valor_seguro ?? 0}`}
-            />
+            {tarifa.total_transacion && (
+              <Campo
+                label="Total"
+                value={`$${Number(tarifa.total_transacion).toFixed(2)}`}
+                highlight
+              />
+            )}
+            {!tarifa.total_transacion && tarifa.gtotal && (
+              <Campo
+                label="Total"
+                value={`$${Number(tarifa.gtotal).toFixed(2)}`}
+                highlight
+              />
+            )}
+            {!tarifa.total_transacion && !tarifa.gtotal && (
+              <Campo label="Total" value={`$${calcularTotal()}`} highlight />
+            )}
             <Campo
               label="Tiempo estimado"
-              value={tarifa.tiempo ? `${tarifa.tiempo} día(s)` : "N/A"}
-            />
-            <Campo
-              label="Total estimado a pagar"
-              value={`$${calcularTotal()}`}
-              highlight
+              value={
+                tarifa.tiempo ? `${tarifa.tiempo} día(s)` : "1-2 días hábiles"
+              }
             />
           </Seccion>
         )}

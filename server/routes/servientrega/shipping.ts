@@ -15,11 +15,11 @@ interface AnularGuiaResponse {
   };
 }
 
-// Función para obtener las credenciales SIEMPRE correctas
-function getCredentials(): ServientregaCredentials {
+// Función para extraer credenciales del payload (usa las del frontend)
+function getCredentialsFromPayload(payload: any): ServientregaCredentials {
   return {
-    usuingreso: "INTPUNTOC",
-    contrasenha: "73Yes7321t",
+    usuingreso: payload.usuingreso || "PRUEBA",
+    contrasenha: payload.contrasenha || "s12345ABCDe",
   };
 }
 
@@ -45,14 +45,23 @@ router.post("/tarifa", async (req, res) => {
     }
 
     // Sanitizar y preparar payload
-    const sanitizedData =
-      ServientregaValidationService.sanitizeTarifaRequest(req.body);
+    const sanitizedData = ServientregaValidationService.sanitizeTarifaRequest(
+      req.body
+    );
 
     console.log("🔍 Datos sanitizados:", sanitizedData);
 
-    // Crear servicio API con credenciales correctas y URL oficial
-    const apiService = new ServientregaAPIService(getCredentials());
-    apiService.apiUrl = "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php"; // fuerza la URL oficial
+    // Extraer credenciales del payload del frontend
+    const credentials = getCredentialsFromPayload(req.body);
+    console.log("🔑 Credenciales extraídas:", {
+      usuingreso: credentials.usuingreso,
+      contrasenha: "***",
+    });
+
+    // Crear servicio API con credenciales del frontend y URL oficial
+    const apiService = new ServientregaAPIService(credentials);
+    apiService.apiUrl =
+      "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php"; // fuerza la URL oficial
 
     const result = await apiService.calcularTarifa(sanitizedData);
 
@@ -97,7 +106,8 @@ interface AnularGuiaResponse {
 router.post("/generar-guia", async (req, res) => {
   try {
     const dbService = new ServientregaDBService();
-    const apiService = new ServientregaAPIService(getCredentials());
+    const credentials = getCredentialsFromPayload(req.body);
+    const apiService = new ServientregaAPIService(credentials);
 
     const response = await apiService.generarGuia(req.body);
 
@@ -199,7 +209,8 @@ router.post("/anular-guia", async (req, res) => {
       return res.status(400).json({ error: "El número de guía es requerido" });
     }
 
-    const apiService = new ServientregaAPIService(getCredentials());
+    const credentials = getCredentialsFromPayload(req.body);
+    const apiService = new ServientregaAPIService(credentials);
     const response = (await apiService.anularGuia(guia)) as AnularGuiaResponse;
 
     if (response?.fetch?.proceso === "Guia Actualizada") {

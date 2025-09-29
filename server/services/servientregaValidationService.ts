@@ -88,7 +88,7 @@ export class ServientregaValidationService {
     return errors;
   }
 
-  static sanitizeTarifaRequest(request: TarifaRequest): Record<string, string> {
+  static sanitizeTarifaRequest(request: any): Record<string, string> {
     const peso = Math.max(this.PESO_MINIMO, parseFloat(String(request.peso)));
     const producto = this.PRODUCTOS_VALIDOS.includes(
       request.nombre_producto || ""
@@ -96,7 +96,9 @@ export class ServientregaValidationService {
       ? request.nombre_producto || "MERCANCIA PREMIER"
       : "MERCANCIA PREMIER";
 
-    return {
+    // Construir el payload base con todos los campos requeridos
+    const payload: Record<string, string> = {
+      tipo: request.tipo || "obtener_tarifa_nacional", // Campo requerido por Servientrega
       ciu_ori: String(request.ciu_ori).toUpperCase(),
       provincia_ori: String(request.provincia_ori).toUpperCase(),
       ciu_des: String(request.ciu_des).toUpperCase(),
@@ -109,8 +111,19 @@ export class ServientregaValidationService {
       largo: String(request.largo),
       recoleccion: request.recoleccion || "NO",
       nombre_producto: producto,
-      empaque: request.empaque || "",
+      empaque: request.empaque || "AISLANTE DE HUMEDAD",
+      // Las credenciales se agregan automáticamente en ServientregaAPIService.callAPI()
     };
+
+    // Agregar campos adicionales para envíos internacionales si están presentes
+    if (request.pais_ori) payload.pais_ori = String(request.pais_ori);
+    if (request.pais_des) payload.pais_des = String(request.pais_des);
+    if (request.codigo_postal_ori)
+      payload.codigo_postal_ori = String(request.codigo_postal_ori);
+    if (request.codigo_postal_des)
+      payload.codigo_postal_des = String(request.codigo_postal_des);
+
+    return payload;
   }
 
   static parseServientregaErrors(response: any): string[] {

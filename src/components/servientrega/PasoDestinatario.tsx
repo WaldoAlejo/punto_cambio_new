@@ -48,6 +48,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [paises, setPaises] = useState<Pais[]>([]);
   const [ciudades, setCiudades] = useState<Ciudad[]>([]);
   const [agencias, setAgencias] = useState<Agencia[]>([]);
+  // OPCIÓN COMENTADA: Retiro en oficina Servientrega - siempre false
   const [mostrarAgencias, setMostrarAgencias] = useState(false);
   const [agenciaSeleccionada, setAgenciaSeleccionada] = useState<string>("");
   const [ciudadEstablecidaPorAgencia, setCiudadEstablecidaPorAgencia] =
@@ -587,6 +588,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           )}
         </div>
         {/* --- RETIRO EN OFICINA --- */}
+        {/* OPCIÓN COMENTADA: Retiro en oficina Servientrega */}
+        {/*
         <div className="p-4 border rounded-md bg-gray-50">
           <h4 className="font-semibold mb-2">🏢 Entrega</h4>
           <div className="flex items-center gap-2">
@@ -617,6 +620,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             </div>
           )}
         </div>
+        */}
         {/* --- DATOS PERSONALES --- */}
         <div className="p-4 border rounded-md bg-white">
           <h4 className="font-semibold mb-4">👤 Datos Personales</h4>
@@ -719,7 +723,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
               />
             </div>
           </div>
-          {!mostrarAgencias && (
+          {/* SIEMPRE MOSTRAR DIRECCIÓN MANUAL (mostrarAgencias siempre es false) */}
+          {true && (
             <div className="mt-6">
               <h4 className="font-semibold mb-4">🏠 Dirección</h4>
               <div className="space-y-4">
