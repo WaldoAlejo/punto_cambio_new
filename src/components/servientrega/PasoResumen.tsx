@@ -304,16 +304,36 @@ export default function PasoResumen({
       toast.error("Aún no se ha calculado la tarifa.");
       return;
     }
+
+    // Calcular el monto total de la transacción
+    const montoTotal = tarifa.total_transacion || tarifa.gtotal || 0;
+
     try {
       const { data } = await axiosInstance.get(
-        `/servientrega/saldo/validar/${punto_atencion_id}`
+        `/servientrega/saldo/validar/${punto_atencion_id}?monto=${montoTotal}`
       );
+
+      console.log("🔍 Validación de saldo:", data);
+
       if (data?.estado === "OK") {
         onConfirm();
       } else {
-        toast.error(
-          data?.mensaje || "Saldo insuficiente para generar esta guía."
-        );
+        // Mostrar mensaje específico según el estado
+        let mensaje =
+          data?.mensaje || "Saldo insuficiente para generar esta guía.";
+
+        if (data?.estado === "SIN_SALDO") {
+          mensaje =
+            "No hay saldo asignado para este punto de atención. Contacte al administrador.";
+        } else if (data?.estado === "SALDO_AGOTADO") {
+          mensaje = "El saldo disponible se ha agotado. Solicite una recarga.";
+        } else if (data?.estado === "SALDO_INSUFICIENTE") {
+          mensaje = `Saldo insuficiente. Disponible: $${data.disponible?.toFixed(
+            2
+          )}, Requerido: $${montoTotal.toFixed(2)}`;
+        }
+
+        toast.error(mensaje);
       }
     } catch (err) {
       console.error("Error al validar saldo:", err);

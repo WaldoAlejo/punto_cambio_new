@@ -5,6 +5,7 @@ import { usersRouter } from "./users.js";
 import { balancesRouter } from "./balances.js";
 import { informesRouter } from "./informes.js";
 import { anulacionesRouter } from "./anulaciones.js";
+import receiptsRouter from "./receipts.js";
 
 const router = express.Router();
 
@@ -15,5 +16,6 @@ router.use("/", usersRouter);
 router.use("/", balancesRouter);
 router.use("/", informesRouter);
 router.use("/", anulacionesRouter);
+router.use("/recibos", receiptsRouter);
 
 export default router;

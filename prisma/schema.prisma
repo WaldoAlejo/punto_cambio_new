@@ -777,6 +777,7 @@ enum TipoRecibo {
   MOVIMIENTO
   DEPOSITO
   RETIRO
+  SERVIENTREGA
 }
 
 enum EstadoJornada {

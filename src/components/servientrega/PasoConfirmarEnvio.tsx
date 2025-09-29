@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { FormDataGuia } from "@/types/servientrega";
+import { ReceiptService } from "@/services/receiptService";
 
 interface PasoConfirmarEnvioProps {
   formData: FormDataGuia;
@@ -36,26 +37,47 @@ export default function PasoConfirmarEnvio({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [saldoDisponible, setSaldoDisponible] = useState<number | null>(null);
   const [saldoEstado, setSaldoEstado] = useState<string | null>(null);
+  const [reciboGenerado, setReciboGenerado] = useState<boolean>(false);
 
   // ==========================
   // 🔍 Validar saldo disponible
   // ==========================
   const validarSaldo = async () => {
     try {
+      // Calcular el monto total de la transacción desde la tarifa
+      const montoTotal = tarifa?.total_transacion || tarifa?.gtotal || 0;
+
       const { data } = await axiosInstance.get(
-        `/servientrega/saldo/validar/${formData?.punto_atencion_id || ""}`
+        `/servientrega/saldo/validar/${
+          formData?.punto_atencion_id || ""
+        }?monto=${montoTotal}`
       );
+
       setSaldoDisponible(Number(data?.disponible) || 0);
       setSaldoEstado(data?.estado);
 
       if (data?.estado !== "OK") {
-        toast.error(
-          data?.mensaje || "Saldo insuficiente para generar la guía."
-        );
+        // Mostrar mensaje específico según el estado
+        let mensaje =
+          data?.mensaje || "Saldo insuficiente para generar la guía.";
+
+        if (data?.estado === "SIN_SALDO") {
+          mensaje =
+            "No hay saldo asignado para este punto de atención. Contacte al administrador.";
+        } else if (data?.estado === "SALDO_AGOTADO") {
+          mensaje = "El saldo disponible se ha agotado. Solicite una recarga.";
+        } else if (data?.estado === "SALDO_INSUFICIENTE") {
+          mensaje = `Saldo insuficiente. Disponible: $${data.disponible?.toFixed(
+            2
+          )}, Requerido: $${montoTotal.toFixed(2)}`;
+        }
+
+        toast.error(mensaje);
         return false;
       }
       return true;
-    } catch {
+    } catch (error) {
+      console.error("Error al validar saldo:", error);
       toast.error("No se pudo validar el saldo.");
       setSaldoEstado("ERROR");
       return false;
@@ -216,6 +238,94 @@ export default function PasoConfirmarEnvio({
     const isBase64 = !/^https?:\/\//i.test(base64);
     const url = isBase64 ? `data:application/pdf;base64,${base64}` : base64; // si vino url directa
     window.open(url, "_blank");
+  };
+
+  // ==========================
+  // 🧾 Generar y guardar recibo
+  // ==========================
+  const generarRecibo = async () => {
+    if (!guia || !formData.resumen_costos) {
+      toast.error("No hay datos suficientes para generar el recibo");
+      return;
+    }
+
+    try {
+      // Generar el recibo usando el servicio
+      const reciboData = ReceiptService.generateServientregaReceipt(
+        {
+          numero_guia: guia,
+          nombre_producto: formData.nombre_producto,
+          remitente: formData.remitente,
+          destinatario: formData.destinatario,
+          medidas: formData.medidas,
+          observaciones: formData.observaciones,
+        },
+        formData.resumen_costos,
+        formData.punto_atencion_nombre || "Punto de Atención",
+        "Usuario Actual" // TODO: Obtener del contexto de usuario
+      );
+
+      // Guardar en la base de datos
+      await axiosInstance.post("/servientrega/recibos", {
+        numero_recibo: reciboData.numeroRecibo,
+        referencia_id: guia,
+        punto_atencion_id: formData.punto_atencion_id,
+        datos_operacion: {
+          guia: {
+            numero_guia: guia,
+            nombre_producto: formData.nombre_producto,
+            remitente: formData.remitente,
+            destinatario: formData.destinatario,
+            medidas: formData.medidas,
+            observaciones: formData.observaciones,
+          },
+          tarifa: formData.resumen_costos,
+          fecha_generacion: new Date().toISOString(),
+        },
+      });
+
+      // Mostrar el recibo
+      ReceiptService.showReceiptInCurrentWindow(reciboData);
+      setReciboGenerado(true);
+      toast.success("Recibo generado exitosamente");
+    } catch (error) {
+      console.error("Error al generar recibo:", error);
+      toast.error("Error al generar el recibo");
+    }
+  };
+
+  // ==========================
+  // 🧾 Imprimir recibo
+  // ==========================
+  const imprimirRecibo = async () => {
+    if (!guia || !formData.resumen_costos) {
+      toast.error("No hay datos suficientes para imprimir el recibo");
+      return;
+    }
+
+    try {
+      // Generar el recibo para impresión
+      const reciboData = ReceiptService.generateServientregaReceipt(
+        {
+          numero_guia: guia,
+          nombre_producto: formData.nombre_producto,
+          remitente: formData.remitente,
+          destinatario: formData.destinatario,
+          medidas: formData.medidas,
+          observaciones: formData.observaciones,
+        },
+        formData.resumen_costos,
+        formData.punto_atencion_nombre || "Punto de Atención",
+        "Usuario Actual" // TODO: Obtener del contexto de usuario
+      );
+
+      // Imprimir directamente
+      ReceiptService.printReceipt(reciboData, 2);
+      toast.success("Enviando recibo a impresora...");
+    } catch (error) {
+      console.error("Error al imprimir recibo:", error);
+      toast.error("Error al imprimir el recibo");
+    }
   };
 
   const saldoRestante =
@@ -388,6 +498,27 @@ export default function PasoConfirmarEnvio({
               >
                 Ver PDF de la guía
               </Button>
+
+              {/* Botones de recibos */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  onClick={generarRecibo}
+                  disabled={!guia || !formData.resumen_costos}
+                  className="bg-green-600 text-white hover:bg-green-700"
+                  size="sm"
+                >
+                  {reciboGenerado ? "Ver Recibo" : "Generar Recibo"}
+                </Button>
+                <Button
+                  onClick={imprimirRecibo}
+                  disabled={!guia || !formData.resumen_costos}
+                  className="bg-purple-600 text-white hover:bg-purple-700"
+                  size="sm"
+                >
+                  Imprimir Recibo
+                </Button>
+              </div>
+
               <Button
                 onClick={onReset}
                 className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200"

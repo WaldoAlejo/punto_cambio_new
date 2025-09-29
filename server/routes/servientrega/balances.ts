@@ -22,6 +22,84 @@ router.get("/saldo/historial", async (_, res) => {
   }
 });
 
+router.get("/saldo/validar/:puntoAtencionId", async (req, res) => {
+  try {
+    const { puntoAtencionId } = req.params;
+    const { monto } = req.query;
+
+    console.log(
+      `🔍 Servientrega: Validando saldo para punto ${puntoAtencionId}, monto: ${monto}`
+    );
+
+    if (!puntoAtencionId) {
+      return res.status(400).json({
+        estado: "ERROR",
+        mensaje: "El ID del punto de atención es requerido",
+      });
+    }
+
+    const dbService = new ServientregaDBService();
+    const saldo = await dbService.obtenerSaldo(puntoAtencionId);
+
+    if (!saldo) {
+      console.log(
+        `❌ Servientrega: No se encontró saldo para punto ${puntoAtencionId}`
+      );
+      return res.json({
+        estado: "SIN_SALDO",
+        mensaje: "No hay saldo asignado para este punto de atención",
+        disponible: 0,
+      });
+    }
+
+    const disponible = saldo.monto_total.sub(saldo.monto_usado).toNumber();
+    const montoRequerido = monto ? parseFloat(monto as string) : 0;
+
+    console.log(
+      `💰 Servientrega: Saldo disponible: ${disponible}, Monto requerido: ${montoRequerido}`
+    );
+
+    if (disponible <= 0) {
+      return res.json({
+        estado: "SALDO_AGOTADO",
+        mensaje: "El saldo disponible se ha agotado",
+        disponible: disponible,
+        monto_requerido: montoRequerido,
+      });
+    }
+
+    if (montoRequerido > 0 && disponible < montoRequerido) {
+      return res.json({
+        estado: "SALDO_INSUFICIENTE",
+        mensaje: `Saldo insuficiente. Disponible: $${disponible.toFixed(
+          2
+        )}, Requerido: $${montoRequerido.toFixed(2)}`,
+        disponible: disponible,
+        monto_requerido: montoRequerido,
+      });
+    }
+
+    return res.json({
+      estado: "OK",
+      mensaje: "Saldo suficiente para la operación",
+      disponible: disponible,
+      monto_requerido: montoRequerido,
+      monto_total: saldo.monto_total.toNumber(),
+      monto_usado: saldo.monto_usado.toNumber(),
+    });
+  } catch (error) {
+    console.error(
+      `❌ Servientrega: Error al validar saldo para punto ${req.params.puntoAtencionId}:`,
+      error
+    );
+    res.status(500).json({
+      estado: "ERROR",
+      mensaje: "Error interno al validar saldo",
+      details: error instanceof Error ? error.message : "Error desconocido",
+    });
+  }
+});
+
 router.get("/saldo/:puntoAtencionId", async (req, res) => {
   try {
     const { puntoAtencionId } = req.params;

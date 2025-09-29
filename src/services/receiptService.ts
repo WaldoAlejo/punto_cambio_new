@@ -40,7 +40,47 @@ type TransferDetails = {
   descripcion?: string | null;
 };
 
-export type ReceiptDetails = CurrencyExchangeDetails | TransferDetails;
+type ServientregaDetails = {
+  numeroGuia: string;
+  producto: string;
+  origen: {
+    nombre: string;
+    direccion: string;
+    ciudad: string;
+    telefono: string;
+  };
+  destino: {
+    nombre: string;
+    direccion: string;
+    ciudad: string;
+    telefono: string;
+  };
+  paquete: {
+    peso: number;
+    largo: number;
+    ancho: number;
+    alto: number;
+    valorDeclarado: number;
+  };
+  costos: {
+    flete: number;
+    empaque: number;
+    empaqueIva: number;
+    totalEmpaque: number;
+    prima: number;
+    iva: number;
+    descuento: number;
+    total: number;
+  };
+  tiempoEntrega: string;
+  trayecto: string;
+  observaciones?: string;
+};
+
+export type ReceiptDetails =
+  | CurrencyExchangeDetails
+  | TransferDetails
+  | ServientregaDetails;
 
 export interface ReceiptData {
   numeroRecibo: string;
@@ -61,6 +101,7 @@ export class ReceiptService {
         MOVIMIENTO: "MV",
         DEPOSITO: "DP",
         RETIRO: "RT",
+        SERVIENTREGA: "SG",
       }[tipo] || "RC";
 
     return `${prefix}-${timestamp}`;
@@ -217,6 +258,62 @@ export class ReceiptService {
     };
   }
 
+  static generateServientregaReceipt(
+    guiaData: any,
+    tarifaData: any,
+    puntoNombre: string,
+    usuarioNombre: string,
+    numeroRecibo?: string
+  ): ReceiptData {
+    return {
+      numeroRecibo: numeroRecibo || this.generateReceiptNumber("SERVIENTREGA"),
+      fecha: new Date().toLocaleString(),
+      tipo: "GUÍA SERVIENTREGA",
+      puntoAtencion: puntoNombre,
+      usuario: usuarioNombre,
+      detalles: {
+        numeroGuia: guiaData?.numero_guia || "N/A",
+        producto: guiaData?.nombre_producto || "PAQUETE",
+        origen: {
+          nombre: guiaData?.remitente?.nombre || "",
+          direccion: guiaData?.remitente?.direccion || "",
+          ciudad: guiaData?.remitente?.ciudad || "",
+          telefono: guiaData?.remitente?.telefono || "",
+        },
+        destino: {
+          nombre: guiaData?.destinatario?.nombre || "",
+          direccion: guiaData?.destinatario?.direccion || "",
+          ciudad: guiaData?.destinatario?.ciudad || "",
+          telefono: guiaData?.destinatario?.telefono || "",
+        },
+        paquete: {
+          peso: Number(guiaData?.medidas?.peso || 0),
+          largo: Number(guiaData?.medidas?.largo || 0),
+          ancho: Number(guiaData?.medidas?.ancho || 0),
+          alto: Number(guiaData?.medidas?.alto || 0),
+          valorDeclarado: Number(guiaData?.medidas?.valor_declarado || 0),
+        },
+        costos: {
+          flete: Number(tarifaData?.flete || 0),
+          empaque: Number(tarifaData?.valor_empaque || 0),
+          empaqueIva: Number(tarifaData?.valor_empaque_iva || 0),
+          totalEmpaque: Number(tarifaData?.total_empaque || 0),
+          prima: Number(tarifaData?.prima || 0),
+          iva: Number(tarifaData?.tiva || 0),
+          descuento: Number(tarifaData?.descuento || 0),
+          total: Number(
+            tarifaData?.total_transacion || tarifaData?.gtotal || 0
+          ),
+        },
+        tiempoEntrega: tarifaData?.tiempo
+          ? `${tarifaData.tiempo} día${tarifaData.tiempo === "1" ? "" : "s"}`
+          : "1-2 días",
+        trayecto: tarifaData?.trayecto || "NACIONAL",
+        observaciones: guiaData?.observaciones || null,
+      },
+    };
+  }
+
   static formatReceiptForPrinting(
     receipt: ReceiptData,
     copyType: "cliente" | "operador" = "cliente"
@@ -330,6 +427,53 @@ ${
     : ""
 }
 `;
+    } else if (receipt.tipo === "GUÍA SERVIENTREGA") {
+      const detalles = receipt.detalles as ServientregaDetails;
+      receiptText += `
+GUÍA SERVIENTREGA: ${detalles.numeroGuia}
+PRODUCTO: ${detalles.producto}
+${halfSeparator}
+REMITENTE:
+${detalles.origen.nombre}
+${detalles.origen.direccion}
+${detalles.origen.ciudad}
+Tel: ${detalles.origen.telefono}
+${halfSeparator}
+DESTINATARIO:
+${detalles.destino.nombre}
+${detalles.destino.direccion}
+${detalles.destino.ciudad}
+Tel: ${detalles.destino.telefono}
+${halfSeparator}
+PAQUETE:
+Peso: ${detalles.paquete.peso.toFixed(2)} kg
+Dimensiones: ${detalles.paquete.largo}x${detalles.paquete.ancho}x${
+        detalles.paquete.alto
+      } cm
+Valor declarado: $${detalles.paquete.valorDeclarado.toFixed(2)}
+${halfSeparator}
+COSTOS:
+Flete: $${detalles.costos.flete.toFixed(2)}
+Empaque: $${detalles.costos.empaque.toFixed(2)}
+IVA empaque: $${detalles.costos.empaqueIva.toFixed(2)}
+Prima (seguro): $${detalles.costos.prima.toFixed(2)}
+IVA: $${detalles.costos.iva.toFixed(2)}
+${
+  detalles.costos.descuento > 0
+    ? `Descuento: -$${detalles.costos.descuento.toFixed(2)}`
+    : ""
+}
+${halfSeparator}
+TOTAL PAGADO: $${detalles.costos.total.toFixed(2)}
+${halfSeparator}
+ENTREGA: ${detalles.tiempoEntrega}
+TRAYECTO: ${detalles.trayecto}
+${
+  detalles.observaciones
+    ? `${halfSeparator}\nOBSERVACIONES: ${detalles.observaciones}`
+    : ""
+}
+`;
     }
 
     // Sección de firmas diferenciada por tipo de copia
@@ -345,6 +489,9 @@ ${
         (receipt.detalles as CurrencyExchangeDetails).cliente.apellido
       }
 Doc: ${(receipt.detalles as CurrencyExchangeDetails).cliente.cedula}`
+    : receipt.tipo === "GUÍA SERVIENTREGA"
+    ? `${(receipt.detalles as ServientregaDetails).origen.nombre}
+Tel: ${(receipt.detalles as ServientregaDetails).origen.telefono}`
     : ""
 }
 
