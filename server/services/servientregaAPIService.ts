@@ -44,8 +44,23 @@ export class ServientregaAPIService {
       console.log(`⏱️ Timeout configurado: ${timeoutMs}ms`);
 
       const startTime = Date.now();
-      const response = await axios.post(url, fullPayload, {
-        headers: { "Content-Type": "application/json" },
+
+      // Probar primero con application/x-www-form-urlencoded (formato tradicional de Servientrega)
+      console.log(
+        "🔄 Intentando con Content-Type: application/x-www-form-urlencoded"
+      );
+      const formData = new URLSearchParams();
+      Object.entries(fullPayload).forEach(([key, value]) => {
+        formData.append(key, String(value));
+      });
+
+      console.log("📝 FormData string:", formData.toString());
+
+      const response = await axios.post(url, formData.toString(), {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": "PuntoCambio/1.0",
+        },
         httpsAgent,
         timeout: timeoutMs,
         maxRedirects: 3,
@@ -59,15 +74,47 @@ export class ServientregaAPIService {
         `📋 Headers de respuesta:`,
         JSON.stringify(response.headers, null, 2)
       );
+
+      // Análisis detallado de la respuesta
+      console.log("🔍 Análisis de respuesta:");
+      console.log("  - Tipo de data:", typeof response.data);
+      console.log("  - Es null?", response.data === null);
+      console.log("  - Es undefined?", response.data === undefined);
+      console.log("  - Es string vacío?", response.data === "");
+      console.log("  - Es array?", Array.isArray(response.data));
+      console.log("  - Es objeto?", typeof response.data === "object");
+
+      if (typeof response.data === "string") {
+        console.log("  - Longitud string:", response.data.length);
+        console.log("  - String trimmed:", `"${response.data.trim()}"`);
+      }
+
+      if (Array.isArray(response.data)) {
+        console.log("  - Longitud array:", response.data.length);
+      }
+
       console.log(
         `📋 Respuesta completa:`,
         JSON.stringify(response.data, null, 2)
       );
       console.log(
-        `📏 Tamaño de respuesta:`,
+        `📏 Tamaño de respuesta serializada:`,
         JSON.stringify(response.data).length,
         "caracteres"
       );
+
+      // Verificar si la respuesta está vacía de diferentes maneras
+      if (
+        response.data === "" ||
+        response.data === null ||
+        response.data === undefined
+      ) {
+        console.log("⚠️ RESPUESTA VACÍA DETECTADA");
+      }
+
+      if (Array.isArray(response.data) && response.data.length === 0) {
+        console.log("⚠️ ARRAY VACÍO DETECTADO");
+      }
 
       return response.data;
     } catch (error) {
