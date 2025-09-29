@@ -61,9 +61,10 @@ const ExchangeList = ({
     return isNaN(num) ? "0.00" : num.toFixed(2);
   };
 
-  const formatFecha = (iso?: string | null) => {
-    if (!iso) return "Sin fecha";
-    const d = new Date(iso);
+  // Acepta Date | string | number | null | undefined
+  const formatFecha = (value?: Date | string | number | null) => {
+    if (value == null) return "Sin fecha";
+    const d = value instanceof Date ? value : new Date(value);
     if (isNaN(d.getTime())) return "Sin fecha";
     return d.toLocaleString();
   };
@@ -71,16 +72,19 @@ const ExchangeList = ({
   const getClienteNombre = (ex: CambioDivisa): string => {
     // En /exchanges (GET) viene `cliente` (string). En la creación puede venir `datos_cliente`.
     const nombreFromDatos =
-      ex.datos_cliente &&
-      [ex.datos_cliente.nombre, ex.datos_cliente.apellido]
+      (ex as any).datos_cliente &&
+      [
+        ((ex as any).datos_cliente?.nombre as string) || "",
+        ((ex as any).datos_cliente?.apellido as string) || "",
+      ]
         .filter(Boolean)
         .join(" ");
-    return (ex as any).cliente || nombreFromDatos || "Cliente";
+    return ((ex as any).cliente as string) || nombreFromDatos || "Cliente";
   };
 
   const getTasaTexto = (ex: CambioDivisa): string => {
-    const tb = Number(ex.tasa_cambio_billetes || 0);
-    const tm = Number(ex.tasa_cambio_monedas || 0);
+    const tb = Number((ex as any).tasa_cambio_billetes || 0);
+    const tm = Number((ex as any).tasa_cambio_monedas || 0);
     if (tb > 0 && tm > 0) return `B: ${tb} | M: ${tm}`;
     if (tb > 0) return `Billetes: ${tb}`;
     if (tm > 0) return `Monedas: ${tm}`;
@@ -166,7 +170,7 @@ const ExchangeList = ({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground shrink-0">
-                      {formatFecha(exchange.fecha)}
+                      {formatFecha(exchange.fecha as any)}
                     </span>
                     {canDelete && (
                       <Button
@@ -201,14 +205,15 @@ const ExchangeList = ({
                   <div className="flex justify-between items-center pt-1">
                     <div className="flex items-center gap-3 text-muted-foreground">
                       <span>Tasa: {getTasaTexto(exchange)}</span>
-                      {showPointName && exchange.puntoAtencion?.nombre && (
-                        <span className="inline-flex items-center text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200">
-                          Punto: {exchange.puntoAtencion.nombre}
-                        </span>
-                      )}
-                      {showUserName && exchange.usuario?.nombre && (
+                      {showPointName &&
+                        (exchange as any).puntoAtencion?.nombre && (
+                          <span className="inline-flex items-center text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200">
+                            Punto: {(exchange as any).puntoAtencion.nombre}
+                          </span>
+                        )}
+                      {showUserName && (exchange as any).usuario?.nombre && (
                         <span className="inline-flex items-center text-xs px-2 py-0.5 bg-slate-50 text-slate-700 rounded border border-slate-200">
-                          Operador: {exchange.usuario.nombre}
+                          Operador: {(exchange as any).usuario.nombre}
                         </span>
                       )}
                     </div>

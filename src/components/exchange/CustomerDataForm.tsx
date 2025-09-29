@@ -11,11 +11,11 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import CustomerSearch from "@/components/ui/customer-search";
-import { DatosCliente } from "../../types";
+import type { DatosCliente } from "../../types";
 
 interface CustomerDataFormProps {
   onCustomerData: (data: DatosCliente) => void;
-  initialData?: DatosCliente;
+  initialData?: Partial<DatosCliente>;
 }
 
 const emptyCustomer: DatosCliente = {
@@ -26,67 +26,43 @@ const emptyCustomer: DatosCliente = {
   telefono: "",
 };
 
+const sanitizeCliente = (
+  c: Partial<DatosCliente> | undefined
+): DatosCliente => {
+  const nombre = (c?.nombre ?? "").trim();
+  const apellido = (c?.apellido ?? "").trim();
+  const cedula = (c?.cedula ?? "").trim();
+  const telefono = (c?.telefono ?? "").trim();
+  // documento se iguala a cedula si viene vacío, para cumplir con el backend
+  const documento = ((c?.documento ?? "").trim() || cedula).trim();
+
+  return { nombre, apellido, documento, cedula, telefono };
+};
+
 const CustomerDataForm = ({
   onCustomerData,
   initialData,
 }: CustomerDataFormProps) => {
-  // Siempre iniciamos con todos los campos definidos para evitar undefined/null
   const [customerData, setCustomerData] = useState<DatosCliente>({
     ...emptyCustomer,
-    ...initialData,
-    // Normalizamos por si initialData trae nulls
-    nombre: (initialData?.nombre ?? "").trim(),
-    apellido: (initialData?.apellido ?? "").trim(),
-    cedula: (initialData?.cedula ?? "").trim(),
-    telefono: (initialData?.telefono ?? "") || "",
-    documento:
-      (initialData?.documento ?? "").trim() ||
-      (initialData?.cedula ?? "").trim() ||
-      "",
+    ...sanitizeCliente(initialData),
   });
 
-  const isFormValid = () => {
-    return (
-      customerData.nombre.trim().length > 0 &&
-      customerData.apellido.trim().length > 0 &&
-      customerData.cedula.trim().length > 0
-    );
-  };
+  const isFormValid = () =>
+    customerData.nombre.trim().length > 0 &&
+    customerData.apellido.trim().length > 0 &&
+    customerData.cedula.trim().length > 0;
 
   const handleCustomerSelect = (selected: DatosCliente) => {
-    // Blindaje: mezclamos con empty y normalizamos documento = cedula si viene vacío
-    const normalized: DatosCliente = {
-      ...emptyCustomer,
-      ...selected,
-      nombre: (selected.nombre ?? "").trim(),
-      apellido: (selected.apellido ?? "").trim(),
-      cedula: (selected.cedula ?? "").trim(),
-      telefono: (selected.telefono ?? "") || "",
-      documento:
-        (selected.documento ?? "").trim() ||
-        (selected.cedula ?? "").trim() ||
-        "",
-    };
-    setCustomerData(normalized);
+    setCustomerData(sanitizeCliente(selected));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Normalizamos antes de enviar al backend (evita “faltan datos” por strings vacíos/espacios)
-    const sanitized: DatosCliente = {
-      nombre: customerData.nombre.trim(),
-      apellido: customerData.apellido.trim(),
-      cedula: customerData.cedula.trim(),
-      telefono: (customerData.telefono ?? "").trim(),
-      documento:
-        (customerData.documento ?? "").trim() ||
-        customerData.cedula.trim() ||
-        "",
-    };
-
-    // Validación final en el cliente (coincide con las reglas del backend)
+    const sanitized = sanitizeCliente(customerData);
     if (!sanitized.nombre || !sanitized.apellido || !sanitized.cedula) {
+      // El botón ya se deshabilita si es inválido; aquí simplemente no enviamos.
       return;
     }
 
@@ -171,11 +147,8 @@ const CustomerDataForm = ({
                   setCustomerData((prev) => ({
                     ...prev,
                     cedula: value,
-                    // Alineado con el backend: si documento está vacío, lo igualamos a la cédula
-                    documento:
-                      prev.documento && prev.documento.trim()
-                        ? prev.documento
-                        : value,
+                    // Si documento está vacío, lo igualamos a la cédula (regla backend)
+                    documento: prev.documento?.trim() ? prev.documento : value,
                   }));
                 }}
                 placeholder="Número de cédula"

@@ -94,7 +94,9 @@ const ExchangeFormFields = ({
   const toOptions = currencies.filter((c) => c.id !== fromCurrency);
 
   // Detección de inversión USD según tipo de operación
-  const usdCurrency = currencies.find((c) => c.codigo === "USD");
+  const usdCurrency = currencies.find(
+    (c) => (c?.codigo || "").toUpperCase() === "USD"
+  );
   const isUSDFrom = !!usdCurrency && fromCurrency === usdCurrency.id;
   const isUSDTo = !!usdCurrency && toCurrency === usdCurrency.id;
   const usdInversion =
@@ -143,7 +145,9 @@ const ExchangeFormFields = ({
         <Label className="text-sm font-medium">Tipo de Operación</Label>
         <Select
           value={operationType}
-          onValueChange={(value: "COMPRA" | "VENTA") => setOperationType(value)}
+          onValueChange={(value) =>
+            setOperationType(value as "COMPRA" | "VENTA")
+          }
         >
           <SelectTrigger className="h-10">
             <SelectValue placeholder="Seleccionar tipo" />

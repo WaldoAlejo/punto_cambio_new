@@ -1,9 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import CurrencyDetailForm from "./CurrencyDetailForm";
-import { DetalleDivisasSimple, Moneda, User } from "../../types";
+import { DetalleDivisasSimple, Moneda } from "../../types";
 import { ExchangeFormData } from "./ExchangeForm";
 
 export interface ExchangeDetailsFormProps {
@@ -11,13 +11,15 @@ export interface ExchangeDetailsFormProps {
   toCurrency: Moneda | null;
   fromCurrencyName: string;
   toCurrencyName: string;
-  exchangeData: ExchangeFormData; // Datos del formulario de cambio
+  exchangeData: ExchangeFormData; // Datos del formulario de cambio (origen)
   onBack: () => void;
   onComplete: () => void;
+
+  // Detalle de lo que el OPERADOR entrega al cliente (destino)
   onDivisasRecibidasChange: (data: DetalleDivisasSimple) => void;
   divisasRecibidas: DetalleDivisasSimple;
 
-  // Métodos de entrega
+  // Método de entrega al cliente (DESTINO)
   metodoEntrega: "efectivo" | "transferencia";
   onMetodoEntregaChange: (value: "efectivo" | "transferencia") => void;
   transferenciaNumero: string;
@@ -78,13 +80,42 @@ const ExchangeDetailsForm = ({
     );
   }
 
-  const handleImagenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      onTransferenciaImagenChange(e.target.files[0]);
-    } else {
-      onTransferenciaImagenChange(null);
-    }
+  // Totales y helpers numéricos
+  const toFixed2 = (v: number) => (Number.isFinite(v) ? v.toFixed(2) : "0.00");
+  const parseSafe = (v?: string | number | null) => {
+    if (typeof v === "number") return v;
+    const n = parseFloat(String(v ?? "0"));
+    return Number.isFinite(n) ? n : 0;
   };
+  const fmtRate = (v: string) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n.toFixed(4) : "-";
+  };
+
+  // Total que el operador entrega al cliente (DESTINO)
+  const totalDestino = useMemo(() => {
+    // `divisasRecibidas.total` debería venir consolidado desde CurrencyDetailForm,
+    // pero calculamos a prueba de balas por si viene des-sincronizado.
+    const billetes = parseSafe((divisasRecibidas as any)?.billetes);
+    const monedas = parseSafe((divisasRecibidas as any)?.monedas);
+    const total = parseSafe((divisasRecibidas as any)?.total);
+    const recompute = billetes + monedas;
+    // Si total no cuadra, preferimos recomputar
+    return Number.isFinite(total) && Math.abs(total - recompute) < 0.005
+      ? total
+      : recompute;
+  }, [divisasRecibidas]);
+
+  // Total que el cliente entrega al operador (ORIGEN)
+  const totalOrigen = useMemo(() => {
+    const billetes = parseSafe(exchangeData?.amountBilletes);
+    const monedas = parseSafe(exchangeData?.amountMonedas);
+    const total = parseSafe(exchangeData?.totalAmountEntregado);
+    const recompute = billetes + monedas;
+    return Number.isFinite(total) && Math.abs(total - recompute) < 0.005
+      ? total
+      : recompute;
+  }, [exchangeData]);
 
   // Limpiar campos de transferencia si se cambia a efectivo (evita “faltan datos” por valores residuales)
   useEffect(() => {
@@ -96,14 +127,50 @@ const ExchangeDetailsForm = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [metodoEntrega]);
 
-  // Helper para mostrar tasas con fallback amigable
-  const fmtRate = (v: string) => {
-    const n = parseFloat(v);
-    return Number.isFinite(n) ? n.toFixed(4) : "-";
-  };
-
+  // Cambio parcial activado si han tocado abono/saldo
   const cambioParcialActivado =
     abonoInicialMonto != null || saldoPendiente != null;
+
+  // Autocalcular saldo pendiente = totalDestino - abonoInicialMonto (nunca negativo)
+  useEffect(() => {
+    if (!cambioParcialActivado) return;
+    if (!onSaldoPendienteChange) return;
+
+    const abono = parseSafe(abonoInicialMonto);
+    const pendienteCalc = Math.max(
+      0,
+      Number((totalDestino - abono).toFixed(2))
+    );
+    onSaldoPendienteChange(pendienteCalc);
+  }, [
+    cambioParcialActivado,
+    abonoInicialMonto,
+    totalDestino,
+    onSaldoPendienteChange,
+  ]);
+
+  // Validaciones UI
+  const transferenciaInvalida =
+    metodoEntrega === "transferencia" &&
+    (transferenciaNumero.trim() === "" || transferenciaBanco.trim() === "");
+
+  const abonoInvalido =
+    cambioParcialActivado &&
+    (abonoInicialMonto == null ||
+      !Number.isFinite(Number(abonoInicialMonto)) ||
+      Number(abonoInicialMonto) <= 0 ||
+      Number(abonoInicialMonto) >= Number(totalDestino));
+
+  const botonDisabled =
+    !fromCurrency || !toCurrency || transferenciaInvalida || abonoInvalido;
+
+  const handleImagenChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      onTransferenciaImagenChange(e.target.files[0]);
+    } else {
+      onTransferenciaImagenChange(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -134,6 +201,12 @@ const ExchangeDetailsForm = ({
             🏦 Transferencia bancaria
           </button>
         </div>
+        {metodoEntrega === "transferencia" && (
+          <p className="text-xs text-blue-600 mt-2">
+            Nota: Las transferencias del operador al cliente{" "}
+            <span className="font-semibold">no afectan el stock físico</span>.
+          </p>
+        )}
       </div>
 
       {/* Si entrega es transferencia, pedir datos de transferencia */}
@@ -173,8 +246,8 @@ const ExchangeDetailsForm = ({
         </div>
       )}
 
-      {/* Resumen de divisas que el CLIENTE ENTREGA al operador */}
-      {metodoEntrega === "efectivo" && fromCurrency && (
+      {/* Resumen de divisas que el CLIENTE ENTREGA al operador (ORIGEN) */}
+      {fromCurrency && (
         <div className="border rounded-lg p-4 bg-blue-50">
           <h3 className="font-semibold mb-3">
             💰 Divisas que el Cliente Entrega ({fromCurrencyName})
@@ -183,19 +256,19 @@ const ExchangeDetailsForm = ({
             <div>
               <span className="text-gray-600">💴 Billetes:</span>
               <div className="font-bold text-blue-700">
-                {parseFloat(exchangeData.amountBilletes || "0").toFixed(2)}
+                {toFixed2(parseSafe(exchangeData.amountBilletes))}
               </div>
             </div>
             <div>
               <span className="text-gray-600">🪙 Monedas:</span>
               <div className="font-bold text-blue-700">
-                {parseFloat(exchangeData.amountMonedas || "0").toFixed(2)}
+                {toFixed2(parseSafe(exchangeData.amountMonedas))}
               </div>
             </div>
             <div>
               <span className="text-gray-600">💰 Total:</span>
               <div className="font-bold text-blue-700">
-                {exchangeData.totalAmountEntregado.toFixed(2)}
+                {toFixed2(totalOrigen)}
               </div>
             </div>
           </div>
@@ -206,7 +279,7 @@ const ExchangeDetailsForm = ({
         </div>
       )}
 
-      {/* Divisas que el OPERADOR ENTREGA al cliente */}
+      {/* Divisas que el OPERADOR ENTREGA al cliente (DESTINO) */}
       {toCurrency && (
         <CurrencyDetailForm
           currency={toCurrency}
@@ -214,6 +287,18 @@ const ExchangeDetailsForm = ({
           onDetailData={onDivisasRecibidasChange}
           initialData={divisasRecibidas}
         />
+      )}
+
+      {/* Resumen total destino / helper para parciales */}
+      {toCurrency && (
+        <div className="rounded-lg border p-3 bg-gray-50">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-gray-600">Total a entregar al cliente:</span>
+            <span className="font-semibold">
+              {toCurrency?.simbolo} {toFixed2(totalDestino)}
+            </span>
+          </div>
+        </div>
       )}
 
       {/* Activar cambio parcial */}
@@ -247,8 +332,10 @@ const ExchangeDetailsForm = ({
           </Label>
         </div>
         <p className="text-sm text-blue-600">
-          Active esta opción cuando el cliente haga un abono inicial y quede con
-          saldo pendiente para completar más tarde.
+          Use esta opción cuando el cliente hace un abono inicial y queda un
+          saldo pendiente para completar más tarde. (Regla: el abono debe ser{" "}
+          <span className="font-semibold">&gt; 0</span> y{" "}
+          <span className="font-semibold">&lt; total a entregar</span>).
         </p>
       </div>
 
@@ -264,7 +351,11 @@ const ExchangeDetailsForm = ({
                 <Label>Monto del abono inicial</Label>
                 <Input
                   type="number"
-                  value={abonoInicialMonto ?? ""}
+                  value={
+                    abonoInicialMonto == null || Number.isNaN(abonoInicialMonto)
+                      ? ""
+                      : abonoInicialMonto
+                  }
                   min={0}
                   step="0.01"
                   placeholder="Ingrese abono inicial"
@@ -274,6 +365,12 @@ const ExchangeDetailsForm = ({
                     )
                   }
                 />
+                {abonoInvalido && (
+                  <p className="text-xs text-red-600 mt-1">
+                    El abono debe ser mayor a 0 y menor que el total a entregar
+                    ({toCurrency?.simbolo} {toFixed2(totalDestino)}).
+                  </p>
+                )}
               </div>
             )}
             {onAbonoInicialFechaChange && (
@@ -307,21 +404,28 @@ const ExchangeDetailsForm = ({
                 <Label>Saldo pendiente</Label>
                 <Input
                   type="number"
-                  value={saldoPendiente ?? ""}
+                  value={
+                    saldoPendiente == null || Number.isNaN(saldoPendiente)
+                      ? ""
+                      : saldoPendiente
+                  }
                   min={0}
                   step="0.01"
-                  placeholder="Se calcula automáticamente"
                   readOnly
                   className="bg-gray-100"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Se calcula automáticamente: Monto a entregar - Abono inicial
+                  Se calcula automáticamente: Total a entregar - Abono inicial ={" "}
+                  {toCurrency?.simbolo}{" "}
+                  {toFixed2(
+                    Math.max(0, totalDestino - parseSafe(abonoInicialMonto))
+                  )}
                 </p>
               </div>
             )}
             {onReferenciaCambioPrincipalChange && (
               <div className="md:col-span-2">
-                <Label>Referencia de cambio principal</Label>
+                <Label>Referencia de cambio principal (opcional)</Label>
                 <Input
                   type="text"
                   value={referenciaCambioPrincipal ?? ""}
@@ -330,7 +434,7 @@ const ExchangeDetailsForm = ({
                       e.target.value ? e.target.value : null
                     )
                   }
-                  placeholder="Referencia transacción principal (opcional)"
+                  placeholder="Referencia transacción principal"
                 />
               </div>
             )}
@@ -346,16 +450,7 @@ const ExchangeDetailsForm = ({
         <Button
           onClick={onComplete}
           className="flex-1"
-          disabled={
-            !fromCurrency ||
-            !toCurrency ||
-            (metodoEntrega === "transferencia" &&
-              (transferenciaNumero.trim() === "" ||
-                transferenciaBanco.trim() === "")) ||
-            (abonoInicialMonto !== undefined &&
-              abonoInicialMonto !== null &&
-              abonoInicialMonto < 0)
-          }
+          disabled={botonDisabled}
         >
           Completar Cambio
         </Button>

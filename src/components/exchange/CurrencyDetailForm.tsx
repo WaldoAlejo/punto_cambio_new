@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -25,7 +25,7 @@ const round2 = (n: number) => Math.round((isNaN(n) ? 0 : n) * 100) / 100;
 // Acepta coma o punto y hace clamp a [0, ∞)
 const parseMoney = (value: string) => {
   const num = parseFloat((value || "").replace(",", "."));
-  return num > 0 ? num : 0;
+  return Number.isFinite(num) && num > 0 ? num : 0;
 };
 
 const calcTotal = (billetes: number, monedas: number) =>
@@ -42,34 +42,58 @@ const CurrencyDetailForm = ({
     ...initialData,
   });
 
-  // Sincroniza con initialData si cambia
+  // Simbolo/código memorizado
+  const simbolo = useMemo(
+    () => currency?.simbolo || currency?.codigo || "",
+    [currency?.simbolo, currency?.codigo]
+  );
+
+  // Sincroniza con initialData si cambia (y recalcula total de forma determinista)
   useEffect(() => {
-    const merged = { ...emptyDetail, ...initialData };
-    merged.billetes = round2(merged.billetes || 0);
-    merged.monedas = round2(merged.monedas || 0);
-    merged.total = calcTotal(merged.billetes, merged.monedas);
-    setDetail(merged);
-    onDetailData(merged);
+    const merged: DetalleDivisasSimple = {
+      ...emptyDetail,
+      ...(initialData || {}),
+    };
+    const billetes = round2(merged.billetes || 0);
+    const monedas = round2(merged.monedas || 0);
+    const total = calcTotal(billetes, monedas);
+    const next = { billetes, monedas, total };
+    setDetail(next);
+    onDetailData(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData?.billetes, initialData?.monedas]);
 
+  // Si cambia la moneda y no hay initialData explícita, reinicia a vacío
+  useEffect(() => {
+    if (!initialData) {
+      setDetail(emptyDetail);
+      onDetailData(emptyDetail);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currency?.id]);
+
+  const updateAndEmit = (partial: Partial<DetalleDivisasSimple>) => {
+    const next: DetalleDivisasSimple = {
+      ...detail,
+      ...partial,
+    };
+    next.total = calcTotal(next.billetes, next.monedas);
+    setDetail(next);
+    onDetailData(next);
+  };
+
   const handleBilletesChange = (value: string) => {
     const billetes = round2(parseMoney(value));
-    const total = calcTotal(billetes, detail.monedas);
-    const newDetail = { billetes, monedas: detail.monedas, total };
-    setDetail(newDetail);
-    onDetailData(newDetail);
+    updateAndEmit({ billetes });
   };
 
   const handleMonedasChange = (value: string) => {
     const monedas = round2(parseMoney(value));
-    const total = calcTotal(detail.billetes, monedas);
-    const newDetail = { billetes: detail.billetes, monedas, total };
-    setDetail(newDetail);
-    onDetailData(newDetail);
+    updateAndEmit({ monedas });
   };
 
-  const simbolo = currency?.simbolo || currency?.codigo || "";
+  // Para que el input muestre vacío cuando sea 0 (mejor UX al limpiar)
+  const fmtInput = (n: number) => (n === 0 ? "" : n.toString());
 
   return (
     <Card>
@@ -81,28 +105,30 @@ const CurrencyDetailForm = ({
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label>💴 Billetes</Label>
+              <Label htmlFor="billetes">💴 Billetes</Label>
               <Input
+                id="billetes"
                 type="number"
                 inputMode="decimal"
                 step="0.01"
                 min="0"
-                value={detail.billetes === 0 ? "" : detail.billetes.toString()}
+                value={fmtInput(detail.billetes)}
                 onChange={(e) => handleBilletesChange(e.target.value)}
                 placeholder="0.00"
               />
             </div>
 
             <div className="space-y-2">
-              <Label>🪙 Monedas</Label>
+              <Label htmlFor="monedas">🪙 Monedas</Label>
               <Input
+                id="monedas"
                 type="number"
                 inputMode="decimal"
                 step="0.01"
                 min="0"
-                value={detail.monedas === 0 ? "" : detail.monedas.toString()}
+                value={fmtInput(detail.monedas)}
                 onChange={(e) => handleMonedasChange(e.target.value)}
                 placeholder="0.00"
               />

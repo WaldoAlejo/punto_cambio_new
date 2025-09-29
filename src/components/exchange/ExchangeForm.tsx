@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -42,6 +42,15 @@ export interface ExchangeFormData {
   observation: string;
 }
 
+/** Normaliza una cadena numérica con coma o punto a número JS */
+const toNumber = (v: string | number | undefined | null): number => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (!v) return 0;
+  const s = String(v).replace(/\s+/g, "").replace(",", ".");
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+};
+
 const ExchangeForm = ({
   currencies,
   onBack,
@@ -79,72 +88,6 @@ const ExchangeForm = ({
     initialData?.amountMonedas || ""
   );
 
-  // Cálculos automáticos
-  const totalAmountEntregado =
-    (parseFloat(amountBilletes) || 0) + (parseFloat(amountMonedas) || 0);
-
-  const calculateTotalRecibido = () => {
-    const billetes = parseFloat(amountBilletes) || 0;
-    const monedas = parseFloat(amountMonedas) || 0;
-    const tasaBilletes = parseFloat(rateBilletes) || 0;
-    const tasaMonedas = parseFloat(rateMonedas) || 0;
-
-    // Nueva lógica usando comportamiento por moneda si está disponible
-    if (fromCurrency && toCurrency && currencies.length > 0) {
-      const monedaOrigen = currencies.find((c) => c.id === fromCurrency);
-      const monedaDestino = currencies.find((c) => c.id === toCurrency);
-
-      if (monedaOrigen && monedaDestino) {
-        const comportamientoBilletes =
-          operationType === "COMPRA"
-            ? monedaOrigen.comportamiento_compra
-            : monedaDestino.comportamiento_venta;
-        const comportamientoMonedas =
-          operationType === "COMPRA"
-            ? monedaOrigen.comportamiento_compra
-            : monedaDestino.comportamiento_venta;
-
-        let totalBilletes = 0;
-        let totalMonedas = 0;
-
-        if (billetes > 0 && tasaBilletes > 0) {
-          totalBilletes =
-            comportamientoBilletes === "MULTIPLICA"
-              ? billetes * tasaBilletes
-              : billetes / tasaBilletes;
-        }
-
-        if (monedas > 0 && tasaMonedas > 0) {
-          totalMonedas =
-            comportamientoMonedas === "MULTIPLICA"
-              ? monedas * tasaMonedas
-              : monedas / tasaMonedas;
-        }
-
-        return totalBilletes + totalMonedas;
-      }
-    }
-
-    // Fallback al comportamiento anterior
-    return billetes * tasaBilletes + monedas * tasaMonedas;
-  };
-
-  const totalAmountRecibido = calculateTotalRecibido();
-
-  // Limpia la tasa que no se usa para evitar confusión visual
-  useEffect(() => {
-    const billetesNum = parseFloat(amountBilletes) || 0;
-    const monedasNum = parseFloat(amountMonedas) || 0;
-
-    if (billetesNum === 0 && rateBilletes !== "") {
-      setRateBilletes("");
-    }
-    if (monedasNum === 0 && rateMonedas !== "") {
-      setRateMonedas("");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [amountBilletes, amountMonedas]);
-
   // Validación de monedas cargadas
   if (!currencies || currencies.length < 2) {
     return (
@@ -163,6 +106,84 @@ const ExchangeForm = ({
     const currency = currencies.find((c) => c.id === currencyId);
     return currency ? currency.codigo : "";
   };
+
+  const amountBilletesNum = useMemo(
+    () => toNumber(amountBilletes),
+    [amountBilletes]
+  );
+  const amountMonedasNum = useMemo(
+    () => toNumber(amountMonedas),
+    [amountMonedas]
+  );
+  const rateBilletesNum = useMemo(() => toNumber(rateBilletes), [rateBilletes]);
+  const rateMonedasNum = useMemo(() => toNumber(rateMonedas), [rateMonedas]);
+
+  const totalAmountEntregado = useMemo(
+    () => amountBilletesNum + amountMonedasNum,
+    [amountBilletesNum, amountMonedasNum]
+  );
+
+  const totalAmountRecibido = useMemo(() => {
+    const monedaOrigen = currencies.find((c) => c.id === fromCurrency);
+    const monedaDestino = currencies.find((c) => c.id === toCurrency);
+
+    // Si falta información mínima, caer al fallback simple
+    if (!monedaOrigen || !monedaDestino) {
+      return (
+        amountBilletesNum * rateBilletesNum + amountMonedasNum * rateMonedasNum
+      );
+    }
+
+    // Comportamientos por tipo
+    // Para COMPRA: el cliente entrega divisa extranjera y recibe USD (u otra)
+    // Para VENTA: el cliente entrega USD (u otra) y recibe divisa extranjera
+    const comportamientoBilletes =
+      operationType === "COMPRA"
+        ? monedaOrigen.comportamiento_compra || "MULTIPLICA"
+        : monedaDestino.comportamiento_venta || "MULTIPLICA";
+    const comportamientoMonedas =
+      operationType === "COMPRA"
+        ? monedaOrigen.comportamiento_compra || "MULTIPLICA"
+        : monedaDestino.comportamiento_venta || "MULTIPLICA";
+
+    const conv = (monto: number, tasa: number, comp: string) => {
+      if (!(monto > 0 && tasa > 0)) return 0;
+      return comp === "DIVIDE" ? monto / tasa : monto * tasa;
+    };
+
+    const totalBilletes = conv(
+      amountBilletesNum,
+      rateBilletesNum,
+      comportamientoBilletes
+    );
+    const totalMonedas = conv(
+      amountMonedasNum,
+      rateMonedasNum,
+      comportamientoMonedas
+    );
+
+    return totalBilletes + totalMonedas;
+  }, [
+    currencies,
+    fromCurrency,
+    toCurrency,
+    amountBilletesNum,
+    amountMonedasNum,
+    rateBilletesNum,
+    rateMonedasNum,
+    operationType,
+  ]);
+
+  // Limpia la tasa que no se usa para evitar confusión visual
+  useEffect(() => {
+    if (amountBilletesNum === 0 && rateBilletes !== "") {
+      setRateBilletes("");
+    }
+    if (amountMonedasNum === 0 && rateMonedas !== "") {
+      setRateMonedas("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [amountBilletesNum, amountMonedasNum]);
 
   const handleSubmit = () => {
     if (!fromCurrency || !toCurrency) {
@@ -184,30 +205,19 @@ const ExchangeForm = ({
       return;
     }
 
-    const rateBilletesNum = parseFloat(rateBilletes);
-    const rateMonedasNum = parseFloat(rateMonedas);
-    const amountBilletesNum = parseFloat(amountBilletes) || 0;
-    const amountMonedasNum = parseFloat(amountMonedas) || 0;
-
-    // Validar solo la tasa correspondiente al tipo usado
-    if (
-      amountBilletesNum > 0 &&
-      (isNaN(rateBilletesNum) || rateBilletesNum <= 0)
-    ) {
+    // Validar tasa solo donde haya monto
+    if (amountBilletesNum > 0 && !(rateBilletesNum > 0)) {
       toast.error(
         "La tasa de cambio para billetes debe ser un número positivo"
       );
       return;
     }
-    if (
-      amountMonedasNum > 0 &&
-      (isNaN(rateMonedasNum) || rateMonedasNum <= 0)
-    ) {
+    if (amountMonedasNum > 0 && !(rateMonedasNum > 0)) {
       toast.error("La tasa de cambio para monedas debe ser un número positivo");
       return;
     }
 
-    // Al menos una combinación válida
+    // Al menos una combinación válida (monto + tasa)
     const tieneBilletesValidos = amountBilletesNum > 0 && rateBilletesNum > 0;
     const tieneMonedasValidas = amountMonedasNum > 0 && rateMonedasNum > 0;
     if (!tieneBilletesValidos && !tieneMonedasValidas) {
@@ -217,7 +227,7 @@ const ExchangeForm = ({
       return;
     }
 
-    if (totalAmountEntregado <= 0) {
+    if (!(totalAmountEntregado > 0)) {
       toast.error("El monto total entregado debe ser mayor a cero");
       return;
     }
@@ -241,12 +251,9 @@ const ExchangeForm = ({
       observation,
     };
 
-    // Usar onSubmit si está disponible (para abonos parciales), sino onContinue
-    if (onSubmit) {
-      onSubmit(formData);
-    } else if (onContinue) {
-      onContinue(formData);
-    }
+    // Usar onSubmit si está disponible (p.ej., para flujos de abono), sino onContinue
+    if (onSubmit) onSubmit(formData);
+    else if (onContinue) onContinue(formData);
   };
 
   return (
@@ -283,7 +290,11 @@ const ExchangeForm = ({
         />
 
         <div className="flex gap-2 mt-4">
-          <Button variant="outline" onClick={onBack || onCancel}>
+          <Button
+            variant="outline"
+            onClick={onBack ? onBack : onCancel}
+            type="button"
+          >
             {isPartialPayment ? "Cancelar" : "Atrás"}
           </Button>
           <Button
@@ -295,6 +306,7 @@ const ExchangeForm = ({
               (!amountBilletes && !amountMonedas)
             }
             className="flex-1"
+            type="button"
           >
             {isPartialPayment ? "Continuar con Abono" : "Continuar"}
           </Button>

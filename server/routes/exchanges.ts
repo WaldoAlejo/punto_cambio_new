@@ -1,6 +1,10 @@
 // server/routes/exchanges.ts
 import express from "express";
-import { EstadoTransaccion, TipoOperacion } from "@prisma/client";
+import {
+  EstadoTransaccion,
+  TipoOperacion,
+  TipoViaTransferencia,
+} from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
@@ -156,12 +160,19 @@ const exchangeSchema = z.object({
   divisas_recibidas_monedas: z.number().default(0),
   divisas_recibidas_total: z.number().default(0),
 
-  // Entrega USD
+  // DESTINO: Entrega USD (efectivo/transfer/mixto) – para reporte y bancos
   metodo_entrega: z
     .enum(["efectivo", "transferencia", "mixto"])
     .default("efectivo"),
   usd_entregado_efectivo: z.number().optional().nullable(),
   usd_entregado_transfer: z.number().optional().nullable(),
+
+  // ORIGEN: método de pago del cliente
+  metodo_pago_origen: z
+    .nativeEnum(TipoViaTransferencia)
+    .default(TipoViaTransferencia.EFECTIVO), // EFECTIVO | BANCO | MIXTO
+  usd_recibido_efectivo: z.number().optional().nullable(),
+  usd_recibido_transfer: z.number().optional().nullable(),
 
   observacion: z.string().optional(),
   transferencia_numero: z.string().optional().nullable(),
@@ -227,6 +238,9 @@ router.post(
         metodo_entrega,
         usd_entregado_efectivo,
         usd_entregado_transfer,
+        metodo_pago_origen,
+        usd_recibido_efectivo,
+        usd_recibido_transfer,
         transferencia_numero,
         transferencia_banco,
         transferencia_imagen_url,
@@ -302,7 +316,7 @@ router.post(
         return;
       }
 
-      // Validación mínima de transferencia
+      // Validación mínima de transferencia (solo para la ENTREGA)
       if (metodo_entrega === "transferencia") {
         if (!transferencia_banco || !String(transferencia_banco).trim()) {
           res.status(400).json({
@@ -484,9 +498,38 @@ router.post(
           usd_entregado_efectivo = num(usd_entregado_efectivo);
           usd_entregado_transfer = num(usd_entregado_transfer);
           const tot = divisas_recibidas_total_final;
-          if (usd_entregado_efectivo + usd_entregado_transfer > tot) {
-            usd_entregado_transfer = Math.max(0, tot - usd_entregado_efectivo);
+          if (
+            round2(
+              (usd_entregado_efectivo || 0) + (usd_entregado_transfer || 0)
+            ) !== round2(tot)
+          ) {
+            // fallback prudente
+            usd_entregado_efectivo = round2(tot / 2);
+            usd_entregado_transfer = round2(tot - usd_entregado_efectivo);
           }
+        }
+      }
+
+      // Normalizar ORIGEN (método de pago del cliente) – solo para registrar bancos vs efectivo
+      metodo_pago_origen = metodo_pago_origen || TipoViaTransferencia.EFECTIVO;
+      if (metodo_pago_origen === TipoViaTransferencia.EFECTIVO) {
+        usd_recibido_efectivo = divisas_entregadas_total_final;
+        usd_recibido_transfer = 0;
+      } else if (metodo_pago_origen === TipoViaTransferencia.BANCO) {
+        usd_recibido_efectivo = 0;
+        usd_recibido_transfer = divisas_entregadas_total_final;
+      } else {
+        // MIXTO
+        usd_recibido_efectivo = num(usd_recibido_efectivo);
+        usd_recibido_transfer = num(usd_recibido_transfer);
+        const tot = divisas_entregadas_total_final;
+        if (
+          round2(
+            (usd_recibido_efectivo || 0) + (usd_recibido_transfer || 0)
+          ) !== round2(tot)
+        ) {
+          usd_recibido_efectivo = round2(tot / 2);
+          usd_recibido_transfer = round2(tot - usd_recibido_efectivo);
         }
       }
 
@@ -527,6 +570,7 @@ router.post(
               metodo_entrega !== "efectivo"
                 ? transferencia_imagen_url || null
                 : null,
+            // DESTINO USD
             usd_entregado_efectivo:
               typeof usd_entregado_efectivo === "number"
                 ? round2(usd_entregado_efectivo)
@@ -535,6 +579,17 @@ router.post(
               typeof usd_entregado_transfer === "number"
                 ? round2(usd_entregado_transfer)
                 : null,
+            // ORIGEN (nuevo)
+            metodo_pago_origen,
+            usd_recibido_efectivo:
+              typeof usd_recibido_efectivo === "number"
+                ? round2(usd_recibido_efectivo)
+                : null,
+            usd_recibido_transfer:
+              typeof usd_recibido_transfer === "number"
+                ? round2(usd_recibido_transfer)
+                : null,
+
             abono_inicial_monto:
               typeof abono_inicial_monto === "number"
                 ? round2(abono_inicial_monto)
@@ -588,6 +643,9 @@ router.post(
             transferencia_imagen_url: true,
             usd_entregado_efectivo: true,
             usd_entregado_transfer: true,
+            usd_recibido_efectivo: true,
+            usd_recibido_transfer: true,
+            metodo_pago_origen: true,
             monedaOrigen: {
               select: { id: true, nombre: true, codigo: true, simbolo: true },
             },
@@ -625,7 +683,7 @@ router.post(
         });
 
         // 3) SALDOS (cuadre SOLO EFECTIVO; bancos se registran pero NO se cuadran)
-        // 3.1 Origen (INGRESO efectivo físico)
+        // 3.1 Origen (INGRESO efectivo/bancos según metodo_pago_origen)
         const saldoOrigen = await getSaldo(
           tx,
           punto_atencion_id,
@@ -634,14 +692,23 @@ router.post(
         const origenAnteriorEf = num(saldoOrigen?.cantidad);
         const origenAnteriorBil = num(saldoOrigen?.billetes);
         const origenAnteriorMon = num(saldoOrigen?.monedas_fisicas);
+        const origenAnteriorBk =
+          typeof saldoOrigen?.bancos !== "undefined"
+            ? num(saldoOrigen?.bancos)
+            : 0;
 
-        const ingresoEf = round2(divisas_entregadas_total_final);
-        const ingresoBil = round2(num(divisas_entregadas_billetes));
-        const ingresoMon = round2(num(divisas_entregadas_monedas));
+        const ingresoEf = round2(num(usd_recibido_efectivo));
+        const ingresoBk = round2(num(usd_recibido_transfer));
+        // breakdown físico solo si entra efectivo
+        const ingresoBil =
+          ingresoEf > 0 ? round2(num(divisas_entregadas_billetes)) : 0;
+        const ingresoMon =
+          ingresoEf > 0 ? round2(num(divisas_entregadas_monedas)) : 0;
 
         const origenNuevoEf = round2(origenAnteriorEf + ingresoEf);
         const origenNuevoBil = round2(origenAnteriorBil + ingresoBil);
         const origenNuevoMon = round2(origenAnteriorMon + ingresoMon);
+        const origenNuevoBk = round2(origenAnteriorBk + ingresoBk);
 
         await upsertSaldoEfectivoYBancos(
           tx,
@@ -651,21 +718,40 @@ router.post(
             cantidad: origenNuevoEf,
             billetes: origenNuevoBil,
             monedas_fisicas: origenNuevoMon,
+            ...(typeof saldoOrigen?.bancos !== "undefined"
+              ? { bancos: origenNuevoBk }
+              : {}),
           }
         );
 
-        await logMovimientoSaldo(tx, {
-          punto_atencion_id,
-          moneda_id: moneda_origen_id,
-          tipo_movimiento: "INGRESO",
-          monto: ingresoEf,
-          saldo_anterior: origenAnteriorEf,
-          saldo_nuevo: origenNuevoEf,
-          usuario_id: req.user!.id,
-          referencia_id: cambio.id,
-          tipo_referencia: "CAMBIO_DIVISA",
-          descripcion: `Ingreso por cambio (origen) ${numeroRecibo}`,
-        });
+        if (ingresoEf > 0) {
+          await logMovimientoSaldo(tx, {
+            punto_atencion_id,
+            moneda_id: moneda_origen_id,
+            tipo_movimiento: "INGRESO",
+            monto: ingresoEf,
+            saldo_anterior: origenAnteriorEf,
+            saldo_nuevo: origenNuevoEf,
+            usuario_id: req.user!.id,
+            referencia_id: cambio.id,
+            tipo_referencia: "CAMBIO_DIVISA",
+            descripcion: `Ingreso por cambio (efectivo, origen) ${numeroRecibo}`,
+          });
+        }
+        if (ingresoBk > 0 && typeof saldoOrigen?.bancos !== "undefined") {
+          await logMovimientoSaldo(tx, {
+            punto_atencion_id,
+            moneda_id: moneda_origen_id,
+            tipo_movimiento: "INGRESO",
+            monto: ingresoBk,
+            saldo_anterior: origenAnteriorBk,
+            saldo_nuevo: origenNuevoBk,
+            usuario_id: req.user!.id,
+            referencia_id: cambio.id,
+            tipo_referencia: "CAMBIO_DIVISA",
+            descripcion: `Ingreso por cambio (bancos, origen)`,
+          });
+        }
 
         // 3.2 Destino (EGRESO efectivo y/o bancos)
         const saldoDestino = await getSaldo(
@@ -781,7 +867,7 @@ router.post(
             usuario_id: req.user!.id,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
-            descripcion: `Egreso por cambio (efectivo) ${numeroRecibo}`,
+            descripcion: `Egreso por cambio (efectivo, destino) ${numeroRecibo}`,
           });
         }
         // Movimiento: BANCOS (control, NO entra al cuadre de efectivo)
@@ -796,7 +882,7 @@ router.post(
             usuario_id: req.user!.id,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
-            descripcion: `Egreso por cambio (bancos) ${
+            descripcion: `Egreso por cambio (bancos, destino) ${
               transferencia_banco || ""
             } ${transferencia_numero || ""}`.trim(),
           });
@@ -848,7 +934,6 @@ router.get(
       if (req.query.point_id)
         whereClause.punto_atencion_id = String(req.query.point_id);
 
-      // ✅ Fix TS2345: evitar .includes con tipo estrecho
       const estadoParam = req.query.estado as EstadoTransaccion | undefined;
       if (
         estadoParam === EstadoTransaccion.PENDIENTE ||
@@ -909,6 +994,9 @@ router.get(
           transferencia_imagen_url: true,
           usd_entregado_efectivo: true,
           usd_entregado_transfer: true,
+          usd_recibido_efectivo: true,
+          usd_recibido_transfer: true,
+          metodo_pago_origen: true,
           monedaOrigen: {
             select: { id: true, nombre: true, codigo: true, simbolo: true },
           },
@@ -1140,10 +1228,6 @@ router.patch(
           abono_inicial_monto: true,
           abono_inicial_fecha: true,
           fecha_completado: true,
-          metodo_entrega: true,
-          transferencia_banco: true,
-          transferencia_numero: true,
-          transferencia_imagen_url: true,
           monedaOrigen: {
             select: { id: true, nombre: true, codigo: true, simbolo: true },
           },
@@ -1666,7 +1750,13 @@ router.post(
         return;
       }
 
-      const cambio = await prisma.cambioDivisa.findUnique({ where: { id } });
+      const cambio = await prisma.cambioDivisa.findUnique({
+        where: { id },
+        include: {
+          monedaOrigen: true,
+          monedaDestino: true,
+        },
+      });
       if (!cambio) {
         res.status(404).json({ success: false, error: "Cambio no encontrado" });
         return;
@@ -1684,27 +1774,95 @@ router.post(
         return;
       }
 
+      // Reconstruir egresos/ingresos coherentes con métodos
+      const isDestinoUSD = isUSDByCode(cambio.monedaDestino?.codigo);
+      const totDestino = num(
+        cambio.divisas_recibidas_total || cambio.monto_destino
+      );
+      const egresoEf = isDestinoUSD
+        ? num(cambio.usd_entregado_efectivo)
+        : cambio.metodo_entrega === "efectivo"
+        ? totDestino
+        : 0;
+      const egresoBk = isDestinoUSD
+        ? num(cambio.usd_entregado_transfer)
+        : cambio.metodo_entrega === "transferencia"
+        ? totDestino
+        : 0;
+
+      const totOrigen = num(
+        cambio.divisas_entregadas_total || cambio.monto_origen
+      );
+      const ingresoEf =
+        cambio.metodo_pago_origen === "EFECTIVO"
+          ? totOrigen
+          : cambio.metodo_pago_origen === "MIXTO"
+          ? num(cambio.usd_recibido_efectivo)
+          : 0;
+      const ingresoBk =
+        cambio.metodo_pago_origen === "BANCO"
+          ? totOrigen
+          : cambio.metodo_pago_origen === "MIXTO"
+          ? num(cambio.usd_recibido_transfer)
+          : 0;
+
       const movimientos = [
-        {
-          punto_atencion_id: cambio.punto_atencion_id,
-          moneda_id: cambio.moneda_destino_id,
-          tipo_movimiento: "EGRESO",
-          monto: Number(cambio.monto_destino),
-          usuario_id: req.user.id,
-          referencia_id: cambio.id,
-          tipo_referencia: "CAMBIO_DIVISA",
-          descripcion: `Cambio de divisas - Entrega ${cambio.monto_destino}`,
-        },
-        {
-          punto_atencion_id: cambio.punto_atencion_id,
-          moneda_id: cambio.moneda_origen_id,
-          tipo_movimiento: "INGRESO",
-          monto: Number(cambio.monto_origen),
-          usuario_id: req.user.id,
-          referencia_id: cambio.id,
-          tipo_referencia: "CAMBIO_DIVISA",
-          descripcion: `Cambio de divisas - Recepción ${cambio.monto_origen}`,
-        },
+        ...(egresoEf > 0
+          ? [
+              {
+                punto_atencion_id: cambio.punto_atencion_id,
+                moneda_id: cambio.moneda_destino_id,
+                tipo_movimiento: "EGRESO",
+                monto: egresoEf,
+                usuario_id: req.user.id,
+                referencia_id: cambio.id,
+                tipo_referencia: "CAMBIO_DIVISA",
+                descripcion: `Egreso efectivo (recontabilizar)`,
+              },
+            ]
+          : []),
+        ...(egresoBk > 0
+          ? [
+              {
+                punto_atencion_id: cambio.punto_atencion_id,
+                moneda_id: cambio.moneda_destino_id,
+                tipo_movimiento: "EGRESO",
+                monto: egresoBk,
+                usuario_id: req.user.id,
+                referencia_id: cambio.id,
+                tipo_referencia: "CAMBIO_DIVISA",
+                descripcion: `Egreso bancos (recontabilizar)`,
+              },
+            ]
+          : []),
+        ...(ingresoEf > 0
+          ? [
+              {
+                punto_atencion_id: cambio.punto_atencion_id,
+                moneda_id: cambio.moneda_origen_id,
+                tipo_movimiento: "INGRESO",
+                monto: ingresoEf,
+                usuario_id: req.user.id,
+                referencia_id: cambio.id,
+                tipo_referencia: "CAMBIO_DIVISA",
+                descripcion: `Ingreso efectivo (recontabilizar)`,
+              },
+            ]
+          : []),
+        ...(ingresoBk > 0
+          ? [
+              {
+                punto_atencion_id: cambio.punto_atencion_id,
+                moneda_id: cambio.moneda_origen_id,
+                tipo_movimiento: "INGRESO",
+                monto: ingresoBk,
+                usuario_id: req.user.id,
+                referencia_id: cambio.id,
+                tipo_referencia: "CAMBIO_DIVISA",
+                descripcion: `Ingreso bancos (recontabilizar)`,
+              },
+            ]
+          : []),
       ];
 
       const baseUrl =
@@ -1754,7 +1912,10 @@ router.delete(
     try {
       const { id } = req.params;
 
-      const cambio = await prisma.cambioDivisa.findUnique({ where: { id } });
+      const cambio = await prisma.cambioDivisa.findUnique({
+        where: { id },
+        include: { monedaOrigen: true, monedaDestino: true },
+      });
       if (!cambio) {
         res.status(404).json({ success: false, error: "Cambio no encontrado" });
         return;
@@ -1780,30 +1941,40 @@ router.delete(
       }
 
       await prisma.$transaction(async (tx) => {
-        // Revertir ORIGEN (había INGRESO efectivo)
+        // Revertir ORIGEN (había INGRESO efectivo y/o bancos según metodo_pago_origen)
         const saldoOrigen = await getSaldo(
           tx,
           cambio.punto_atencion_id,
           cambio.moneda_origen_id
         );
         const anteriorEf = num(saldoOrigen?.cantidad);
-        const montoEf = num(
-          cambio.divisas_entregadas_total || cambio.monto_origen
-        );
-        const nuevoEf = Math.max(0, round2(anteriorEf - montoEf));
+        const anteriorBk =
+          typeof saldoOrigen?.bancos !== "undefined"
+            ? num(saldoOrigen?.bancos)
+            : 0;
+
+        const ingresoEf = num(cambio.usd_recibido_efectivo, 0);
+        const ingresoBk = num(cambio.usd_recibido_transfer, 0);
+
+        const nuevoEf = Math.max(0, round2(anteriorEf - ingresoEf));
+        const nuevoBk = Math.max(0, round2(anteriorBk - ingresoBk));
+
+        // Billetes/monedas físicos solo si hubo ingresoEf
         const nuevoBil = Math.max(
           0,
           round2(
-            num(saldoOrigen?.billetes) - num(cambio.divisas_entregadas_billetes)
+            num(saldoOrigen?.billetes) -
+              (ingresoEf > 0 ? num(cambio.divisas_entregadas_billetes) : 0)
           )
         );
         const nuevoMon = Math.max(
           0,
           round2(
             num(saldoOrigen?.monedas_fisicas) -
-              num(cambio.divisas_entregadas_monedas)
+              (ingresoEf > 0 ? num(cambio.divisas_entregadas_monedas) : 0)
           )
         );
+
         await upsertSaldoEfectivoYBancos(
           tx,
           cambio.punto_atencion_id,
@@ -1812,22 +1983,43 @@ router.delete(
             cantidad: nuevoEf,
             billetes: nuevoBil,
             monedas_fisicas: nuevoMon,
+            ...(typeof saldoOrigen?.bancos !== "undefined"
+              ? { bancos: nuevoBk }
+              : {}),
           }
         );
-        await logMovimientoSaldo(tx, {
-          punto_atencion_id: cambio.punto_atencion_id,
-          moneda_id: cambio.moneda_origen_id,
-          tipo_movimiento: "AJUSTE",
-          monto: -montoEf,
-          saldo_anterior: anteriorEf,
-          saldo_nuevo: nuevoEf,
-          usuario_id: req.user!.id,
-          referencia_id: cambio.id,
-          tipo_referencia: "CAMBIO_DIVISA",
-          descripcion: `Reverso eliminación cambio (origen) #${
-            cambio.numero_recibo || ""
-          }`,
-        });
+        if (ingresoEf > 0) {
+          await logMovimientoSaldo(tx, {
+            punto_atencion_id: cambio.punto_atencion_id,
+            moneda_id: cambio.moneda_origen_id,
+            tipo_movimiento: "AJUSTE",
+            monto: -ingresoEf,
+            saldo_anterior: anteriorEf,
+            saldo_nuevo: nuevoEf,
+            usuario_id: req.user!.id,
+            referencia_id: cambio.id,
+            tipo_referencia: "CAMBIO_DIVISA",
+            descripcion: `Reverso eliminación cambio (origen efectivo) #${
+              cambio.numero_recibo || ""
+            }`,
+          });
+        }
+        if (ingresoBk > 0 && typeof saldoOrigen?.bancos !== "undefined") {
+          await logMovimientoSaldo(tx, {
+            punto_atencion_id: cambio.punto_atencion_id,
+            moneda_id: cambio.moneda_origen_id,
+            tipo_movimiento: "AJUSTE",
+            monto: -ingresoBk,
+            saldo_anterior: anteriorBk,
+            saldo_nuevo: nuevoBk,
+            usuario_id: req.user!.id,
+            referencia_id: cambio.id,
+            tipo_referencia: "CAMBIO_DIVISA",
+            descripcion: `Reverso eliminación cambio (origen bancos) #${
+              cambio.numero_recibo || ""
+            }`,
+          });
+        }
 
         // Revertir DESTINO (había EGRESO ef + bancos)
         const saldoDestino = await getSaldo(
@@ -1848,7 +2040,8 @@ router.delete(
         );
 
         // Si hubo egreso en efectivo, regresamos efectivo físico y su breakdown
-        const nuevoEfDest = round2(antEf + (egEf > 0 ? egEf : sumDestTotal));
+        const devolverEf = egEf > 0 ? egEf : sumDestTotal;
+        const nuevoEfDest = round2(antEf + devolverEf);
         const nuevoBkDest = round2(antBk + egBk);
 
         // ⚠️ Solo recuperar billetes/monedas si originalmente hubo efectivo
@@ -1878,20 +2071,23 @@ router.delete(
           }
         );
 
+        // Ajuste por EFECTIVO (si hubo egreso en efectivo originalmente)
         await logMovimientoSaldo(tx, {
           punto_atencion_id: cambio.punto_atencion_id,
           moneda_id: cambio.moneda_destino_id,
           tipo_movimiento: "AJUSTE",
-          monto: egEf > 0 ? egEf : sumDestTotal,
+          monto: devolverEf,
           saldo_anterior: antEf,
           saldo_nuevo: nuevoEfDest,
           usuario_id: req.user!.id,
           referencia_id: cambio.id,
           tipo_referencia: "CAMBIO_DIVISA",
-          descripcion: `Reverso eliminación cambio (destino) #${
+          descripcion: `Reverso eliminación cambio (destino efectivo) #${
             cambio.numero_recibo || ""
           }`,
         });
+
+        // Ajuste por BANCOS (si aplica)
         if (egBk > 0 && typeof saldoDestino?.bancos !== "undefined") {
           await logMovimientoSaldo(tx, {
             punto_atencion_id: cambio.punto_atencion_id,
@@ -1903,7 +2099,7 @@ router.delete(
             usuario_id: req.user!.id,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
-            descripcion: `Reverso eliminación cambio (destino/bancos) #${
+            descripcion: `Reverso eliminación cambio (destino bancos) #${
               cambio.numero_recibo || ""
             }`,
           });

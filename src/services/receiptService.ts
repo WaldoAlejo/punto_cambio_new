@@ -1,3 +1,4 @@
+// src/services/receiptService.ts
 import { CambioDivisa, Transferencia } from "../types";
 
 type CurrencyExchangeDetails = {
@@ -102,6 +103,8 @@ export class ReceiptService {
         DEPOSITO: "DP",
         RETIRO: "RT",
         SERVIENTREGA: "SG",
+        ABONO_PARCIAL: "AP",
+        COMPLETAR_CAMBIO: "CC",
       }[tipo] || "RC";
 
     return `${prefix}-${timestamp}`;
@@ -126,16 +129,16 @@ export class ReceiptService {
     // Para abonos parciales, mostrar el monto del abono
     const montoMostrar =
       isInitialPayment && partialData
-        ? partialData.initialPayment
-        : exchange.monto_destino;
+        ? Number(partialData.initialPayment)
+        : Number(exchange.monto_destino);
 
     const observacionCompleta =
       isInitialPayment && partialData
         ? `ABONO PARCIAL: ${partialData.initialPayment.toLocaleString()} ${
-            exchange.monedaDestino?.codigo
-          }. Pendiente: ${partialData.pendingBalance.toLocaleString()}. Recibido por: ${
-            partialData.receivedBy
-          }. ${
+            exchange.monedaDestino?.codigo ?? ""
+          }. Pendiente: ${partialData.pendingBalance.toLocaleString()} ${
+            exchange.monedaDestino?.codigo ?? ""
+          }. Recibido por: ${partialData.receivedBy}. ${
             partialData.observations ? `Obs: ${partialData.observations}` : ""
           }`
         : `CAMBIO COMPLETADO. ${exchange.observacion || ""}`;
@@ -158,7 +161,7 @@ export class ReceiptService {
         montoOrigen: Number(exchange.monto_origen) || 0,
         monedaOrigen:
           exchange.monedaOrigen?.nombre || exchange.monedaOrigen?.codigo || "",
-        montoDestino: montoMostrar,
+        montoDestino: Number(montoMostrar) || 0,
         monedaDestino:
           exchange.monedaDestino?.nombre ||
           exchange.monedaDestino?.codigo ||
@@ -221,14 +224,14 @@ export class ReceiptService {
           telefono: exchange.datos_cliente?.telefono || "",
         },
         divisasEntregadas: {
-          billetes: exchange.divisas_entregadas_billetes || 0,
-          monedas: exchange.divisas_entregadas_monedas || 0,
-          total: exchange.divisas_entregadas_total || 0,
+          billetes: Number(exchange.divisas_entregadas_billetes) || 0,
+          monedas: Number(exchange.divisas_entregadas_monedas) || 0,
+          total: Number(exchange.divisas_entregadas_total) || 0,
         },
         divisasRecibidas: {
-          billetes: exchange.divisas_recibidas_billetes || 0,
-          monedas: exchange.divisas_recibidas_monedas || 0,
-          total: exchange.divisas_recibidas_total || 0,
+          billetes: Number(exchange.divisas_recibidas_billetes) || 0,
+          monedas: Number(exchange.divisas_recibidas_monedas) || 0,
+          total: Number(exchange.divisas_recibidas_total) || 0,
         },
       },
     };
@@ -248,7 +251,7 @@ export class ReceiptService {
       usuario: usuarioNombre,
       detalles: {
         tipoTransferencia: transfer.tipo_transferencia,
-        monto: transfer.monto,
+        monto: Number(transfer.monto) || 0,
         moneda: transfer.moneda?.nombre || transfer.moneda?.codigo || "",
         origen: transfer.origen?.nombre || "Matriz",
         destino: transfer.destino?.nombre || "",
@@ -318,7 +321,7 @@ export class ReceiptService {
     receipt: ReceiptData,
     copyType: "cliente" | "operador" = "cliente"
   ): string {
-    // Formato optimizado para impresoras térmicas (48 caracteres)
+    // Formato optimizado para impresoras térmicas (48+ caracteres)
     const separator = "================================================";
     const halfSeparator = "------------------------";
     const copyLabel =
@@ -484,7 +487,7 @@ FIRMA DE RESPONSABILIDAD:
 
 Cliente: ____________________
 ${
-  receipt.tipo === "CAMBIO DE DIVISA"
+  receipt.tipo.includes("CAMBIO")
     ? `${(receipt.detalles as CurrencyExchangeDetails).cliente.nombre} ${
         (receipt.detalles as CurrencyExchangeDetails).cliente.apellido
       }
@@ -525,14 +528,13 @@ ${separator}
 `;
     }
 
-    return receiptText;
+    return receiptText.trim();
   }
 
   static printReceipt(receiptData: ReceiptData, copies: number = 2): void {
     // En un entorno real, aquí se enviaría a la impresora térmica
+    // (dejamos logs para debug)
     console.log("Imprimiendo recibo:");
-
-    // Generar las dos copias diferenciadas
     const copyTypes: ("cliente" | "operador")[] = ["cliente", "operador"];
 
     for (let i = 0; i < Math.min(copies, 2); i++) {
@@ -551,59 +553,67 @@ ${separator}
 
           if (printWindow) {
             const copyLabel = copyType === "cliente" ? "Cliente" : "Operador";
-            printWindow.document.write(`
-              <html>
-                <head>
-                  <title>Recibo ${receiptData.numeroRecibo} - Copia ${copyLabel}</title>
-                  <style>
-                    body { 
-                      font-family: 'Courier New', monospace; 
-                      font-size: 11px; 
-                      margin: 5px; 
-                      line-height: 1.1;
-                      background: white;
-                    }
-                    .receipt { 
-                      white-space: pre-line; 
-                      max-width: 350px;
-                      width: 100%;
-                    }
-                    @media print {
-                      body { 
-                        margin: 0; 
-                        padding: 0;
-                        font-size: 9px;
-                      }
-                      .receipt { 
-                        font-size: 9px; 
-                        max-width: 300px;
-                        width: 100%;
-                      }
-                      @page {
-                        margin: 0;
-                        size: 80mm auto;
-                      }
-                    }
-                  </style>
-                </head>
-                <body>
-                  <div class="receipt">${formattedReceipt}</div>
-                  <script>
-                    window.onload = function() {
-                      setTimeout(() => {
-                        window.print(); 
-                        setTimeout(() => {
-                          window.close();
-                        }, 2000);
-                      }, 500);
-                    };
-                  </script>
-                </body>
-              </html>
-            `);
+
+            const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Recibo ${receiptData.numeroRecibo} - Copia ${copyLabel}</title>
+  <style>
+    body { 
+      font-family: "Courier New", monospace; 
+      font-size: 11px; 
+      margin: 5px; 
+      line-height: 1.1;
+      background: white;
+    }
+    .receipt { 
+      white-space: pre-line; 
+      max-width: 350px;
+      width: 100%;
+    }
+    @media print {
+      body { 
+        margin: 0; 
+        padding: 0;
+        font-size: 9px;
+      }
+      .receipt { 
+        font-size: 9px; 
+        max-width: 300px;
+        width: 100%;
+      }
+      @page {
+        margin: 0;
+        size: 80mm auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="receipt">${this.escapeHtml(formattedReceipt).replace(
+    /\n/g,
+    "<br/>"
+  )}</div>
+</body>
+</html>`;
+
+            printWindow.document.open();
+            printWindow.document.write(html);
             printWindow.document.close();
+
+            printWindow.onload = () => {
+              try {
+                printWindow.focus();
+                printWindow.print();
+                setTimeout(() => {
+                  printWindow.close();
+                }, 500);
+              } catch (e) {
+                console.error("Error al imprimir:", e);
+              }
+            };
           } else {
-            // Si el popup fue bloqueado, mostrar alerta
             console.warn(
               `ADVERTENCIA: Popup bloqueado para copia ${copyType}. Verifique la configuración del navegador.`
             );
@@ -629,7 +639,6 @@ ${separator}
     receiptData: ReceiptData,
     onClose?: () => void
   ): void {
-    // Mostrar ambas copias en tabs
     const clienteReceipt = this.formatReceiptForPrinting(
       receiptData,
       "cliente"
@@ -639,7 +648,6 @@ ${separator}
       "operador"
     );
 
-    // Crear un div temporal para mostrar el recibo
     const receiptDiv = document.createElement("div");
     receiptDiv.innerHTML = `
       <div style="
@@ -663,7 +671,7 @@ ${separator}
           overflow-y: auto;
         ">
           <div style="margin-bottom: 20px;">
-            <button id="tabCliente" onclick="showTab('cliente')" style="
+            <button id="tabCliente" style="
               background: #007bff; 
               color: white; 
               border: none; 
@@ -672,7 +680,7 @@ ${separator}
               border-radius: 4px;
               cursor: pointer;
             ">COPIA CLIENTE</button>
-            <button id="tabOperador" onclick="showTab('operador')" style="
+            <button id="tabOperador" style="
               background: #6c757d; 
               color: white; 
               border: none; 
@@ -694,7 +702,7 @@ ${separator}
             border-radius: 4px;
             max-width: 350px;
             line-height: 1.2;
-          ">${clienteReceipt}</div>
+          "></div>
           
           <div id="receiptOperador" style="
             font-family: 'Courier New', monospace; 
@@ -707,10 +715,10 @@ ${separator}
             border-radius: 4px;
             max-width: 350px;
             line-height: 1.2;
-          ">${operadorReceipt}</div>
+          "></div>
           
           <div style="text-align: center;">
-            <button onclick="window.print()" style="
+            <button id="printBtn" style="
               background: #28a745; 
               color: white; 
               border: none; 
@@ -731,40 +739,57 @@ ${separator}
           </div>
         </div>
       </div>
-      
-      <script>
-        function showTab(type) {
-          // Ocultar ambos recibos
-          document.getElementById('receiptCliente').style.display = 'none';
-          document.getElementById('receiptOperador').style.display = 'none';
-          
-          // Resetear botones
-          document.getElementById('tabCliente').style.background = '#6c757d';
-          document.getElementById('tabOperador').style.background = '#6c757d';
-          
-          // Mostrar el seleccionado
-          if (type === 'cliente') {
-            document.getElementById('receiptCliente').style.display = 'block';
-            document.getElementById('tabCliente').style.background = '#007bff';
-          } else {
-            document.getElementById('receiptOperador').style.display = 'block';
-            document.getElementById('tabOperador').style.background = '#007bff';
-          }
-        }
-      </script>
     `;
 
     document.body.appendChild(receiptDiv);
 
-    // Agregar event listener para el botón de cerrar
-    const closeBtn = document.getElementById("closeReceiptBtn");
+    // Colocamos el texto ya formateado (preservando saltos)
+    const clienteEl =
+      receiptDiv.querySelector<HTMLDivElement>("#receiptCliente");
+    const operadorEl =
+      receiptDiv.querySelector<HTMLDivElement>("#receiptOperador");
+    if (clienteEl) clienteEl.textContent = clienteReceipt; // evita inyectar HTML
+    if (operadorEl) operadorEl.textContent = operadorReceipt; // evita inyectar HTML
+
+    const tabCliente =
+      receiptDiv.querySelector<HTMLButtonElement>("#tabCliente");
+    const tabOperador =
+      receiptDiv.querySelector<HTMLButtonElement>("#tabOperador");
+    const printBtn = receiptDiv.querySelector<HTMLButtonElement>("#printBtn");
+    const closeBtn =
+      receiptDiv.querySelector<HTMLButtonElement>("#closeReceiptBtn");
+
+    const showTab = (type: "cliente" | "operador") => {
+      if (!clienteEl || !operadorEl || !tabCliente || !tabOperador) return;
+      const active = type === "cliente" ? clienteEl : operadorEl;
+      const inactive = type === "cliente" ? operadorEl : clienteEl;
+      active.style.display = "block";
+      inactive.style.display = "none";
+      tabCliente.style.background = type === "cliente" ? "#007bff" : "#6c757d";
+      tabOperador.style.background =
+        type === "operador" ? "#007bff" : "#6c757d";
+    };
+
+    if (tabCliente)
+      tabCliente.addEventListener("click", () => showTab("cliente"));
+    if (tabOperador)
+      tabOperador.addEventListener("click", () => showTab("operador"));
+    if (printBtn) printBtn.addEventListener("click", () => window.print());
     if (closeBtn) {
       closeBtn.addEventListener("click", () => {
         receiptDiv.remove();
-        if (onClose) {
-          onClose();
-        }
+        if (onClose) onClose();
       });
     }
+  }
+
+  /** Escapa HTML básico para evitar que caracteres especiales rompan el documento al imprimir */
+  private static escapeHtml(text: string): string {
+    return String(text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 }

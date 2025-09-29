@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,9 +10,17 @@ import CurrencyDetailForm from "./CurrencyDetailForm";
 
 interface DeliveryDetailsFormProps {
   exchange: CambioDivisa;
-  onSubmit: (details: any) => void;
+  onSubmit: (details: DeliveryDetailsPayload) => void;
   onCancel: () => void;
   isCompletion?: boolean;
+}
+
+export interface DeliveryDetailsPayload {
+  metodoEntrega: "efectivo" | "transferencia";
+  transferenciaNumero: string | null;
+  transferenciaBanco: string | null;
+  transferenciaImagen: File | null;
+  divisasRecibidas: DetalleDivisasSimple;
 }
 
 const EPSILON = 0.005; // tolerancia para comparación de decimales
@@ -23,42 +31,56 @@ const DeliveryDetailsForm = ({
   onCancel,
   isCompletion = false,
 }: DeliveryDetailsFormProps) => {
+  // Monto objetivo a entregar: saldo pendiente (si lo hay) o monto destino
+  const montoAEntregar = useMemo(() => {
+    const sp = Number(exchange.saldo_pendiente ?? 0);
+    return sp > 0 ? sp : Number(exchange.monto_destino ?? 0);
+  }, [exchange.saldo_pendiente, exchange.monto_destino]);
+
+  // Método inicial: usa el del exchange si existiera; fallback a efectivo
+  const initialMetodo: "efectivo" | "transferencia" = (
+    exchange.metodo_entrega === "transferencia" ? "transferencia" : "efectivo"
+  ) as "efectivo" | "transferencia";
+
   const [metodoEntrega, setMetodoEntrega] = useState<
     "efectivo" | "transferencia"
-  >("efectivo");
+  >(initialMetodo);
   const [transferenciaNumero, setTransferenciaNumero] = useState("");
   const [transferenciaBanco, setTransferenciaBanco] = useState("");
   const [transferenciaImagen, setTransferenciaImagen] = useState<File | null>(
     null
   );
 
-  const montoAEntregar =
-    (exchange.saldo_pendiente ?? 0) > 0
-      ? Number(exchange.saldo_pendiente)
-      : Number(exchange.monto_destino);
-
-  // Detalles de divisas a entregar
+  // Detalles de divisas a entregar (cuando es efectivo)
   const [divisasRecibidas, setDivisasRecibidas] =
     useState<DetalleDivisasSimple>({
       billetes: 0,
       monedas: 0,
-      total: montoAEntregar,
+      total:
+        initialMetodo === "transferencia" ? montoAEntregar : montoAEntregar,
     });
 
-  // Si cambia el saldo pendiente / monto destino, sincroniza el total por defecto
+  // Si cambia el método de entrega, ajusta el detalle
   useEffect(() => {
-    setDivisasRecibidas((prev) => ({
-      billetes: metodoEntrega === "transferencia" ? 0 : prev.billetes,
-      monedas: metodoEntrega === "transferencia" ? 0 : prev.monedas,
-      total:
-        metodoEntrega === "transferencia"
-          ? montoAEntregar
-          : prev.total || montoAEntregar,
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exchange.saldo_pendiente, exchange.monto_destino]);
+    setDivisasRecibidas((prev) =>
+      metodoEntrega === "transferencia"
+        ? { billetes: 0, monedas: 0, total: montoAEntregar }
+        : {
+            ...prev,
+            total: prev.total || montoAEntregar,
+          }
+    );
 
-  // Si cambia el método de entrega, ajusta el detalle sin perder datos innecesariamente
+    if (metodoEntrega === "efectivo") {
+      // Limpiar campos de transferencia para evitar validaciones residuales
+      setTransferenciaNumero("");
+      setTransferenciaBanco("");
+      setTransferenciaImagen(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metodoEntrega]);
+
+  // Si cambia el saldo pendiente / monto destino, sincroniza el total por defecto
   useEffect(() => {
     setDivisasRecibidas((prev) =>
       metodoEntrega === "transferencia"
@@ -66,7 +88,7 @@ const DeliveryDetailsForm = ({
         : { ...prev, total: prev.total || montoAEntregar }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [metodoEntrega]);
+  }, [montoAEntregar]);
 
   const handleSubmit = () => {
     if (metodoEntrega === "transferencia") {
@@ -86,19 +108,33 @@ const DeliveryDetailsForm = ({
       return;
     }
 
-    const details = {
+    onSubmit({
       metodoEntrega,
       transferenciaNumero:
-        metodoEntrega === "transferencia" ? transferenciaNumero : null,
+        metodoEntrega === "transferencia" ? transferenciaNumero.trim() : null,
       transferenciaBanco:
-        metodoEntrega === "transferencia" ? transferenciaBanco : null,
+        metodoEntrega === "transferencia" ? transferenciaBanco.trim() : null,
       transferenciaImagen:
         metodoEntrega === "transferencia" ? transferenciaImagen : null,
       divisasRecibidas,
-    };
-
-    onSubmit(details);
+    });
   };
+
+  const montoFormateado = useMemo(
+    () =>
+      (isFinite(montoAEntregar) ? montoAEntregar : 0).toLocaleString("es-EC", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    [montoAEntregar]
+  );
+
+  const canSubmit =
+    metodoEntrega === "efectivo"
+      ? Math.abs(divisasRecibidas.total - montoAEntregar) <= EPSILON
+      : transferenciaNumero.trim() !== "" &&
+        transferenciaBanco.trim() !== "" &&
+        Math.abs(divisasRecibidas.total - montoAEntregar) <= EPSILON;
 
   return (
     <div className="space-y-6">
@@ -110,8 +146,7 @@ const DeliveryDetailsForm = ({
               : "Detalles de Entrega"}
           </CardTitle>
           <div className="text-sm text-gray-600">
-            Monto a entregar: {montoAEntregar.toLocaleString()}{" "}
-            {exchange.monedaDestino?.codigo}
+            Monto a entregar: {montoFormateado} {exchange.monedaDestino?.codigo}
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -198,7 +233,11 @@ const DeliveryDetailsForm = ({
             <Button variant="outline" onClick={onCancel} className="flex-1">
               Cancelar
             </Button>
-            <Button onClick={handleSubmit} className="flex-1">
+            <Button
+              onClick={handleSubmit}
+              className="flex-1"
+              disabled={!canSubmit}
+            >
               Continuar
             </Button>
           </div>

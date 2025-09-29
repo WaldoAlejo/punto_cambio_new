@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useMemo } from "react";
 import { User, PuntoAtencion } from "../../types";
 import { useExchangeData } from "../../hooks/useExchangeData";
 import { useExchangeProcess } from "../../hooks/useExchangeProcess";
@@ -6,12 +6,15 @@ import ExchangeSteps, { ExchangeStepsRef } from "./ExchangeSteps";
 import ExchangeList from "./ExchangeList";
 import PendingExchangesList from "./PendingExchangesList";
 import SaldosDivisasEnTiempoReal from "../contabilidad/SaldosDivisasEnTiempoReal";
+import { Button } from "@/components/ui/button";
 
 interface ExchangeManagementProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
   onReturnToDashboard?: () => void;
 }
+
+type RolPermitido = "OPERADOR" | "CONCESION" | "ADMIN" | "SUPER_USUARIO";
 
 const ExchangeManagement = ({
   user,
@@ -37,10 +40,16 @@ const ExchangeManagement = ({
     onReturnToDashboard,
   });
 
-  // Guardas de acceso: Operador / Concesión operan; Admin puede ver listas y eliminar
-  const isAdmin = user?.rol === "ADMIN" || user?.rol === "SUPER_USUARIO";
-  const canOperate = user?.rol === "OPERADOR" || user?.rol === "CONCESION";
+  // Derivados de rol
+  const { isAdmin, canOperate } = useMemo(() => {
+    const rol = (user?.rol || "") as RolPermitido;
+    return {
+      isAdmin: rol === "ADMIN" || rol === "SUPER_USUARIO",
+      canOperate: rol === "OPERADOR" || rol === "CONCESION",
+    };
+  }, [user?.rol]);
 
+  // === Guardas ===
   if (!user) {
     return (
       <div className="p-6 text-center py-12 text-gray-500 text-lg">
@@ -51,20 +60,33 @@ const ExchangeManagement = ({
 
   if (!canOperate && !isAdmin) {
     return (
-      <div className="p-6 text-center py-12 text-gray-500 text-lg">
+      <div className="p-6 text-center py-12 text-gray-700">
         Los cambios de divisas solo pueden ser realizados por usuarios con rol{" "}
         <span className="font-semibold">OPERADOR</span>
-        {` `}
-        {`o `}
+        {" o "}
         <span className="font-semibold">CONCESION</span>.
+        {onReturnToDashboard && (
+          <div className="mt-6">
+            <Button variant="outline" onClick={onReturnToDashboard}>
+              Volver al panel
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
 
   if (!selectedPoint) {
     return (
-      <div className="p-6 text-center py-12 text-gray-500 text-lg">
-        Debe seleccionar un punto de atención
+      <div className="p-6 text-center py-12 text-gray-700">
+        Debe seleccionar un punto de atención.
+        {onReturnToDashboard && (
+          <div className="mt-6">
+            <Button variant="outline" onClick={onReturnToDashboard}>
+              Volver al panel
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
@@ -72,7 +94,7 @@ const ExchangeManagement = ({
   if (isLoadingCurrencies) {
     return (
       <div className="p-6 text-center py-12">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto" />
         <p className="mt-4 text-gray-600">Cargando monedas...</p>
       </div>
     );
@@ -81,7 +103,12 @@ const ExchangeManagement = ({
   if (dataError) {
     return (
       <div className="p-6 text-center py-12 text-red-500 text-lg">
-        Error al cargar datos: {dataError}
+        Error al cargar datos: {String(dataError)}
+        <div className="mt-6">
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Reintentar
+          </Button>
+        </div>
       </div>
     );
   }
@@ -100,21 +127,28 @@ const ExchangeManagement = ({
       <div className="container mx-auto p-6 space-y-8">
         {/* Encabezado */}
         <div className="bg-card rounded-xl shadow-lg p-6 border border-border/50">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-primary mb-2">
                 💱 Cambio de Divisas
               </h1>
               <p className="text-muted-foreground">
                 Gestiona las operaciones donde el cliente entrega una divisa y
-                recibe otra
+                recibe otra.
               </p>
             </div>
             <div className="text-right">
               <p className="text-sm text-muted-foreground">Punto de Atención</p>
-              <p className="text-lg font-semibold text-primary">
+              <p className="text-lg font-semibold text-primary truncate max-w-[260px]">
                 {selectedPoint?.nombre}
               </p>
+              {onReturnToDashboard && (
+                <div className="mt-3">
+                  <Button variant="outline" onClick={onReturnToDashboard}>
+                    Volver al panel
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -123,7 +157,7 @@ const ExchangeManagement = ({
         <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
           {isProcessing ? (
             <div className="text-center py-16 px-6">
-              <div className="animate-spin rounded-full h-20 w-20 border-4 border-primary/20 border-t-primary mx-auto"></div>
+              <div className="animate-spin rounded-full h-20 w-20 border-4 border-primary/20 border-t-primary mx-auto" />
               <p className="mt-6 text-lg text-muted-foreground">
                 Procesando cambio...
               </p>

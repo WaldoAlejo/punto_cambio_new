@@ -100,7 +100,6 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
         abonoInicialMonto > 0
       ) {
         if (!abonoInicialRecibidoPor) {
-          // Mostrar el nombre del usuario para la UI
           setAbonoInicialRecibidoPor(user.nombre || user.username || user.id);
         }
         if (!abonoInicialFecha) {
@@ -323,7 +322,6 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
               handleAbonoInicialRecibidoPorChange
             }
             saldoPendiente={saldoPendiente}
-            onSaldoPendienteChange={undefined}
             referenciaCambioPrincipal={referenciaCambioPrincipal}
             onReferenciaCambioPrincipalChange={
               handleReferenciaCambioPrincipalChange

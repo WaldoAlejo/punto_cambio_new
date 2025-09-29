@@ -14,38 +14,38 @@ import { useConfirmationDialog } from "../../hooks/useConfirmationDialog";
 
 interface PartialExchange {
   id: string;
-  fecha: string;
-  cliente_nombre: string;
-  cliente_apellido: string;
-  cliente_cedula: string;
+  fecha: string; // ISO
+  tipo_operacion: "COMPRA" | "VENTA";
+  estado: "PENDIENTE" | "COMPLETADO" | string;
+
   monto_origen: number;
   monto_destino: number;
-  tasa_cambio: number;
-  abono_inicial_monto: number;
-  abono_inicial_fecha: string;
-  saldo_pendiente: number;
-  monedaOrigen: {
-    id: string;
-    codigo: string;
-    simbolo: string;
-  };
+
+  // Tasas que devuelve el backend
+  tasa_cambio_billetes: number | null;
+  tasa_cambio_monedas: number | null;
+
+  // Campo string "Nombre Apellido"
+  cliente: string | null;
+
+  // Totales y parciales
+  abono_inicial_monto: number | null;
+  abono_inicial_fecha: string | null; // ISO
+  saldo_pendiente: number | null;
+
+  // Relacionadas
+  monedaOrigen: { id: string; nombre: string; codigo: string; simbolo: string };
   monedaDestino: {
     id: string;
+    nombre: string;
     codigo: string;
     simbolo: string;
   };
-  usuario: {
-    id: string;
-    nombre: string;
-    username: string;
-  };
-  puntoAtencion: {
-    id: string;
-    nombre: string;
-  };
+  usuario?: { id: string; nombre: string | null; username: string };
+  puntoAtencion?: { id: string; nombre: string };
   abonoInicialRecibidoPorUsuario?: {
     id: string;
-    nombre: string;
+    nombre: string | null;
     username: string;
   };
 }
@@ -66,68 +66,23 @@ const PartialExchangesList = ({
   const [completingId, setCompletingId] = useState<string | null>(null);
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
 
-  const handleCompletePartial = async (exchange: PartialExchange) => {
-    showConfirmation(
-      "Completar Cambio Parcial",
-      `¿Confirma que desea completar este cambio parcial?
-      
-Cliente: ${exchange.cliente_nombre} ${exchange.cliente_apellido}
-Saldo pendiente: ${
-        exchange.monedaDestino.simbolo
-      }${exchange.saldo_pendiente.toFixed(2)}
+  const getClientName = (e: PartialExchange) =>
+    (e.cliente && e.cliente.trim()) || "Cliente";
 
-Esta acción marcará el cambio como completado y actualizará la contabilidad.`,
-      async () => {
-        try {
-          setCompletingId(exchange.id);
-
-          const response = await fetch(
-            `/api/exchanges/${exchange.id}/complete-partial`,
-            {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
-              },
-              body: JSON.stringify({
-                completado_por_usuario_id: null, // Se usará el usuario actual del token
-              }),
-            }
-          );
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(
-              errorData.error || "Error al completar cambio parcial"
-            );
-          }
-
-          const data = await response.json();
-
-          if (data.success) {
-            toast.success(
-              data.message || "Cambio parcial completado exitosamente"
-            );
-            onCompleted(exchange.id);
-
-            // Disparar evento para actualizar saldos
-            window.dispatchEvent(new CustomEvent("saldosUpdated"));
-          } else {
-            throw new Error(data.error || "Error desconocido");
-          }
-        } catch (error: any) {
-          console.error("Error completing partial exchange:", error);
-          toast.error(error.message || "Error al completar el cambio parcial");
-        } finally {
-          setCompletingId(null);
-        }
-      },
-      "default"
-    );
+  const tasaTexto = (e: PartialExchange) => {
+    const tb = Number(e.tasa_cambio_billetes || 0);
+    const tm = Number(e.tasa_cambio_monedas || 0);
+    if (tb > 0 && tm > 0) return `B: ${tb.toFixed(4)} | M: ${tm.toFixed(4)}`;
+    if (tb > 0) return `Billetes: ${tb.toFixed(4)}`;
+    if (tm > 0) return `Monedas: ${tm.toFixed(4)}`;
+    return "—";
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString("es-EC", {
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return "—";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleString("es-EC", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -136,11 +91,68 @@ Esta acción marcará el cambio como completado y actualizará la contabilidad.`
     });
   };
 
-  const formatCurrency = (amount: number, currency: { simbolo: string }) => {
-    return `${currency.simbolo}${amount.toFixed(2)}`;
+  const formatCurrency = (
+    amount?: number | null,
+    moneda?: { simbolo: string }
+  ) => {
+    const n = typeof amount === "number" ? amount : 0;
+    const sym = moneda?.simbolo ?? "";
+    return `${sym}${n.toFixed(2)}`;
   };
 
-  if (exchanges.length === 0) {
+  const handleCompletePartial = async (exchange: PartialExchange) => {
+    const saldo = Number(exchange.saldo_pendiente || 0);
+    showConfirmation(
+      "Completar Cambio Parcial",
+      `¿Confirma que desea completar este cambio parcial?
+
+Cliente: ${getClientName(exchange)}
+Saldo pendiente: ${formatCurrency(saldo, exchange.monedaDestino)}
+
+Esta acción marcará el cambio como COMPLETADO y actualizará la contabilidad.`,
+      async () => {
+        try {
+          setCompletingId(exchange.id);
+
+          const resp = await fetch(
+            `/api/exchanges/${exchange.id}/complete-partial`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+              },
+              body: JSON.stringify({
+                // el backend toma el usuario del token; no es necesario enviar más campos
+              }),
+            }
+          );
+
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || data?.success === false) {
+            throw new Error(data?.error || "Error al completar cambio parcial");
+          }
+
+          toast.success(
+            data?.message || "Cambio parcial completado exitosamente"
+          );
+          onCompleted(exchange.id);
+          // Actualiza saldos en tiempo real (si tienes un listener)
+          try {
+            window.dispatchEvent(new CustomEvent("saldosUpdated"));
+          } catch {}
+        } catch (err: any) {
+          console.error("Error completing partial exchange:", err);
+          toast.error(err?.message || "Error al completar el cambio parcial");
+        } finally {
+          setCompletingId(null);
+        }
+      },
+      "default"
+    );
+  };
+
+  if (!exchanges || exchanges.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
         <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -167,11 +179,9 @@ Esta acción marcará el cambio como completado y actualizará la contabilidad.`
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-semibold text-lg">
-                    {exchange.cliente_nombre} {exchange.cliente_apellido}
+                    {getClientName(exchange)}
                   </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Cédula: {exchange.cliente_cedula}
-                  </p>
+                  {/* Si necesitas cédula u otros datos, agrega aquí cuando el backend los incluya */}
                 </div>
                 <div className="text-right">
                   <Badge
@@ -179,7 +189,7 @@ Esta acción marcará el cambio como completado y actualizará la contabilidad.`
                     className="bg-yellow-50 text-yellow-700 border-yellow-200"
                   >
                     <Clock className="h-3 w-3 mr-1" />
-                    Pendiente
+                    {exchange.estado || "Pendiente"}
                   </Badge>
                   <p className="text-xs text-muted-foreground mt-1">
                     <Calendar className="h-3 w-3 inline mr-1" />
@@ -206,7 +216,7 @@ Esta acción marcará el cambio como completado y actualizará la contabilidad.`
                     )}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Tasa: {exchange.tasa_cambio.toFixed(4)}
+                    Tasa: {tasaTexto(exchange)}
                   </p>
                 </div>
 
@@ -219,7 +229,7 @@ Esta acción marcará el cambio como completado y actualizará la contabilidad.`
                     )}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {formatDate(exchange.abono_inicial_fecha)}
+                    {formatDate(exchange.abono_inicial_fecha || undefined)}
                   </p>
                 </div>
 
@@ -239,19 +249,20 @@ Esta acción marcará el cambio como completado y actualizará la contabilidad.`
 
               {/* Información adicional */}
               <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                {showPointName && (
+                {showPointName && exchange.puntoAtencion?.nombre && (
                   <div className="flex items-center gap-1">
                     <MapPin className="h-3 w-3" />
                     {exchange.puntoAtencion.nombre}
                   </div>
                 )}
-                {showUserName && (
-                  <div className="flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    Operador:{" "}
-                    {exchange.usuario.nombre || exchange.usuario.username}
-                  </div>
-                )}
+                {showUserName &&
+                  (exchange.usuario?.nombre || exchange.usuario?.username) && (
+                    <div className="flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      Operador:{" "}
+                      {exchange.usuario?.nombre || exchange.usuario?.username}
+                    </div>
+                  )}
                 {exchange.abonoInicialRecibidoPorUsuario && (
                   <div className="flex items-center gap-1">
                     <User className="h-3 w-3" />

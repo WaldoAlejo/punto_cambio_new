@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,8 +13,10 @@ import {
 import { toast } from "@/hooks/use-toast";
 
 interface PartialExchangeFormProps {
-  totalAmount: number; // Monto total de la operación (a entregar al cliente)
-  currency: string; // Código o etiqueta de moneda (p. ej. "USD")
+  /** Monto total de la operación (a entregar al cliente) */
+  totalAmount: number;
+  /** Código o etiqueta de moneda (p. ej. "USD") */
+  currency: string;
   clientName: string;
   onSubmit: (data: {
     initialPayment: number;
@@ -26,12 +28,19 @@ interface PartialExchangeFormProps {
 }
 
 const formatNumber = (n: number) =>
-  isFinite(n)
+  Number.isFinite(n)
     ? n.toLocaleString("es-EC", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })
     : "0,00";
+
+/** Convierte string con coma o punto a número seguro (>=0) */
+const parseMoney = (raw: string) => {
+  const cleaned = (raw || "").replace(/\s+/g, "").replace(",", ".");
+  const n = Number.parseFloat(cleaned);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
 
 const PartialExchangeForm = ({
   totalAmount,
@@ -44,58 +53,68 @@ const PartialExchangeForm = ({
   const [receivedBy, setReceivedBy] = useState<string>("");
   const [observations, setObservations] = useState<string>("");
 
-  // Sanitizar y calcular saldos de forma segura
-  const initialPaymentNumber = useMemo(() => {
-    const n = parseFloat((initialPayment || "").replace(",", "."));
-    return isFinite(n) && n >= 0 ? n : 0;
-  }, [initialPayment]);
+  const initialPaymentNumber = useMemo(
+    () => parseMoney(initialPayment),
+    [initialPayment]
+  );
 
   const pendingBalanceNumber = useMemo(() => {
-    const raw = totalAmount - initialPaymentNumber;
+    const raw = Number(totalAmount) - initialPaymentNumber;
+    if (!Number.isFinite(raw)) return Math.max(0, Number(totalAmount) || 0);
     // Nunca negativo; clamp a [0, totalAmount]
-    if (!isFinite(raw)) return totalAmount;
-    return Math.max(0, Math.min(totalAmount, raw));
+    return Math.max(0, Math.min(Number(totalAmount) || 0, raw));
   }, [totalAmount, initialPaymentNumber]);
 
   const isValidForm = useMemo(() => {
-    // Reglas:
-    // - initialPayment > 0
-    // - initialPayment < totalAmount (debe ser parcial)
-    // - receivedBy no vacío
-    if (!isFinite(initialPaymentNumber) || initialPaymentNumber <= 0)
+    if (!(Number(totalAmount) > 0)) return false;
+    if (!Number.isFinite(initialPaymentNumber) || initialPaymentNumber <= 0)
       return false;
-    if (!(totalAmount > 0) || initialPaymentNumber >= totalAmount) return false;
+    if (initialPaymentNumber >= Number(totalAmount)) return false;
     if (!receivedBy.trim()) return false;
     return true;
   }, [initialPaymentNumber, receivedBy, totalAmount]);
 
+  const showValidationToasts = useCallback(() => {
+    if (!(Number(totalAmount) > 0)) {
+      toast({
+        title: "Error",
+        description:
+          "El monto total debe ser mayor a 0 para registrar cambio parcial.",
+        variant: "destructive",
+      });
+      return true;
+    }
+    if (!Number.isFinite(initialPaymentNumber) || initialPaymentNumber <= 0) {
+      toast({
+        title: "Error",
+        description: "Debe ingresar un monto de abono válido (mayor a 0).",
+        variant: "destructive",
+      });
+      return true;
+    }
+    if (initialPaymentNumber >= Number(totalAmount)) {
+      toast({
+        title: "Error",
+        description: "El abono no puede ser mayor o igual al monto total.",
+        variant: "destructive",
+      });
+      return true;
+    }
+    if (!receivedBy.trim()) {
+      toast({
+        title: "Error",
+        description: "Debe especificar quién recibe el abono.",
+        variant: "destructive",
+      });
+      return true;
+    }
+    return false;
+  }, [initialPaymentNumber, receivedBy, totalAmount]);
+
   const handleSubmit = () => {
     if (!isValidForm) {
-      // Mensajes específicos
-      if (!isFinite(initialPaymentNumber) || initialPaymentNumber <= 0) {
-        toast({
-          title: "Error",
-          description: "Debe ingresar un monto de abono válido (mayor a 0).",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!(totalAmount > 0) || initialPaymentNumber >= totalAmount) {
-        toast({
-          title: "Error",
-          description: "El abono no puede ser mayor o igual al monto total.",
-          variant: "destructive",
-        });
-        return;
-      }
-      if (!receivedBy.trim()) {
-        toast({
-          title: "Error",
-          description: "Debe especificar quién recibe el abono.",
-          variant: "destructive",
-        });
-        return;
-      }
+      showValidationToasts();
+      return;
     }
 
     onSubmit({
@@ -118,9 +137,11 @@ const PartialExchangeForm = ({
       <CardContent className="space-y-4">
         <div className="bg-blue-50 p-4 rounded-lg">
           <div className="font-semibold">
-            Monto Total: {formatNumber(totalAmount)} {currency}
+            Monto Total: {formatNumber(Number(totalAmount) || 0)} {currency}
           </div>
-          <div className="text-sm text-gray-600">Cliente: {clientName}</div>
+          <div className="text-sm text-gray-600">
+            Cliente: {clientName || "—"}
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -130,22 +151,29 @@ const PartialExchangeForm = ({
             inputMode="decimal"
             type="number"
             step="0.01"
-            min="0.01"
-            // máx. visual, pero igual validamos en código
-            max={Math.max(0, totalAmount - 0.01)}
+            min={0.01}
+            // Máximo visual; validamos también en código
+            max={Math.max(0, (Number(totalAmount) || 0) - 0.01)}
             value={initialPayment}
             onChange={(e) => setInitialPayment(e.target.value)}
+            onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()} // evita scroll accidental
+            onKeyDown={(e) => {
+              // Evita scientific notation y signos
+              if (["e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+            }}
             placeholder="0.00"
             className="h-10"
           />
           {initialPayment !== "" && initialPaymentNumber <= 0 && (
             <p className="text-xs text-red-600">El abono debe ser mayor a 0.</p>
           )}
-          {initialPaymentNumber >= totalAmount && (
-            <p className="text-xs text-red-600">
-              El abono no puede ser mayor o igual al monto total.
-            </p>
-          )}
+          {initialPayment !== "" &&
+            Number(totalAmount) > 0 &&
+            initialPaymentNumber >= Number(totalAmount) && (
+              <p className="text-xs text-red-600">
+                El abono no puede ser mayor o igual al monto total.
+              </p>
+            )}
         </div>
 
         <div className="space-y-2">
@@ -178,10 +206,16 @@ const PartialExchangeForm = ({
         </div>
 
         <div className="flex gap-2 pt-4">
-          <Button variant="outline" onClick={onCancel} className="flex-1">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onCancel}
+            className="flex-1"
+          >
             Cancelar
           </Button>
           <Button
+            type="button"
             onClick={handleSubmit}
             className="flex-1"
             disabled={!isValidForm}
