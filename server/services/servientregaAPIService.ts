@@ -62,7 +62,7 @@ async function doPost(
   });
   const ms = Date.now() - start;
 
-  // Logging útil (mantén si lo necesitas; si no, puedes reducirlo)
+  // Logging útil (moderado)
   console.log(
     `🔗 POST ${url} [${mode}] -> HTTP ${
       res.status
@@ -162,7 +162,7 @@ export class ServientregaAPIService {
     throw out;
   }
 
-  // Generación de guía: aquí el proveedor tradicionalmente quiere JSON (y funciona bien).
+  // Generación de guía: el proveedor suele funcionar bien con JSON.
   async generarGuia(
     payload: Record<string, any>,
     timeoutMs = 20000
@@ -181,8 +181,10 @@ export class ServientregaAPIService {
     return res.data;
   }
 
-  // **OJO**: el proveedor para anulación de aliados suele usar:
-  //  { "tipo":"ActualizaEstadoGuia", "guia":"...", "estado":"Anulada" }
+  /**
+   * **Anulación**: en aliados el “tipo” correcto suele ser:
+   *   { "tipo":"ActualizaEstadoGuia", "guia":"...", "estado":"Anulada" }
+   */
   async anularGuia(
     guia: string,
     estado = "Anulada",
@@ -207,7 +209,7 @@ export class ServientregaAPIService {
     return res.data;
   }
 
-  // Métodos de catálogo (dejan JSON que es lo que mejor responde en aliados)
+  // Métodos de catálogo (JSON)
   async obtenerProductos(timeoutMs = 10000) {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_producto", ...this.credentials };
@@ -240,6 +242,71 @@ export class ServientregaAPIService {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_empaqueyembalaje", ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
+    return res.data;
+  }
+
+  // =========================================================
+  // 🔁 Método de compatibilidad para rutas existentes (callAPI)
+  // =========================================================
+  /**
+   * Mantiene compatibilidad con routers que aún invocan `callAPI(payload, timeoutMs?, useRetailUrl?)`.
+   * - Detecta el `tipo` y redirige a los métodos específicos cuando aplica.
+   * - Para requests genéricos, hace POST JSON al MAIN (o RETAIL si useRetailUrl=true).
+   */
+  public async callAPI(
+    payload: Record<string, any>,
+    timeoutMs: number = 15000,
+    useRetailUrl: boolean = false
+  ): Promise<ServientregaAPIResponse> {
+    const tipo = (payload?.tipo || "").toString();
+
+    // Tarifas (usa estrategia robusta)
+    if (tipo === "obtener_tarifa_nacional") {
+      return this.calcularTarifa(payload, timeoutMs);
+    }
+
+    // Generación de guía
+    if (tipo === "GeneracionGuia") {
+      return this.generarGuia(payload, Math.max(timeoutMs, 20000));
+    }
+
+    // Anulación / actualización de estado
+    if (tipo === "ActualizaEstadoGuia" || tipo === "AnulacionGuia") {
+      const guia = payload.guia ?? payload?.Guia ?? payload?.numero_guia;
+      const estado = payload.estado || "Anulada";
+      if (!guia) {
+        throw new Error(
+          "Falta 'guia' en payload para ActualizaEstadoGuia/AnulacionGuia"
+        );
+      }
+      return this.anularGuia(String(guia), String(estado), timeoutMs);
+    }
+
+    // Catálogos (por si llegan por callAPI genérico)
+    if (tipo === "obtener_producto") return this.obtenerProductos(timeoutMs);
+    if (tipo === "obtener_paises") return this.obtenerPaises(timeoutMs);
+    if (tipo === "obtener_ciudades") {
+      const codpais = Number(payload?.codpais ?? payload?.pais ?? 0);
+      if (!codpais) throw new Error("Falta 'codpais' para obtener_ciudades");
+      return this.obtenerCiudades(codpais, timeoutMs);
+    }
+    if (tipo === "obtener_agencias_aliadas")
+      return this.obtenerAgencias(timeoutMs);
+    if (tipo === "obtener_empaqueyembalaje")
+      return this.obtenerEmpaques(timeoutMs);
+
+    // Genérico: POST JSON a MAIN o RETAIL (según useRetailUrl)
+    const url = useRetailUrl ? RETAIL_URL : this.apiUrl || MAIN_URL;
+    const full = { ...payload, ...this.credentials };
+    const res = await doPost(url, full, "json", timeoutMs);
+
+    if (isEmptyUpstream(res.data)) {
+      const e: any = new Error("Respuesta vacía del proveedor");
+      e.code = "UPSTREAM_EMPTY";
+      e.httpStatus = 502;
+      e.endpoint = url;
+      throw e;
+    }
     return res.data;
   }
 }
