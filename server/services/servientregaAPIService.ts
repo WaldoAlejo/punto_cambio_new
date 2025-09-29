@@ -1,12 +1,12 @@
 import axios from "axios";
 import https from "https";
 
-const BASE_URL =
+const MAIN_URL =
   "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
 const RETAIL_URL =
   "https://servientrega-ecuador.appsiscore.com/app/ws/serviretail_cs.php";
 
-// Para evitar problemas de SSL en desarrollo
+// Evita problemas de SSL si el proveedor tiene cadenas intermedias raras
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
 export interface ServientregaCredentials {
@@ -18,209 +18,228 @@ export interface ServientregaAPIResponse {
   [key: string]: any;
 }
 
+type WireMode = "json" | "form";
+
+function isEmptyUpstream(data: any): boolean {
+  if (data === null || data === undefined) return true;
+  if (typeof data === "string" && data.trim() === "") return true;
+  if (Array.isArray(data) && data.length === 0) return true;
+  return false;
+}
+
+async function doPost(
+  url: string,
+  payload: Record<string, any>,
+  mode: WireMode,
+  timeoutMs: number
+) {
+  let body: any;
+  let headers: any;
+
+  if (mode === "json") {
+    body = payload;
+    headers = {
+      "Content-Type": "application/json",
+      "User-Agent": "PuntoCambio/1.0",
+    };
+  } else {
+    const form = new URLSearchParams();
+    Object.entries(payload).forEach(([k, v]) => form.append(k, String(v)));
+    body = form.toString();
+    headers = {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": "PuntoCambio/1.0",
+    };
+  }
+
+  const start = Date.now();
+  const res = await axios.post(url, body, {
+    headers,
+    httpsAgent,
+    timeout: timeoutMs,
+    validateStatus: (s) => s < 500,
+    maxRedirects: 2,
+  });
+  const ms = Date.now() - start;
+
+  // Logging útil (mantén si lo necesitas; si no, puedes reducirlo)
+  console.log(
+    `🔗 POST ${url} [${mode}] -> HTTP ${
+      res.status
+    } en ${ms}ms | vacio=${isEmptyUpstream(res.data)}`
+  );
+
+  return res;
+}
+
 export class ServientregaAPIService {
   private credentials: ServientregaCredentials;
-  public apiUrl: string = BASE_URL; // Permite forzar la URL desde fuera si es necesario
+  /**
+   * Permite sobreescribir la URL “main” desde fuera (router lee .env y la setea).
+   * Si no se setea, usa MAIN_URL.
+   */
+  public apiUrl: string = MAIN_URL;
 
   constructor(credentials: ServientregaCredentials) {
     this.credentials = credentials;
   }
 
-  async callAPI(
-    payload: Record<string, any>,
-    timeoutMs: number = 15000,
-    useRetailUrl: boolean = false
-  ): Promise<ServientregaAPIResponse> {
-    try {
-      // Permite forzar la URL desde la instancia
-      const url = useRetailUrl ? RETAIL_URL : this.apiUrl || BASE_URL;
-      const fullPayload = { ...payload, ...this.credentials };
-
-      console.log(
-        `🔗 Llamando a ${useRetailUrl ? "RETAIL" : "MAIN"} API:`,
-        url
-      );
-      console.log(`📦 Payload completo:`, JSON.stringify(fullPayload, null, 2));
-      console.log(`⏱️ Timeout configurado: ${timeoutMs}ms`);
-
-      const startTime = Date.now();
-
-      // Determinar el Content-Type basado en el tipo de operación
-      const isTarifaOperation =
-        (fullPayload as any).tipo === "obtener_tarifa_nacional" ||
-        (fullPayload as any).ciu_ori ||
-        (fullPayload as any).ciu_des;
-
-      let requestData: any;
-      let headers: any;
-
-      if (isTarifaOperation) {
-        // Para cálculo de tarifas, usar form-urlencoded
-        console.log(
-          "🔄 Operación de tarifa detectada - usando application/x-www-form-urlencoded"
-        );
-        const formData = new URLSearchParams();
-        Object.entries(fullPayload).forEach(([key, value]) => {
-          formData.append(key, String(value));
-        });
-        requestData = formData.toString();
-        headers = {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": "PuntoCambio/1.0",
-        };
-        console.log("📝 FormData string:", requestData);
-      } else {
-        // Para otras operaciones (productos, países, etc.), usar JSON
-        console.log(
-          "🔄 Operación estándar detectada - usando application/json"
-        );
-        requestData = fullPayload;
-        headers = {
-          "Content-Type": "application/json",
-          "User-Agent": "PuntoCambio/1.0",
-        };
-      }
-
-      const response = await axios.post(url, requestData, {
-        headers,
-        httpsAgent,
-        timeout: timeoutMs,
-        maxRedirects: 3,
-        validateStatus: (status) => status < 500,
-      });
-      const endTime = Date.now();
-
-      console.log(`⏱️ Tiempo de respuesta: ${endTime - startTime}ms`);
-      console.log(`📊 Status HTTP: ${response.status}`);
-      console.log(
-        `📋 Headers de respuesta:`,
-        JSON.stringify(response.headers, null, 2)
-      );
-
-      // Análisis detallado de la respuesta
-      console.log("🔍 Análisis de respuesta:");
-      console.log("  - Tipo de data:", typeof response.data);
-      console.log("  - Es null?", response.data === null);
-      console.log("  - Es undefined?", response.data === undefined);
-      console.log("  - Es string vacío?", response.data === "");
-      console.log("  - Es array?", Array.isArray(response.data));
-      console.log("  - Es objeto?", typeof response.data === "object");
-
-      if (typeof response.data === "string") {
-        console.log("  - Longitud string:", response.data.length);
-        console.log("  - String trimmed:", `"${response.data.trim()}"`);
-      }
-
-      if (Array.isArray(response.data)) {
-        console.log("  - Longitud array:", response.data.length);
-      }
-
-      console.log(
-        `📋 Respuesta completa:`,
-        JSON.stringify(response.data, null, 2)
-      );
-      console.log(
-        `📏 Tamaño de respuesta serializada:`,
-        JSON.stringify(response.data).length,
-        "caracteres"
-      );
-
-      // Verificar si la respuesta está vacía de diferentes maneras
-      if (
-        response.data === "" ||
-        response.data === null ||
-        response.data === undefined
-      ) {
-        console.log("⚠️ RESPUESTA VACÍA DETECTADA");
-      }
-
-      if (Array.isArray(response.data) && response.data.length === 0) {
-        console.log("⚠️ ARRAY VACÍO DETECTADO");
-      }
-
-      return response.data;
-    } catch (error) {
-      console.error("❌ Error al consumir API Servientrega:", error);
-
-      if (axios.isAxiosError(error)) {
-        console.error("📊 Status de error:", error.response?.status);
-        console.error(
-          "📋 Headers de error:",
-          JSON.stringify(error.response?.headers, null, 2)
-        );
-        console.error(
-          "📋 Data de error:",
-          JSON.stringify(error.response?.data, null, 2)
-        );
-        console.error("🔧 Código de error:", error.code);
-        console.error("📝 Mensaje de error:", error.message);
-
-        if (error.code === "ECONNABORTED") {
-          throw new Error(
-            `Timeout al conectar con Servientrega después de ${timeoutMs}ms`
-          );
-        }
-        if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
-          throw new Error(
-            `No se puede conectar con Servientrega (${error.code})`
-          );
-        }
-        if (error.response?.status) {
-          throw new Error(
-            `Error HTTP ${error.response.status}: ${
-              error.response?.data || error.message
-            }`
-          );
-        }
-        throw new Error(`Error al conectar con Servientrega: ${error.message}`);
-      }
-
-      console.error("❌ Error no identificado:", error);
-      throw new Error("Error al conectar con Servientrega");
-    }
-  }
-
-  // Métodos específicos para diferentes tipos de consultas
-  async obtenerProductos(): Promise<ServientregaAPIResponse> {
-    return this.callAPI({ tipo: "obtener_producto" });
-  }
-
-  async obtenerPaises(): Promise<ServientregaAPIResponse> {
-    return this.callAPI({ tipo: "obtener_paises" });
-  }
-
-  async obtenerCiudades(codpais: number): Promise<ServientregaAPIResponse> {
-    return this.callAPI({ tipo: "obtener_ciudades", codpais });
-  }
-
-  async obtenerAgencias(): Promise<ServientregaAPIResponse> {
-    return this.callAPI({ tipo: "obtener_agencias_aliadas" });
-  }
-
-  async obtenerEmpaques(): Promise<ServientregaAPIResponse> {
-    return this.callAPI({ tipo: "obtener_empaqueyembalaje" });
-  }
-
+  /**
+   * Estrategia robusta para tarifas:
+   *  1) MAIN JSON
+   *  2) MAIN FORM
+   *  3) RETAIL JSON
+   *  4) RETAIL FORM
+   */
   async calcularTarifa(
-    payload: Record<string, any>
+    payload: Record<string, any>,
+    timeoutMs = 15000
   ): Promise<ServientregaAPIResponse> {
-    // El payload ya debe tener todos los campos requeridos por Servientrega
-    return this.callAPI(payload);
+    const basePayload = { ...payload, ...this.credentials };
+
+    // Orden de intentos
+    const attempts: Array<{ url: string; mode: WireMode; label: string }> = [
+      { url: this.apiUrl || MAIN_URL, mode: "json", label: "MAIN JSON" },
+      { url: this.apiUrl || MAIN_URL, mode: "form", label: "MAIN FORM" },
+      { url: RETAIL_URL, mode: "json", label: "RETAIL JSON" },
+      { url: RETAIL_URL, mode: "form", label: "RETAIL FORM" },
+    ];
+
+    let lastErr: any = null;
+
+    for (const att of attempts) {
+      try {
+        const res = await doPost(att.url, basePayload, att.mode, timeoutMs);
+
+        // 4xx del proveedor → propaga con mensaje claro
+        if (res.status >= 400) {
+          const e: any = new Error(
+            `HTTP ${res.status} en ${att.label}: ${JSON.stringify(res.data)}`
+          );
+          e.httpStatus = res.status;
+          e.endpoint = att.url;
+          throw e;
+        }
+
+        // Consideramos “vacío” como fallo recuperable → probamos siguiente intento
+        if (isEmptyUpstream(res.data)) {
+          console.warn(
+            `⚠️ Respuesta vacía en ${att.label}, probando siguiente...`
+          );
+          lastErr = new Error("UPSTREAM_EMPTY");
+          (lastErr as any).code = "UPSTREAM_EMPTY";
+          (lastErr as any).endpoint = att.url;
+          continue;
+        }
+
+        // ¡Listo!
+        return res.data;
+      } catch (err: any) {
+        lastErr = err;
+        // Si fue timeout o vacío, seguimos con el siguiente intento
+        if (
+          err?.code === "ECONNABORTED" ||
+          err?.code === "UPSTREAM_EMPTY" ||
+          err?.response?.status === 408
+        ) {
+          console.warn(`⏳/🈳 ${att.label} falló: ${err?.message || err}`);
+          continue;
+        }
+        // Para otros errores (p.ej. 4xx con body), guarda y continua al siguiente intento
+        console.warn(`❗ ${att.label} error: ${err?.message || err}`);
+        continue;
+      }
+    }
+
+    // Si llegamos aquí, todos los intentos fallaron
+    const out: any = new Error(
+      lastErr?.code === "UPSTREAM_EMPTY"
+        ? "Proveedor no devolvió datos (tarifa vacía) en todos los endpoints"
+        : "Error al conectar con Servientrega"
+    );
+    out.code = lastErr?.code || "UPSTREAM_FAILURE";
+    out.httpStatus = lastErr?.httpStatus || 502;
+    throw out;
   }
 
+  // Generación de guía: aquí el proveedor tradicionalmente quiere JSON (y funciona bien).
   async generarGuia(
-    payload: Record<string, any>
+    payload: Record<string, any>,
+    timeoutMs = 20000
   ): Promise<ServientregaAPIResponse> {
-    return this.callAPI({
-      tipo: "GeneracionGuia",
-      ...payload,
-    });
+    const url = this.apiUrl || MAIN_URL;
+    const full = { tipo: "GeneracionGuia", ...payload, ...this.credentials };
+    const res = await doPost(url, full, "json", timeoutMs);
+
+    if (isEmptyUpstream(res.data)) {
+      const e: any = new Error("Respuesta vacía al generar guía");
+      e.code = "UPSTREAM_EMPTY";
+      e.httpStatus = 502;
+      e.endpoint = url;
+      throw e;
+    }
+    return res.data;
   }
 
-  async anularGuia(guia: string): Promise<ServientregaAPIResponse> {
-    return this.callAPI({
-      tipo: "AnulacionGuia",
+  // **OJO**: el proveedor para anulación de aliados suele usar:
+  //  { "tipo":"ActualizaEstadoGuia", "guia":"...", "estado":"Anulada" }
+  async anularGuia(
+    guia: string,
+    estado = "Anulada",
+    timeoutMs = 15000
+  ): Promise<ServientregaAPIResponse> {
+    const url = this.apiUrl || MAIN_URL;
+    const full = {
+      tipo: "ActualizaEstadoGuia",
       guia,
-    });
+      estado,
+      ...this.credentials,
+    };
+    const res = await doPost(url, full, "json", timeoutMs);
+
+    if (isEmptyUpstream(res.data)) {
+      const e: any = new Error("Respuesta vacía al anular guía");
+      e.code = "UPSTREAM_EMPTY";
+      e.httpStatus = 502;
+      e.endpoint = url;
+      throw e;
+    }
+    return res.data;
+  }
+
+  // Métodos de catálogo (dejan JSON que es lo que mejor responde en aliados)
+  async obtenerProductos(timeoutMs = 10000) {
+    const url = this.apiUrl || MAIN_URL;
+    const full = { tipo: "obtener_producto", ...this.credentials };
+    const res = await doPost(url, full, "json", timeoutMs);
+    return res.data;
+  }
+
+  async obtenerPaises(timeoutMs = 10000) {
+    const url = this.apiUrl || MAIN_URL;
+    const full = { tipo: "obtener_paises", ...this.credentials };
+    const res = await doPost(url, full, "json", timeoutMs);
+    return res.data;
+  }
+
+  async obtenerCiudades(codpais: number, timeoutMs = 10000) {
+    const url = this.apiUrl || MAIN_URL;
+    const full = { tipo: "obtener_ciudades", codpais, ...this.credentials };
+    const res = await doPost(url, full, "json", timeoutMs);
+    return res.data;
+  }
+
+  async obtenerAgencias(timeoutMs = 10000) {
+    const url = this.apiUrl || MAIN_URL;
+    const full = { tipo: "obtener_agencias_aliadas", ...this.credentials };
+    const res = await doPost(url, full, "json", timeoutMs);
+    return res.data;
+  }
+
+  async obtenerEmpaques(timeoutMs = 10000) {
+    const url = this.apiUrl || MAIN_URL;
+    const full = { tipo: "obtener_empaqueyembalaje", ...this.credentials };
+    const res = await doPost(url, full, "json", timeoutMs);
+    return res.data;
   }
 }
