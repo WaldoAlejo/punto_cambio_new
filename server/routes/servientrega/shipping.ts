@@ -88,8 +88,22 @@ router.post("/tarifa", async (req, res) => {
     const sanitizedData =
       ServientregaValidationService.sanitizeTarifaRequest(bodyConTipo);
 
+    // DEBUG: Log del payload que se va a enviar
+    console.log(
+      "🔍 PAYLOAD ORIGINAL DEL FRONTEND:",
+      JSON.stringify(req.body, null, 2)
+    );
+    console.log("🔍 PAYLOAD CON TIPO:", JSON.stringify(bodyConTipo, null, 2));
+    console.log(
+      "🔍 PAYLOAD SANITIZADO:",
+      JSON.stringify(sanitizedData, null, 2)
+    );
+
     // 4) Preparar API Service con credenciales de env
     const credentials = getCredentialsFromEnv();
+    console.log("🔍 CREDENCIALES:", JSON.stringify(credentials, null, 2));
+    console.log("🔍 URL API:", getApiUrl());
+
     const apiService = new ServientregaAPIService(credentials);
     apiService.apiUrl = getApiUrl();
 
