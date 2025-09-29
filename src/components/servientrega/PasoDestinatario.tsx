@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axiosInstance from "@/services/axiosInstance";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,28 +13,22 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Destinatario } from "@/types/servientrega"; // Asegúrate de la ruta
+import { Destinatario } from "@/types/servientrega";
 
-// ----- TIPADOS AUXILIARES -----
 interface Pais {
   codpais: number;
   pais: string;
   nombrecorto: string;
   phone_code: string;
 }
-interface Ciudad {
+interface CiudadCanon {
   ciudad: string;
   provincia: string;
+  raw: string;
 }
-interface Agencia {
-  nombre: string;
-  tipo_cs: string;
-  direccion: string;
-  ciudad: string;
-}
+
 interface PasoDestinatarioProps {
   onNext: (
     destinatario: Destinatario,
@@ -43,16 +37,19 @@ interface PasoDestinatarioProps {
   ) => void;
 }
 
-// ----------- COMPONENTE PRINCIPAL -----------
+const clean = (s: string) =>
+  (s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+
 export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [paises, setPaises] = useState<Pais[]>([]);
-  const [ciudades, setCiudades] = useState<Ciudad[]>([]);
-  const [agencias, setAgencias] = useState<Agencia[]>([]);
-  // OPCIÓN COMENTADA: Retiro en oficina Servientrega - siempre false
-  const [mostrarAgencias, setMostrarAgencias] = useState(false);
-  const [agenciaSeleccionada, setAgenciaSeleccionada] = useState<string>("");
-  const [ciudadEstablecidaPorAgencia, setCiudadEstablecidaPorAgencia] =
-    useState(false);
+  const [ciudadesCanon, setCiudadesCanon] = useState<CiudadCanon[]>([]);
+  const [cargandoPaises, setCargandoPaises] = useState(true);
+  const [cargandoCiudades, setCargandoCiudades] = useState(true);
+
   const [loading, setLoading] = useState(false);
 
   const [cedulaQuery, setCedulaQuery] = useState("");
@@ -66,7 +63,6 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [destinatarioExistente, setDestinatarioExistente] =
     useState<Destinatario | null>(null);
 
-  // Incluye pais y codpais
   const [form, setForm] = useState<Destinatario>({
     identificacion: "",
     nombre: "",
@@ -87,59 +83,85 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     referencia: "",
   });
 
-  const esInternacional = form.codpais !== 63;
+  const esInternacional = useMemo(() => form.codpais !== 63, [form.codpais]);
+  const ciudadSeleccionValida = useMemo(
+    () =>
+      !!form.ciudad &&
+      !!form.provincia &&
+      ciudadesCanon.some(
+        (c) => c.ciudad === form.ciudad && c.provincia === form.provincia
+      ),
+    [form.ciudad, form.provincia, ciudadesCanon]
+  );
 
-  // ===============================
-  // 1. Cargar países y Ecuador por defecto
-  // ===============================
+  // 1) Cargar países y setear Ecuador por defecto
   useEffect(() => {
-    axiosInstance
-      .post("/servientrega/paises")
-      .then((res) => {
-        const lista: Pais[] = res.data.fetch || [];
-        console.log("🌍 Países cargados de la API:", lista);
+    const loadPaises = async () => {
+      try {
+        setCargandoPaises(true);
+        const { data } = await axiosInstance.post("/servientrega/paises");
+        const lista: Pais[] = data?.fetch || [];
         setPaises(lista);
-        const ecuador = lista.find((p) => p.codpais === 63);
-        console.log("🇪🇨 Ecuador encontrado:", ecuador);
-        if (ecuador) {
-          console.log("🇪🇨 Estableciendo Ecuador por defecto directamente");
-          // Establecer Ecuador directamente en el form
-          setForm((prev) => ({
-            ...prev,
-            codpais: 63,
-            pais: ecuador.pais,
-          }));
-          // Cargar ciudades de Ecuador
-          axiosInstance
-            .post("/servientrega/ciudades", { codpais: 63 })
-            .then((res) => {
-              const lista = res.data.fetch || [];
-              console.log("🌍 Ciudades de Ecuador cargadas:", lista);
-              const ciudadesProcesadas = lista.map((item: { city: string }) => {
-                const [ciudad, provincia] = item.city.split("-");
-                return {
-                  ciudad: ciudad?.trim() ?? "",
-                  provincia: provincia?.trim() ?? "",
-                };
-              });
-              console.log(
-                "🏙️ Ciudades de Ecuador procesadas:",
-                ciudadesProcesadas
-              );
-              setCiudades(ciudadesProcesadas);
-            })
-            .catch((err) =>
-              console.error("Error al obtener ciudades de Ecuador:", err)
-            );
+
+        // Ecuador por defecto
+        const ec = lista.find((p) => p.codpais === 63);
+        if (ec) {
+          setForm((prev) => ({ ...prev, codpais: 63, pais: ec.pais }));
         }
-      })
-      .catch((err) => console.error("Error al obtener países:", err));
-    // eslint-disable-next-line
+      } catch (e) {
+        console.error("❌ Error al obtener países:", e);
+        toast.error("No se pudo cargar el listado de países.");
+      } finally {
+        setCargandoPaises(false);
+      }
+    };
+    loadPaises();
   }, []);
 
-  // ===============================
-  // 2. Búsqueda predictiva de destinatario por cédula
-  // ===============================
+  // 2) Cargar ciudades por país (codpais)
+  const cargarCiudadesPorPais = async (codpais: number) => {
+    try {
+      setCargandoCiudades(true);
+      const { data } = await axiosInstance.post("/servientrega/ciudades", {
+        codpais,
+      });
+      const lista: CiudadCanon[] = (data?.fetch || []).map(
+        (item: { city: string }) => {
+          const [ciu, prov] = String(item.city || "").split("-");
+          return {
+            ciudad: (ciu || "").trim(),
+            provincia: (prov || "").trim(),
+            raw: item.city,
+          };
+        }
+      );
+      setCiudadesCanon(lista);
+
+      // Si la ciudad actual no existe en el nuevo catálogo, limpiar selección
+      const match = lista.find(
+        (c) => c.ciudad === form.ciudad && c.provincia === form.provincia
+      );
+      if (!match) {
+        setForm((prev) => ({ ...prev, ciudad: "", provincia: "" }));
+      }
+    } catch (e) {
+      console.error("❌ Error al obtener ciudades:", e);
+      setCiudadesCanon([]);
+      toast.error("No se pudo cargar el listado de ciudades.");
+    } finally {
+      setCargandoCiudades(false);
+    }
+  };
+
+  // 2.1) Cuando cambia el país, recargar ciudades
+  useEffect(() => {
+    if (form.codpais) {
+      cargarCiudadesPorPais(form.codpais);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.codpais]);
+
+  // 3) Búsqueda predictiva de destinatario por cédula
   useEffect(() => {
     if (cedulaQuery.trim().length >= 3) {
       setBuscandoCedula(true);
@@ -153,9 +175,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
   }, [cedulaQuery]);
 
-  // ===============================
-  // 2.1. Búsqueda predictiva de destinatario por nombre
-  // ===============================
+  // 3.1) Búsqueda predictiva por nombre
   useEffect(() => {
     if (nombreQuery.trim().length >= 3) {
       setBuscandoNombre(true);
@@ -169,38 +189,40 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
   }, [nombreQuery]);
 
-  // ===============================
-  // 3. Seleccionar destinatario existente
-  // ===============================
+  // 4) Seleccionar destinatario existente (homologa la ciudad si coincide en el catálogo de país actual)
   const seleccionarDestinatario = (dest: any) => {
+    // Buscar match canónico en el catálogo actual
+    const ciu = clean(dest.ciudad || "");
+    const prov = clean(dest.provincia || "");
+    const match =
+      ciudadesCanon.find(
+        (c) => clean(c.ciudad) === ciu && clean(c.provincia) === prov
+      ) || null;
+
     setForm({
-      identificacion: dest.cedula || dest.identificacion,
-      nombre: dest.nombre,
-      telefono: dest.telefono,
+      identificacion: dest.cedula || dest.identificacion || "",
+      nombre: dest.nombre || "",
+      telefono: dest.telefono || "",
       email: dest.email || "",
       direccion: dest.direccion || "",
-      ciudad: dest.ciudad || "",
-      provincia: dest.provincia || "",
+      ciudad: match ? match.ciudad : "",
+      provincia: match ? match.provincia : "",
       codigo_postal: dest.codigo_postal || "",
-      pais: dest.pais || "ECUADOR",
-      codpais: dest.codpais ?? 63,
+      pais: dest.pais || form.pais,
+      codpais: Number.isFinite(dest.codpais) ? dest.codpais : form.codpais,
     });
-    if (dest.direccion) {
-      const partes = dest.direccion.split(",").map((p: string) => p.trim());
-      console.log("🏠 Parseando dirección:", dest.direccion);
-      console.log("🏠 Partes divididas:", partes);
 
-      // Buscar numeración en cualquier parte que contenga #
+    if (dest.direccion) {
+      const partes = String(dest.direccion)
+        .split(",")
+        .map((p: string) => p.trim());
+
       let numeracion = "";
       let calleSecundaria = "";
-
-      // Buscar la parte que contiene #
       const parteConNumeracion = partes.find((p: string) => p.includes("#"));
-      if (parteConNumeracion) {
-        numeracion = parteConNumeracion.trim();
-      }
+      if (parteConNumeracion)
+        numeracion = parteConNumeracion.replace("#", "").trim();
 
-      // La calle secundaria es la parte que empieza con "y" (sin el "y")
       const parteCalleSecundaria = partes.find((p: string) =>
         p.toLowerCase().startsWith("y ")
       );
@@ -210,25 +232,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
       setExtraDireccion({
         callePrincipal: partes[0] || "",
-        numeracion: numeracion,
-        calleSecundaria: calleSecundaria,
-        referencia:
-          partes
-            .find(
-              (p: string) =>
-                p.toLowerCase().startsWith("ref:") ||
-                (!p.includes("#") &&
-                  !p.toLowerCase().startsWith("y ") &&
-                  p !== partes[0])
-            )
-            ?.replace(/^Ref:\s*/i, "")
-            .trim() || "",
-      });
-
-      console.log("🏠 Dirección parseada:", {
-        callePrincipal: partes[0] || "",
-        numeracion: numeracion,
-        calleSecundaria: calleSecundaria,
+        numeracion,
+        calleSecundaria,
         referencia:
           partes
             .find(
@@ -242,6 +247,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             .trim() || "",
       });
     }
+
     setDestinatarioExistente(dest);
     setCedulaResultados([]);
     setNombreResultados([]);
@@ -249,56 +255,27 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     setNombreQuery("");
   };
 
-  // ===============================
-  // 4. Cambio de país (siempre guarda pais y codpais)
-  // ===============================
+  // 5) Cambio de país
   const handlePaisChange = (value: string) => {
-    console.log("🌍 País seleccionado - valor:", value);
-    console.log("🌍 Array de países disponible:", paises.length, paises);
-    const codpais = parseInt(value);
+    const codpais = parseInt(value, 10);
     const paisSeleccionado = paises.find((p) => p.codpais === codpais);
-    console.log("🌍 País encontrado:", paisSeleccionado);
-
-    const nuevoForm = {
-      ...form,
+    setForm((prev) => ({
+      ...prev,
       codpais,
       pais: paisSeleccionado ? paisSeleccionado.pais : "",
       ciudad: "",
       provincia: "",
-    };
-    console.log("🌍 Nuevo form después de seleccionar país:", nuevoForm);
-    setForm(nuevoForm);
-    axiosInstance
-      .post("/servientrega/ciudades", { codpais })
-      .then((res) => {
-        const lista = res.data.fetch || [];
-        console.log("🌍 Ciudades recibidas de la API:", lista);
-        const ciudadesProcesadas = lista.map((item: { city: string }) => {
-          const [ciudad, provincia] = item.city.split("-");
-          return {
-            ciudad: ciudad?.trim() ?? "",
-            provincia: provincia?.trim() ?? "",
-          };
-        });
-        console.log("🏙️ Ciudades procesadas:", ciudadesProcesadas);
-        setCiudades(ciudadesProcesadas);
-      })
-      .catch((err) => console.error("Error al obtener ciudades:", err));
+      codigo_postal: "", // limpiar CP al cambiar país
+    }));
   };
 
-  // ===============================
-  // 5. Cambio de ciudad/provincia
-  // ===============================
+  // 6) Cambio de ciudad (siempre viene canónica desde el catálogo)
   const handleCiudadChange = (value: string) => {
-    console.log("🏙️ Valor seleccionado:", value);
     const [ciudad, provincia] = value.split("|");
-    console.log("🏙️ Ciudad:", ciudad, "Provincia:", provincia);
     setForm((prev) => ({ ...prev, ciudad, provincia }));
   };
 
-  // ===============================
-  // 6. Cambios generales del form
-  // ===============================
+  // 7) Cambios generales del form
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value.trimStart() });
 
@@ -308,106 +285,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       [e.target.name]: e.target.value.trimStart(),
     }));
 
-  // ===============================
-  // 7. Retiro en agencia
-  // ===============================
-  const handleCheckboxChange = async (checked: boolean) => {
-    setMostrarAgencias(checked);
-    if (checked) {
-      try {
-        console.log("🔍 Cargando agencias de Servientrega...");
-        const res = await axiosInstance.post("/servientrega/agencias");
-        console.log("📍 Respuesta de agencias:", res.data);
-
-        // Corregir la estructura de datos - usar res.data.data en lugar de res.data.fetch
-        const data = res.data.data || res.data.fetch || [];
-        console.log("📋 Agencias procesadas:", data.length);
-
-        setAgencias(
-          data.map((a: any) => ({
-            nombre: String(a.agencia ?? Object.values(a)[0] ?? "").trim(),
-            tipo_cs: String(a.tipo_cs?.trim() ?? ""),
-            direccion: String(a.direccion?.trim() ?? ""),
-            ciudad: String(a.ciudad?.trim() ?? ""),
-          }))
-        );
-
-        console.log("✅ Agencias cargadas exitosamente:", data.length);
-      } catch (error) {
-        console.error("❌ Error al cargar agencias:", error);
-        toast.error("Error al cargar las agencias de Servientrega");
-      }
-    } else {
-      setAgenciaSeleccionada("");
-      // Si la ciudad fue establecida por una agencia, limpiarla
-      if (ciudadEstablecidaPorAgencia) {
-        setForm((prev) => ({
-          ...prev,
-          ciudad: "",
-          provincia: "",
-        }));
-        setCiudadEstablecidaPorAgencia(false);
-        toast.info(
-          "Ciudad y provincia limpiadas al deseleccionar retiro en oficina"
-        );
-      }
-    }
-  };
-
-  // Manejar selección de agencia y actualizar ciudad automáticamente
-  const handleAgenciaChange = async (nombreAgencia: string) => {
-    setAgenciaSeleccionada(nombreAgencia);
-
-    // Buscar la agencia seleccionada para obtener su ciudad
-    const agenciaEncontrada = agencias.find((a) => a.nombre === nombreAgencia);
-    if (agenciaEncontrada) {
-      const ciudadAgencia = agenciaEncontrada.ciudad.trim();
-
-      // Buscar la provincia correspondiente a esta ciudad
-      try {
-        const ciudadEncontrada = ciudades.find(
-          (c) => c.ciudad.trim().toUpperCase() === ciudadAgencia.toUpperCase()
-        );
-
-        const provinciaAgencia = ciudadEncontrada?.provincia || "";
-
-        // Actualizar la ciudad y provincia del formulario
-        setForm((prev) => ({
-          ...prev,
-          ciudad: ciudadAgencia,
-          provincia: provinciaAgencia,
-        }));
-
-        // Marcar que la ciudad fue establecida por una agencia
-        setCiudadEstablecidaPorAgencia(true);
-
-        console.log(`🏢 Agencia seleccionada: ${nombreAgencia}`);
-        console.log(`🏙️ Ciudad actualizada a: ${ciudadAgencia}`);
-        console.log(`🗺️ Provincia actualizada a: ${provinciaAgencia}`);
-
-        // Mostrar toast informativo
-        toast.success(
-          `Ubicación actualizada: ${ciudadAgencia}${
-            provinciaAgencia ? `, ${provinciaAgencia}` : ""
-          }`
-        );
-      } catch (error) {
-        console.error("Error al buscar provincia:", error);
-        // Solo actualizar ciudad si hay error con provincia
-        setForm((prev) => ({
-          ...prev,
-          ciudad: ciudadAgencia,
-        }));
-        setCiudadEstablecidaPorAgencia(true);
-        toast.success(`Ciudad actualizada a: ${ciudadAgencia}`);
-      }
-    }
-  };
-
-  // ===============================
-  // 8. Validar código postal (internacional)
-  // ===============================
-  const validarCodigoPostal = async (): Promise<boolean> => {
+  // 8) Validar código postal (internacional)
+  const validarCodigoPostal = (): boolean => {
     if (!esInternacional) return true;
     if (!form.codigo_postal?.trim()) {
       toast.error(
@@ -418,107 +297,80 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     return true;
   };
 
-  // ===============================
-  // 9. Guardar/actualizar y continuar
-  // ===============================
+  // 9) Guardar/continuar (requiere ciudad/provincia canónicas del catálogo)
   const handleContinue = async () => {
-    console.log("🔍 Validando formulario:", {
-      nombre: form.nombre,
-      telefono: form.telefono,
-      pais: form.pais,
-      ciudad: form.ciudad,
-      provincia: form.provincia,
-    });
+    if (cargandoPaises || cargandoCiudades) {
+      toast.info("Cargando catálogos...");
+      return;
+    }
 
     if (
       !form.identificacion ||
       !form.nombre ||
       !form.telefono ||
       !form.pais ||
-      !form.ciudad
+      !form.ciudad ||
+      !form.provincia
     ) {
-      console.log("❌ Campos faltantes:", {
-        identificacion: !form.identificacion,
-        nombre: !form.nombre,
-        telefono: !form.telefono,
-        pais: !form.pais,
-        ciudad: !form.ciudad,
-      });
       toast.error("Completa todos los campos obligatorios.");
       return;
     }
-    if (!(await validarCodigoPostal())) return;
 
-    let direccionFinal = "";
-    if (mostrarAgencias) {
-      const agencia = agencias.find((a) => a.nombre === agenciaSeleccionada);
-      if (!agencia) {
-        toast.error("Debes seleccionar una agencia.");
-        return;
-      }
-      direccionFinal = agencia.direccion;
-    } else {
-      direccionFinal = [
-        extraDireccion.callePrincipal.trim(),
-        extraDireccion.numeracion && `#${extraDireccion.numeracion.trim()}`,
-        extraDireccion.calleSecundaria &&
-          `y ${extraDireccion.calleSecundaria.trim()}`,
-        extraDireccion.referencia && `Ref: ${extraDireccion.referencia.trim()}`,
-      ]
-        .filter(Boolean)
-        .join(", ");
+    if (!ciudadSeleccionValida) {
+      toast.error("Selecciona una ciudad válida del catálogo.");
+      return;
     }
 
-    // Objeto preparado para el backend y flujo interno
+    if (!validarCodigoPostal()) return;
+
+    const direccionFinal = [
+      extraDireccion.callePrincipal.trim(),
+      extraDireccion.numeracion && `#${extraDireccion.numeracion.trim()}`,
+      extraDireccion.calleSecundaria &&
+        `y ${extraDireccion.calleSecundaria.trim()}`,
+      extraDireccion.referencia && `Ref: ${extraDireccion.referencia.trim()}`,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    if (!direccionFinal) {
+      toast.error("La dirección es requerida");
+      return;
+    }
+
     const destinatarioFinal: Destinatario = {
-      ...form,
-      direccion: direccionFinal.trim(),
+      identificacion: form.identificacion.trim(),
+      nombre: form.nombre.trim(),
+      direccion: direccionFinal,
+      telefono: form.telefono.trim(),
+      email: form.email?.trim() || "",
+      ciudad: form.ciudad, // canónica
+      provincia: form.provincia, // canónica
+      pais: form.pais,
+      codpais: form.codpais,
+      codigo_postal: form.codigo_postal?.trim() || "",
     };
 
     const datosParaEnviar = {
       ...destinatarioFinal,
-      cedula: form.identificacion,
+      cedula: form.identificacion.trim(),
     };
-
-    console.log("📤 Enviando datos del destinatario:", datosParaEnviar);
 
     setLoading(true);
     try {
       if (destinatarioExistente) {
-        console.log("🔄 Actualizando destinatario existente");
         await axiosInstance.put(
           `/servientrega/destinatario/actualizar/${form.identificacion.trim()}`,
           datosParaEnviar
         );
       } else {
-        console.log("➕ Creando nuevo destinatario");
         await axiosInstance.post(
           "/servientrega/destinatario/guardar",
           datosParaEnviar
         );
       }
       toast.success("Destinatario guardado correctamente.");
-
-      // Preparar datos limpios para el siguiente paso
-      const destinatarioLimpio: Destinatario = {
-        identificacion: form.identificacion,
-        nombre: form.nombre,
-        direccion: direccionFinal.trim(),
-        ciudad: form.ciudad,
-        provincia: form.provincia,
-        pais: form.pais,
-        codpais: form.codpais,
-        telefono: form.telefono,
-        email: form.email,
-        codigo_postal: form.codigo_postal,
-      };
-
-      console.log(
-        "🧹 Datos limpios para el siguiente paso:",
-        destinatarioLimpio
-      );
-
-      onNext(destinatarioLimpio, mostrarAgencias, agenciaSeleccionada.trim());
+      onNext(destinatarioFinal, false, undefined);
     } catch (err) {
       console.error("❌ Error al guardar destinatario:", err);
       toast.error("Hubo un problema al guardar el destinatario.");
@@ -527,9 +379,6 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
   };
 
-  // ===============================
-  // ----------- RENDER ------------
-  // ===============================
   return (
     <Card className="w-full max-w-2xl mx-auto mt-6 shadow-lg border rounded-xl">
       <CardHeader>
@@ -539,22 +388,25 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         {/* --- UBICACIÓN --- */}
         <div className="p-4 border rounded-md bg-gray-50">
           <h4 className="font-semibold mb-2">📍 Ubicación</h4>
+
           <Label>País</Label>
           <Select
-            value={form.codpais.toString()}
+            value={String(form.codpais ?? "")}
             onValueChange={handlePaisChange}
+            disabled={cargandoPaises}
           >
             <SelectTrigger>
               <SelectValue placeholder="Seleccionar país" />
             </SelectTrigger>
             <SelectContent>
               {paises.map((p) => (
-                <SelectItem key={p.codpais} value={p.codpais.toString()}>
+                <SelectItem key={p.codpais} value={String(p.codpais)}>
                   {p.pais} (+{p.phone_code})
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+
           <Label className="mt-3">Ciudad y Provincia</Label>
           <Select
             onValueChange={handleCiudadChange}
@@ -563,18 +415,26 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
                 ? `${form.ciudad}|${form.provincia}`
                 : ""
             }
+            disabled={cargandoCiudades}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Seleccionar ciudad" />
+              <SelectValue
+                placeholder={
+                  cargandoCiudades
+                    ? "Cargando ciudades..."
+                    : "Seleccionar ciudad"
+                }
+              />
             </SelectTrigger>
             <SelectContent>
-              {ciudades.map((c, i) => (
+              {ciudadesCanon.map((c, i) => (
                 <SelectItem key={i} value={`${c.ciudad}|${c.provincia}`}>
                   {c.ciudad} - {c.provincia}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+
           {esInternacional && (
             <>
               <Label className="mt-3">Código Postal (Obligatorio)</Label>
@@ -587,40 +447,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             </>
           )}
         </div>
-        {/* --- RETIRO EN OFICINA --- */}
-        {/* OPCIÓN COMENTADA: Retiro en oficina Servientrega */}
-        {/*
-        <div className="p-4 border rounded-md bg-gray-50">
-          <h4 className="font-semibold mb-2">🏢 Entrega</h4>
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={mostrarAgencias}
-              onCheckedChange={handleCheckboxChange}
-            />
-            <Label>¿Retiro en oficina Servientrega?</Label>
-          </div>
-          {mostrarAgencias && (
-            <div className="mt-2">
-              <Label>Seleccionar agencia</Label>
-              <Select
-                onValueChange={handleAgenciaChange}
-                value={agenciaSeleccionada}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar agencia" />
-                </SelectTrigger>
-                <SelectContent>
-                  {agencias.map((a, i) => (
-                    <SelectItem key={i} value={a.nombre}>
-                      {a.nombre} - {a.ciudad} ({a.tipo_cs})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-        */}
+
         {/* --- DATOS PERSONALES --- */}
         <div className="p-4 border rounded-md bg-white">
           <h4 className="font-semibold mb-4">👤 Datos Personales</h4>
@@ -723,61 +550,66 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
               />
             </div>
           </div>
-          {/* SIEMPRE MOSTRAR DIRECCIÓN MANUAL (mostrarAgencias siempre es false) */}
-          {true && (
-            <div className="mt-6">
-              <h4 className="font-semibold mb-4">🏠 Dirección</h4>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="callePrincipal">Calle principal</Label>
-                  <Input
-                    id="callePrincipal"
-                    name="callePrincipal"
-                    placeholder="Ingrese calle principal"
-                    value={extraDireccion.callePrincipal}
-                    onChange={handleExtraDireccionChange}
-                  />
-                </div>
 
-                <div>
-                  <Label htmlFor="numeracion">Numeración</Label>
-                  <Input
-                    id="numeracion"
-                    name="numeracion"
-                    placeholder="Ej: #123, Lote 35 A"
-                    value={extraDireccion.numeracion}
-                    onChange={handleExtraDireccionChange}
-                  />
-                </div>
+          {/* Dirección manual */}
+          <div className="mt-6">
+            <h4 className="font-semibold mb-4">🏠 Dirección</h4>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="callePrincipal">Calle principal</Label>
+                <Input
+                  id="callePrincipal"
+                  name="callePrincipal"
+                  placeholder="Ingrese calle principal"
+                  value={extraDireccion.callePrincipal}
+                  onChange={handleExtraDireccionChange}
+                />
+              </div>
 
-                <div>
-                  <Label htmlFor="calleSecundaria">Calle secundaria</Label>
-                  <Input
-                    id="calleSecundaria"
-                    name="calleSecundaria"
-                    placeholder="Ingrese calle secundaria"
-                    value={extraDireccion.calleSecundaria}
-                    onChange={handleExtraDireccionChange}
-                  />
-                </div>
+              <div>
+                <Label htmlFor="numeracion">Numeración</Label>
+                <Input
+                  id="numeracion"
+                  name="numeracion"
+                  placeholder="Ej: #123, Lote 35 A"
+                  value={extraDireccion.numeracion}
+                  onChange={handleExtraDireccionChange}
+                />
+              </div>
 
-                <div>
-                  <Label htmlFor="referencia">Referencia</Label>
-                  <Input
-                    id="referencia"
-                    name="referencia"
-                    placeholder="Punto de referencia"
-                    value={extraDireccion.referencia}
-                    onChange={handleExtraDireccionChange}
-                  />
-                </div>
+              <div>
+                <Label htmlFor="calleSecundaria">Calle secundaria</Label>
+                <Input
+                  id="calleSecundaria"
+                  name="calleSecundaria"
+                  placeholder="Ingrese calle secundaria"
+                  value={extraDireccion.calleSecundaria}
+                  onChange={handleExtraDireccionChange}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="referencia">Referencia</Label>
+                <Input
+                  id="referencia"
+                  name="referencia"
+                  placeholder="Punto de referencia"
+                  value={extraDireccion.referencia}
+                  onChange={handleExtraDireccionChange}
+                />
               </div>
             </div>
-          )}
+          </div>
         </div>
+
         <Button
           onClick={handleContinue}
-          disabled={loading || !form.ciudad}
+          disabled={
+            loading ||
+            cargandoPaises ||
+            cargandoCiudades ||
+            !ciudadSeleccionValida
+          }
           className="w-full mt-4"
         >
           {loading ? (

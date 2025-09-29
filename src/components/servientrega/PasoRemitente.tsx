@@ -16,19 +16,33 @@ interface PasoRemitenteProps {
   onNext: (remitente: Remitente) => void;
 }
 
+// Helpers de normalización
+const clean = (s: string) =>
+  (s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+
+type CiudadCanon = { ciudad: string; provincia: string; raw: string };
+
 export default function PasoRemitente({
   selectedPoint,
   onNext,
 }: PasoRemitenteProps) {
-  // Usa ciudad y provincia del punto de atención seleccionado
+  // Catálogo oficial de ciudades (Servientrega)
+  const [ciudadesCanon, setCiudadesCanon] = useState<CiudadCanon[]>([]);
+  const [cargandoCiudades, setCargandoCiudades] = useState(true);
+
+  // Usa SIEMPRE ciudad/provincia del punto de atención (validada contra catálogo)
   const [formData, setFormData] = useState<Remitente>({
     identificacion: "",
     nombre: "",
     direccion: "",
     telefono: "",
     email: "",
-    ciudad: selectedPoint?.ciudad || "Quito",
-    provincia: selectedPoint?.provincia || "Pichincha",
+    ciudad: selectedPoint?.ciudad || "",
+    provincia: selectedPoint?.provincia || "",
     codigo_postal: selectedPoint?.codigo_postal || "170150",
     pais: "ECUADOR",
   });
@@ -42,41 +56,99 @@ export default function PasoRemitente({
 
   const [loading, setLoading] = useState(false);
   const [ciudadValida, setCiudadValida] = useState(false);
+
   const [cedulaQuery, setCedulaQuery] = useState("");
   const [cedulaResultados, setCedulaResultados] = useState<Remitente[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
   const [remitenteExistente, setRemitenteExistente] =
     useState<Remitente | null>(null);
 
-  // Autocompletar ciudad/provincia/país desde el punto seleccionado
+  // 1) Cargar ciudades (codpais: 63 Ecuador) y validar punto de atención
   useEffect(() => {
-    if (selectedPoint?.ciudad && selectedPoint?.provincia) {
-      setFormData((prev) => ({
-        ...prev,
-        ciudad: selectedPoint.ciudad,
-        provincia: selectedPoint.provincia,
-        pais: "ECUADOR", // Default
-      }));
-      setCiudadValida(true);
-    }
-  }, [selectedPoint]);
+    const loadCiudades = async () => {
+      try {
+        setCargandoCiudades(true);
+        const { data } = await axiosInstance.post("/servientrega/ciudades", {
+          codpais: 63,
+        });
 
-  // Búsqueda predictiva de remitente
+        const lista: CiudadCanon[] = (data?.fetch || []).map(
+          (it: { city: string }) => {
+            const [ciu, prov] = (it.city || "").split("-");
+            return {
+              ciudad: (ciu || "").trim(),
+              provincia: (prov || "").trim(),
+              raw: it.city,
+            };
+          }
+        );
+
+        setCiudadesCanon(lista);
+
+        // Validar/ajustar contra catálogo
+        const spCiudad = clean(selectedPoint?.ciudad || "");
+        const spProv = clean(selectedPoint?.provincia || "");
+
+        // Match exacto (normalizado)
+        let match =
+          lista.find(
+            (c) => clean(c.ciudad) === spCiudad && clean(c.provincia) === spProv
+          ) || null;
+
+        // Match aproximado si no hay exacto (contiene)
+        if (!match) {
+          match =
+            lista.find(
+              (c) =>
+                clean(c.ciudad).includes(spCiudad) &&
+                clean(c.provincia).includes(spProv)
+            ) || null;
+        }
+
+        if (match) {
+          setFormData((prev) => ({
+            ...prev,
+            ciudad: match!.ciudad,
+            provincia: match!.provincia,
+            pais: "ECUADOR",
+          }));
+          setCiudadValida(true);
+        } else {
+          setCiudadValida(false);
+          setFormData((prev) => ({
+            ...prev,
+            ciudad: selectedPoint?.ciudad || "",
+            provincia: selectedPoint?.provincia || "",
+            pais: "ECUADOR",
+          }));
+          toast.error(
+            "La ciudad/provincia del Punto de Atención no existe en el catálogo de Servientrega. Contacta a soporte para homologar el punto."
+          );
+        }
+      } catch (e) {
+        console.error("❌ Error cargando ciudades:", e);
+        setCiudadValida(false);
+        toast.error(
+          "No se pudo validar ciudades con Servientrega. Verifica conexión."
+        );
+      } finally {
+        setCargandoCiudades(false);
+      }
+    };
+
+    loadCiudades();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPoint?.ciudad, selectedPoint?.provincia]);
+
+  // 2) Búsqueda predictiva de remitente
   useEffect(() => {
     const query = cedulaQuery.trim();
     if (query.length >= 3) {
       setBuscandoCedula(true);
-      console.log("🔍 Buscando remitente con cédula:", query);
       axiosInstance
         .get(`/servientrega/remitente/buscar/${encodeURIComponent(query)}`)
-        .then((res) => {
-          console.log("✅ Resultados de búsqueda:", res.data);
-          setCedulaResultados(res.data.remitentes || []);
-        })
-        .catch((err) => {
-          console.error("❌ Error en búsqueda de remitente:", err);
-          setCedulaResultados([]);
-        })
+        .then((res) => setCedulaResultados(res.data.remitentes || []))
+        .catch(() => setCedulaResultados([]))
         .finally(() => setBuscandoCedula(false));
     } else {
       setCedulaResultados([]);
@@ -84,30 +156,25 @@ export default function PasoRemitente({
   }, [cedulaQuery]);
 
   const seleccionarRemitente = (rem: any) => {
-    console.log("🔍 Remitente encontrado:", rem);
-
-    setFormData({
-      identificacion: rem.cedula || rem.identificacion,
+    setFormData((prev) => ({
+      ...prev,
+      identificacion: rem.cedula || rem.identificacion || "",
       nombre: rem.nombre || "",
       telefono: rem.telefono || "",
       email: rem.email || "",
       direccion: rem.direccion || "",
-      codigo_postal:
-        rem.codigo_postal || selectedPoint?.codigo_postal || "170150",
-      // Usa ciudad y provincia del punto de atención seleccionado
-      ciudad: selectedPoint?.ciudad || "Quito",
-      provincia: selectedPoint?.provincia || "Pichincha",
-      pais: "ECUADOR", // Valor fijo para la API
-    });
+      // Fijar SIEMPRE la ciudad/provincia del punto (ya validadas contra catálogo)
+      ciudad: prev.ciudad,
+      provincia: prev.provincia,
+      codigo_postal: prev.codigo_postal || "170150",
+      pais: "ECUADOR",
+    }));
 
+    // Parseo de dirección
     if (rem.direccion) {
-      console.log("📍 Parseando dirección:", rem.direccion);
-
-      // Parsear la dirección completa
-      const direccionCompleta = rem.direccion;
-      const partes = direccionCompleta.split(",").map((p: string) => p.trim());
-
-      // Buscar la referencia (parte que empieza con "Ref:")
+      const partes = String(rem.direccion)
+        .split(",")
+        .map((p: string) => p.trim());
       const referenciaIndex = partes.findIndex((p: string) =>
         p.toLowerCase().startsWith("ref:")
       );
@@ -120,36 +187,22 @@ export default function PasoRemitente({
               .trim()
           : "";
 
-      // Las partes antes de la referencia
       const partesAntes =
         referenciaIndex >= 0 ? partes.slice(0, referenciaIndex) : partes;
 
-      // Primera parte: calle principal
       const callePrincipal = partesAntes[0]?.trim() || "";
-
-      // Segunda parte: puede ser numeración (si empieza con #) o calle secundaria
       const segundaParte = partesAntes[1]?.trim() || "";
       let numeracion = "";
       let calleSecundaria = "";
 
       if (segundaParte.startsWith("#")) {
-        // La segunda parte es la numeración
         numeracion = segundaParte.replace("#", "").trim();
-        // La tercera parte sería la calle secundaria
         calleSecundaria = partesAntes[2]?.replace(/^y\s*/i, "").trim() || "";
       } else {
-        // La segunda parte es la calle secundaria
         calleSecundaria = segundaParte.replace(/^y\s*/i, "").trim();
       }
 
       setExtraDireccion({
-        callePrincipal,
-        numeracion,
-        calleSecundaria,
-        referencia,
-      });
-
-      console.log("📍 Dirección parseada:", {
         callePrincipal,
         numeracion,
         calleSecundaria,
@@ -161,8 +214,9 @@ export default function PasoRemitente({
     setCedulaResultados([]);
   };
 
+  // Validación identificación EC (cédula/RUC) + fallback pasaporte
   const validarIdentificacion = (id: string): boolean => {
-    const cleanId = id.trim();
+    const cleanId = (id || "").trim();
     if (!cleanId) return false;
     if (/^\d{10}$/.test(cleanId)) {
       const provincia = parseInt(cleanId.substring(0, 2));
@@ -179,7 +233,7 @@ export default function PasoRemitente({
     }
     if (/^\d{13}$/.test(cleanId))
       return validarIdentificacion(cleanId.substring(0, 10));
-    return /^[A-Za-z0-9]{6,}$/.test(cleanId);
+    return /^[A-Za-z0-9]{6,}$/.test(cleanId); // pasaporte genérico
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -189,6 +243,17 @@ export default function PasoRemitente({
     setExtraDireccion((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleContinue = async () => {
+    if (cargandoCiudades) {
+      toast.info("Cargando catálogo de ciudades...");
+      return;
+    }
+    if (!ciudadValida) {
+      toast.error(
+        "La ciudad del Punto de Atención no está homologada. No se puede continuar."
+      );
+      return;
+    }
+
     const { identificacion, nombre, telefono, email, ciudad, pais } = formData;
     if (!identificacion || !nombre || !telefono || !email || !ciudad || !pais) {
       toast.error("Completa todos los campos obligatorios.");
@@ -209,91 +274,55 @@ export default function PasoRemitente({
       .filter(Boolean)
       .join(", ");
 
-    // Validar campos requeridos
-    if (!formData.identificacion?.trim()) {
-      toast.error("La identificación es requerida");
-      return;
-    }
-
-    // Validar formato de cédula (básico)
-    const cedula = formData.identificacion.trim();
-    if (cedula.length < 10 || !/^\d+$/.test(cedula)) {
-      toast.error("La identificación debe tener al menos 10 dígitos");
-      return;
-    }
-    if (!formData.nombre?.trim()) {
-      toast.error("El nombre es requerido");
-      return;
-    }
-    if (!formData.telefono?.trim()) {
-      toast.error("El teléfono es requerido");
-      return;
-    }
     if (!direccionFinal.trim()) {
       toast.error("La dirección es requerida");
       return;
     }
 
-    // Prepara objeto para el backend (usa identificacion y pais)
+    // Construye el remitente canonizado
     const remitenteFinal: Remitente = {
       identificacion: formData.identificacion.trim(),
       nombre: formData.nombre.trim(),
       direccion: direccionFinal.trim(),
       telefono: formData.telefono.trim(),
       email: formData.email?.trim() || "",
-      ciudad: formData.ciudad?.trim() || "",
-      provincia: formData.provincia?.trim() || "",
+      ciudad: formData.ciudad.trim(), // canon Servientrega
+      provincia: formData.provincia.trim(), // canon Servientrega
       codigo_postal: formData.codigo_postal?.trim() || "170150",
-      pais: formData.pais?.trim() || "ECUADOR",
-    };
-    // Intentar con todos los campos, si falla usar solo campos básicos
-    const payloadCompleto = {
-      cedula: formData.identificacion.trim(),
-      nombre: formData.nombre.trim(),
-      direccion: direccionFinal.trim(),
-      telefono: formData.telefono.trim(),
-      ...(formData.email?.trim() && { email: formData.email.trim() }),
-      ...(formData.codigo_postal?.trim() && {
-        codigo_postal: formData.codigo_postal.trim(),
-      }),
-      ...(formData.ciudad?.trim() && { ciudad: formData.ciudad.trim() }),
-      ...(formData.provincia?.trim() && {
-        provincia: formData.provincia.trim(),
-      }),
+      pais: "ECUADOR",
     };
 
-    // Payload básico como respaldo
-    const payloadBasico = {
-      cedula: formData.identificacion.trim(),
-      nombre: formData.nombre.trim(),
-      direccion: direccionFinal.trim(),
-      telefono: formData.telefono.trim(),
-      ...(formData.email?.trim() && { email: formData.email.trim() }),
-      ...(formData.codigo_postal?.trim() && {
-        codigo_postal: formData.codigo_postal.trim(),
-      }),
+    // Payload a BD (usa campos básicos por compatibilidad)
+    const payload = {
+      cedula: remitenteFinal.identificacion,
+      nombre: remitenteFinal.nombre,
+      direccion: remitenteFinal.direccion,
+      telefono: remitenteFinal.telefono,
+      email: remitenteFinal.email,
+      codigo_postal: remitenteFinal.codigo_postal,
+      ciudad: remitenteFinal.ciudad,
+      provincia: remitenteFinal.provincia,
     };
 
-    // Usar payload básico hasta que se ejecuten las migraciones en producción
-    const payload = payloadBasico;
-
-    console.log("📤 Enviando datos del remitente:", payload);
     setLoading(true);
-
     try {
       if (remitenteExistente) {
         await axiosInstance.put(
-          `/servientrega/remitente/actualizar/${formData.identificacion.trim()}`,
+          `/servientrega/remitente/actualizar/${remitenteFinal.identificacion}`,
           payload
         );
       } else {
         await axiosInstance.post("/servientrega/remitente/guardar", payload);
       }
       toast.success("Remitente guardado correctamente.");
-      onNext({ ...remitenteFinal, direccion: direccionFinal.trim() });
+      onNext(remitenteFinal);
     } catch (err) {
-      console.error("❌ Error al guardar remitente:", err);
-      console.error("❌ Datos que se intentaron enviar:", payload);
+      console.error(
+        "❌ Error al guardar remitente:",
+        err,
+        "\nPayload:",
+        payload
+      );
       toast.error("Hubo un problema al guardar el remitente.");
     } finally {
       setLoading(false);
@@ -306,7 +335,7 @@ export default function PasoRemitente({
         <CardTitle>Información del Remitente</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Identificación */}
+        {/* Identificación (con búsqueda) */}
         <div className="relative">
           <Input
             name="identificacion"
@@ -381,14 +410,18 @@ export default function PasoRemitente({
           onChange={handleExtraDireccionChange}
         />
 
-        {/* Ciudad y Provincia */}
+        {/* Ciudad y Provincia — SIEMPRE desde punto de atención y validadas contra catálogo */}
         <Input
           name="ciudad"
-          value={`${formData.ciudad} - ${formData.provincia}`}
+          value={
+            cargandoCiudades
+              ? "Validando ciudad del punto..."
+              : `${formData.ciudad} - ${formData.provincia}`
+          }
           readOnly
         />
 
-        {/* País (opcional en este flujo, pero preparado para el futuro) */}
+        {/* País (fijo) */}
         <Input name="pais" placeholder="País" value={formData.pais} readOnly />
 
         <Button

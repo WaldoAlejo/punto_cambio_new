@@ -16,43 +16,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import type {
-  Remitente,
-  Destinatario,
-  Medidas,
-  Empaque,
-  ResumenCostos,
-  FormDataGuia,
-} from "@/types/servientrega";
-import {
-  formatearPayloadGuia,
-  procesarRespuestaGuia,
-} from "@/config/servientrega";
+import type { FormDataGuia } from "@/types/servientrega";
 
 interface PasoConfirmarEnvioProps {
   formData: FormDataGuia;
   onReset: () => void;
   onSuccess?: () => void;
-}
-
-interface GenerarGuiaResponse {
-  // Datos de tarifa
-  flete: number;
-  valor_declarado: number;
-  tiempo: string;
-  valor_empaque: number;
-  trayecto: string;
-  prima: number;
-  peso: number;
-  volumen: number;
-  peso_cobrar: number;
-  gtotal: number;
-
-  // Datos de la guía generada
-  proceso: string;
-  guia: string;
-  guia_pdf: string;
-  guia_64: string;
 }
 
 export default function PasoConfirmarEnvio({
@@ -86,7 +55,7 @@ export default function PasoConfirmarEnvio({
         return false;
       }
       return true;
-    } catch (err) {
+    } catch {
       toast.error("No se pudo validar el saldo.");
       setSaldoEstado("ERROR");
       return false;
@@ -98,6 +67,18 @@ export default function PasoConfirmarEnvio({
     if (valido) setConfirmOpen(true);
   };
 
+  // Helpers
+  const safeUpper = (s?: string) => (s || "").toUpperCase().trim();
+  const ciudadProv = (ciudad?: string, provincia?: string) =>
+    `${safeUpper(ciudad)}-${safeUpper(provincia)}`;
+
+  // Mapeo de producto según selección previa
+  const mapNombreProducto = (raw?: string) => {
+    const v = (raw || "").toUpperCase();
+    if (v.includes("DOC")) return "DOCUMENTO";
+    return "MERCANCIA PREMIER";
+  };
+
   // ==========================
   // 📄 Generar guía
   // ==========================
@@ -105,35 +86,112 @@ export default function PasoConfirmarEnvio({
     setLoading(true);
     setError(null);
     try {
-      // Usar función centralizada para formatear payload
-      const payload = formatearPayloadGuia({
-        formData,
-        contenido: formData?.contenido || formData?.nombre_producto || "",
-        retiro_oficina: formData.retiro_oficina,
-        nombre_agencia_retiro_oficina: formData.retiro_oficina
-          ? formData.nombre_agencia_retiro_oficina
-          : "",
+      const r = formData.remitente!;
+      const d = formData.destinatario!;
+      const m = formData.medidas!;
+
+      // Peso volumétrico si no llega
+      const pesoVol =
+        Number(m?.alto || 0) > 0 &&
+        Number(m?.ancho || 0) > 0 &&
+        Number(m?.largo || 0) > 0
+          ? (Number(m.alto) * Number(m.ancho) * Number(m.largo)) / 5000
+          : 0;
+
+      // ⚠️ Forma de Consumo: GeneracionGuia
+      const payload = {
+        tipo: "GeneracionGuia",
+        nombre_producto: mapNombreProducto(formData.nombre_producto),
+        ciudad_origen: ciudadProv(r.ciudad, r.provincia),
+        cedula_remitente: r.identificacion || r.cedula || "",
+        nombre_remitente: r.nombre || "",
+        direccion_remitente: r.direccion || "",
+        telefono_remitente: r.telefono || "",
+        codigo_postal_remitente: r.codigo_postal || "PRUEBA",
+        cedula_destinatario: d.identificacion || d.cedula || "",
+        nombre_destinatario: d.nombre || "",
+        direccion_destinatario: d.direccion || "",
+        telefono_destinatario: d.telefono || "",
+        ciudad_destinatario: ciudadProv(d.ciudad, d.provincia),
+        pais_destinatario: d.pais || "ECUADOR",
+        codigo_postal_destinatario: d.codigo_postal || "PRUEBA",
+        contenido:
+          (formData?.contenido || formData?.nombre_producto || "PRUEBA") + "",
+        retiro_oficina: formData.retiro_oficina ? "SI" : "NO",
+        ...(formData.retiro_oficina &&
+          formData.nombre_agencia_retiro_oficina && {
+            nombre_agencia_retiro_oficina:
+              formData.nombre_agencia_retiro_oficina,
+          }),
         pedido: formData.pedido || "PRUEBA",
         factura: formData.factura || "PRUEBA",
-      });
+        valor_declarado: Number(m?.valor_declarado || 0),
+        valor_asegurado: Number(m?.valor_seguro || 0),
+        peso_fisico: Number(m?.peso || 0),
+        peso_volumentrico: Number(pesoVol || 0),
+        piezas: Number(m?.piezas || 1),
+        alto: Number(m?.alto || 0),
+        ancho: Number(m?.ancho || 0),
+        largo: Number(m?.largo || 0),
+        tipo_guia: "1",
+        alianza: "PRUEBAS",
+        alianza_oficina: "OFICINA_PRUEBA",
+        mail_remite: r.email || "correoremitente@gmail.com",
 
-      console.log("📤 Payload para generar guía:", payload);
+        // Si tu backend NO agrega credenciales, descomenta y completa:
+        // usuingreso: "PRUEBA",
+        // contrasenha: "s12345ABCDe",
+      } as const;
+
+      console.log("📤 Payload GeneracionGuia:", payload);
 
       const res = await axiosInstance.post(
         "/servientrega/generar-guia",
         payload
       );
+      let data = res.data;
 
-      console.log("📥 Respuesta de generar guía:", res.data);
+      // La API a veces devuelve: [ ...tarifa ]{ fetch: {...guia...} }
+      // Normalizamos para extraer la guía y el PDF Base64
+      let guiaStr: string | undefined;
+      let guia64: string | undefined;
 
-      // Procesar respuesta usando función centralizada
-      const data = procesarRespuestaGuia(res.data);
+      if (typeof data === "string") {
+        // Intento de parse cuando vienen concatenados como string
+        try {
+          // separa jsons contiguos: ][ o }{ etc.
+          const parts = data
+            .trim()
+            .replace(/}\s*{/g, "}|{")
+            .split("|")
+            .map((p: string) => p.trim());
+          for (const p of parts) {
+            try {
+              const j = JSON.parse(p);
+              if (Array.isArray(j)) {
+                // tarifa: ignoramos aquí
+              } else if (j?.fetch?.guia) {
+                guiaStr = j.fetch.guia;
+                guia64 = j.fetch.guia_64 || j.fetch.guia_pdf;
+              }
+            } catch {}
+          }
+        } catch {}
+      } else if (Array.isArray(data)) {
+        // solo tarifa
+      } else if (data?.fetch?.guia) {
+        guiaStr = data.fetch.guia;
+        guia64 = data.fetch.guia_64 || data.fetch.guia_pdf;
+      } else if (data?.guia) {
+        guiaStr = data.guia;
+        guia64 = data.guia_64 || data.guia_pdf;
+      }
 
-      if (data?.guia && data?.guia_64) {
-        setGuia(data.guia);
-        setBase64(data.guia_64);
-        toast.success(`✅ Guía generada: ${data.guia}`);
-        if (onSuccess) onSuccess();
+      if (guiaStr && guia64) {
+        setGuia(guiaStr);
+        setBase64(guia64);
+        toast.success(`✅ Guía generada: ${guiaStr}`);
+        onSuccess?.();
       } else {
         setError("No se pudo generar la guía. Verifica los datos.");
         toast.error("No se pudo generar la guía.");
@@ -154,45 +212,17 @@ export default function PasoConfirmarEnvio({
   // 📄 Ver PDF de la guía
   // ==========================
   const handleVerPDF = () => {
-    if (base64) {
-      const pdfURL = `data:application/pdf;base64,${base64}`;
-      window.open(pdfURL, "_blank");
-    }
-  };
-
-  // ==========================
-  // 🔔 Solicitar saldo
-  // ==========================
-  const handleSolicitarSaldo = async () => {
-    try {
-      const montoRequerido = Math.max(
-        formData?.resumen_costos?.total || 0,
-        50 // Monto mínimo sugerido
-      );
-
-      await axiosInstance.post("/servientrega/solicitar-saldo", {
-        punto_atencion_id: formData?.punto_atencion_id || "",
-        monto_solicitado: montoRequerido,
-        observaciones: `Solicitud automática para generar guía. Costo estimado: $${formData?.resumen_costos?.total?.toFixed(
-          2
-        )}`,
-        creado_por: "Sistema",
-      });
-      toast.success("Solicitud de saldo enviada al administrador.");
-      setConfirmOpen(false);
-    } catch (err) {
-      toast.error("No se pudo enviar la solicitud de saldo.");
-    }
+    if (!base64) return;
+    const isBase64 = !/^https?:\/\//i.test(base64);
+    const url = isBase64 ? `data:application/pdf;base64,${base64}` : base64; // si vino url directa
+    window.open(url, "_blank");
   };
 
   const saldoRestante =
     saldoDisponible !== null
-      ? saldoDisponible - formData.resumen_costos.total
+      ? saldoDisponible - (formData.resumen_costos.total || 0)
       : null;
 
-  // ==========================
-  // 🎨 Render
-  // ==========================
   return (
     <Card className="w-full max-w-2xl mx-auto mt-6 shadow-lg border rounded-xl">
       <CardHeader>
@@ -208,7 +238,8 @@ export default function PasoConfirmarEnvio({
 
             <div className="border rounded-md p-3 bg-gray-50 text-sm space-y-2">
               <p>
-                <strong>Producto:</strong> {formData?.nombre_producto || "N/A"}
+                <strong>Producto:</strong>{" "}
+                {mapNombreProducto(formData?.nombre_producto)}
               </p>
               <p>
                 <strong>Valor declarado:</strong> $
@@ -264,7 +295,10 @@ export default function PasoConfirmarEnvio({
                       <p>
                         <strong>Saldo requerido:</strong>{" "}
                         <span className="text-green-600">
-                          ${Number(formData.resumen_costos.total).toFixed(2)}
+                          $
+                          {Number(formData.resumen_costos.total || 0).toFixed(
+                            2
+                          )}
                         </span>
                       </p>
                       <p>
@@ -296,7 +330,34 @@ export default function PasoConfirmarEnvio({
                   {saldoEstado !== "OK" ||
                   (saldoRestante !== null && saldoRestante < 0) ? (
                     <Button
-                      onClick={handleSolicitarSaldo}
+                      onClick={async () => {
+                        try {
+                          const montoRequerido = Math.max(
+                            formData?.resumen_costos?.total || 0,
+                            50
+                          );
+                          await axiosInstance.post(
+                            "/servientrega/solicitar-saldo",
+                            {
+                              punto_atencion_id:
+                                formData?.punto_atencion_id || "",
+                              monto_solicitado: montoRequerido,
+                              observaciones: `Solicitud automática. Costo estimado: $${Number(
+                                formData?.resumen_costos?.total || 0
+                              ).toFixed(2)}`,
+                              creado_por: "Sistema",
+                            }
+                          );
+                          toast.success(
+                            "Solicitud de saldo enviada al administrador."
+                          );
+                          setConfirmOpen(false);
+                        } catch {
+                          toast.error(
+                            "No se pudo enviar la solicitud de saldo."
+                          );
+                        }
+                      }}
                       className="bg-yellow-500 hover:bg-yellow-600 text-white w-full"
                     >
                       Solicitar saldo al administrador

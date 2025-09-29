@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Dialog,
   DialogContent,
@@ -21,24 +23,27 @@ import {
   Loader2,
 } from "lucide-react";
 
+type NumStr = number | string | null | undefined;
+
 interface TarifaServientrega {
-  flete: number;
-  valor_declarado: string;
-  tiempo: string;
-  valor_empaque: string;
-  valor_empaque_iva: string;
-  total_empaque: string;
-  trayecto: string;
-  prima: number;
-  peso: string;
-  volumen: number;
-  peso_cobrar: string;
-  descuento: number;
-  tarifa0: number;
-  tarifa12: number;
-  tiva: number;
-  gtotal: number;
-  total_transacion: string;
+  // Campos que suelen venir (a veces como string)
+  flete?: NumStr;
+  valor_declarado?: NumStr;
+  tiempo?: string; // suele venir como "1", "2", etc.
+  valor_empaque?: NumStr;
+  valor_empaque_iva?: NumStr;
+  total_empaque?: NumStr;
+  trayecto?: string;
+  prima?: NumStr; // seguro
+  peso?: NumStr;
+  volumen?: NumStr;
+  peso_cobrar?: NumStr;
+  descuento?: NumStr;
+  tarifa0?: NumStr;
+  tarifa12?: NumStr;
+  tiva?: NumStr;
+  gtotal?: NumStr;
+  total_transacion?: NumStr; // valor real a cobrar
 }
 
 interface TarifaModalProps {
@@ -49,6 +54,35 @@ interface TarifaModalProps {
   loading?: boolean;
   saldoDisponible?: number;
   puntoAtencionNombre?: string;
+}
+
+function toNumber(v: NumStr, fallback = 0): number {
+  if (v === null || v === undefined || v === "") return fallback;
+  const n = typeof v === "string" ? parseFloat(v.replace(",", ".")) : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function formatCurrency(v: NumStr): string {
+  const n = toNumber(v, 0);
+  return `$${n.toFixed(2)}`;
+}
+
+function pluralDias(tiempo?: string): string {
+  if (!tiempo) return "1-2 días";
+  return `${tiempo} día${tiempo === "1" ? "" : "s"}`;
+}
+
+function getTrayectoColor(trayecto?: string) {
+  switch ((trayecto || "").toUpperCase()) {
+    case "REGIONAL":
+      return "bg-blue-100 text-blue-800";
+    case "NACIONAL":
+      return "bg-green-100 text-green-800";
+    case "INTERNACIONAL":
+      return "bg-purple-100 text-purple-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
 }
 
 export default function TarifaModal({
@@ -62,23 +96,12 @@ export default function TarifaModal({
 }: TarifaModalProps) {
   if (!tarifa) return null;
 
-  const formatCurrency = (value: string | number) => {
-    const num = typeof value === "string" ? parseFloat(value) : value;
-    return `$${num.toFixed(2)}`;
-  };
+  const totalTransaccion = toNumber(tarifa.total_transacion);
+  const gtotal = toNumber(tarifa.gtotal);
+  const costoEnvio = totalTransaccion > 0 ? totalTransaccion : gtotal;
 
-  const getTrayectoColor = (trayecto: string) => {
-    switch (trayecto.toUpperCase()) {
-      case "REGIONAL":
-        return "bg-blue-100 text-blue-800";
-      case "NACIONAL":
-        return "bg-green-100 text-green-800";
-      case "INTERNACIONAL":
-        return "bg-purple-100 text-purple-800";
-      default:
-        return "bg-gray-100 text-gray-800";
-    }
-  };
+  const saldoDespues =
+    saldoDisponible !== undefined ? saldoDisponible - costoEnvio : undefined;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -91,7 +114,7 @@ export default function TarifaModal({
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Header con información principal */}
+          {/* Header principal */}
           <Card className="bg-gradient-to-r from-primary/10 to-primary/5">
             <CardContent className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -103,7 +126,7 @@ export default function TarifaModal({
                     </span>
                   </div>
                   <div className="text-3xl font-bold text-primary">
-                    {formatCurrency(tarifa.total_transacion)}
+                    {formatCurrency(costoEnvio)}
                   </div>
                 </div>
 
@@ -115,7 +138,7 @@ export default function TarifaModal({
                     </span>
                   </div>
                   <div className="text-xl font-semibold text-orange-600">
-                    {tarifa.tiempo} día{tarifa.tiempo !== "1" ? "s" : ""}
+                    {pluralDias(tarifa.tiempo)}
                   </div>
                 </div>
 
@@ -127,7 +150,7 @@ export default function TarifaModal({
                     </span>
                   </div>
                   <Badge className={getTrayectoColor(tarifa.trayecto)}>
-                    {tarifa.trayecto}
+                    {tarifa.trayecto || "—"}
                   </Badge>
                 </div>
               </div>
@@ -172,20 +195,20 @@ export default function TarifaModal({
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Prima:</span>
+                  <span className="text-gray-600">Prima (seguro):</span>
                   <span className="font-medium">
                     {formatCurrency(tarifa.prima)}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600">IVA:</span>
+                  <span className="text-gray-600">IVA (flete/servicios):</span>
                   <span className="font-medium">
                     {formatCurrency(tarifa.tiva)}
                   </span>
                 </div>
 
-                {tarifa.descuento > 0 && (
+                {toNumber(tarifa.descuento) > 0 && (
                   <div className="flex justify-between items-center text-green-600">
                     <span>Descuento:</span>
                     <span className="font-medium">
@@ -203,7 +226,7 @@ export default function TarifaModal({
 
                 <div className="flex justify-between items-center text-xl font-bold text-primary">
                   <span>Total a pagar:</span>
-                  <span>{formatCurrency(tarifa.total_transacion)}</span>
+                  <span>{formatCurrency(costoEnvio)}</span>
                 </div>
               </div>
             </CardContent>
@@ -221,17 +244,23 @@ export default function TarifaModal({
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Peso real:</span>
-                    <span className="font-medium">{tarifa.peso} kg</span>
+                    <span className="font-medium">
+                      {toNumber(tarifa.peso).toFixed(2)} kg
+                    </span>
                   </div>
 
                   <div className="flex justify-between">
                     <span className="text-gray-600">Peso a cobrar:</span>
-                    <span className="font-medium">{tarifa.peso_cobrar} kg</span>
+                    <span className="font-medium">
+                      {toNumber(tarifa.peso_cobrar).toFixed(2)} kg
+                    </span>
                   </div>
 
                   <div className="flex justify-between">
                     <span className="text-gray-600">Volumen:</span>
-                    <span className="font-medium">{tarifa.volumen} m³</span>
+                    <span className="font-medium">
+                      {toNumber(tarifa.volumen).toFixed(3)} m³
+                    </span>
                   </div>
                 </div>
 
@@ -288,7 +317,7 @@ export default function TarifaModal({
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">Costo del envío:</span>
                     <span className="font-medium text-orange-600">
-                      {formatCurrency(tarifa.total_transacion)}
+                      {formatCurrency(costoEnvio)}
                     </span>
                   </div>
 
@@ -300,20 +329,16 @@ export default function TarifaModal({
                     </span>
                     <span
                       className={`font-bold ${
-                        saldoDisponible - parseFloat(tarifa.total_transacion) >=
-                        0
+                        saldoDespues !== undefined && saldoDespues >= 0
                           ? "text-green-600"
                           : "text-red-600"
                       }`}
                     >
-                      {formatCurrency(
-                        saldoDisponible - parseFloat(tarifa.total_transacion)
-                      )}
+                      {formatCurrency(saldoDespues)}
                     </span>
                   </div>
 
-                  {saldoDisponible - parseFloat(tarifa.total_transacion) <
-                    0 && (
+                  {saldoDespues !== undefined && saldoDespues < 0 && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
                       <div className="flex items-center gap-2 text-red-800">
                         <AlertTriangle className="h-4 w-4" />
@@ -355,8 +380,8 @@ export default function TarifaModal({
               disabled={
                 loading ||
                 (saldoDisponible !== undefined &&
-                  tarifa &&
-                  saldoDisponible - parseFloat(tarifa.total_transacion) < 0)
+                  saldoDespues !== undefined &&
+                  saldoDespues < 0)
               }
               className="bg-green-600 hover:bg-green-700 text-white"
             >

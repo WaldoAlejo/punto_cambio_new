@@ -34,6 +34,8 @@ export interface Medidas {
   valor_seguro: number;
   recoleccion: boolean;
   contenido: string;
+  /** Cantidad de piezas del envío (opcional). */
+  piezas?: number;
 }
 
 export interface Empaque {

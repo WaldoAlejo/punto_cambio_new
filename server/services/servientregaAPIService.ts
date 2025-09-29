@@ -45,22 +45,44 @@ export class ServientregaAPIService {
 
       const startTime = Date.now();
 
-      // Probar primero con application/x-www-form-urlencoded (formato tradicional de Servientrega)
-      console.log(
-        "🔄 Intentando con Content-Type: application/x-www-form-urlencoded"
-      );
-      const formData = new URLSearchParams();
-      Object.entries(fullPayload).forEach(([key, value]) => {
-        formData.append(key, String(value));
-      });
+      // Determinar el Content-Type basado en el tipo de operación
+      const isTarifaOperation =
+        (fullPayload as any).tipo === "obtener_tarifa_nacional" ||
+        (fullPayload as any).ciu_ori ||
+        (fullPayload as any).ciu_des;
 
-      console.log("📝 FormData string:", formData.toString());
+      let requestData: any;
+      let headers: any;
 
-      const response = await axios.post(url, formData.toString(), {
-        headers: {
+      if (isTarifaOperation) {
+        // Para cálculo de tarifas, usar form-urlencoded
+        console.log(
+          "🔄 Operación de tarifa detectada - usando application/x-www-form-urlencoded"
+        );
+        const formData = new URLSearchParams();
+        Object.entries(fullPayload).forEach(([key, value]) => {
+          formData.append(key, String(value));
+        });
+        requestData = formData.toString();
+        headers = {
           "Content-Type": "application/x-www-form-urlencoded",
           "User-Agent": "PuntoCambio/1.0",
-        },
+        };
+        console.log("📝 FormData string:", requestData);
+      } else {
+        // Para otras operaciones (productos, países, etc.), usar JSON
+        console.log(
+          "🔄 Operación estándar detectada - usando application/json"
+        );
+        requestData = fullPayload;
+        headers = {
+          "Content-Type": "application/json",
+          "User-Agent": "PuntoCambio/1.0",
+        };
+      }
+
+      const response = await axios.post(url, requestData, {
+        headers,
         httpsAgent,
         timeout: timeoutMs,
         maxRedirects: 3,

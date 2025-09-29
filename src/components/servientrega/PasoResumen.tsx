@@ -1,31 +1,78 @@
+// src/components/servientrega/PasoResumen.tsx
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axiosInstance from "@/services/axiosInstance";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { getCredenciales, SERVIENTREGA_CONFIG } from "@/config/servientrega";
+import { Loader2, Wallet, AlertTriangle, Calculator } from "lucide-react";
+import TarifaModal from "./TarifaModal";
+
+/** Tipos mínimos locales (ajusta si ya los tienes tipados globalmente) */
+interface Remitente {
+  identificacion?: string;
+  nombre?: string;
+  direccion?: string;
+  telefono?: string;
+  email?: string;
+  ciudad?: string;
+  provincia?: string;
+  codigo_postal?: string;
+  pais?: string;
+}
+interface Destinatario extends Remitente {
+  codpais?: number;
+}
+interface Medidas {
+  alto: number;
+  ancho: number;
+  largo: number;
+  peso: number;
+  valor_declarado: number;
+  valor_seguro?: number;
+  recoleccion?: boolean;
+}
+interface FormDataGuia {
+  remitente: Remitente;
+  destinatario: Destinatario;
+  medidas: Medidas;
+  punto_atencion_id?: string | number;
+  nombre_producto?: string; // Texto que viene del PasoProducto
+  requiere_empaque?: boolean;
+  empaque?: { tipo_empaque: string };
+  contenido?: string;
+  retiro_oficina?: boolean;
+  nombre_agencia_retiro_oficina?: string;
+  pedido?: string;
+  factura?: string;
+}
 
 interface PasoResumenProps {
-  formData: any;
+  formData: FormDataGuia;
   onBack: () => void;
-  onConfirm: () => void;
+  onConfirm: () => void; // sigue siendo el botón que avanza a generar guía
 }
 
-interface TarifaResponse {
-  flete: number | string;
-  valor_declarado: number | string;
-  valor_empaque: number | string;
-  seguro?: number | string;
+/** Respuesta que mostramos en la UI */
+interface TarifaResponseUI {
+  flete: number;
+  valor_declarado: number;
+  valor_empaque: number;
+  seguro?: number;
   tiempo: string | null;
-  peso_vol?: string | number;
+  peso_vol?: number;
+  descuento?: number;
+  tarifa0?: number;
+  tarifa12?: number;
+  tiva?: number;
+  gtotal?: number;
+  total_transacion?: number;
+  trayecto?: string;
 }
 
-// Usar configuración centralizada
-const { DEFAULT_EMPAQUE, DEFAULT_CP_ORI, DEFAULT_CP_DES } = SERVIENTREGA_CONFIG;
-
+/** Para pintar campos */
 const Campo = ({
   label,
   value,
@@ -62,160 +109,197 @@ const Seccion = ({
   </div>
 );
 
+/** Helpers de negocio */
+const DEFAULT_EMPAQUE = "AISLANTE DE HUMEDAD";
+const DEFAULT_CP_ORI = "170150";
+const DEFAULT_CP_DES = "110111";
+const UMBRAL_SALDO_BAJO = 2.0;
+
+/** Normaliza el nombre del producto según documentación */
+function mapProducto(nombre?: string): "DOCUMENTO" | "MERCANCIA PREMIER" {
+  const raw = (nombre || "").toUpperCase();
+  if (raw.includes("DOC")) return "DOCUMENTO";
+  return "MERCANCIA PREMIER";
+}
+
+/** Calcula peso volumétrico localmente */
+function calcPesoVol({ alto = 0, ancho = 0, largo = 0 }: Partial<Medidas>) {
+  const a = Number(alto) || 0;
+  const b = Number(ancho) || 0;
+  const c = Number(largo) || 0;
+  return a > 0 && b > 0 && c > 0 ? (a * b * c) / 5000 : 0;
+}
+
 export default function PasoResumen({
   formData,
   onBack,
   onConfirm,
 }: PasoResumenProps) {
   const { remitente, destinatario, medidas, punto_atencion_id } = formData;
-  const [tarifa, setTarifa] = useState<TarifaResponse | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  // Desglose dirección para presentación más clara
-  const descomponerDireccion = (direccion: string) => {
-    if (!direccion)
-      return {
-        callePrincipal: "-",
-        numeracion: "-",
-        calleSecundaria: "-",
-        referencia: "-",
-      };
-    const partes = direccion.split(",").map((p) => p.trim());
-    return {
-      callePrincipal: partes[0]?.split("#")[0]?.trim() || "-",
-      numeracion: partes[0]?.includes("#")
-        ? partes[0].split("#")[1]?.trim() || "-"
-        : "-",
-      calleSecundaria: partes[1]?.replace(/^y\s*/i, "").trim() || "-",
-      referencia: partes[2]?.replace(/^Ref:\s*/i, "").trim() || "-",
-    };
-  };
+  /** Estado UI */
+  const [tarifa, setTarifa] = useState<TarifaResponseUI | null>(null);
+  const [tarifaCruda, setTarifaCruda] = useState<any>(null); // para el modal
+  const [loadingTarifa, setLoadingTarifa] = useState(false);
 
-  // Calcula peso volumétrico
-  const calcularPesoVolumetrico = () => {
-    const alto = Number(medidas?.alto || 0);
-    const ancho = Number(medidas?.ancho || 0);
-    const largo = Number(medidas?.largo || 0);
-    return alto > 0 && ancho > 0 && largo > 0
-      ? (alto * ancho * largo) / 5000
-      : 0;
-  };
+  const [saldo, setSaldo] = useState<{
+    disponible: number;
+    estado: "OK" | "SALDO_BAJO" | "ERROR";
+    mensaje?: string;
+  } | null>(null);
+  const [loadingSaldo, setLoadingSaldo] = useState(false);
 
+  const [showTarifaModal, setShowTarifaModal] = useState(false);
+
+  /** Cálculos de peso */
   const pesoFisico = Number(medidas?.peso || 0);
-  const pesoVolumetrico = Number(tarifa?.peso_vol || calcularPesoVolumetrico());
+  const pesoVolumetrico = useMemo(
+    () => Number(tarifa?.peso_vol || calcPesoVol(medidas)),
+    [tarifa?.peso_vol, medidas]
+  );
   const pesoFacturable = Math.max(pesoFisico, pesoVolumetrico);
 
-  // Calcula tarifa usando backend
-  useEffect(() => {
-    const fetchTarifa = async () => {
-      setLoading(true);
-      try {
-        const isInternacional =
-          (destinatario?.pais || "").toUpperCase() !== "ECUADOR";
-        const credenciales = getCredenciales();
-
-        const payload = {
-          tipo: isInternacional
-            ? "obtener_tarifa_internacional"
-            : "obtener_tarifa_nacional",
-          pais_ori: remitente?.pais || "ECUADOR",
-          ciu_ori: (remitente?.ciudad || "").toUpperCase(),
-          provincia_ori: (remitente?.provincia || "").toUpperCase(),
-          pais_des: destinatario?.pais || "ECUADOR",
-          ciu_des: (destinatario?.ciudad || "").toUpperCase(),
-          provincia_des: (destinatario?.provincia || "").toUpperCase(),
-          valor_seguro: (medidas?.valor_seguro ?? "0").toString(),
-          valor_declarado: (medidas?.valor_declarado ?? "0").toString(),
-          peso: pesoFacturable.toString(),
-          alto: (medidas?.alto ?? 0).toString(),
-          ancho: (medidas?.ancho ?? 0).toString(),
-          largo: (medidas?.largo ?? 0).toString(),
-          recoleccion: "NO",
-          nombre_producto:
-            formData?.nombre_producto || SERVIENTREGA_CONFIG.DEFAULT_PRODUCTO,
-          empaque: formData.requiere_empaque
-            ? formData.empaque?.tipo_empaque || DEFAULT_EMPAQUE
-            : DEFAULT_EMPAQUE,
-          usuingreso: credenciales.usuingreso,
-          contrasenha: credenciales.contrasenha,
-          ...(isInternacional && {
-            codigo_postal_ori: remitente?.codigo_postal || DEFAULT_CP_ORI,
-            codigo_postal_des: destinatario?.codigo_postal || DEFAULT_CP_DES,
-          }),
-        };
-
-        console.log("📤 Payload para tarifa (PasoResumen):", payload);
-
-        const res = await axiosInstance.post("/servientrega/tarifa", payload);
-        const resultado = Array.isArray(res.data) ? res.data[0] : res.data;
-
-        console.log("📥 Respuesta de tarifa (PasoResumen):", res.data);
-        console.log("🔍 Resultado procesado:", resultado);
-
-        if (!resultado || resultado.flete === undefined) {
-          console.error("❌ Respuesta inválida de Servientrega:", resultado);
-          toast.error("No se pudo calcular la tarifa. Verifica los datos.");
-          setTarifa(null);
-          return;
-        }
-
-        // Procesar todos los campos de la respuesta de Servientrega
-        const tarifaProcesada = {
-          ...resultado,
-          flete: Number(resultado.flete) || 0,
-          valor_empaque: Number(resultado.valor_empaque) || 0,
-          valor_declarado: Number(resultado.valor_declarado) || 0,
-          seguro: Number(resultado.prima) || Number(resultado.seguro) || 0,
-          prima: Number(resultado.prima) || 0,
-          peso_vol:
-            Number(resultado.peso_vol) ||
-            Number(resultado.volumen) ||
-            calcularPesoVolumetrico(),
-          total_transacion: Number(resultado.total_transacion) || 0,
-          gtotal: Number(resultado.gtotal) || 0,
-          tiempo: resultado.tiempo || "1-2 días hábiles",
-        };
-
-        console.log("💰 Tarifa procesada:", tarifaProcesada);
-        setTarifa(tarifaProcesada);
-      } catch (err) {
-        console.error("Error al obtener tarifa:", err);
-        toast.error("Error al calcular la tarifa. Intenta nuevamente.");
-        setTarifa(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTarifa();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData]);
-
-  // Total calculado - incluye flete, empaque y seguro
-  const calcularTotal = (): string => {
-    if (!tarifa) return "0.00";
-
-    // Si la respuesta de Servientrega incluye el total calculado, usarlo
+  /** Total mostrado (preferimos total_transacion > gtotal > suma simple) */
+  const total = useMemo(() => {
+    if (!tarifa) return 0;
     if (tarifa.total_transacion && Number(tarifa.total_transacion) > 0) {
-      return Number(tarifa.total_transacion).toFixed(2);
+      return Number(tarifa.total_transacion);
     }
-
     if (tarifa.gtotal && Number(tarifa.gtotal) > 0) {
-      return Number(tarifa.gtotal).toFixed(2);
+      return Number(tarifa.gtotal);
     }
+    const flete = Number(tarifa.flete || 0);
+    const empaque = Number(tarifa.valor_empaque || 0);
+    const seguro = Number(tarifa.seguro || 0);
+    const iva = Number(tarifa.tiva || 0);
+    return flete + empaque + seguro + iva;
+  }, [tarifa]);
 
-    // Fallback: calcular manualmente
-    const flete = Number(tarifa.flete) || 0;
-    const empaque = Number(tarifa.valor_empaque) || 0;
-    const seguro = Number(tarifa.seguro) || Number(tarifa.prima) || 0;
+  const saldoSuficiente = saldo ? saldo.disponible >= total : false;
+  const saldoBajo = saldo?.estado === "SALDO_BAJO";
 
-    return (flete + empaque + seguro).toFixed(2);
+  /** Cargar saldo */
+  const obtenerSaldo = async () => {
+    if (!punto_atencion_id) return;
+    setLoadingSaldo(true);
+    try {
+      const { data } = await axiosInstance.get(
+        `/servientrega/saldo/${punto_atencion_id}`
+      );
+      const disponible = Number(data.disponible || 0);
+      const estado = disponible < UMBRAL_SALDO_BAJO ? "SALDO_BAJO" : "OK";
+      setSaldo({
+        disponible,
+        estado,
+        mensaje:
+          estado === "SALDO_BAJO"
+            ? "Saldo bajo. Se recomienda solicitar más saldo."
+            : undefined,
+      });
+    } catch (error) {
+      console.error("❌ Error al obtener saldo:", error);
+      setSaldo({
+        disponible: 0,
+        estado: "ERROR",
+        mensaje: "Error al consultar el saldo",
+      });
+    } finally {
+      setLoadingSaldo(false);
+    }
   };
 
-  // Valida saldo antes de permitir confirmar
+  /** Cargar tarifa */
+  const fetchTarifa = async () => {
+    if (!remitente || !destinatario || !medidas) {
+      toast.error("Faltan datos para calcular la tarifa.");
+      return;
+    }
+    setLoadingTarifa(true);
+    try {
+      const isInternacional =
+        (destinatario?.pais || "ECUADOR").toUpperCase() !== "ECUADOR";
+      const nombre_producto = mapProducto(formData?.nombre_producto);
+
+      // Tipo según doc: usamos "obtener_tarifa_nacional" incluso cuando haya país destino distinto
+      const payload: any = {
+        tipo: "obtener_tarifa_nacional",
+        // Origen
+        ciu_ori: (remitente?.ciudad || "").toUpperCase(),
+        provincia_ori: (remitente?.provincia || "").toUpperCase(),
+        // Destino
+        ciu_des: (destinatario?.ciudad || "").toUpperCase(),
+        provincia_des: (destinatario?.provincia || "").toUpperCase(),
+        // Valores
+        valor_seguro: String(medidas?.valor_seguro ?? "0"),
+        valor_declarado: String(medidas?.valor_declarado ?? "0"),
+        peso: String(pesoFacturable),
+        alto: String(medidas?.alto ?? 0),
+        ancho: String(medidas?.ancho ?? 0),
+        largo: String(medidas?.largo ?? 0),
+        recoleccion: "NO",
+        nombre_producto, // "DOCUMENTO" | "MERCANCIA PREMIER"
+        empaque: formData.requiere_empaque
+          ? formData.empaque?.tipo_empaque || DEFAULT_EMPAQUE
+          : DEFAULT_EMPAQUE,
+      };
+
+      // Para “internacional” (doc usa mismo tipo pero añadimos país/códigos postales)
+      if (isInternacional) {
+        payload.pais_ori = remitente?.pais || "ECUADOR";
+        payload.pais_des = destinatario?.pais || "ECUADOR";
+        payload.codigo_postal_ori = remitente?.codigo_postal || DEFAULT_CP_ORI;
+        payload.codigo_postal_des =
+          destinatario?.codigo_postal || DEFAULT_CP_DES;
+      }
+
+      console.log("📤 Payload tarifa (PasoResumen):", payload);
+      const res = await axiosInstance.post("/servientrega/tarifa", payload);
+      const raw = Array.isArray(res.data) ? res.data[0] : res.data;
+      setTarifaCruda(raw);
+
+      if (!raw || raw.flete === undefined) {
+        console.error("❌ Respuesta inválida de Servientrega:", raw);
+        toast.error("No se pudo calcular la tarifa. Verifica los datos.");
+        setTarifa(null);
+        return;
+      }
+
+      // Normalización
+      const tarifaUI: TarifaResponseUI = {
+        flete: Number(raw.flete || 0),
+        valor_declarado: Number(raw.valor_declarado || 0),
+        valor_empaque: Number(raw.valor_empaque || 0),
+        seguro: Number(raw.prima || raw.seguro || 0),
+        tiempo: raw.tiempo || "1-2 días hábiles",
+        peso_vol: Number(raw.peso_vol || raw.volumen || calcPesoVol(medidas)),
+        descuento: Number(raw.descuento || 0),
+        tarifa0: Number(raw.tarifa0 || 0),
+        tarifa12: Number(raw.tarifa12 || 0),
+        tiva: Number(raw.tiva || 0),
+        gtotal: Number(raw.gtotal || 0),
+        total_transacion: Number(raw.total_transacion || 0),
+        trayecto: raw.trayecto || "",
+      };
+
+      setTarifa(tarifaUI);
+      toast.success("Tarifa calculada exitosamente.");
+    } catch (err) {
+      console.error("❌ Error al obtener tarifa:", err);
+      toast.error("Error al calcular la tarifa. Intenta nuevamente.");
+      setTarifa(null);
+    } finally {
+      setLoadingTarifa(false);
+    }
+  };
+
+  /** Validar saldo antes de confirmar */
   const validarSaldoAntesConfirmar = async () => {
     if (!punto_atencion_id) {
       toast.error("No se ha identificado el punto de atención.");
+      return;
+    }
+    if (!tarifa) {
+      toast.error("Aún no se ha calculado la tarifa.");
       return;
     }
     try {
@@ -235,29 +319,108 @@ export default function PasoResumen({
     }
   };
 
+  /** Efectos iniciales */
+  useEffect(() => {
+    fetchTarifa();
+    obtenerSaldo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData]);
+
   return (
     <Card className="w-full max-w-4xl mx-auto mt-6 shadow-lg border rounded-xl">
       <CardHeader>
         <CardTitle className="text-xl">Resumen de la Guía</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Panel de saldo */}
+        <Card
+          className={`${
+            saldoBajo
+              ? "border-yellow-300 bg-yellow-50"
+              : saldo?.estado === "ERROR"
+              ? "border-red-300 bg-red-50"
+              : "border-green-300 bg-green-50"
+          }`}
+        >
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between text-lg">
+              <div className="flex items-center gap-2">
+                <Wallet
+                  className={`h-5 w-5 ${
+                    saldoBajo
+                      ? "text-yellow-600"
+                      : saldo?.estado === "ERROR"
+                      ? "text-red-600"
+                      : "text-green-600"
+                  }`}
+                />
+                <span>Saldo Disponible</span>
+              </div>
+              {loadingSaldo && <Loader2 className="h-4 w-4 animate-spin" />}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-between items-center">
+              <div>
+                <div
+                  className={`text-2xl font-bold ${
+                    saldoBajo
+                      ? "text-yellow-600"
+                      : saldo?.estado === "ERROR"
+                      ? "text-red-600"
+                      : "text-green-600"
+                  }`}
+                >
+                  ${saldo?.disponible?.toFixed(2) || "0.00"}
+                </div>
+                {saldo?.mensaje && (
+                  <p
+                    className={`text-sm ${
+                      saldoBajo ? "text-yellow-600" : "text-red-600"
+                    }`}
+                  >
+                    {saldo.mensaje}
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Costo estimado:</p>
+                <p
+                  className={`text-lg font-semibold ${
+                    saldoSuficiente ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  ${total.toFixed(2)}
+                </p>
+                {!saldoSuficiente && total > 0 && (
+                  <p className="text-xs text-red-600 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    Saldo insuficiente
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Producto */}
         <Seccion titulo="📦 Producto">
           <Campo
             label="Nombre del producto"
-            value={formData?.nombre_producto || "N/A"}
+            value={mapProducto(formData?.nombre_producto)}
           />
           <Campo
             label="Contenido"
-            value={formData?.contenido || formData?.nombre_producto || "N/A"}
+            value={
+              formData?.contenido || mapProducto(formData?.nombre_producto)
+            }
           />
         </Seccion>
 
+        {/* Remitente */}
         <Seccion titulo="🧍 Remitente">
           <Campo label="Nombre" value={remitente?.nombre} />
-          <Campo
-            label="Cédula"
-            value={remitente?.identificacion || remitente?.cedula}
-          />
+          <Campo label="Cédula" value={remitente?.identificacion} />
           <Campo
             label="Ciudad"
             value={`${remitente?.ciudad} - ${remitente?.provincia}`}
@@ -267,35 +430,28 @@ export default function PasoResumen({
           <Campo label="Dirección" value={remitente?.direccion} />
         </Seccion>
 
+        {/* Destinatario */}
         <Seccion titulo="🎯 Destinatario">
           <Campo label="Nombre" value={destinatario?.nombre} />
-          <Campo
-            label="Cédula"
-            value={destinatario?.identificacion || destinatario?.cedula}
-          />
+          <Campo label="Cédula" value={destinatario?.identificacion} />
           <Campo
             label="Ciudad"
             value={`${destinatario?.ciudad} - ${destinatario?.provincia}`}
           />
           <Campo label="Teléfono" value={destinatario?.telefono} />
           <Campo label="País" value={destinatario?.pais} />
-          {formData.retiro_oficina && (
-            <Campo
-              label="Agencia retiro en oficina"
-              value={formData.nombre_agencia_retiro_oficina}
-            />
-          )}
           <Campo label="Dirección" value={destinatario?.direccion} />
         </Seccion>
 
+        {/* Medidas */}
         <Seccion titulo="📐 Medidas y valores">
           <Campo
             label="Valor declarado"
-            value={`$${medidas?.valor_declarado}`}
+            value={`$${Number(medidas?.valor_declarado || 0).toFixed(2)}`}
           />
           <Campo
             label="Valor asegurado"
-            value={`$${tarifa?.seguro ?? medidas?.valor_seguro ?? 0}`}
+            value={`$${Number(medidas?.valor_seguro || 0).toFixed(2)}`}
           />
           <Campo label="Peso físico (kg)" value={pesoFisico} />
           <Campo
@@ -315,52 +471,105 @@ export default function PasoResumen({
           />
         </Seccion>
 
-        {tarifa && (
-          <Seccion titulo="💰 Costos">
-            <Campo
-              label="Flete"
-              value={`$${Number(tarifa.flete || 0).toFixed(2)}`}
-            />
-            <Campo
-              label="Empaque"
-              value={`$${Number(tarifa.valor_empaque || 0).toFixed(2)}`}
-            />
-            <Campo
-              label="Seguro"
-              value={`$${Number(tarifa.seguro || tarifa.prima || 0).toFixed(
-                2
-              )}`}
-            />
-            {tarifa.total_transacion && (
-              <Campo
-                label="Total"
-                value={`$${Number(tarifa.total_transacion).toFixed(2)}`}
-                highlight
-              />
-            )}
-            {!tarifa.total_transacion && tarifa.gtotal && (
-              <Campo
-                label="Total"
-                value={`$${Number(tarifa.gtotal).toFixed(2)}`}
-                highlight
-              />
-            )}
-            {!tarifa.total_transacion && !tarifa.gtotal && (
-              <Campo label="Total" value={`$${calcularTotal()}`} highlight />
-            )}
-            <Campo
-              label="Tiempo estimado"
-              value={
-                tarifa.tiempo ? `${tarifa.tiempo} día(s)` : "1-2 días hábiles"
-              }
-            />
-          </Seccion>
-        )}
+        {/* Costos */}
+        <div>
+          <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+            <Calculator className="h-5 w-5" />
+            Costos
+          </h3>
 
-        {loading && (
-          <p className="text-sm text-gray-500">Calculando tarifa...</p>
-        )}
+          {tarifa ? (
+            <div className="bg-blue-50 p-4 rounded-lg space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Flete:</span>
+                <span>${Number(tarifa.flete || 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Empaque:</span>
+                <span>${Number(tarifa.valor_empaque || 0).toFixed(2)}</span>
+              </div>
+              {(tarifa.seguro || 0) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span>Seguro:</span>
+                  <span>${Number(tarifa.seguro).toFixed(2)}</span>
+                </div>
+              )}
+              {(tarifa.tiva || 0) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span>IVA:</span>
+                  <span>${Number(tarifa.tiva).toFixed(2)}</span>
+                </div>
+              )}
+              {(tarifa.descuento || 0) > 0 && (
+                <div className="flex justify-between text-sm text-green-600">
+                  <span>Descuento:</span>
+                  <span>- ${Number(tarifa.descuento).toFixed(2)}</span>
+                </div>
+              )}
+              <Separator />
+              <div className="flex justify-between items-center">
+                <div className="flex justify-between font-semibold text-lg w-full">
+                  <span>Total:</span>
+                  <span className="text-blue-600">${total.toFixed(2)}</span>
+                </div>
+              </div>
 
+              {/* Ver detalle crudo de Servientrega */}
+              {tarifaCruda && (
+                <div className="flex justify-end mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowTarifaModal(true)}
+                  >
+                    Ver detalles completos
+                  </Button>
+                </div>
+              )}
+
+              {/* Info adicional */}
+              <div className="mt-3 pt-2 border-t border-blue-200 text-center text-xs text-gray-500">
+                {tarifa.peso_vol && (
+                  <div>
+                    Peso volumétrico: {Number(tarifa.peso_vol).toFixed(2)} kg
+                  </div>
+                )}
+                {tarifa.tiempo && <div>Tiempo estimado: {tarifa.tiempo}</div>}
+                {tarifa.trayecto && <div>Trayecto: {tarifa.trayecto}</div>}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gray-50 p-4 rounded-lg text-center">
+              <div className="text-gray-500 mb-2">
+                {loadingTarifa ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                    Calculando tarifa...
+                  </>
+                ) : (
+                  "Calculando costos..."
+                )}
+              </div>
+              {!loadingTarifa && (
+                <div className="space-y-2">
+                  <Button
+                    onClick={fetchTarifa}
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+                  >
+                    <Calculator className="h-4 w-4 mr-2" />
+                    Recalcular tarifa
+                  </Button>
+                  <div className="text-xs text-gray-500">
+                    Los costos se calcularán automáticamente
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Acciones */}
         <div className="flex justify-between mt-6">
           <Button variant="outline" onClick={onBack}>
             ← Atrás
@@ -368,12 +577,23 @@ export default function PasoResumen({
           <Button
             onClick={validarSaldoAntesConfirmar}
             className="bg-green-600 text-white hover:bg-green-700"
-            disabled={loading || !tarifa}
+            disabled={loadingTarifa || !tarifa}
           >
-            Confirmar y generar guía
+            Confirmar y continuar
           </Button>
         </div>
       </CardContent>
+
+      {/* Modal detalle crudo (usa tu componente existente) */}
+      <TarifaModal
+        isOpen={showTarifaModal}
+        onClose={() => setShowTarifaModal(false)}
+        tarifa={tarifaCruda}
+        onConfirm={() => setShowTarifaModal(false)}
+        loading={false}
+        saldoDisponible={saldo?.disponible}
+        puntoAtencionNombre={String(punto_atencion_id ?? "")}
+      />
     </Card>
   );
 }

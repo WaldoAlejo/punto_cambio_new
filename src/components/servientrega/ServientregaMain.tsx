@@ -1,10 +1,11 @@
+// src/components/servientrega/ServientregaMain.tsx
 import React, { useState } from "react";
 import { User, PuntoAtencion } from "../../types";
 import PasoProducto from "./PasoProducto";
 import PasoRemitente from "./PasoRemitente";
 import PasoDestinatario from "./PasoDestinatario";
 import PasoEmpaqueYMedidas from "./PasoEmpaqueYMedidas";
-import PasoResumenNuevo from "./PasoResumenNuevo";
+import PasoResumen from "./PasoResumen"; // ← unificado
 import PasoConfirmarEnvio from "./PasoConfirmarEnvio";
 import ListadoGuias from "./ListadoGuias";
 import SaldoOperador from "./SaldoOperador";
@@ -113,20 +114,12 @@ export default function ServientregaMain({
     setPasoActual("resumen");
   };
 
-  const handleResumenNext = (data: {
-    contenido: string;
-    retiro_oficina: boolean;
-    nombre_agencia_retiro_oficina?: string;
-    pedido?: string;
-    factura?: string;
-  }) => {
-    setFormData((prev) => ({
-      ...prev,
-      ...data,
-    }));
+  // PasoResumen → “Confirmar y continuar”
+  const handleResumenConfirm = () => {
     setPasoActual("confirmar");
   };
 
+  // PasoConfirmarEnvio → éxito
   const handleGuiaGenerada = () => {
     resetForm();
   };
@@ -208,9 +201,10 @@ export default function ServientregaMain({
 
       case "resumen":
         return (
-          <PasoResumenNuevo
+          <PasoResumen
             formData={formData as FormDataGuia}
-            onNext={handleResumenNext}
+            onBack={() => setPasoActual("empaque")}
+            onConfirm={handleResumenConfirm}
           />
         );
 

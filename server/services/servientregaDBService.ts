@@ -16,7 +16,7 @@ export interface RemitenteData {
 }
 
 export interface DestinatarioData extends RemitenteData {
-  // codpais se mapea a pais en la base de datos
+  // codpais se mapea a pais en la base de datos (se ignora en sanitización)
 }
 
 export interface GuiaData {
@@ -52,7 +52,7 @@ export class ServientregaDBService {
   async guardarRemitente(data: RemitenteData) {
     const sanitizedData = this.sanitizeRemitenteData(data);
     return prisma.servientregaRemitente.create({
-      data: sanitizedData as any, // Prisma types are too strict here
+      data: sanitizedData as any, // Prisma types are too estrictos aquí
     });
   }
 
@@ -64,6 +64,10 @@ export class ServientregaDBService {
     });
   }
 
+  /**
+   * Remitente: NO guardamos ciudad/provincia/pais intencionalmente,
+   * porque el remitente SIEMPRE es el punto de atención.
+   */
   private sanitizeRemitenteData(
     data: Partial<RemitenteData>
   ): Record<string, any> {
@@ -113,7 +117,7 @@ export class ServientregaDBService {
   async guardarDestinatario(data: DestinatarioData) {
     const sanitizedData = this.sanitizeDestinatarioData(data);
     return prisma.servientregaDestinatario.create({
-      data: sanitizedData as any, // Prisma types are too strict here
+      data: sanitizedData as any,
     });
   }
 
@@ -137,6 +141,9 @@ export class ServientregaDBService {
     });
   }
 
+  /**
+   * Destinatario: ignoramos 'codpais' (numérico). Usar 'pais' (string).
+   */
   private sanitizeDestinatarioData(
     data: Partial<DestinatarioData>
   ): Record<string, any> {
@@ -152,16 +159,12 @@ export class ServientregaDBService {
       "codigo_postal",
     ];
 
-    // Filtrar solo los campos permitidos y excluir campos no válidos como 'codpais'
     const sanitized = Object.keys(data)
       .filter((key) => allowedFields.includes(key))
       .reduce((obj: Record<string, any>, key) => {
         obj[key] = data[key as keyof DestinatarioData];
         return obj;
       }, {});
-
-    // Si viene 'codpais' en los datos originales, lo ignoramos ya que no existe en el modelo
-    // El campo correcto es 'pais' que debe ser un string
 
     return sanitized;
   }
@@ -201,58 +204,88 @@ export class ServientregaDBService {
     });
   }
 
+  /**
+   * Asignación de saldo: transacción + historial + upsert con increment.
+   */
   async gestionarSaldo(data: SaldoData) {
     const { punto_atencion_id, monto_total, creado_por } = data;
 
-    // Obtener información del punto de atención
-    const puntoAtencion = await prisma.puntoAtencion.findUnique({
-      where: { id: punto_atencion_id },
-      select: { nombre: true },
-    });
+    return prisma.$transaction(async (tx) => {
+      // Obtener información del punto de atención
+      const puntoAtencion = await tx.puntoAtencion.findUnique({
+        where: { id: punto_atencion_id },
+        select: { nombre: true },
+      });
 
-    const existente = await prisma.servientregaSaldo.findUnique({
-      where: { punto_atencion_id },
-    });
+      // Registrar en el historial cada asignación de saldo (crédito)
+      await tx.servientregaHistorialSaldo.create({
+        data: {
+          punto_atencion_id,
+          punto_atencion_nombre: puntoAtencion?.nombre || "Punto desconocido",
+          monto_total: new Prisma.Decimal(monto_total),
+          creado_por: creado_por || "SYSTEM",
+        },
+      });
 
-    // Registrar en el historial cada asignación de saldo
-    await prisma.servientregaHistorialSaldo.create({
-      data: {
-        punto_atencion_id,
-        punto_atencion_nombre: puntoAtencion?.nombre || "Punto desconocido",
-        monto_total: new Prisma.Decimal(monto_total),
-        creado_por: creado_por || "SYSTEM",
-      },
-    });
+      // Upsert del saldo con incremento
+      const actualizado = await tx.servientregaSaldo.upsert({
+        where: { punto_atencion_id },
+        update: {
+          monto_total: { increment: monto_total },
+          updated_at: new Date(),
+        },
+        create: {
+          punto_atencion_id,
+          monto_total: new Prisma.Decimal(monto_total),
+          monto_usado: new Prisma.Decimal(0),
+          creado_por: creado_por || "SYSTEM",
+        },
+      });
 
-    return existente
-      ? await prisma.servientregaSaldo.update({
-          where: { punto_atencion_id },
-          data: {
-            monto_total: existente.monto_total.add(
-              new Prisma.Decimal(monto_total)
-            ),
-            updated_at: new Date(),
-          },
-        })
-      : await prisma.servientregaSaldo.create({
-          data: {
-            punto_atencion_id,
-            monto_total: new Prisma.Decimal(monto_total),
-            monto_usado: new Prisma.Decimal(0),
-            creado_por: creado_por || "SYSTEM",
-          },
-        });
+      return actualizado;
+    });
   }
 
+  /**
+   * Descuento de saldo: transacción, evita sobregiros y registra historial (débito).
+   */
   async descontarSaldo(puntoAtencionId: string, monto: number) {
-    const saldo = await this.obtenerSaldo(puntoAtencionId);
-    if (!saldo) return null;
+    return prisma.$transaction(async (tx) => {
+      const saldo = await tx.servientregaSaldo.findUnique({
+        where: { punto_atencion_id: puntoAtencionId },
+      });
+      if (!saldo) return null;
 
-    return prisma.servientregaSaldo.update({
-      where: { punto_atencion_id: puntoAtencionId },
-      data: {
-        monto_usado: saldo.monto_usado.add(new Prisma.Decimal(monto)),
-      },
+      const usado = saldo.monto_usado ?? new Prisma.Decimal(0);
+      const total = saldo.monto_total ?? new Prisma.Decimal(0);
+      const nuevoUsado = usado.add(new Prisma.Decimal(monto));
+      const disponible = total.sub(nuevoUsado);
+
+      if (disponible.lt(0)) {
+        throw new Error("Saldo insuficiente");
+      }
+
+      const actualizado = await tx.servientregaSaldo.update({
+        where: { punto_atencion_id: puntoAtencionId },
+        data: { monto_usado: nuevoUsado, updated_at: new Date() },
+      });
+
+      // Registrar movimiento en historial (débito). Si tu esquema soporta 'tipo', úsalo; si no, dejamos el monto negativo.
+      const puntoAtencion = await tx.puntoAtencion.findUnique({
+        where: { id: puntoAtencionId },
+        select: { nombre: true },
+      });
+
+      await tx.servientregaHistorialSaldo.create({
+        data: {
+          punto_atencion_id: puntoAtencionId,
+          punto_atencion_nombre: puntoAtencion?.nombre || "Punto desconocido",
+          monto_total: new Prisma.Decimal(-monto), // negativo = débito
+          creado_por: "SYSTEM:DESCUENTO_GUIA",
+        },
+      });
+
+      return actualizado;
     });
   }
 
@@ -280,7 +313,9 @@ export class ServientregaDBService {
     return historial.map((item) => ({
       ...item,
       punto_nombre: item.punto_atencion?.nombre || item.punto_atencion_nombre,
-      punto_ubicacion: `${item.punto_atencion?.ciudad}, ${item.punto_atencion?.provincia}`,
+      punto_ubicacion: `${item.punto_atencion?.ciudad ?? ""}${
+        item.punto_atencion?.ciudad ? ", " : ""
+      }${item.punto_atencion?.provincia ?? ""}`,
     }));
   }
 
@@ -372,79 +407,7 @@ export class ServientregaDBService {
 
   // ===== PUNTOS DE ATENCIÓN =====
   async obtenerPuntosAtencion() {
-    console.log(
-      "🔍 ServientregaDBService: Iniciando consulta de puntos de atención con agencia Servientrega..."
-    );
-
-    // Primero verificar cuántos puntos hay en total
-    const totalPuntos = await prisma.puntoAtencion.count();
-    const puntosActivos = await prisma.puntoAtencion.count({
-      where: { activo: true },
-    });
-    // Contar puntos con agencia Servientrega válida (excluyendo espacios)
-    const puntosConServientregaResult = await prisma.$queryRaw<
-      Array<{ count: bigint }>
-    >`
-      SELECT COUNT(*) as count
-      FROM "PuntoAtencion"
-      WHERE activo = true
-        AND servientrega_agencia_codigo IS NOT NULL
-        AND servientrega_agencia_codigo != ''
-        AND TRIM(servientrega_agencia_codigo) != ''
-    `;
-    const puntosConServientrega = Number(puntosConServientregaResult[0].count);
-
-    console.log(
-      `📊 ServientregaDBService: Estadísticas de puntos - Total: ${totalPuntos}, Activos: ${puntosActivos}, Con Servientrega: ${puntosConServientrega}`
-    );
-
-    // Primero obtener TODOS los puntos activos para debug
-    const todosPuntosActivos = await prisma.puntoAtencion.findMany({
-      select: {
-        id: true,
-        nombre: true,
-        ciudad: true,
-        provincia: true,
-        activo: true,
-        servientrega_agencia_codigo: true,
-        servientrega_agencia_nombre: true,
-      },
-      where: {
-        activo: true,
-      },
-      orderBy: [{ provincia: "asc" }, { ciudad: "asc" }, { nombre: "asc" }],
-    });
-
-    console.log(
-      `🔍 DEBUG: Todos los puntos activos (${todosPuntosActivos.length}):`
-    );
-    todosPuntosActivos.forEach((punto, index) => {
-      const codigo = punto.servientrega_agencia_codigo;
-      let codigoInfo = "NULL";
-      if (codigo !== null) {
-        if (codigo === "") {
-          codigoInfo = "EMPTY_STRING";
-        } else if (codigo.trim() === "") {
-          codigoInfo = `ONLY_SPACES (length: ${codigo.length})`;
-        } else {
-          codigoInfo = `"${codigo.trim()}" (original length: ${
-            codigo.length
-          }, trimmed length: ${codigo.trim().length})`;
-        }
-      }
-
-      console.log(
-        `  ${index + 1}. ${punto.nombre} - ${punto.ciudad}, ${punto.provincia}`
-      );
-      console.log(`     Agencia código: ${codigoInfo}`);
-      console.log(
-        `     Agencia nombre: ${punto.servientrega_agencia_nombre || "NULL"}`
-      );
-    });
-
-    // TEMPORAL: Usar filtro Prisma simple primero para debug
-    console.log("🔍 TEMPORAL: Usando filtro Prisma simple para debug...");
-
+    // Obtener puntos activos con agencia Servientrega no nula
     const puntos = await prisma.puntoAtencion.findMany({
       select: {
         id: true,
@@ -467,65 +430,15 @@ export class ServientregaDBService {
       orderBy: [{ provincia: "asc" }, { ciudad: "asc" }, { nombre: "asc" }],
     });
 
-    console.log(
-      `🔍 Filtro Prisma simple (NOT NULL): ${puntos.length} puntos encontrados`
+    // Filtrar manualmente agencias con sólo espacios
+    const filtrados = puntos.filter(
+      (p) =>
+        p.servientrega_agencia_codigo &&
+        p.servientrega_agencia_codigo.trim() !== ""
     );
 
-    // Filtrar manualmente los que tienen espacios en blanco
-    const puntosFiltrados = puntos.filter((punto) => {
-      const codigo = punto.servientrega_agencia_codigo;
-      return codigo && codigo.trim() !== "";
-    });
-
-    console.log(
-      `🔍 Después de filtrar espacios manualmente: ${puntosFiltrados.length} puntos`
-    );
-
-    // Usar los puntos filtrados
-    const puntosFinales = puntosFiltrados;
-
-    console.log(
-      `🎯 Resultado final: ${puntosFinales.length} puntos después del filtrado`
-    );
-
-    // Debug adicional: verificar si el filtrado está funcionando
-    if (puntosFinales.length !== 5) {
-      console.warn(
-        `⚠️ PROBLEMA DETECTADO: Se esperaban 5 puntos pero se obtuvieron ${puntosFinales.length}`
-      );
-
-      console.log("🔍 Analizando cada punto filtrado:");
-      puntosFinales.forEach((p, i) => {
-        const codigo = p.servientrega_agencia_codigo;
-        console.log(
-          `  ${i + 1}. ${p.nombre} - Código: "${codigo}" (length: ${
-            codigo?.length || 0
-          }, trimmed: "${codigo?.trim()}")`
-        );
-      });
-    }
-
-    console.log(
-      `📍 ServientregaDBService: Consulta completada - ${puntosFinales.length} puntos con agencia Servientrega encontrados:`
-    );
-    puntosFinales.forEach((punto, index) => {
-      console.log(
-        `  ${index + 1}. ${punto.nombre} - ${punto.ciudad}, ${
-          punto.provincia
-        } (ID: ${punto.id}) - Agencia: "${
-          punto.servientrega_agencia_codigo?.trim() || "N/A"
-        }"`
-      );
-    });
-
-    if (puntosFinales.length === 0) {
-      console.warn(
-        "⚠️ ServientregaDBService: No se encontraron puntos de atención activos con agencia Servientrega asignada"
-      );
-    }
-
-    // Limpiar los datos antes de devolverlos (trim de espacios)
-    return puntosFinales.map((punto) => ({
+    // Normalizar (trim) antes de devolver
+    return filtrados.map((punto) => ({
       ...punto,
       servientrega_agencia_codigo:
         punto.servientrega_agencia_codigo?.trim() || null,
@@ -606,7 +519,7 @@ export class ServientregaDBService {
       }
     }
 
-    // Obtener estadísticas generales
+    // Estadísticas generales
     const [totalGuias, guiasActivas, guiasAnuladas, guiasPendientes] =
       await Promise.all([
         prisma.servientregaGuia.count({ where }),
@@ -621,7 +534,7 @@ export class ServientregaDBService {
         }),
       ]);
 
-    // Obtener estadísticas por punto de atención
+    // Agrupar por punto de atención
     const guiasPorPunto = await prisma.servientregaGuia.groupBy({
       by: ["punto_atencion_id"],
       where,
@@ -689,7 +602,6 @@ export class ServientregaDBService {
   }) {
     const where: any = {};
 
-    // Filtro por fechas
     if (filtros.desde || filtros.hasta) {
       where.fecha_solicitud = {};
       if (filtros.desde) {
@@ -700,7 +612,6 @@ export class ServientregaDBService {
       }
     }
 
-    // Filtro por estado
     if (filtros.estado && filtros.estado !== "TODOS") {
       where.estado = filtros.estado;
     }

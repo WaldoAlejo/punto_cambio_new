@@ -6,7 +6,9 @@ import {
 
 const router = express.Router();
 
-// Función para obtener las credenciales desde variables de entorno
+// =============================
+// Helpers de credenciales y URL
+// =============================
 function getCredentials(): ServientregaCredentials {
   return {
     usuingreso: process.env.SERVIENTREGA_USER || "INTPUNTOC",
@@ -14,27 +16,106 @@ function getCredentials(): ServientregaCredentials {
   };
 }
 
+function getApiUrl(): string {
+  return (
+    process.env.SERVIENTREGA_URL ||
+    "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php"
+  );
+}
+
+// =============================
+// Normalización de productos
+// =============================
+const clean = (s: any) =>
+  String(s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+
+const DOC = "DOCUMENTOS";
+const MERC = "MERCANCIA PREMIER";
+
+function normalizarProducto(raw?: string): "" | typeof DOC | typeof MERC {
+  const c = clean(raw);
+  if (!c) return "";
+  // Cualquier variante que contenga "DOC" → DOCUMENTOS
+  if (c.includes("DOC")) return DOC;
+  // MERCANCIA PREMIER exacto o cercano
+  if (c.includes("MERCANCIA") && c.includes("PREMIER")) return MERC;
+  // Ignorar INTERNACIONAL, INDUSTRIAL u otros no soportados
+  return "";
+}
+
+function uniquePreserveOrder(arr: string[]) {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of arr) {
+    if (v && !seen.has(v)) {
+      seen.add(v);
+      out.push(v);
+    }
+  }
+  return out;
+}
+
 // =============================
 // 📦 Productos, 🏙 Ciudades, 🌎 Países, 🏢 Agencias, 📦 Empaques
 // =============================
 
-router.post("/productos", async (_, res) => {
+router.post("/productos", async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
-    const result = await apiService.obtenerProductos();
-    res.json(result);
+    apiService.apiUrl = getApiUrl();
+
+    // Tu servicio ya debería enviar { tipo: "obtener_producto", ...credenciales }
+    const result: any = await apiService.obtenerProductos();
+
+    // La doc de ejemplo devuelve:
+    // {"fetch":[{"producto":"DOCUMENTO UNITARIO "},{"producto":"DOCUMENTO UNITARIO - 10AM "},{"producto":"INTERNACIONAL "},{"producto":"MERCANCIA INDUSTRIAL "},{"producto":"MERCANCIA PREMIER "}]}
+    const rawList: any[] =
+      (Array.isArray(result?.fetch) && result.fetch) ||
+      (Array.isArray(result?.productos) && result.productos) ||
+      (Array.isArray(result) && result) ||
+      [];
+
+    const normalizados = uniquePreserveOrder(
+      rawList
+        .map((item: any) =>
+          normalizarProducto(
+            // soporta distintas formas:
+            item?.producto ?? item?.nombre_producto ?? item
+          )
+        )
+        .filter((x) => x === DOC || x === MERC)
+    );
+
+    const productosFinales =
+      normalizados.length > 0 ? normalizados : [MERC, DOC]; // fallback seguro
+
+    return res.json({
+      success: true,
+      productos: productosFinales.map((n) => ({ nombre_producto: n })),
+      // Solo en no-prod exponemos el raw para depuración
+      raw_fetch: process.env.NODE_ENV === "production" ? undefined : result,
+    });
   } catch (error) {
     console.error("Error al obtener productos:", error);
-    res.status(500).json({
+    return res.status(500).json({
+      success: false,
       error: "Error al obtener productos",
       details: error instanceof Error ? error.message : "Error desconocido",
+      // Fallback seguro
+      productos: [{ nombre_producto: MERC }, { nombre_producto: DOC }],
     });
   }
 });
 
-router.post("/paises", async (_, res) => {
+router.post("/paises", async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
+    apiService.apiUrl = getApiUrl();
+
     const result = await apiService.obtenerPaises();
     res.json(result);
   } catch (error) {
@@ -54,6 +135,8 @@ router.post("/ciudades", async (req, res) => {
     }
 
     const apiService = new ServientregaAPIService(getCredentials());
+    apiService.apiUrl = getApiUrl();
+
     const result = await apiService.obtenerCiudades(codpais);
     res.json(result);
   } catch (error) {
@@ -65,15 +148,15 @@ router.post("/ciudades", async (req, res) => {
   }
 });
 
-router.post("/agencias", async (_, res) => {
+router.post("/agencias", async (_req, res) => {
   try {
     console.log("🔍 Servientrega API: Obteniendo agencias...");
     const apiService = new ServientregaAPIService(getCredentials());
-    const result = await apiService.obtenerAgencias();
+    apiService.apiUrl = getApiUrl();
 
+    const result: any = await apiService.obtenerAgencias();
     console.log("📍 Servientrega API: Respuesta de agencias recibida:", result);
 
-    // Verificar si la respuesta tiene el formato esperado
     if (!result) {
       console.error("❌ Respuesta vacía de la API de Servientrega");
       return res.status(500).json({
@@ -83,28 +166,18 @@ router.post("/agencias", async (_, res) => {
       });
     }
 
-    // Si la respuesta tiene un array de agencias directamente
-    let agencias = [];
+    // Intentar descubrir el array de agencias en la respuesta
+    let agencias: any[] = [];
     if (Array.isArray(result)) {
       agencias = result;
-    } else if (result.data && Array.isArray(result.data)) {
+    } else if (Array.isArray(result?.data)) {
       agencias = result.data;
-    } else if (result.agencias && Array.isArray(result.agencias)) {
+    } else if (Array.isArray(result?.agencias)) {
       agencias = result.agencias;
     } else {
-      // Si no encontramos un array, intentar extraer las agencias del objeto
-      console.log(
-        "🔍 Estructura de respuesta no reconocida, intentando extraer agencias..."
-      );
-      console.log("📋 Claves disponibles:", Object.keys(result));
-
-      // Buscar cualquier propiedad que sea un array
       for (const key of Object.keys(result)) {
-        if (Array.isArray(result[key])) {
-          console.log(
-            `✅ Encontrado array en propiedad '${key}' con ${result[key].length} elementos`
-          );
-          agencias = result[key];
+        if (Array.isArray((result as any)[key])) {
+          agencias = (result as any)[key];
           break;
         }
       }
@@ -128,9 +201,11 @@ router.post("/agencias", async (_, res) => {
   }
 });
 
-router.post("/empaques", async (_, res) => {
+router.post("/empaques", async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
+    apiService.apiUrl = getApiUrl();
+
     const result = await apiService.obtenerEmpaques();
     res.json(result);
   } catch (error) {
@@ -149,6 +224,8 @@ router.post("/empaques", async (_, res) => {
 router.post("/validar-retail", async (req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
+    apiService.apiUrl = getApiUrl();
+
     const result = await apiService.callAPI(req.body, 15000, true);
     res.json(result);
   } catch (error) {
@@ -160,9 +237,11 @@ router.post("/validar-retail", async (req, res) => {
   }
 });
 
-router.get("/test-retail", async (_, res) => {
+router.get("/test-retail", async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
+    apiService.apiUrl = getApiUrl();
+
     const result = await apiService.callAPI({ tipo: "test" }, 10000, true);
     res.json({
       success: true,

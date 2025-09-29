@@ -1,8 +1,51 @@
 import { apiService } from "./apiService";
 import { Agencia, ApiResponse } from "../types";
 
-interface AgenciasResponse extends ApiResponse {
-  data?: Agencia[];
+type RawAgencia = Partial<{
+  agencia: string;
+  nombre: string;
+  tipo_cs: string;
+  direccion: string;
+  ciudad: string;
+}> &
+  Record<string, unknown>;
+
+// ⬇️ Nota: quitamos 'success' de ApiResponse y lo redeclaramos opcional aquí
+interface AgenciasResponse extends Omit<ApiResponse, "success"> {
+  success?: boolean;
+  error?: string;
+  data?: RawAgencia[];
+  fetch?: RawAgencia[];
+  agencias?: RawAgencia[];
+  // algunos endpoints devuelven array plano
+  0?: unknown;
+}
+
+function toAgencia(raw: RawAgencia): Agencia {
+  const nombre = String(raw.agencia ?? raw.nombre ?? "").trim();
+  const tipo_cs = String(raw.tipo_cs ?? "").trim();
+  const direccion = String(raw.direccion ?? "").trim();
+  const ciudad = String(raw.ciudad ?? "").trim();
+  return { nombre, tipo_cs, direccion, ciudad };
+}
+
+function dedupeAndSort(agencias: Agencia[]): Agencia[] {
+  const seen = new Set<string>();
+  const out: Agencia[] = [];
+  for (const a of agencias) {
+    const key = `${a.nombre.toUpperCase()}|${a.ciudad.toUpperCase()}`;
+    if (!seen.has(key) && a.nombre) {
+      seen.add(key);
+      out.push(a);
+    }
+  }
+  out.sort((a, b) => {
+    const c = a.ciudad.localeCompare(b.ciudad, "es", { sensitivity: "base" });
+    return c !== 0
+      ? c
+      : a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" });
+  });
+  return out;
 }
 
 export const servientregaService = {
@@ -10,59 +53,53 @@ export const servientregaService = {
     try {
       const response = await apiService.post<AgenciasResponse>(
         "/servientrega/agencias",
-        {} // Enviar un objeto vacío como body para el POST
+        {}
       );
 
-      // Verificar si la respuesta tiene el formato esperado
       if (!response) {
-        console.error("❌ getAgencias - Respuesta vacía");
-        return {
-          agencias: [],
-          error: "Respuesta vacía del servidor",
-        };
+        return { agencias: [], error: "Respuesta vacía del servidor" };
       }
 
-      // Si la respuesta tiene success: false, usar el error de la respuesta
       if (response.success === false) {
-        const errorMessage =
-          response.error || "Error al obtener agencias de Servientrega";
-        console.error("❌ getAgencias - Error en respuesta:", errorMessage);
         return {
           agencias: [],
-          error: errorMessage,
+          error: response.error || "Error al obtener agencias de Servientrega",
         };
       }
 
-      // Si la respuesta es exitosa, extraer y mapear las agencias
-      const rawAgencias = response.data || [];
+      let raw: RawAgencia[] = [];
 
-      // Mapear la estructura de datos del backend al tipo Agencia esperado
-      const agencias: Agencia[] = rawAgencias.map((rawAgencia: any) => ({
-        nombre: rawAgencia.agencia || rawAgencia.nombre || "",
-        tipo_cs: rawAgencia.tipo_cs || "",
-        direccion: rawAgencia.direccion || "",
-        ciudad: rawAgencia.ciudad || "",
-      }));
+      if (Array.isArray(response as unknown as unknown[])) {
+        raw = response as unknown as RawAgencia[];
+      } else if (Array.isArray(response.data)) {
+        raw = response.data;
+      } else if (Array.isArray(response.fetch)) {
+        raw = response.fetch;
+      } else if (Array.isArray(response.agencias)) {
+        raw = response.agencias;
+      } else {
+        const candidate = Object.values(response).find(
+          (v) => Array.isArray(v) && (v as unknown[]).length > 0
+        );
+        if (candidate) raw = candidate as RawAgencia[];
+      }
 
+      if (!raw.length) return { agencias: [], error: null };
+
+      const agencias = dedupeAndSort(raw.map(toAgencia));
       return { agencias, error: null };
     } catch (error) {
-      console.error("❌ getAgencias ERROR:", error);
-
-      // Proporcionar un mensaje de error más específico
-      let errorMessage = "Error de conexión con el servidor";
+      let msg = "Error de conexión con el servidor";
       if (error instanceof Error) {
-        if (error.message.includes("404")) {
-          errorMessage = "Servicio de agencias no encontrado";
-        } else if (error.message.includes("500")) {
-          errorMessage = "Error interno del servidor de Servientrega";
-        } else if (error.message.includes("timeout")) {
-          errorMessage = "Timeout al conectar con Servientrega";
-        } else {
-          errorMessage = `Error: ${error.message}`;
-        }
+        const m = error.message.toLowerCase();
+        if (m.includes("404")) msg = "Servicio de agencias no encontrado";
+        else if (m.includes("500"))
+          msg = "Error interno del servidor de Servientrega";
+        else if (m.includes("timeout"))
+          msg = "Timeout al conectar con Servientrega";
+        else msg = `Error: ${error.message}`;
       }
-
-      return { agencias: [], error: errorMessage };
+      return { agencias: [], error: msg };
     }
   },
 };

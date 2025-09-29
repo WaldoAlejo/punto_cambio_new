@@ -15,7 +15,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface ProductoSeleccionado {
-  nombre_producto: string; // <- Usar SIEMPRE este campo
+  nombre_producto: string; // "MERCANCIA PREMIER" | "DOCUMENTOS"
   esDocumento: boolean;
 }
 
@@ -23,70 +23,109 @@ interface PasoProductoProps {
   onNext: (producto: ProductoSeleccionado) => void;
 }
 
+// ===== Helpers =====
+const clean = (s: string) =>
+  (s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
+
+const DOC = "DOCUMENTOS";
+const MERC = "MERCANCIA PREMIER";
+
+const normalizarProducto = (raw?: string): "" | typeof DOC | typeof MERC => {
+  const c = clean(raw || "");
+  if (!c) return "";
+  if (c.includes("DOC")) return DOC; // DOCUMENTO, DOCUMENTOS, DOCUMENTO UNITARIO, etc.
+  if (c.includes("MERCANCIA") && c.includes("PREMIER")) return MERC;
+  return ""; // Ignora INTERNACIONAL, INDUSTRIAL, etc.
+};
+
+const unique = (arr: string[]) => Array.from(new Set(arr.filter(Boolean)));
+
 export default function PasoProducto({ onNext }: PasoProductoProps) {
-  // productos es array de objetos { nombre_producto }
   const [productos, setProductos] = useState<{ nombre_producto: string }[]>([]);
   const [selectedProducto, setSelectedProducto] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [cargandoProductos, setCargandoProductos] = useState(true);
 
-  // Cargar productos desde el backend Servientrega (ya devuelve productos: [{nombre_producto: string}])
+  const parseProductos = (data: any): string[] => {
+    // Soporta múltiples formatos del backend
+    // 1) data.productos -> [{ nombre_producto }]
+    if (Array.isArray(data?.productos)) {
+      return unique(
+        data.productos
+          .map((p: any) => normalizarProducto(p?.nombre_producto))
+          .filter((x: string) => x === DOC || x === MERC)
+      );
+    }
+
+    // 2) data.fetch -> [{ producto }] / [{ nombre_producto }] / strings
+    if (Array.isArray(data?.fetch)) {
+      return unique(
+        data.fetch
+          .map((p: any) => {
+            if (typeof p === "string") return normalizarProducto(p);
+            if (p?.producto) return normalizarProducto(p.producto);
+            if (p?.nombre_producto)
+              return normalizarProducto(p.nombre_producto);
+            return "";
+          })
+          .filter((x: string) => x === DOC || x === MERC)
+      );
+    }
+
+    // 3) data como array crudo
+    if (Array.isArray(data)) {
+      return unique(
+        data
+          .map((p: any) => {
+            if (typeof p === "string") return normalizarProducto(p);
+            if (p?.producto) return normalizarProducto(p.producto);
+            if (p?.nombre_producto)
+              return normalizarProducto(p.nombre_producto);
+            return "";
+          })
+          .filter((x: string) => x === DOC || x === MERC)
+      );
+    }
+
+    return [];
+  };
+
   const fetchProductos = async () => {
     try {
       setCargandoProductos(true);
-      console.log("🔍 Cargando productos de Servientrega...");
+      const response = await axiosInstance.post("/servientrega/productos");
+      const normalizados = parseProductos(response.data);
 
-      const response = await axiosInstance.post<{
-        fetch?: { producto: string }[];
-        productos?: { nombre_producto: string }[];
-        success?: boolean;
-        fallback?: boolean;
-        warning?: string;
-      }>("/servientrega/productos");
+      // Fallback seguro si el WS trae cosas raras: siempre nuestras 2 opciones
+      const finales = normalizados.length > 0 ? normalizados : [MERC, DOC];
 
-      console.log("📦 Respuesta de productos:", response.data);
+      setProductos(finales.map((n) => ({ nombre_producto: n })));
+      setSelectedProducto((prev) =>
+        prev && finales.includes(prev) ? prev : finales[0]
+      );
 
-      // Adaptar la respuesta - el servidor devuelve "fetch" con objetos que tienen "producto"
-      let productos: { nombre_producto: string }[] = [];
-      
-      if (Array.isArray(response.data.fetch)) {
-        // Convertir formato del servidor a formato esperado por el frontend
-        productos = response.data.fetch.map(item => ({
-          nombre_producto: item.producto.trim()
-        }));
-      } else if (Array.isArray(response.data.productos)) {
-        productos = response.data.productos;
-      }
-      
-      setProductos(productos);
-
-      // Mostrar advertencia si se usó fallback
-      if (response.data.fallback) {
-        toast.warning(
-          response.data.warning || "Se cargaron productos por defecto"
-        );
-      } else if (productos.length > 0) {
-        toast.success(`${productos.length} productos cargados correctamente`);
+      if (normalizados.length === 0) {
+        toast.warning("Usando productos por defecto.");
+      } else {
+        toast.success(`${finales.length} producto(s) cargado(s)`);
       }
     } catch (err: any) {
       console.error("❌ Error al cargar productos:", err);
-
-      // Mostrar error más específico
       const errorMessage =
-        err.response?.data?.details ||
-        err.response?.data?.error ||
-        err.message ||
+        err?.response?.data?.details ||
+        err?.response?.data?.error ||
+        err?.message ||
         "Error desconocido";
       toast.error(`Error al cargar productos: ${errorMessage}`);
 
-      // Productos de emergencia si todo falla
-      const productosEmergencia = [
-        { nombre_producto: "PREMIER" },
-        { nombre_producto: "ESTANDAR" },
-        { nombre_producto: "EXPRESS" },
-      ];
-      setProductos(productosEmergencia);
-      toast.info("Se cargaron productos básicos como respaldo");
+      const fallback = [MERC, DOC];
+      setProductos(fallback.map((n) => ({ nombre_producto: n })));
+      setSelectedProducto(fallback[0]);
+      toast.info("Se cargaron productos por defecto.");
     } finally {
       setCargandoProductos(false);
     }
@@ -94,6 +133,7 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
 
   useEffect(() => {
     fetchProductos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleContinue = () => {
@@ -103,21 +143,17 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
     }
     setLoading(true);
 
-    // Busca el objeto seleccionado para enviar el nombre_producto correcto
-    const producto = productos.find(
-      (p) => p?.nombre_producto === selectedProducto
-    );
+    const nombre = clean(selectedProducto) === clean(DOC) ? DOC : MERC;
 
     const resultado: ProductoSeleccionado = {
-      nombre_producto: producto?.nombre_producto || selectedProducto,
-      esDocumento: (selectedProducto || "").toUpperCase().includes("DOCUMENTO"),
+      nombre_producto: nombre, // garantizado: "MERCANCIA PREMIER" | "DOCUMENTOS"
+      esDocumento: nombre === DOC,
     };
 
-    // Simulación de carga breve para UX
     setTimeout(() => {
       setLoading(false);
       onNext(resultado);
-    }, 300);
+    }, 200);
   };
 
   return (
@@ -141,11 +177,8 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
               </SelectTrigger>
               <SelectContent>
                 {productos.map((p, i) => (
-                  <SelectItem
-                    key={i}
-                    value={p?.nombre_producto || `producto-${i}`}
-                  >
-                    {p?.nombre_producto || `Producto ${i + 1}`}
+                  <SelectItem key={i} value={p.nombre_producto}>
+                    {p.nombre_producto}
                   </SelectItem>
                 ))}
               </SelectContent>

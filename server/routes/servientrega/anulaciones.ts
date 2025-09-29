@@ -6,16 +6,81 @@ import { ServientregaAPIService } from "../../services/servientregaAPIService.js
 const router = express.Router();
 const dbService = new ServientregaDBService();
 
-// GET /api/servientrega/solicitudes-anulacion
+/** Helpers */
+function sendError(
+  res: express.Response,
+  status: number,
+  err: unknown,
+  fallback = "Error interno del servidor"
+) {
+  const message = err instanceof Error ? err.message : fallback;
+  return res.status(status).json({ success: false, error: fallback, message });
+}
+
+function validarAccion(accion?: string) {
+  const val = String(accion || "")
+    .toUpperCase()
+    .trim();
+  return val === "APROBAR" || val === "RECHAZAR";
+}
+
+function esAnulacionExitosa(resp: any): boolean {
+  const procesoFetch = resp?.fetch?.proceso;
+  if (typeof procesoFetch === "string" && /actualizad/i.test(procesoFetch))
+    return true;
+  const procesoPlano = resp?.proceso;
+  if (typeof procesoPlano === "string" && /actualizad/i.test(procesoPlano))
+    return true;
+  if (typeof resp === "string") {
+    const match = resp.match(/\{"proceso":"([^"]+)"\}/i);
+    if (match?.[1] && /actualizad/i.test(match[1])) return true;
+  }
+  return false;
+}
+
+/** Obtiene credenciales desde env, valida que existan */
+function getCreds() {
+  const usuingreso = process.env.SERVIENTREGA_USER;
+  const contrasenha = process.env.SERVIENTREGA_PASSWORD;
+  if (!usuingreso || !contrasenha) {
+    throw new Error(
+      "Faltan variables de entorno SERVIENTREGA_USER y/o SERVIENTREGA_PASSWORD. Verifica .env.production"
+    );
+  }
+  return { usuingreso, contrasenha };
+}
+
+/** Llama al API de Servientrega para marcar la guía como Anulada (incluye credenciales en payload) */
+async function procesarAnulacionServientrega(numeroGuia: string) {
+  const { usuingreso, contrasenha } = getCreds();
+
+  // Si tu ServientregaAPIService ya inyecta credenciales, igual está bien incluirlas aquí:
+  const apiService = new ServientregaAPIService({ usuingreso, contrasenha });
+
+  const payload = {
+    tipo: "ActualizaEstadoGuia",
+    guia: numeroGuia,
+    estado: "Anulada",
+    usuingreso, // <- requerido por tu API de anulación
+    contrasenha, // <- requerido por tu API de anulación
+  };
+
+  const response = await apiService.callAPI(payload);
+
+  if (!esAnulacionExitosa(response)) {
+    throw new Error(
+      `Respuesta inesperada de Servientrega: ${JSON.stringify(response)}`
+    );
+  }
+  return response;
+}
+
+/* ==============================
+   GET /api/servientrega/solicitudes-anulacion
+============================== */
 router.get("/solicitudes-anulacion", authenticateToken, async (req, res) => {
   try {
     const { desde, hasta, estado } = req.query;
-
-    console.log("🔍 Obteniendo solicitudes de anulación:", {
-      desde,
-      hasta,
-      estado,
-    });
 
     const solicitudes = await dbService.obtenerSolicitudesAnulacion({
       desde: desde as string,
@@ -23,7 +88,6 @@ router.get("/solicitudes-anulacion", authenticateToken, async (req, res) => {
       estado: estado as string,
     });
 
-    // Transformar datos para el frontend
     const solicitudesTransformadas = solicitudes.map((solicitud) => ({
       id: solicitud.id,
       guia_id: solicitud.guia_id,
@@ -39,176 +103,147 @@ router.get("/solicitudes-anulacion", authenticateToken, async (req, res) => {
       observaciones_respuesta: solicitud.observaciones_respuesta || "",
     }));
 
-    res.json({
-      data: solicitudesTransformadas,
-      success: true,
-    });
+    return res.json({ success: true, data: solicitudesTransformadas });
   } catch (error) {
     console.error("❌ Error al obtener solicitudes de anulación:", error);
-    res.status(500).json({
-      error: "Error interno del servidor",
-      message: error instanceof Error ? error.message : "Error desconocido",
-    });
+    return sendError(res, 500, error);
   }
 });
 
-// POST /api/servientrega/solicitudes-anulacion
+/* ==============================
+   POST /api/servientrega/solicitudes-anulacion
+============================== */
 router.post("/solicitudes-anulacion", authenticateToken, async (req, res) => {
   try {
     const { guia_id, numero_guia, motivo_anulacion } = req.body;
     const usuario = (req as any).user;
 
-    console.log("📝 Creando solicitud de anulación:", {
-      guia_id,
-      numero_guia,
-      motivo_anulacion,
-      usuario: usuario.id,
-    });
+    if (!guia_id || !numero_guia || !motivo_anulacion) {
+      return res.status(400).json({
+        success: false,
+        error: "Parámetros inválidos",
+        message: "guia_id, numero_guia y motivo_anulacion son requeridos",
+      });
+    }
 
     const solicitud = await dbService.crearSolicitudAnulacion({
       guia_id,
       numero_guia,
       motivo_anulacion,
-      solicitado_por: usuario.id,
-      solicitado_por_nombre: usuario.nombre,
+      solicitado_por: usuario?.id || "SYSTEM",
+      solicitado_por_nombre: usuario?.nombre || "Sistema",
     });
 
-    res.json({
-      data: solicitud,
+    return res.json({
       success: true,
       message: "Solicitud de anulación creada exitosamente",
+      data: solicitud,
     });
   } catch (error) {
     console.error("❌ Error al crear solicitud de anulación:", error);
-    res.status(500).json({
-      error: "Error interno del servidor",
-      message: error instanceof Error ? error.message : "Error desconocido",
-    });
+    return sendError(res, 500, error);
   }
 });
 
-// PUT /api/servientrega/solicitudes-anulacion/:id/responder
+/* ==============================
+   PUT /api/servientrega/solicitudes-anulacion/:id/responder
+============================== */
 router.put(
   "/solicitudes-anulacion/:id/responder",
   authenticateToken,
   async (req, res) => {
     try {
       const { id } = req.params;
-      const { accion, observaciones } = req.body; // accion: "APROBAR" | "RECHAZAR"
+      const { accion, observaciones } = req.body; // "APROBAR" | "RECHAZAR"
       const usuario = (req as any).user;
 
-      console.log("✅ Respondiendo solicitud de anulación:", {
-        id,
-        accion,
-        observaciones,
-        usuario: usuario.id,
-      });
+      if (!validarAccion(accion)) {
+        return res.status(400).json({
+          success: false,
+          error: "Parámetros inválidos",
+          message: 'La acción debe ser "APROBAR" o "RECHAZAR".',
+        });
+      }
 
-      // Actualizar estado de la solicitud
-      const estado = accion === "APROBAR" ? "APROBADA" : "RECHAZADA";
+      const estado =
+        String(accion).toUpperCase() === "APROBAR" ? "APROBADA" : "RECHAZADA";
 
       const solicitudActualizada = await dbService.actualizarSolicitudAnulacion(
         id,
         {
           estado,
-          respondido_por: usuario.id,
-          respondido_por_nombre: usuario.nombre,
-          observaciones_respuesta: observaciones,
+          respondido_por: usuario?.id || "SYSTEM",
+          respondido_por_nombre: usuario?.nombre || "Sistema",
+          observaciones_respuesta: observaciones || "",
           fecha_respuesta: new Date(),
         }
       );
 
-      // Si se aprueba, proceder con la anulación en Servientrega
-      if (accion === "APROBAR") {
+      if (estado === "APROBADA") {
         try {
           await procesarAnulacionServientrega(solicitudActualizada.numero_guia);
-
-          // Actualizar estado de la guía en la base de datos
           await dbService.anularGuia(solicitudActualizada.numero_guia);
-
-          console.log("✅ Guía anulada exitosamente en Servientrega");
         } catch (apiError) {
-          console.error("❌ Error al anular en Servientrega:", apiError);
-          // La solicitud queda aprobada pero se registra el error
           await dbService.actualizarSolicitudAnulacion(id, {
-            observaciones_respuesta: `${observaciones}\n\nError en API Servientrega: ${apiError}`,
+            observaciones_respuesta: `${
+              observaciones || ""
+            }\n\nError en API Servientrega: ${
+              apiError instanceof Error ? apiError.message : String(apiError)
+            }`,
           });
         }
       }
 
-      res.json({
-        data: solicitudActualizada,
+      return res.json({
         success: true,
         message: `Solicitud ${estado.toLowerCase()} exitosamente`,
+        data: solicitudActualizada,
       });
     } catch (error) {
       console.error("❌ Error al responder solicitud:", error);
-      res.status(500).json({
-        error: "Error interno del servidor",
-        message: error instanceof Error ? error.message : "Error desconocido",
-      });
+      return sendError(res, 500, error);
     }
   }
 );
 
-// Función auxiliar para procesar anulación en Servientrega
-async function procesarAnulacionServientrega(numeroGuia: string) {
-  const apiService = new ServientregaAPIService({
-    usuingreso: process.env.SERVIENTREGA_USER || "PRUEBA",
-    contrasenha: process.env.SERVIENTREGA_PASSWORD || "s12345ABCDe",
-  });
-
-  const payload = {
-    tipo: "ActualizaEstadoGuia",
-    guia: numeroGuia,
-    estado: "Anulada",
-  };
-
-  const response = await apiService.callAPI(payload);
-
-  if (!response.fetch?.proceso?.includes("Actualizada")) {
-    throw new Error(`Error en API Servientrega: ${JSON.stringify(response)}`);
-  }
-
-  return response;
-}
-
-// POST /api/servientrega/solicitar-anulacion (alias para compatibilidad con frontend)
+/* ==============================
+   POST /api/servientrega/solicitar-anulacion (alias)
+============================== */
 router.post("/solicitar-anulacion", authenticateToken, async (req, res) => {
   try {
     const { guia_id, numero_guia, motivo } = req.body;
     const usuario = (req as any).user;
 
-    console.log("📝 Creando solicitud de anulación (alias):", {
-      guia_id,
-      numero_guia,
-      motivo,
-      usuario: usuario.id,
-    });
+    if (!guia_id || !numero_guia || !motivo) {
+      return res.status(400).json({
+        success: false,
+        error: "Parámetros inválidos",
+        message: "guia_id, numero_guia y motivo son requeridos",
+      });
+    }
 
     const solicitud = await dbService.crearSolicitudAnulacion({
       guia_id,
       numero_guia,
       motivo_anulacion: motivo,
-      solicitado_por: usuario.id,
-      solicitado_por_nombre: usuario.nombre,
+      solicitado_por: usuario?.id || "SYSTEM",
+      solicitado_por_nombre: usuario?.nombre || "Sistema",
     });
 
-    res.json({
-      data: solicitud,
+    return res.json({
       success: true,
       message: "Solicitud de anulación creada exitosamente",
+      data: solicitud,
     });
   } catch (error) {
-    console.error("❌ Error al crear solicitud de anulación:", error);
-    res.status(500).json({
-      error: "Error interno del servidor",
-      message: error instanceof Error ? error.message : "Error desconocido",
-    });
+    console.error("❌ Error al crear solicitud de anulación (alias):", error);
+    return sendError(res, 500, error);
   }
 });
 
-// POST /api/servientrega/responder-solicitud-anulacion (alias para compatibilidad con frontend)
+/* ==============================
+   POST /api/servientrega/responder-solicitud-anulacion (alias)
+============================== */
 router.post(
   "/responder-solicitud-anulacion",
   authenticateToken,
@@ -217,56 +252,55 @@ router.post(
       const { solicitud_id, accion, comentario } = req.body;
       const usuario = (req as any).user;
 
-      console.log("✅ Respondiendo solicitud de anulación (alias):", {
-        solicitud_id,
-        accion,
-        comentario,
-        usuario: usuario.id,
-      });
+      if (!solicitud_id || !validarAccion(accion)) {
+        return res.status(400).json({
+          success: false,
+          error: "Parámetros inválidos",
+          message:
+            'solicitud_id es requerido y la acción debe ser "APROBAR" o "RECHAZAR".',
+        });
+      }
 
-      // Actualizar estado de la solicitud
-      const estado = accion === "APROBAR" ? "APROBADA" : "RECHAZADA";
+      const estado =
+        String(accion).toUpperCase() === "APROBAR" ? "APROBADA" : "RECHAZADA";
 
       const solicitudActualizada = await dbService.actualizarSolicitudAnulacion(
         solicitud_id,
         {
           estado,
-          respondido_por: usuario.id,
-          respondido_por_nombre: usuario.nombre,
-          observaciones_respuesta: comentario,
+          respondido_por: usuario?.id || "SYSTEM",
+          respondido_por_nombre: usuario?.nombre || "Sistema",
+          observaciones_respuesta: comentario || "",
           fecha_respuesta: new Date(),
         }
       );
 
-      // Si se aprueba, proceder con la anulación en Servientrega
-      if (accion === "APROBAR") {
+      if (estado === "APROBADA") {
         try {
           await procesarAnulacionServientrega(solicitudActualizada.numero_guia);
-
-          // Actualizar estado de la guía en la base de datos
           await dbService.anularGuia(solicitudActualizada.numero_guia);
-
-          console.log("✅ Guía anulada exitosamente en Servientrega");
         } catch (apiError) {
-          console.error("❌ Error al anular en Servientrega:", apiError);
-          // La solicitud queda aprobada pero se registra el error
           await dbService.actualizarSolicitudAnulacion(solicitud_id, {
-            observaciones_respuesta: `${comentario}\n\nError en API Servientrega: ${apiError}`,
+            observaciones_respuesta: `${
+              comentario || ""
+            }\n\nError en API Servientrega: ${
+              apiError instanceof Error ? apiError.message : String(apiError)
+            }`,
           });
         }
       }
 
-      res.json({
-        data: solicitudActualizada,
+      return res.json({
         success: true,
         message: `Solicitud ${estado.toLowerCase()} exitosamente`,
+        data: solicitudActualizada,
       });
     } catch (error) {
-      console.error("❌ Error al responder solicitud:", error);
-      res.status(500).json({
-        error: "Error interno del servidor",
-        message: error instanceof Error ? error.message : "Error desconocido",
-      });
+      console.error(
+        "❌ Error al responder solicitud de anulación (alias):",
+        error
+      );
+      return sendError(res, 500, error);
     }
   }
 );
