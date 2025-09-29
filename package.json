@@ -74,6 +74,8 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
     "cors": "^2.8.5",
+    "currency-codes": "^2.2.0",
+    "currency-symbol-map": "^5.1.0",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.5",
     "embla-carousel-react": "^8.3.0",

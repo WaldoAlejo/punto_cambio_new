@@ -193,10 +193,10 @@ export default function PasoEmpaqueYMedidas({
     }
 
     // 🔓 Valor declarado ya NO es obligatorio
-    // if (!medidas.valor_declarado || medidas.valor_declarado <= 0) {
-    //   toast.error("Debes ingresar un valor declarado válido.");
-    //   return false;
-    // }
+    if (!medidas.valor_declarado || medidas.valor_declarado <= 0) {
+      toast.error("Debes ingresar un valor declarado válido.");
+      return false;
+    }
 
     if (esDocumento) {
       return true;
