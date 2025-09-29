@@ -29,6 +29,7 @@ function getCredentialsFromPayload(payload: any): ServientregaCredentials {
 
 router.post("/tarifa", async (req, res) => {
   try {
+    console.log("🚀 === INICIO CÁLCULO TARIFA ===");
     console.log(
       "📥 Datos recibidos para tarifa:",
       JSON.stringify(req.body, null, 2)
@@ -38,6 +39,7 @@ router.post("/tarifa", async (req, res) => {
     const validationErrors =
       ServientregaValidationService.validateTarifaRequest(req.body);
     if (validationErrors.length > 0) {
+      console.log("❌ Errores de validación:", validationErrors);
       return res.status(400).json({
         error: "Errores de validación",
         errores: validationErrors,
@@ -49,7 +51,10 @@ router.post("/tarifa", async (req, res) => {
       req.body
     );
 
-    console.log("🔍 Datos sanitizados:", sanitizedData);
+    console.log(
+      "🔍 Datos sanitizados:",
+      JSON.stringify(sanitizedData, null, 2)
+    );
 
     // Extraer credenciales del payload del frontend
     const credentials = getCredentialsFromPayload(req.body);
@@ -63,12 +68,36 @@ router.post("/tarifa", async (req, res) => {
     apiService.apiUrl =
       "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php"; // fuerza la URL oficial
 
+    console.log("🌐 URL API:", apiService.apiUrl);
+    console.log("📤 Llamando a Servientrega...");
+
     const result = await apiService.calcularTarifa(sanitizedData);
+
+    console.log(
+      "📥 Respuesta cruda de Servientrega:",
+      JSON.stringify(result, null, 2)
+    );
+    console.log("📊 Tipo de respuesta:", typeof result);
+    console.log(
+      "📏 Longitud de respuesta:",
+      Array.isArray(result) ? result.length : "No es array"
+    );
+
+    // Verificar si la respuesta está vacía
+    if (!result || (Array.isArray(result) && result.length === 0)) {
+      console.log("⚠️ Respuesta vacía de Servientrega");
+      return res.status(400).json({
+        error: "Respuesta vacía de Servientrega",
+        respuesta_original: result,
+        payload_enviado: sanitizedData,
+      });
+    }
 
     // Procesar errores de Servientrega
     const servientregaErrors =
       ServientregaValidationService.parseServientregaErrors(result);
     if (servientregaErrors.length > 0) {
+      console.log("❌ Errores de Servientrega:", servientregaErrors);
       return res.status(400).json({
         error: "Error en Servientrega",
         errores: servientregaErrors,
@@ -76,12 +105,19 @@ router.post("/tarifa", async (req, res) => {
       });
     }
 
+    console.log("✅ Respuesta exitosa, enviando al cliente");
+    console.log("🏁 === FIN CÁLCULO TARIFA ===");
     res.json(result);
   } catch (error) {
-    console.error("Error al calcular tarifa:", error);
+    console.error("💥 Error al calcular tarifa:", error);
+    console.error(
+      "📋 Stack trace:",
+      error instanceof Error ? error.stack : "No stack"
+    );
     res.status(500).json({
       error: "Error al calcular tarifa",
       details: error instanceof Error ? error.message : "Error desconocido",
+      timestamp: new Date().toISOString(),
     });
   }
 });

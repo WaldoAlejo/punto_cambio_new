@@ -22,7 +22,10 @@ export interface ValidationError {
 export class ServientregaValidationService {
   private static readonly PRODUCTOS_VALIDOS = [
     "MERCANCIA PREMIER",
+    "PREMIER",
     "DOCUMENTO",
+    "ESTANDAR",
+    "EXPRESS",
   ];
   private static readonly PESO_MINIMO = 0.5;
 
