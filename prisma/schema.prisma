@@ -247,8 +247,14 @@ model CambioDivisa {
   numero_recibo_abono            String?           @unique
   numero_recibo_completar        String?           @unique
   fecha_completado               DateTime?
+  // DESTINO (ya existente)
   usd_entregado_efectivo         Decimal?          @db.Decimal(15, 2)
   usd_entregado_transfer         Decimal?          @db.Decimal(15, 2)
+  // ORIGEN (NUEVO): cómo paga el cliente
+  metodo_pago_origen             TipoViaTransferencia @default(EFECTIVO)
+  usd_recibido_efectivo          Decimal?             @db.Decimal(15, 2)
+  usd_recibido_transfer          Decimal?             @db.Decimal(15, 2)
+
   abonoInicialRecibidoPorUsuario Usuario?          @relation("AbonoInicialRecibidoPor", fields: [abono_inicial_recibido_por], references: [id])
   monedaDestino                  Moneda            @relation("MonedaDestino", fields: [moneda_destino_id], references: [id])
   monedaOrigen                   Moneda            @relation("MonedaOrigen", fields: [moneda_origen_id], references: [id])
@@ -276,7 +282,7 @@ model Transferencia {
   fecha_rechazo            DateTime?
   descripcion              String?
   numero_recibo            String?             @unique
-  via                      TipoViaTransferencia?           // <<< NUEVO
+  via                      TipoViaTransferencia?
   observaciones_aprobacion String?
   usuarioAprobador         Usuario?            @relation("UsuarioAprobador", fields: [aprobado_por], references: [id])
   destino                  PuntoAtencion       @relation("TransferenciasDestino", fields: [destino_id], references: [id])
