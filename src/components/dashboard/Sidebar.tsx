@@ -46,15 +46,6 @@ const Sidebar = ({
   const isConcesion = user.rol === "CONCESION";
 
   const menuItems: MenuItem[] = [
-    // Solo opciones de Servientrega para operadores y concesión
-    {
-      id: "servientrega",
-      label: "Guía Servientrega",
-      color: "text-cyan-600",
-      roles: ["OPERADOR", "CONCESION"],
-    },
-    // Opciones temporalmente ocultas - se pueden reactivar más adelante
-    /*
     {
       id: "exchanges",
       label: "Cambio de Divisas",
@@ -92,6 +83,12 @@ const Sidebar = ({
       roles: ["OPERADOR"],
     },
     {
+      id: "servientrega",
+      label: "Guía Servientrega",
+      color: "text-cyan-600",
+      roles: ["OPERADOR", "CONCESION"],
+    },
+    {
       id: "contabilidad-divisas",
       label: "Contabilidad por Punto",
       color: "text-emerald-600",
@@ -109,46 +106,9 @@ const Sidebar = ({
       color: "text-yellow-600",
       roles: ["CONCESION"],
     },
-    */
   ];
 
   const adminMenuItems: MenuItem[] = [
-    // Gestión básica de usuarios y puntos
-    {
-      id: "users",
-      label: "Usuarios",
-      color: "text-blue-600",
-    },
-    {
-      id: "points",
-      label: "Puntos de Atención",
-      color: "text-green-600",
-    },
-    // Separador visual
-    {
-      id: "separator-1",
-      label: "---",
-      color: "",
-    },
-    // Gestión de Servientrega - funcionalidades principales
-    {
-      id: "servientrega-saldo",
-      label: "Asignación Saldos Servientrega",
-      color: "text-cyan-600",
-    },
-    {
-      id: "servientrega-anulaciones",
-      label: "Anulación Guías Servientrega",
-      color: "text-orange-600",
-    },
-    {
-      id: "servientrega-informes",
-      label: "Informes Servientrega",
-      color: "text-purple-600",
-    },
-
-    // Opciones temporalmente ocultas - se pueden reactivar más adelante
-    /*
     // Supervisión y contabilidad
     {
       id: "contabilidad-general",
@@ -166,10 +126,33 @@ const Sidebar = ({
       label: "Cambios (admin)",
       color: "text-blue-700",
     },
+    // Separador visual
+    {
+      id: "separator-1",
+      label: "---",
+      color: "",
+    },
+    // Gestión de usuarios y puntos
+    {
+      id: "users",
+      label: "Usuarios",
+      color: "text-blue-600",
+    },
+    {
+      id: "points",
+      label: "Puntos de Atención",
+      color: "text-green-600",
+    },
     {
       id: "admin-time-management",
       label: "Control de Horarios",
       color: "text-purple-600",
+    },
+    // Separador visual
+    {
+      id: "separator-2",
+      label: "---",
+      color: "",
     },
     // Gestión financiera
     {
@@ -197,13 +180,40 @@ const Sidebar = ({
       label: "Aprobación de Permisos",
       color: "text-pink-700",
     },
+    // Separador visual
+    {
+      id: "separator-3",
+      label: "---",
+      color: "",
+    },
+    // Gestión de Servientrega
+    {
+      id: "servientrega-saldo",
+      label: "Saldo Servientrega",
+      color: "text-cyan-600",
+    },
+    {
+      id: "servientrega-anulaciones",
+      label: "Anulaciones Servientrega",
+      color: "text-orange-600",
+    },
+    {
+      id: "servientrega-informes",
+      label: "Informes Servientrega",
+      color: "text-purple-600",
+    },
+    // Separador visual
+    {
+      id: "separator-4",
+      label: "---",
+      color: "",
+    },
     // Administración de servicios externos
     {
       id: "servicios-externos-admin",
       label: "Admin Servicios Externos",
       color: "text-emerald-700",
     },
-    */
   ];
 
   const renderMenuItem = (item: MenuItem) => {

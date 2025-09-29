@@ -74,7 +74,7 @@ router.post("/tarifa", async (req, res) => {
         : "obtener_tarifa_nacional",
     };
 
-    // 2) Validación
+    // 2) Validación (valor_declarado es opcional en el servicio)
     const validationErrors =
       ServientregaValidationService.validateTarifaRequest(bodyConTipo);
     if (validationErrors.length > 0) {
@@ -84,7 +84,7 @@ router.post("/tarifa", async (req, res) => {
       });
     }
 
-    // 3) Sanitizar (pone strings y defaults compatibles con WS)
+    // 3) Sanitizar (pone strings y defaults compatibles con WS; valor_declarado→0 si falta)
     const sanitizedData =
       ServientregaValidationService.sanitizeTarifaRequest(bodyConTipo);
 
@@ -101,7 +101,7 @@ router.post("/tarifa", async (req, res) => {
 
     // 4) Preparar API Service con credenciales de env
     const credentials = getCredentialsFromEnv();
-    console.log("🔍 CREDENCIALES:", JSON.stringify(credentials, null, 2));
+    console.log("🔍 CREDENCIALES:", JSON.stringify(maskCreds(credentials)));
     console.log("🔍 URL API:", getApiUrl());
 
     const apiService = new ServientregaAPIService(credentials);
@@ -246,6 +246,19 @@ router.post("/generar-guia", async (req, res) => {
         destinatario?.ciudad || ""
       ).toUpperCase()}-${String(destinatario?.provincia || "").toUpperCase()}`;
 
+      // Normalizaciones numéricas seguras
+      const vd = Number(medidas?.valor_declarado ?? 0) || 0; // 👈 default 0
+      const va = Number(medidas?.valor_seguro ?? 0) || 0;
+      const alto = Number(medidas?.alto ?? 0) || 0;
+      const ancho = Number(medidas?.ancho ?? 0) || 0;
+      const largo = Number(medidas?.largo ?? 0) || 0;
+      const peso_fisico = Number(medidas?.peso ?? 0) || 0;
+      const piezas = Number((medidas as any)?.piezas ?? 1) || 1;
+
+      // Cálculo de peso volumétrico (si hay dimensiones)
+      const peso_volumentrico =
+        alto > 0 && ancho > 0 && largo > 0 ? (alto * ancho * largo) / 5000 : 0;
+
       payload = {
         tipo: "GeneracionGuia",
         nombre_producto: producto,
@@ -270,18 +283,24 @@ router.post("/generar-guia", async (req, res) => {
           : {}),
         pedido: pedido || "PRUEBA",
         factura: factura || "PRUEBA",
-        valor_declarado: Number(medidas?.valor_declarado ?? 0),
-        valor_asegurado: Number(medidas?.valor_seguro ?? 0),
-        peso_fisico: Number(medidas?.peso ?? 0),
-        peso_volumentrico: 0, // si ya lo tienes calculado, puedes reemplazarlo
-        piezas: 1,
-        alto: Number(medidas?.alto ?? 0),
-        ancho: Number(medidas?.ancho ?? 0),
-        largo: Number(medidas?.largo ?? 0),
+
+        // 🔓 valor_declarado puede ir 0 sin problema
+        valor_declarado: vd,
+
+        // 🛡️ valor_asegurado SOLO si > 0
+        ...(va > 0 ? { valor_asegurado: va } : {}),
+
+        peso_fisico,
+        peso_volumentrico, // ahora calculado
+        piezas,
+        alto,
+        ancho,
+        largo,
         tipo_guia: "1",
         alianza: "PRUEBAS",
         alianza_oficina: "DON JUAN_INICIAL_XR",
         mail_remite: remitente?.email || "",
+
         // Credenciales requeridas por el WS dentro del body
         usuingreso: credentials.usuingreso,
         contrasenha: credentials.contrasenha,
@@ -292,10 +311,19 @@ router.post("/generar-guia", async (req, res) => {
       };
     } else {
       // Ya viene formateado → sólo inyectamos credenciales si faltan
+      const vd = Number(req.body?.valor_declarado ?? 0) || 0;
+      const va = Number(req.body?.valor_asegurado ?? 0) || 0;
+
+      // Clonar y forzar las dos reglas:
+      const base = { ...req.body, valor_declarado: vd };
+      if (va <= 0 && "valor_asegurado" in base) {
+        delete (base as any).valor_asegurado;
+      }
+
       payload = {
-        ...req.body,
-        usuingreso: req.body.usuingreso || credentials.usuingreso,
-        contrasenha: req.body.contrasenha || credentials.contrasenha,
+        ...base,
+        usuingreso: base.usuingreso || credentials.usuingreso,
+        contrasenha: base.contrasenha || credentials.contrasenha,
       };
     }
 

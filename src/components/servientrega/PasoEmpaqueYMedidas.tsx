@@ -51,7 +51,7 @@ export default function PasoEmpaqueYMedidas({
     ancho: 0,
     largo: 0,
     peso: 0,
-    valor_declarado: 0,
+    valor_declarado: 0, // ahora puede quedarse en 0
     valor_seguro: 0,
     recoleccion: false,
     contenido: "",
@@ -192,13 +192,13 @@ export default function PasoEmpaqueYMedidas({
       return false;
     }
 
-    if (!medidas.valor_declarado || medidas.valor_declarado <= 0) {
-      toast.error("Debes ingresar un valor declarado válido.");
-      return false;
-    }
+    // 🔓 Valor declarado ya NO es obligatorio
+    // if (!medidas.valor_declarado || medidas.valor_declarado <= 0) {
+    //   toast.error("Debes ingresar un valor declarado válido.");
+    //   return false;
+    // }
 
     if (esDocumento) {
-      // documento: reglas ya forzadas en estado
       return true;
     }
 
@@ -212,7 +212,6 @@ export default function PasoEmpaqueYMedidas({
         toast.error("Selecciona un tipo de empaque.");
         return false;
       }
-      // Para internacional con empaque, no exigimos medidas (tu backend calculará volumétrico si aplica)
       return true;
     }
 
@@ -250,7 +249,8 @@ export default function PasoEmpaqueYMedidas({
           : requiereEmpaque
           ? 0
           : medidas.peso,
-        valor_declarado: medidas.valor_declarado,
+        // ✅ valor declarado puede ser 0
+        valor_declarado: medidas.valor_declarado || 0,
         valor_seguro: manualSeguro ? medidas.valor_seguro : 0,
         recoleccion: !!medidas.recoleccion,
         contenido: (medidas.contenido || "").trim(),
@@ -370,7 +370,8 @@ export default function PasoEmpaqueYMedidas({
         {/* Valor mercancía y seguro */}
         <Separator />
         <div>
-          <Label>Valor declarado de la mercancía (USD) *</Label>
+          {/* 🔓 sin asterisco, ya no es obligatorio */}
+          <Label>Valor declarado de la mercancía (USD)</Label>
           <Input
             name="valor_declarado"
             type="number"

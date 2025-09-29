@@ -39,13 +39,38 @@ export default function PasoConfirmarEnvio({
   const [saldoEstado, setSaldoEstado] = useState<string | null>(null);
   const [reciboGenerado, setReciboGenerado] = useState<boolean>(false);
 
+  // Helpers seguros
+  const safeUpper = (s?: string) => (s || "").toUpperCase().trim();
+  const ciudadProv = (ciudad?: string, provincia?: string) =>
+    `${safeUpper(ciudad)}-${safeUpper(provincia)}`;
+  const mapNombreProducto = (raw?: string) => {
+    const v = (raw || "").toUpperCase();
+    if (v.includes("DOC")) return "DOCUMENTO";
+    return "MERCANCIA PREMIER";
+  };
+
+  // Observaciones y nombre de punto (campos opcionales que NO están en el tipo)
+  const observaciones: string =
+    ((formData as any)?.observaciones as string) || "";
+  const puntoAtencionNombre: string =
+    ((formData as any)?.punto_atencion_nombre as string) ||
+    formData.punto_atencion_id ||
+    "Punto de Atención";
+
+  // Total estimado desde resumen_costos (evita usar 'tarifa' inexistente)
+  const totalEstimado = Number(
+    (formData as any)?.resumen_costos?.total ??
+      (formData as any)?.resumen_costos?.gtotal ??
+      (formData as any)?.resumen_costos?.total_transaccion ??
+      0
+  );
+
   // ==========================
   // 🔍 Validar saldo disponible
   // ==========================
   const validarSaldo = async () => {
     try {
-      // Calcular el monto total de la transacción desde la tarifa
-      const montoTotal = tarifa?.total_transacion || tarifa?.gtotal || 0;
+      const montoTotal = totalEstimado || 0;
 
       const { data } = await axiosInstance.get(
         `/servientrega/saldo/validar/${
@@ -57,7 +82,6 @@ export default function PasoConfirmarEnvio({
       setSaldoEstado(data?.estado);
 
       if (data?.estado !== "OK") {
-        // Mostrar mensaje específico según el estado
         let mensaje =
           data?.mensaje || "Saldo insuficiente para generar la guía.";
 
@@ -67,9 +91,9 @@ export default function PasoConfirmarEnvio({
         } else if (data?.estado === "SALDO_AGOTADO") {
           mensaje = "El saldo disponible se ha agotado. Solicite una recarga.";
         } else if (data?.estado === "SALDO_INSUFICIENTE") {
-          mensaje = `Saldo insuficiente. Disponible: $${data.disponible?.toFixed(
-            2
-          )}, Requerido: $${montoTotal.toFixed(2)}`;
+          mensaje = `Saldo insuficiente. Disponible: $${Number(
+            data.disponible || 0
+          ).toFixed(2)}, Requerido: $${Number(montoTotal).toFixed(2)}`;
         }
 
         toast.error(mensaje);
@@ -89,18 +113,6 @@ export default function PasoConfirmarEnvio({
     if (valido) setConfirmOpen(true);
   };
 
-  // Helpers
-  const safeUpper = (s?: string) => (s || "").toUpperCase().trim();
-  const ciudadProv = (ciudad?: string, provincia?: string) =>
-    `${safeUpper(ciudad)}-${safeUpper(provincia)}`;
-
-  // Mapeo de producto según selección previa
-  const mapNombreProducto = (raw?: string) => {
-    const v = (raw || "").toUpperCase();
-    if (v.includes("DOC")) return "DOCUMENTO";
-    return "MERCANCIA PREMIER";
-  };
-
   // ==========================
   // 📄 Generar guía
   // ==========================
@@ -113,24 +125,22 @@ export default function PasoConfirmarEnvio({
       const m = formData.medidas!;
 
       // Peso volumétrico si no llega
+      const alto = Number(m?.alto || 0);
+      const ancho = Number(m?.ancho || 0);
+      const largo = Number(m?.largo || 0);
       const pesoVol =
-        Number(m?.alto || 0) > 0 &&
-        Number(m?.ancho || 0) > 0 &&
-        Number(m?.largo || 0) > 0
-          ? (Number(m.alto) * Number(m.ancho) * Number(m.largo)) / 5000
-          : 0;
+        alto > 0 && ancho > 0 && largo > 0 ? (alto * ancho * largo) / 5000 : 0;
 
-      // ⚠️ Forma de Consumo: GeneracionGuia
       const payload = {
         tipo: "GeneracionGuia",
         nombre_producto: mapNombreProducto(formData.nombre_producto),
         ciudad_origen: ciudadProv(r.ciudad, r.provincia),
-        cedula_remitente: r.identificacion || r.cedula || "",
+        cedula_remitente: (r.identificacion || r.cedula || "").toString(),
         nombre_remitente: r.nombre || "",
         direccion_remitente: r.direccion || "",
         telefono_remitente: r.telefono || "",
         codigo_postal_remitente: r.codigo_postal || "PRUEBA",
-        cedula_destinatario: d.identificacion || d.cedula || "",
+        cedula_destinatario: (d.identificacion || d.cedula || "").toString(),
         nombre_destinatario: d.nombre || "",
         direccion_destinatario: d.direccion || "",
         telefono_destinatario: d.telefono || "",
@@ -141,28 +151,24 @@ export default function PasoConfirmarEnvio({
           (formData?.contenido || formData?.nombre_producto || "PRUEBA") + "",
         retiro_oficina: formData.retiro_oficina ? "SI" : "NO",
         ...(formData.retiro_oficina &&
-          formData.nombre_agencia_retiro_oficina && {
-            nombre_agencia_retiro_oficina:
-              formData.nombre_agencia_retiro_oficina,
+          (formData as any).nombre_agencia_retiro_oficina && {
+            nombre_agencia_retiro_oficina: (formData as any)
+              .nombre_agencia_retiro_oficina,
           }),
-        pedido: formData.pedido || "PRUEBA",
-        factura: formData.factura || "PRUEBA",
+        pedido: (formData as any).pedido || "PRUEBA",
+        factura: (formData as any).factura || "PRUEBA",
         valor_declarado: Number(m?.valor_declarado || 0),
-        valor_asegurado: Number(m?.valor_seguro || 0),
+        valor_asegurado: Number((m as any)?.valor_seguro || 0),
         peso_fisico: Number(m?.peso || 0),
         peso_volumentrico: Number(pesoVol || 0),
         piezas: Number(m?.piezas || 1),
-        alto: Number(m?.alto || 0),
-        ancho: Number(m?.ancho || 0),
-        largo: Number(m?.largo || 0),
+        alto: alto,
+        ancho: ancho,
+        largo: largo,
         tipo_guia: "1",
         alianza: "PRUEBAS",
         alianza_oficina: "OFICINA_PRUEBA",
         mail_remite: r.email || "correoremitente@gmail.com",
-
-        // Si tu backend NO agrega credenciales, descomenta y completa:
-        // usuingreso: "PRUEBA",
-        // contrasenha: "s12345ABCDe",
       } as const;
 
       console.log("📤 Payload GeneracionGuia:", payload);
@@ -173,15 +179,12 @@ export default function PasoConfirmarEnvio({
       );
       let data = res.data;
 
-      // La API a veces devuelve: [ ...tarifa ]{ fetch: {...guia...} }
-      // Normalizamos para extraer la guía y el PDF Base64
+      // Normaliza respuesta para extraer guía y PDF Base64
       let guiaStr: string | undefined;
       let guia64: string | undefined;
 
       if (typeof data === "string") {
-        // Intento de parse cuando vienen concatenados como string
         try {
-          // separa jsons contiguos: ][ o }{ etc.
           const parts = data
             .trim()
             .replace(/}\s*{/g, "}|{")
@@ -191,7 +194,7 @@ export default function PasoConfirmarEnvio({
             try {
               const j = JSON.parse(p);
               if (Array.isArray(j)) {
-                // tarifa: ignoramos aquí
+                // tarifa: ignorar aquí
               } else if (j?.fetch?.guia) {
                 guiaStr = j.fetch.guia;
                 guia64 = j.fetch.guia_64 || j.fetch.guia_pdf;
@@ -236,7 +239,7 @@ export default function PasoConfirmarEnvio({
   const handleVerPDF = () => {
     if (!base64) return;
     const isBase64 = !/^https?:\/\//i.test(base64);
-    const url = isBase64 ? `data:application/pdf;base64,${base64}` : base64; // si vino url directa
+    const url = isBase64 ? `data:application/pdf;base64,${base64}` : base64;
     window.open(url, "_blank");
   };
 
@@ -244,13 +247,12 @@ export default function PasoConfirmarEnvio({
   // 🧾 Generar y guardar recibo
   // ==========================
   const generarRecibo = async () => {
-    if (!guia || !formData.resumen_costos) {
+    if (!guia || !(formData as any).resumen_costos) {
       toast.error("No hay datos suficientes para generar el recibo");
       return;
     }
 
     try {
-      // Generar el recibo usando el servicio
       const reciboData = ReceiptService.generateServientregaReceipt(
         {
           numero_guia: guia,
@@ -258,14 +260,13 @@ export default function PasoConfirmarEnvio({
           remitente: formData.remitente,
           destinatario: formData.destinatario,
           medidas: formData.medidas,
-          observaciones: formData.observaciones,
+          observaciones, // <- seguro
         },
-        formData.resumen_costos,
-        formData.punto_atencion_nombre || "Punto de Atención",
-        "Usuario Actual" // TODO: Obtener del contexto de usuario
+        (formData as any).resumen_costos,
+        puntoAtencionNombre,
+        "Usuario Actual" // TODO: obtener del contexto real
       );
 
-      // Guardar en la base de datos
       await axiosInstance.post("/servientrega/recibos", {
         numero_recibo: reciboData.numeroRecibo,
         referencia_id: guia,
@@ -277,14 +278,13 @@ export default function PasoConfirmarEnvio({
             remitente: formData.remitente,
             destinatario: formData.destinatario,
             medidas: formData.medidas,
-            observaciones: formData.observaciones,
+            observaciones,
           },
-          tarifa: formData.resumen_costos,
+          tarifa: (formData as any).resumen_costos,
           fecha_generacion: new Date().toISOString(),
         },
       });
 
-      // Mostrar el recibo
       ReceiptService.showReceiptInCurrentWindow(reciboData);
       setReciboGenerado(true);
       toast.success("Recibo generado exitosamente");
@@ -298,13 +298,12 @@ export default function PasoConfirmarEnvio({
   // 🧾 Imprimir recibo
   // ==========================
   const imprimirRecibo = async () => {
-    if (!guia || !formData.resumen_costos) {
+    if (!guia || !(formData as any).resumen_costos) {
       toast.error("No hay datos suficientes para imprimir el recibo");
       return;
     }
 
     try {
-      // Generar el recibo para impresión
       const reciboData = ReceiptService.generateServientregaReceipt(
         {
           numero_guia: guia,
@@ -312,14 +311,13 @@ export default function PasoConfirmarEnvio({
           remitente: formData.remitente,
           destinatario: formData.destinatario,
           medidas: formData.medidas,
-          observaciones: formData.observaciones,
+          observaciones,
         },
-        formData.resumen_costos,
-        formData.punto_atencion_nombre || "Punto de Atención",
-        "Usuario Actual" // TODO: Obtener del contexto de usuario
+        (formData as any).resumen_costos,
+        puntoAtencionNombre,
+        "Usuario Actual"
       );
 
-      // Imprimir directamente
       ReceiptService.printReceipt(reciboData, 2);
       toast.success("Enviando recibo a impresora...");
     } catch (error) {
@@ -329,9 +327,7 @@ export default function PasoConfirmarEnvio({
   };
 
   const saldoRestante =
-    saldoDisponible !== null
-      ? saldoDisponible - (formData.resumen_costos.total || 0)
-      : null;
+    saldoDisponible !== null ? saldoDisponible - totalEstimado : null;
 
   return (
     <Card className="w-full max-w-2xl mx-auto mt-6 shadow-lg border rounded-xl">
@@ -357,12 +353,14 @@ export default function PasoConfirmarEnvio({
               </p>
               <p>
                 <strong>Flete estimado:</strong> $
-                {Number(formData?.resumen_costos?.flete || 0).toFixed(2)}
+                {Number((formData as any)?.resumen_costos?.flete || 0).toFixed(
+                  2
+                )}
               </p>
               <p>
                 <strong>Total estimado:</strong>{" "}
                 <span className="text-green-700 font-semibold">
-                  ${Number(formData?.resumen_costos?.total || 0).toFixed(2)}
+                  ${Number(totalEstimado).toFixed(2)}
                 </span>
               </p>
             </div>
@@ -405,10 +403,7 @@ export default function PasoConfirmarEnvio({
                       <p>
                         <strong>Saldo requerido:</strong>{" "}
                         <span className="text-green-600">
-                          $
-                          {Number(formData.resumen_costos.total || 0).toFixed(
-                            2
-                          )}
+                          ${Number(totalEstimado).toFixed(2)}
                         </span>
                       </p>
                       <p>
@@ -443,7 +438,7 @@ export default function PasoConfirmarEnvio({
                       onClick={async () => {
                         try {
                           const montoRequerido = Math.max(
-                            formData?.resumen_costos?.total || 0,
+                            totalEstimado || 0,
                             50
                           );
                           await axiosInstance.post(
@@ -453,7 +448,7 @@ export default function PasoConfirmarEnvio({
                                 formData?.punto_atencion_id || "",
                               monto_solicitado: montoRequerido,
                               observaciones: `Solicitud automática. Costo estimado: $${Number(
-                                formData?.resumen_costos?.total || 0
+                                totalEstimado || 0
                               ).toFixed(2)}`,
                               creado_por: "Sistema",
                             }
@@ -503,7 +498,7 @@ export default function PasoConfirmarEnvio({
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   onClick={generarRecibo}
-                  disabled={!guia || !formData.resumen_costos}
+                  disabled={!guia || !(formData as any).resumen_costos}
                   className="bg-green-600 text-white hover:bg-green-700"
                   size="sm"
                 >
@@ -511,7 +506,7 @@ export default function PasoConfirmarEnvio({
                 </Button>
                 <Button
                   onClick={imprimirRecibo}
-                  disabled={!guia || !formData.resumen_costos}
+                  disabled={!guia || !(formData as any).resumen_costos}
                   className="bg-purple-600 text-white hover:bg-purple-700"
                   size="sm"
                 >

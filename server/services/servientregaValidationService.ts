@@ -7,7 +7,8 @@ export interface TarifaRequest {
   ciu_des: string;
   provincia_des: string;
   valor_seguro: number | string;
-  valor_declarado: number | string;
+  // 🔓 valor_declarado deja de ser obligatorio
+  valor_declarado?: number | string;
   peso: number | string;
   alto: number | string;
   ancho: number | string;
@@ -40,19 +41,18 @@ export class ServientregaValidationService {
 
   /**
    * Valida los campos necesarios para calcular tarifa.
-   * No obliga a `empaque`.
+   * No obliga a `empaque` ni a `valor_declarado`.
    */
   static validateTarifaRequest(request: TarifaRequest): ValidationError[] {
     const errors: ValidationError[] = [];
 
-    // Requeridos base
+    // Requeridos base (quitamos valor_declarado)
     const requiredFields: (keyof TarifaRequest)[] = [
       "ciu_ori",
       "provincia_ori",
       "ciu_des",
       "provincia_des",
       "valor_seguro",
-      "valor_declarado",
       "peso",
       "alto",
       "ancho",
@@ -91,15 +91,34 @@ export class ServientregaValidationService {
     });
 
     // Valores monetarios
-    (["valor_seguro", "valor_declarado"] as const).forEach((k) => {
-      const val = parseFloat(String(request[k]));
+    // valor_seguro: requerido y >= 0
+    {
+      const val = parseFloat(String(request.valor_seguro));
       if (isNaN(val) || val < 0) {
         errors.push({
-          field: k,
-          message: `${k} debe ser un número mayor o igual a 0`,
+          field: "valor_seguro",
+          message: `valor_seguro debe ser un número mayor o igual a 0`,
         });
       }
-    });
+    }
+
+    // valor_declarado: OPCIONAL; si viene, debe ser >= 0
+    {
+      const rawDecl = request.valor_declarado;
+      const isEmpty =
+        rawDecl === undefined ||
+        rawDecl === null ||
+        (typeof rawDecl === "string" && rawDecl.trim() === "");
+      if (!isEmpty) {
+        const valDecl = parseFloat(String(rawDecl));
+        if (isNaN(valDecl) || valDecl < 0) {
+          errors.push({
+            field: "valor_declarado",
+            message: `valor_declarado debe ser un número mayor o igual a 0`,
+          });
+        }
+      }
+    }
 
     // Producto (si viene) debe ser uno de los válidos
     if (
@@ -125,6 +144,7 @@ export class ServientregaValidationService {
    * - Normaliza mayúsculas donde aplica.
    * - `recoleccion` por defecto "NO".
    * - Asegura peso mínimo 0.5.
+   * - `valor_declarado` default 0 si no viene.
    */
   static sanitizeTarifaRequest(request: TarifaRequest): Record<string, string> {
     const peso = Math.max(
@@ -139,14 +159,20 @@ export class ServientregaValidationService {
       ? productoNormalizado
       : "MERCANCIA PREMIER";
 
+    // Normalización monetaria segura
+    const vs = parseFloat(String(request.valor_seguro ?? 0));
+    const vdNum = parseFloat(String(request.valor_declarado ?? 0));
+    const valor_seguro = isNaN(vs) ? 0 : vs;
+    const valor_declarado = isNaN(vdNum) ? 0 : vdNum; // 👈 default 0
+
     const payload: Record<string, string> = {
       tipo: (request.tipo || "obtener_tarifa_nacional").toString(),
       ciu_ori: String(request.ciu_ori).toUpperCase(),
       provincia_ori: String(request.provincia_ori).toUpperCase(),
       ciu_des: String(request.ciu_des).toUpperCase(),
       provincia_des: String(request.provincia_des).toUpperCase(),
-      valor_seguro: String(request.valor_seguro),
-      valor_declarado: String(request.valor_declarado),
+      valor_seguro: String(valor_seguro),
+      valor_declarado: String(valor_declarado), // 👈 siempre se envía como número válido (0 si faltó)
       peso: String(peso),
       alto: String(request.alto),
       ancho: String(request.ancho),
