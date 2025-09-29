@@ -27,6 +27,24 @@ function isEmptyUpstream(data: any): boolean {
   return false;
 }
 
+// 👉 Quita BOM/whitespace y trata de parsear JSON si viene como string
+function normalizeUpstream<T = any>(raw: any): T {
+  try {
+    if (typeof raw !== "string") return raw as T;
+    // quitar BOM UTF-8 y espacios
+    const trimmed = raw.replace(/^\uFEFF/, "").trim();
+    if (trimmed === "") return trimmed as unknown as T;
+    const first = trimmed[0];
+    if (first === "{" || first === "[") {
+      return JSON.parse(trimmed) as T;
+    }
+    return trimmed as unknown as T;
+  } catch {
+    // si no se puede parsear, devuelvo el original
+    return raw as T;
+  }
+}
+
 async function doPost(
   url: string,
   payload: Record<string, any>,
@@ -74,10 +92,7 @@ async function doPost(
 
 export class ServientregaAPIService {
   private credentials: ServientregaCredentials;
-  /**
-   * Permite sobreescribir la URL “main” desde fuera (router lee .env y la setea).
-   * Si no se setea, usa MAIN_URL.
-   */
+  /** Permite sobreescribir la URL main desde fuera (router lee .env y la setea). */
   public apiUrl: string = MAIN_URL;
 
   constructor(credentials: ServientregaCredentials) {
@@ -97,7 +112,6 @@ export class ServientregaAPIService {
   ): Promise<ServientregaAPIResponse> {
     const basePayload = { ...payload, ...this.credentials };
 
-    // Orden de intentos
     const attempts: Array<{ url: string; mode: WireMode; label: string }> = [
       { url: this.apiUrl || MAIN_URL, mode: "json", label: "MAIN JSON" },
       { url: this.apiUrl || MAIN_URL, mode: "form", label: "MAIN FORM" },
@@ -110,19 +124,18 @@ export class ServientregaAPIService {
     for (const att of attempts) {
       try {
         const res = await doPost(att.url, basePayload, att.mode, timeoutMs);
+        const data = normalizeUpstream(res.data);
 
-        // 4xx del proveedor → propaga con mensaje claro
         if (res.status >= 400) {
           const e: any = new Error(
-            `HTTP ${res.status} en ${att.label}: ${JSON.stringify(res.data)}`
+            `HTTP ${res.status} en ${att.label}: ${JSON.stringify(data)}`
           );
           e.httpStatus = res.status;
           e.endpoint = att.url;
           throw e;
         }
 
-        // Consideramos “vacío” como fallo recuperable → probamos siguiente intento
-        if (isEmptyUpstream(res.data)) {
+        if (isEmptyUpstream(data)) {
           console.warn(
             `⚠️ Respuesta vacía en ${att.label}, probando siguiente...`
           );
@@ -132,11 +145,9 @@ export class ServientregaAPIService {
           continue;
         }
 
-        // ¡Listo!
-        return res.data;
+        return data;
       } catch (err: any) {
         lastErr = err;
-        // Si fue timeout o vacío, seguimos con el siguiente intento
         if (
           err?.code === "ECONNABORTED" ||
           err?.code === "UPSTREAM_EMPTY" ||
@@ -145,13 +156,11 @@ export class ServientregaAPIService {
           console.warn(`⏳/🈳 ${att.label} falló: ${err?.message || err}`);
           continue;
         }
-        // Para otros errores (p.ej. 4xx con body), guarda y continua al siguiente intento
         console.warn(`❗ ${att.label} error: ${err?.message || err}`);
         continue;
       }
     }
 
-    // Si llegamos aquí, todos los intentos fallaron
     const out: any = new Error(
       lastErr?.code === "UPSTREAM_EMPTY"
         ? "Proveedor no devolvió datos (tarifa vacía) en todos los endpoints"
@@ -162,7 +171,7 @@ export class ServientregaAPIService {
     throw out;
   }
 
-  // Generación de guía: el proveedor suele funcionar bien con JSON.
+  // Generación de guía (JSON)
   async generarGuia(
     payload: Record<string, any>,
     timeoutMs = 20000
@@ -170,21 +179,19 @@ export class ServientregaAPIService {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "GeneracionGuia", ...payload, ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
+    const data = normalizeUpstream(res.data);
 
-    if (isEmptyUpstream(res.data)) {
+    if (isEmptyUpstream(data)) {
       const e: any = new Error("Respuesta vacía al generar guía");
       e.code = "UPSTREAM_EMPTY";
       e.httpStatus = 502;
       e.endpoint = url;
       throw e;
     }
-    return res.data;
+    return data;
   }
 
-  /**
-   * **Anulación**: en aliados el “tipo” correcto suele ser:
-   *   { "tipo":"ActualizaEstadoGuia", "guia":"...", "estado":"Anulada" }
-   */
+  // Anulación / actualización de estado
   async anularGuia(
     guia: string,
     estado = "Anulada",
@@ -198,61 +205,57 @@ export class ServientregaAPIService {
       ...this.credentials,
     };
     const res = await doPost(url, full, "json", timeoutMs);
+    const data = normalizeUpstream(res.data);
 
-    if (isEmptyUpstream(res.data)) {
+    if (isEmptyUpstream(data)) {
       const e: any = new Error("Respuesta vacía al anular guía");
       e.code = "UPSTREAM_EMPTY";
       e.httpStatus = 502;
       e.endpoint = url;
       throw e;
     }
-    return res.data;
+    return data;
   }
 
-  // Métodos de catálogo (JSON)
+  // Catálogos (JSON)
   async obtenerProductos(timeoutMs = 10000) {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_producto", ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    return res.data;
+    return normalizeUpstream(res.data);
   }
 
   async obtenerPaises(timeoutMs = 10000) {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_paises", ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    return res.data;
+    return normalizeUpstream(res.data);
   }
 
   async obtenerCiudades(codpais: number, timeoutMs = 10000) {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_ciudades", codpais, ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    return res.data;
+    return normalizeUpstream(res.data);
   }
 
   async obtenerAgencias(timeoutMs = 10000) {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_agencias_aliadas", ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    return res.data;
+    return normalizeUpstream(res.data);
   }
 
   async obtenerEmpaques(timeoutMs = 10000) {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_empaqueyembalaje", ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    return res.data;
+    return normalizeUpstream(res.data);
   }
 
   // =========================================================
-  // 🔁 Método de compatibilidad para rutas existentes (callAPI)
+  // 🔁 Compatibilidad: callAPI(payload, timeoutMs?, useRetailUrl?)
   // =========================================================
-  /**
-   * Mantiene compatibilidad con routers que aún invocan `callAPI(payload, timeoutMs?, useRetailUrl?)`.
-   * - Detecta el `tipo` y redirige a los métodos específicos cuando aplica.
-   * - Para requests genéricos, hace POST JSON al MAIN (o RETAIL si useRetailUrl=true).
-   */
   public async callAPI(
     payload: Record<string, any>,
     timeoutMs: number = 15000,
@@ -260,17 +263,14 @@ export class ServientregaAPIService {
   ): Promise<ServientregaAPIResponse> {
     const tipo = (payload?.tipo || "").toString();
 
-    // Tarifas (usa estrategia robusta)
     if (tipo === "obtener_tarifa_nacional") {
       return this.calcularTarifa(payload, timeoutMs);
     }
 
-    // Generación de guía
     if (tipo === "GeneracionGuia") {
       return this.generarGuia(payload, Math.max(timeoutMs, 20000));
     }
 
-    // Anulación / actualización de estado
     if (tipo === "ActualizaEstadoGuia" || tipo === "AnulacionGuia") {
       const guia = payload.guia ?? payload?.Guia ?? payload?.numero_guia;
       const estado = payload.estado || "Anulada";
@@ -282,7 +282,6 @@ export class ServientregaAPIService {
       return this.anularGuia(String(guia), String(estado), timeoutMs);
     }
 
-    // Catálogos (por si llegan por callAPI genérico)
     if (tipo === "obtener_producto") return this.obtenerProductos(timeoutMs);
     if (tipo === "obtener_paises") return this.obtenerPaises(timeoutMs);
     if (tipo === "obtener_ciudades") {
@@ -299,14 +298,15 @@ export class ServientregaAPIService {
     const url = useRetailUrl ? RETAIL_URL : this.apiUrl || MAIN_URL;
     const full = { ...payload, ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
+    const data = normalizeUpstream(res.data);
 
-    if (isEmptyUpstream(res.data)) {
+    if (isEmptyUpstream(data)) {
       const e: any = new Error("Respuesta vacía del proveedor");
       e.code = "UPSTREAM_EMPTY";
       e.httpStatus = 502;
       e.endpoint = url;
       throw e;
     }
-    return res.data;
+    return data;
   }
 }
