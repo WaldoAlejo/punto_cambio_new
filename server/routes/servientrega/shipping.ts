@@ -130,7 +130,54 @@ router.post("/tarifa", async (req, res) => {
       });
     }
 
-    return res.json(result);
+    // 8) Ajustar costos de empaque si no se solicitó empaque
+    let adjustedResult = result;
+    const noEmpaqueRequested = !sanitizedData.empaque;
+
+    if (noEmpaqueRequested && result) {
+      console.log("🔧 AJUSTANDO COSTOS - No se solicitó empaque");
+
+      // Si es un array, ajustar el primer elemento
+      const dataToAdjust = Array.isArray(result) ? result[0] : result;
+
+      if (dataToAdjust && typeof dataToAdjust === "object") {
+        const valorEmpaque = parseFloat(dataToAdjust.valor_empaque || 0);
+        const valorEmpaqueIva = parseFloat(dataToAdjust.valor_empaque_iva || 0);
+        const totalEmpaque = parseFloat(dataToAdjust.total_empaque || 0);
+        const gtotal = parseFloat(dataToAdjust.gtotal || 0);
+        const totalTransacion = parseFloat(dataToAdjust.total_transacion || 0);
+
+        console.log("🔧 Valores originales:", {
+          valor_empaque: valorEmpaque,
+          valor_empaque_iva: valorEmpaqueIva,
+          total_empaque: totalEmpaque,
+          gtotal: gtotal,
+          total_transacion: totalTransacion,
+        });
+
+        // Crear objeto ajustado
+        const adjustedData = {
+          ...dataToAdjust,
+          valor_empaque: 0,
+          valor_empaque_iva: 0,
+          total_empaque: 0,
+          gtotal: Math.max(0, gtotal - totalEmpaque),
+          total_transacion: Math.max(0, totalTransacion - totalEmpaque),
+        };
+
+        console.log("🔧 Valores ajustados:", {
+          valor_empaque: adjustedData.valor_empaque,
+          valor_empaque_iva: adjustedData.valor_empaque_iva,
+          total_empaque: adjustedData.total_empaque,
+          gtotal: adjustedData.gtotal,
+          total_transacion: adjustedData.total_transacion,
+        });
+
+        adjustedResult = Array.isArray(result) ? [adjustedData] : adjustedData;
+      }
+    }
+
+    return res.json(adjustedResult);
   } catch (error) {
     console.error("💥 Error al calcular tarifa:", error);
     return res.status(500).json({

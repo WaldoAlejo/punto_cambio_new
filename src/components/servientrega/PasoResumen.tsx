@@ -238,10 +238,12 @@ export default function PasoResumen({
         largo: String(medidas?.largo ?? 0),
         recoleccion: "NO",
         nombre_producto, // "DOCUMENTO" | "MERCANCIA PREMIER"
-        empaque: formData.requiere_empaque
-          ? formData.empaque?.tipo_empaque || DEFAULT_EMPAQUE
-          : DEFAULT_EMPAQUE,
       };
+
+      // Solo agregar empaque si el usuario lo requiere
+      if (formData.requiere_empaque) {
+        payload.empaque = formData.empaque?.tipo_empaque || DEFAULT_EMPAQUE;
+      }
 
       // Para “internacional” (doc usa mismo tipo pero añadimos país/códigos postales)
       if (isInternacional) {
