@@ -10,7 +10,6 @@ import {
   Calendar,
   FileText,
   CheckCircle,
-  AlertTriangle,
   Eye,
   Lock,
 } from "lucide-react";
@@ -41,9 +40,10 @@ const formatNumber = (n: number) =>
   new Intl.NumberFormat("es-EC", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(Number(n || 0));
+  }).format(Number.isFinite(n) ? n : 0);
 
-const formatMoney = (n: number, symbol = "$") => `${symbol}${formatNumber(n)}`;
+const formatMoney = (n: number, symbol = "$") =>
+  `${symbol}${formatNumber(Number.isFinite(n) ? n : 0)}`;
 
 const conceptoLabel = (concepto: MovimientoDiario["concepto"]) => {
   switch (concepto) {
@@ -58,7 +58,7 @@ const conceptoLabel = (concepto: MovimientoDiario["concepto"]) => {
     case "SALDO_INICIAL":
       return "Saldo inicial";
     default:
-      return concepto;
+      return String(concepto);
   }
 };
 
@@ -79,13 +79,22 @@ const conceptoPill = (concepto: MovimientoDiario["concepto"]) => {
   }
 };
 
+// Safe wrapper para etiquetas (si backend trae algo fuera del enum)
+function conceptoLabelSafe(key: MovimientoDiario["concepto"]) {
+  try {
+    return conceptoLabel(key);
+  } catch {
+    return String(key);
+  }
+}
+
 /* =========================
    Component
 ========================= */
-const ContabilidadDiaria = ({
+const ContabilidadDiaria: React.FC<ContabilidadDiariaProps> = ({
   user,
   selectedPoint,
-}: ContabilidadDiariaProps) => {
+}) => {
   const [resumenDiario, setResumenDiario] = useState<ResumenDiario[]>([]);
   const [cierreDiario, setCierreDiario] = useState<CierreDiario | null>(null);
   const [loading, setLoading] = useState(false);
@@ -126,7 +135,7 @@ const ContabilidadDiaria = ({
       } else {
         setCierreDiario(null);
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Error al cargar la contabilidad diaria",
@@ -162,7 +171,7 @@ const ContabilidadDiaria = ({
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Error al realizar el cierre diario",
@@ -202,12 +211,12 @@ const ContabilidadDiaria = ({
     );
   }
 
-  const fechaBonita = format(
-    new Date(fechaSeleccionada),
-    "dd 'de' MMMM, yyyy",
-    {
-      locale: es,
-    }
+  const fechaBonita = useMemo(
+    () =>
+      format(new Date(fechaSeleccionada), "dd 'de' MMMM, yyyy", {
+        locale: es,
+      }),
+    [fechaSeleccionada]
   );
 
   return (
@@ -220,7 +229,8 @@ const ContabilidadDiaria = ({
           </h2>
           <div className="flex items-center gap-2 text-gray-600">
             <span>
-              {selectedPoint.nombre} • {selectedPoint.ciudad}
+              {selectedPoint.nombre}
+              {selectedPoint.ciudad ? ` • ${selectedPoint.ciudad}` : ""}
             </span>
             <span className="text-xs text-gray-500">• {fechaBonita}</span>
           </div>
@@ -521,7 +531,7 @@ const ContabilidadDiaria = ({
                                       mov.concepto
                                     )}`}
                                   >
-                                    {conseptoLabelSafe(mov.concepto)}
+                                    {conceptoLabelSafe(mov.concepto)}
                                   </div>
                                   <div>
                                     <p className="font-medium">
@@ -561,14 +571,5 @@ const ContabilidadDiaria = ({
     </div>
   );
 };
-
-// Safe wrapper for labels (evita typo si el backend trae algo inesperado)
-function conseptoLabelSafe(key: MovimientoDiario["concepto"]) {
-  try {
-    return conceptoLabel(key);
-  } catch {
-    return String(key);
-  }
-}
 
 export default ContabilidadDiaria;
