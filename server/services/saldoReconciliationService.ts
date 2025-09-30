@@ -286,7 +286,7 @@ export const saldoReconciliationService = {
 
       const saldos = await prisma.saldo.findMany({
         include: {
-          punto_atencion: {
+          puntoAtencion: {
             select: { id: true, nombre: true },
           },
           moneda: {
@@ -311,7 +311,7 @@ export const saldoReconciliationService = {
         if (requiereCorreccion) {
           reporte.push({
             puntoAtencionId: saldo.punto_atencion_id,
-            puntoNombre: saldo.punto_atencion.nombre,
+            puntoNombre: saldo.puntoAtencion.nombre,
             monedaId: saldo.moneda_id,
             monedaCodigo: saldo.moneda.codigo,
             saldoRegistrado,
