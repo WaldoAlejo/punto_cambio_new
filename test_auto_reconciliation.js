@@ -6,7 +6,7 @@
  */
 
 import { PrismaClient } from "@prisma/client";
-import saldoReconciliationService from "./server/services/saldoReconciliationService.js";
+import saldoReconciliationService from "./dist-server/server/services/saldoReconciliationService.js";
 
 const prisma = new PrismaClient();
 

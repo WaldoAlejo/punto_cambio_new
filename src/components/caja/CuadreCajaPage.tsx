@@ -4,8 +4,9 @@ import useCuadreCaja from "../../hooks/useCuadreCaja";
 // Alias corto para createElement
 const h = React.createElement;
 
-function n2(v?: number) {
-  const n = Number.isFinite(v as number) ? (v as number) : 0;
+function n2(v?: number | any) {
+  // Validación defensiva para evitar renderizar objetos
+  const n = typeof v === "number" && Number.isFinite(v) ? v : 0;
   return n.toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -350,7 +351,11 @@ export default function CuadreCajaPage({ pointId }: Props) {
               null,
               estado.detalles.length > 0
                 ? estado.detalles.map((d) => {
-                    const diff = (d.conteo_fisico ?? 0) - (d.saldo_cierre ?? 0);
+                    const conteoFisico =
+                      typeof d.conteo_fisico === "number" ? d.conteo_fisico : 0;
+                    const saldoCierre =
+                      typeof d.saldo_cierre === "number" ? d.saldo_cierre : 0;
+                    const diff = conteoFisico - saldoCierre;
                     const fueraTol =
                       Math.abs(diff) >
                       (d.codigo?.toUpperCase() === "USD" ? 1 : 0.01);
@@ -432,9 +437,11 @@ export default function CuadreCajaPage({ pointId }: Props) {
                         },
                         h(Input, {
                           inputMode: "decimal",
-                          value: Number.isFinite(d.conteo_fisico)
-                            ? d.conteo_fisico
-                            : 0,
+                          value:
+                            typeof d.conteo_fisico === "number" &&
+                            Number.isFinite(d.conteo_fisico)
+                              ? d.conteo_fisico
+                              : 0,
                           onChange: (e: any) => {
                             const val = parseFloat(e.target.value);
                             updateConteo(d.moneda_id, {
@@ -458,7 +465,11 @@ export default function CuadreCajaPage({ pointId }: Props) {
                         },
                         h(Input, {
                           inputMode: "numeric",
-                          value: Number.isFinite(d.billetes) ? d.billetes : 0,
+                          value:
+                            typeof d.billetes === "number" &&
+                            Number.isFinite(d.billetes)
+                              ? d.billetes
+                              : 0,
                           onChange: (e: any) => {
                             const val = parseFloat(e.target.value);
                             updateConteo(d.moneda_id, {
@@ -482,7 +493,11 @@ export default function CuadreCajaPage({ pointId }: Props) {
                         },
                         h(Input, {
                           inputMode: "numeric",
-                          value: Number.isFinite(d.monedas) ? d.monedas : 0,
+                          value:
+                            typeof d.monedas === "number" &&
+                            Number.isFinite(d.monedas)
+                              ? d.monedas
+                              : 0,
                           onChange: (e: any) => {
                             const val = parseFloat(e.target.value);
                             updateConteo(d.moneda_id, {
@@ -570,11 +585,19 @@ export default function CuadreCajaPage({ pointId }: Props) {
             { style: { fontSize: 12, color: "#6b7280" } },
             cuadre?.totales
               ? `Cambios: ${
-                  cuadre.totales.cambios?.cantidad ?? 0
+                  typeof cuadre.totales.cambios?.cantidad === "number"
+                    ? cuadre.totales.cambios.cantidad
+                    : 0
                 } · Transf. In: ${
-                  cuadre.totales.transferencias_entrada?.cantidad ?? 0
+                  typeof cuadre.totales.transferencias_entrada?.cantidad ===
+                  "number"
+                    ? cuadre.totales.transferencias_entrada.cantidad
+                    : 0
                 } · Transf. Out: ${
-                  cuadre.totales.transferencias_salida?.cantidad ?? 0
+                  typeof cuadre.totales.transferencias_salida?.cantidad ===
+                  "number"
+                    ? cuadre.totales.transferencias_salida.cantidad
+                    : 0
                 }`
               : null
           ),
