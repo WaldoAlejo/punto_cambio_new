@@ -480,289 +480,354 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
   const showMetodoEntregaFilter = mainType === "exchanges" && isDetailed;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Reportes Generales
+    <div className="container mx-auto p-4 space-y-6 max-w-7xl">
+      {/* Header mejorado */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+            📊 Reportes Generales
           </h1>
-          <p className="text-muted-foreground">
-            Genera reportes detallados y exporta datos a Excel
+          <p className="text-muted-foreground text-base">
+            Genera reportes detallados y exporta datos a Excel de forma
+            profesional
           </p>
         </div>
-        <Button variant="outline" onClick={clearFilters}>
+        <Button variant="outline" onClick={clearFilters} className="shrink-0">
           <RefreshCw className="w-4 h-4 mr-2" />
           Limpiar Filtros
         </Button>
       </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="w-5 h-5" />
-            Filtros de Reporte
+      {/* Filtros mejorados */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Filter className="w-5 h-5 text-primary" />
+            Configuración del Reporte
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-base">
             Configura los parámetros para generar tu reporte personalizado
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Fila 1: Tipo y configuración */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <BarChart2 className="w-4 h-4" />
-                Tipo de Reporte *
-              </Label>
-              <Select
-                value={mainType}
-                onValueChange={(v) => setMainType(v as any)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="exchanges">📊 Cambios</SelectItem>
-                  <SelectItem value="transfers">💸 Transferencias</SelectItem>
-                  <SelectItem value="balances">💰 Saldos</SelectItem>
-                  <SelectItem value="users">👥 Actividad Usuarios</SelectItem>
-                  <SelectItem value="worktime">⏰ Tiempo de Trabajo</SelectItem>
-                  <SelectItem value="accounting_movements">
-                    📋 Movimientos Contables
-                  </SelectItem>
-                  <SelectItem value="point_assignments">
-                    📍 Asignaciones de Punto
-                  </SelectItem>
-                  <SelectItem value="summary">📈 Resumen General</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Configuración específica por tipo */}
-            {(mainType === "exchanges" || mainType === "transfers") && (
+          {/* Sección 1: Configuración Principal */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+              Configuración Principal
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               <div className="space-y-2">
-                <Label>Nivel de Detalle</Label>
-                <Select
-                  value={isDetailed ? "detalle" : "resumen"}
-                  onValueChange={(v) => setIsDetailed(v === "detalle")}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="resumen">📋 Resumen</SelectItem>
-                    <SelectItem value="detalle">🔍 Detallado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {mainType === "balances" && (
-              <div className="space-y-2">
-                <Label>Tipo de Corte</Label>
-                <Select
-                  value={corte}
-                  onValueChange={(v) => setCorte(v as "actual" | "eod")}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="actual">🔄 Actual</SelectItem>
-                    <SelectItem value="eod">🌅 Fin de Día</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-
-          {/* Fila 2: Fechas */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Fecha Desde *
-              </Label>
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Fecha Hasta *
-              </Label>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="w-full"
-              />
-            </div>
-          </div>
-
-          {/* Fila 3: Filtros opcionales */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Usuario */}
-            {showUserFilter && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Users className="w-4 h-4" />
-                  Usuario
+                <Label className="flex items-center gap-2 text-sm font-medium">
+                  <BarChart2 className="w-4 h-4 text-primary" />
+                  Tipo de Reporte *
                 </Label>
+                <Select
+                  value={mainType}
+                  onValueChange={(v) => setMainType(v as any)}
+                >
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Seleccionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="exchanges">📊 Cambios</SelectItem>
+                    <SelectItem value="transfers">💸 Transferencias</SelectItem>
+                    <SelectItem value="balances">💰 Saldos</SelectItem>
+                    <SelectItem value="users">👥 Actividad Usuarios</SelectItem>
+                    <SelectItem value="worktime">
+                      ⏰ Tiempo de Trabajo
+                    </SelectItem>
+                    <SelectItem value="accounting_movements">
+                      📋 Movimientos Contables
+                    </SelectItem>
+                    <SelectItem value="point_assignments">
+                      📍 Asignaciones de Punto
+                    </SelectItem>
+                    <SelectItem value="summary">📈 Resumen General</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Configuración específica por tipo */}
+              {(mainType === "exchanges" || mainType === "transfers") && (
                 <div className="space-y-2">
-                  <Input
-                    placeholder="Buscar usuario..."
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                  />
+                  <Label className="text-sm font-medium">
+                    Nivel de Detalle
+                  </Label>
                   <Select
-                    value={selectedUserId || ""}
-                    onValueChange={(v) =>
-                      setSelectedUserId(v === "ALL" ? null : v)
-                    }
+                    value={isDetailed ? "detalle" : "resumen"}
+                    onValueChange={(v) => setIsDetailed(v === "detalle")}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Todos los usuarios" />
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ALL">Todos</SelectItem>
-                      {filteredUsers.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.nombre} (@{u.username})
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="resumen">📋 Resumen</SelectItem>
+                      <SelectItem value="detalle">🔍 Detallado</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Punto */}
-            {showPointFilter && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  Punto de Atención
-                </Label>
-                <Select
-                  value={selectedPointId || ""}
-                  onValueChange={(v) =>
-                    setSelectedPointId(v === "ALL" ? null : v)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos los puntos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos</SelectItem>
-                    {points.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Moneda */}
-            {showCurrencyFilter && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Coins className="w-4 h-4" />
-                  Moneda
-                </Label>
-                <Select
-                  value={selectedCurrencyId || ""}
-                  onValueChange={(v) =>
-                    setSelectedCurrencyId(v === "ALL" ? null : v)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todas las monedas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todas</SelectItem>
-                    {currencies.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.codigo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Estado */}
-            {showEstadoFilter && (
-              <div className="space-y-2">
-                <Label>Estado</Label>
-                <Select
-                  value={estado || ""}
-                  onValueChange={(v) => setEstado(v === "ALL" ? null : v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos los estados" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos</SelectItem>
-                    {mainType === "exchanges" && (
-                      <>
-                        <SelectItem value="PENDIENTE">🟡 PENDIENTE</SelectItem>
-                        <SelectItem value="COMPLETADO">
-                          🟢 COMPLETADO
-                        </SelectItem>
-                      </>
-                    )}
-                    {mainType === "transfers" && (
-                      <>
-                        <SelectItem value="PENDIENTE">🟡 PENDIENTE</SelectItem>
-                        <SelectItem value="APROBADO">🟢 APROBADO</SelectItem>
-                        <SelectItem value="RECHAZADO">🔴 RECHAZADO</SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {/* Método de entrega */}
-            {showMetodoEntregaFilter && (
-              <div className="space-y-2">
-                <Label>Método de Entrega</Label>
-                <Select
-                  value={metodoEntrega || ""}
-                  onValueChange={(v) =>
-                    setMetodoEntrega(v === "ALL" ? null : (v as any))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos los métodos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos</SelectItem>
-                    <SelectItem value="efectivo">💵 Efectivo</SelectItem>
-                    <SelectItem value="transferencia">
-                      🏦 Transferencia
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+              {mainType === "balances" && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Tipo de Corte</Label>
+                  <Select
+                    value={corte}
+                    onValueChange={(v) => setCorte(v as "actual" | "eod")}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="actual">🔄 Actual</SelectItem>
+                      <SelectItem value="eod">🌅 Fin de Día</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Botones de acción */}
-          <div className="flex flex-wrap gap-3 pt-4 border-t">
+          {/* Sección 2: Rango de Fechas */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+              Rango de Fechas
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-sm font-medium">
+                  <Calendar className="w-4 h-4 text-primary" />
+                  Fecha Desde *
+                </Label>
+                <Input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-sm font-medium">
+                  <Calendar className="w-4 h-4 text-primary" />
+                  Fecha Hasta *
+                </Label>
+                <Input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Sección 3: Filtros Opcionales */}
+          {(showUserFilter ||
+            showPointFilter ||
+            showCurrencyFilter ||
+            showEstadoFilter ||
+            showMetodoEntregaFilter) && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+                Filtros Opcionales
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Usuario mejorado */}
+                {showUserFilter && (
+                  <div className="space-y-3">
+                    <Label className="flex items-center gap-2 text-sm font-medium">
+                      <Users className="w-4 h-4 text-primary" />
+                      Usuario
+                    </Label>
+                    <div className="space-y-2">
+                      <Input
+                        placeholder="🔍 Buscar por nombre o usuario..."
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        className="h-10"
+                      />
+                      <Select
+                        value={selectedUserId || ""}
+                        onValueChange={(v) =>
+                          setSelectedUserId(v === "ALL" ? null : v)
+                        }
+                      >
+                        <SelectTrigger className="h-10">
+                          <SelectValue placeholder="Todos los usuarios" />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-60">
+                          <SelectItem value="ALL">
+                            <div className="flex items-center gap-2">
+                              <Users className="w-4 h-4" />
+                              Todos los usuarios
+                            </div>
+                          </SelectItem>
+                          {filteredUsers.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 bg-primary rounded-full" />
+                                <span className="font-medium">{u.nombre}</span>
+                                <span className="text-muted-foreground text-xs">
+                                  @{u.username}
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Punto */}
+                {showPointFilter && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-sm font-medium">
+                      <MapPin className="w-4 h-4 text-primary" />
+                      Punto de Atención
+                    </Label>
+                    <Select
+                      value={selectedPointId || ""}
+                      onValueChange={(v) =>
+                        setSelectedPointId(v === "ALL" ? null : v)
+                      }
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Todos los puntos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4" />
+                            Todos los puntos
+                          </div>
+                        </SelectItem>
+                        {points.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-green-500 rounded-full" />
+                              {p.nombre}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Moneda */}
+                {showCurrencyFilter && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2 text-sm font-medium">
+                      <Coins className="w-4 h-4 text-primary" />
+                      Moneda
+                    </Label>
+                    <Select
+                      value={selectedCurrencyId || ""}
+                      onValueChange={(v) =>
+                        setSelectedCurrencyId(v === "ALL" ? null : v)
+                      }
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Todas las monedas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">
+                          <div className="flex items-center gap-2">
+                            <Coins className="w-4 h-4" />
+                            Todas las monedas
+                          </div>
+                        </SelectItem>
+                        {currencies.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 bg-yellow-500 rounded-full" />
+                              {c.codigo}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Estado */}
+                {showEstadoFilter && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Estado</Label>
+                    <Select
+                      value={estado || ""}
+                      onValueChange={(v) => setEstado(v === "ALL" ? null : v)}
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Todos los estados" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Todos los estados</SelectItem>
+                        {mainType === "exchanges" && (
+                          <>
+                            <SelectItem value="PENDIENTE">
+                              🟡 PENDIENTE
+                            </SelectItem>
+                            <SelectItem value="COMPLETADO">
+                              🟢 COMPLETADO
+                            </SelectItem>
+                          </>
+                        )}
+                        {mainType === "transfers" && (
+                          <>
+                            <SelectItem value="PENDIENTE">
+                              🟡 PENDIENTE
+                            </SelectItem>
+                            <SelectItem value="APROBADO">
+                              🟢 APROBADO
+                            </SelectItem>
+                            <SelectItem value="RECHAZADO">
+                              🔴 RECHAZADO
+                            </SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Método de entrega */}
+                {showMetodoEntregaFilter && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">
+                      Método de Entrega
+                    </Label>
+                    <Select
+                      value={metodoEntrega || ""}
+                      onValueChange={(v) =>
+                        setMetodoEntrega(v === "ALL" ? null : (v as any))
+                      }
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Todos los métodos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">Todos los métodos</SelectItem>
+                        <SelectItem value="efectivo">💵 Efectivo</SelectItem>
+                        <SelectItem value="transferencia">
+                          🏦 Transferencia
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Botones de acción mejorados */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t">
             <Button
               onClick={generateReport}
               disabled={loading || !effectiveReportType || !dateFrom || !dateTo}
-              className="flex-1 sm:flex-none"
+              className="flex-1 sm:flex-none h-11 px-6"
+              size="lg"
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -776,6 +841,8 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
               variant="outline"
               onClick={exportReport}
               disabled={reportData.length === 0}
+              className="h-11 px-6"
+              size="lg"
             >
               <Download className="w-4 h-4 mr-2" />
               Exportar Excel
@@ -786,65 +853,82 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
 
       {/* Error */}
       {error && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="border-red-200 bg-red-50">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
+          <AlertDescription className="text-red-800">
             <strong>Error:</strong> {error}
           </AlertDescription>
         </Alert>
       )}
 
-      {/* Resultados */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Resultados del Reporte
-          </CardTitle>
-          <CardDescription>
-            {reportData.length > 0
-              ? `Se encontraron ${reportData.length} registros`
-              : "Los resultados aparecerán aquí después de generar un reporte"}
-          </CardDescription>
+      {/* Resultados mejorados */}
+      <Card className="shadow-sm">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <FileText className="w-5 h-5 text-primary" />
+                Resultados del Reporte
+              </CardTitle>
+              <CardDescription className="text-base mt-1">
+                {reportData.length > 0
+                  ? `Se encontraron ${reportData.length} registros para el período seleccionado`
+                  : "Los resultados aparecerán aquí después de generar un reporte"}
+              </CardDescription>
+            </div>
+            {reportData.length > 0 && (
+              <Badge variant="secondary" className="text-sm px-3 py-1">
+                {reportData.length} registros
+              </Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <div className="text-center">
-                <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-primary" />
-                <p className="text-lg font-medium">Generando reporte...</p>
-                <p className="text-sm text-muted-foreground">
-                  Esto puede tomar unos momentos
-                </p>
+            <div className="flex items-center justify-center py-20">
+              <div className="text-center space-y-4">
+                <Loader2 className="w-12 h-12 mx-auto animate-spin text-primary" />
+                <div>
+                  <p className="text-lg font-medium">Generando reporte...</p>
+                  <p className="text-sm text-muted-foreground">
+                    Esto puede tomar unos momentos dependiendo del rango de
+                    fechas
+                  </p>
+                </div>
               </div>
             </div>
           ) : reportData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <BarChart2 className="w-12 h-12 mb-4 text-muted-foreground/50" />
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4">
+                <BarChart2 className="w-8 h-8 text-muted-foreground" />
+              </div>
               <h3 className="text-lg font-medium mb-2">
                 Sin datos para mostrar
               </h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Selecciona un tipo de reporte y fechas para comenzar
+              <p className="text-sm text-muted-foreground mb-6 max-w-md">
+                Selecciona un tipo de reporte y configura las fechas para
+                comenzar a generar reportes
               </p>
             </div>
           ) : (
-            <>
-              {/* KPIs */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="space-y-6">
+              {/* KPIs mejorados */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {kpis.map((kpi, index) => (
                   <Card
                     key={index}
-                    className="bg-gradient-to-br from-primary/5 to-primary/10"
+                    className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20"
                   >
                     <CardContent className="p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        {kpi.icon}
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                          {kpi.icon}
+                        </div>
                         <span className="text-sm font-medium text-muted-foreground">
                           {kpi.label}
                         </span>
                       </div>
-                      <div className="text-2xl font-bold">
+                      <div className="text-2xl font-bold text-primary">
                         {typeof kpi.value === "number"
                           ? kpi.value.toLocaleString("es-EC")
                           : kpi.value}
@@ -854,45 +938,68 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                 ))}
               </div>
 
-              <Separator className="mb-6" />
+              <Separator />
 
-              {/* Tabla de datos */}
-              <div className="rounded-lg border overflow-hidden">
-                <div className="overflow-x-auto max-h-96">
-                  <table className="w-full">
-                    <thead className="bg-muted/50 sticky top-0">
-                      <tr>
-                        {reportData.length > 0 &&
-                          Object.keys(reportData[0]).map((key) => (
-                            <th
-                              key={key}
-                              className="px-4 py-3 text-left text-sm font-semibold whitespace-nowrap"
+              {/* Tabla de datos mejorada */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-lg font-semibold">Datos Detallados</h4>
+                  <div className="text-sm text-muted-foreground">
+                    Desplázate horizontalmente para ver más columnas
+                  </div>
+                </div>
+
+                <div className="rounded-lg border bg-card overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <div className="max-h-[600px] overflow-y-auto">
+                      <table className="w-full min-w-full">
+                        <thead className="bg-muted/50 sticky top-0 z-10">
+                          <tr>
+                            {reportData.length > 0 &&
+                              Object.keys(reportData[0]).map((key) => (
+                                <th
+                                  key={key}
+                                  className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap border-b"
+                                >
+                                  {key.replace(/_/g, " ")}
+                                </th>
+                              ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {reportData.map((row, index) => (
+                            <tr
+                              key={index}
+                              className="hover:bg-muted/30 transition-colors"
                             >
-                              {key.replace(/_/g, " ").toUpperCase()}
-                            </th>
+                              {Object.values(row).map((value, cellIndex) => (
+                                <td
+                                  key={cellIndex}
+                                  className="px-4 py-3 text-sm whitespace-nowrap"
+                                >
+                                  <div
+                                    className="max-w-[200px] truncate"
+                                    title={String(value || "")}
+                                  >
+                                    {typeof value === "number"
+                                      ? value.toLocaleString("es-EC", {
+                                          minimumFractionDigits:
+                                            value % 1 === 0 ? 0 : 2,
+                                          maximumFractionDigits: 2,
+                                        })
+                                      : String(value || "")}
+                                  </div>
+                                </td>
+                              ))}
+                            </tr>
                           ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportData.map((row, index) => (
-                        <tr
-                          key={index}
-                          className="hover:bg-muted/30 border-b border-border/50"
-                        >
-                          {Object.values(row).map((value, cellIndex) => (
-                            <td key={cellIndex} className="px-4 py-3 text-sm">
-                              {typeof value === "number"
-                                ? value.toLocaleString("es-EC")
-                                : String(value || "")}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
         </CardContent>
       </Card>

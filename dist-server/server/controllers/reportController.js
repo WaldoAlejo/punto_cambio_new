@@ -3,6 +3,17 @@ import logger from "../utils/logger.js";
 export const reportController = {
     async generateReport(req, res) {
         try {
+            logger.info("🚨 DEBUG - Iniciando generación de reporte", {
+                user: req.user
+                    ? {
+                        id: req.user.id,
+                        username: req.user.username,
+                        rol: req.user.rol,
+                    }
+                    : null,
+                body: req.body,
+                timestamp: new Date().toISOString(),
+            });
             res.set({
                 "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
                 Pragma: "no-cache",
@@ -10,7 +21,19 @@ export const reportController = {
                 "Surrogate-Control": "no-store",
             });
             const { reportType, dateFrom, dateTo, pointId, userId } = req.body;
+            logger.info("🚨 DEBUG - Parámetros extraídos", {
+                reportType,
+                dateFrom,
+                dateTo,
+                pointId,
+                userId,
+            });
             if (!reportType || !dateFrom || !dateTo) {
+                logger.warn("🚨 DEBUG - Faltan parámetros requeridos", {
+                    reportType: !!reportType,
+                    dateFrom: !!dateFrom,
+                    dateTo: !!dateTo,
+                });
                 res.status(400).json({
                     success: false,
                     error: "Faltan parámetros requeridos: reportType, dateFrom, dateTo",
@@ -25,7 +48,16 @@ export const reportController = {
                 pointId,
                 userId,
             };
+            logger.info("🚨 DEBUG - Llamando al servicio de reportes", {
+                requestPayload,
+                userId: req.user?.id,
+            });
             const data = await reportService.generateReport(requestPayload, req.user?.id);
+            logger.info("🚨 DEBUG - Reporte generado exitosamente", {
+                dataType: typeof data,
+                dataLength: Array.isArray(data) ? data.length : "N/A",
+                userId: req.user?.id,
+            });
             res.status(200).json({
                 success: true,
                 data,

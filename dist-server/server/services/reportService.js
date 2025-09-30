@@ -3,12 +3,43 @@ import logger from "../utils/logger.js";
 import { gyeParseDateOnly, gyeDayRangeUtcFromYMD } from "../utils/timezone.js";
 export const reportService = {
     async generateReport(request, userId) {
+        logger.info("🚨 DEBUG - Servicio de reportes iniciado", {
+            request,
+            userId,
+            timestamp: new Date().toISOString(),
+        });
         const { reportType, dateFrom, dateTo } = request;
+        logger.info("🚨 DEBUG - Procesando fechas", {
+            reportType,
+            dateFrom,
+            dateTo,
+        });
         // Normalizar rango por día GYE
-        const { y: y1, m: m1, d: d1 } = gyeParseDateOnly(dateFrom);
-        const { y: y2, m: m2, d: d2 } = gyeParseDateOnly(dateTo);
-        const { gte: startDate } = gyeDayRangeUtcFromYMD(y1, m1, d1);
-        const { lt: endDate } = gyeDayRangeUtcFromYMD(y2, m2, d2);
+        let startDate, endDate;
+        try {
+            const { y: y1, m: m1, d: d1 } = gyeParseDateOnly(dateFrom);
+            const { y: y2, m: m2, d: d2 } = gyeParseDateOnly(dateTo);
+            const startRange = gyeDayRangeUtcFromYMD(y1, m1, d1);
+            const endRange = gyeDayRangeUtcFromYMD(y2, m2, d2);
+            startDate = startRange.gte;
+            endDate = endRange.lt;
+            logger.info("🚨 DEBUG - Fechas procesadas", {
+                startDate,
+                endDate,
+                reportType,
+            });
+        }
+        catch (dateError) {
+            logger.error("🚨 DEBUG - Error procesando fechas", {
+                error: dateError instanceof Error ? dateError.message : dateError,
+                dateFrom,
+                dateTo,
+            });
+            throw dateError;
+        }
+        logger.info("🚨 DEBUG - Iniciando switch para tipo de reporte", {
+            reportType,
+        });
         switch (reportType) {
             case "exchanges": {
                 const reportData = await reportDataService.getExchangesData(startDate, endDate);
@@ -166,7 +197,23 @@ export const reportService = {
                 return reportData;
             }
             default:
-                throw new Error("Tipo de reporte no válido");
+                logger.error("🚨 DEBUG - Tipo de reporte no válido", {
+                    reportType,
+                    availableTypes: [
+                        "exchanges",
+                        "transfers",
+                        "balances",
+                        "users",
+                        "summary",
+                        "worktime",
+                        "exchanges_detailed",
+                        "transfers_detailed",
+                        "accounting_movements",
+                        "eod_balances",
+                        "point_assignments",
+                    ],
+                });
+                throw new Error(`Tipo de reporte no válido: ${reportType}`);
         }
     },
 };
