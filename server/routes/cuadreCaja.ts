@@ -247,39 +247,25 @@ router.get("/", authenticateToken, async (req, res) => {
       saldosResult.rows.map((r) => r.moneda_id)
     );
 
-    // Todas las monedas activas (para mostrar filas aunque todo esté en cero)
-    const activasResult = await pool.query<Moneda>(
-      `SELECT id, codigo, nombre, simbolo, activo, orden_display
-         FROM "Moneda"
-        WHERE activo = true
-     ORDER BY orden_display NULLS LAST, nombre ASC`
-    );
-    const activas = activasResult.rows;
-
-    // Unir sets → universo de monedas a mostrar
+    // Solo monedas que tuvieron movimientos durante el día
+    // Unir sets → universo de monedas a mostrar (solo las que tuvieron actividad)
     const universoIds = new Set<string>([
-      ...activas.map((m) => m.id),
       ...Array.from(monedaIdsDeCambios),
       ...Array.from(monedaIdsDeTransfers),
-      ...Array.from(monedaIdsDeSaldos),
     ]);
 
-    // Map id -> Moneda (de activas; si hubiera inactivas en movimientos/saldos, las traemos aparte)
-    const conocidaPorId = new Map<string, Moneda>(
-      activas.map((m) => [m.id, m])
-    );
+    // Obtener información de las monedas que tuvieron movimientos
+    const conocidaPorId = new Map<string, Moneda>();
 
-    const idsDesconocidos = Array.from(universoIds).filter(
-      (id) => !conocidaPorId.has(id)
-    );
-    if (idsDesconocidos.length > 0) {
-      const extraMonedas = await pool.query<Moneda>(
-        `SELECT id, codigo, nombre, simbolo
+    if (universoIds.size > 0) {
+      const monedasResult = await pool.query<Moneda>(
+        `SELECT id, codigo, nombre, simbolo, activo, orden_display
            FROM "Moneda"
-          WHERE id = ANY($1::uuid[])`,
-        [idsDesconocidos]
+          WHERE id = ANY($1::uuid[])
+       ORDER BY orden_display NULLS LAST, nombre ASC`,
+        [Array.from(universoIds)]
       );
-      extraMonedas.rows.forEach((m) => conocidaPorId.set(m.id, m));
+      monedasResult.rows.forEach((m) => conocidaPorId.set(m.id, m));
     }
 
     const monedas: Moneda[] = Array.from(universoIds)

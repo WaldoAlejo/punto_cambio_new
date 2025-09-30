@@ -541,215 +541,262 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 </div>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="grid gap-6">
                 {cuadreData?.detalles.map((detalle) => {
                   const userTotal = calculateUserTotal(detalle.moneda_id);
                   const isValid = validateBalance(detalle, userTotal);
 
                   return (
-                    <div
+                    <Card
                       key={detalle.moneda_id}
-                      className={`border rounded-lg p-4 ${
+                      className={`${
                         !isValid
-                          ? "border-red-200 bg-red-50"
+                          ? "border-red-300 bg-red-50"
                           : "border-gray-200"
                       }`}
                     >
-                      <div className="flex justify-between items-center mb-3">
-                        <h3 className="font-semibold text-lg">
-                          {detalle.codigo} - {detalle.nombre}
-                        </h3>
-                        {!isValid && (
-                          <span className="text-red-600 text-sm font-medium">
-                            ⚠️ No cuadra
-                          </span>
-                        )}
-                      </div>
+                      <CardHeader className="pb-3">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-xl flex items-center gap-2">
+                            <span className="text-2xl">{detalle.simbolo}</span>
+                            {detalle.codigo} - {detalle.nombre}
+                          </CardTitle>
+                          {!isValid && (
+                            <Badge variant="destructive" className="text-xs">
+                              ⚠️ No cuadra
+                            </Badge>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Resumen de movimientos */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                          <Card className="bg-blue-50 border-blue-200">
+                            <CardContent className="p-3">
+                              <div className="text-blue-700 font-medium text-xs">
+                                Saldo Apertura
+                              </div>
+                              <div className="text-blue-800 font-bold text-lg">
+                                {detalle.simbolo}
+                                {detalle.saldo_apertura.toFixed(2)}
+                              </div>
+                              <div className="text-xs text-blue-600">
+                                Dinero al inicio
+                              </div>
+                            </CardContent>
+                          </Card>
 
-                      {/* Información automática */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 text-sm">
-                        <div className="bg-blue-50 p-2 rounded">
-                          <label className="text-blue-700 font-medium">
-                            Saldo Apertura
-                          </label>
-                          <p className="text-blue-800 font-bold">
-                            {detalle.saldo_apertura.toFixed(2)}
-                          </p>
-                          <p className="text-xs text-blue-600">
-                            Dinero al inicio del día
-                          </p>
-                        </div>
-                        <div className="bg-green-50 p-2 rounded">
-                          <label className="text-green-700 font-medium">
-                            Ingresos (+)
-                          </label>
-                          <p className="text-green-800 font-bold">
-                            +{detalle.ingresos_periodo.toFixed(2)}
-                          </p>
-                          <p className="text-xs text-green-600">
-                            Divisas que recibimos
-                          </p>
-                        </div>
-                        <div className="bg-red-50 p-2 rounded">
-                          <label className="text-red-700 font-medium">
-                            Egresos (-)
-                          </label>
-                          <p className="text-red-800 font-bold">
-                            -{detalle.egresos_periodo.toFixed(2)}
-                          </p>
-                          <p className="text-xs text-red-600">
-                            Divisas que entregamos
-                          </p>
-                        </div>
-                        <div className="bg-purple-50 p-2 rounded">
-                          <label className="text-purple-700 font-medium">
-                            Saldo Esperado
-                          </label>
-                          <p className="text-purple-800 font-bold">
-                            {detalle.saldo_cierre.toFixed(2)}
-                          </p>
-                          <p className="text-xs text-purple-600">
-                            Lo que debe quedar
-                          </p>
-                        </div>
-                      </div>
+                          <Card className="bg-green-50 border-green-200">
+                            <CardContent className="p-3">
+                              <div className="text-green-700 font-medium text-xs">
+                                Ingresos (+)
+                              </div>
+                              <div className="text-green-800 font-bold text-lg">
+                                +{detalle.simbolo}
+                                {detalle.ingresos_periodo.toFixed(2)}
+                              </div>
+                              <div className="text-xs text-green-600">
+                                Divisas recibidas
+                              </div>
+                            </CardContent>
+                          </Card>
 
-                      {/* Instrucciones claras */}
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                        <p className="text-sm text-yellow-800">
-                          <strong>📝 Instrucciones:</strong> Ingrese el total
-                          final que tiene físicamente. Ejemplo: Si tenía{" "}
-                          {detalle.saldo_apertura.toFixed(2)} y los movimientos
-                          suman{" "}
-                          {(
-                            detalle.ingresos_periodo - detalle.egresos_periodo
-                          ).toFixed(2)}
-                          , debe tener {detalle.saldo_cierre.toFixed(2)} en
-                          total.
-                        </p>
-                      </div>
+                          <Card className="bg-red-50 border-red-200">
+                            <CardContent className="p-3">
+                              <div className="text-red-700 font-medium text-xs">
+                                Egresos (-)
+                              </div>
+                              <div className="text-red-800 font-bold text-lg">
+                                -{detalle.simbolo}
+                                {detalle.egresos_periodo.toFixed(2)}
+                              </div>
+                              <div className="text-xs text-red-600">
+                                Divisas entregadas
+                              </div>
+                            </CardContent>
+                          </Card>
 
-                      {/* Conteo físico del usuario */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">
-                            💵 Billetes Físicos
-                            <span className="text-xs text-gray-500 block">
-                              Valor total en billetes
-                            </span>
-                          </Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={
-                              userAdjustments[detalle.moneda_id]?.bills || ""
-                            }
-                            onChange={(e) =>
-                              handleUserAdjustment(
-                                detalle.moneda_id,
-                                "bills",
-                                e.target.value
-                              )
-                            }
-                            placeholder="0.00"
-                            className={!isValid ? "border-red-300" : ""}
-                          />
+                          <Card className="bg-purple-50 border-purple-200">
+                            <CardContent className="p-3">
+                              <div className="text-purple-700 font-medium text-xs">
+                                Saldo Esperado
+                              </div>
+                              <div className="text-purple-800 font-bold text-lg">
+                                {detalle.simbolo}
+                                {detalle.saldo_cierre.toFixed(2)}
+                              </div>
+                              <div className="text-xs text-purple-600">
+                                Lo que debe quedar
+                              </div>
+                            </CardContent>
+                          </Card>
                         </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">
-                            🪙 Monedas Físicas
-                            <span className="text-xs text-gray-500 block">
-                              Valor total en monedas
-                            </span>
-                          </Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={
-                              userAdjustments[detalle.moneda_id]?.coins || ""
-                            }
-                            onChange={(e) =>
-                              handleUserAdjustment(
-                                detalle.moneda_id,
-                                "coins",
-                                e.target.value
-                              )
-                            }
-                            placeholder="0.00"
-                            className={!isValid ? "border-red-300" : ""}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">
-                            💰 Total Final Físico
-                            <span className="text-xs text-gray-500 block">
-                              Billetes + Monedas
-                            </span>
-                          </Label>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className={`h-10 px-3 py-2 border rounded-md flex items-center font-bold ${
-                                !isValid
-                                  ? "bg-red-50 border-red-300 text-red-700"
-                                  : "bg-gray-50"
-                              }`}
-                            >
-                              {userTotal.toFixed(2)}
+
+                        {/* Instrucciones claras */}
+                        <Card className="bg-yellow-50 border-yellow-200">
+                          <CardContent className="p-4">
+                            <div className="flex items-start gap-2">
+                              <span className="text-yellow-600 text-lg">
+                                📝
+                              </span>
+                              <div>
+                                <h4 className="font-medium text-yellow-800 mb-1">
+                                  Instrucciones de Conteo
+                                </h4>
+                                <p className="text-sm text-yellow-700">
+                                  Cuente físicamente el dinero que tiene en caja
+                                  y registre los valores. Debe tener exactamente{" "}
+                                  <strong>
+                                    {detalle.simbolo}
+                                    {detalle.saldo_cierre.toFixed(2)}
+                                  </strong>{" "}
+                                  en total.
+                                </p>
+                              </div>
                             </div>
-                            {(() => {
-                              const diff = parseFloat(
-                                (userTotal - detalle.saldo_cierre).toFixed(2)
-                              );
-                              const abs = Math.abs(diff);
-                              const tol = getTolerance(detalle);
-                              const within = abs <= tol;
-                              const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
-                              const color = within
-                                ? diff === 0
-                                  ? "bg-gray-200 text-gray-800 border-gray-300"
-                                  : "bg-green-100 text-green-800 border-green-300"
-                                : "bg-red-100 text-red-800 border-red-300";
-                              const label = `${sign}${abs.toFixed(2)}`;
-                              return (
-                                <Badge
-                                  className={`border ${color} whitespace-nowrap`}
-                                  variant={within ? "secondary" : "destructive"}
-                                  title={`Diferencia vs esperado (tolerancia ±${tol.toFixed(
-                                    2
-                                  )})`}
-                                >
-                                  Diff: {label}
-                                </Badge>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium">
-                            📝 Nota u observación
-                            <span className="text-xs text-gray-500 block">
-                              (opcional, visible en el cierre)
-                            </span>
-                          </Label>
-                          <Textarea
-                            rows={2}
-                            placeholder="Ej: Diferencia por redondeo o conteo"
-                            value={
-                              userAdjustments[detalle.moneda_id]?.note || ""
-                            }
-                            onChange={(e) =>
-                              handleUserAdjustment(
-                                detalle.moneda_id,
-                                "note",
-                                e.target.value
-                              )
-                            }
-                          />
-                        </div>
-                      </div>
-                    </div>
+                          </CardContent>
+                        </Card>
+
+                        {/* Conteo físico del usuario */}
+                        <Card className="border-gray-300">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-lg">
+                              💰 Conteo Físico
+                            </CardTitle>
+                            <CardDescription>
+                              Registre el dinero que tiene físicamente en caja
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium flex items-center gap-1">
+                                  💵 Billetes
+                                  <span className="text-xs text-gray-500">
+                                    ({detalle.simbolo})
+                                  </span>
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={
+                                    userAdjustments[detalle.moneda_id]?.bills ||
+                                    ""
+                                  }
+                                  onChange={(e) =>
+                                    handleUserAdjustment(
+                                      detalle.moneda_id,
+                                      "bills",
+                                      e.target.value
+                                    )
+                                  }
+                                  placeholder="0.00"
+                                  className={!isValid ? "border-red-300" : ""}
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium flex items-center gap-1">
+                                  🪙 Monedas
+                                  <span className="text-xs text-gray-500">
+                                    ({detalle.simbolo})
+                                  </span>
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={
+                                    userAdjustments[detalle.moneda_id]?.coins ||
+                                    ""
+                                  }
+                                  onChange={(e) =>
+                                    handleUserAdjustment(
+                                      detalle.moneda_id,
+                                      "coins",
+                                      e.target.value
+                                    )
+                                  }
+                                  placeholder="0.00"
+                                  className={!isValid ? "border-red-300" : ""}
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium">
+                                  💰 Total Contado
+                                </Label>
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className={`h-10 px-3 py-2 border rounded-md flex items-center font-bold text-lg ${
+                                      !isValid
+                                        ? "bg-red-50 border-red-300 text-red-700"
+                                        : "bg-green-50 border-green-300 text-green-700"
+                                    }`}
+                                  >
+                                    {detalle.simbolo}
+                                    {userTotal.toFixed(2)}
+                                  </div>
+                                  {(() => {
+                                    const diff = parseFloat(
+                                      (
+                                        userTotal - detalle.saldo_cierre
+                                      ).toFixed(2)
+                                    );
+                                    const abs = Math.abs(diff);
+                                    const tol = getTolerance(detalle);
+                                    const within = abs <= tol;
+                                    const sign =
+                                      diff > 0 ? "+" : diff < 0 ? "-" : "";
+                                    const color = within
+                                      ? diff === 0
+                                        ? "bg-gray-200 text-gray-800 border-gray-300"
+                                        : "bg-green-100 text-green-800 border-green-300"
+                                      : "bg-red-100 text-red-800 border-red-300";
+                                    const label = `${sign}${abs.toFixed(2)}`;
+                                    return (
+                                      <Badge
+                                        className={`border ${color} whitespace-nowrap`}
+                                        variant={
+                                          within ? "secondary" : "destructive"
+                                        }
+                                        title={`Diferencia vs esperado (tolerancia ±${tol.toFixed(
+                                          2
+                                        )})`}
+                                      >
+                                        Diff: {label}
+                                      </Badge>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Observaciones */}
+                            <div className="mt-4 space-y-2">
+                              <Label className="text-sm font-medium">
+                                📝 Observaciones (opcional)
+                              </Label>
+                              <Textarea
+                                rows={2}
+                                placeholder="Ej: Diferencia por redondeo, conteo manual, etc."
+                                value={
+                                  userAdjustments[detalle.moneda_id]?.note || ""
+                                }
+                                onChange={(e) =>
+                                  handleUserAdjustment(
+                                    detalle.moneda_id,
+                                    "note",
+                                    e.target.value
+                                  )
+                                }
+                              />
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </CardContent>
+                    </Card>
                   );
                 })}
 
