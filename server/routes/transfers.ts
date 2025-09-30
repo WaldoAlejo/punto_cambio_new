@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
+import { transferAutoReconciliation } from "../middleware/autoReconciliation.js";
 import { z } from "zod";
 import transferController from "../controllers/transferController.js";
 
@@ -52,6 +53,7 @@ router.post(
   "/",
   authenticateToken,
   validate(createTransferSchema),
+  transferAutoReconciliation, // 🔄 Auto-reconciliación después de crear transferencia
   transferController.createTransfer
 );
 
