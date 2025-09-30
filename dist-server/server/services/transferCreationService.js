@@ -1,6 +1,7 @@
 import { TipoMovimiento, } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
+import saldoReconciliationService from "./saldoReconciliationService.js";
 async function getSaldo(pointId, monedaId) {
     const s = await prisma.saldo.findUnique({
         where: {
@@ -17,7 +18,7 @@ async function getSaldo(pointId, monedaId) {
         bancos: Number(s?.bancos ?? 0),
     };
 }
-async function upsertSaldoEfectivo(pointId, monedaId, nuevoEfectivo) {
+async function upsertSaldoEfectivo(pointId, monedaId, nuevoEfectivo, usuarioId) {
     const { id } = await getSaldo(pointId, monedaId);
     if (id) {
         await prisma.saldo.update({
@@ -42,8 +43,33 @@ async function upsertSaldoEfectivo(pointId, monedaId, nuevoEfectivo) {
             },
         });
     }
+    // 🔄 AUTO-RECONCILIACIÓN: Verificar y corregir automáticamente cualquier inconsistencia
+    try {
+        const reconciliationResult = await saldoReconciliationService.reconciliarSaldo(pointId, monedaId, usuarioId);
+        if (reconciliationResult.corregido) {
+            logger.warn("🔧 Saldo corregido automáticamente después de actualización", {
+                pointId,
+                monedaId,
+                saldoAnterior: reconciliationResult.saldoAnterior,
+                saldoCalculado: reconciliationResult.saldoCalculado,
+                diferencia: reconciliationResult.diferencia,
+                usuarioId,
+            });
+        }
+    }
+    catch (reconciliationError) {
+        logger.error("Error en auto-reconciliación de saldo efectivo", {
+            error: reconciliationError instanceof Error
+                ? reconciliationError.message
+                : "Unknown error",
+            pointId,
+            monedaId,
+            usuarioId,
+        });
+        // No lanzamos el error para no interrumpir la operación principal
+    }
 }
-async function upsertSaldoBanco(pointId, monedaId, nuevoBanco) {
+async function upsertSaldoBanco(pointId, monedaId, nuevoBanco, usuarioId) {
     const { id } = await getSaldo(pointId, monedaId);
     if (id) {
         await prisma.saldo.update({
@@ -67,6 +93,32 @@ async function upsertSaldoBanco(pointId, monedaId, nuevoBanco) {
                 bancos: nuevoBanco,
             },
         });
+    }
+    // 🔄 AUTO-RECONCILIACIÓN: Verificar saldo después de actualización de banco
+    // Nota: Los saldos de banco no afectan el cuadre de caja, pero mantenemos consistencia
+    try {
+        const reconciliationResult = await saldoReconciliationService.reconciliarSaldo(pointId, monedaId, usuarioId);
+        if (reconciliationResult.corregido) {
+            logger.warn("🔧 Saldo corregido automáticamente después de actualización de banco", {
+                pointId,
+                monedaId,
+                saldoAnterior: reconciliationResult.saldoAnterior,
+                saldoCalculado: reconciliationResult.saldoCalculado,
+                diferencia: reconciliationResult.diferencia,
+                usuarioId,
+            });
+        }
+    }
+    catch (reconciliationError) {
+        logger.error("Error en auto-reconciliación de saldo banco", {
+            error: reconciliationError instanceof Error
+                ? reconciliationError.message
+                : "Unknown error",
+            pointId,
+            monedaId,
+            usuarioId,
+        });
+        // No lanzamos el error para no interrumpir la operación principal
     }
 }
 async function logMovimientoSaldo(args) {
@@ -140,7 +192,7 @@ export const transferCreationService = {
         if (efectivo > 0) {
             const { cantidad: antEf } = await getSaldo(destino_id, moneda_id);
             const nuevoEf = +(antEf + efectivo).toFixed(2);
-            await upsertSaldoEfectivo(destino_id, moneda_id, nuevoEf);
+            await upsertSaldoEfectivo(destino_id, moneda_id, nuevoEf, usuario_id);
             await logMovimientoSaldo({
                 punto_atencion_id: destino_id,
                 moneda_id,
@@ -158,7 +210,7 @@ export const transferCreationService = {
         if (banco > 0) {
             const { bancos: antBk } = await getSaldo(destino_id, moneda_id);
             const nuevoBk = +(antBk + banco).toFixed(2);
-            await upsertSaldoBanco(destino_id, moneda_id, nuevoBk);
+            await upsertSaldoBanco(destino_id, moneda_id, nuevoBk, usuario_id);
             await logMovimientoSaldo({
                 punto_atencion_id: destino_id,
                 moneda_id,
