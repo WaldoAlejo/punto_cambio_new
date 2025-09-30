@@ -267,7 +267,7 @@ app.use("/api/balance-completo", balanceCompletoRoutes);
 
 // ------- Frontend estático (serve SPA build) -------
 try {
-  const frontendDistPath = path.join(__dirname, "..", "dist");
+  const frontendDistPath = path.join(__dirname, "..", "..", "dist");
   const indexPath = path.join(frontendDistPath, "index.html");
 
   if (fs.existsSync(indexPath)) {
