@@ -15,6 +15,12 @@ import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, CuadreCaja } from "../../types";
 import ExternalServicesClose from "./ExternalServicesClose";
 
+function getCantidad(val: any): number {
+  if (typeof val === "number") return val;
+  if (val && typeof val.cantidad === "number") return val.cantidad;
+  return 0;
+}
+
 interface DailyCloseProps {
   user: User;
   selectedPoint: PuntoAtencion | null;
@@ -496,7 +502,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 <div className="text-center">
                   <h4 className="font-semibold text-blue-700">Total Cambios</h4>
                   <p className="text-2xl font-bold text-blue-600">
-                    {cuadreData.totales.cambios}
+                    {getCantidad(cuadreData.totales.cambios)}
                   </p>
                 </div>
                 <div className="text-center">
@@ -504,7 +510,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                     Transferencias Entrada
                   </h4>
                   <p className="text-2xl font-bold text-green-600">
-                    {cuadreData.totales.transferencias_entrada}
+                    {getCantidad(cuadreData.totales.transferencias_entrada)}
                   </p>
                 </div>
                 <div className="text-center">
@@ -512,7 +518,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                     Transferencias Salida
                   </h4>
                   <p className="text-2xl font-bold text-orange-600">
-                    {cuadreData.totales.transferencias_salida}
+                    {getCantidad(cuadreData.totales.transferencias_salida)}
                   </p>
                 </div>
               </div>
@@ -781,7 +787,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h4 className="font-semibold text-blue-700">Total Cambios</h4>
                   <p className="text-2xl font-bold text-blue-600">
-                    {todayClose.total_cambios}
+                    {getCantidad(todayClose.total_cambios)}
                   </p>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg">
@@ -789,7 +795,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                     Transferencias Entrada
                   </h4>
                   <p className="text-2xl font-bold text-green-600">
-                    {todayClose.total_transferencias_entrada}
+                    {getCantidad(todayClose.total_transferencias_entrada)}
                   </p>
                 </div>
                 <div className="bg-orange-50 p-4 rounded-lg">
@@ -797,7 +803,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                     Transferencias Salida
                   </h4>
                   <p className="text-2xl font-bold text-orange-600">
-                    {todayClose.total_transferencias_salida}
+                    {getCantidad(todayClose.total_transferencias_salida)}
                   </p>
                 </div>
               </div>

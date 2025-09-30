@@ -313,9 +313,11 @@ export interface CuadreCaja {
   punto_atencion_id: string;
   fecha: string;
   estado: "ABIERTO" | "CERRADO";
-  total_cambios: number;
-  total_transferencias_entrada: number;
-  total_transferencias_salida: number;
+  total_cambios:
+    | number
+    | { cantidad: number; ingresos?: number; egresos?: number };
+  total_transferencias_entrada: number | { cantidad: number; monto?: number };
+  total_transferencias_salida: number | { cantidad: number; monto?: number };
   fecha_cierre?: string | null;
   observaciones?: string | null;
 }
