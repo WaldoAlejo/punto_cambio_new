@@ -245,6 +245,92 @@ export const transferCreationService = {
             });
         }
     },
+    async contabilizarSalidaOrigen(args) {
+        const { origen_id, moneda_id, usuario_id, transferencia, numero_recibo, via, } = args;
+        let efectivo = 0;
+        let banco = 0;
+        if (via === "EFECTIVO") {
+            efectivo = args.monto;
+        }
+        else if (via === "BANCO") {
+            banco = args.monto;
+        }
+        else {
+            // MIXTO
+            const me = Number(args.monto_efectivo ?? NaN);
+            const mb = Number(args.monto_banco ?? NaN);
+            if (Number.isFinite(me) &&
+                Number.isFinite(mb) &&
+                me >= 0 &&
+                mb >= 0 &&
+                +(me + mb).toFixed(2) <= +args.monto.toFixed(2)) {
+                efectivo = +me.toFixed(2);
+                banco = +mb.toFixed(2);
+            }
+            else {
+                // Split 50/50 si no viene desglose válido
+                const half = Math.round((args.monto / 2) * 100) / 100;
+                efectivo = half;
+                banco = +(+args.monto - half).toFixed(2);
+            }
+        }
+        // === EFECTIVO (afecta cuadre) - RESTAR del origen
+        if (efectivo > 0) {
+            const { cantidad: antEf } = await getSaldo(origen_id, moneda_id);
+            const nuevoEf = +(antEf - efectivo).toFixed(2);
+            await upsertSaldoEfectivo(origen_id, moneda_id, nuevoEf, usuario_id);
+            await logMovimientoSaldo({
+                punto_atencion_id: origen_id,
+                moneda_id,
+                tipo_movimiento: "EGRESO",
+                monto: efectivo,
+                saldo_anterior: antEf,
+                saldo_nuevo: nuevoEf,
+                usuario_id,
+                referencia_id: transferencia.id,
+                tipo_referencia: "TRANSFERENCIA",
+                descripcion: `Transferencia (EFECTIVO) ${numero_recibo} - Salida`,
+            });
+        }
+        // === BANCO (solo control) - RESTAR del origen
+        if (banco > 0) {
+            const { bancos: antBk } = await getSaldo(origen_id, moneda_id);
+            const nuevoBk = +(antBk - banco).toFixed(2);
+            await upsertSaldoBanco(origen_id, moneda_id, nuevoBk, usuario_id);
+            await logMovimientoSaldo({
+                punto_atencion_id: origen_id,
+                moneda_id,
+                tipo_movimiento: "EGRESO",
+                monto: banco,
+                saldo_anterior: antBk,
+                saldo_nuevo: nuevoBk,
+                usuario_id,
+                referencia_id: transferencia.id,
+                tipo_referencia: "TRANSFERENCIA",
+                descripcion: `Transferencia (BANCO) ${numero_recibo} - Salida`,
+            });
+        }
+        // Registrar movimiento "operacional" (para listados rápidos)
+        try {
+            await prisma.movimiento.create({
+                data: {
+                    punto_atencion_id: origen_id,
+                    usuario_id,
+                    moneda_id,
+                    monto: args.monto,
+                    tipo: TipoMovimiento.TRANSFERENCIA_SALIENTE,
+                    descripcion: `Transferencia ${args.via} - ${numero_recibo} - Salida`,
+                    numero_recibo: numero_recibo,
+                },
+            });
+            logger.info("Movimiento de salida registrado exitosamente");
+        }
+        catch (movError) {
+            logger.warn("Error registrando movimiento de salida (no crítico)", {
+                error: movError,
+            });
+        }
+    },
     async createReceipt(data) {
         try {
             await prisma.recibo.create({

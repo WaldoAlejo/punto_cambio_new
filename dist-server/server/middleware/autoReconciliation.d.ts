@@ -29,8 +29,9 @@ export declare const autoReconciliationMiddleware: (options?: {
 }) => (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<void>;
 /**
  * Middleware específico para transferencias
+ * Reconcilia tanto el origen como el destino
  */
-export declare const transferAutoReconciliation: (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<void>;
+export declare const transferAutoReconciliation: (req: AuthenticatedRequest, res: Response, next: NextFunction) => void;
 /**
  * Middleware específico para cambios de divisa
  */
@@ -51,7 +52,7 @@ declare const _default: {
         currencyIdBody?: string;
         skipOnError?: boolean;
     }) => (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<void>;
-    transferAutoReconciliation: (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<void>;
+    transferAutoReconciliation: (req: AuthenticatedRequest, res: Response, next: NextFunction) => void;
     exchangeAutoReconciliation: (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<void>;
     balanceUpdateAutoReconciliation: (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<void>;
     genericAutoReconciliation: (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<void>;

@@ -48,39 +48,33 @@ const controller = {
         req.user?.id
       );
       if (!userValidation.success) {
-        res
-          .status(401)
-          .json({
-            error: userValidation.error,
-            success: false,
-            timestamp: new Date().toISOString(),
-          });
+        res.status(401).json({
+          error: userValidation.error,
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
 
       const destinationValidation =
         await transferValidationService.validateDestination(destino_id);
       if (!destinationValidation.success) {
-        res
-          .status(400)
-          .json({
-            error: destinationValidation.error,
-            success: false,
-            timestamp: new Date().toISOString(),
-          });
+        res.status(400).json({
+          error: destinationValidation.error,
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
 
       const currencyValidation =
         await transferValidationService.validateCurrency(moneda_id);
       if (!currencyValidation.success) {
-        res
-          .status(400)
-          .json({
-            error: currencyValidation.error,
-            success: false,
-            timestamp: new Date().toISOString(),
-          });
+        res.status(400).json({
+          error: currencyValidation.error,
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
 
@@ -88,24 +82,20 @@ const controller = {
         origen_id
       );
       if (!originValidation.success) {
-        res
-          .status(400)
-          .json({
-            error: originValidation.error,
-            success: false,
-            timestamp: new Date().toISOString(),
-          });
+        res.status(400).json({
+          error: originValidation.error,
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
 
       if (!req.user) {
-        res
-          .status(401)
-          .json({
-            error: "Usuario no autenticado",
-            success: false,
-            timestamp: new Date().toISOString(),
-          });
+        res.status(401).json({
+          error: "Usuario no autenticado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
         return;
       }
 
@@ -126,7 +116,22 @@ const controller = {
         via: via as TipoViaTransferencia,
       });
 
-      // Contabilizar en saldos del DESTINO (efectivo y/o banco)
+      // Contabilizar SALIDA del ORIGEN (si existe origen_id)
+      if (origen_id) {
+        await transferCreationService.contabilizarSalidaOrigen({
+          origen_id,
+          moneda_id,
+          usuario_id: req.user.id,
+          transferencia: newTransfer,
+          numero_recibo: numeroRecibo,
+          via: via as TipoViaTransferencia,
+          monto,
+          monto_efectivo,
+          monto_banco,
+        });
+      }
+
+      // Contabilizar ENTRADA en el DESTINO (efectivo y/o banco)
       await transferCreationService.contabilizarEntradaDestino({
         destino_id,
         moneda_id,

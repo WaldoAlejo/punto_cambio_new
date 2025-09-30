@@ -4,6 +4,7 @@ import { pool } from "../lib/database.js";
 import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import saldoReconciliationService from "../services/saldoReconciliationService.js";
 const router = express.Router();
 function parseFechaParam(fecha) {
     if (!fecha)
@@ -228,9 +229,13 @@ router.get("/", authenticateToken, async (req, res) => {
                 monto: 0,
                 cantidad: 0,
             };
-            const ingresos_periodo = (c.ingresos || 0) + (tIn.monto || 0);
-            const egresos_periodo = (c.egresos || 0) + (tOut.monto || 0);
-            const saldo_cierre_teorico = saldoApertura + ingresos_periodo - egresos_periodo;
+            // Calcular el saldo real basado en todos los movimientos registrados
+            // Esto incluye cambios Y transferencias automáticamente
+            const saldo_cierre_teorico = await saldoReconciliationService.calcularSaldoReal(puntoAtencionId, moneda.id);
+            // Para el desglose, mostrar solo los cambios como ingresos/egresos del período
+            // Las transferencias se muestran por separado en el desglose pero no se suman al cálculo
+            const ingresos_periodo = c.ingresos || 0;
+            const egresos_periodo = c.egresos || 0;
             return {
                 moneda_id: moneda.id,
                 codigo: moneda.codigo,

@@ -16,31 +16,33 @@ export declare const transferCreationService: {
     generateReceiptNumber(): string;
     createTransfer(transferData: TransferData): Promise<{
         moneda: {
-            id: string;
             nombre: string;
+            id: string;
             simbolo: string;
             codigo: string;
         };
         destino: {
-            id: string;
             nombre: string;
+            id: string;
         };
         origen: {
-            id: string;
             nombre: string;
+            id: string;
         } | null;
         usuarioSolicitante: {
+            nombre: string;
             id: string;
             username: string;
-            nombre: string;
         };
     } & {
-        id: string;
         origen_id: string | null;
         destino_id: string;
         moneda_id: string;
         monto: import("@prisma/client/runtime/library.js").Decimal;
         tipo_transferencia: import(".prisma/client").$Enums.TipoTransferencia;
+        via: import(".prisma/client").$Enums.TipoViaTransferencia | null;
+        descripcion: string | null;
+        id: string;
         estado: import(".prisma/client").$Enums.EstadoTransferencia;
         solicitado_por: string;
         aprobado_por: string | null;
@@ -48,13 +50,22 @@ export declare const transferCreationService: {
         fecha: Date;
         fecha_aprobacion: Date | null;
         fecha_rechazo: Date | null;
-        descripcion: string | null;
         numero_recibo: string | null;
-        via: import(".prisma/client").$Enums.TipoViaTransferencia | null;
         observaciones_aprobacion: string | null;
     }>;
     contabilizarEntradaDestino(args: {
         destino_id: string;
+        moneda_id: string;
+        usuario_id: string;
+        transferencia: Transferencia;
+        numero_recibo: string;
+        via: TipoViaTransferencia;
+        monto: number;
+        monto_efectivo?: number;
+        monto_banco?: number;
+    }): Promise<void>;
+    contabilizarSalidaOrigen(args: {
+        origen_id: string;
         moneda_id: string;
         usuario_id: string;
         transferencia: Transferencia;

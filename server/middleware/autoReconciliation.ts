@@ -176,11 +176,108 @@ async function executeAutoReconciliation(
 
 /**
  * Middleware específico para transferencias
+ * Reconcilia tanto el origen como el destino
  */
-export const transferAutoReconciliation = autoReconciliationMiddleware({
-  pointIdBody: "destino_id",
-  currencyIdBody: "moneda_id",
-});
+export const transferAutoReconciliation = (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  // Solo ejecutar si la respuesta fue exitosa
+  const originalSend = res.send;
+
+  res.send = function (data: any) {
+    // Ejecutar reconciliación solo si la operación fue exitosa
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      // Ejecutar reconciliación de forma asíncrona para no bloquear la respuesta
+      setImmediate(async () => {
+        try {
+          const currencyId = req.body.moneda_id;
+          const destinoId = req.body.destino_id;
+          const origenId = req.body.origen_id;
+          const userId = req.user?.id;
+
+          // Reconciliar destino
+          if (destinoId && currencyId) {
+            logger.info(
+              "🔄 Ejecutando auto-reconciliación en DESTINO después de transferencia",
+              {
+                pointId: destinoId,
+                currencyId,
+                userId,
+              }
+            );
+
+            const resultadoDestino =
+              await saldoReconciliationService.reconciliarSaldo(
+                destinoId,
+                currencyId,
+                userId
+              );
+
+            if (resultadoDestino.corregido) {
+              logger.warn(
+                "🔧 Auto-reconciliación DESTINO detectó y corrigió inconsistencia",
+                {
+                  pointId: destinoId,
+                  currencyId,
+                  saldoAnterior: resultadoDestino.saldoAnterior,
+                  saldoCalculado: resultadoDestino.saldoCalculado,
+                  diferencia: resultadoDestino.diferencia,
+                  userId,
+                }
+              );
+            }
+          }
+
+          // Reconciliar origen (si existe)
+          if (origenId && currencyId) {
+            logger.info(
+              "🔄 Ejecutando auto-reconciliación en ORIGEN después de transferencia",
+              {
+                pointId: origenId,
+                currencyId,
+                userId,
+              }
+            );
+
+            const resultadoOrigen =
+              await saldoReconciliationService.reconciliarSaldo(
+                origenId,
+                currencyId,
+                userId
+              );
+
+            if (resultadoOrigen.corregido) {
+              logger.warn(
+                "🔧 Auto-reconciliación ORIGEN detectó y corrigió inconsistencia",
+                {
+                  pointId: origenId,
+                  currencyId,
+                  saldoAnterior: resultadoOrigen.saldoAnterior,
+                  saldoCalculado: resultadoOrigen.saldoCalculado,
+                  diferencia: resultadoOrigen.diferencia,
+                  userId,
+                }
+              );
+            }
+          }
+        } catch (error) {
+          logger.error("Error en auto-reconciliación de transferencia", {
+            error: error instanceof Error ? error.message : "Unknown error",
+            path: req.path,
+            method: req.method,
+            userId: req.user?.id,
+          });
+        }
+      });
+    }
+
+    return originalSend.call(this, data);
+  };
+
+  next();
+};
 
 /**
  * Middleware específico para cambios de divisa
