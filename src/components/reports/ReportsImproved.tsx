@@ -312,12 +312,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
           : {}),
       };
 
-      console.log("📊 Enviando solicitud de reporte:", { apiUrl, requestBody });
-      console.log("🔐 Token disponible:", !!token);
-      console.log(
-        "🔐 Token (primeros 20 chars):",
-        token?.substring(0, 20) + "..."
-      );
+      console.log("Enviando solicitud de reporte:", { apiUrl, requestBody });
 
       const response = await fetch(`${apiUrl}/reports`, {
         method: "POST",
@@ -328,31 +323,13 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
         body: JSON.stringify(requestBody),
       });
 
-      console.log("📡 Respuesta del servidor - Status:", response.status);
-      console.log(
-        "📡 Respuesta del servidor - StatusText:",
-        response.statusText
-      );
-
-      const data = await response.json().catch(() => ({
-        error: `HTTP ${response.status}: ${response.statusText}`,
-      }));
-      console.log("📡 Respuesta del servidor - Data:", data);
+      const data = await response.json();
+      console.log("Respuesta del servidor:", data);
 
       if (!response.ok) {
-        if (response.status === 403) {
-          throw new Error(
-            "❌ Acceso denegado. Verifica tus permisos o contacta al administrador."
-          );
-        } else if (response.status === 401) {
-          throw new Error(
-            "❌ Sesión expirada. Por favor inicia sesión nuevamente."
-          );
-        } else {
-          throw new Error(
-            data.error || `❌ Error ${response.status}: ${response.statusText}`
-          );
-        }
+        throw new Error(
+          data.error || `Error ${response.status}: ${response.statusText}`
+        );
       }
 
       if (!data.success) {

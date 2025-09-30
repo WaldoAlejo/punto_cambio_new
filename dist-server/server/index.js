@@ -34,6 +34,7 @@ import exchangeRoutes from "./routes/exchanges.js";
 import scheduleRoutes from "./routes/schedules.js";
 import spontaneousExitRoutes from "./routes/spontaneous-exits.js";
 import reportRoutes from "./routes/reports.js";
+import reportDebugRoutes from "./routes/reportsDebug.js";
 import cuadreCajaRoutes from "./routes/cuadreCaja.js";
 import activePointsRoutes from "./routes/activePoints.js";
 import saldosInicialesRoutes from "./routes/saldos-iniciales.js";
@@ -210,6 +211,7 @@ app.use("/api/exchanges", exchangeRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/spontaneous-exits", spontaneousExitRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/reports-debug", reportDebugRoutes);
 app.use("/api/cuadre-caja", cuadreCajaRoutes);
 app.use("/api/active-points", activePointsRoutes);
 app.use("/api/saldos-iniciales", saldosInicialesRoutes);
@@ -227,7 +229,7 @@ app.use("/api/guardar-cierre", guardarCierreRoutes);
 app.use("/api/balance-completo", balanceCompletoRoutes);
 // ------- Frontend estático (serve SPA build) -------
 try {
-    const frontendDistPath = path.join(__dirname, "..", "dist");
+    const frontendDistPath = path.join(__dirname, "..", "..", "dist");
     const indexPath = path.join(frontendDistPath, "index.html");
     if (fs.existsSync(indexPath)) {
         // 1) Servir /assets primero (CSS/JS generados por Vite) para evitar que el fallback devuelva HTML

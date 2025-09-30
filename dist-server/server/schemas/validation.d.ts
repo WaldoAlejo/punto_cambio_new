@@ -18,21 +18,21 @@ export declare const createUserSchema: z.ZodObject<{
     rol: z.ZodEnum<["ADMIN", "OPERADOR", "SUPER_USUARIO", "CONCESION", "ADMINISTRATIVO"]>;
     punto_atencion_id: z.ZodNullable<z.ZodOptional<z.ZodString>>;
 }, "strip", z.ZodTypeAny, {
+    rol: "OPERADOR" | "ADMIN" | "SUPER_USUARIO" | "CONCESION" | "ADMINISTRATIVO";
     username: string;
     password: string;
-    rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION" | "ADMINISTRATIVO";
     nombre: string;
+    punto_atencion_id?: string | null | undefined;
     correo?: string | null | undefined;
     telefono?: string | null | undefined;
-    punto_atencion_id?: string | null | undefined;
 }, {
+    rol: "OPERADOR" | "ADMIN" | "SUPER_USUARIO" | "CONCESION" | "ADMINISTRATIVO";
     username: string;
     password: string;
-    rol: "SUPER_USUARIO" | "ADMIN" | "OPERADOR" | "CONCESION" | "ADMINISTRATIVO";
     nombre: string;
+    punto_atencion_id?: string | null | undefined;
     correo?: string | null | undefined;
     telefono?: string | null | undefined;
-    punto_atencion_id?: string | null | undefined;
 }>;
 export declare const createPointSchema: z.ZodObject<{
     nombre: z.ZodString;
