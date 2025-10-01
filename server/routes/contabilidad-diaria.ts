@@ -240,6 +240,77 @@ router.get("/:pointId/:fecha", authenticateToken, async (req, res) => {
 });
 
 /**
+ * GET /api/contabilidad-diaria/cierre/:pointId/:fecha
+ * Verifica si existe un cierre para el día especificado
+ */
+router.get("/cierre/:pointId/:fecha", authenticateToken, async (req, res) => {
+  try {
+    const { pointId, fecha } = req.params;
+    const usuario = req.user as
+      | {
+          id: string;
+          punto_atencion_id?: string;
+          rol?: RolUsuario;
+        }
+      | undefined;
+
+    if (!pointId) {
+      return res.status(400).json({ success: false, error: "Falta pointId" });
+    }
+
+    // Seguridad: operadores solo pueden consultar su propio punto
+    const esAdmin =
+      (usuario?.rol === "ADMIN" || usuario?.rol === "SUPER_USUARIO") ?? false;
+    if (
+      !esAdmin &&
+      usuario?.punto_atencion_id &&
+      usuario.punto_atencion_id !== pointId
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: "No autorizado para consultar otro punto de atención",
+      });
+    }
+
+    // Valida YYYY-MM-DD (lanza si no cumple)
+    gyeParseDateOnly(fecha);
+
+    // Prisma usa Date para @db.Date (sin hora).
+    // Usamos medianoche UTC de esa fecha
+    const fechaDate = new Date(`${fecha}T00:00:00.000Z`);
+
+    // Buscar cierre por clave compuesta
+    const cierre = await prisma.cierreDiario.findUnique({
+      where: {
+        fecha_punto_atencion_id: {
+          fecha: fechaDate,
+          punto_atencion_id: pointId,
+        },
+      },
+      include: {
+        usuario: {
+          select: { nombre: true, username: true },
+        },
+      },
+    });
+
+    return res.json({
+      success: true,
+      cierre: cierre || null,
+    });
+  } catch (error) {
+    logger.error("Error en GET /contabilidad-diaria/cierre/:pointId/:fecha", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return res.status(500).json({
+      success: false,
+      error: "Error interno del servidor",
+    });
+  }
+});
+
+/**
  * POST /api/contabilidad-diaria/:pointId/:fecha/cerrar
  * Marca el cierre del día como CERRADO de forma idempotente usando la clave compuesta
  * @@unique([fecha, punto_atencion_id]) en CierreDiario.
