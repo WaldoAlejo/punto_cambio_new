@@ -50,7 +50,7 @@ async function checkNegativeBalances() {
 
   console.log("📊 Saldos actuales en SANTA FE:");
   for (const saldo of saldosSantaFe) {
-    const status = saldo.cantidad < 0 ? "❌" : "✅";
+    const status = Number(saldo.cantidad) < 0 ? "❌" : "✅";
     console.log(`${status} ${saldo.moneda.codigo}: ${saldo.cantidad}`);
   }
 
@@ -72,7 +72,7 @@ async function checkNegativeBalances() {
   }
 
   // Revisar movimientos de SANTA FE para una moneda específica con saldo negativo
-  const saldoNegativo = saldosSantaFe.find((s) => s.cantidad < 0);
+  const saldoNegativo = saldosSantaFe.find((s) => Number(s.cantidad) < 0);
   if (saldoNegativo) {
     console.log(
       `\n🔍 Análisis de movimientos para ${saldoNegativo.moneda.codigo} en SANTA FE:`

@@ -83,7 +83,7 @@ async function generarInformeSantaFe() {
       saldoNuevo: Number(mov.saldo_nuevo),
       descripcion: mov.descripcion || "",
       usuario: mov.usuario?.nombre || "Sistema",
-      referencia: mov.referencia || "",
+      referencia: mov.referencia_id || "",
     }));
 
     // 7. Calcular estadísticas
@@ -213,9 +213,9 @@ async function generarInformeSantaFe() {
     );
 
     // HOJA 3: ANÁLISIS POR TIPO
-    const tiposMovimiento = [
-      ...new Set(movimientos.map((m) => m.tipo_movimiento)),
-    ];
+    const tiposMovimiento = Array.from(
+      new Set(movimientos.map((m) => m.tipo_movimiento))
+    );
     const analisisTipos = tiposMovimiento.map((tipo) => {
       const movsTipo = movimientos.filter((m) => m.tipo_movimiento === tipo);
       const totalTipo = movsTipo.reduce((sum, m) => sum + Number(m.monto), 0);
@@ -381,7 +381,7 @@ async function generarInformeSantaFe() {
 export { generarInformeSantaFe };
 
 // Ejecutar si es llamado directamente
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (require.main === module) {
   generarInformeSantaFe()
     .then((resultado) => {
       console.log("🎯 Informe completado:", resultado.archivo);

@@ -130,7 +130,7 @@ async function findSantaFeMovements() {
         `   ${(index + 1)
           .toString()
           .padStart(2)}. ${fecha} ${hora} | ${signo}${Math.abs(
-          mov.monto
+          Number(mov.monto)
         ).toFixed(2)} | ${mov.tipo.padEnd(20)} | ${
           mov.descripcion || "Sin descripción"
         }`
@@ -156,7 +156,7 @@ async function findSantaFeMovements() {
         `   ${(index + 1)
           .toString()
           .padStart(2)}. ${fecha} ${hora} | ${signo}${Math.abs(
-          mov.monto
+          Number(mov.monto)
         ).toFixed(2)} | ${mov.tipo.padEnd(20)} | ${
           mov.descripcion || "Sin descripción"
         }`

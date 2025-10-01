@@ -92,7 +92,7 @@ async function findSantaFeMovimientoSaldo() {
 
       movsDia.forEach((mov, index) => {
         const hora = mov.fecha.toTimeString().split(" ")[0];
-        const signo = mov.monto >= 0 ? "+" : "-";
+        const signo = Number(mov.monto) >= 0 ? "+" : "-";
         const monto = Math.abs(Number(mov.monto));
 
         console.log(
@@ -117,7 +117,7 @@ async function findSantaFeMovimientoSaldo() {
       movimientosSaldo.forEach((mov, index) => {
         const fecha = mov.fecha.toISOString().split("T")[0];
         const hora = mov.fecha.toTimeString().split(" ")[0];
-        const signo = mov.monto >= 0 ? "+" : "-";
+        const signo = Number(mov.monto) >= 0 ? "+" : "-";
         const monto = Math.abs(Number(mov.monto));
 
         console.log(
