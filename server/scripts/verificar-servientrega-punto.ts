@@ -87,11 +87,11 @@ async function verificarConfiguracionServientrega(nombrePunto: string) {
       console.log(`✅ Saldo configurado:`);
       console.log(
         `   💵 Saldo actual: $${Number(
-          punto.saldosServientrega.saldo_actual || 0
+          punto.saldosServientrega.monto_total || 0
         ).toFixed(2)}`
       );
       console.log(
-        `   📅 Última actualización: ${punto.saldosServientrega.updated_at.toLocaleString()}`
+        `   📅 Creado en: ${punto.saldosServientrega.created_at.toLocaleString()}`
       );
     } else {
       console.log(

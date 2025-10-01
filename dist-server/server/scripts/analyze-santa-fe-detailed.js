@@ -63,7 +63,7 @@ async function analyzeSantaFeDetailed() {
             movimientosPorDia.get(fecha).push(mov);
         });
         // Análisis día por día
-        let saldoAcumulado = saldoInicial?.cantidad_inicial || 0;
+        let saldoAcumulado = Number(saldoInicial?.cantidad_inicial || 0);
         console.log("📅 ANÁLISIS DÍA POR DÍA:");
         console.log("=".repeat(80));
         for (const [fecha, movsDia] of Array.from(movimientosPorDia.entries()).sort()) {
@@ -81,7 +81,7 @@ async function analyzeSantaFeDetailed() {
                 ].includes(mov.tipo)
                     ? "+"
                     : "-";
-                const monto = Math.abs(mov.monto);
+                const monto = Math.abs(Number(mov.monto));
                 if (signo === "+") {
                     ingresosDia += monto;
                     saldoAcumulado += monto;
@@ -105,20 +105,22 @@ async function analyzeSantaFeDetailed() {
         // Calcular totales
         const totalIngresos = movimientos
             .filter((m) => ["INGRESO", "TRANSFERENCIA_ENTRANTE", "SALDO_INICIAL"].includes(m.tipo))
-            .reduce((sum, m) => sum + Math.abs(m.monto), 0);
+            .reduce((sum, m) => sum + Math.abs(Number(m.monto)), 0);
         const totalEgresos = movimientos
             .filter((m) => ["EGRESO", "TRANSFERENCIA_SALIENTE", "CAMBIO_DIVISA"].includes(m.tipo))
-            .reduce((sum, m) => sum + Math.abs(m.monto), 0);
-        console.log(`💰 Saldo inicial:     ${(saldoInicial?.cantidad_inicial || 0).toFixed(2)} USD`);
+            .reduce((sum, m) => sum + Math.abs(Number(m.monto)), 0);
+        console.log(`💰 Saldo inicial:     ${Number(saldoInicial?.cantidad_inicial || 0).toFixed(2)} USD`);
         console.log(`📈 Total ingresos:    +${totalIngresos.toFixed(2)} USD`);
         console.log(`📉 Total egresos:     -${totalEgresos.toFixed(2)} USD`);
         console.log(`🔄 Movimiento neto:   ${(totalIngresos - totalEgresos).toFixed(2)} USD`);
-        console.log(`💳 Saldo final calc:  ${((saldoInicial?.cantidad_inicial || 0) +
+        console.log(`💳 Saldo final calc:  ${(Number(saldoInicial?.cantidad_inicial || 0) +
             totalIngresos -
             totalEgresos).toFixed(2)} USD`);
         console.log(`💳 Saldo actual BD:   ${saldoAcumulado.toFixed(2)} USD`);
         // Verificar inconsistencias
-        const saldoCalculado = (saldoInicial?.cantidad_inicial || 0) + totalIngresos - totalEgresos;
+        const saldoCalculado = Number(saldoInicial?.cantidad_inicial || 0) +
+            totalIngresos -
+            totalEgresos;
         const diferencia = Math.abs(saldoCalculado - saldoAcumulado);
         if (diferencia > 0.01) {
             console.log(`⚠️  INCONSISTENCIA DETECTADA: ${diferencia.toFixed(2)} USD`);
@@ -128,7 +130,7 @@ async function analyzeSantaFeDetailed() {
         }
         // Identificar movimientos problemáticos
         console.log("\n🚨 MOVIMIENTOS CRÍTICOS:");
-        const movimientosGrandes = movimientos.filter((m) => Math.abs(m.monto) > 100);
+        const movimientosGrandes = movimientos.filter((m) => Math.abs(Number(m.monto)) > 100);
         movimientosGrandes.forEach((mov) => {
             const fecha = mov.fecha.toISOString().split("T")[0];
             const hora = mov.fecha.toTimeString().split(" ")[0];
@@ -139,7 +141,7 @@ async function analyzeSantaFeDetailed() {
             ].includes(mov.tipo)
                 ? "+"
                 : "-";
-            console.log(`   ${fecha} ${hora} | ${signo}${Math.abs(mov.monto).toFixed(2)} | ${mov.tipo} | ${mov.descripcion || "Sin descripción"}`);
+            console.log(`   ${fecha} ${hora} | ${signo}${Math.abs(Number(mov.monto)).toFixed(2)} | ${mov.tipo} | ${mov.descripcion || "Sin descripción"}`);
         });
     }
     catch (error) {

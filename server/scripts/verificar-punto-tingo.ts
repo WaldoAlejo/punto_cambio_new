@@ -166,9 +166,9 @@ async function verificarPuntoTingo() {
     if (cierrePendiente) {
       console.log(`✅ Ya existe un cierre para hoy`);
       console.log(`🕐 Fecha del cierre: ${cierrePendiente.fecha}`);
-      console.log(`💰 Total efectivo: $${cierrePendiente.total_efectivo}`);
+      console.log(`📊 Estado: ${cierrePendiente.estado}`);
       console.log(
-        `💳 Total servicios externos: $${cierrePendiente.total_servicios_externos}`
+        `🕐 Fecha de cierre: ${cierrePendiente.fecha_cierre || "Pendiente"}`
       );
     } else {
       console.log(`❌ No hay cierre diario para hoy`);

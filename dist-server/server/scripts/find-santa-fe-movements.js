@@ -105,7 +105,7 @@ async function findSantaFeMovements() {
                 : "-";
             console.log(`   ${(index + 1)
                 .toString()
-                .padStart(2)}. ${fecha} ${hora} | ${signo}${Math.abs(mov.monto).toFixed(2)} | ${mov.tipo.padEnd(20)} | ${mov.descripcion || "Sin descripción"}`);
+                .padStart(2)}. ${fecha} ${hora} | ${signo}${Math.abs(Number(mov.monto)).toFixed(2)} | ${mov.tipo.padEnd(20)} | ${mov.descripcion || "Sin descripción"}`);
         });
         console.log("");
         // Mostrar los últimos 10 movimientos
@@ -122,7 +122,7 @@ async function findSantaFeMovements() {
                 : "-";
             console.log(`   ${(index + 1)
                 .toString()
-                .padStart(2)}. ${fecha} ${hora} | ${signo}${Math.abs(mov.monto).toFixed(2)} | ${mov.tipo.padEnd(20)} | ${mov.descripcion || "Sin descripción"}`);
+                .padStart(2)}. ${fecha} ${hora} | ${signo}${Math.abs(Number(mov.monto)).toFixed(2)} | ${mov.tipo.padEnd(20)} | ${mov.descripcion || "Sin descripción"}`);
         });
     }
     catch (error) {

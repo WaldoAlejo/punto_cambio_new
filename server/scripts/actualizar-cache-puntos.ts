@@ -42,7 +42,9 @@ async function actualizarCachePuntos() {
       console.log(
         `   🏪 Nombre de Agencia: "${punto.servientrega_agencia_nombre}"`
       );
-      console.log(`   💰 Saldo: $${punto.saldosServientrega?.saldo || 0}`);
+      console.log(
+        `   💰 Saldo: $${Number(punto.saldosServientrega?.monto_total || 0)}`
+      );
       console.log(
         `   👥 Operadores activos: ${
           punto.usuarios.filter((u) => u.rol === "OPERADOR").length

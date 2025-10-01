@@ -57,9 +57,7 @@ async function diagnosticoCompleto() {
       console.log(
         `   💰 Saldo: ${
           punto.saldosServientrega
-            ? `$${Number(punto.saldosServientrega.saldo_actual || 0).toFixed(
-                2
-              )}`
+            ? `$${Number(punto.saldosServientrega.monto_total || 0).toFixed(2)}`
             : "No configurado"
         }`
       );
