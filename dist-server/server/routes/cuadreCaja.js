@@ -138,27 +138,20 @@ router.get("/", authenticateToken, async (req, res) => {
         WHERE punto_atencion_id = $1
           AND COALESCE(cantidad, 0) <> 0`, [puntoAtencionId]);
         const monedaIdsDeSaldos = new Set(saldosResult.rows.map((r) => r.moneda_id));
-        // Todas las monedas activas (para mostrar filas aunque todo esté en cero)
-        const activasResult = await pool.query(`SELECT id, codigo, nombre, simbolo, activo, orden_display
-         FROM "Moneda"
-        WHERE activo = true
-     ORDER BY orden_display NULLS LAST, nombre ASC`);
-        const activas = activasResult.rows;
-        // Unir sets → universo de monedas a mostrar
+        // Solo monedas que tuvieron movimientos durante el día
+        // Unir sets → universo de monedas a mostrar (solo las que tuvieron actividad)
         const universoIds = new Set([
-            ...activas.map((m) => m.id),
             ...Array.from(monedaIdsDeCambios),
             ...Array.from(monedaIdsDeTransfers),
-            ...Array.from(monedaIdsDeSaldos),
         ]);
-        // Map id -> Moneda (de activas; si hubiera inactivas en movimientos/saldos, las traemos aparte)
-        const conocidaPorId = new Map(activas.map((m) => [m.id, m]));
-        const idsDesconocidos = Array.from(universoIds).filter((id) => !conocidaPorId.has(id));
-        if (idsDesconocidos.length > 0) {
-            const extraMonedas = await pool.query(`SELECT id, codigo, nombre, simbolo
+        // Obtener información de las monedas que tuvieron movimientos
+        const conocidaPorId = new Map();
+        if (universoIds.size > 0) {
+            const monedasResult = await pool.query(`SELECT id, codigo, nombre, simbolo, activo, orden_display
            FROM "Moneda"
-          WHERE id = ANY($1::uuid[])`, [idsDesconocidos]);
-            extraMonedas.rows.forEach((m) => conocidaPorId.set(m.id, m));
+          WHERE id = ANY($1::uuid[])
+       ORDER BY orden_display NULLS LAST, nombre ASC`, [Array.from(universoIds)]);
+            monedasResult.rows.forEach((m) => conocidaPorId.set(m.id, m));
         }
         const monedas = Array.from(universoIds)
             .map((id) => conocidaPorId.get(id))

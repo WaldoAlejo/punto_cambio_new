@@ -2,6 +2,7 @@ import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
 async function analizarTransferencias() {
+    console.log("🔍 Analizando todas las transferencias...");
     logger.info("🔍 Analizando todas las transferencias...");
     const transferencias = await prisma.transferencia.findMany({
         where: {
@@ -148,16 +149,18 @@ async function main() {
         throw error;
     }
 }
-// Ejecutar solo si se llama directamente
-if (import.meta.url === `file://${process.argv[1]}`) {
-    main()
-        .then(() => {
-        logger.info("✅ Reporte completado");
+// Ejecutar el script directamente
+(async () => {
+    try {
+        console.log("🚀 Iniciando análisis de transferencias históricas...");
+        await main();
+        console.log("✅ Reporte completado");
         process.exit(0);
-    })
-        .catch((error) => {
+    }
+    catch (error) {
+        console.error("❌ Reporte falló:", error);
         logger.error("❌ Reporte falló", { error });
         process.exit(1);
-    });
-}
+    }
+})();
 export { main as generateTransferReport };

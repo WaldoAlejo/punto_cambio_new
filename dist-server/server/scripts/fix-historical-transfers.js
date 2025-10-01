@@ -72,6 +72,15 @@ async function corregirTransferenciaIncompleta(transferencia) {
         moneda_id: transferencia.moneda_id,
     });
     try {
+        // Buscar un usuario administrador para usar como usuario del sistema
+        const adminUser = await prisma.usuario.findFirst({
+            where: {
+                rol: "ADMIN",
+            },
+        });
+        if (!adminUser) {
+            throw new Error("No se encontró un usuario administrador para la corrección");
+        }
         // Obtener información del punto de origen para el saldo anterior
         const saldoOrigen = await prisma.saldo.findUnique({
             where: {
@@ -92,7 +101,7 @@ async function corregirTransferenciaIncompleta(transferencia) {
                 monto: transferencia.monto,
                 saldo_anterior: saldoAnterior,
                 saldo_nuevo: saldoNuevo,
-                usuario_id: "SYSTEM", // Usuario del sistema para corrección histórica
+                usuario_id: adminUser.id, // Usuario administrador para corrección histórica
                 referencia_id: transferencia.id,
                 tipo_referencia: "TRANSFERENCIA",
                 descripcion: `CORRECCIÓN HISTÓRICA: Transferencia ${transferencia.numero_recibo || "N/A"} - Salida (${transferencia.via || "N/A"})`,
@@ -111,6 +120,15 @@ async function corregirTransferenciaIncompleta(transferencia) {
 }
 async function ejecutarReconciliacionMasiva() {
     logger.info("🔄 Ejecutando reconciliación masiva de todos los puntos...");
+    // Buscar un usuario administrador para usar como usuario del sistema
+    const adminUser = await prisma.usuario.findFirst({
+        where: {
+            rol: "ADMIN",
+        },
+    });
+    if (!adminUser) {
+        throw new Error("No se encontró un usuario administrador para la reconciliación");
+    }
     // Obtener todos los puntos de atención
     const puntos = await prisma.puntoAtencion.findMany({
         select: {
@@ -122,7 +140,7 @@ async function ejecutarReconciliacionMasiva() {
     for (const punto of puntos) {
         try {
             logger.info(`🔄 Reconciliando punto: ${punto.nombre}`);
-            const resultados = await saldoReconciliationService.reconciliarTodosPuntoAtencion(punto.id, "SYSTEM" // Usuario del sistema
+            const resultados = await saldoReconciliationService.reconciliarTodosPuntoAtencion(punto.id, adminUser.id // Usuario administrador
             );
             const corregidos = resultados.filter((r) => r.corregido).length;
             totalCorregidos += corregidos;
@@ -167,6 +185,7 @@ async function generarReporteDespues() {
 }
 async function main() {
     try {
+        console.log("🚀 INICIANDO CORRECCIÓN DE TRANSFERENCIAS HISTÓRICAS");
         logger.info("🚀 INICIANDO CORRECCIÓN DE TRANSFERENCIAS HISTÓRICAS");
         logger.info("=".repeat(60));
         // 1. Generar reporte inicial
@@ -208,16 +227,18 @@ async function main() {
         throw error;
     }
 }
-// Ejecutar solo si se llama directamente
-if (import.meta.url === `file://${process.argv[1]}`) {
-    main()
-        .then(() => {
-        logger.info("✅ Script completado exitosamente");
+// Ejecutar el script directamente
+(async () => {
+    try {
+        console.log("🚀 Iniciando corrección de transferencias históricas...");
+        await main();
+        console.log("✅ Script completado exitosamente");
         process.exit(0);
-    })
-        .catch((error) => {
+    }
+    catch (error) {
+        console.error("❌ Script falló:", error);
         logger.error("❌ Script falló", { error });
         process.exit(1);
-    });
-}
+    }
+})();
 export { main as fixHistoricalTransfers };

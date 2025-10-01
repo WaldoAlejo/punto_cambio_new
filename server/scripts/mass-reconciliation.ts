@@ -51,6 +51,16 @@ async function ejecutarReconciliacionMasiva(): Promise<void> {
       logger.info(`🔄 Reconciliando punto: ${punto.nombre}`);
       console.log(`🔄 Reconciliando punto: ${punto.nombre}`);
 
+      // Obtener saldos del punto para tener información de monedas
+      const saldos = await prisma.saldo.findMany({
+        where: { punto_atencion_id: punto.id },
+        include: {
+          moneda: {
+            select: { codigo: true },
+          },
+        },
+      });
+
       const resultados =
         await saldoReconciliationService.reconciliarTodosPuntoAtencion(
           punto.id,
@@ -69,18 +79,24 @@ async function ejecutarReconciliacionMasiva(): Promise<void> {
       );
 
       // Mostrar detalles de las correcciones
-      for (const resultado of resultados) {
-        if (resultado.corregido) {
+      for (let i = 0; i < resultados.length; i++) {
+        const resultado = resultados[i];
+        if (resultado.corregido && saldos[i]) {
+          const monedaCodigo = saldos[i].moneda.codigo;
           logger.info(
-            `   💰 ${resultado.moneda}: ${resultado.saldoAnterior} → ${resultado.saldoNuevo} (diferencia: ${resultado.diferencia})`
+            `   💰 ${monedaCodigo}: ${resultado.saldoAnterior} → ${resultado.saldoCalculado} (diferencia: ${resultado.diferencia})`
           );
           console.log(
-            `   💰 ${resultado.moneda}: ${resultado.saldoAnterior} → ${resultado.saldoNuevo} (diferencia: ${resultado.diferencia})`
+            `   💰 ${monedaCodigo}: ${resultado.saldoAnterior} → ${resultado.saldoCalculado} (diferencia: ${resultado.diferencia})`
           );
         }
       }
     } catch (error) {
-      logger.error(`❌ Error reconciliando punto ${punto.nombre}:`, error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Error desconocido";
+      logger.error(`❌ Error reconciliando punto ${punto.nombre}:`, {
+        error: errorMessage,
+      });
       console.error(`❌ Error reconciliando punto ${punto.nombre}:`, error);
     }
   }
@@ -114,7 +130,11 @@ async function main(): Promise<void> {
     logger.info("✅ Reconciliación masiva completada exitosamente");
     console.log("✅ Reconciliación masiva completada exitosamente");
   } catch (error) {
-    logger.error("💥 Error durante la reconciliación masiva:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Error desconocido";
+    logger.error("💥 Error durante la reconciliación masiva:", {
+      error: errorMessage,
+    });
     console.error("💥 Error durante la reconciliación masiva:", error);
     throw error;
   } finally {
