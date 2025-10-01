@@ -26,6 +26,7 @@ export interface ReconciliationSummary {
 export declare const saldoReconciliationService: {
     /**
      * Calcula el saldo correcto basado en todos los movimientos registrados
+     * Incluye: saldos iniciales, ingresos, egresos, transferencias y cambios de divisa
      */
     calcularSaldoReal(puntoAtencionId: string, monedaId: string): Promise<number>;
     /**

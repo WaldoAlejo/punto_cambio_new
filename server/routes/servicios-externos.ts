@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
+import saldoValidation from "../middleware/saldoValidation.js";
 import prisma from "../lib/prisma.js";
 import { randomUUID } from "crypto";
 import {
@@ -82,6 +83,7 @@ async function ensureUsdMonedaId(): Promise<string> {
 router.post(
   "/movimientos",
   authenticateToken,
+  saldoValidation.validarSaldoSuficiente,
   async (req: Request, res: Response) => {
     try {
       if (!isOperador(req)) {

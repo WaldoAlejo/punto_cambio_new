@@ -2,6 +2,7 @@ import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { transferAutoReconciliation } from "../middleware/autoReconciliation.js";
+import { validarSaldoTransferencia } from "../middleware/saldoValidation.js";
 import { z } from "zod";
 import transferController from "../controllers/transferController.js";
 
@@ -53,6 +54,7 @@ router.post(
   "/",
   authenticateToken,
   validate(createTransferSchema),
+  validarSaldoTransferencia, // 🛡️ Validar saldo suficiente antes de transferir
   transferAutoReconciliation, // 🔄 Auto-reconciliación después de crear transferencia
   transferController.createTransfer
 );

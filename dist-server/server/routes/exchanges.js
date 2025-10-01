@@ -5,6 +5,7 @@ import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
+import { validarSaldoCambioDivisa } from "../middleware/saldoValidation.js";
 import { z } from "zod";
 import axios from "axios";
 import { todayGyeDateOnly, gyeDayRangeUtcFromDateOnly, } from "../utils/timezone.js";
@@ -131,7 +132,8 @@ const exchangeSchema = z.object({
     referencia_cambio_principal: z.string().optional().nullable(),
 });
 /* ========================= Crear cambio ========================= */
-router.post("/", authenticateToken, validate(exchangeSchema), async (req, res) => {
+router.post("/", authenticateToken, validate(exchangeSchema), validarSaldoCambioDivisa, // 🛡️ Validar saldo suficiente antes del cambio
+async (req, res) => {
     try {
         if (!req.user?.id) {
             res

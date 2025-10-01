@@ -9,35 +9,76 @@ import logger from "../utils/logger.js";
 export const saldoReconciliationService = {
     /**
      * Calcula el saldo correcto basado en todos los movimientos registrados
+     * Incluye: saldos iniciales, ingresos, egresos, transferencias y cambios de divisa
      */
     async calcularSaldoReal(puntoAtencionId, monedaId) {
         try {
+            // Obtener todos los movimientos reales (excluyendo AJUSTE)
             const movimientos = await prisma.movimientoSaldo.findMany({
                 where: {
                     punto_atencion_id: puntoAtencionId,
                     moneda_id: monedaId,
+                    tipo_movimiento: {
+                        in: [
+                            "INGRESO",
+                            "EGRESO",
+                            "TRANSFERENCIA_ENTRANTE",
+                            "TRANSFERENCIA_SALIENTE",
+                            "CAMBIO_DIVISA",
+                            "SALDO_INICIAL",
+                        ],
+                    },
                 },
                 select: {
                     monto: true,
                     tipo_movimiento: true,
+                    descripcion: true,
                 },
                 orderBy: {
                     fecha: "asc",
                 },
             });
+            // Verificar si hay movimientos SALDO_INICIAL
+            const tieneSaldoInicialMovimiento = movimientos.some((mov) => mov.tipo_movimiento === "SALDO_INICIAL");
             let saldoCalculado = 0;
+            // Si hay movimientos SALDO_INICIAL, usar esos como base
+            // Si no, usar la tabla saldoInicial
+            if (!tieneSaldoInicialMovimiento) {
+                const saldoInicial = await prisma.saldoInicial.findFirst({
+                    where: {
+                        punto_atencion_id: puntoAtencionId,
+                        moneda_id: monedaId,
+                        activo: true,
+                    },
+                });
+                saldoCalculado = saldoInicial
+                    ? Number(saldoInicial.cantidad_inicial)
+                    : 0;
+            }
+            // Calcular saldo basado en movimientos reales
             for (const mov of movimientos) {
                 const monto = Number(mov.monto);
                 switch (mov.tipo_movimiento) {
+                    case "SALDO_INICIAL":
+                        // Los movimientos SALDO_INICIAL establecen el saldo base
+                        saldoCalculado += monto;
+                        break;
                     case "INGRESO":
+                    case "TRANSFERENCIA_ENTRANTE":
                         saldoCalculado += monto;
                         break;
                     case "EGRESO":
+                    case "TRANSFERENCIA_SALIENTE":
                         saldoCalculado -= monto;
                         break;
-                    case "AJUSTE":
-                        // Los ajustes pueden ser positivos o negativos
-                        saldoCalculado += monto;
+                    case "CAMBIO_DIVISA":
+                        // Para cambios de divisa, verificar la descripción
+                        if (mov.descripcion?.toLowerCase().includes("ingreso por cambio")) {
+                            saldoCalculado += monto;
+                        }
+                        else if (mov.descripcion?.toLowerCase().includes("egreso por cambio")) {
+                            saldoCalculado -= monto;
+                        }
                         break;
                 }
             }
@@ -96,7 +137,7 @@ export const saldoReconciliationService = {
                     diferencia,
                     movimientosCount,
                 });
-                // Corregir el saldo
+                // Corregir el saldo directamente sin crear ajustes
                 await prisma.saldo.upsert({
                     where: {
                         punto_atencion_id_moneda_id: {
@@ -117,23 +158,7 @@ export const saldoReconciliationService = {
                         bancos: 0,
                     },
                 });
-                // Registrar el ajuste automático
-                if (usuarioId) {
-                    await prisma.movimientoSaldo.create({
-                        data: {
-                            punto_atencion_id: puntoAtencionId,
-                            moneda_id: monedaId,
-                            tipo_movimiento: "AJUSTE",
-                            monto: -diferencia, // Negativo porque corregimos la diferencia
-                            saldo_anterior: saldoRegistrado,
-                            saldo_nuevo: saldoCalculado,
-                            usuario_id: usuarioId,
-                            referencia_id: `AUTO-RECONCILIATION-${Date.now()}`,
-                            tipo_referencia: "TRANSFERENCIA", // Usamos el tipo existente
-                            descripcion: `Auto-reconciliación: diferencia de ${diferencia} corregida automáticamente`,
-                        },
-                    });
-                }
+                // NO crear movimientos de ajuste - solo actualizar el saldo
                 corregido = true;
                 logger.info("✅ Saldo corregido automáticamente", {
                     puntoAtencionId,

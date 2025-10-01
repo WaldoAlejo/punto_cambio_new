@@ -1,5 +1,6 @@
 import express from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
+import saldoValidation from "../middleware/saldoValidation.js";
 import prisma from "../lib/prisma.js";
 const router = express.Router();
 /** Type guard: asegura que req.user existe y es OPERADOR */
@@ -48,7 +49,7 @@ async function ensureUsdMonedaId() {
 /* ==============================
  * POST /servicios-externos/movimientos  (OPERADOR)
  * ============================== */
-router.post("/movimientos", authenticateToken, async (req, res) => {
+router.post("/movimientos", authenticateToken, saldoValidation.validarSaldoSuficiente, async (req, res) => {
     try {
         if (!isOperador(req)) {
             res.status(403).json({

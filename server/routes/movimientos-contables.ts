@@ -1,6 +1,7 @@
 import express from "express";
 import type { Request, Response } from "express";
 import { authenticateToken } from "../middleware/auth.js";
+import saldoValidation from "../middleware/saldoValidation.js";
 import prisma from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
 import {
@@ -211,6 +212,7 @@ router.post(
 router.post(
   "/procesar-cambio",
   authenticateToken,
+  saldoValidation.validarSaldoSuficiente,
   async (req: Request, res: Response) => {
     try {
       const { cambio_id, movimientos } = req.body ?? {};

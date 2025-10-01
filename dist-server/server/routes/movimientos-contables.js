@@ -1,5 +1,6 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
+import saldoValidation from "../middleware/saldoValidation.js";
 import prisma from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
 import { todayGyeDateOnly, gyeDayRangeUtcFromDateOnly, } from "../utils/timezone.js";
@@ -176,7 +177,7 @@ router.post("/validar-saldo", authenticateToken, async (req, res) => {
    - Actualiza Saldo (cantidad, billetes, monedas_fisicas)
    - Valida no dejar saldos negativos (cantidad y conteo físico en EGRESO)
 ============================================================================ */
-router.post("/procesar-cambio", authenticateToken, async (req, res) => {
+router.post("/procesar-cambio", authenticateToken, saldoValidation.validarSaldoSuficiente, async (req, res) => {
     try {
         const { cambio_id, movimientos } = req.body ?? {};
         if (!cambio_id ||
