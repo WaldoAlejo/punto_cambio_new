@@ -250,40 +250,39 @@ const TimeTracker = ({
   const handleFinalizarJornada = async () => {
     if (jornadaActual.estado !== "TRABAJANDO") return;
 
-    // Solo OPERADOR necesita cierre de caja. Otros roles pueden finalizar directo.
-    const requiereCierre = user.rol === "OPERADOR";
-
-    if (!requiereCierre) {
-      try {
-        const ahora = new Date().toISOString();
-        await guardarJornadaBackend({
-          usuario_id: user.id,
-          punto_atencion_id: selectedPoint?.id,
-          fecha_salida: ahora,
-        });
-        toast.success(`✅ Jornada finalizada a las ${formatearHora(ahora)}`);
-      } catch {
-        // Error manejado en guardarJornadaBackend
+    // Intentar finalizar la jornada - el backend decidirá si necesita cierre
+    try {
+      const ahora = new Date().toISOString();
+      await guardarJornadaBackend({
+        usuario_id: user.id,
+        punto_atencion_id: selectedPoint?.id,
+        fecha_salida: ahora,
+      });
+      toast.success(`✅ Jornada finalizada a las ${formatearHora(ahora)}`);
+    } catch (error: any) {
+      // Si el backend requiere cierre, redirigir al cierre diario
+      if (
+        error?.message?.includes("cierre de caja diario") ||
+        error?.message?.includes("cierre diario")
+      ) {
+        showConfirmation(
+          "Cierre requerido",
+          "Para finalizar su jornada debe realizar primero el cierre de caja diario.",
+          async () => {
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.set("view", "daily-close");
+              window.history.pushState({}, "", url.toString());
+              window.dispatchEvent(new Event("popstate"));
+              toast.info("Vaya a Cierre Diario para finalizar su jornada.");
+            } catch {
+              toast.info("Vaya a Cierre Diario para finalizar su jornada.");
+            }
+          }
+        );
       }
-      return;
+      // Error manejado en guardarJornadaBackend para otros casos
     }
-
-    // Operador: pedir cierre de caja
-    showConfirmation(
-      "Cierre requerido",
-      "Para finalizar su jornada debe realizar primero el cierre de caja diario.",
-      async () => {
-        try {
-          const url = new URL(window.location.href);
-          url.searchParams.set("view", "daily-close");
-          window.history.pushState({}, "", url.toString());
-          window.dispatchEvent(new Event("popstate"));
-          toast.info("Vaya a Cierre Diario para finalizar su jornada.");
-        } catch {
-          toast.info("Vaya a Cierre Diario para finalizar su jornada.");
-        }
-      }
-    );
   };
 
   const calcularTiempoTrabajado = () => {
