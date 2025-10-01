@@ -387,9 +387,17 @@ router.post(
         }
         if (fecha_salida) {
           // === AJUSTE: exentos cierran jornada sin exigir cierres ===
+          console.log(
+            `🔍 DEBUG - Usuario rol: ${
+              req.user?.rol
+            }, esExento: ${esExentoDeCaja(req.user?.rol)}`
+          );
           if (!esExentoDeCaja(req.user?.rol)) {
             // Para roles que sí manejan caja, verificar Cierre de Caja (divisas)
             const { gte } = gyeDayRangeUtcFromDate(new Date());
+            console.log(
+              `🔍 DEBUG - Buscando cierre para punto: ${punto_atencion_id}, fecha >= ${gte}`
+            );
             const cierreHoy = await prisma.cuadreCaja.findFirst({
               where: {
                 punto_atencion_id,
@@ -397,7 +405,9 @@ router.post(
                 estado: "CERRADO",
               },
             });
+            console.log(`🔍 DEBUG - Cierre encontrado:`, cierreHoy);
             if (!cierreHoy) {
+              console.log(`❌ DEBUG - No se encontró cierre, enviando error`);
               res.status(400).json({
                 success: false,
                 error:
