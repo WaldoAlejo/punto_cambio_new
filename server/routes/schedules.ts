@@ -392,7 +392,6 @@ router.post(
             const { gte } = gyeDayRangeUtcFromDate(new Date());
             const cierreHoy = await prisma.cuadreCaja.findFirst({
               where: {
-                usuario_id: usuario_id,
                 punto_atencion_id,
                 fecha: { gte },
                 estado: "CERRADO",
