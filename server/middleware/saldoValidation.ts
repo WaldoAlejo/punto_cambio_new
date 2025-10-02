@@ -220,21 +220,26 @@ export async function validarSaldoTransferencia(
   next: NextFunction
 ) {
   try {
-    const { punto_origen_id, moneda_id, monto } = req.body;
+    const { origen_id, moneda_id, monto, tipo_transferencia } = req.body;
 
-    if (!punto_origen_id || !moneda_id || !monto) {
+    // Para transferencias sin origen (DEPOSITO_GERENCIA, DEPOSITO_MATRIZ), no validar saldo
+    if (!origen_id) {
+      return next();
+    }
+
+    if (!moneda_id || !monto) {
       return res.status(400).json({
         error: "DATOS_INCOMPLETOS",
         message: "Faltan datos requeridos para la transferencia",
       });
     }
 
-    const saldoActual = await obtenerSaldoActual(punto_origen_id, moneda_id);
+    const saldoActual = await obtenerSaldoActual(origen_id, moneda_id);
     const montoRequerido = Number(monto);
 
     if (saldoActual < montoRequerido) {
       const punto = await prisma.puntoAtencion.findUnique({
-        where: { id: punto_origen_id },
+        where: { id: origen_id },
       });
       const moneda = await prisma.moneda.findUnique({
         where: { id: moneda_id },
