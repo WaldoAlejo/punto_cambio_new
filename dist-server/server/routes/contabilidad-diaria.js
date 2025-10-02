@@ -200,6 +200,158 @@ router.get("/:pointId/:fecha", authenticateToken, async (req, res) => {
     }
 });
 /**
+ * GET /api/contabilidad-diaria/cierre/:pointId/:fecha
+ * Verifica si existe un cierre para el día especificado
+ */
+router.get("/cierre/:pointId/:fecha", authenticateToken, async (req, res) => {
+    try {
+        const { pointId, fecha } = req.params;
+        const usuario = req.user;
+        if (!pointId) {
+            return res.status(400).json({ success: false, error: "Falta pointId" });
+        }
+        // Seguridad: operadores solo pueden consultar su propio punto
+        const esAdmin = (usuario?.rol === "ADMIN" || usuario?.rol === "SUPER_USUARIO") ?? false;
+        if (!esAdmin &&
+            usuario?.punto_atencion_id &&
+            usuario.punto_atencion_id !== pointId) {
+            return res.status(403).json({
+                success: false,
+                error: "No autorizado para consultar otro punto de atención",
+            });
+        }
+        // Valida YYYY-MM-DD (lanza si no cumple)
+        gyeParseDateOnly(fecha);
+        // Prisma usa Date para @db.Date (sin hora).
+        // Usamos medianoche UTC de esa fecha
+        const fechaDate = new Date(`${fecha}T00:00:00.000Z`);
+        // Buscar cierre por clave compuesta
+        const cierre = await prisma.cierreDiario.findUnique({
+            where: {
+                fecha_punto_atencion_id: {
+                    fecha: fechaDate,
+                    punto_atencion_id: pointId,
+                },
+            },
+            include: {
+                usuario: {
+                    select: { nombre: true, username: true },
+                },
+            },
+        });
+        return res.json({
+            success: true,
+            cierre: cierre || null,
+        });
+    }
+    catch (error) {
+        logger.error("Error en GET /contabilidad-diaria/cierre/:pointId/:fecha", {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+        });
+        return res.status(500).json({
+            success: false,
+            error: "Error interno del servidor",
+        });
+    }
+});
+/**
+ * GET /api/contabilidad-diaria/validar-cierres/:pointId/:fecha
+ * Valida qué cierres son necesarios antes de permitir el cierre diario
+ */
+router.get("/validar-cierres/:pointId/:fecha", authenticateToken, async (req, res) => {
+    try {
+        const { pointId, fecha } = req.params;
+        const usuario = req.user;
+        if (!pointId) {
+            return res.status(400).json({ success: false, error: "Falta pointId" });
+        }
+        // Seguridad: operadores solo pueden consultar su propio punto
+        const esAdmin = (usuario?.rol === "ADMIN" || usuario?.rol === "SUPER_USUARIO") ?? false;
+        if (!esAdmin &&
+            usuario?.punto_atencion_id &&
+            usuario.punto_atencion_id !== pointId) {
+            return res.status(403).json({
+                success: false,
+                error: "No autorizado para consultar otro punto de atención",
+            });
+        }
+        // Valida YYYY-MM-DD (lanza si no cumple)
+        gyeParseDateOnly(fecha);
+        // Rango UTC que cubre el día en GYE
+        const { gte, lt } = gyeDayRangeUtcFromDateOnly(fecha);
+        const fechaDate = new Date(`${fecha}T00:00:00.000Z`);
+        // 1. Verificar si hay cambios de divisas del día
+        const cambiosDivisas = await prisma.cambioDivisa.count({
+            where: {
+                punto_atencion_id: pointId,
+                fecha: { gte, lt },
+            },
+        });
+        // 2. Verificar si hay movimientos de servicios externos del día
+        const serviciosExternos = await prisma.servicioExternoMovimiento.count({
+            where: {
+                punto_atencion_id: pointId,
+                fecha: { gte, lt },
+            },
+        });
+        // 3. Verificar estado de cierres existentes
+        const cierreDiario = await prisma.cierreDiario.findUnique({
+            where: {
+                fecha_punto_atencion_id: {
+                    fecha: fechaDate,
+                    punto_atencion_id: pointId,
+                },
+            },
+        });
+        const cierreServiciosExternos = await prisma.servicioExternoCierreDiario.findUnique({
+            where: {
+                fecha_punto_atencion_id: {
+                    fecha: fechaDate,
+                    punto_atencion_id: pointId,
+                },
+            },
+        });
+        // Determinar qué cierres son requeridos
+        const cierresRequeridos = {
+            servicios_externos: serviciosExternos > 0,
+            cambios_divisas: cambiosDivisas > 0,
+            cierre_diario: true, // Siempre requerido
+        };
+        // Estado actual de los cierres
+        const estadoCierres = {
+            servicios_externos: cierreServiciosExternos?.estado === "CERRADO",
+            cambios_divisas: true, // Los cambios de divisas no tienen cierre separado, se incluyen en el cierre diario
+            cierre_diario: cierreDiario?.estado === "CERRADO",
+        };
+        // Verificar si todos los cierres requeridos están completos
+        const cierresCompletos = (!cierresRequeridos.servicios_externos ||
+            estadoCierres.servicios_externos) &&
+            (!cierresRequeridos.cambios_divisas || estadoCierres.cambios_divisas) &&
+            estadoCierres.cierre_diario;
+        return res.json({
+            success: true,
+            cierres_requeridos: cierresRequeridos,
+            estado_cierres: estadoCierres,
+            cierres_completos: cierresCompletos,
+            conteos: {
+                cambios_divisas: cambiosDivisas,
+                servicios_externos: serviciosExternos,
+            },
+        });
+    }
+    catch (error) {
+        logger.error("Error en GET /contabilidad-diaria/validar-cierres/:pointId/:fecha", {
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+        });
+        return res.status(500).json({
+            success: false,
+            error: "Error interno del servidor",
+        });
+    }
+});
+/**
  * POST /api/contabilidad-diaria/:pointId/:fecha/cerrar
  * Marca el cierre del día como CERRADO de forma idempotente usando la clave compuesta
  * @@unique([fecha, punto_atencion_id]) en CierreDiario.
@@ -250,10 +402,43 @@ router.post("/:pointId/:fecha/cerrar", authenticateToken, async (req, res) => {
                 cierre: existing,
             });
         }
-        // Crear o actualizar a CERRADO
-        const cierre = await prisma.$transaction(async (tx) => {
+        // Antes de cerrar, validar que todos los cierres requeridos estén completos
+        const { gte, lt } = gyeDayRangeUtcFromDateOnly(fecha);
+        // Verificar si hay servicios externos que requieren cierre
+        const serviciosExternos = await prisma.servicioExternoMovimiento.count({
+            where: {
+                punto_atencion_id: pointId,
+                fecha: { gte, lt },
+            },
+        });
+        if (serviciosExternos > 0) {
+            // Verificar si el cierre de servicios externos está completo
+            const cierreServiciosExternos = await prisma.servicioExternoCierreDiario.findUnique({
+                where: {
+                    fecha_punto_atencion_id: {
+                        fecha: fechaDate,
+                        punto_atencion_id: pointId,
+                    },
+                },
+            });
+            if (!cierreServiciosExternos ||
+                cierreServiciosExternos.estado !== "CERRADO") {
+                return res.status(400).json({
+                    success: false,
+                    error: "Debe completar el cierre de servicios externos antes del cierre diario",
+                    codigo: "SERVICIOS_EXTERNOS_PENDIENTE",
+                    detalles: {
+                        servicios_externos_movimientos: serviciosExternos,
+                        cierre_servicios_externos_estado: cierreServiciosExternos?.estado || "NO_EXISTE",
+                    },
+                });
+            }
+        }
+        // Crear o actualizar a CERRADO y verificar si se puede finalizar jornada
+        const result = await prisma.$transaction(async (tx) => {
+            let cierre;
             if (!existing) {
-                return tx.cierreDiario.create({
+                cierre = await tx.cierreDiario.create({
                     data: {
                         punto_atencion_id: pointId,
                         fecha: fechaDate,
@@ -266,25 +451,61 @@ router.post("/:pointId/:fecha/cerrar", authenticateToken, async (req, res) => {
                     },
                 });
             }
-            // existe pero no está cerrado -> actualizar
-            return tx.cierreDiario.update({
-                where: {
-                    fecha_punto_atencion_id: {
-                        fecha: fechaDate,
-                        punto_atencion_id: pointId,
+            else {
+                // existe pero no está cerrado -> actualizar
+                cierre = await tx.cierreDiario.update({
+                    where: {
+                        fecha_punto_atencion_id: {
+                            fecha: fechaDate,
+                            punto_atencion_id: pointId,
+                        },
                     },
+                    data: {
+                        estado: "CERRADO",
+                        fecha_cierre: new Date(),
+                        cerrado_por: usuario.id,
+                        observaciones: observaciones ?? existing.observaciones,
+                        diferencias_reportadas: diferencias_reportadas ?? existing.diferencias_reportadas,
+                        updated_at: new Date(),
+                    },
+                });
+            }
+            // Verificar si hay jornada activa para finalizar automáticamente
+            const jornadaActiva = await tx.jornada.findFirst({
+                where: {
+                    usuario_id: usuario.id,
+                    punto_atencion_id: pointId,
+                    fecha_salida: null, // Jornada activa
                 },
-                data: {
-                    estado: "CERRADO",
-                    fecha_cierre: new Date(),
-                    cerrado_por: usuario.id,
-                    observaciones: observaciones ?? existing.observaciones,
-                    diferencias_reportadas: diferencias_reportadas ?? existing.diferencias_reportadas,
-                    updated_at: new Date(),
-                },
+                orderBy: { fecha_inicio: "desc" },
             });
+            let jornadaFinalizada = null;
+            if (jornadaActiva) {
+                // Finalizar la jornada automáticamente
+                jornadaFinalizada = await tx.jornada.update({
+                    where: { id: jornadaActiva.id },
+                    data: {
+                        fecha_salida: new Date(),
+                        observaciones: "Jornada finalizada automáticamente tras completar cierre diario",
+                    },
+                });
+                logger.info("🎯 JORNADA_FINALIZADA_AUTOMATICAMENTE", {
+                    usuario: usuario.id,
+                    punto: pointId,
+                    jornada_id: jornadaActiva.id,
+                    cierre_id: cierre.id,
+                });
+            }
+            return { cierre, jornadaFinalizada };
         });
-        return res.status(existing ? 200 : 201).json({ success: true, cierre });
+        return res.status(existing ? 200 : 201).json({
+            success: true,
+            cierre: result.cierre,
+            jornada_finalizada: !!result.jornadaFinalizada,
+            mensaje: result.jornadaFinalizada
+                ? "Cierre diario completado y jornada finalizada automáticamente"
+                : "Cierre diario completado",
+        });
     }
     catch (error) {
         logger.error("Error en POST /contabilidad-diaria/:pointId/:fecha/cerrar", {

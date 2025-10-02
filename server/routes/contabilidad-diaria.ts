@@ -589,7 +589,7 @@ router.post(
           where: {
             usuario_id: usuario.id,
             punto_atencion_id: pointId,
-            fecha_fin: null, // Jornada activa
+            fecha_salida: null, // Jornada activa
           },
           orderBy: { fecha_inicio: "desc" },
         });
@@ -600,8 +600,8 @@ router.post(
           jornadaFinalizada = await tx.jornada.update({
             where: { id: jornadaActiva.id },
             data: {
-              fecha_fin: new Date(),
-              observaciones_fin:
+              fecha_salida: new Date(),
+              observaciones:
                 "Jornada finalizada automáticamente tras completar cierre diario",
             },
           });
