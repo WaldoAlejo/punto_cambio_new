@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import axiosInstance from "@/services/axiosInstance";
 
 interface SaldoDivisa {
   moneda_codigo: string;
@@ -82,28 +83,21 @@ const CierresDiariosResumen = () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        "/api/cierres-diarios/resumen-dia-anterior",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      const { data: result } = await axiosInstance.get<ResumenResponse>(
+        "/cierres-diarios/resumen-dia-anterior"
       );
 
-      if (!response.ok) {
-        throw new Error("Error al cargar el resumen de cierres");
-      }
-
-      const result: ResumenResponse = await response.json();
       if (result.success && result.data) {
         setData(result.data);
       } else {
         throw new Error(result.error || "Error desconocido");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error desconocido");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Error al cargar el resumen de cierres"
+      );
     } finally {
       setLoading(false);
     }
