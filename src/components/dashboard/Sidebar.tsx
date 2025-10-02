@@ -180,6 +180,11 @@ const Sidebar = ({
       label: "Aprobación de Permisos",
       color: "text-pink-700",
     },
+    {
+      id: "cierres-diarios",
+      label: "Resumen Cierres Diarios",
+      color: "text-orange-600",
+    },
     // Separador visual
     {
       id: "separator-3",

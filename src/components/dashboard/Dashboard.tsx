@@ -88,6 +88,9 @@ const ServiciosExternosPage = React.lazy(
 const ServiciosExternosAdmin = React.lazy(
   () => import("../admin/ServiciosExternosAdmin")
 );
+const CierresDiariosResumen = React.lazy(
+  () => import("../admin/CierresDiariosResumen")
+);
 
 /** Utils */
 const STORAGE_KEY_VIEW = "pc_active_view";
@@ -118,6 +121,7 @@ const VALID_VIEWS = new Set<string>([
   "contabilidad-general",
   "servicios-externos",
   "servicios-externos-admin",
+  "cierres-diarios",
 ]);
 
 function getInitialView(
@@ -391,6 +395,11 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isAdmin)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
         return <ServiciosExternosAdmin />;
+
+      case "cierres-diarios":
+        if (!isAdmin)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <CierresDiariosResumen />;
 
       default:
         if (isOperador) {

@@ -60,6 +60,7 @@ import serviciosExternosRoutes from "./routes/servicios-externos.js";
 import guardarCierreRoutes from "./routes/guardar-cierre.js";
 import balanceCompletoRoutes from "./routes/balance-completo.js";
 import saldoReconciliationRoutes from "./routes/saldo-reconciliation.js";
+import cierresDiariosRoutes from "./routes/cierres-diarios.js";
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
@@ -268,6 +269,7 @@ app.use("/api/permissions", permissionRoutes);
 app.use("/api/guardar-cierre", guardarCierreRoutes);
 app.use("/api/balance-completo", balanceCompletoRoutes);
 app.use("/api/saldo-reconciliation", saldoReconciliationRoutes);
+app.use("/api/cierres-diarios", cierresDiariosRoutes);
 
 // ------- Frontend estático (serve SPA build) -------
 try {
