@@ -14,6 +14,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, CuadreCaja } from "../../types";
 import ExternalServicesClose from "./ExternalServicesClose";
+import { contabilidadDiariaService } from "../../services/contabilidadDiariaService";
 
 function getCantidad(val: any): number {
   if (typeof val === "number") return val;
@@ -61,6 +62,23 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     null
   );
   const [loading, setLoading] = useState(false);
+  const [validacionCierres, setValidacionCierres] = useState<{
+    cierres_requeridos?: {
+      servicios_externos: boolean;
+      cambios_divisas: boolean;
+      cierre_diario: boolean;
+    };
+    estado_cierres?: {
+      servicios_externos: boolean;
+      cambios_divisas: boolean;
+      cierre_diario: boolean;
+    };
+    cierres_completos?: boolean;
+    conteos?: {
+      cambios_divisas: number;
+      servicios_externos: number;
+    };
+  } | null>(null);
 
   // Verificar jornada activa
   useEffect(() => {
@@ -265,6 +283,35 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     return difference <= tolerance;
   };
 
+  // Validar cierres requeridos
+  const validarCierresRequeridos = async () => {
+    if (!selectedPoint) return;
+
+    try {
+      const fechaHoy = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+      const validacion =
+        await contabilidadDiariaService.validarCierresRequeridos(
+          selectedPoint.id,
+          fechaHoy
+        );
+
+      if (validacion.success) {
+        setValidacionCierres(validacion);
+      } else {
+        console.error("Error validando cierres:", validacion.error);
+      }
+    } catch (error) {
+      console.error("Error validando cierres:", error);
+    }
+  };
+
+  // Cargar validación de cierres cuando cambie el punto seleccionado
+  useEffect(() => {
+    if (selectedPoint) {
+      validarCierresRequeridos();
+    }
+  }, [selectedPoint]);
+
   const performDailyClose = async () => {
     console.log("🔄 performDailyClose START");
     if (!selectedPoint || !cuadreData) {
@@ -277,118 +324,156 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       return;
     }
 
-    // Si no hay detalles de divisas, permitir cierre solo con servicios externos
-    if (cuadreData.detalles.length === 0) {
-      console.log(
-        "📝 Cierre sin movimientos de divisas, solo servicios externos"
-      );
-    } else {
-      // Validar que todos los saldos estén completos solo si hay detalles
-      const incompleteBalances = cuadreData.detalles.some(
-        (detalle) =>
-          !userAdjustments[detalle.moneda_id]?.bills ||
-          !userAdjustments[detalle.moneda_id]?.coins
-      );
+    try {
+      // 1. Primero validar qué cierres son requeridos
+      const fechaHoy = new Date().toISOString().split("T")[0];
+      const validacion =
+        await contabilidadDiariaService.validarCierresRequeridos(
+          selectedPoint.id,
+          fechaHoy
+        );
 
-      if (incompleteBalances) {
+      if (!validacion.success) {
+        toast({
+          title: "Error de validación",
+          description:
+            validacion.error || "No se pudo validar los cierres requeridos",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 2. Verificar si faltan cierres requeridos
+      const { cierres_requeridos, estado_cierres } = validacion;
+
+      if (
+        cierres_requeridos.servicios_externos &&
+        !estado_cierres.servicios_externos
+      ) {
+        toast({
+          title: "Cierre de servicios externos pendiente",
+          description: `Debe completar el cierre de servicios externos antes del cierre diario. Se encontraron ${
+            validacion.conteos?.servicios_externos || 0
+          } movimientos de servicios externos.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 3. Validaciones de saldos solo si hay movimientos de cambios de divisas
+      if (
+        cierres_requeridos.cambios_divisas &&
+        cuadreData.detalles.length === 0
+      ) {
         toast({
           title: "Error",
-          description: "Debe completar todos los saldos antes del cierre",
+          description: `Se encontraron ${
+            validacion.conteos?.cambios_divisas || 0
+          } cambios de divisas, pero no hay detalles de cuadre. Recargue la página.`,
           variant: "destructive",
         });
         return;
       }
-    }
 
-    // Validación estricta: todas las divisas deben cuadrar con tolerancia por divisa (USD ±1.00, otras ±0.01)
-    // Solo validar si hay detalles de divisas
-    if (cuadreData.detalles.length > 0) {
-      const invalidBalances = cuadreData.detalles.filter((detalle) => {
-        const userTotal = calculateUserTotal(detalle.moneda_id);
-        return !validateBalance(detalle, userTotal);
-      });
+      // Si hay detalles de divisas, validar que estén completos
+      if (cuadreData.detalles.length > 0) {
+        // Validar que todos los saldos estén completos
+        const incompleteBalances = cuadreData.detalles.some(
+          (detalle) =>
+            !userAdjustments[detalle.moneda_id]?.bills ||
+            !userAdjustments[detalle.moneda_id]?.coins
+        );
 
-      if (invalidBalances.length > 0) {
-        const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
-          .map((d) => {
-            const userTotal = calculateUserTotal(d.moneda_id);
-            const tolerance = getTolerance(d).toFixed(2);
-            return `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(
-              2
-            )}, Ingresado ${userTotal.toFixed(2)} (tolerancia ±${tolerance})`;
-          })
-          .join(
-            "\n"
-          )}\n\nRegistre el servicio externo (USD) o el cambio de divisa faltante y vuelva a intentar.`;
-        toast({ title: "No cuadra", description: msg, variant: "destructive" });
-        return;
-      }
-    }
+        if (incompleteBalances) {
+          toast({
+            title: "Error",
+            description: "Debe completar todos los saldos antes del cierre",
+            variant: "destructive",
+          });
+          return;
+        }
 
-    // Preparar detalles del cuadre con los datos del usuario
-    const detalles = cuadreData.detalles.map((detalle) => ({
-      moneda_id: detalle.moneda_id,
-      conteo_fisico: calculateUserTotal(detalle.moneda_id),
-      billetes: parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0"),
-      monedas: parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0"),
-      saldo_apertura: detalle.saldo_apertura,
-      saldo_cierre: detalle.saldo_cierre,
-      ingresos_periodo: detalle.ingresos_periodo || 0,
-      egresos_periodo: detalle.egresos_periodo || 0,
-      movimientos_periodo: detalle.movimientos_periodo || 0,
-      observaciones_detalle: userAdjustments[detalle.moneda_id]?.note || "",
-    }));
-
-    console.log("📊 Detalles prepared:", detalles);
-
-    try {
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        toast({
-          title: "Sesión Expirada",
-          description:
-            "Su sesión ha expirado. Por favor, inicie sesión nuevamente.",
-          variant: "destructive",
+        // Validación estricta: todas las divisas deben cuadrar con tolerancia
+        const invalidBalances = cuadreData.detalles.filter((detalle) => {
+          const userTotal = calculateUserTotal(detalle.moneda_id);
+          return !validateBalance(detalle, userTotal);
         });
-        setTimeout(() => (window.location.href = "/login"), 2000);
-        return;
+
+        if (invalidBalances.length > 0) {
+          const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
+            .map((d) => {
+              const userTotal = calculateUserTotal(d.moneda_id);
+              const tolerance = getTolerance(d).toFixed(2);
+              return `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(
+                2
+              )}, Ingresado ${userTotal.toFixed(2)} (tolerancia ±${tolerance})`;
+            })
+            .join(
+              "\n"
+            )}\n\nRegistre el servicio externo (USD) o el cambio de divisa faltante y vuelva a intentar.`;
+          toast({
+            title: "No cuadra",
+            description: msg,
+            variant: "destructive",
+          });
+          return;
+        }
       }
 
-      const requestBody = {
-        detalles,
-        observaciones: cuadreData.observaciones || "",
-      };
+      // 4. Preparar detalles del cuadre con los datos del usuario
+      const detalles = cuadreData.detalles.map((detalle) => ({
+        moneda_id: detalle.moneda_id,
+        conteo_fisico: calculateUserTotal(detalle.moneda_id),
+        billetes: parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0"),
+        monedas: parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0"),
+        saldo_apertura: detalle.saldo_apertura,
+        saldo_cierre: detalle.saldo_cierre,
+        ingresos_periodo: detalle.ingresos_periodo || 0,
+        egresos_periodo: detalle.egresos_periodo || 0,
+        movimientos_periodo: detalle.movimientos_periodo || 0,
+        observaciones_detalle: userAdjustments[detalle.moneda_id]?.note || "",
+      }));
 
-      const res = await fetch(
-        `${
-          import.meta.env.VITE_API_URL || "http://35.238.95.118/api"
-        }/guardar-cierre`,
+      console.log("📊 Detalles prepared:", detalles);
+
+      // 5. Realizar el cierre diario usando el nuevo servicio
+      const resultado = await contabilidadDiariaService.realizarCierreDiario(
+        selectedPoint.id,
+        fechaHoy,
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ ...requestBody, tipo_cierre: "CERRADO" }),
+          observaciones: cuadreData.observaciones || "",
+          diferencias_reportadas: null,
         }
       );
 
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || "Error inesperado");
+      if (!resultado.success) {
+        throw new Error(resultado.error || "Error al realizar el cierre");
       }
 
+      // 6. Actualizar estado y mostrar mensaje de éxito
       setTodayClose({
-        // Minimal representation for post-success UX
-        id: data.cuadre_id,
+        id: resultado.cierre?.id || "",
         estado: "CERRADO",
-        observaciones: requestBody.observaciones,
+        observaciones: cuadreData.observaciones || "",
       } as unknown as CuadreCaja);
+
+      const mensaje = resultado.jornada_finalizada
+        ? "El cierre diario se ha completado correctamente y su jornada fue finalizada automáticamente."
+        : "El cierre diario se ha completado correctamente.";
+
       toast({
         title: "Cierre realizado",
-        description:
-          "El cierre diario se ha guardado correctamente y la jornada fue finalizada.",
+        description: mensaje,
+      });
+
+      // Actualizar validación de cierres
+      setValidacionCierres({
+        ...validacion,
+        estado_cierres: {
+          ...validacion.estado_cierres,
+          cierre_diario: true,
+        },
+        cierres_completos: true,
       });
     } catch (error) {
       console.error("💥 Error in performDailyClose:", error);
@@ -799,6 +884,117 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                     </Card>
                   );
                 })}
+
+                {/* Sección de validación de cierres */}
+                {validacionCierres && (
+                  <Card className="border-blue-200 bg-blue-50">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg text-blue-800">
+                        📋 Validación de Cierres Requeridos
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid gap-2">
+                        {/* Servicios Externos */}
+                        {validacionCierres.cierres_requeridos
+                          .servicios_externos && (
+                          <div className="flex items-center justify-between p-2 bg-white rounded border">
+                            <span className="text-sm font-medium">
+                              Cierre de Servicios Externos
+                              <span className="text-xs text-gray-500 ml-1">
+                                (
+                                {validacionCierres.conteos
+                                  ?.servicios_externos || 0}{" "}
+                                movimientos)
+                              </span>
+                            </span>
+                            <Badge
+                              variant={
+                                validacionCierres.estado_cierres
+                                  .servicios_externos
+                                  ? "default"
+                                  : "destructive"
+                              }
+                              className="text-xs"
+                            >
+                              {validacionCierres.estado_cierres
+                                .servicios_externos
+                                ? "✅ Completado"
+                                : "⏳ Pendiente"}
+                            </Badge>
+                          </div>
+                        )}
+
+                        {/* Cambios de Divisas */}
+                        {validacionCierres.cierres_requeridos
+                          .cambios_divisas && (
+                          <div className="flex items-center justify-between p-2 bg-white rounded border">
+                            <span className="text-sm font-medium">
+                              Cambios de Divisas
+                              <span className="text-xs text-gray-500 ml-1">
+                                (
+                                {validacionCierres.conteos?.cambios_divisas ||
+                                  0}{" "}
+                                movimientos)
+                              </span>
+                            </span>
+                            <Badge
+                              variant={
+                                validacionCierres.estado_cierres.cambios_divisas
+                                  ? "default"
+                                  : "destructive"
+                              }
+                              className="text-xs"
+                            >
+                              {validacionCierres.estado_cierres.cambios_divisas
+                                ? "✅ Incluido en cierre diario"
+                                : "⏳ Pendiente"}
+                            </Badge>
+                          </div>
+                        )}
+
+                        {/* Cierre Diario */}
+                        <div className="flex items-center justify-between p-2 bg-white rounded border">
+                          <span className="text-sm font-medium">
+                            Cierre Diario
+                          </span>
+                          <Badge
+                            variant={
+                              validacionCierres.estado_cierres.cierre_diario
+                                ? "default"
+                                : "secondary"
+                            }
+                            className="text-xs"
+                          >
+                            {validacionCierres.estado_cierres.cierre_diario
+                              ? "✅ Completado"
+                              : "📝 Por realizar"}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* Estado general */}
+                      <div className="pt-2 border-t">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-blue-800">
+                            Estado General:
+                          </span>
+                          <Badge
+                            variant={
+                              validacionCierres.cierres_completos
+                                ? "default"
+                                : "secondary"
+                            }
+                          >
+                            {validacionCierres.cierres_completos
+                              ? "✅ Todos los cierres completos"
+                              : "⏳ Cierres pendientes"}
+                          </Badge>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <Button
                   onClick={performDailyClose}
