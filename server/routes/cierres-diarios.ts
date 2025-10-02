@@ -3,7 +3,11 @@ import express from "express";
 import prisma from "../lib/prisma.js";
 import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
-import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import {
+  gyeDayRangeUtcFromDate,
+  todayGyeDateOnly,
+  gyeParseDateOnly,
+} from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -36,11 +40,29 @@ router.get("/resumen-dia-anterior", authenticateToken, async (req, res) => {
     }
 
     // Calcular el rango del día anterior en zona GYE
-    const hoy = new Date();
-    const ayer = new Date(hoy);
-    ayer.setDate(ayer.getDate() - 1);
+    // Obtener la fecha actual de Ecuador (no UTC del servidor)
+    const hoyGyeStr = todayGyeDateOnly(); // "YYYY-MM-DD" en hora de Ecuador
+    const { y, m, d } = gyeParseDateOnly(hoyGyeStr);
 
-    const { gte: ayerGte, lt: ayerLt } = gyeDayRangeUtcFromDate(ayer);
+    // Calcular ayer restando 1 día
+    const ayerDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+    ayerDate.setUTCDate(ayerDate.getUTCDate() - 1);
+
+    const ayerY = ayerDate.getUTCFullYear();
+    const ayerM = ayerDate.getUTCMonth() + 1;
+    const ayerD = ayerDate.getUTCDate();
+    const ayerStr = `${ayerY}-${ayerM.toString().padStart(2, "0")}-${ayerD
+      .toString()
+      .padStart(2, "0")}`;
+
+    // Log para debug de fechas
+    logger.info("Calculando resumen de cierres", {
+      hoy_ecuador: hoyGyeStr,
+      ayer_ecuador: ayerStr,
+      servidor_utc: new Date().toISOString(),
+    });
+
+    const { gte: ayerGte, lt: ayerLt } = gyeDayRangeUtcFromDate(ayerDate);
 
     // Obtener todos los puntos activos
     const puntosActivos = await prisma.puntoAtencion.findMany({
@@ -165,7 +187,7 @@ router.get("/resumen-dia-anterior", authenticateToken, async (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        fecha_consultada: ayer.toISOString().split("T")[0],
+        fecha_consultada: ayerStr,
         estadisticas: {
           total_puntos: totalPuntos,
           puntos_con_cierre: puntosConCierreCount,
