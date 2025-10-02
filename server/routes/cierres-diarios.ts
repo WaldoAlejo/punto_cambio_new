@@ -16,11 +16,19 @@ router.get("/resumen-dia-anterior", authenticateToken, async (req, res) => {
   try {
     const usuario = req.user as { id: string; rol: string } | undefined;
 
+    // Log para debug
+    logger.info("Acceso a resumen-dia-anterior", {
+      usuario: usuario?.id,
+      rol: usuario?.rol,
+    });
+
     // Verificar permisos
-    if (
-      !usuario ||
-      (usuario.rol !== "ADMIN" && usuario.rol !== "SUPER_USUARIO")
-    ) {
+    const isAdmin = ["ADMIN", "SUPER_USUARIO"].includes(usuario?.rol || "");
+    if (!usuario || !isAdmin) {
+      logger.warn("Acceso denegado a resumen-dia-anterior", {
+        usuario: usuario?.id,
+        rol: usuario?.rol,
+      });
       return res.status(403).json({
         success: false,
         error: "No tiene permisos para acceder a esta información",
@@ -192,11 +200,20 @@ router.get("/resumen-por-fecha", authenticateToken, async (req, res) => {
   try {
     const usuario = req.user as { id: string; rol: string } | undefined;
 
+    // Log para debug
+    logger.info("Acceso a resumen-por-fecha", {
+      usuario: usuario?.id,
+      rol: usuario?.rol,
+      fecha: req.query.fecha,
+    });
+
     // Verificar permisos
-    if (
-      !usuario ||
-      (usuario.rol !== "ADMIN" && usuario.rol !== "SUPER_USUARIO")
-    ) {
+    const isAdmin = ["ADMIN", "SUPER_USUARIO"].includes(usuario?.rol || "");
+    if (!usuario || !isAdmin) {
+      logger.warn("Acceso denegado a resumen-por-fecha", {
+        usuario: usuario?.id,
+        rol: usuario?.rol,
+      });
       return res.status(403).json({
         success: false,
         error: "No tiene permisos para acceder a esta información",
