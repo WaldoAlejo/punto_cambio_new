@@ -147,20 +147,35 @@ router.get("/resumen-dia-anterior", authenticateToken, async (req, res) => {
         };
       }
 
-      // Punto con cierre
-      const saldosPorDivisa = cierre.detalles.map((detalle) => ({
-        moneda_id: detalle.moneda.id,
-        moneda_codigo: detalle.moneda.codigo,
-        moneda_nombre: detalle.moneda.nombre,
-        moneda_simbolo: detalle.moneda.simbolo,
-        saldo_apertura: Number(detalle.saldo_apertura),
-        saldo_cierre: Number(detalle.saldo_cierre),
-        conteo_fisico: Number(detalle.conteo_fisico),
-        diferencia: Number(detalle.diferencia),
-        billetes: detalle.billetes,
-        monedas_fisicas: detalle.monedas_fisicas,
-        movimientos_periodo: detalle.movimientos_periodo,
-      }));
+      // Punto con cierre - Filtrar solo divisas con movimientos
+      const saldosPorDivisa = cierre.detalles
+        .filter((detalle) => {
+          // Incluir solo si hay algún saldo o movimiento
+          const saldoApertura = Number(detalle.saldo_apertura);
+          const saldoCierre = Number(detalle.saldo_cierre);
+          const conteoFisico = Number(detalle.conteo_fisico);
+          const movimientos = detalle.movimientos_periodo || 0;
+
+          return (
+            saldoApertura !== 0 ||
+            saldoCierre !== 0 ||
+            conteoFisico !== 0 ||
+            movimientos > 0
+          );
+        })
+        .map((detalle) => ({
+          moneda_id: detalle.moneda.id,
+          moneda_codigo: detalle.moneda.codigo,
+          moneda_nombre: detalle.moneda.nombre,
+          moneda_simbolo: detalle.moneda.simbolo,
+          saldo_apertura: Number(detalle.saldo_apertura),
+          saldo_cierre: Number(detalle.saldo_cierre),
+          conteo_fisico: Number(detalle.conteo_fisico),
+          diferencia: Number(detalle.diferencia),
+          billetes: detalle.billetes,
+          monedas_fisicas: detalle.monedas_fisicas,
+          movimientos_periodo: detalle.movimientos_periodo,
+        }));
 
       return {
         punto_id: punto.id,
@@ -345,19 +360,35 @@ router.get("/resumen-por-fecha", authenticateToken, async (req, res) => {
         };
       }
 
-      const saldosPorDivisa = cierre.detalles.map((detalle) => ({
-        moneda_id: detalle.moneda.id,
-        moneda_codigo: detalle.moneda.codigo,
-        moneda_nombre: detalle.moneda.nombre,
-        moneda_simbolo: detalle.moneda.simbolo,
-        saldo_apertura: Number(detalle.saldo_apertura),
-        saldo_cierre: Number(detalle.saldo_cierre),
-        conteo_fisico: Number(detalle.conteo_fisico),
-        diferencia: Number(detalle.diferencia),
-        billetes: detalle.billetes,
-        monedas_fisicas: detalle.monedas_fisicas,
-        movimientos_periodo: detalle.movimientos_periodo,
-      }));
+      // Filtrar solo divisas con movimientos
+      const saldosPorDivisa = cierre.detalles
+        .filter((detalle) => {
+          // Incluir solo si hay algún saldo o movimiento
+          const saldoApertura = Number(detalle.saldo_apertura);
+          const saldoCierre = Number(detalle.saldo_cierre);
+          const conteoFisico = Number(detalle.conteo_fisico);
+          const movimientos = detalle.movimientos_periodo || 0;
+
+          return (
+            saldoApertura !== 0 ||
+            saldoCierre !== 0 ||
+            conteoFisico !== 0 ||
+            movimientos > 0
+          );
+        })
+        .map((detalle) => ({
+          moneda_id: detalle.moneda.id,
+          moneda_codigo: detalle.moneda.codigo,
+          moneda_nombre: detalle.moneda.nombre,
+          moneda_simbolo: detalle.moneda.simbolo,
+          saldo_apertura: Number(detalle.saldo_apertura),
+          saldo_cierre: Number(detalle.saldo_cierre),
+          conteo_fisico: Number(detalle.conteo_fisico),
+          diferencia: Number(detalle.diferencia),
+          billetes: detalle.billetes,
+          monedas_fisicas: detalle.monedas_fisicas,
+          movimientos_periodo: detalle.movimientos_periodo,
+        }));
 
       return {
         punto_id: punto.id,
