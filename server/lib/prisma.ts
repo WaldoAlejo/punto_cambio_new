@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 
 declare global {
   // Evitar múltiples instancias en desarrollo con hot-reload
-  // Usamos var en lugar de let/const para que no se pierda entre recargas
+
   // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
