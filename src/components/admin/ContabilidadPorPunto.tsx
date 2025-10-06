@@ -93,16 +93,16 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
     const loadInitialData = async () => {
       try {
         // Cargar puntos
-        const pointsData = await pointService.getAllPoints();
-        setPoints(pointsData);
-        if (pointsData.length > 0) {
+        const { points: pointsData } = await pointService.getAllPoints();
+        setPoints(pointsData || []);
+        if (pointsData && pointsData.length > 0) {
           setSelectedPointId(pointsData[0].id);
         }
 
         // Cargar monedas
         const { currencies: currenciesData } =
           await currencyService.getAllCurrencies();
-        setCurrencies(currenciesData);
+        setCurrencies(currenciesData || []);
       } catch (error) {
         console.error("Error cargando datos iniciales:", error);
       }
@@ -145,9 +145,9 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
         `/api/movimientos-saldo?puntoId=${selectedPointId}&monedaCodigo=${selectedCurrency}&fechaInicio=${startDateTime.toISOString()}&fechaFin=${endDateTime.toISOString()}`
       );
       if (movimientosResponse.ok) {
-        const movimientosData: MovimientoSaldo[] =
-          await movimientosResponse.json();
-        setMovimientos(movimientosData);
+        const movimientosData = await movimientosResponse.json();
+        // El endpoint devuelve directamente un array
+        setMovimientos(Array.isArray(movimientosData) ? movimientosData : []);
       }
 
       // 3. Obtener saldo actual
@@ -271,11 +271,12 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
                   <SelectValue placeholder="Seleccionar punto" />
                 </SelectTrigger>
                 <SelectContent>
-                  {points.map((point) => (
-                    <SelectItem key={point.id} value={point.id}>
-                      {point.nombre}
-                    </SelectItem>
-                  ))}
+                  {Array.isArray(points) &&
+                    points.map((point) => (
+                      <SelectItem key={point.id} value={point.id}>
+                        {point.nombre}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -293,11 +294,12 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
                   <SelectValue placeholder="Seleccionar moneda" />
                 </SelectTrigger>
                 <SelectContent>
-                  {currencies.map((currency) => (
-                    <SelectItem key={currency.codigo} value={currency.codigo}>
-                      {currency.codigo} - {currency.nombre}
-                    </SelectItem>
-                  ))}
+                  {Array.isArray(currencies) &&
+                    currencies.map((currency) => (
+                      <SelectItem key={currency.codigo} value={currency.codigo}>
+                        {currency.codigo} - {currency.nombre}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -551,50 +553,51 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {movimientos.map((mov) => {
-                    const isIngreso =
-                      mov.tipo_movimiento === "INGRESO" ||
-                      mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE";
-                    return (
-                      <tr
-                        key={mov.id}
-                        className="border-b border-gray-100 hover:bg-gray-50"
-                      >
-                        <td className="py-3 px-4 text-sm text-gray-600">
-                          {new Date(mov.fecha).toLocaleString("es-EC", {
-                            year: "numeric",
-                            month: "2-digit",
-                            day: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge
-                            variant={isIngreso ? "default" : "destructive"}
-                            className={
-                              isIngreso
-                                ? "bg-green-100 text-green-800"
-                                : "bg-red-100 text-red-800"
-                            }
-                          >
-                            {mov.tipo_movimiento.replace(/_/g, " ")}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-700">
-                          {mov.descripcion || "-"}
-                        </td>
-                        <td
-                          className={`py-3 px-4 text-sm font-semibold text-right ${
-                            isIngreso ? "text-green-600" : "text-red-600"
-                          }`}
+                  {Array.isArray(movimientos) &&
+                    movimientos.map((mov) => {
+                      const isIngreso =
+                        mov.tipo_movimiento === "INGRESO" ||
+                        mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE";
+                      return (
+                        <tr
+                          key={mov.id}
+                          className="border-b border-gray-100 hover:bg-gray-50"
                         >
-                          {isIngreso ? "+" : "-"}
-                          {formatCurrency(Math.abs(mov.monto))}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          <td className="py-3 px-4 text-sm text-gray-600">
+                            {new Date(mov.fecha).toLocaleString("es-EC", {
+                              year: "numeric",
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge
+                              variant={isIngreso ? "default" : "destructive"}
+                              className={
+                                isIngreso
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-red-100 text-red-800"
+                              }
+                            >
+                              {mov.tipo_movimiento.replace(/_/g, " ")}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-700">
+                            {mov.descripcion || "-"}
+                          </td>
+                          <td
+                            className={`py-3 px-4 text-sm font-semibold text-right ${
+                              isIngreso ? "text-green-600" : "text-red-600"
+                            }`}
+                          >
+                            {isIngreso ? "+" : "-"}
+                            {formatCurrency(Math.abs(mov.monto))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
