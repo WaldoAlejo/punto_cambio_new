@@ -116,6 +116,11 @@ const Sidebar = ({
       color: "text-emerald-600",
     },
     {
+      id: "contabilidad-por-punto",
+      label: "Control por Punto",
+      color: "text-teal-600",
+    },
+    {
       id: "reports",
       label: "Reportes Generales",
       color: "text-red-600",

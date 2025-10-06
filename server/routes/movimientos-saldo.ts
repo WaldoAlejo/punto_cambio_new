@@ -4,6 +4,94 @@ import prisma from "../lib/prisma.js";
 
 const router = express.Router();
 
+// Obtener movimientos de saldo con filtros (query params)
+router.get("/", authenticateToken, async (req, res) => {
+  try {
+    const { puntoId, monedaCodigo, fechaInicio, fechaFin } = req.query;
+
+    if (!puntoId) {
+      return res.status(400).json({
+        success: false,
+        error: "puntoId es requerido",
+      });
+    }
+
+    // Construir filtros dinámicamente
+    const where: any = {
+      punto_atencion_id: String(puntoId),
+    };
+
+    // Filtro por moneda
+    if (monedaCodigo) {
+      where.moneda = {
+        codigo: String(monedaCodigo),
+      };
+    }
+
+    // Filtro por rango de fechas
+    if (fechaInicio || fechaFin) {
+      where.fecha = {};
+      if (fechaInicio) {
+        where.fecha.gte = new Date(String(fechaInicio));
+      }
+      if (fechaFin) {
+        where.fecha.lte = new Date(String(fechaFin));
+      }
+    }
+
+    const movimientos = await prisma.movimientoSaldo.findMany({
+      where,
+      orderBy: { fecha: "desc" },
+      include: {
+        moneda: {
+          select: { id: true, nombre: true, codigo: true, simbolo: true },
+        },
+        usuario: { select: { id: true, nombre: true } },
+        puntoAtencion: { select: { id: true, nombre: true } },
+      },
+    });
+
+    const payload = movimientos.map((ms) => ({
+      id: ms.id,
+      punto_atencion_id: ms.punto_atencion_id,
+      moneda_id: ms.moneda_id,
+      moneda_codigo: ms.moneda.codigo,
+      tipo_movimiento: ms.tipo_movimiento,
+      monto: parseFloat(ms.monto.toString()),
+      saldo_anterior: parseFloat(ms.saldo_anterior.toString()),
+      saldo_nuevo: parseFloat(ms.saldo_nuevo.toString()),
+      usuario_id: ms.usuario_id,
+      referencia_id: ms.referencia_id,
+      tipo_referencia: ms.tipo_referencia,
+      descripcion: ms.descripcion,
+      fecha: ms.fecha,
+      created_at: ms.created_at,
+      moneda: {
+        id: ms.moneda.id,
+        nombre: ms.moneda.nombre,
+        codigo: ms.moneda.codigo,
+        simbolo: ms.moneda.simbolo,
+      },
+      usuario: {
+        id: ms.usuario.id,
+        nombre: ms.usuario.nombre,
+      },
+      puntoAtencion: {
+        id: ms.puntoAtencion.id,
+        nombre: ms.puntoAtencion.nombre,
+      },
+    }));
+
+    res.json(payload);
+  } catch (error) {
+    console.error("Error in filtered balance movements route:", error);
+    res.status(500).json({
+      success: false,
+      error: "Error interno del servidor",
+    });
+  }
+});
+
 // Obtener movimientos de saldo por punto (Prisma)
 router.get("/:pointId", authenticateToken, async (req, res) => {
   try {
