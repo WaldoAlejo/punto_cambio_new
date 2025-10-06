@@ -127,27 +127,47 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
       const startDateTime = new Date(startDate + "T00:00:00");
       const endDateTime = new Date(endDate + "T23:59:59");
 
+      console.log("🔍 Cargando datos de contabilidad:", {
+        punto: selectedPointId,
+        moneda: selectedCurrency,
+        fechaInicio: startDateTime.toISOString(),
+        fechaFin: endDateTime.toISOString(),
+      });
+
       // 1. Obtener saldo inicial
       const saldoInicialResponse = await fetch(
         `/api/saldos-iniciales/${selectedPointId}`
       );
       if (saldoInicialResponse.ok) {
         const data = await saldoInicialResponse.json();
+        console.log("📊 Saldos iniciales recibidos:", data);
         const saldosIniciales: SaldoInicial[] = data.saldos || [];
         const saldoMoneda = saldosIniciales.find(
           (s) => s.moneda_codigo === selectedCurrency
         );
+        console.log("💰 Saldo inicial encontrado:", saldoMoneda);
         setSaldoInicial(saldoMoneda?.cantidad_inicial || 0);
+      } else {
+        console.error(
+          "❌ Error al obtener saldos iniciales:",
+          saldoInicialResponse.status
+        );
       }
 
       // 2. Obtener movimientos del período
-      const movimientosResponse = await fetch(
-        `/api/movimientos-saldo?puntoId=${selectedPointId}&monedaCodigo=${selectedCurrency}&fechaInicio=${startDateTime.toISOString()}&fechaFin=${endDateTime.toISOString()}`
-      );
+      const movimientosUrl = `/api/movimientos-saldo?puntoId=${selectedPointId}&monedaCodigo=${selectedCurrency}&fechaInicio=${startDateTime.toISOString()}&fechaFin=${endDateTime.toISOString()}`;
+      console.log("🔗 URL movimientos:", movimientosUrl);
+      const movimientosResponse = await fetch(movimientosUrl);
       if (movimientosResponse.ok) {
         const movimientosData = await movimientosResponse.json();
+        console.log("📈 Movimientos recibidos:", movimientosData);
         // El endpoint devuelve directamente un array
         setMovimientos(Array.isArray(movimientosData) ? movimientosData : []);
+      } else {
+        console.error(
+          "❌ Error al obtener movimientos:",
+          movimientosResponse.status
+        );
       }
 
       // 3. Obtener saldo actual
@@ -156,14 +176,21 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
       );
       if (saldoActualResponse.ok) {
         const data = await saldoActualResponse.json();
+        console.log("💵 Saldos actuales recibidos:", data);
         const saldosActuales: SaldoActual[] = data.saldos || [];
         const saldoMoneda = saldosActuales.find(
           (s) => s.moneda_codigo === selectedCurrency
         );
+        console.log("💸 Saldo actual encontrado:", saldoMoneda);
         setSaldoActual(saldoMoneda?.saldo || 0);
+      } else {
+        console.error(
+          "❌ Error al obtener saldos actuales:",
+          saldoActualResponse.status
+        );
       }
     } catch (error) {
-      console.error("Error cargando datos de contabilidad:", error);
+      console.error("❌ Error cargando datos de contabilidad:", error);
     } finally {
       setIsLoading(false);
     }
@@ -357,6 +384,52 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
           </div>
         </div>
       )}
+
+      {/* Alerta cuando no hay saldo inicial */}
+      {!isLoading &&
+        saldoInicial === 0 &&
+        saldoActual === 0 &&
+        movimientos.length === 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <svg
+                  className="h-5 w-5 text-yellow-600"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-yellow-800 mb-1">
+                  No hay datos disponibles
+                </h3>
+                <p className="text-sm text-yellow-700">
+                  No se encontró saldo inicial ni movimientos para{" "}
+                  <strong>{selectedPoint?.nombre}</strong> en{" "}
+                  <strong>{selectedCurrency}</strong>. Es posible que necesites:
+                </p>
+                <ul className="mt-2 text-sm text-yellow-700 list-disc list-inside space-y-1">
+                  <li>
+                    Asignar un saldo inicial para esta moneda en este punto
+                  </li>
+                  <li>
+                    Verificar que existan transacciones en el rango de fechas
+                    seleccionado
+                  </li>
+                  <li>
+                    Seleccionar una moneda diferente que tenga movimientos
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* Tarjetas de Métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
