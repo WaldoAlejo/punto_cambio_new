@@ -55,7 +55,7 @@ router.post(
   authenticateToken,
   validate(createTransferSchema),
   validarSaldoTransferencia, // 🛡️ Validar saldo suficiente antes de transferir
-  transferAutoReconciliation, // 🔄 Auto-reconciliación después de crear transferencia
+  // transferAutoReconciliation, // ❌ DESHABILITADO: Causaba doble actualización de saldos
   transferController.createTransfer
 );
 

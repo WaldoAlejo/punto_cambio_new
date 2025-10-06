@@ -77,40 +77,46 @@ async function upsertSaldoEfectivo(
     });
   }
 
-  // 🔄 AUTO-RECONCILIACIÓN: Verificar y corregir automáticamente cualquier inconsistencia
-  try {
-    const reconciliationResult =
-      await saldoReconciliationService.reconciliarSaldo(
-        pointId,
-        monedaId,
-        usuarioId
-      );
-
-    if (reconciliationResult.corregido) {
-      logger.warn(
-        "🔧 Saldo corregido automáticamente después de actualización",
-        {
-          pointId,
-          monedaId,
-          saldoAnterior: reconciliationResult.saldoAnterior,
-          saldoCalculado: reconciliationResult.saldoCalculado,
-          diferencia: reconciliationResult.diferencia,
-          usuarioId,
-        }
-      );
-    }
-  } catch (reconciliationError) {
-    logger.error("Error en auto-reconciliación de saldo efectivo", {
-      error:
-        reconciliationError instanceof Error
-          ? reconciliationError.message
-          : "Unknown error",
-      pointId,
-      monedaId,
-      usuarioId,
-    });
-    // No lanzamos el error para no interrumpir la operación principal
-  }
+  // 🔄 AUTO-RECONCILIACIÓN DESHABILITADA
+  // NOTA: La auto-reconciliación causaba doble actualización de saldos porque se ejecutaba
+  // inmediatamente después de registrar el movimiento, causando que el saldo se actualizara dos veces.
+  // La reconciliación debe ejecutarse manualmente cuando sea necesario usando el endpoint dedicado.
+  //
+  // Para reconciliar saldos manualmente, usar: POST /api/saldo-reconciliation/reconciliar
+  //
+  // try {
+  //   const reconciliationResult =
+  //     await saldoReconciliationService.reconciliarSaldo(
+  //       pointId,
+  //       monedaId,
+  //       usuarioId
+  //     );
+  //
+  //   if (reconciliationResult.corregido) {
+  //     logger.warn(
+  //       "🔧 Saldo corregido automáticamente después de actualización",
+  //       {
+  //         pointId,
+  //         monedaId,
+  //         saldoAnterior: reconciliationResult.saldoAnterior,
+  //         saldoCalculado: reconciliationResult.saldoCalculado,
+  //         diferencia: reconciliationResult.diferencia,
+  //         usuarioId,
+  //       }
+  //     );
+  //   }
+  // } catch (reconciliationError) {
+  //   logger.error("Error en auto-reconciliación de saldo efectivo", {
+  //     error:
+  //       reconciliationError instanceof Error
+  //         ? reconciliationError.message
+  //         : "Unknown error",
+  //     pointId,
+  //     monedaId,
+  //     usuarioId,
+  //   });
+  //   // No lanzamos el error para no interrumpir la operación principal
+  // }
 }
 
 async function upsertSaldoBanco(
@@ -143,41 +149,46 @@ async function upsertSaldoBanco(
     });
   }
 
-  // 🔄 AUTO-RECONCILIACIÓN: Verificar saldo después de actualización de banco
-  // Nota: Los saldos de banco no afectan el cuadre de caja, pero mantenemos consistencia
-  try {
-    const reconciliationResult =
-      await saldoReconciliationService.reconciliarSaldo(
-        pointId,
-        monedaId,
-        usuarioId
-      );
-
-    if (reconciliationResult.corregido) {
-      logger.warn(
-        "🔧 Saldo corregido automáticamente después de actualización de banco",
-        {
-          pointId,
-          monedaId,
-          saldoAnterior: reconciliationResult.saldoAnterior,
-          saldoCalculado: reconciliationResult.saldoCalculado,
-          diferencia: reconciliationResult.diferencia,
-          usuarioId,
-        }
-      );
-    }
-  } catch (reconciliationError) {
-    logger.error("Error en auto-reconciliación de saldo banco", {
-      error:
-        reconciliationError instanceof Error
-          ? reconciliationError.message
-          : "Unknown error",
-      pointId,
-      monedaId,
-      usuarioId,
-    });
-    // No lanzamos el error para no interrumpir la operación principal
-  }
+  // 🔄 AUTO-RECONCILIACIÓN DESHABILITADA
+  // NOTA: La auto-reconciliación causaba doble actualización de saldos porque se ejecutaba
+  // inmediatamente después de registrar el movimiento, causando que el saldo se actualizara dos veces.
+  // La reconciliación debe ejecutarse manualmente cuando sea necesario usando el endpoint dedicado.
+  //
+  // Para reconciliar saldos manualmente, usar: POST /api/saldo-reconciliation/reconciliar
+  //
+  // try {
+  //   const reconciliationResult =
+  //     await saldoReconciliationService.reconciliarSaldo(
+  //       pointId,
+  //       monedaId,
+  //       usuarioId
+  //     );
+  //
+  //   if (reconciliationResult.corregido) {
+  //     logger.warn(
+  //       "🔧 Saldo corregido automáticamente después de actualización de banco",
+  //       {
+  //         pointId,
+  //         monedaId,
+  //         saldoAnterior: reconciliationResult.saldoAnterior,
+  //         saldoCalculado: reconciliationResult.saldoCalculado,
+  //         diferencia: reconciliationResult.diferencia,
+  //         usuarioId,
+  //       }
+  //     );
+  //   }
+  // } catch (reconciliationError) {
+  //   logger.error("Error en auto-reconciliación de saldo banco", {
+  //     error:
+  //       reconciliationError instanceof Error
+  //         ? reconciliationError.message
+  //         : "Unknown error",
+  //     pointId,
+  //     monedaId,
+  //     usuarioId,
+  //   });
+  //   // No lanzamos el error para no interrumpir la operación principal
+  // }
 }
 
 async function logMovimientoSaldo(args: {
