@@ -150,10 +150,14 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
 
       // 1. Obtener saldo inicial
       try {
+        console.log(
+          "🔑 Token en localStorage:",
+          localStorage.getItem("authToken") ? "✅ Existe" : "❌ No existe"
+        );
         const data = await apiService.get<{
           saldos: SaldoInicial[];
           success: boolean;
-        }>(`/saldos-iniciales/${selectedPointId}`);
+        }>(`/api/saldos-iniciales/${selectedPointId}`);
         console.log("📊 Saldos iniciales recibidos:", data);
         const saldosIniciales: SaldoInicial[] = data?.saldos || [];
         const saldoMoneda = saldosIniciales.find(
@@ -168,7 +172,7 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
 
       // 2. Obtener movimientos del período
       try {
-        const movimientosUrl = `/movimientos-saldo?puntoId=${selectedPointId}&monedaCodigo=${selectedCurrency}&fechaInicio=${startDateTime.toISOString()}&fechaFin=${endDateTime.toISOString()}`;
+        const movimientosUrl = `/api/movimientos-saldo?puntoId=${selectedPointId}&monedaCodigo=${selectedCurrency}&fechaInicio=${startDateTime.toISOString()}&fechaFin=${endDateTime.toISOString()}`;
         console.log("🔗 URL movimientos:", movimientosUrl);
         const movimientosData = await apiService.get<MovimientoSaldo[]>(
           movimientosUrl
@@ -186,7 +190,7 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
         const data = await apiService.get<{
           saldos: SaldoActual[];
           success: boolean;
-        }>(`/saldos-actuales/${selectedPointId}`);
+        }>(`/api/saldos-actuales/${selectedPointId}`);
         console.log("💵 Saldos actuales recibidos:", data);
         const saldosActuales: SaldoActual[] = data?.saldos || [];
         const saldoMoneda = saldosActuales.find(
@@ -213,7 +217,7 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
           m.tipo_movimiento === "INGRESO" ||
           m.tipo_movimiento === "TRANSFERENCIA_ENTRANTE"
       )
-      .reduce((sum, m) => sum + m.monto, 0);
+      .reduce((sum, m) => sum + Math.abs(m.monto), 0);
 
     const egresos = movimientos
       .filter(
@@ -221,7 +225,7 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
           m.tipo_movimiento === "EGRESO" ||
           m.tipo_movimiento === "TRANSFERENCIA_SALIENTE"
       )
-      .reduce((sum, m) => sum + m.monto, 0);
+      .reduce((sum, m) => sum + Math.abs(m.monto), 0);
 
     const balance = ingresos - egresos;
 
