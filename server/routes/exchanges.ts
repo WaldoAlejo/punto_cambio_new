@@ -145,16 +145,16 @@ async function logMovimientoSaldo(
   const montoAbsoluto = Math.abs(data.monto);
 
   await registrarMovimientoSaldo({
-    puntoAtencionId: parseInt(data.punto_atencion_id),
-    monedaId: parseInt(data.moneda_id),
+    puntoAtencionId: data.punto_atencion_id,
+    monedaId: data.moneda_id,
     tipoMovimiento: tipoMov,
     monto: montoAbsoluto, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
     saldoAnterior: round2(data.saldo_anterior),
     saldoNuevo: round2(data.saldo_nuevo),
     tipoReferencia: tipoRef,
-    referenciaId: parseInt(data.referencia_id),
-    descripcion: data.descripcion || null,
-    usuarioId: parseInt(data.usuario_id),
+    referenciaId: data.referencia_id,
+    descripcion: data.descripcion || undefined,
+    usuarioId: data.usuario_id,
   });
 }
 

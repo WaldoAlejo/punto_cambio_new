@@ -377,8 +377,8 @@ router.post(
             saldoAnterior: cantidadActual,
             saldoNuevo: nuevaCantidad,
             tipoReferencia: tipoRef,
-            referenciaId: referencia_id,
-            descripcion: descripcion,
+            referenciaId: referencia_id || undefined,
+            descripcion: descripcion || undefined,
             usuarioId: usuario_id,
           });
 
@@ -411,9 +411,6 @@ router.post(
             tipo_movimiento,
             monto: montoNum,
           });
-
-          // Opcional: podrías usar ms.id para logs, etc.
-          void ms;
         }
 
         return saldos_actualizados;

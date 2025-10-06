@@ -6,6 +6,10 @@ const prisma = global.prisma ||
             ? ["query", "error", "warn"]
             : ["error"],
     });
+// Configurar timezone de Ecuador (UTC-5) para todas las conexiones
+prisma.$executeRawUnsafe(`SET timezone = 'America/Guayaquil'`).catch((err) => {
+    console.error("Error configurando timezone:", err);
+});
 // En desarrollo, mantener la instancia global para evitar reconexiones en hot-reload
 if (process.env.NODE_ENV === "development") {
     global.prisma = prisma;

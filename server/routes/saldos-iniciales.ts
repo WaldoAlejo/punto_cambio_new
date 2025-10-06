@@ -272,16 +272,16 @@ router.post(
 
         // ⚠️ USAR SERVICIO CENTRALIZADO para registrar el movimiento
         await registrarMovimientoSaldo({
-          puntoAtencionId: parseInt(punto_atencion_id),
-          monedaId: parseInt(moneda_id),
+          puntoAtencionId: punto_atencion_id,
+          monedaId: moneda_id,
           tipoMovimiento: TipoMovimiento.SALDO_INICIAL,
           monto: decCantidad, // Monto positivo
           saldoAnterior: new Prisma.Decimal(existingSaldo?.cantidad ?? 0),
           saldoNuevo: saldoResult.cantidad,
           tipoReferencia: TipoReferencia.SALDO_INICIAL,
-          referenciaId: parseInt(saldoInicialResult.id),
-          descripcion: observaciones ?? null,
-          usuarioId: parseInt(user.id),
+          referenciaId: saldoInicialResult.id,
+          descripcion: observaciones || undefined,
+          usuarioId: user.id,
         });
 
         // Registrar historial consolidado de saldo (para auditoría)

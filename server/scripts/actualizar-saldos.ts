@@ -242,7 +242,7 @@ async function main(): Promise<void> {
     });
 
     const saldoActual = saldoActualRecord
-      ? Number(saldoActualRecord.monto)
+      ? Number(saldoActualRecord.cantidad)
       : null;
     const diferencia = saldoActual !== null ? saldoNuevo - saldoActual : null;
 

@@ -225,7 +225,7 @@ router.post(
           saldoNuevo: nuevo,
           tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
           referenciaId: svcMov.id,
-          descripcion: descripcion || null,
+          descripcion: descripcion || undefined,
           usuarioId: (req as any).user.id,
         });
 
@@ -458,16 +458,16 @@ router.delete(
         // ⚠️ USAR SERVICIO CENTRALIZADO para registrar el ajuste
         // El servicio espera monto positivo y aplica el signo según el tipo
         await registrarMovimientoSaldo({
-          puntoAtencionId: parseInt(mov.punto_atencion_id),
-          monedaId: parseInt(mov.moneda_id),
-          tipoMovimiento: TipoMovimiento.AJUSTE,
+          puntoAtencionId: mov.punto_atencion_id,
+          monedaId: mov.moneda_id,
+          tipoMovimiento: TipoMov.AJUSTE,
           monto: delta, // AJUSTE mantiene el signo original (positivo o negativo)
           saldoAnterior: anterior,
           saldoNuevo: nuevo,
           tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
-          referenciaId: parseInt(mov.id),
+          referenciaId: mov.id,
           descripcion: `Reverso eliminación servicio externo ${mov.tipo_movimiento}`,
-          usuarioId: parseInt((req as any).user.id),
+          usuarioId: (req as any).user.id,
         });
 
         await tx.servicioExternoMovimiento.delete({ where: { id: mov.id } });

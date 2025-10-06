@@ -2,6 +2,7 @@ import express from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import saldoValidation from "../middleware/saldoValidation.js";
 import prisma from "../lib/prisma.js";
+import { registrarMovimientoSaldo, TipoMovimiento as TipoMov, TipoReferencia, } from "../services/movimientoSaldoService.js";
 const router = express.Router();
 /** Type guard: asegura que req.user existe y es OPERADOR */
 function isOperador(req) {
@@ -145,22 +146,18 @@ router.post("/movimientos", authenticateToken, saldoValidation.validarSaldoSufic
                 // por si luego quieres enriquecer respuesta
                 },
             });
-            // Trazabilidad en MovimientoSaldo (String en el schema)
-            await tx.movimientoSaldo.create({
-                data: {
-                    punto_atencion_id: puntoId,
-                    moneda_id: usdId,
-                    tipo_movimiento, // Prisma lo guardará como string en tu modelo
-                    monto: montoNum,
-                    saldo_anterior: anterior,
-                    saldo_nuevo: nuevo,
-                    usuario_id: req.user.id,
-                    referencia_id: svcMov.id,
-                    tipo_referencia: "SERVICIO_EXTERNO",
-                    descripcion: descripcion || null,
-                    fecha: new Date(),
-                    created_at: new Date(),
-                },
+            // Trazabilidad en MovimientoSaldo usando servicio centralizado
+            await registrarMovimientoSaldo({
+                puntoAtencionId: puntoId,
+                monedaId: usdId,
+                tipoMovimiento: tipo_movimiento === "INGRESO" ? TipoMov.INGRESO : TipoMov.EGRESO,
+                monto: montoNum, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
+                saldoAnterior: anterior,
+                saldoNuevo: nuevo,
+                tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
+                referenciaId: svcMov.id,
+                descripcion: descripcion || undefined,
+                usuarioId: req.user.id,
             });
             return {
                 id: svcMov.id,
@@ -330,7 +327,8 @@ router.delete("/movimientos/:id", authenticateToken, requireRole(["ADMIN", "SUPE
                 },
             });
             const anterior = Number(saldo?.cantidad || 0);
-            // Ajuste inverso
+            // Ajuste inverso: si era INGRESO, ahora es EGRESO (negativo)
+            // Si era EGRESO, ahora es INGRESO (positivo)
             const delta = mov.tipo_movimiento === "INGRESO"
                 ? -Number(mov.monto)
                 : Number(mov.monto);
@@ -352,22 +350,19 @@ router.delete("/movimientos/:id", authenticateToken, requireRole(["ADMIN", "SUPE
                     },
                 });
             }
-            // MovimientoSaldo (AJUSTE)
-            await tx.movimientoSaldo.create({
-                data: {
-                    punto_atencion_id: mov.punto_atencion_id,
-                    moneda_id: mov.moneda_id,
-                    tipo_movimiento: "AJUSTE",
-                    monto: delta,
-                    saldo_anterior: anterior,
-                    saldo_nuevo: nuevo,
-                    usuario_id: req.user.id,
-                    referencia_id: mov.id,
-                    tipo_referencia: "SERVICIO_EXTERNO",
-                    descripcion: `Reverso eliminación servicio externo ${mov.tipo_movimiento}`,
-                    fecha: new Date(),
-                    created_at: new Date(),
-                },
+            // ⚠️ USAR SERVICIO CENTRALIZADO para registrar el ajuste
+            // El servicio espera monto positivo y aplica el signo según el tipo
+            await registrarMovimientoSaldo({
+                puntoAtencionId: mov.punto_atencion_id,
+                monedaId: mov.moneda_id,
+                tipoMovimiento: TipoMov.AJUSTE,
+                monto: delta, // AJUSTE mantiene el signo original (positivo o negativo)
+                saldoAnterior: anterior,
+                saldoNuevo: nuevo,
+                tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
+                referenciaId: mov.id,
+                descripcion: `Reverso eliminación servicio externo ${mov.tipo_movimiento}`,
+                usuarioId: req.user.id,
             });
             await tx.servicioExternoMovimiento.delete({ where: { id: mov.id } });
         });

@@ -26,7 +26,14 @@ export interface ReconciliationSummary {
 export declare const saldoReconciliationService: {
     /**
      * Calcula el saldo correcto basado en todos los movimientos registrados
-     * Incluye: saldos iniciales, ingresos, egresos, transferencias y cambios de divisa
+     *
+     * ⚠️ IMPORTANTE: Esta lógica debe coincidir EXACTAMENTE con calcular-saldos.ts
+     *
+     * Reglas:
+     * 1. Los EGRESOS se guardan con monto NEGATIVO en la BD
+     * 2. Los INGRESOS se guardan con monto POSITIVO en la BD
+     * 3. Los AJUSTES mantienen su signo original
+     * 4. Se excluyen movimientos con descripción que contenga "bancos"
      */
     calcularSaldoReal(puntoAtencionId: string, monedaId: string): Promise<number>;
     /**

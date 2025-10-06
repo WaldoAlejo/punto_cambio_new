@@ -253,9 +253,9 @@ export declare class ServientregaDBService {
         servientrega_agencia_codigo: string | null;
         servientrega_agencia_nombre: string | null;
         id: string;
-        activo: boolean;
         nombre: string;
         telefono: string | null;
+        activo: boolean;
         direccion: string;
         ciudad: string;
         provincia: string;

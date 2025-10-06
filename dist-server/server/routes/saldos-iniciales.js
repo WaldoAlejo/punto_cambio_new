@@ -2,6 +2,7 @@ import express from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
+import { registrarMovimientoSaldo, TipoMovimiento, TipoReferencia, } from "../services/movimientoSaldoService.js";
 const router = express.Router();
 // ===== helpers =====
 const toNumber = (v) => {
@@ -210,20 +211,18 @@ router.post("/", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), asy
                     },
                 });
             }
-            // Registrar movimiento de saldo para trazabilidad
-            await tx.movimientoSaldo.create({
-                data: {
-                    punto_atencion_id,
-                    moneda_id,
-                    tipo_movimiento: "SALDO_INICIAL",
-                    monto: decCantidad,
-                    saldo_anterior: new Prisma.Decimal(existingSaldo?.cantidad ?? 0),
-                    saldo_nuevo: saldoResult.cantidad,
-                    usuario_id: user.id,
-                    referencia_id: saldoInicialResult.id,
-                    tipo_referencia: "SALDO_INICIAL",
-                    descripcion: observaciones ?? null,
-                },
+            // ⚠️ USAR SERVICIO CENTRALIZADO para registrar el movimiento
+            await registrarMovimientoSaldo({
+                puntoAtencionId: punto_atencion_id,
+                monedaId: moneda_id,
+                tipoMovimiento: TipoMovimiento.SALDO_INICIAL,
+                monto: decCantidad, // Monto positivo
+                saldoAnterior: new Prisma.Decimal(existingSaldo?.cantidad ?? 0),
+                saldoNuevo: saldoResult.cantidad,
+                tipoReferencia: TipoReferencia.SALDO_INICIAL,
+                referenciaId: saldoInicialResult.id,
+                descripcion: observaciones || undefined,
+                usuarioId: user.id,
             });
             // Registrar historial consolidado de saldo (para auditoría)
             await tx.historialSaldo.create({

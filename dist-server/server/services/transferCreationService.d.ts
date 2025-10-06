@@ -36,20 +36,20 @@ export declare const transferCreationService: {
         };
     } & {
         id: string;
+        fecha: Date;
+        numero_recibo: string | null;
+        estado: import(".prisma/client").$Enums.EstadoTransferencia;
+        moneda_id: string;
+        descripcion: string | null;
+        monto: import("@prisma/client/runtime/library.js").Decimal;
+        aprobado_por: string | null;
+        fecha_aprobacion: Date | null;
         origen_id: string | null;
         destino_id: string;
-        moneda_id: string;
-        monto: import("@prisma/client/runtime/library.js").Decimal;
         tipo_transferencia: import(".prisma/client").$Enums.TipoTransferencia;
-        estado: import(".prisma/client").$Enums.EstadoTransferencia;
         solicitado_por: string;
-        aprobado_por: string | null;
         rechazado_por: string | null;
-        fecha: Date;
-        fecha_aprobacion: Date | null;
         fecha_rechazo: Date | null;
-        descripcion: string | null;
-        numero_recibo: string | null;
         via: import(".prisma/client").$Enums.TipoViaTransferencia | null;
         observaciones_aprobacion: string | null;
     }>;

@@ -145,18 +145,22 @@ async function obtenerSaldoActual(puntoAtencionId, monedaId) {
  */
 export async function validarSaldoTransferencia(req, res, next) {
     try {
-        const { punto_origen_id, moneda_id, monto } = req.body;
-        if (!punto_origen_id || !moneda_id || !monto) {
+        const { origen_id, moneda_id, monto, tipo_transferencia } = req.body;
+        // Para transferencias sin origen (DEPOSITO_GERENCIA, DEPOSITO_MATRIZ), no validar saldo
+        if (!origen_id) {
+            return next();
+        }
+        if (!moneda_id || !monto) {
             return res.status(400).json({
                 error: "DATOS_INCOMPLETOS",
                 message: "Faltan datos requeridos para la transferencia",
             });
         }
-        const saldoActual = await obtenerSaldoActual(punto_origen_id, moneda_id);
+        const saldoActual = await obtenerSaldoActual(origen_id, moneda_id);
         const montoRequerido = Number(monto);
         if (saldoActual < montoRequerido) {
             const punto = await prisma.puntoAtencion.findUnique({
-                where: { id: punto_origen_id },
+                where: { id: origen_id },
             });
             const moneda = await prisma.moneda.findUnique({
                 where: { id: moneda_id },
@@ -185,16 +189,55 @@ export async function validarSaldoTransferencia(req, res, next) {
 }
 /**
  * Middleware específico para cambios de divisa
+ * Aplica la misma lógica de normalización que el endpoint de exchanges
+ * para validar la moneda correcta según el tipo de operación
  */
 export async function validarSaldoCambioDivisa(req, res, next) {
     try {
-        const { punto_atencion_id, moneda_origen_id, monto_origen } = req.body;
-        if (!punto_atencion_id || !moneda_origen_id || !monto_origen) {
+        let { punto_atencion_id, moneda_origen_id, moneda_destino_id, monto_origen, monto_destino, tipo_operacion, } = req.body;
+        if (!punto_atencion_id ||
+            !moneda_origen_id ||
+            !moneda_destino_id ||
+            !monto_origen ||
+            !tipo_operacion) {
             return res.status(400).json({
                 error: "DATOS_INCOMPLETOS",
                 message: "Faltan datos requeridos para el cambio de divisa",
             });
         }
+        // 🔄 NORMALIZACIÓN: Aplicar la misma lógica que en exchanges.ts (líneas 284-338)
+        // COMPRA -> USD destino, VENTA -> USD origen
+        try {
+            const usdMoneda = await prisma.moneda.findFirst({
+                where: { codigo: "USD" },
+            });
+            if (usdMoneda &&
+                (moneda_origen_id === usdMoneda.id ||
+                    moneda_destino_id === usdMoneda.id)) {
+                const isCompra = tipo_operacion === "COMPRA";
+                const isVenta = tipo_operacion === "VENTA";
+                // Si es COMPRA y USD está como origen, invertir
+                if (isCompra && moneda_origen_id === usdMoneda.id) {
+                    [moneda_origen_id, moneda_destino_id] = [
+                        moneda_destino_id,
+                        moneda_origen_id,
+                    ];
+                    [monto_origen, monto_destino] = [monto_destino, monto_origen];
+                }
+                // Si es VENTA y USD está como destino, invertir
+                else if (isVenta && moneda_destino_id === usdMoneda.id) {
+                    [moneda_origen_id, moneda_destino_id] = [
+                        moneda_destino_id,
+                        moneda_origen_id,
+                    ];
+                    [monto_origen, monto_destino] = [monto_destino, monto_origen];
+                }
+            }
+        }
+        catch (e) {
+            console.warn("No se pudo normalizar par USD en validación (continuando)", e);
+        }
+        // Ahora validar con las monedas normalizadas
         const saldoActual = await obtenerSaldoActual(punto_atencion_id, moneda_origen_id);
         const montoRequerido = Number(monto_origen);
         if (saldoActual < montoRequerido) {

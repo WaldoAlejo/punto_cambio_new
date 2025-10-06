@@ -17,133 +17,49 @@
  * SIEMPRE usa este servicio.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-
-import prisma from "../lib/prisma";
 import { Prisma } from "@prisma/client";
-
 /**
  * Tipos de movimiento permitidos
  */
-export enum TipoMovimiento {
-  INGRESO = "INGRESO",
-  EGRESO = "EGRESO",
-  AJUSTE = "AJUSTE",
-  SALDO_INICIAL = "SALDO_INICIAL",
+export declare enum TipoMovimiento {
+    INGRESO = "INGRESO",
+    EGRESO = "EGRESO",
+    AJUSTE = "AJUSTE",
+    SALDO_INICIAL = "SALDO_INICIAL"
 }
-
 /**
  * Tipos de referencia para trazabilidad
  */
-export enum TipoReferencia {
-  EXCHANGE = "EXCHANGE",
-  TRANSFER = "TRANSFER",
-  SERVICIO_EXTERNO = "SERVICIO_EXTERNO",
-  AJUSTE_MANUAL = "AJUSTE_MANUAL",
-  SALDO_INICIAL = "SALDO_INICIAL",
-  CIERRE_DIARIO = "CIERRE_DIARIO",
-  SERVIENTREGA = "SERVIENTREGA",
+export declare enum TipoReferencia {
+    EXCHANGE = "EXCHANGE",
+    TRANSFER = "TRANSFER",
+    SERVICIO_EXTERNO = "SERVICIO_EXTERNO",
+    AJUSTE_MANUAL = "AJUSTE_MANUAL",
+    SALDO_INICIAL = "SALDO_INICIAL",
+    CIERRE_DIARIO = "CIERRE_DIARIO",
+    SERVIENTREGA = "SERVIENTREGA"
 }
-
 /**
  * Parámetros para registrar un movimiento
  */
 export interface RegistrarMovimientoParams {
-  puntoAtencionId: number | string;
-  monedaId: number | string;
-  tipoMovimiento: TipoMovimiento;
-  monto: number | Prisma.Decimal; // Monto SIN signo aplicado (siempre positivo)
-  saldoAnterior: number | Prisma.Decimal;
-  saldoNuevo: number | Prisma.Decimal;
-  tipoReferencia: TipoReferencia;
-  referenciaId?: number | string;
-  descripcion?: string | null;
-  usuarioId: number | string; // Requerido
+    puntoAtencionId: number | string;
+    monedaId: number | string;
+    tipoMovimiento: TipoMovimiento;
+    monto: number | Prisma.Decimal;
+    saldoAnterior: number | Prisma.Decimal;
+    saldoNuevo: number | Prisma.Decimal;
+    tipoReferencia: TipoReferencia;
+    referenciaId?: number | string;
+    descripcion?: string | null;
+    usuarioId: number | string;
 }
-
 /**
  * Clase de error personalizada para validaciones
  */
-export class MovimientoSaldoError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "MovimientoSaldoError";
-  }
+export declare class MovimientoSaldoError extends Error {
+    constructor(message: string);
 }
-
-/**
- * Calcula el monto con el signo correcto según el tipo de movimiento
- */
-function calcularMontoConSigno(
-  tipoMovimiento: TipoMovimiento,
-  monto: number | Prisma.Decimal
-): Prisma.Decimal {
-  const montoNum = typeof monto === "number" ? monto : monto.toNumber();
-  const montoAbsoluto = Math.abs(montoNum);
-
-  switch (tipoMovimiento) {
-    case TipoMovimiento.INGRESO:
-    case TipoMovimiento.SALDO_INICIAL:
-      // INGRESO y SALDO_INICIAL siempre positivos
-      return new Prisma.Decimal(montoAbsoluto);
-
-    case TipoMovimiento.EGRESO:
-      // EGRESO siempre negativo
-      return new Prisma.Decimal(-montoAbsoluto);
-
-    case TipoMovimiento.AJUSTE:
-      // AJUSTE mantiene el signo original
-      return new Prisma.Decimal(montoNum);
-
-    default:
-      throw new MovimientoSaldoError(
-        `Tipo de movimiento no válido: ${tipoMovimiento}`
-      );
-  }
-}
-
-/**
- * Valida que el movimiento sea consistente
- */
-function validarMovimiento(params: RegistrarMovimientoParams): void {
-  const { tipoMovimiento, monto, saldoAnterior, saldoNuevo } = params;
-
-  // Convertir a números para validación
-  const montoNum = typeof monto === "number" ? monto : monto.toNumber();
-  const saldoAntNum =
-    typeof saldoAnterior === "number"
-      ? saldoAnterior
-      : saldoAnterior.toNumber();
-  const saldoNuevoNum =
-    typeof saldoNuevo === "number" ? saldoNuevo : saldoNuevo.toNumber();
-
-  // Validar que el monto no sea cero (excepto para ajustes)
-  if (montoNum === 0 && tipoMovimiento !== TipoMovimiento.AJUSTE) {
-    throw new MovimientoSaldoError(
-      `El monto no puede ser cero para movimientos tipo ${tipoMovimiento}`
-    );
-  }
-
-  // Calcular el delta esperado
-  const montoConSigno = calcularMontoConSigno(tipoMovimiento, monto);
-  const deltaEsperado = montoConSigno.toNumber();
-  const deltaReal = saldoNuevoNum - saldoAntNum;
-
-  // Validar consistencia (con tolerancia de 0.01 por redondeos)
-  const diferencia = Math.abs(deltaReal - deltaEsperado);
-  if (diferencia > 0.01) {
-    throw new MovimientoSaldoError(
-      `Inconsistencia detectada:\n` +
-        `  Tipo: ${tipoMovimiento}\n` +
-        `  Monto: ${montoNum}\n` +
-        `  Saldo anterior: ${saldoAntNum}\n` +
-        `  Saldo nuevo: ${saldoNuevoNum}\n` +
-        `  Delta esperado: ${deltaEsperado}\n` +
-        `  Delta real: ${deltaReal}\n` +
-        `  Diferencia: ${diferencia}`
-    );
-  }
-}
-
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  * FUNCIÓN PRINCIPAL: Registrar Movimiento de Saldo
@@ -186,37 +102,21 @@ function validarMovimiento(params: RegistrarMovimientoParams): void {
  * });
  * // Resultado: Se registra con monto = +30.00
  */
-export async function registrarMovimientoSaldo(
-  params: RegistrarMovimientoParams
-) {
-  // 1. Validar el movimiento
-  validarMovimiento(params);
-
-  // 2. Calcular el monto con el signo correcto
-  const montoConSigno = calcularMontoConSigno(
-    params.tipoMovimiento,
-    params.monto
-  );
-
-  // 3. Registrar en la base de datos
-  const movimiento = await prisma.movimientoSaldo.create({
-    data: {
-      punto_atencion_id: String(params.puntoAtencionId),
-      moneda_id: String(params.monedaId),
-      tipo_movimiento: params.tipoMovimiento,
-      monto: montoConSigno,
-      saldo_anterior: new Prisma.Decimal(params.saldoAnterior),
-      saldo_nuevo: new Prisma.Decimal(params.saldoNuevo),
-      tipo_referencia: params.tipoReferencia,
-      referencia_id: params.referenciaId ? String(params.referenciaId) : null,
-      descripcion: params.descripcion || null,
-      usuario_id: String(params.usuarioId),
-    },
-  });
-
-  return movimiento;
-}
-
+export declare function registrarMovimientoSaldo(params: RegistrarMovimientoParams): Promise<{
+    id: string;
+    punto_atencion_id: string;
+    created_at: Date;
+    fecha: Date;
+    usuario_id: string;
+    moneda_id: string;
+    tipo_movimiento: string;
+    descripcion: string | null;
+    monto: Prisma.Decimal;
+    saldo_anterior: Prisma.Decimal;
+    saldo_nuevo: Prisma.Decimal;
+    referencia_id: string | null;
+    tipo_referencia: string | null;
+}>;
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  * FUNCIÓN AUXILIAR: Calcular Delta
@@ -235,13 +135,7 @@ export async function registrarMovimientoSaldo(
  * const delta = calcularDelta(TipoMovimiento.EGRESO, monto); // -30
  * const saldoNuevo = saldoAnterior + delta; // 70
  */
-export function calcularDelta(
-  tipoMovimiento: TipoMovimiento,
-  monto: number | Prisma.Decimal
-): number {
-  return calcularMontoConSigno(tipoMovimiento, monto).toNumber();
-}
-
+export declare function calcularDelta(tipoMovimiento: TipoMovimiento, monto: number | Prisma.Decimal): number;
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  * FUNCIÓN DE UTILIDAD: Validar Saldo Suficiente
@@ -254,35 +148,18 @@ export function calcularDelta(
  * @returns true si hay saldo suficiente
  * @throws MovimientoSaldoError si no hay saldo suficiente
  */
-export function validarSaldoSuficiente(
-  saldoActual: number | Prisma.Decimal,
-  montoEgreso: number | Prisma.Decimal
-): boolean {
-  const saldoNum =
-    typeof saldoActual === "number" ? saldoActual : saldoActual.toNumber();
-  const montoNum =
-    typeof montoEgreso === "number" ? montoEgreso : montoEgreso.toNumber();
-  const montoAbsoluto = Math.abs(montoNum);
-
-  if (saldoNum < montoAbsoluto) {
-    throw new MovimientoSaldoError(
-      `Saldo insuficiente: Saldo actual = ${saldoNum}, Monto requerido = ${montoAbsoluto}`
-    );
-  }
-
-  return true;
-}
-
+export declare function validarSaldoSuficiente(saldoActual: number | Prisma.Decimal, montoEgreso: number | Prisma.Decimal): boolean;
 /**
  * ═══════════════════════════════════════════════════════════════════════════
  * EXPORTACIONES
  * ═══════════════════════════════════════════════════════════════════════════
  */
-export default {
-  registrarMovimientoSaldo,
-  calcularDelta,
-  validarSaldoSuficiente,
-  TipoMovimiento,
-  TipoReferencia,
-  MovimientoSaldoError,
+declare const _default: {
+    registrarMovimientoSaldo: typeof registrarMovimientoSaldo;
+    calcularDelta: typeof calcularDelta;
+    validarSaldoSuficiente: typeof validarSaldoSuficiente;
+    TipoMovimiento: typeof TipoMovimiento;
+    TipoReferencia: typeof TipoReferencia;
+    MovimientoSaldoError: typeof MovimientoSaldoError;
 };
+export default _default;

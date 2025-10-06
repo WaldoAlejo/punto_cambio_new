@@ -22,9 +22,11 @@ export declare function validarSaldoSuficiente(req: SaldoValidationRequest, res:
 /**
  * Middleware específico para transferencias
  */
-export declare function validarSaldoTransferencia(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
+export declare function validarSaldoTransferencia(req: Request, res: Response, next: NextFunction): Promise<void | Response<any, Record<string, any>>>;
 /**
  * Middleware específico para cambios de divisa
+ * Aplica la misma lógica de normalización que el endpoint de exchanges
+ * para validar la moneda correcta según el tipo de operación
  */
 export declare function validarSaldoCambioDivisa(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
 declare const _default: {
