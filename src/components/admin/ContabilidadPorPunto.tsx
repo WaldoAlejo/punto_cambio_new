@@ -92,19 +92,32 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        // Cargar puntos
-        const { points: pointsData } = await pointService.getAllPoints();
+        // Cargar puntos - usar endpoint específico para gestión de saldos
+        console.log("🔍 Cargando puntos para contabilidad...");
+        const { points: pointsData } =
+          await pointService.getPointsForBalanceManagement();
+        console.log(
+          "📍 Puntos cargados:",
+          pointsData?.length || 0,
+          pointsData?.map((p) => p.nombre)
+        );
         setPoints(pointsData || []);
         if (pointsData && pointsData.length > 0) {
           setSelectedPointId(pointsData[0].id);
+          console.log(
+            "✅ Punto seleccionado por defecto:",
+            pointsData[0].nombre,
+            pointsData[0].id
+          );
         }
 
         // Cargar monedas
         const { currencies: currenciesData } =
           await currencyService.getAllCurrencies();
         setCurrencies(currenciesData || []);
+        console.log("💱 Monedas cargadas:", currenciesData?.length || 0);
       } catch (error) {
-        console.error("Error cargando datos iniciales:", error);
+        console.error("❌ Error cargando datos iniciales:", error);
       }
     };
 

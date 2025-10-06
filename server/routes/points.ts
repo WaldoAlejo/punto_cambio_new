@@ -488,7 +488,7 @@ router.get(
 router.get(
   "/for-balance-management",
   authenticateToken,
-  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
       const puntosParaSaldos = await prisma.puntoAtencion.findMany({
