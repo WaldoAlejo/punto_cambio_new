@@ -34,7 +34,9 @@
     "migrate:agencias": "npx prisma db push",
     "transfer:report": "npx tsx server/scripts/report-transfer-issues.ts",
     "transfer:fix": "npx tsx server/scripts/fix-historical-transfers.ts",
-    "transfer:menu": "npx tsx server/scripts/transfer-fix-menu.ts"
+    "transfer:menu": "npx tsx server/scripts/transfer-fix-menu.ts",
+    "script:verificar-limpieza": "npx tsx server/scripts/verificar-antes-limpiar.ts",
+    "script:limpiar-transacciones": "npx tsx server/scripts/limpiar-transacciones.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed-complete.ts"

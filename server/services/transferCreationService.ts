@@ -7,6 +7,11 @@ import {
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import saldoReconciliationService from "./saldoReconciliationService.js";
+import {
+  registrarMovimientoSaldo,
+  TipoMovimiento as TipoMov,
+  TipoReferencia,
+} from "./movimientoSaldoService.js";
 
 export interface TransferData {
   origen_id?: string | null;
@@ -187,19 +192,29 @@ async function logMovimientoSaldo(args: {
   tipo_referencia: "TRANSFERENCIA";
   descripcion?: string;
 }) {
-  await prisma.movimientoSaldo.create({
-    data: {
-      punto_atencion_id: args.punto_atencion_id,
-      moneda_id: args.moneda_id,
-      tipo_movimiento: args.tipo_movimiento,
-      monto: args.monto,
-      saldo_anterior: args.saldo_anterior,
-      saldo_nuevo: args.saldo_nuevo,
-      usuario_id: args.usuario_id,
-      referencia_id: args.referencia_id,
-      tipo_referencia: args.tipo_referencia,
-      descripcion: args.descripcion ?? null,
-    },
+  // Usar servicio centralizado
+  const tipoMov =
+    args.tipo_movimiento === "INGRESO"
+      ? TipoMov.INGRESO
+      : args.tipo_movimiento === "EGRESO"
+      ? TipoMov.EGRESO
+      : TipoMov.AJUSTE;
+
+  // El monto ya viene con el signo correcto desde las llamadas
+  // pero el servicio espera monto positivo, así que tomamos el valor absoluto
+  const montoAbsoluto = Math.abs(args.monto);
+
+  await registrarMovimientoSaldo({
+    puntoAtencionId: parseInt(args.punto_atencion_id),
+    monedaId: parseInt(args.moneda_id),
+    tipoMovimiento: tipoMov,
+    monto: montoAbsoluto, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
+    saldoAnterior: args.saldo_anterior,
+    saldoNuevo: args.saldo_nuevo,
+    tipoReferencia: TipoReferencia.TRANSFER,
+    referenciaId: parseInt(args.referencia_id),
+    descripcion: args.descripcion ?? null,
+    usuarioId: parseInt(args.usuario_id),
   });
 }
 
@@ -394,7 +409,7 @@ export const transferCreationService = {
         punto_atencion_id: origen_id,
         moneda_id,
         tipo_movimiento: "EGRESO",
-        monto: efectivo,
+        monto: -efectivo, // Negativo para EGRESO
         saldo_anterior: antEf,
         saldo_nuevo: nuevoEf,
         usuario_id,
@@ -414,7 +429,7 @@ export const transferCreationService = {
         punto_atencion_id: origen_id,
         moneda_id,
         tipo_movimiento: "EGRESO",
-        monto: banco,
+        monto: -banco, // Negativo para EGRESO
         saldo_anterior: antBk,
         saldo_nuevo: nuevoBk,
         usuario_id,

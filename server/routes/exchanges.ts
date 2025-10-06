@@ -16,6 +16,11 @@ import {
   todayGyeDateOnly,
   gyeDayRangeUtcFromDateOnly,
 } from "../utils/timezone.js";
+import {
+  registrarMovimientoSaldo,
+  TipoMovimiento,
+  TipoReferencia,
+} from "../services/movimientoSaldoService.js";
 
 const router = express.Router();
 
@@ -118,15 +123,38 @@ async function logMovimientoSaldo(
     descripcion?: string | null;
   }
 ) {
-  await tx.movimientoSaldo.create({
-    data: {
-      ...data,
-      monto: round2(data.monto),
-      saldo_anterior: round2(data.saldo_anterior),
-      saldo_nuevo: round2(data.saldo_nuevo),
-      descripcion: data.descripcion || null,
-      created_at: new Date(),
-    },
+  // Usar servicio centralizado
+  const tipoMov =
+    data.tipo_movimiento === "INGRESO"
+      ? TipoMovimiento.INGRESO
+      : data.tipo_movimiento === "EGRESO"
+      ? TipoMovimiento.EGRESO
+      : TipoMovimiento.AJUSTE;
+
+  const tipoRef =
+    data.tipo_referencia === "CAMBIO_DIVISA"
+      ? TipoReferencia.EXCHANGE
+      : data.tipo_referencia === "TRANSFERENCIA"
+      ? TipoReferencia.TRANSFER
+      : data.tipo_referencia === "SERVICIO_EXTERNO"
+      ? TipoReferencia.SERVICIO_EXTERNO
+      : TipoReferencia.AJUSTE_MANUAL;
+
+  // El monto ya viene con el signo correcto desde las llamadas
+  // pero el servicio espera monto positivo, así que tomamos el valor absoluto
+  const montoAbsoluto = Math.abs(data.monto);
+
+  await registrarMovimientoSaldo({
+    puntoAtencionId: parseInt(data.punto_atencion_id),
+    monedaId: parseInt(data.moneda_id),
+    tipoMovimiento: tipoMov,
+    monto: montoAbsoluto, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
+    saldoAnterior: round2(data.saldo_anterior),
+    saldoNuevo: round2(data.saldo_nuevo),
+    tipoReferencia: tipoRef,
+    referenciaId: parseInt(data.referencia_id),
+    descripcion: data.descripcion || null,
+    usuarioId: parseInt(data.usuario_id),
   });
 }
 
@@ -863,7 +891,7 @@ router.post(
             punto_atencion_id,
             moneda_id: moneda_destino_id,
             tipo_movimiento: "EGRESO",
-            monto: egresoEf,
+            monto: -egresoEf, // Negativo para EGRESO
             saldo_anterior: destinoAnteriorEf,
             saldo_nuevo: destinoNuevoEf,
             usuario_id: req.user!.id,
@@ -878,7 +906,7 @@ router.post(
             punto_atencion_id,
             moneda_id: moneda_destino_id,
             tipo_movimiento: "EGRESO",
-            monto: egresoBk,
+            monto: -egresoBk, // Negativo para EGRESO
             saldo_anterior: destinoAnteriorBk,
             saldo_nuevo: destinoNuevoBk,
             usuario_id: req.user!.id,

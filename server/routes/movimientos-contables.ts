@@ -8,6 +8,11 @@ import {
   todayGyeDateOnly,
   gyeDayRangeUtcFromDateOnly,
 } from "../utils/timezone.js";
+import {
+  registrarMovimientoSaldo,
+  TipoMovimiento,
+  TipoReferencia,
+} from "../services/movimientoSaldoService.js";
 
 const router = express.Router();
 
@@ -347,21 +352,34 @@ router.post(
             }
           }
 
-          // Registrar MovimientoSaldo
-          const ms = await tx.movimientoSaldo.create({
-            data: {
-              punto_atencion_id,
-              moneda_id,
-              tipo_movimiento, // String en tu schema
-              monto: new Prisma.Decimal(montoNum),
-              saldo_anterior: cantidadActual,
-              saldo_nuevo: nuevaCantidad,
-              usuario_id,
-              referencia_id,
-              tipo_referencia,
-              descripcion,
-            },
-            select: { id: true },
+          // Registrar MovimientoSaldo usando servicio centralizado
+          const tipoMov =
+            tipo_movimiento === "INGRESO"
+              ? TipoMovimiento.INGRESO
+              : tipo_movimiento === "EGRESO"
+              ? TipoMovimiento.EGRESO
+              : TipoMovimiento.AJUSTE;
+
+          const tipoRef =
+            tipo_referencia === "EXCHANGE"
+              ? TipoReferencia.EXCHANGE
+              : tipo_referencia === "TRANSFER"
+              ? TipoReferencia.TRANSFER
+              : tipo_referencia === "SERVICIO_EXTERNO"
+              ? TipoReferencia.SERVICIO_EXTERNO
+              : TipoReferencia.AJUSTE_MANUAL;
+
+          await registrarMovimientoSaldo({
+            puntoAtencionId: punto_atencion_id,
+            monedaId: moneda_id,
+            tipoMovimiento: tipoMov,
+            monto: montoNum, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
+            saldoAnterior: cantidadActual,
+            saldoNuevo: nuevaCantidad,
+            tipoReferencia: tipoRef,
+            referenciaId: referencia_id,
+            descripcion: descripcion,
+            usuarioId: usuario_id,
           });
 
           // Upsert de Saldo

@@ -270,6 +270,8 @@ export async function validarSaldoTransferencia(
 
 /**
  * Middleware específico para cambios de divisa
+ * Aplica la misma lógica de normalización que el endpoint de exchanges
+ * para validar la moneda correcta según el tipo de operación
  */
 export async function validarSaldoCambioDivisa(
   req: Request,
@@ -277,15 +279,68 @@ export async function validarSaldoCambioDivisa(
   next: NextFunction
 ) {
   try {
-    const { punto_atencion_id, moneda_origen_id, monto_origen } = req.body;
+    let {
+      punto_atencion_id,
+      moneda_origen_id,
+      moneda_destino_id,
+      monto_origen,
+      monto_destino,
+      tipo_operacion,
+    } = req.body;
 
-    if (!punto_atencion_id || !moneda_origen_id || !monto_origen) {
+    if (
+      !punto_atencion_id ||
+      !moneda_origen_id ||
+      !moneda_destino_id ||
+      !monto_origen ||
+      !tipo_operacion
+    ) {
       return res.status(400).json({
         error: "DATOS_INCOMPLETOS",
         message: "Faltan datos requeridos para el cambio de divisa",
       });
     }
 
+    // 🔄 NORMALIZACIÓN: Aplicar la misma lógica que en exchanges.ts (líneas 284-338)
+    // COMPRA -> USD destino, VENTA -> USD origen
+    try {
+      const usdMoneda = await prisma.moneda.findFirst({
+        where: { codigo: "USD" },
+      });
+
+      if (
+        usdMoneda &&
+        (moneda_origen_id === usdMoneda.id ||
+          moneda_destino_id === usdMoneda.id)
+      ) {
+        const isCompra = tipo_operacion === "COMPRA";
+        const isVenta = tipo_operacion === "VENTA";
+
+        // Si es COMPRA y USD está como origen, invertir
+        if (isCompra && moneda_origen_id === usdMoneda.id) {
+          [moneda_origen_id, moneda_destino_id] = [
+            moneda_destino_id,
+            moneda_origen_id,
+          ];
+          [monto_origen, monto_destino] = [monto_destino, monto_origen];
+        }
+        // Si es VENTA y USD está como destino, invertir
+        else if (isVenta && moneda_destino_id === usdMoneda.id) {
+          [moneda_origen_id, moneda_destino_id] = [
+            moneda_destino_id,
+            moneda_origen_id,
+          ];
+          [monto_origen, monto_destino] = [monto_destino, monto_origen];
+        }
+      }
+    } catch (e) {
+      console.warn(
+        "No se pudo normalizar par USD en validación (continuando)",
+        e
+      );
+    }
+
+    // Ahora validar con las monedas normalizadas
     const saldoActual = await obtenerSaldoActual(
       punto_atencion_id,
       moneda_origen_id

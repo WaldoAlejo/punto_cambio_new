@@ -31,28 +31,41 @@ export interface ReconciliationSummary {
 export const saldoReconciliationService = {
   /**
    * Calcula el saldo correcto basado en todos los movimientos registrados
-   * Incluye: saldos iniciales, ingresos, egresos, transferencias y cambios de divisa
+   *
+   * ⚠️ IMPORTANTE: Esta lógica debe coincidir EXACTAMENTE con calcular-saldos.ts
+   *
+   * Reglas:
+   * 1. Los EGRESOS se guardan con monto NEGATIVO en la BD
+   * 2. Los INGRESOS se guardan con monto POSITIVO en la BD
+   * 3. Los AJUSTES mantienen su signo original
+   * 4. Se excluyen movimientos con descripción que contenga "bancos"
    */
   async calcularSaldoReal(
     puntoAtencionId: string,
     monedaId: string
   ): Promise<number> {
     try {
-      // Obtener todos los movimientos reales (excluyendo AJUSTE)
-      const movimientos = await prisma.movimientoSaldo.findMany({
+      // 1. Obtener saldo inicial más reciente
+      const saldoInicial = await prisma.saldoInicial.findFirst({
         where: {
           punto_atencion_id: puntoAtencionId,
           moneda_id: monedaId,
-          tipo_movimiento: {
-            in: [
-              "INGRESO",
-              "EGRESO",
-              "TRANSFERENCIA_ENTRANTE",
-              "TRANSFERENCIA_SALIENTE",
-              "CAMBIO_DIVISA",
-              "SALDO_INICIAL",
-            ],
-          },
+          activo: true,
+        },
+        orderBy: {
+          fecha_asignacion: "desc",
+        },
+      });
+
+      let saldoCalculado = saldoInicial
+        ? Number(saldoInicial.cantidad_inicial)
+        : 0;
+
+      // 2. Obtener TODOS los movimientos (sin filtrar por tipo)
+      const todosMovimientos = await prisma.movimientoSaldo.findMany({
+        where: {
+          punto_atencion_id: puntoAtencionId,
+          moneda_id: monedaId,
         },
         select: {
           monto: true,
@@ -64,55 +77,51 @@ export const saldoReconciliationService = {
         },
       });
 
-      // Verificar si hay movimientos SALDO_INICIAL
-      const tieneSaldoInicialMovimiento = movimientos.some(
-        (mov) => mov.tipo_movimiento === "SALDO_INICIAL"
-      );
+      // 3. Filtrar movimientos bancarios (igual que en los scripts)
+      const movimientos = todosMovimientos.filter((mov) => {
+        const desc = mov.descripcion?.toLowerCase() || "";
+        return !desc.includes("bancos");
+      });
 
-      let saldoCalculado = 0;
-
-      // Si hay movimientos SALDO_INICIAL, usar esos como base
-      // Si no, usar la tabla saldoInicial
-      if (!tieneSaldoInicialMovimiento) {
-        const saldoInicial = await prisma.saldoInicial.findFirst({
-          where: {
-            punto_atencion_id: puntoAtencionId,
-            moneda_id: monedaId,
-            activo: true,
-          },
-        });
-
-        saldoCalculado = saldoInicial
-          ? Number(saldoInicial.cantidad_inicial)
-          : 0;
-      }
-
-      // Calcular saldo basado en movimientos reales
+      // 4. Calcular saldo basado en movimientos
+      // ⚠️ CRÍTICO: Los montos YA tienen el signo correcto en la BD
       for (const mov of movimientos) {
         const monto = Number(mov.monto);
+        const tipoMovimiento = mov.tipo_movimiento;
 
-        switch (mov.tipo_movimiento) {
+        switch (tipoMovimiento) {
           case "SALDO_INICIAL":
-            // Los movimientos SALDO_INICIAL establecen el saldo base
-            saldoCalculado += monto;
+            // Skip - ya incluido en saldo inicial
             break;
+
           case "INGRESO":
-          case "TRANSFERENCIA_ENTRANTE":
-            saldoCalculado += monto;
+            // INGRESO: monto positivo en BD, sumar valor absoluto
+            saldoCalculado += Math.abs(monto);
             break;
+
           case "EGRESO":
-          case "TRANSFERENCIA_SALIENTE":
-            saldoCalculado -= monto;
+            // EGRESO: monto negativo en BD, restar valor absoluto
+            saldoCalculado -= Math.abs(monto);
             break;
-          case "CAMBIO_DIVISA":
-            // Para cambios de divisa, verificar la descripción
-            if (mov.descripcion?.toLowerCase().includes("ingreso por cambio")) {
+
+          case "AJUSTE":
+            // AJUSTE: mantiene signo original
+            if (monto >= 0) {
               saldoCalculado += monto;
-            } else if (
-              mov.descripcion?.toLowerCase().includes("egreso por cambio")
-            ) {
-              saldoCalculado -= monto;
+            } else {
+              saldoCalculado -= Math.abs(monto);
             }
+            break;
+
+          default:
+            // Tipos desconocidos: sumar el monto tal cual
+            logger.warn("Tipo de movimiento desconocido", {
+              tipo: tipoMovimiento,
+              monto,
+              puntoAtencionId,
+              monedaId,
+            });
+            saldoCalculado += monto;
             break;
         }
       }

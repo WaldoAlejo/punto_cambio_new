@@ -111,3 +111,99 @@ export function gyeDayRangeUtcFromYMD(
   }
   throw new Error("Parámetros inválidos para gyeDayRangeUtcFromYMD");
 }
+
+/**
+ * 🕐 FUNCIONES DE FORMATEO PARA ECUADOR
+ */
+
+/**
+ * Convierte una fecha UTC a la hora local de Ecuador (UTC-5)
+ * y la retorna como objeto Date ajustado
+ */
+export function toEcuadorTime(utcDate: Date): Date {
+  return new Date(utcDate.getTime() + GYE_OFFSET_HOURS * 60 * 60 * 1000);
+}
+
+/**
+ * Formatea una fecha UTC al formato corto de Ecuador: DD/MM/YYYY HH:mm
+ * Ejemplo: 03/10/2025 18:30
+ */
+export function formatEcuadorDateTime(utcDate: Date): string {
+  const ecuadorDate = toEcuadorTime(utcDate);
+
+  const day = String(ecuadorDate.getUTCDate()).padStart(2, "0");
+  const month = String(ecuadorDate.getUTCMonth() + 1).padStart(2, "0");
+  const year = ecuadorDate.getUTCFullYear();
+  const hours = String(ecuadorDate.getUTCHours()).padStart(2, "0");
+  const minutes = String(ecuadorDate.getUTCMinutes()).padStart(2, "0");
+
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
+/**
+ * Formatea una fecha UTC al formato solo fecha de Ecuador: DD/MM/YYYY
+ * Ejemplo: 03/10/2025
+ */
+export function formatEcuadorDate(utcDate: Date): string {
+  const ecuadorDate = toEcuadorTime(utcDate);
+
+  const day = String(ecuadorDate.getUTCDate()).padStart(2, "0");
+  const month = String(ecuadorDate.getUTCMonth() + 1).padStart(2, "0");
+  const year = ecuadorDate.getUTCFullYear();
+
+  return `${day}/${month}/${year}`;
+}
+
+/**
+ * Formatea una fecha UTC al formato solo hora de Ecuador: HH:mm:ss
+ * Ejemplo: 18:30:45
+ */
+export function formatEcuadorTime(utcDate: Date): string {
+  const ecuadorDate = toEcuadorTime(utcDate);
+
+  const hours = String(ecuadorDate.getUTCHours()).padStart(2, "0");
+  const minutes = String(ecuadorDate.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(ecuadorDate.getUTCSeconds()).padStart(2, "0");
+
+  return `${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * Obtiene la fecha y hora actual de Ecuador
+ */
+export function nowEcuador(): Date {
+  return toEcuadorTime(new Date());
+}
+
+/**
+ * Convierte una fecha/hora local de Ecuador a UTC para guardar en BD
+ * Ejemplo: Si recibes "2025-10-03 18:30" de Ecuador, lo convierte a UTC
+ */
+export function fromEcuadorToUTC(ecuadorDate: Date): Date {
+  return new Date(ecuadorDate.getTime() - GYE_OFFSET_HOURS * 60 * 60 * 1000);
+}
+
+/**
+ * Crea una fecha UTC desde componentes de fecha/hora de Ecuador
+ * @param year Año
+ * @param month Mes (1-12)
+ * @param day Día
+ * @param hour Hora (0-23), opcional, default 0
+ * @param minute Minuto (0-59), opcional, default 0
+ * @param second Segundo (0-59), opcional, default 0
+ */
+export function createEcuadorDate(
+  year: number,
+  month: number,
+  day: number,
+  hour: number = 0,
+  minute: number = 0,
+  second: number = 0
+): Date {
+  // Crear fecha como si fuera UTC
+  const ecuadorAsUtc = new Date(
+    Date.UTC(year, month - 1, day, hour, minute, second, 0)
+  );
+  // Convertir a UTC real
+  return fromGyeClockToUtc(ecuadorAsUtc);
+}
