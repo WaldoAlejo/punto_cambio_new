@@ -74,6 +74,9 @@ export const ContabilidadDashboard = ({
     saldoPositivo: 0,
     saldoNegativo: 0,
     monedaPrincipalSaldo: 0,
+    // Nuevos campos para desglose
+    ingresosPorMoneda: [] as { codigo: string; monto: number }[],
+    egresosPorMoneda: [] as { codigo: string; monto: number }[],
   });
 
   // Totales consolidados por moneda (solo relevante en vista admin)
@@ -131,21 +134,44 @@ export const ContabilidadDashboard = ({
         return fechaMov >= inicioHoy && fechaMov < finHoy;
       });
 
-      const ingresos = movimientosHoy
+      // Agrupar ingresos por moneda
+      const ingresosMap = new Map<string, number>();
+      movimientosHoy
         .filter(
           (mov) =>
             mov.tipo_movimiento === "INGRESO" ||
             mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE"
         )
-        .reduce((sum, mov) => sum + mov.monto, 0);
+        .forEach((mov) => {
+          const codigo = mov.moneda_codigo || "USD";
+          ingresosMap.set(codigo, (ingresosMap.get(codigo) || 0) + mov.monto);
+        });
 
-      const egresos = movimientosHoy
+      // Agrupar egresos por moneda
+      const egresosMap = new Map<string, number>();
+      movimientosHoy
         .filter(
           (mov) =>
             mov.tipo_movimiento === "EGRESO" ||
             mov.tipo_movimiento === "TRANSFERENCIA_SALIENTE"
         )
-        .reduce((sum, mov) => sum + mov.monto, 0);
+        .forEach((mov) => {
+          const codigo = mov.moneda_codigo || "USD";
+          egresosMap.set(codigo, (egresosMap.get(codigo) || 0) + mov.monto);
+        });
+
+      // Convertir a arrays para mostrar
+      const ingresosPorMoneda = Array.from(ingresosMap.entries())
+        .map(([codigo, monto]) => ({ codigo, monto }))
+        .sort((a, b) => b.monto - a.monto);
+
+      const egresosPorMoneda = Array.from(egresosMap.entries())
+        .map(([codigo, monto]) => ({ codigo, monto }))
+        .sort((a, b) => b.monto - a.monto);
+
+      // Solo sumar USD para el total (evitar mezclar monedas)
+      const ingresos = ingresosMap.get("USD") || 0;
+      const egresos = egresosMap.get("USD") || 0;
 
       // Contar cambios como cantidad de transacciones únicas (referencia_id) con tipo_referencia CAMBIO_DIVISA
       const cambios = (() => {
@@ -185,6 +211,8 @@ export const ContabilidadDashboard = ({
         saldoPositivo: saldosPositivos,
         saldoNegativo: saldosNegativos,
         monedaPrincipalSaldo: usdSaldo,
+        ingresosPorMoneda,
+        egresosPorMoneda,
       });
     }
   }, [movimientos, saldos, isAdminView]);
@@ -269,10 +297,10 @@ export const ContabilidadDashboard = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex-1">
                 <p className="text-sm font-medium text-gray-600">
-                  Ingresos Hoy
+                  Ingresos Hoy (USD)
                 </p>
                 <p className="text-2xl font-bold text-green-600">
                   {formatCurrency(estadisticas.totalIngresos)}
@@ -280,20 +308,64 @@ export const ContabilidadDashboard = ({
               </div>
               <TrendingUp className="h-8 w-8 text-green-600" />
             </div>
+            {estadisticas.ingresosPorMoneda.length > 1 && (
+              <div className="mt-2 pt-2 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Otras monedas:</p>
+                <div className="space-y-1">
+                  {estadisticas.ingresosPorMoneda
+                    .filter((item) => item.codigo !== "USD")
+                    .slice(0, 3)
+                    .map((item) => (
+                      <div
+                        key={item.codigo}
+                        className="flex justify-between text-xs"
+                      >
+                        <span className="text-gray-600">{item.codigo}:</span>
+                        <span className="font-semibold text-green-700">
+                          {formatCurrency(item.monto, item.codigo)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Egresos Hoy</p>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-gray-600">
+                  Egresos Hoy (USD)
+                </p>
                 <p className="text-2xl font-bold text-red-600">
                   {formatCurrency(estadisticas.totalEgresos)}
                 </p>
               </div>
               <TrendingDown className="h-8 w-8 text-red-600" />
             </div>
+            {estadisticas.egresosPorMoneda.length > 1 && (
+              <div className="mt-2 pt-2 border-t border-gray-200">
+                <p className="text-xs text-gray-500 mb-1">Otras monedas:</p>
+                <div className="space-y-1">
+                  {estadisticas.egresosPorMoneda
+                    .filter((item) => item.codigo !== "USD")
+                    .slice(0, 3)
+                    .map((item) => (
+                      <div
+                        key={item.codigo}
+                        className="flex justify-between text-xs"
+                      >
+                        <span className="text-gray-600">{item.codigo}:</span>
+                        <span className="font-semibold text-red-700">
+                          {formatCurrency(item.monto, item.codigo)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
