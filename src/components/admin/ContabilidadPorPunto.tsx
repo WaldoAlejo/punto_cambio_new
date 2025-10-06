@@ -24,6 +24,7 @@ import {
 import { User, PuntoAtencion, Moneda } from "@/types";
 import { pointService } from "@/services/pointService";
 import { currencyService } from "@/services/currencyService";
+import { apiService } from "@/services/apiService";
 import { gyeDayRangeUtcFromDate } from "@/utils/timezone";
 
 interface ContabilidadPorPuntoProps {
@@ -148,59 +149,54 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
       });
 
       // 1. Obtener saldo inicial
-      const saldoInicialResponse = await fetch(
-        `/api/saldos-iniciales/${selectedPointId}`
-      );
-      if (saldoInicialResponse.ok) {
-        const data = await saldoInicialResponse.json();
+      try {
+        const data = await apiService.get<{
+          saldos: SaldoInicial[];
+          success: boolean;
+        }>(`/saldos-iniciales/${selectedPointId}`);
         console.log("📊 Saldos iniciales recibidos:", data);
-        const saldosIniciales: SaldoInicial[] = data.saldos || [];
+        const saldosIniciales: SaldoInicial[] = data?.saldos || [];
         const saldoMoneda = saldosIniciales.find(
           (s) => s.moneda_codigo === selectedCurrency
         );
         console.log("💰 Saldo inicial encontrado:", saldoMoneda);
         setSaldoInicial(saldoMoneda?.cantidad_inicial || 0);
-      } else {
-        console.error(
-          "❌ Error al obtener saldos iniciales:",
-          saldoInicialResponse.status
-        );
+      } catch (error) {
+        console.error("❌ Error al obtener saldos iniciales:", error);
+        setSaldoInicial(0);
       }
 
       // 2. Obtener movimientos del período
-      const movimientosUrl = `/api/movimientos-saldo?puntoId=${selectedPointId}&monedaCodigo=${selectedCurrency}&fechaInicio=${startDateTime.toISOString()}&fechaFin=${endDateTime.toISOString()}`;
-      console.log("🔗 URL movimientos:", movimientosUrl);
-      const movimientosResponse = await fetch(movimientosUrl);
-      if (movimientosResponse.ok) {
-        const movimientosData = await movimientosResponse.json();
+      try {
+        const movimientosUrl = `/movimientos-saldo?puntoId=${selectedPointId}&monedaCodigo=${selectedCurrency}&fechaInicio=${startDateTime.toISOString()}&fechaFin=${endDateTime.toISOString()}`;
+        console.log("🔗 URL movimientos:", movimientosUrl);
+        const movimientosData = await apiService.get<MovimientoSaldo[]>(
+          movimientosUrl
+        );
         console.log("📈 Movimientos recibidos:", movimientosData);
         // El endpoint devuelve directamente un array
         setMovimientos(Array.isArray(movimientosData) ? movimientosData : []);
-      } else {
-        console.error(
-          "❌ Error al obtener movimientos:",
-          movimientosResponse.status
-        );
+      } catch (error) {
+        console.error("❌ Error al obtener movimientos:", error);
+        setMovimientos([]);
       }
 
       // 3. Obtener saldo actual
-      const saldoActualResponse = await fetch(
-        `/api/saldos-actuales/${selectedPointId}`
-      );
-      if (saldoActualResponse.ok) {
-        const data = await saldoActualResponse.json();
+      try {
+        const data = await apiService.get<{
+          saldos: SaldoActual[];
+          success: boolean;
+        }>(`/saldos-actuales/${selectedPointId}`);
         console.log("💵 Saldos actuales recibidos:", data);
-        const saldosActuales: SaldoActual[] = data.saldos || [];
+        const saldosActuales: SaldoActual[] = data?.saldos || [];
         const saldoMoneda = saldosActuales.find(
           (s) => s.moneda_codigo === selectedCurrency
         );
         console.log("💸 Saldo actual encontrado:", saldoMoneda);
         setSaldoActual(saldoMoneda?.saldo || 0);
-      } else {
-        console.error(
-          "❌ Error al obtener saldos actuales:",
-          saldoActualResponse.status
-        );
+      } catch (error) {
+        console.error("❌ Error al obtener saldos actuales:", error);
+        setSaldoActual(0);
       }
     } catch (error) {
       console.error("❌ Error cargando datos de contabilidad:", error);
