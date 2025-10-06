@@ -33,10 +33,17 @@ interface ContabilidadPorPuntoProps {
 interface SaldoInicial {
   id: string;
   punto_atencion_id: string;
-  moneda_codigo: string;
-  monto: number;
-  fecha: string;
-  usuario_id: string;
+  moneda_id: string;
+  cantidad_inicial: number;
+  asignado_por: string;
+  observaciones?: string;
+  activo: boolean;
+  created_at: string;
+  moneda_nombre?: string;
+  moneda_codigo?: string;
+  moneda_simbolo?: string;
+  punto_nombre?: string;
+  ciudad?: string;
 }
 
 interface MovimientoSaldo {
@@ -52,8 +59,10 @@ interface MovimientoSaldo {
 }
 
 interface SaldoActual {
-  punto_atencion_id: string;
-  moneda_codigo: string;
+  moneda_id: string;
+  moneda_codigo: string | null;
+  moneda_nombre: string | null;
+  moneda_simbolo: string | null;
   saldo: number;
 }
 
@@ -123,12 +132,12 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
         `/api/saldos-iniciales/${selectedPointId}`
       );
       if (saldoInicialResponse.ok) {
-        const saldosIniciales: SaldoInicial[] =
-          await saldoInicialResponse.json();
+        const data = await saldoInicialResponse.json();
+        const saldosIniciales: SaldoInicial[] = data.saldos || [];
         const saldoMoneda = saldosIniciales.find(
           (s) => s.moneda_codigo === selectedCurrency
         );
-        setSaldoInicial(saldoMoneda?.monto || 0);
+        setSaldoInicial(saldoMoneda?.cantidad_inicial || 0);
       }
 
       // 2. Obtener movimientos del período
@@ -143,10 +152,11 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
 
       // 3. Obtener saldo actual
       const saldoActualResponse = await fetch(
-        `/api/saldos-actuales?puntoId=${selectedPointId}`
+        `/api/saldos-actuales/${selectedPointId}`
       );
       if (saldoActualResponse.ok) {
-        const saldosActuales: SaldoActual[] = await saldoActualResponse.json();
+        const data = await saldoActualResponse.json();
+        const saldosActuales: SaldoActual[] = data.saldos || [];
         const saldoMoneda = saldosActuales.find(
           (s) => s.moneda_codigo === selectedCurrency
         );
