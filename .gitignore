@@ -13,8 +13,10 @@ node_modules/
 # Dist and builds
 dist/
 dist-ssr/
+dist-server/
 build/
 coverage/
+*.tsbuildinfo
 
 # Prisma
 prisma/dev.db
