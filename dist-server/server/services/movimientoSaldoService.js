@@ -17,7 +17,7 @@
  * SIEMPRE usa este servicio.
  * ═══════════════════════════════════════════════════════════════════════════
  */
-import prisma from "../lib/prisma";
+import prisma from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
 /**
  * Tipos de movimiento permitidos

@@ -18,7 +18,7 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-import prisma from "../lib/prisma";
+import prisma from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
 
 /**
