@@ -68,7 +68,7 @@ async function checkAmazonasBancos() {
     let totalDepositado = 0;
     movimientosBanco.forEach((m) => {
       const monto = Number(m.monto);
-      const tipo = m.tipo || "UNKNOWN";
+      const tipo = m.tipo_movimiento || "UNKNOWN";
       console.log(
         `   ${m.fecha.toISOString().split("T")[0]} ${tipo.padEnd(15)} ${
           monto >= 0 ? "+" : ""
