@@ -116,33 +116,45 @@ const controller = {
         via: via as TipoViaTransferencia,
       });
 
-      // Contabilizar SALIDA del ORIGEN (si existe origen_id)
-      if (origen_id) {
-        await transferCreationService.contabilizarSalidaOrigen({
-          origen_id,
-          moneda_id,
-          usuario_id: req.user.id,
-          transferencia: newTransfer,
-          numero_recibo: numeroRecibo,
-          via: via as TipoViaTransferencia,
-          monto,
-          monto_efectivo,
-          monto_banco,
-        });
-      }
+      // ⚠️ IMPORTANTE: NO CONTABILIZAR AL CREAR
+      // La contabilización se realiza SOLO cuando la transferencia es APROBADA
+      // en el endpoint de transfer-approvals.ts
+      // Esto evita la duplicación de movimientos de saldo.
+      //
+      // ANTES: Se contabilizaba aquí al crear (PENDIENTE) y luego al aprobar (APROBADO)
+      // AHORA: Solo se contabiliza al aprobar (APROBADO)
+      //
+      // Si en el futuro se necesita contabilizar al crear (para transferencias sin aprobación),
+      // se debe eliminar la contabilización del endpoint de aprobación.
 
-      // Contabilizar ENTRADA en el DESTINO (efectivo y/o banco)
-      await transferCreationService.contabilizarEntradaDestino({
-        destino_id,
-        moneda_id,
-        usuario_id: req.user.id,
-        transferencia: newTransfer,
-        numero_recibo: numeroRecibo,
-        via: via as TipoViaTransferencia,
-        monto,
-        monto_efectivo,
-        monto_banco,
-      });
+      // ❌ CÓDIGO DESHABILITADO - Causaba duplicación
+      // // Contabilizar SALIDA del ORIGEN (si existe origen_id)
+      // if (origen_id) {
+      //   await transferCreationService.contabilizarSalidaOrigen({
+      //     origen_id,
+      //     moneda_id,
+      //     usuario_id: req.user.id,
+      //     transferencia: newTransfer,
+      //     numero_recibo: numeroRecibo,
+      //     via: via as TipoViaTransferencia,
+      //     monto,
+      //     monto_efectivo,
+      //     monto_banco,
+      //   });
+      // }
+      //
+      // // Contabilizar ENTRADA en el DESTINO (efectivo y/o banco)
+      // await transferCreationService.contabilizarEntradaDestino({
+      //   destino_id,
+      //   moneda_id,
+      //   usuario_id: req.user.id,
+      //   transferencia: newTransfer,
+      //   numero_recibo: numeroRecibo,
+      //   via: via as TipoViaTransferencia,
+      //   monto,
+      //   monto_efectivo,
+      //   monto_banco,
+      // });
 
       // Recibo
       await transferCreationService.createReceipt({
@@ -169,7 +181,7 @@ const controller = {
         responsable_movilizacion: responsable_movilizacion || null,
       };
 
-      logger.info("Transferencia creada y contabilizada", {
+      logger.info("Transferencia creada (pendiente de aprobación)", {
         transferId: newTransfer.id,
         createdBy: req.user.id,
         amount: monto,
@@ -181,7 +193,8 @@ const controller = {
       res.status(201).json({
         transfer: formattedTransfer,
         success: true,
-        message: "Transferencia creada, contabilizada y recibo generado",
+        message:
+          "Transferencia creada exitosamente. Pendiente de aprobación para contabilizar.",
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
