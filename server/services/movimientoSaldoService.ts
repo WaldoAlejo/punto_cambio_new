@@ -36,6 +36,7 @@ export enum TipoMovimiento {
  */
 export enum TipoReferencia {
   EXCHANGE = "EXCHANGE",
+  CAMBIO_DIVISA = "CAMBIO_DIVISA",
   TRANSFER = "TRANSFER",
   SERVICIO_EXTERNO = "SERVICIO_EXTERNO",
   AJUSTE_MANUAL = "AJUSTE_MANUAL",

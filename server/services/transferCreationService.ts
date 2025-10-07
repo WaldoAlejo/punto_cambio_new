@@ -420,7 +420,7 @@ export const transferCreationService = {
         punto_atencion_id: origen_id,
         moneda_id,
         tipo_movimiento: "EGRESO",
-        monto: -efectivo, // Negativo para EGRESO
+        monto: efectivo, // ✅ Positivo - el servicio aplica el signo
         saldo_anterior: antEf,
         saldo_nuevo: nuevoEf,
         usuario_id,
@@ -440,7 +440,7 @@ export const transferCreationService = {
         punto_atencion_id: origen_id,
         moneda_id,
         tipo_movimiento: "EGRESO",
-        monto: -banco, // Negativo para EGRESO
+        monto: banco, // ✅ Positivo - el servicio aplica el signo
         saldo_anterior: antBk,
         saldo_nuevo: nuevoBk,
         usuario_id,

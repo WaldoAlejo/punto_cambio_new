@@ -891,7 +891,7 @@ router.post(
             punto_atencion_id,
             moneda_id: moneda_destino_id,
             tipo_movimiento: "EGRESO",
-            monto: -egresoEf, // Negativo para EGRESO
+            monto: egresoEf, // ✅ Positivo - el servicio aplica el signo
             saldo_anterior: destinoAnteriorEf,
             saldo_nuevo: destinoNuevoEf,
             usuario_id: req.user!.id,
@@ -906,7 +906,7 @@ router.post(
             punto_atencion_id,
             moneda_id: moneda_destino_id,
             tipo_movimiento: "EGRESO",
-            monto: -egresoBk, // Negativo para EGRESO
+            monto: egresoBk, // ✅ Positivo - el servicio aplica el signo
             saldo_anterior: destinoAnteriorBk,
             saldo_nuevo: destinoNuevoBk,
             usuario_id: req.user!.id,

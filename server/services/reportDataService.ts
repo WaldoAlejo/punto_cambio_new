@@ -493,23 +493,27 @@ export const reportDataService = {
       );
     }
 
-    return rows.map((r) => ({
-      id: r.id,
-      fecha: r.fecha.toISOString(),
-      punto: r.puntoAtencion?.nombre || "Punto desconocido",
-      moneda: r.moneda.codigo,
-      tipo_movimiento: r.tipo_movimiento,
-      monto: Number(r.monto),
-      saldo_anterior: Number(r.saldo_anterior),
-      saldo_nuevo: Number(r.saldo_nuevo),
-      usuario: r.usuario?.nombre || "Usuario desconocido",
-      referencia_id: r.referencia_id || null,
-      tipo_referencia: r.tipo_referencia || null,
-      numero_referencia: r.referencia_id
-        ? recibosMap.get(r.referencia_id) || null
-        : null,
-      descripcion: r.descripcion || null,
-    }));
+    return rows.map((r) => {
+      const montoRaw = Number(r.monto);
+      return {
+        id: r.id,
+        fecha: r.fecha.toISOString(),
+        punto: r.puntoAtencion?.nombre || "Punto desconocido",
+        moneda: r.moneda.codigo,
+        tipo_movimiento: r.tipo_movimiento,
+        monto: Math.abs(montoRaw), // ✅ Siempre positivo para visualización
+        signo: montoRaw >= 0 ? "+" : "-", // ✅ Signo separado
+        saldo_anterior: Number(r.saldo_anterior),
+        saldo_nuevo: Number(r.saldo_nuevo),
+        usuario: r.usuario?.nombre || "Usuario desconocido",
+        referencia_id: r.referencia_id || null,
+        tipo_referencia: r.tipo_referencia || null,
+        numero_referencia: r.referencia_id
+          ? recibosMap.get(r.referencia_id) || null
+          : null,
+        descripcion: r.descripcion || null,
+      };
+    });
   },
 
   // Saldos de cierre por día (CuadreCaja + Detalle)

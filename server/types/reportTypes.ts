@@ -91,7 +91,8 @@ export interface AccountingMovementData {
   punto: string;
   moneda: string; // CODIGO
   tipo_movimiento: string;
-  monto: number;
+  monto: number; // ✅ Siempre positivo (valor absoluto)
+  signo: "+" | "-"; // ✅ Signo del movimiento
   saldo_anterior?: number | null;
   saldo_nuevo?: number | null;
   usuario: string;

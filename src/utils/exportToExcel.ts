@@ -41,6 +41,17 @@ export const exportToExcel = (
 ): void => {
   if (!data || data.length === 0) return;
 
+  // ✅ Normalizar datos: combinar monto con signo y eliminar campo signo
+  const normalizedData = data.map((row) => {
+    if ("signo" in row && "monto" in row) {
+      const { signo, monto, ...rest } = row;
+      const montoValue = typeof monto === "number" ? monto : 0;
+      const montoConSigno = signo === "-" ? -montoValue : montoValue;
+      return { ...rest, monto: montoConSigno };
+    }
+    return row;
+  });
+
   // Prepare workbook and sheet
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(sheetName);
@@ -73,7 +84,7 @@ export const exportToExcel = (
   }
 
   // Determine headers from the actual data keys (ignore metadata)
-  const dataKeys = Object.keys(data[0]);
+  const dataKeys = Object.keys(normalizedData[0]);
   const displayHeaders = dataKeys.map(prettifyHeader);
 
   // Add header row
@@ -98,19 +109,19 @@ export const exportToExcel = (
     if (isDateKey(keyLower)) dateCols.add(idx);
 
     // If any row has a number in this column, mark as numeric
-    const hasNumber = data.some((r) => typeof r[k] === "number");
+    const hasNumber = normalizedData.some((r) => typeof r[k] === "number");
     if (hasNumber) numericCols.add(idx);
 
     // If not already date by name, try to infer by value
     if (!dateCols.has(idx)) {
-      const hasIso = data.some((r) => isIsoDateString(r[k]));
+      const hasIso = normalizedData.some((r) => isIsoDateString(r[k]));
       if (hasIso) dateCols.add(idx);
     }
   });
 
   // Write data rows with conversions for dates
   const firstDataRowIndex = currentRow; // keep to apply number formats later
-  for (const item of data) {
+  for (const item of normalizedData) {
     const row = worksheet.getRow(currentRow++);
     dataKeys.forEach((k, idx) => {
       const v = item[k];
@@ -137,7 +148,7 @@ export const exportToExcel = (
     const totalsRow = worksheet.getRow(currentRow++);
     dataKeys.forEach((k, idx) => {
       if (numericCols.has(idx)) {
-        const total = data.reduce(
+        const total = normalizedData.reduce(
           (sum, r) => sum + (typeof r[k] === "number" ? (r[k] as number) : 0),
           0
         );
@@ -172,7 +183,7 @@ export const exportToExcel = (
   // Auto column widths based on max content length (header and cells)
   const colWidths = dataKeys.map((k, colIdx) => {
     const headerLen = String(displayHeaders[colIdx] ?? "").length;
-    const maxCellLen = data.reduce((max, r) => {
+    const maxCellLen = normalizedData.reduce((max, r) => {
       const v = r[k];
       const len =
         v instanceof Date

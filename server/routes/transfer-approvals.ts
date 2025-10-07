@@ -4,6 +4,11 @@ import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
+import {
+  registrarMovimientoSaldo,
+  TipoMovimiento,
+  TipoReferencia,
+} from "../services/movimientoSaldoService.js";
 
 const router = express.Router();
 
@@ -183,6 +188,18 @@ router.patch(
 
         // 2. Actualizar saldo del punto origen (restar) - solo si hay punto origen
         if (transfer.origen_id) {
+          // Obtener saldo anterior
+          const saldoOrigen = await tx.saldo.findUnique({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: transfer.origen_id,
+                moneda_id: transfer.moneda_id,
+              },
+            },
+          });
+          const saldoAnteriorOrigen = Number(saldoOrigen?.cantidad || 0);
+          const saldoNuevoOrigen = saldoAnteriorOrigen - Number(transfer.monto);
+
           await tx.saldo.upsert({
             where: {
               punto_atencion_id_moneda_id: {
@@ -191,29 +208,43 @@ router.patch(
               },
             },
             update: {
-              cantidad: {
-                decrement: Number(transfer.monto),
-              },
+              cantidad: saldoNuevoOrigen,
               updated_at: new Date(),
             },
             create: {
               punto_atencion_id: transfer.origen_id,
               moneda_id: transfer.moneda_id,
-              cantidad: -Number(transfer.monto),
+              cantidad: saldoNuevoOrigen,
               billetes: 0,
               monedas_fisicas: 0,
             },
           });
 
-          // Registrar movimiento de salida
+          // Registrar movimiento de salida en MovimientoSaldo
+          await registrarMovimientoSaldo({
+            puntoAtencionId: transfer.origen_id,
+            monedaId: transfer.moneda_id,
+            tipoMovimiento: TipoMovimiento.EGRESO,
+            monto: Number(transfer.monto),
+            saldoAnterior: saldoAnteriorOrigen,
+            saldoNuevo: saldoNuevoOrigen,
+            tipoReferencia: TipoReferencia.TRANSFER,
+            referenciaId: transfer.id,
+            descripcion: `Transferencia de salida a ${
+              transferAprobada.destino?.nombre || "Externa"
+            } - ${transfer.monto}`,
+            usuarioId: req.user!.id,
+          });
+
+          // Registrar movimiento de salida en HistorialSaldo (legacy)
           await tx.historialSaldo.create({
             data: {
               punto_atencion_id: transfer.origen_id,
               moneda_id: transfer.moneda_id,
               usuario_id: req.user!.id,
-              cantidad_anterior: 0, // Se calculará después si es necesario
+              cantidad_anterior: saldoAnteriorOrigen,
               cantidad_incrementada: -Number(transfer.monto),
-              cantidad_nueva: 0, // Se calculará después si es necesario
+              cantidad_nueva: saldoNuevoOrigen,
               tipo_movimiento: "EGRESO",
               descripcion: `Transferencia de salida a ${
                 transferAprobada.destino?.nombre || "Externa"
@@ -224,6 +255,18 @@ router.patch(
         }
 
         // 3. Actualizar saldo del punto destino (sumar)
+        // Obtener saldo anterior
+        const saldoDestino = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: transfer.destino_id,
+              moneda_id: transfer.moneda_id,
+            },
+          },
+        });
+        const saldoAnteriorDestino = Number(saldoDestino?.cantidad || 0);
+        const saldoNuevoDestino = saldoAnteriorDestino + Number(transfer.monto);
+
         await tx.saldo.upsert({
           where: {
             punto_atencion_id_moneda_id: {
@@ -232,29 +275,43 @@ router.patch(
             },
           },
           update: {
-            cantidad: {
-              increment: Number(transfer.monto),
-            },
+            cantidad: saldoNuevoDestino,
             updated_at: new Date(),
           },
           create: {
             punto_atencion_id: transfer.destino_id,
             moneda_id: transfer.moneda_id,
-            cantidad: Number(transfer.monto),
+            cantidad: saldoNuevoDestino,
             billetes: 0,
             monedas_fisicas: 0,
           },
         });
 
-        // Registrar movimiento de entrada
+        // Registrar movimiento de entrada en MovimientoSaldo
+        await registrarMovimientoSaldo({
+          puntoAtencionId: transfer.destino_id,
+          monedaId: transfer.moneda_id,
+          tipoMovimiento: TipoMovimiento.INGRESO,
+          monto: Number(transfer.monto),
+          saldoAnterior: saldoAnteriorDestino,
+          saldoNuevo: saldoNuevoDestino,
+          tipoReferencia: TipoReferencia.TRANSFER,
+          referenciaId: transfer.id,
+          descripcion: `Transferencia de entrada desde ${
+            transferAprobada.origen?.nombre || "Externa"
+          } - ${transfer.monto}`,
+          usuarioId: req.user!.id,
+        });
+
+        // Registrar movimiento de entrada en HistorialSaldo (legacy)
         await tx.historialSaldo.create({
           data: {
             punto_atencion_id: transfer.destino_id,
             moneda_id: transfer.moneda_id,
             usuario_id: req.user!.id,
-            cantidad_anterior: 0, // Se calculará después si es necesario
+            cantidad_anterior: saldoAnteriorDestino,
             cantidad_incrementada: Number(transfer.monto),
-            cantidad_nueva: 0, // Se calculará después si es necesario
+            cantidad_nueva: saldoNuevoDestino,
             tipo_movimiento: "INGRESO",
             descripcion: `Transferencia de entrada desde ${
               transferAprobada.origen?.nombre || "Externa"

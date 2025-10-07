@@ -89,6 +89,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
   const [metodoEntrega, setMetodoEntrega] = useState<
     "efectivo" | "transferencia" | null
   >(null);
+  const [tipoReferencia, setTipoReferencia] = useState<string | null>(null); // ✅ Nuevo filtro
 
   // Configuración inicial de fechas (últimos 7 días)
   useEffect(() => {
@@ -310,6 +311,9 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
         ...(effectiveReportType === "transfers_detailed" && estado
           ? { estado }
           : {}),
+        ...(effectiveReportType === "accounting_movements" && tipoReferencia
+          ? { tipoReferencia }
+          : {}), // ✅ Nuevo filtro para movimientos contables
       };
 
       console.log("Enviando solicitud de reporte:", { apiUrl, requestBody });
@@ -420,6 +424,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
     setSelectedCurrencyId(null);
     setEstado(null);
     setMetodoEntrega(null);
+    setTipoReferencia(null); // ✅ Limpiar nuevo filtro
     setUserSearch("");
     setReportData([]);
     setError(null);
@@ -455,6 +460,8 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
     (mainType === "transfers" && isDetailed);
 
   const showMetodoEntregaFilter = mainType === "exchanges" && isDetailed;
+
+  const showTipoReferenciaFilter = mainType === "accounting_movements"; // ✅ Nuevo filtro
 
   return (
     <div className="space-y-6">
@@ -732,6 +739,46 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                 </Select>
               </div>
             )}
+
+            {/* ✅ Tipo de Referencia (para movimientos contables) */}
+            {showTipoReferenciaFilter && (
+              <div className="space-y-2">
+                <Label>Tipo de Referencia</Label>
+                <Select
+                  value={tipoReferencia || ""}
+                  onValueChange={(v) =>
+                    setTipoReferencia(v === "ALL" ? null : v)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los tipos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Todos</SelectItem>
+                    <SelectItem value="CAMBIO_DIVISA">
+                      🔄 Cambio de Divisa
+                    </SelectItem>
+                    <SelectItem value="EXCHANGE">💱 Exchange</SelectItem>
+                    <SelectItem value="TRANSFER">💸 Transferencia</SelectItem>
+                    <SelectItem value="SERVICIO_EXTERNO">
+                      🏢 Servicio Externo
+                    </SelectItem>
+                    <SelectItem value="AJUSTE_MANUAL">
+                      ✏️ Ajuste Manual
+                    </SelectItem>
+                    <SelectItem value="SALDO_INICIAL">
+                      💰 Saldo Inicial
+                    </SelectItem>
+                    <SelectItem value="CIERRE_DIARIO">
+                      📊 Cierre Diario
+                    </SelectItem>
+                    <SelectItem value="SERVIENTREGA">
+                      📦 Servientrega
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           {/* Botones de acción */}
@@ -840,14 +887,16 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                     <thead className="bg-muted/50 sticky top-0">
                       <tr>
                         {reportData.length > 0 &&
-                          Object.keys(reportData[0]).map((key) => (
-                            <th
-                              key={key}
-                              className="px-4 py-3 text-left text-sm font-semibold whitespace-nowrap"
-                            >
-                              {key.replace(/_/g, " ").toUpperCase()}
-                            </th>
-                          ))}
+                          Object.keys(reportData[0])
+                            .filter((key) => key !== "signo") // ✅ Ocultar columna "signo"
+                            .map((key) => (
+                              <th
+                                key={key}
+                                className="px-4 py-3 text-left text-sm font-semibold whitespace-nowrap"
+                              >
+                                {key.replace(/_/g, " ").toUpperCase()}
+                              </th>
+                            ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -856,13 +905,47 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                           key={index}
                           className="hover:bg-muted/30 border-b border-border/50"
                         >
-                          {Object.values(row).map((value, cellIndex) => (
-                            <td key={cellIndex} className="px-4 py-3 text-sm">
-                              {typeof value === "number"
-                                ? value.toLocaleString("es-EC")
-                                : String(value || "")}
-                            </td>
-                          ))}
+                          {Object.entries(row).map(
+                            ([key, value], cellIndex) => {
+                              // ✅ Formateo especial para monto con signo
+                              if (key === "monto" && "signo" in row) {
+                                const signo = row.signo === "+" ? "+" : "-";
+                                const color =
+                                  row.signo === "+"
+                                    ? "text-green-600"
+                                    : "text-red-600";
+                                return (
+                                  <td
+                                    key={cellIndex}
+                                    className={`px-4 py-3 text-sm font-medium ${color}`}
+                                  >
+                                    {signo}{" "}
+                                    {typeof value === "number"
+                                      ? value.toLocaleString("es-EC", {
+                                          minimumFractionDigits: 2,
+                                          maximumFractionDigits: 2,
+                                        })
+                                      : String(value || "")}
+                                  </td>
+                                );
+                              }
+                              // ✅ Ocultar columna "signo" (ya se muestra con el monto)
+                              if (key === "signo") {
+                                return null;
+                              }
+                              // Renderizado normal
+                              return (
+                                <td
+                                  key={cellIndex}
+                                  className="px-4 py-3 text-sm"
+                                >
+                                  {typeof value === "number"
+                                    ? value.toLocaleString("es-EC")
+                                    : String(value || "")}
+                                </td>
+                              );
+                            }
+                          )}
                         </tr>
                       ))}
                     </tbody>
