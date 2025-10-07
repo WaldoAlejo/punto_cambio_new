@@ -301,8 +301,9 @@ export async function validarSaldoCambioDivisa(
       });
     }
 
-    // 🔄 NORMALIZACIÓN: Aplicar la misma lógica que en exchanges.ts (líneas 284-338)
-    // COMPRA -> USD destino, VENTA -> USD origen
+    // 🔄 NORMALIZACIÓN: Asegurar que moneda_origen sea siempre lo que el PUNTO ENTREGA (egreso)
+    // COMPRA -> El punto compra divisa (recibe divisa, entrega USD) -> Validar USD
+    // VENTA -> El punto vende divisa (entrega divisa, recibe USD) -> Validar divisa
     try {
       const usdMoneda = await prisma.moneda.findFirst({
         where: { codigo: "USD" },
@@ -316,16 +317,18 @@ export async function validarSaldoCambioDivisa(
         const isCompra = tipo_operacion === "COMPRA";
         const isVenta = tipo_operacion === "VENTA";
 
-        // Si es COMPRA y USD está como origen, invertir
-        if (isCompra && moneda_origen_id === usdMoneda.id) {
+        // Si es COMPRA y USD está como DESTINO, invertir
+        // (el cliente entrega divisa y recibe USD, el punto entrega USD)
+        if (isCompra && moneda_destino_id === usdMoneda.id) {
           [moneda_origen_id, moneda_destino_id] = [
             moneda_destino_id,
             moneda_origen_id,
           ];
           [monto_origen, monto_destino] = [monto_destino, monto_origen];
         }
-        // Si es VENTA y USD está como destino, invertir
-        else if (isVenta && moneda_destino_id === usdMoneda.id) {
+        // Si es VENTA y USD está como ORIGEN, invertir
+        // (el cliente entrega USD y recibe divisa, el punto entrega divisa)
+        else if (isVenta && moneda_origen_id === usdMoneda.id) {
           [moneda_origen_id, moneda_destino_id] = [
             moneda_destino_id,
             moneda_origen_id,
