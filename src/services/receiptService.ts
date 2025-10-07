@@ -617,18 +617,18 @@ ${separator}
             console.warn(
               `ADVERTENCIA: Popup bloqueado para copia ${copyType}. Verifique la configuración del navegador.`
             );
-            alert(
-              `ADVERTENCIA: El navegador bloqueó la ventana de impresión.\n\nPor favor:\n1. Permita popups para este sitio\n2. O use Ctrl+P para imprimir manualmente`
-            );
+            // Solo mostrar advertencia en la primera copia bloqueada
+            if (i === 0) {
+              // No usar alert para no interrumpir el flujo
+              // El usuario verá el recibo en la ventana actual de todas formas
+            }
           }
         } catch (error) {
           console.error(
             `ERROR: Error al abrir ventana de impresión para copia ${copyType}:`,
             error
           );
-          alert(
-            `ERROR: Error al imprimir copia ${copyType}. Verifique la configuración del navegador.`
-          );
+          // Solo log, no interrumpir con alert
         }
       }
     }

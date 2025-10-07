@@ -16,6 +16,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, VistaSaldosPorPunto } from "../../types";
 import { saldoInicialService } from "../../services/saldoInicialService";
+import { apiService } from "../../services/apiService";
 import ContabilidadDiaria from "./ContabilidadDiaria";
 import {
   Select,
@@ -137,13 +138,9 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
     if (!selectedPoint) return;
     setLoadingBalanceCompleto(true);
     try {
-      const response = await fetch(
-        `/api/balance-completo/punto/${selectedPoint.id}`
+      const data = await apiService.get(
+        `/balance-completo/punto/${selectedPoint.id}`
       );
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-      const data = await response.json();
       if (data.success) {
         setBalanceCompleto(data.data);
       } else {

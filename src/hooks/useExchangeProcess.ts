@@ -322,29 +322,19 @@ export const useExchangeProcess = ({
         window.dispatchEvent(new CustomEvent("saldosUpdated"));
       } catch {}
 
-      // 🎯 Decidir si auto-completar o dejar pendiente
-      const shouldAutoComplete =
-        data.metodoEntrega === "efectivo" &&
-        !data.saldoPendiente &&
-        !data.abonoInicialMonto;
+      // 🎯 Verificar el estado del cambio creado
+      // El backend ya crea el cambio como COMPLETADO si:
+      // - No hay saldo pendiente (saldo_pendiente === 0 o null)
+      // - Es efectivo sin abono inicial
+      const isAlreadyCompleted = createdExchange.estado === "COMPLETADO";
+      const isPending = createdExchange.estado === "PENDIENTE";
 
-      if (shouldAutoComplete) {
-        // IMPORTANTE: el backend ya contabliza en POST /exchanges
-        // Aquí solo cerramos (estado COMPLETADO) SIN volver a contablizar.
-        const { error: closeError } =
-          await exchangeService.closePendingExchange(createdExchange.id);
-
-        if (closeError) {
-          toast.warning(
-            `⚠️ Cambio creado pero pendiente. Debe completarlo manualmente desde "Cambios Pendientes". Error: ${closeError}`
-          );
-        } else {
-          // Notificar a la UI que el estado cambió
-          window.dispatchEvent(new CustomEvent("exchangeCompleted"));
-          window.dispatchEvent(new CustomEvent("saldosUpdated"));
-          toast.success("✅ Cambio completado.");
-        }
-      } else {
+      if (isAlreadyCompleted) {
+        // El backend ya lo completó, solo notificamos
+        window.dispatchEvent(new CustomEvent("exchangeCompleted"));
+        window.dispatchEvent(new CustomEvent("saldosUpdated"));
+        toast.success("✅ Cambio completado exitosamente.");
+      } else if (isPending) {
         // Cambio pendiente (transferencia, saldo pendiente o abono)
         const reason =
           data.metodoEntrega === "transferencia"
