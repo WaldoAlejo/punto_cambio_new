@@ -1,6 +1,6 @@
-const { TipoMovimiento } = require("@prisma/client");
-const { Decimal } = require("@prisma/client/runtime/library");
-const prisma = require("../lib/prisma").default;
+import { TipoMovimiento } from "@prisma/client";
+import { Decimal } from "@prisma/client/runtime/library";
+import prisma from "../lib/prisma";
 
 // Elimina duplicados por campos clave (ajusta los campos si lo necesitas)
 async function eliminarDuplicadosCambioDivisa() {
@@ -138,37 +138,31 @@ async function recalcularSaldos() {
 
     // Suma de ingresos y egresos
     const ingresos = cambiosDestino
-      .reduce(
-        (a: typeof Decimal, b: any) => a.plus(b.monto_destino),
-        new Decimal(0)
-      )
+      .reduce((a: Decimal, b) => a.plus(b.monto_destino), new Decimal(0))
       .plus(
         transferenciasEntrada.reduce(
-          (a: typeof Decimal, b: any) => a.plus(b.monto),
+          (a: Decimal, b) => a.plus(b.monto),
           new Decimal(0)
         )
       )
       .plus(
         serviciosIngresos.reduce(
-          (a: typeof Decimal, b: any) => a.plus(b.monto),
+          (a: Decimal, b) => a.plus(b.monto),
           new Decimal(0)
         )
       );
 
     const egresos = cambiosOrigen
-      .reduce(
-        (a: typeof Decimal, b: any) => a.plus(b.monto_origen),
-        new Decimal(0)
-      )
+      .reduce((a: Decimal, b) => a.plus(b.monto_origen), new Decimal(0))
       .plus(
         transferenciasSalida.reduce(
-          (a: typeof Decimal, b: any) => a.plus(b.monto),
+          (a: Decimal, b) => a.plus(b.monto),
           new Decimal(0)
         )
       )
       .plus(
         serviciosEgresos.reduce(
-          (a: typeof Decimal, b: any) => a.plus(b.monto),
+          (a: Decimal, b) => a.plus(b.monto),
           new Decimal(0)
         )
       );
@@ -197,7 +191,7 @@ async function main() {
 }
 
 main()
-  .catch((e: any) => {
+  .catch((e: Error) => {
     console.error(e);
     process.exit(1);
   })

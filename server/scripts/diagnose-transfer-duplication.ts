@@ -146,7 +146,7 @@ async function diagnosticarTransferencias() {
           numero_recibo: t.numero_recibo,
         },
         include: {
-          punto_atencion: { select: { nombre: true } },
+          puntoAtencion: { select: { nombre: true } },
           moneda: { select: { codigo: true } },
         },
       });
@@ -155,7 +155,7 @@ async function diagnosticarTransferencias() {
         `\n   📝 Movimientos operacionales (${movimientosOperacionales.length}):`
       );
       for (const mo of movimientosOperacionales) {
-        console.log(`   │  Punto: ${mo.punto_atencion?.nombre}`);
+        console.log(`   │  Punto: ${mo.puntoAtencion?.nombre}`);
         console.log(`   │  Tipo: ${mo.tipo}`);
         console.log(`   │  Monto: ${mo.monto}`);
         console.log(`   │  Descripción: ${mo.descripcion || "N/A"}`);

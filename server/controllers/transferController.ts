@@ -247,15 +247,17 @@ const controller = {
 
       logger.info(`Transferencias encontradas en BD: ${transfers.length}`);
 
-      const formattedTransfers = transfers.map((transfer) => ({
-        ...transfer,
-        solicitado_por: transfer.solicitado_por
-          ? transfer.solicitado_por
-          : transfer.usuarioSolicitante?.id ?? "",
-        monto: parseFloat(transfer.monto.toString()),
-        fecha: transfer.fecha.toISOString(),
-        fecha_aprobacion: transfer.fecha_aprobacion?.toISOString() || null,
-      }));
+      const formattedTransfers = transfers.map(
+        (transfer: (typeof transfers)[0]) => ({
+          ...transfer,
+          solicitado_por: transfer.solicitado_por
+            ? transfer.solicitado_por
+            : transfer.usuarioSolicitante?.id ?? "",
+          monto: parseFloat(transfer.monto.toString()),
+          fecha: transfer.fecha.toISOString(),
+          fecha_aprobacion: transfer.fecha_aprobacion?.toISOString() || null,
+        })
+      );
 
       res.status(200).json({
         transfers: formattedTransfers,
