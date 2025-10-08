@@ -1230,11 +1230,11 @@ router.patch(
 
         // Calcular incrementos/decrementos restantes según método de pago
         const usdRecibidoEfectivo =
-          cambio.metodo_pago_origen === "efectivo"
+          cambio.metodo_pago_origen === TipoViaTransferencia.EFECTIVO
             ? num(cambio.divisas_entregadas_total)
             : 0;
         const usdRecibidoTransfer =
-          cambio.metodo_pago_origen === "transferencia"
+          cambio.metodo_pago_origen === TipoViaTransferencia.BANCO
             ? num(cambio.divisas_entregadas_total)
             : 0;
 
@@ -1288,10 +1288,10 @@ router.patch(
               },
             },
             data: {
-              efectivo: { increment: ingresoEfRestante },
+              cantidad: { increment: ingresoEfRestante },
               bancos: { increment: ingresoBkRestante },
               billetes: { increment: ingresoBilRestante },
-              monedas: { increment: ingresoMonRestante },
+              monedas_fisicas: { increment: ingresoMonRestante },
             },
           });
 
@@ -1304,10 +1304,10 @@ router.patch(
               },
             },
             data: {
-              efectivo: { decrement: egresoEfRestante },
+              cantidad: { decrement: egresoEfRestante },
               bancos: { decrement: egresoBkRestante },
               billetes: { decrement: billetesEgresoRestante },
-              monedas: { decrement: monedasEgresoRestante },
+              monedas_fisicas: { decrement: monedasEgresoRestante },
             },
           });
 
@@ -1319,13 +1319,13 @@ router.patch(
               tipo_movimiento: TipoMovimiento.INGRESO,
               monto: montoRestante,
               saldo_anterior:
-                num(saldoOrigen.efectivo) + num(saldoOrigen.bancos),
+                num(saldoOrigen.cantidad) + num(saldoOrigen.bancos),
               saldo_nuevo:
-                num(saldoOrigen.efectivo) +
+                num(saldoOrigen.cantidad) +
                 num(saldoOrigen.bancos) +
                 ingresoEfRestante +
                 ingresoBkRestante,
-              referencia_tipo: "CAMBIO_DIVISA_CIERRE",
+              tipo_referencia: "CAMBIO_DIVISA_CIERRE",
               referencia_id: cambio.id,
               usuario_id: req.user!.id,
               descripcion: `Cierre de cambio pendiente - Monto restante: ${montoRestante.toFixed(
@@ -1497,11 +1497,11 @@ router.patch(
 
         // Calcular incrementos/decrementos restantes según método de pago
         const usdRecibidoEfectivo =
-          cambio.metodo_pago_origen === "efectivo"
+          cambio.metodo_pago_origen === TipoViaTransferencia.EFECTIVO
             ? num(cambio.divisas_entregadas_total)
             : 0;
         const usdRecibidoTransfer =
-          cambio.metodo_pago_origen === "transferencia"
+          cambio.metodo_pago_origen === TipoViaTransferencia.BANCO
             ? num(cambio.divisas_entregadas_total)
             : 0;
 
@@ -1555,10 +1555,10 @@ router.patch(
               },
             },
             data: {
-              efectivo: { increment: ingresoEfRestante },
+              cantidad: { increment: ingresoEfRestante },
               bancos: { increment: ingresoBkRestante },
               billetes: { increment: ingresoBilRestante },
-              monedas: { increment: ingresoMonRestante },
+              monedas_fisicas: { increment: ingresoMonRestante },
             },
           });
 
@@ -1571,10 +1571,10 @@ router.patch(
               },
             },
             data: {
-              efectivo: { decrement: egresoEfRestante },
+              cantidad: { decrement: egresoEfRestante },
               bancos: { decrement: egresoBkRestante },
               billetes: { decrement: billetesEgresoRestante },
-              monedas: { decrement: monedasEgresoRestante },
+              monedas_fisicas: { decrement: monedasEgresoRestante },
             },
           });
 
@@ -1586,13 +1586,13 @@ router.patch(
               tipo_movimiento: TipoMovimiento.INGRESO,
               monto: montoRestante,
               saldo_anterior:
-                num(saldoOrigen.efectivo) + num(saldoOrigen.bancos),
+                num(saldoOrigen.cantidad) + num(saldoOrigen.bancos),
               saldo_nuevo:
-                num(saldoOrigen.efectivo) +
+                num(saldoOrigen.cantidad) +
                 num(saldoOrigen.bancos) +
                 ingresoEfRestante +
                 ingresoBkRestante,
-              referencia_tipo: "CAMBIO_DIVISA_COMPLETAR",
+              tipo_referencia: "CAMBIO_DIVISA_COMPLETAR",
               referencia_id: cambio.id,
               usuario_id: req.user!.id,
               descripcion: `Completar cambio pendiente - Monto restante: ${montoRestante.toFixed(
