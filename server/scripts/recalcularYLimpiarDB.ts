@@ -2,6 +2,34 @@ import { TipoMovimiento } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import prisma from "../lib/prisma";
 
+/**
+ * Script de Recálculo y Limpieza de Base de Datos
+ *
+ * Este script realiza las siguientes operaciones:
+ * 1. Elimina duplicados de CambioDivisa, Transferencia y ServicioExternoMovimiento
+ * 2. Recalcula los saldos por punto de atención y moneda
+ *
+ * IMPORTANTE - Lógica de Cálculo de Saldos:
+ * - Solo se consideran transacciones COMPLETADAS (CambioDivisa)
+ * - Solo se consideran transferencias APROBADAS (Transferencia)
+ * - Todos los servicios externos se procesan (no tienen estado)
+ *
+ * Fórmula de Balance:
+ * Balance = Ingresos - Egresos
+ *
+ * Ingresos:
+ *   + Cambios de divisa donde la moneda es DESTINO (monto_destino)
+ *   + Transferencias RECIBIDAS (destino_id = punto)
+ *   + Servicios externos tipo INGRESO
+ *
+ * Egresos:
+ *   - Cambios de divisa donde la moneda es ORIGEN (monto_origen)
+ *   - Transferencias ENVIADAS (origen_id = punto)
+ *   - Servicios externos tipo EGRESO
+ *
+ * Esta lógica debe ser consistente con el endpoint /api/balance-completo
+ */
+
 // Elimina duplicados por campos clave (ajusta los campos si lo necesitas)
 async function eliminarDuplicadosCambioDivisa() {
   const movimientos = await prisma.cambioDivisa.findMany();
@@ -104,20 +132,36 @@ async function recalcularSaldos() {
   });
 
   for (const { punto_atencion_id, moneda_id } of saldos) {
-    // Cambios de divisa (como destino y origen)
+    // Cambios de divisa (como destino y origen) - SOLO COMPLETADOS
     const cambiosOrigen = await prisma.cambioDivisa.findMany({
-      where: { punto_atencion_id, moneda_origen_id: moneda_id },
+      where: {
+        punto_atencion_id,
+        moneda_origen_id: moneda_id,
+        estado: "COMPLETADO", // ✅ Filtrar solo transacciones completadas
+      },
     });
     const cambiosDestino = await prisma.cambioDivisa.findMany({
-      where: { punto_atencion_id, moneda_destino_id: moneda_id },
+      where: {
+        punto_atencion_id,
+        moneda_destino_id: moneda_id,
+        estado: "COMPLETADO", // ✅ Filtrar solo transacciones completadas
+      },
     });
 
-    // Transferencias recibidas y enviadas
+    // Transferencias recibidas y enviadas - SOLO APROBADAS
     const transferenciasEntrada = await prisma.transferencia.findMany({
-      where: { destino_id: punto_atencion_id, moneda_id },
+      where: {
+        destino_id: punto_atencion_id,
+        moneda_id,
+        estado: "APROBADO", // ✅ Filtrar solo transferencias aprobadas
+      },
     });
     const transferenciasSalida = await prisma.transferencia.findMany({
-      where: { origen_id: punto_atencion_id, moneda_id },
+      where: {
+        origen_id: punto_atencion_id,
+        moneda_id,
+        estado: "APROBADO", // ✅ Filtrar solo transferencias aprobadas
+      },
     });
 
     // Servicios externos

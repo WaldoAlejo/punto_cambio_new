@@ -713,6 +713,15 @@ router.post(
         });
 
         // 3) SALDOS (cuadre SOLO EFECTIVO; bancos se registran pero NO se cuadran)
+        // ✅ NUEVO: Calcular porcentaje de actualización según estado
+        // Si es PENDIENTE (con abono inicial), solo actualizar proporcionalmente
+        // Si es COMPLETADO, actualizar el monto completo
+        const porcentajeActualizacion =
+          cambio.estado === EstadoTransaccion.PENDIENTE &&
+          num(abono_inicial_monto) > 0
+            ? num(abono_inicial_monto) / monto_destino_final
+            : 1.0; // 100% si está completado o no hay abono
+
         // 3.1 Origen (INGRESO efectivo/bancos según metodo_pago_origen)
         const saldoOrigen = await getSaldo(
           tx,
@@ -727,13 +736,22 @@ router.post(
             ? num(saldoOrigen?.bancos)
             : 0;
 
-        const ingresoEf = round2(num(usd_recibido_efectivo));
-        const ingresoBk = round2(num(usd_recibido_transfer));
-        // breakdown físico solo si entra efectivo
+        // ✅ APLICAR PORCENTAJE: Solo actualizar según el abono inicial si es PENDIENTE
+        const ingresoEf = round2(
+          num(usd_recibido_efectivo) * porcentajeActualizacion
+        );
+        const ingresoBk = round2(
+          num(usd_recibido_transfer) * porcentajeActualizacion
+        );
+        // breakdown físico solo si entra efectivo (también aplicar porcentaje)
         const ingresoBil =
-          ingresoEf > 0 ? round2(num(divisas_entregadas_billetes)) : 0;
+          ingresoEf > 0
+            ? round2(num(divisas_entregadas_billetes) * porcentajeActualizacion)
+            : 0;
         const ingresoMon =
-          ingresoEf > 0 ? round2(num(divisas_entregadas_monedas)) : 0;
+          ingresoEf > 0
+            ? round2(num(divisas_entregadas_monedas) * porcentajeActualizacion)
+            : 0;
 
         const origenNuevoEf = round2(origenAnteriorEf + ingresoEf);
         const origenNuevoBil = round2(origenAnteriorBil + ingresoBil);
@@ -838,6 +856,10 @@ router.post(
           }
         }
 
+        // ✅ APLICAR PORCENTAJE al egreso también
+        egresoEf = round2(egresoEf * porcentajeActualizacion);
+        egresoBk = round2(egresoBk * porcentajeActualizacion);
+
         // Validaciones (evitamos números negativos)
         if (destinoAnteriorEf < egresoEf) {
           throw new Error(
@@ -856,11 +878,15 @@ router.post(
         const destinoNuevoEf = round2(destinoAnteriorEf - egresoEf);
         const destinoNuevoBk = round2(destinoAnteriorBk - egresoBk);
 
-        // ⚠️ Solo tocar billetes/monedas físicas si HAY egreso en efectivo
+        // ⚠️ Solo tocar billetes/monedas físicas si HAY egreso en efectivo (también aplicar porcentaje)
         const billetesEgreso =
-          egresoEf > 0 ? round2(num(divisas_recibidas_billetes)) : 0;
+          egresoEf > 0
+            ? round2(num(divisas_recibidas_billetes) * porcentajeActualizacion)
+            : 0;
         const monedasEgreso =
-          egresoEf > 0 ? round2(num(divisas_recibidas_monedas)) : 0;
+          egresoEf > 0
+            ? round2(num(divisas_recibidas_monedas) * porcentajeActualizacion)
+            : 0;
 
         const destinoNuevoBil = Math.max(
           0,
@@ -1165,6 +1191,151 @@ router.patch(
         return;
       }
 
+      // ✅ CRÍTICO: Si hubo abono inicial, actualizar el balance restante
+      const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
+
+      if (huboAbonoInicial) {
+        // Calcular el porcentaje restante que falta actualizar
+        const montoTotal = num(cambio.monto_destino);
+        const montoAbonado = num(cambio.abono_inicial_monto);
+        const montoRestante = montoTotal - montoAbonado;
+        const porcentajeRestante = montoRestante / montoTotal;
+
+        // Obtener saldos actuales
+        const saldoOrigen = await prisma.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+            },
+          },
+        });
+
+        const saldoDestino = await prisma.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_destino_id,
+            },
+          },
+        });
+
+        if (!saldoOrigen || !saldoDestino) {
+          res.status(400).json({
+            error: "No se encontraron saldos para las monedas involucradas",
+            success: false,
+          });
+          return;
+        }
+
+        // Calcular incrementos/decrementos restantes según método de pago
+        const usdRecibidoEfectivo =
+          cambio.metodo_pago_origen === "efectivo"
+            ? num(cambio.divisas_entregadas_total)
+            : 0;
+        const usdRecibidoTransfer =
+          cambio.metodo_pago_origen === "transferencia"
+            ? num(cambio.divisas_entregadas_total)
+            : 0;
+
+        const ingresoEfRestante = round2(
+          usdRecibidoEfectivo * porcentajeRestante
+        );
+        const ingresoBkRestante = round2(
+          usdRecibidoTransfer * porcentajeRestante
+        );
+        const ingresoBilRestante =
+          ingresoEfRestante > 0
+            ? round2(
+                num(cambio.divisas_entregadas_billetes) * porcentajeRestante
+              )
+            : 0;
+        const ingresoMonRestante =
+          ingresoEfRestante > 0
+            ? round2(
+                num(cambio.divisas_entregadas_monedas) * porcentajeRestante
+              )
+            : 0;
+
+        // Egreso en moneda destino
+        const egresoEfRestante =
+          cambio.metodo_entrega === "efectivo"
+            ? round2(num(cambio.divisas_recibidas_total) * porcentajeRestante)
+            : 0;
+        const egresoBkRestante =
+          cambio.metodo_entrega === "transferencia"
+            ? round2(num(cambio.divisas_recibidas_total) * porcentajeRestante)
+            : 0;
+        const billetesEgresoRestante =
+          egresoEfRestante > 0
+            ? round2(
+                num(cambio.divisas_recibidas_billetes) * porcentajeRestante
+              )
+            : 0;
+        const monedasEgresoRestante =
+          egresoEfRestante > 0
+            ? round2(num(cambio.divisas_recibidas_monedas) * porcentajeRestante)
+            : 0;
+
+        // Actualizar saldos en transacción
+        await prisma.$transaction(async (tx) => {
+          // Actualizar saldo origen (ingreso)
+          await tx.saldo.update({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: cambio.punto_atencion_id,
+                moneda_id: cambio.moneda_origen_id,
+              },
+            },
+            data: {
+              efectivo: { increment: ingresoEfRestante },
+              bancos: { increment: ingresoBkRestante },
+              billetes: { increment: ingresoBilRestante },
+              monedas: { increment: ingresoMonRestante },
+            },
+          });
+
+          // Actualizar saldo destino (egreso)
+          await tx.saldo.update({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: cambio.punto_atencion_id,
+                moneda_id: cambio.moneda_destino_id,
+              },
+            },
+            data: {
+              efectivo: { decrement: egresoEfRestante },
+              bancos: { decrement: egresoBkRestante },
+              billetes: { decrement: billetesEgresoRestante },
+              monedas: { decrement: monedasEgresoRestante },
+            },
+          });
+
+          // Registrar movimiento de saldo
+          await tx.movimientoSaldo.create({
+            data: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+              tipo_movimiento: TipoMovimiento.INGRESO,
+              monto: montoRestante,
+              saldo_anterior:
+                num(saldoOrigen.efectivo) + num(saldoOrigen.bancos),
+              saldo_nuevo:
+                num(saldoOrigen.efectivo) +
+                num(saldoOrigen.bancos) +
+                ingresoEfRestante +
+                ingresoBkRestante,
+              referencia_tipo: "CAMBIO_DIVISA_CIERRE",
+              referencia_id: cambio.id,
+              usuario_id: req.user!.id,
+              descripcion: `Cierre de cambio pendiente - Monto restante: ${montoRestante.toFixed(
+                2
+              )}`,
+            },
+          });
+        });
+      }
+
       const numeroReciboCierre = `CIERRE-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 6)}`;
@@ -1174,6 +1345,7 @@ router.patch(
           estado: EstadoTransaccion.COMPLETADO,
           numero_recibo_completar: numeroReciboCierre,
           fecha_completado: new Date(),
+          saldo_pendiente: 0,
         },
         select: {
           id: true,
@@ -1286,6 +1458,151 @@ router.patch(
         }
       }
 
+      // ✅ CRÍTICO: Si hubo abono inicial, actualizar el balance restante
+      const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
+
+      if (huboAbonoInicial) {
+        // Calcular el porcentaje restante que falta actualizar
+        const montoTotal = num(cambio.monto_destino);
+        const montoAbonado = num(cambio.abono_inicial_monto);
+        const montoRestante = montoTotal - montoAbonado;
+        const porcentajeRestante = montoRestante / montoTotal;
+
+        // Obtener saldos actuales
+        const saldoOrigen = await prisma.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+            },
+          },
+        });
+
+        const saldoDestino = await prisma.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_destino_id,
+            },
+          },
+        });
+
+        if (!saldoOrigen || !saldoDestino) {
+          res.status(400).json({
+            error: "No se encontraron saldos para las monedas involucradas",
+            success: false,
+          });
+          return;
+        }
+
+        // Calcular incrementos/decrementos restantes según método de pago
+        const usdRecibidoEfectivo =
+          cambio.metodo_pago_origen === "efectivo"
+            ? num(cambio.divisas_entregadas_total)
+            : 0;
+        const usdRecibidoTransfer =
+          cambio.metodo_pago_origen === "transferencia"
+            ? num(cambio.divisas_entregadas_total)
+            : 0;
+
+        const ingresoEfRestante = round2(
+          usdRecibidoEfectivo * porcentajeRestante
+        );
+        const ingresoBkRestante = round2(
+          usdRecibidoTransfer * porcentajeRestante
+        );
+        const ingresoBilRestante =
+          ingresoEfRestante > 0
+            ? round2(
+                num(cambio.divisas_entregadas_billetes) * porcentajeRestante
+              )
+            : 0;
+        const ingresoMonRestante =
+          ingresoEfRestante > 0
+            ? round2(
+                num(cambio.divisas_entregadas_monedas) * porcentajeRestante
+              )
+            : 0;
+
+        // Egreso en moneda destino
+        const egresoEfRestante =
+          cambio.metodo_entrega === "efectivo"
+            ? round2(num(cambio.divisas_recibidas_total) * porcentajeRestante)
+            : 0;
+        const egresoBkRestante =
+          cambio.metodo_entrega === "transferencia"
+            ? round2(num(cambio.divisas_recibidas_total) * porcentajeRestante)
+            : 0;
+        const billetesEgresoRestante =
+          egresoEfRestante > 0
+            ? round2(
+                num(cambio.divisas_recibidas_billetes) * porcentajeRestante
+              )
+            : 0;
+        const monedasEgresoRestante =
+          egresoEfRestante > 0
+            ? round2(num(cambio.divisas_recibidas_monedas) * porcentajeRestante)
+            : 0;
+
+        // Actualizar saldos en transacción
+        await prisma.$transaction(async (tx) => {
+          // Actualizar saldo origen (ingreso)
+          await tx.saldo.update({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: cambio.punto_atencion_id,
+                moneda_id: cambio.moneda_origen_id,
+              },
+            },
+            data: {
+              efectivo: { increment: ingresoEfRestante },
+              bancos: { increment: ingresoBkRestante },
+              billetes: { increment: ingresoBilRestante },
+              monedas: { increment: ingresoMonRestante },
+            },
+          });
+
+          // Actualizar saldo destino (egreso)
+          await tx.saldo.update({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: cambio.punto_atencion_id,
+                moneda_id: cambio.moneda_destino_id,
+              },
+            },
+            data: {
+              efectivo: { decrement: egresoEfRestante },
+              bancos: { decrement: egresoBkRestante },
+              billetes: { decrement: billetesEgresoRestante },
+              monedas: { decrement: monedasEgresoRestante },
+            },
+          });
+
+          // Registrar movimiento de saldo
+          await tx.movimientoSaldo.create({
+            data: {
+              punto_atencion_id: cambio.punto_atencion_id,
+              moneda_id: cambio.moneda_origen_id,
+              tipo_movimiento: TipoMovimiento.INGRESO,
+              monto: montoRestante,
+              saldo_anterior:
+                num(saldoOrigen.efectivo) + num(saldoOrigen.bancos),
+              saldo_nuevo:
+                num(saldoOrigen.efectivo) +
+                num(saldoOrigen.bancos) +
+                ingresoEfRestante +
+                ingresoBkRestante,
+              referencia_tipo: "CAMBIO_DIVISA_COMPLETAR",
+              referencia_id: cambio.id,
+              usuario_id: req.user!.id,
+              descripcion: `Completar cambio pendiente - Monto restante: ${montoRestante.toFixed(
+                2
+              )}`,
+            },
+          });
+        });
+      }
+
       const numeroReciboCompletar = `COMP-${Date.now()}-${Math.random()
         .toString(36)
         .slice(2, 6)}`;
@@ -1320,6 +1637,7 @@ router.patch(
               : cambio.divisas_recibidas_total,
           numero_recibo_completar: numeroReciboCompletar,
           fecha_completado: new Date(),
+          saldo_pendiente: 0,
         },
         select: {
           id: true,
