@@ -217,7 +217,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
 /* ============================================================================
    GET /api/balance-completo/punto/:pointId
-   Resumen de actividad por punto (conteos)
+   Resumen de actividad por punto (conteos) + balance por moneda
 ============================================================================ */
 router.get("/punto/:pointId", authenticateToken, async (req, res) => {
   try {
@@ -235,6 +235,7 @@ router.get("/punto/:pointId", authenticateToken, async (req, res) => {
       });
     }
 
+    // Conteos de actividad
     const [
       cambiosDivisas,
       serviciosExternos,
@@ -255,28 +256,136 @@ router.get("/punto/:pointId", authenticateToken, async (req, res) => {
       }),
     ]);
 
-    const balancePorPunto: BalancePorPunto = {
-      punto: punto.nombre,
-      puntoId: punto.id,
-      cambiosDivisas,
-      serviciosExternos,
-      transferenciasOrigen,
-      transferenciasDestino,
-      totalMovimientos:
+    // Balance por moneda para este punto
+    const saldos = await prisma.saldo.findMany({
+      where: { punto_atencion_id: pointId },
+      include: {
+        moneda: {
+          select: { id: true, codigo: true, nombre: true },
+        },
+      },
+    });
+
+    const balancesPorMoneda = await Promise.all(
+      saldos.map(async (saldo) => {
+        const monedaId = saldo.moneda_id;
+
+        // Cambios de divisa (origen = salida, destino = entrada)
+        const [cambiosOrigen, cambiosDestino] = await Promise.all([
+          prisma.cambioDivisa.aggregate({
+            where: {
+              punto_atencion_id: pointId,
+              moneda_origen_id: monedaId,
+              estado: "COMPLETADO",
+            },
+            _sum: { monto_origen: true },
+          }),
+          prisma.cambioDivisa.aggregate({
+            where: {
+              punto_atencion_id: pointId,
+              moneda_destino_id: monedaId,
+              estado: "COMPLETADO",
+            },
+            _sum: { monto_destino: true },
+          }),
+        ]);
+
+        // Servicios externos (ingresos y egresos)
+        const [serviciosIngresos, serviciosEgresos] = await Promise.all([
+          prisma.servicioExternoMovimiento.aggregate({
+            where: {
+              punto_atencion_id: pointId,
+              moneda_id: monedaId,
+              tipo_movimiento: "INGRESO",
+            },
+            _sum: { monto: true },
+          }),
+          prisma.servicioExternoMovimiento.aggregate({
+            where: {
+              punto_atencion_id: pointId,
+              moneda_id: monedaId,
+              tipo_movimiento: "EGRESO",
+            },
+            _sum: { monto: true },
+          }),
+        ]);
+
+        // Transferencias (entrada y salida)
+        const [transferenciasEntrada, transferenciasSalida] = await Promise.all(
+          [
+            prisma.transferencia.aggregate({
+              where: {
+                destino_id: pointId,
+                moneda_id: monedaId,
+                estado: "APROBADO",
+              },
+              _sum: { monto: true },
+            }),
+            prisma.transferencia.aggregate({
+              where: {
+                origen_id: pointId,
+                moneda_id: monedaId,
+                estado: "APROBADO",
+              },
+              _sum: { monto: true },
+            }),
+          ]
+        );
+
+        const cambiosDivisasOrigen = toNum(cambiosOrigen._sum.monto_origen);
+        const cambiosDivisasDestino = toNum(cambiosDestino._sum.monto_destino);
+        const serviciosExternosIngresos = toNum(serviciosIngresos._sum.monto);
+        const serviciosExternosEgresos = toNum(serviciosEgresos._sum.monto);
+        const transferenciasNetas =
+          toNum(transferenciasEntrada._sum.monto) -
+          toNum(transferenciasSalida._sum.monto);
+
+        const balance =
+          -cambiosDivisasOrigen +
+          cambiosDivisasDestino +
+          serviciosExternosIngresos -
+          serviciosExternosEgresos +
+          transferenciasNetas;
+
+        return {
+          moneda_codigo: saldo.moneda.codigo,
+          moneda_nombre: saldo.moneda.nombre,
+          balance,
+          detalles: {
+            cambiosDivisasOrigen,
+            cambiosDivisasDestino,
+            serviciosExternosIngresos,
+            serviciosExternosEgresos,
+            transferenciasNetas,
+          },
+        };
+      })
+    );
+
+    console.log(
+      `✅ Balance por punto calculado: ${
         cambiosDivisas +
         serviciosExternos +
         transferenciasOrigen +
-        transferenciasDestino,
-    };
-
-    console.log(
-      `✅ Balance por punto calculado: ${balancePorPunto.totalMovimientos} movimientos totales`
+        transferenciasDestino
+      } movimientos totales`
     );
 
     res.json({
       success: true,
       data: {
-        balancePorPunto,
+        actividad: {
+          cambiosDivisas,
+          serviciosExternos,
+          transferenciasOrigen,
+          transferenciasDestino,
+          totalMovimientos:
+            cambiosDivisas +
+            serviciosExternos +
+            transferenciasOrigen +
+            transferenciasDestino,
+        },
+        balancesPorMoneda,
         timestamp: new Date().toISOString(),
       },
     });
