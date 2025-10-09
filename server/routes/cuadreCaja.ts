@@ -92,7 +92,7 @@ async function calcularSaldoApertura(
         WHERE dc.moneda_id = $1
           AND c.punto_atencion_id = $2
           AND c.estado IN ('CERRADO','PARCIAL')
-          AND c.fecha < $3
+          AND c.fecha < $3::timestamp
         ORDER BY c.fecha DESC
         LIMIT 1`,
       [monedaId, puntoAtencionId, fechaInicioUtc.toISOString()]
@@ -164,7 +164,7 @@ router.get("/", authenticateToken, async (req, res) => {
     LEFT JOIN "DetalleCuadreCaja" dc ON c.id = dc.cuadre_id
     LEFT JOIN "Moneda" m           ON dc.moneda_id = m.id
         WHERE c.punto_atencion_id = $1
-          AND c.fecha >= $2
+          AND c.fecha >= $2::timestamp
           AND c.estado = 'ABIERTO'
      GROUP BY c.id
      LIMIT 1`,
@@ -189,14 +189,14 @@ router.get("/", authenticateToken, async (req, res) => {
     // independientemente de cuándo empezó la jornada del operador.
     // Esto asegura que servicios externos u otros movimientos registrados antes de que
     // el operador iniciara su jornada sean incluidos en el cierre.
-    const fechaInicio = fechaInicioDia;
+    const fechaInicio: Date = fechaInicioDia;
 
     // Movimientos desde fechaInicio (UTC)
     const cambiosResult = await pool.query<CambioDivisa>(
       `SELECT *
          FROM "CambioDivisa"
         WHERE punto_atencion_id = $1
-          AND fecha >= $2
+          AND fecha >= $2::timestamp
           AND estado = $3`,
       [puntoAtencionId, fechaInicio.toISOString(), "COMPLETADO"]
     );
@@ -207,7 +207,7 @@ router.get("/", authenticateToken, async (req, res) => {
         `SELECT *
            FROM "Transferencia"
           WHERE destino_id = $1
-            AND fecha >= $2
+            AND fecha >= $2::timestamp
             AND estado = 'APROBADO'`,
         [puntoAtencionId, fechaInicio.toISOString()]
       ),
@@ -215,7 +215,7 @@ router.get("/", authenticateToken, async (req, res) => {
         `SELECT *
            FROM "Transferencia"
           WHERE origen_id = $1
-            AND fecha >= $2
+            AND fecha >= $2::timestamp
             AND estado = 'APROBADO'`,
         [puntoAtencionId, fechaInicio.toISOString()]
       ),
@@ -228,7 +228,7 @@ router.get("/", authenticateToken, async (req, res) => {
         `SELECT id, moneda_id, monto, tipo_movimiento
            FROM "ServicioExternoMovimiento"
           WHERE punto_atencion_id = $1
-            AND fecha >= $2`,
+            AND fecha >= $2::timestamp`,
         [puntoAtencionId, fechaInicio.toISOString()]
       ),
     ]);
