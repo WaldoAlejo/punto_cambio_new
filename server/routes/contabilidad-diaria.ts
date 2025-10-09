@@ -369,7 +369,7 @@ router.get(
         },
       });
 
-      // 3. Verificar estado de cierres existentes
+      // 3. Verificar estado de cierre diario
       const cierreDiario = await prisma.cierreDiario.findUnique({
         where: {
           fecha_punto_atencion_id: {
@@ -379,36 +379,24 @@ router.get(
         },
       });
 
-      const cierreServiciosExternos =
-        await prisma.servicioExternoCierreDiario.findUnique({
-          where: {
-            fecha_punto_atencion_id: {
-              fecha: fechaDate,
-              punto_atencion_id: pointId,
-            },
-          },
-        });
-
       // Determinar qué cierres son requeridos
+      // NOTA: Los servicios externos ya NO requieren cierre separado
+      // Se incluyen automáticamente en el cierre diario
       const cierresRequeridos = {
-        servicios_externos: serviciosExternos > 0,
+        servicios_externos: false, // Ya no se requiere cierre separado
         cambios_divisas: cambiosDivisas > 0,
         cierre_diario: true, // Siempre requerido
       };
 
       // Estado actual de los cierres
       const estadoCierres = {
-        servicios_externos: cierreServiciosExternos?.estado === "CERRADO",
+        servicios_externos: true, // Siempre true porque ya no se requiere cierre separado
         cambios_divisas: true, // Los cambios de divisas no tienen cierre separado, se incluyen en el cierre diario
         cierre_diario: cierreDiario?.estado === "CERRADO",
       };
 
       // Verificar si todos los cierres requeridos están completos
-      const cierresCompletos =
-        (!cierresRequeridos.servicios_externos ||
-          estadoCierres.servicios_externos) &&
-        (!cierresRequeridos.cambios_divisas || estadoCierres.cambios_divisas) &&
-        estadoCierres.cierre_diario;
+      const cierresCompletos = estadoCierres.cierre_diario;
 
       return res.json({
         success: true,
@@ -506,46 +494,9 @@ router.post(
         });
       }
 
-      // Antes de cerrar, validar que todos los cierres requeridos estén completos
-      const { gte, lt } = gyeDayRangeUtcFromDateOnly(fecha);
-
-      // Verificar si hay servicios externos que requieren cierre
-      const serviciosExternos = await prisma.servicioExternoMovimiento.count({
-        where: {
-          punto_atencion_id: pointId,
-          fecha: { gte, lt },
-        },
-      });
-
-      if (serviciosExternos > 0) {
-        // Verificar si el cierre de servicios externos está completo
-        const cierreServiciosExternos =
-          await prisma.servicioExternoCierreDiario.findUnique({
-            where: {
-              fecha_punto_atencion_id: {
-                fecha: fechaDate,
-                punto_atencion_id: pointId,
-              },
-            },
-          });
-
-        if (
-          !cierreServiciosExternos ||
-          cierreServiciosExternos.estado !== "CERRADO"
-        ) {
-          return res.status(400).json({
-            success: false,
-            error:
-              "Debe completar el cierre de servicios externos antes del cierre diario",
-            codigo: "SERVICIOS_EXTERNOS_PENDIENTE",
-            detalles: {
-              servicios_externos_movimientos: serviciosExternos,
-              cierre_servicios_externos_estado:
-                cierreServiciosExternos?.estado || "NO_EXISTE",
-            },
-          });
-        }
-      }
+      // NOTA: La validación de servicios externos fue eliminada.
+      // Los servicios externos ahora se incluyen automáticamente en el cierre diario
+      // a través del endpoint /cuadre-caja que consolida todos los movimientos.
 
       // Crear o actualizar a CERRADO y verificar si se puede finalizar jornada
       const result = await prisma.$transaction(async (tx) => {

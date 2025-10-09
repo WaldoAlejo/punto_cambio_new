@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { User, PuntoAtencion, CuadreCaja } from "../../types";
-import ExternalServicesClose from "./ExternalServicesClose";
+// import ExternalServicesClose from "./ExternalServicesClose"; // Ya no se requiere cierre separado
 import { contabilidadDiariaService } from "../../services/contabilidadDiariaService";
 
 function getCantidad(val: any): number {
@@ -49,9 +49,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     cuadre_id?: string;
     periodo_inicio?: string;
     totales?: {
-      cambios: number;
-      transferencias_entrada: number;
-      transferencias_salida: number;
+      cambios: number | { cantidad: number };
+      servicios_externos?: number | { cantidad: number };
+      transferencias_entrada: number | { cantidad: number };
+      transferencias_salida: number | { cantidad: number };
     };
   } | null>(null);
   const [userAdjustments, setUserAdjustments] = useState<{
@@ -346,19 +347,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       // 2. Verificar si faltan cierres requeridos
       const { cierres_requeridos, estado_cierres } = validacion;
 
-      if (
-        cierres_requeridos.servicios_externos &&
-        !estado_cierres.servicios_externos
-      ) {
-        toast({
-          title: "Cierre de servicios externos pendiente",
-          description: `Debe completar el cierre de servicios externos antes del cierre diario. Se encontraron ${
-            validacion.conteos?.servicios_externos || 0
-          } movimientos de servicios externos.`,
-          variant: "destructive",
-        });
-        return;
-      }
+      // NOTA: Los servicios externos ya NO requieren cierre separado
+      // Se incluyen automáticamente en el cierre diario
 
       // 3. Validaciones de saldos solo si hay movimientos de cambios de divisas
       if (
@@ -410,7 +400,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             })
             .join(
               "\n"
-            )}\n\nRegistre el servicio externo (USD) o el cambio de divisa faltante y vuelva a intentar.`;
+            )}\n\nVerifique que todos los movimientos del día estén registrados (cambios, servicios externos, transferencias) y vuelva a intentar.`;
           toast({
             title: "No cuadra",
             description: msg,
@@ -556,8 +546,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         </div>
       </div>
 
-      {/* Cierre de Servicios Externos (USD) */}
-      <ExternalServicesClose user={user} selectedPoint={selectedPoint} />
+      {/* NOTA: El cierre de servicios externos ya NO es necesario como paso separado.
+          Los movimientos de servicios externos se incluyen automáticamente en el cierre diario. */}
 
       {loading ? (
         <Card>
@@ -583,11 +573,19 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           <CardContent>
             {/* Mostrar totales del día */}
             {cuadreData?.totales && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
                 <div className="text-center">
                   <h4 className="font-semibold text-blue-700">Total Cambios</h4>
                   <p className="text-2xl font-bold text-blue-600">
                     {getCantidad(cuadreData.totales.cambios)}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <h4 className="font-semibold text-purple-700">
+                    Servicios Externos
+                  </h4>
+                  <p className="text-2xl font-bold text-purple-600">
+                    {getCantidad(cuadreData.totales.servicios_externos)}
                   </p>
                 </div>
                 <div className="text-center">
@@ -620,8 +618,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                     proceder con el cierre.
                   </p>
                   <p className="text-sm text-blue-600">
-                    El cierre incluirá únicamente los servicios externos
-                    registrados arriba.
+                    El cierre incluirá todos los movimientos del día (servicios
+                    externos, transferencias, etc.).
                   </p>
                 </div>
               </div>

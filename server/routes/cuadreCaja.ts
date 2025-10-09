@@ -203,7 +203,7 @@ router.get("/", authenticateToken, async (req, res) => {
     );
     const cambiosHoy = cambiosResult.rows;
 
-    const [transferIn, transferOut] = await Promise.all([
+    const [transferIn, transferOut, serviciosExternos] = await Promise.all([
       pool.query<Transferencia>(
         `SELECT *
            FROM "Transferencia"
@@ -220,9 +220,21 @@ router.get("/", authenticateToken, async (req, res) => {
             AND estado = 'APROBADO'`,
         [puntoAtencionId, fechaInicio.toISOString()]
       ),
+      pool.query<{
+        id: string;
+        moneda_id: string;
+        monto: number;
+        tipo_movimiento: string;
+      }>(
+        `SELECT id, moneda_id, monto, tipo_movimiento
+           FROM "ServicioExternoMovimiento"
+          WHERE punto_atencion_id = $1
+            AND fecha >= $2`,
+        [puntoAtencionId, fechaInicio.toISOString()]
+      ),
     ]);
 
-    // IDs de monedas usadas en movimientos (cambios y transferencias)
+    // IDs de monedas usadas en movimientos (cambios, transferencias y servicios externos)
     const monedaIdsDeCambios = new Set<string>(
       cambiosHoy
         .flatMap((c) => [c.moneda_origen_id, c.moneda_destino_id])
@@ -233,6 +245,9 @@ router.get("/", authenticateToken, async (req, res) => {
         ...transferIn.rows.map((t) => t.moneda_id),
         ...transferOut.rows.map((t) => t.moneda_id),
       ].filter(Boolean) as string[]
+    );
+    const monedaIdsDeServiciosExternos = new Set<string>(
+      serviciosExternos.rows.map((s) => s.moneda_id).filter(Boolean) as string[]
     );
 
     // IDs de monedas con saldo (pueden no haber tenido movimientos hoy)
@@ -252,6 +267,7 @@ router.get("/", authenticateToken, async (req, res) => {
     const universoIds = new Set<string>([
       ...Array.from(monedaIdsDeCambios),
       ...Array.from(monedaIdsDeTransfers),
+      ...Array.from(monedaIdsDeServiciosExternos),
     ]);
 
     // Obtener información de las monedas que tuvieron movimientos
@@ -285,6 +301,11 @@ router.get("/", authenticateToken, async (req, res) => {
           periodo_inicio: fechaInicio,
           totales: {
             cambios: { cantidad: cambiosHoy.length, ingresos: 0, egresos: 0 },
+            servicios_externos: {
+              cantidad: serviciosExternos.rowCount || 0,
+              ingresos: 0,
+              egresos: 0,
+            },
             transferencias_entrada: { cantidad: transferIn.rowCount, monto: 0 },
             transferencias_salida: { cantidad: transferOut.rowCount, monto: 0 },
           },
@@ -344,6 +365,26 @@ router.get("/", authenticateToken, async (req, res) => {
       transfOutByMoneda.set(t.moneda_id, m);
     }
 
+    // Servicios externos por moneda (ingresos y egresos)
+    const serviciosExternosByMoneda = new Map<
+      string,
+      { ingresos: number; egresos: number; cantidad: number }
+    >();
+    for (const s of serviciosExternos.rows) {
+      const curr = serviciosExternosByMoneda.get(s.moneda_id) || {
+        ingresos: 0,
+        egresos: 0,
+        cantidad: 0,
+      };
+      if (s.tipo_movimiento === "INGRESO") {
+        curr.ingresos += Number(s.monto) || 0;
+      } else {
+        curr.egresos += Number(s.monto) || 0;
+      }
+      curr.cantidad += 1;
+      serviciosExternosByMoneda.set(s.moneda_id, curr);
+    }
+
     // Construir detalles por moneda
     const detallesConValores = await Promise.all(
       monedas.map(async (moneda) => {
@@ -366,16 +407,21 @@ router.get("/", authenticateToken, async (req, res) => {
           monto: 0,
           cantidad: 0,
         };
+        const sExt = serviciosExternosByMoneda.get(moneda.id) || {
+          ingresos: 0,
+          egresos: 0,
+          cantidad: 0,
+        };
 
         // Calcular el saldo real basado en todos los movimientos registrados
-        // Esto incluye cambios Y transferencias automáticamente
+        // Esto incluye cambios, transferencias Y servicios externos automáticamente
         const saldo_cierre_teorico =
           await saldoReconciliationService.calcularSaldoReal(
             puntoAtencionId,
             moneda.id
           );
 
-        // Para el desglose, mostrar solo los cambios como ingresos/egresos del período
+        // Para el desglose, mostrar cambios y servicios externos como ingresos/egresos del período
         // Las transferencias se muestran por separado en el desglose pero no se suman al cálculo
         const ingresos_periodo = c.ingresos || 0;
         const egresos_periodo = c.egresos || 0;
@@ -394,6 +440,11 @@ router.get("/", authenticateToken, async (req, res) => {
               ingresos: c.ingresos || 0,
               egresos: c.egresos || 0,
               cantidad: c.cantidad || 0,
+            },
+            servicios_externos: {
+              ingresos: sExt.ingresos || 0,
+              egresos: sExt.egresos || 0,
+              cantidad: sExt.cantidad || 0,
             },
             transferencias: {
               entrada: tIn.monto || 0,
@@ -423,6 +474,12 @@ router.get("/", authenticateToken, async (req, res) => {
       (s, t) => s + (Number(t.monto) || 0),
       0
     );
+    const totalServiciosExtIngresos = serviciosExternos.rows
+      .filter((s) => s.tipo_movimiento === "INGRESO")
+      .reduce((s, se) => s + (Number(se.monto) || 0), 0);
+    const totalServiciosExtEgresos = serviciosExternos.rows
+      .filter((s) => s.tipo_movimiento === "EGRESO")
+      .reduce((s, se) => s + (Number(se.monto) || 0), 0);
 
     return res.status(200).json({
       success: true,
@@ -438,6 +495,11 @@ router.get("/", authenticateToken, async (req, res) => {
             cantidad: cambiosHoy.length,
             ingresos: totalCambiosIngresos,
             egresos: totalCambiosEgresos,
+          },
+          servicios_externos: {
+            cantidad: serviciosExternos.rowCount,
+            ingresos: totalServiciosExtIngresos,
+            egresos: totalServiciosExtEgresos,
           },
           transferencias_entrada: {
             cantidad: transferIn.rowCount,
