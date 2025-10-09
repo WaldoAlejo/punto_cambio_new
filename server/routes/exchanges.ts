@@ -743,15 +743,42 @@ router.post(
         const ingresoBk = round2(
           num(usd_recibido_transfer) * porcentajeActualizacion
         );
+
         // breakdown físico solo si entra efectivo (también aplicar porcentaje)
-        const ingresoBil =
-          ingresoEf > 0
-            ? round2(num(divisas_entregadas_billetes) * porcentajeActualizacion)
-            : 0;
-        const ingresoMon =
-          ingresoEf > 0
-            ? round2(num(divisas_entregadas_monedas) * porcentajeActualizacion)
-            : 0;
+        let ingresoBil = 0;
+        let ingresoMon = 0;
+
+        if (ingresoEf > 0) {
+          // Calcular proporción de billetes y monedas
+          const totalEntregado =
+            num(divisas_entregadas_billetes) + num(divisas_entregadas_monedas);
+
+          if (totalEntregado > 0) {
+            const proporcionBilletes =
+              num(divisas_entregadas_billetes) / totalEntregado;
+            const proporcionMonedas =
+              num(divisas_entregadas_monedas) / totalEntregado;
+
+            // Aplicar proporción al ingreso efectivo para mantener coherencia
+            ingresoBil = round2(ingresoEf * proporcionBilletes);
+            ingresoMon = round2(ingresoEf * proporcionMonedas);
+
+            // Ajustar por diferencias de redondeo: asegurar que billetes + monedas = total
+            const diferencia = ingresoEf - (ingresoBil + ingresoMon);
+            if (Math.abs(diferencia) > 0.01) {
+              // Si hay diferencia significativa, ajustar el componente mayor
+              if (ingresoBil >= ingresoMon) {
+                ingresoBil = round2(ingresoBil + diferencia);
+              } else {
+                ingresoMon = round2(ingresoMon + diferencia);
+              }
+            }
+          } else {
+            // Si no hay breakdown, todo va a billetes por defecto
+            ingresoBil = ingresoEf;
+            ingresoMon = 0;
+          }
+        }
 
         const origenNuevoEf = round2(origenAnteriorEf + ingresoEf);
         const origenNuevoBil = round2(origenAnteriorBil + ingresoBil);
@@ -878,15 +905,53 @@ router.post(
         const destinoNuevoEf = round2(destinoAnteriorEf - egresoEf);
         const destinoNuevoBk = round2(destinoAnteriorBk - egresoBk);
 
-        // ⚠️ Solo tocar billetes/monedas físicas si HAY egreso en efectivo (también aplicar porcentaje)
-        const billetesEgreso =
-          egresoEf > 0
-            ? round2(num(divisas_recibidas_billetes) * porcentajeActualizacion)
-            : 0;
-        const monedasEgreso =
-          egresoEf > 0
-            ? round2(num(divisas_recibidas_monedas) * porcentajeActualizacion)
-            : 0;
+        // ⚠️ Solo tocar billetes/monedas físicas si HAY egreso en efectivo
+        let billetesEgreso = 0;
+        let monedasEgreso = 0;
+
+        if (egresoEf > 0) {
+          // Calcular proporción de billetes y monedas
+          const totalRecibido =
+            num(divisas_recibidas_billetes) + num(divisas_recibidas_monedas);
+
+          if (totalRecibido > 0) {
+            const proporcionBilletes =
+              num(divisas_recibidas_billetes) / totalRecibido;
+            const proporcionMonedas =
+              num(divisas_recibidas_monedas) / totalRecibido;
+
+            // Aplicar proporción al egreso efectivo para mantener coherencia
+            billetesEgreso = round2(egresoEf * proporcionBilletes);
+            monedasEgreso = round2(egresoEf * proporcionMonedas);
+
+            // Ajustar por diferencias de redondeo: asegurar que billetes + monedas = total
+            const diferencia = egresoEf - (billetesEgreso + monedasEgreso);
+            if (Math.abs(diferencia) > 0.01) {
+              // Si hay diferencia significativa, ajustar el componente mayor
+              if (billetesEgreso >= monedasEgreso) {
+                billetesEgreso = round2(billetesEgreso + diferencia);
+              } else {
+                monedasEgreso = round2(monedasEgreso + diferencia);
+              }
+            }
+          } else {
+            // Si no hay breakdown, todo sale de billetes por defecto
+            billetesEgreso = egresoEf;
+            monedasEgreso = 0;
+          }
+
+          // Validar que hay suficiente saldo de billetes y monedas
+          if (destinoAnteriorBil < billetesEgreso) {
+            throw new Error(
+              `Saldo de billetes insuficiente en moneda destino. Disponible: ${destinoAnteriorBil}, Requerido: ${billetesEgreso}`
+            );
+          }
+          if (destinoAnteriorMon < monedasEgreso) {
+            throw new Error(
+              `Saldo de monedas insuficiente en moneda destino. Disponible: ${destinoAnteriorMon}, Requerido: ${monedasEgreso}`
+            );
+          }
+        }
 
         const destinoNuevoBil = Math.max(
           0,
@@ -1244,18 +1309,40 @@ router.patch(
         const ingresoBkRestante = round2(
           usdRecibidoTransfer * porcentajeRestante
         );
-        const ingresoBilRestante =
-          ingresoEfRestante > 0
-            ? round2(
-                num(cambio.divisas_entregadas_billetes) * porcentajeRestante
-              )
-            : 0;
-        const ingresoMonRestante =
-          ingresoEfRestante > 0
-            ? round2(
-                num(cambio.divisas_entregadas_monedas) * porcentajeRestante
-              )
-            : 0;
+
+        // Calcular billetes y monedas de ingreso manteniendo proporción
+        let ingresoBilRestante = 0;
+        let ingresoMonRestante = 0;
+
+        if (ingresoEfRestante > 0) {
+          const totalEntregado =
+            num(cambio.divisas_entregadas_billetes) +
+            num(cambio.divisas_entregadas_monedas);
+
+          if (totalEntregado > 0) {
+            const proporcionBilletes =
+              num(cambio.divisas_entregadas_billetes) / totalEntregado;
+            const proporcionMonedas =
+              num(cambio.divisas_entregadas_monedas) / totalEntregado;
+
+            ingresoBilRestante = round2(ingresoEfRestante * proporcionBilletes);
+            ingresoMonRestante = round2(ingresoEfRestante * proporcionMonedas);
+
+            // Ajustar por diferencias de redondeo
+            const diferencia =
+              ingresoEfRestante - (ingresoBilRestante + ingresoMonRestante);
+            if (Math.abs(diferencia) > 0.01) {
+              if (ingresoBilRestante >= ingresoMonRestante) {
+                ingresoBilRestante = round2(ingresoBilRestante + diferencia);
+              } else {
+                ingresoMonRestante = round2(ingresoMonRestante + diferencia);
+              }
+            }
+          } else {
+            ingresoBilRestante = ingresoEfRestante;
+            ingresoMonRestante = 0;
+          }
+        }
 
         // Egreso en moneda destino
         const egresoEfRestante =
@@ -1266,16 +1353,49 @@ router.patch(
           cambio.metodo_entrega === "transferencia"
             ? round2(num(cambio.divisas_recibidas_total) * porcentajeRestante)
             : 0;
-        const billetesEgresoRestante =
-          egresoEfRestante > 0
-            ? round2(
-                num(cambio.divisas_recibidas_billetes) * porcentajeRestante
-              )
-            : 0;
-        const monedasEgresoRestante =
-          egresoEfRestante > 0
-            ? round2(num(cambio.divisas_recibidas_monedas) * porcentajeRestante)
-            : 0;
+
+        // Calcular billetes y monedas de egreso manteniendo proporción
+        let billetesEgresoRestante = 0;
+        let monedasEgresoRestante = 0;
+
+        if (egresoEfRestante > 0) {
+          const totalRecibido =
+            num(cambio.divisas_recibidas_billetes) +
+            num(cambio.divisas_recibidas_monedas);
+
+          if (totalRecibido > 0) {
+            const proporcionBilletes =
+              num(cambio.divisas_recibidas_billetes) / totalRecibido;
+            const proporcionMonedas =
+              num(cambio.divisas_recibidas_monedas) / totalRecibido;
+
+            billetesEgresoRestante = round2(
+              egresoEfRestante * proporcionBilletes
+            );
+            monedasEgresoRestante = round2(
+              egresoEfRestante * proporcionMonedas
+            );
+
+            // Ajustar por diferencias de redondeo
+            const diferencia =
+              egresoEfRestante -
+              (billetesEgresoRestante + monedasEgresoRestante);
+            if (Math.abs(diferencia) > 0.01) {
+              if (billetesEgresoRestante >= monedasEgresoRestante) {
+                billetesEgresoRestante = round2(
+                  billetesEgresoRestante + diferencia
+                );
+              } else {
+                monedasEgresoRestante = round2(
+                  monedasEgresoRestante + diferencia
+                );
+              }
+            }
+          } else {
+            billetesEgresoRestante = egresoEfRestante;
+            monedasEgresoRestante = 0;
+          }
+        }
 
         // Actualizar saldos en transacción
         await prisma.$transaction(async (tx) => {
@@ -1511,18 +1631,40 @@ router.patch(
         const ingresoBkRestante = round2(
           usdRecibidoTransfer * porcentajeRestante
         );
-        const ingresoBilRestante =
-          ingresoEfRestante > 0
-            ? round2(
-                num(cambio.divisas_entregadas_billetes) * porcentajeRestante
-              )
-            : 0;
-        const ingresoMonRestante =
-          ingresoEfRestante > 0
-            ? round2(
-                num(cambio.divisas_entregadas_monedas) * porcentajeRestante
-              )
-            : 0;
+
+        // Calcular billetes y monedas de ingreso manteniendo proporción
+        let ingresoBilRestante = 0;
+        let ingresoMonRestante = 0;
+
+        if (ingresoEfRestante > 0) {
+          const totalEntregado =
+            num(cambio.divisas_entregadas_billetes) +
+            num(cambio.divisas_entregadas_monedas);
+
+          if (totalEntregado > 0) {
+            const proporcionBilletes =
+              num(cambio.divisas_entregadas_billetes) / totalEntregado;
+            const proporcionMonedas =
+              num(cambio.divisas_entregadas_monedas) / totalEntregado;
+
+            ingresoBilRestante = round2(ingresoEfRestante * proporcionBilletes);
+            ingresoMonRestante = round2(ingresoEfRestante * proporcionMonedas);
+
+            // Ajustar por diferencias de redondeo
+            const diferencia =
+              ingresoEfRestante - (ingresoBilRestante + ingresoMonRestante);
+            if (Math.abs(diferencia) > 0.01) {
+              if (ingresoBilRestante >= ingresoMonRestante) {
+                ingresoBilRestante = round2(ingresoBilRestante + diferencia);
+              } else {
+                ingresoMonRestante = round2(ingresoMonRestante + diferencia);
+              }
+            }
+          } else {
+            ingresoBilRestante = ingresoEfRestante;
+            ingresoMonRestante = 0;
+          }
+        }
 
         // Egreso en moneda destino
         const egresoEfRestante =
@@ -1533,16 +1675,49 @@ router.patch(
           cambio.metodo_entrega === "transferencia"
             ? round2(num(cambio.divisas_recibidas_total) * porcentajeRestante)
             : 0;
-        const billetesEgresoRestante =
-          egresoEfRestante > 0
-            ? round2(
-                num(cambio.divisas_recibidas_billetes) * porcentajeRestante
-              )
-            : 0;
-        const monedasEgresoRestante =
-          egresoEfRestante > 0
-            ? round2(num(cambio.divisas_recibidas_monedas) * porcentajeRestante)
-            : 0;
+
+        // Calcular billetes y monedas de egreso manteniendo proporción
+        let billetesEgresoRestante = 0;
+        let monedasEgresoRestante = 0;
+
+        if (egresoEfRestante > 0) {
+          const totalRecibido =
+            num(cambio.divisas_recibidas_billetes) +
+            num(cambio.divisas_recibidas_monedas);
+
+          if (totalRecibido > 0) {
+            const proporcionBilletes =
+              num(cambio.divisas_recibidas_billetes) / totalRecibido;
+            const proporcionMonedas =
+              num(cambio.divisas_recibidas_monedas) / totalRecibido;
+
+            billetesEgresoRestante = round2(
+              egresoEfRestante * proporcionBilletes
+            );
+            monedasEgresoRestante = round2(
+              egresoEfRestante * proporcionMonedas
+            );
+
+            // Ajustar por diferencias de redondeo
+            const diferencia =
+              egresoEfRestante -
+              (billetesEgresoRestante + monedasEgresoRestante);
+            if (Math.abs(diferencia) > 0.01) {
+              if (billetesEgresoRestante >= monedasEgresoRestante) {
+                billetesEgresoRestante = round2(
+                  billetesEgresoRestante + diferencia
+                );
+              } else {
+                monedasEgresoRestante = round2(
+                  monedasEgresoRestante + diferencia
+                );
+              }
+            }
+          } else {
+            billetesEgresoRestante = egresoEfRestante;
+            monedasEgresoRestante = 0;
+          }
+        }
 
         // Actualizar saldos en transacción
         await prisma.$transaction(async (tx) => {
