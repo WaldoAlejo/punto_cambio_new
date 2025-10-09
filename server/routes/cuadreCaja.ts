@@ -137,7 +137,7 @@ router.get("/", authenticateToken, async (req, res) => {
     // Determinar día GYE desde la fecha solicitada (o hoy)
     const fechaBase = parseFechaParam(fechaParam);
     const { gte } = gyeDayRangeUtcFromDate(fechaBase);
-    let fechaInicio: Date = new Date(gte);
+    const fechaInicioDia: Date = new Date(gte); // Inicio del día GYE (para consultas de movimientos)
 
     // Cuadre ABIERTO (si existiera) del día
     const cuadreResult = await pool.query<CuadreCaja>(
@@ -168,11 +168,11 @@ router.get("/", authenticateToken, async (req, res) => {
           AND c.estado = 'ABIERTO'
      GROUP BY c.id
      LIMIT 1`,
-      [puntoAtencionId, fechaInicio.toISOString()]
+      [puntoAtencionId, fechaInicioDia.toISOString()]
     );
     const cuadre = cuadreResult.rows[0] || null;
 
-    // Jornada activa (si hay) para desplazar fechaInicio al inicio de la jornada
+    // Jornada activa (solo para información, no afecta el rango de consulta de movimientos)
     const jornadaResult = await pool.query<Jornada>(
       `SELECT *
          FROM "Jornada"
@@ -184,13 +184,12 @@ router.get("/", authenticateToken, async (req, res) => {
       [usuario.id, puntoAtencionId]
     );
     const jornadaActiva = jornadaResult.rows[0] || null;
-    if (jornadaActiva?.fecha_inicio) {
-      const fi = new Date(jornadaActiva.fecha_inicio);
-      if (!isNaN(fi.getTime()) && fi > fechaInicio) {
-        // Si la jornada empezó después del inicio del día GYE, usar la hora de inicio de la jornada
-        fechaInicio = fi;
-      }
-    }
+
+    // IMPORTANTE: Para el cierre diario, siempre contamos TODOS los movimientos del día,
+    // independientemente de cuándo empezó la jornada del operador.
+    // Esto asegura que servicios externos u otros movimientos registrados antes de que
+    // el operador iniciara su jornada sean incluidos en el cierre.
+    const fechaInicio = fechaInicioDia;
 
     // Movimientos desde fechaInicio (UTC)
     const cambiosResult = await pool.query<CambioDivisa>(
