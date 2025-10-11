@@ -271,21 +271,26 @@ export const ContabilidadDashboard = ({
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Encabezado + botón de refresco */}
-      <div className="flex items-center justify-between">
+    <div className="h-full flex flex-col gap-4">
+      {/* Encabezado + botón de refresco - Compacto */}
+      <div className="flex items-center justify-between flex-shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-            <Calculator className="h-6 w-6 text-blue-600" />
+          <h1 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+            <Calculator className="h-5 w-5 text-blue-600" />
             {isAdminView ? "Contabilidad General" : "Contabilidad de Divisas"}
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-xs text-gray-600">
             {isAdminView
-              ? "Vista consolidada de todos los puntos de atención"
-              : `Control contable automático para ${selectedPoint?.nombre}`}
+              ? "Vista consolidada de todos los puntos"
+              : `${selectedPoint?.nombre}`}
           </p>
         </div>
-        <Button onClick={refresh} disabled={isLoading} variant="outline">
+        <Button
+          onClick={refresh}
+          disabled={isLoading}
+          variant="outline"
+          size="sm"
+        >
           <RefreshCw
             className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
           />
@@ -293,20 +298,20 @@ export const ContabilidadDashboard = ({
         </Button>
       </div>
 
-      {/* Estadísticas del día */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Estadísticas del día - Compactas */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 flex-shrink-0">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">
-                  Ingresos Hoy (USD)
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-600 truncate">
+                  Ingresos Hoy
                 </p>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-lg font-bold text-green-600 truncate">
                   {formatCurrency(estadisticas.totalIngresos)}
                 </p>
               </div>
-              <TrendingUp className="h-8 w-8 text-green-600" />
+              <TrendingUp className="h-6 w-6 text-green-600 flex-shrink-0 ml-2" />
             </div>
             {estadisticas.ingresosPorMoneda.length > 1 && (
               <div className="mt-2 pt-2 border-t border-gray-200">
@@ -333,17 +338,17 @@ export const ContabilidadDashboard = ({
         </Card>
 
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-600">
-                  Egresos Hoy (USD)
+          <CardContent className="p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-600 truncate">
+                  Egresos Hoy
                 </p>
-                <p className="text-2xl font-bold text-red-600">
+                <p className="text-lg font-bold text-red-600 truncate">
                   {formatCurrency(estadisticas.totalEgresos)}
                 </p>
               </div>
-              <TrendingDown className="h-8 w-8 text-red-600" />
+              <TrendingDown className="h-6 w-6 text-red-600 flex-shrink-0 ml-2" />
             </div>
             {estadisticas.egresosPorMoneda.length > 1 && (
               <div className="mt-2 pt-2 border-t border-gray-200">
@@ -370,28 +375,30 @@ export const ContabilidadDashboard = ({
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Cambios Hoy</p>
-                <p className="text-2xl font-bold text-blue-600">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-600 truncate">
+                  Cambios Hoy
+                </p>
+                <p className="text-lg font-bold text-blue-600 truncate">
                   {estadisticas.totalCambios}
                 </p>
               </div>
-              <BarChart3 className="h-8 w-8 text-blue-600" />
+              <BarChart3 className="h-6 w-6 text-blue-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-600 truncate">
                   USD (Principal)
                 </p>
                 <p
-                  className={`text-2xl font-bold ${
+                  className={`text-lg font-bold truncate ${
                     estadisticas.monedaPrincipalSaldo >= 0
                       ? "text-green-600"
                       : "text-red-600"
@@ -400,228 +407,241 @@ export const ContabilidadDashboard = ({
                   {formatCurrency(estadisticas.monedaPrincipalSaldo)}
                 </p>
               </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
+              <DollarSign className="h-6 w-6 text-green-600 flex-shrink-0 ml-2" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Estado general del sistema */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Estado del Sistema Contable</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-3">
-              {estadisticas.saldoNegativo === 0 ? (
+      {/* Contenido scrolleable */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+        {/* Estado general del sistema */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">
+              Estado del Sistema Contable
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-center gap-3">
+                {estadisticas.saldoNegativo === 0 ? (
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5 text-red-600" />
+                )}
+                <div>
+                  <p className="font-medium">Saldos Negativos</p>
+                  <p className="text-sm text-gray-600">
+                    {estadisticas.saldoNegativo} de {saldos.length} monedas
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
                 <CheckCircle className="h-5 w-5 text-green-600" />
-              ) : (
-                <AlertTriangle className="h-5 w-5 text-red-600" />
-              )}
-              <div>
-                <p className="font-medium">Saldos Negativos</p>
-                <p className="text-sm text-gray-600">
-                  {estadisticas.saldoNegativo} de {saldos.length} monedas
-                </p>
+                <div>
+                  <p className="font-medium">Saldos Positivos</p>
+                  <p className="text-sm text-gray-600">
+                    {estadisticas.saldoPositivo} de {saldos.length} monedas
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <BarChart3 className="h-5 w-5 text-blue-600" />
+                <div>
+                  <p className="font-medium">Balance del Día</p>
+                  <p
+                    className={`text-sm font-semibold ${
+                      estadisticas.totalIngresos - estadisticas.totalEgresos >=
+                      0
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {formatCurrency(
+                      estadisticas.totalIngresos - estadisticas.totalEgresos
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <div>
-                <p className="font-medium">Saldos Positivos</p>
-                <p className="text-sm text-gray-600">
-                  {estadisticas.saldoPositivo} de {saldos.length} monedas
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <BarChart3 className="h-5 w-5 text-blue-600" />
-              <div>
-                <p className="font-medium">Balance del Día</p>
-                <p
-                  className={`text-sm font-semibold ${
-                    estadisticas.totalIngresos - estadisticas.totalEgresos >= 0
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {formatCurrency(
-                    estadisticas.totalIngresos - estadisticas.totalEgresos
-                  )}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {isAdminView && totalesPorMoneda.length > 0 && (
-            <div className="mt-6">
-              <h4 className="font-semibold mb-3">
-                Totales por Divisa (Consolidado)
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {totalesPorMoneda
-                  .sort((a, b) =>
-                    a.codigo === "USD" ? -1 : a.codigo.localeCompare(b.codigo)
-                  )
-                  .map((t) => (
-                    <Card key={t.codigo}>
-                      <CardContent className="p-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-xs text-gray-500">{t.codigo}</p>
-                            <p className="text-lg font-semibold">
-                              {formatCurrency(t.total, t.codigo)}
-                            </p>
+            {isAdminView && totalesPorMoneda.length > 0 && (
+              <div className="mt-6">
+                <h4 className="font-semibold mb-3">
+                  Totales por Divisa (Consolidado)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {totalesPorMoneda
+                    .sort((a, b) =>
+                      a.codigo === "USD" ? -1 : a.codigo.localeCompare(b.codigo)
+                    )
+                    .map((t) => (
+                      <Card key={t.codigo}>
+                        <CardContent className="p-3">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-xs text-gray-500">
+                                {t.codigo}
+                              </p>
+                              <p className="text-lg font-semibold">
+                                {formatCurrency(t.total, t.codigo)}
+                              </p>
+                            </div>
+                            <DollarSign className="h-5 w-5 text-gray-400" />
                           </div>
-                          <DollarSign className="h-5 w-5 text-gray-400" />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    ))}
+                </div>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* =========================
+        {/* =========================
           TOOLBAR PEGAJOSO DE FILTROS
           ========================= */}
-      <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/50 border rounded-md">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Mostrar</span>
-            {/* Switches de visibilidad */}
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 text-sm">
-                <Switch
-                  checked={showMovimientos}
-                  onCheckedChange={setShowMovimientos}
-                />
-                <span>Movimientos</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <Switch checked={showSaldos} onCheckedChange={setShowSaldos} />
-                <span>Saldos por divisa</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                refresh?.();
-              }}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-              />
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Sección: Historial de Movimientos (abierta por defecto) */}
-      <Collapsible open={showMovimientos} onOpenChange={setShowMovimientos}>
-        <Card className="mt-3">
-          <CardHeader className="flex flex-row items-center justify-between py-3">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              Historial de Movimientos
-            </CardTitle>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm">
-                {showMovimientos ? "Ocultar" : "Mostrar"}
-              </Button>
-            </CollapsibleTrigger>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
-              <HistorialMovimientos
-                user={user}
-                selectedPoint={selectedPoint}
-                currencies={currencies}
-                isAdminView={isAdminView}
-              />
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      {/* Sección: Saldos por divisa (cerrada por defecto) */}
-      <Collapsible open={showSaldos} onOpenChange={setShowSaldos}>
-        <Card className="mt-3">
-          <CardHeader className="flex flex-row items-center justify-between py-3">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <DollarSign className="h-5 w-5" />
-              Saldos por divisa (en tiempo real)
-              {isAdminView && (
-                <Badge variant="secondary" className="ml-2">
-                  Vista Admin
-                </Badge>
-              )}
-            </CardTitle>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm">
-                {showSaldos ? "Ocultar" : "Mostrar"}
-              </Button>
-            </CollapsibleTrigger>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent className="pt-0">
-              <SaldosDivisasEnTiempoReal
-                user={user}
-                selectedPoint={selectedPoint}
-                isAdminView={isAdminView}
-                // Si luego quieres vista resumida primero, puedes pasar "compact"
-                // compact
-              />
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      {/* Información adicional */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Información del Sistema</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-semibold mb-2">Funcionamiento Automático</h4>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>
-                  • Los saldos se actualizan automáticamente con cada cambio
-                </li>
-                <li>• Se registra cada movimiento de entrada y salida</li>
-                <li>
-                  • La moneda principal (USD) es la referencia del sistema
-                </li>
-                <li>• Los movimientos se auditan completamente</li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-2">Tipos de Movimientos</h4>
-              <div className="space-y-2">
-                <Badge className="bg-green-100 text-green-800">Ingreso</Badge>
-                <Badge className="bg-red-100 text-red-800">Egreso</Badge>
-                <Badge className="bg-blue-100 text-blue-800">
-                  Cambio de Divisa
-                </Badge>
-                <Badge className="bg-purple-100 text-purple-800">
-                  Transferencia
-                </Badge>
+        <div className="sticky top-0 z-10 -mx-2 px-2 py-2 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/50 border rounded-md">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Mostrar</span>
+              {/* Switches de visibilidad */}
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch
+                    checked={showMovimientos}
+                    onCheckedChange={setShowMovimientos}
+                  />
+                  <span>Movimientos</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch
+                    checked={showSaldos}
+                    onCheckedChange={setShowSaldos}
+                  />
+                  <span>Saldos por divisa</span>
+                </label>
               </div>
             </div>
+
+            <div className="ml-auto flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  refresh?.();
+                }}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
+                />
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Sección: Historial de Movimientos (abierta por defecto) */}
+        <Collapsible open={showMovimientos} onOpenChange={setShowMovimientos}>
+          <Card className="mt-3">
+            <CardHeader className="flex flex-row items-center justify-between py-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Historial de Movimientos
+              </CardTitle>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  {showMovimientos ? "Ocultar" : "Mostrar"}
+                </Button>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="pt-0">
+                <HistorialMovimientos
+                  user={user}
+                  selectedPoint={selectedPoint}
+                  currencies={currencies}
+                  isAdminView={isAdminView}
+                />
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        {/* Sección: Saldos por divisa (cerrada por defecto) */}
+        <Collapsible open={showSaldos} onOpenChange={setShowSaldos}>
+          <Card className="mt-3">
+            <CardHeader className="flex flex-row items-center justify-between py-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <DollarSign className="h-5 w-5" />
+                Saldos por divisa (en tiempo real)
+                {isAdminView && (
+                  <Badge variant="secondary" className="ml-2">
+                    Vista Admin
+                  </Badge>
+                )}
+              </CardTitle>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  {showSaldos ? "Ocultar" : "Mostrar"}
+                </Button>
+              </CollapsibleTrigger>
+            </CardHeader>
+            <CollapsibleContent>
+              <CardContent className="pt-0">
+                <SaldosDivisasEnTiempoReal
+                  user={user}
+                  selectedPoint={selectedPoint}
+                  isAdminView={isAdminView}
+                  // Si luego quieres vista resumida primero, puedes pasar "compact"
+                  // compact
+                />
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        {/* Información adicional */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Información del Sistema</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="font-semibold mb-2">
+                  Funcionamiento Automático
+                </h4>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>
+                    • Los saldos se actualizan automáticamente con cada cambio
+                  </li>
+                  <li>• Se registra cada movimiento de entrada y salida</li>
+                  <li>
+                    • La moneda principal (USD) es la referencia del sistema
+                  </li>
+                  <li>• Los movimientos se auditan completamente</li>
+                </ul>
+              </div>
+              <div>
+                <h4 className="font-semibold mb-2">Tipos de Movimientos</h4>
+                <div className="space-y-2">
+                  <Badge className="bg-green-100 text-green-800">Ingreso</Badge>
+                  <Badge className="bg-red-100 text-red-800">Egreso</Badge>
+                  <Badge className="bg-blue-100 text-blue-800">
+                    Cambio de Divisa
+                  </Badge>
+                  <Badge className="bg-purple-100 text-purple-800">
+                    Transferencia
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

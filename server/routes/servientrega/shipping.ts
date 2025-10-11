@@ -5,6 +5,7 @@ import {
 } from "../../services/servientregaAPIService.js";
 import { ServientregaValidationService } from "../../services/servientregaValidationService.js";
 import { ServientregaDBService } from "../../services/servientregaDBService.js";
+import prisma from "../../lib/prisma.js";
 
 const router = express.Router();
 
@@ -381,7 +382,7 @@ router.post("/generar-guia", async (req, res) => {
             await db.guardarDestinatario(destinatario);
           }
 
-          // Guardar cabecera de guía
+          // Guardar cabecera de guía con punto de atención y costo
           await db.guardarGuia({
             numero_guia: guia,
             proceso: fetchData?.proceso || "Guia Generada",
@@ -389,6 +390,9 @@ router.post("/generar-guia", async (req, res) => {
             // En este punto no tenemos los IDs de remitente/destinatario creados (si los necesitas, crea primero y usa sus IDs)
             remitente_id: "", // opcional: ajusta si quieres relación estricta
             destinatario_id: "",
+            punto_atencion_id: req.body?.punto_atencion_id || undefined,
+            costo_envio: valorTotal > 0 ? Number(valorTotal) : undefined,
+            valor_declarado: Number(req.body?.valor_declarado || 0),
           });
 
           // Descontar saldo
@@ -442,7 +446,45 @@ router.post("/anular-guia", async (req, res) => {
     if (response?.fetch?.proceso === "Guia Actualizada") {
       try {
         const dbService = new ServientregaDBService();
+
+        // Obtener información de la guía antes de anularla
+        const guiaInfo = await prisma.servientregaGuia.findFirst({
+          where: { numero_guia: guia },
+          select: {
+            punto_atencion_id: true,
+            costo_envio: true,
+            created_at: true,
+          },
+        });
+
+        // Anular la guía en BD
         await dbService.anularGuia(guia);
+
+        // Devolver saldo si la guía se anula el mismo día y tiene punto de atención
+        if (guiaInfo?.punto_atencion_id && guiaInfo?.costo_envio) {
+          const hoy = new Date();
+          const fechaGuia = new Date(guiaInfo.created_at);
+
+          // Verificar si es el mismo día (comparar año, mes y día)
+          const esMismoDia =
+            hoy.getFullYear() === fechaGuia.getFullYear() &&
+            hoy.getMonth() === fechaGuia.getMonth() &&
+            hoy.getDate() === fechaGuia.getDate();
+
+          if (esMismoDia) {
+            await dbService.devolverSaldo(
+              guiaInfo.punto_atencion_id,
+              Number(guiaInfo.costo_envio)
+            );
+            console.log(
+              `✅ Saldo devuelto: $${guiaInfo.costo_envio} al punto ${guiaInfo.punto_atencion_id}`
+            );
+          } else {
+            console.log(
+              "⚠️ La guía no se anula el mismo día, no se devuelve saldo"
+            );
+          }
+        }
       } catch (dbError) {
         console.error("⚠️ Error al actualizar guía en BD:", dbError);
       }

@@ -272,6 +272,7 @@ export async function validarSaldoTransferencia(
  * Middleware específico para cambios de divisa
  * Aplica la misma lógica de normalización que el endpoint de exchanges
  * para validar la moneda correcta según el tipo de operación
+ * ✅ VALIDA BILLETES Y MONEDAS POR SEPARADO
  */
 export async function validarSaldoCambioDivisa(
   req: Request,
@@ -286,6 +287,11 @@ export async function validarSaldoCambioDivisa(
       monto_origen,
       monto_destino,
       tipo_operacion,
+      divisas_recibidas_billetes,
+      divisas_recibidas_monedas,
+      metodo_entrega,
+      usd_entregado_efectivo,
+      usd_entregado_transfer,
     } = req.body;
 
     if (
@@ -304,6 +310,9 @@ export async function validarSaldoCambioDivisa(
     // 🔄 NORMALIZACIÓN: Asegurar que moneda_origen sea siempre lo que el PUNTO ENTREGA (egreso)
     // COMPRA -> El punto compra divisa (recibe divisa, entrega USD) -> Validar USD
     // VENTA -> El punto vende divisa (entrega divisa, recibe USD) -> Validar divisa
+    let monedaValidar = moneda_origen_id;
+    let montoValidar = Number(monto_origen);
+
     try {
       const usdMoneda = await prisma.moneda.findFirst({
         where: { codigo: "USD" },
@@ -320,20 +329,14 @@ export async function validarSaldoCambioDivisa(
         // Si es COMPRA y USD está como DESTINO, invertir
         // (el cliente entrega divisa y recibe USD, el punto entrega USD)
         if (isCompra && moneda_destino_id === usdMoneda.id) {
-          [moneda_origen_id, moneda_destino_id] = [
-            moneda_destino_id,
-            moneda_origen_id,
-          ];
-          [monto_origen, monto_destino] = [monto_destino, monto_origen];
+          monedaValidar = moneda_destino_id;
+          montoValidar = Number(monto_destino);
         }
         // Si es VENTA y USD está como ORIGEN, invertir
         // (el cliente entrega USD y recibe divisa, el punto entrega divisa)
         else if (isVenta && moneda_origen_id === usdMoneda.id) {
-          [moneda_origen_id, moneda_destino_id] = [
-            moneda_destino_id,
-            moneda_origen_id,
-          ];
-          [monto_origen, monto_destino] = [monto_destino, monto_origen];
+          monedaValidar = moneda_destino_id;
+          montoValidar = Number(monto_destino);
         }
       }
     } catch (e) {
@@ -343,32 +346,110 @@ export async function validarSaldoCambioDivisa(
       );
     }
 
-    // Ahora validar con las monedas normalizadas
-    const saldoActual = await obtenerSaldoActual(
-      punto_atencion_id,
-      moneda_origen_id
-    );
-    const montoRequerido = Number(monto_origen);
+    // ✅ VALIDAR SALDO TOTAL Y BILLETES/MONEDAS POR SEPARADO
+    const saldo = await prisma.saldo.findUnique({
+      where: {
+        punto_atencion_id_moneda_id: {
+          punto_atencion_id: punto_atencion_id,
+          moneda_id: monedaValidar,
+        },
+      },
+    });
 
-    if (saldoActual < montoRequerido) {
+    const saldoTotal = Number(saldo?.cantidad || 0);
+    const saldoBilletes = Number(saldo?.billetes || 0);
+    const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
+
+    // Calcular cuánto efectivo se necesita (excluyendo transferencias)
+    let efectivoRequerido = montoValidar;
+
+    // Si es USD y hay transferencia, restar del requerimiento de efectivo
+    const moneda = await prisma.moneda.findUnique({
+      where: { id: monedaValidar },
+    });
+
+    if (moneda?.codigo === "USD" && metodo_entrega) {
+      if (metodo_entrega === "transferencia") {
+        efectivoRequerido = 0; // Todo por transferencia
+      } else if (metodo_entrega === "mixto") {
+        efectivoRequerido = Number(usd_entregado_efectivo || 0);
+      }
+    }
+
+    // Validar saldo total de efectivo
+    if (saldoTotal < efectivoRequerido) {
       const punto = await prisma.puntoAtencion.findUnique({
         where: { id: punto_atencion_id },
-      });
-      const moneda = await prisma.moneda.findUnique({
-        where: { id: moneda_origen_id },
       });
 
       return res.status(400).json({
         error: "SALDO_INSUFICIENTE_CAMBIO",
-        message: `Saldo insuficiente para cambio de divisa en ${punto?.nombre}`,
+        message: `Saldo total insuficiente para cambio de divisa en ${punto?.nombre}`,
         details: {
           punto: punto?.nombre,
-          monedaOrigen: moneda?.codigo,
-          saldoActual: saldoActual,
-          montoRequerido: montoRequerido,
-          deficit: montoRequerido - saldoActual,
+          moneda: moneda?.codigo,
+          saldoActual: saldoTotal,
+          montoRequerido: efectivoRequerido,
+          deficit: efectivoRequerido - saldoTotal,
         },
       });
+    }
+
+    // ✅ VALIDAR BILLETES Y MONEDAS SI SE ESPECIFICARON
+    if (
+      efectivoRequerido > 0 &&
+      (divisas_recibidas_billetes || divisas_recibidas_monedas)
+    ) {
+      const billetesRecibidos = Number(divisas_recibidas_billetes || 0);
+      const monedasRecibidas = Number(divisas_recibidas_monedas || 0);
+      const totalRecibido = billetesRecibidos + monedasRecibidas;
+
+      if (totalRecibido > 0) {
+        // Calcular proporción de billetes y monedas requeridos
+        const proporcionBilletes = billetesRecibidos / totalRecibido;
+        const proporcionMonedas = monedasRecibidas / totalRecibido;
+
+        const billetesRequeridos = efectivoRequerido * proporcionBilletes;
+        const monedasRequeridas = efectivoRequerido * proporcionMonedas;
+
+        // Validar billetes
+        if (saldoBilletes < billetesRequeridos) {
+          const punto = await prisma.puntoAtencion.findUnique({
+            where: { id: punto_atencion_id },
+          });
+
+          return res.status(400).json({
+            error: "BILLETES_INSUFICIENTES",
+            message: `Billetes insuficientes en ${moneda?.codigo} para realizar el cambio en ${punto?.nombre}`,
+            details: {
+              punto: punto?.nombre,
+              moneda: moneda?.codigo,
+              saldoBilletes: saldoBilletes,
+              billetesRequeridos: billetesRequeridos,
+              deficit: billetesRequeridos - saldoBilletes,
+            },
+          });
+        }
+
+        // Validar monedas
+        if (saldoMonedas < monedasRequeridas) {
+          const punto = await prisma.puntoAtencion.findUnique({
+            where: { id: punto_atencion_id },
+          });
+
+          return res.status(400).json({
+            error: "MONEDAS_INSUFICIENTES",
+            message: `Monedas insuficientes en ${moneda?.codigo} para realizar el cambio en ${punto?.nombre}`,
+            details: {
+              punto: punto?.nombre,
+              moneda: moneda?.codigo,
+              saldoMonedas: saldoMonedas,
+              monedasRequeridas: monedasRequeridas,
+              deficit: monedasRequeridas - saldoMonedas,
+            },
+          });
+        }
+      }
     }
 
     next();

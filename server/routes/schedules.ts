@@ -420,26 +420,9 @@ router.post(
               return;
             }
 
-            // Verificar Cierre de Servicios Externos (todo en Prisma)
-            const { gte: seGte, lt: seLt } = gyeDayRangeUtcFromDate(new Date());
-            const cierreSE = await prisma.servicioExternoCierreDiario.findFirst(
-              {
-                where: {
-                  punto_atencion_id,
-                  fecha: { gte: seGte, lt: seLt },
-                  estado: "CERRADO",
-                },
-                select: { id: true },
-              }
-            );
-            if (!cierreSE) {
-              res.status(400).json({
-                success: false,
-                error:
-                  "Debe realizar el cierre diario de Servicios Externos antes de finalizar su jornada",
-              });
-              return;
-            }
+            // NOTA: La validación de cierre de servicios externos fue eliminada.
+            // Los servicios externos ahora se incluyen automáticamente en el cierre diario
+            // a través del endpoint /cuadre-caja que consolida todos los movimientos.
           }
           // Finalizar jornada (para exentos y para quienes ya cerraron cierres requeridos)
           updateData.fecha_salida = new Date(fecha_salida);

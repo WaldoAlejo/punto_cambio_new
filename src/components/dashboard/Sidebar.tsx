@@ -263,7 +263,7 @@ const Sidebar = ({
 
       <aside
         className={`
-          fixed top-0 left-0 h-full bg-white border-r z-50 transition-all duration-300
+          fixed top-0 left-0 h-screen bg-white border-r z-50 transition-all duration-300
           flex flex-col
           ${isOpen ? "w-56" : "w-14"}
           ${isMobile ? "shadow-xl" : ""}

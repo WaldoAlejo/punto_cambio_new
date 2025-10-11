@@ -202,7 +202,12 @@ router.get("/", authenticateToken, async (req, res) => {
     );
     const cambiosHoy = cambiosResult.rows;
 
-    const [transferIn, transferOut, serviciosExternos] = await Promise.all([
+    const [
+      transferIn,
+      transferOut,
+      serviciosExternos,
+      servientregaMovimientos,
+    ] = await Promise.all([
       pool.query<Transferencia>(
         `SELECT *
            FROM "Transferencia"
@@ -231,7 +236,26 @@ router.get("/", authenticateToken, async (req, res) => {
             AND fecha >= $2::timestamp`,
         [puntoAtencionId, fechaInicio.toISOString()]
       ),
+      // Movimientos de Servientrega (historial de asignaciones y devoluciones)
+      pool.query<{
+        id: string;
+        monto_total: number;
+        creado_por: string;
+        creado_en: string;
+      }>(
+        `SELECT id, monto_total, creado_por, creado_en
+           FROM "ServientregaHistorialSaldo"
+          WHERE punto_atencion_id = $1
+            AND creado_en >= $2::timestamp`,
+        [puntoAtencionId, fechaInicio.toISOString()]
+      ),
     ]);
+
+    // Obtener ID de la moneda USD (dólar) para Servientrega
+    const monedaUsdResult = await pool.query<{ id: string }>(
+      `SELECT id FROM "Moneda" WHERE codigo = 'USD' LIMIT 1`
+    );
+    const monedaUsdId = monedaUsdResult.rows[0]?.id;
 
     // IDs de monedas usadas en movimientos (cambios, transferencias y servicios externos)
     const monedaIdsDeCambios = new Set<string>(
@@ -247,6 +271,10 @@ router.get("/", authenticateToken, async (req, res) => {
     );
     const monedaIdsDeServiciosExternos = new Set<string>(
       serviciosExternos.rows.map((s) => s.moneda_id).filter(Boolean) as string[]
+    );
+    // Servientrega siempre usa USD
+    const monedaIdsDeServientrega = new Set<string>(
+      monedaUsdId ? [monedaUsdId] : []
     );
 
     // IDs de monedas con saldo (pueden no haber tenido movimientos hoy)
@@ -267,6 +295,7 @@ router.get("/", authenticateToken, async (req, res) => {
       ...Array.from(monedaIdsDeCambios),
       ...Array.from(monedaIdsDeTransfers),
       ...Array.from(monedaIdsDeServiciosExternos),
+      ...Array.from(monedaIdsDeServientrega),
     ]);
 
     // Obtener información de las monedas que tuvieron movimientos
@@ -384,6 +413,47 @@ router.get("/", authenticateToken, async (req, res) => {
       serviciosExternosByMoneda.set(s.moneda_id, curr);
     }
 
+    // Servientrega: calcular egresos (guías generadas) e ingresos (devoluciones por anulación)
+    const servientregaByMoneda = new Map<
+      string,
+      { ingresos: number; egresos: number; cantidad: number }
+    >();
+
+    if (monedaUsdId) {
+      // Obtener guías generadas del día (egresos)
+      const guiasDelDia = await pool.query<{
+        costo_envio: number;
+      }>(
+        `SELECT costo_envio
+           FROM "ServientregaGuia"
+          WHERE punto_atencion_id = $1
+            AND created_at >= $2::timestamp
+            AND costo_envio IS NOT NULL
+            AND costo_envio > 0`,
+        [puntoAtencionId, fechaInicio.toISOString()]
+      );
+
+      const totalEgresos = guiasDelDia.rows.reduce(
+        (sum, g) => sum + (Number(g.costo_envio) || 0),
+        0
+      );
+
+      // Calcular ingresos (devoluciones por anulación del mismo día)
+      const totalIngresos = servientregaMovimientos.rows
+        .filter((m) => m.creado_por === "SYSTEM:DEVOLUCION_ANULACION")
+        .reduce((sum, m) => sum + Math.abs(Number(m.monto_total) || 0), 0);
+
+      servientregaByMoneda.set(monedaUsdId, {
+        ingresos: totalIngresos,
+        egresos: totalEgresos,
+        cantidad:
+          guiasDelDia.rows.length +
+          servientregaMovimientos.rows.filter(
+            (m) => m.creado_por === "SYSTEM:DEVOLUCION_ANULACION"
+          ).length,
+      });
+    }
+
     // Construir detalles por moneda
     const detallesConValores = await Promise.all(
       monedas.map(async (moneda) => {
@@ -411,6 +481,11 @@ router.get("/", authenticateToken, async (req, res) => {
           egresos: 0,
           cantidad: 0,
         };
+        const servientrega = servientregaByMoneda.get(moneda.id) || {
+          ingresos: 0,
+          egresos: 0,
+          cantidad: 0,
+        };
 
         // Calcular el saldo real basado en todos los movimientos registrados
         // Esto incluye cambios, transferencias Y servicios externos automáticamente
@@ -420,7 +495,7 @@ router.get("/", authenticateToken, async (req, res) => {
             moneda.id
           );
 
-        // Para el desglose, mostrar cambios y servicios externos como ingresos/egresos del período
+        // Para el desglose, mostrar cambios, servicios externos y servientrega como ingresos/egresos del período
         // Las transferencias se muestran por separado en el desglose pero no se suman al cálculo
         const ingresos_periodo = c.ingresos || 0;
         const egresos_periodo = c.egresos || 0;
@@ -444,6 +519,11 @@ router.get("/", authenticateToken, async (req, res) => {
               ingresos: sExt.ingresos || 0,
               egresos: sExt.egresos || 0,
               cantidad: sExt.cantidad || 0,
+            },
+            servientrega: {
+              ingresos: servientrega.ingresos || 0,
+              egresos: servientrega.egresos || 0,
+              cantidad: servientrega.cantidad || 0,
             },
             transferencias: {
               entrada: tIn.monto || 0,
@@ -480,6 +560,14 @@ router.get("/", authenticateToken, async (req, res) => {
       .filter((s) => s.tipo_movimiento === "EGRESO")
       .reduce((s, se) => s + (Number(se.monto) || 0), 0);
 
+    // Totales de Servientrega
+    const servientregaData = monedaUsdId
+      ? servientregaByMoneda.get(monedaUsdId)
+      : null;
+    const totalServientregaIngresos = servientregaData?.ingresos || 0;
+    const totalServientregaEgresos = servientregaData?.egresos || 0;
+    const totalServientregaCantidad = servientregaData?.cantidad || 0;
+
     return res.status(200).json({
       success: true,
       data: {
@@ -499,6 +587,11 @@ router.get("/", authenticateToken, async (req, res) => {
             cantidad: serviciosExternos.rowCount,
             ingresos: totalServiciosExtIngresos,
             egresos: totalServiciosExtEgresos,
+          },
+          servientrega: {
+            cantidad: totalServientregaCantidad,
+            ingresos: totalServientregaIngresos,
+            egresos: totalServientregaEgresos,
           },
           transferencias_entrada: {
             cantidad: transferIn.rowCount,

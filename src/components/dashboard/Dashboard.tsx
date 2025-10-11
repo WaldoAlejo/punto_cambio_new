@@ -492,7 +492,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   ]);
 
   return (
-    <div className="flex min-h-screen bg-gray-50 relative">
+    <div className="flex h-screen bg-gray-50 overflow-hidden">
       <Sidebar
         user={user}
         selectedPoint={selectedPoint}
@@ -502,7 +502,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         onToggle={toggleSidebar}
       />
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header
           user={user}
           selectedPoint={selectedPoint}
@@ -511,19 +511,21 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           onNotificationClick={handleNotificationClick}
         />
 
-        <main className="flex-1 w-full max-w-full p-2 sm:p-4 md:p-6 lg:p-8">
-          <Suspense
-            fallback={
-              <div className="w-full flex justify-center py-16">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Cargando módulo…</p>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="max-w-[1920px] mx-auto h-full">
+            <Suspense
+              fallback={
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Cargando módulo…</p>
+                  </div>
                 </div>
-              </div>
-            }
-          >
-            {renderContent()}
-          </Suspense>
+              }
+            >
+              {renderContent()}
+            </Suspense>
+          </div>
         </main>
       </div>
     </div>

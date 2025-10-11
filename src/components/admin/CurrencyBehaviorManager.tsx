@@ -133,13 +133,13 @@ const CurrencyBehaviorManager = ({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Settings className="h-5 w-5" />
+    <Card className="flex-shrink-0">
+      <CardHeader className="p-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Settings className="h-4 w-4" />
           Configuración de Comportamientos de Divisas
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-xs">
           Configure cómo se calculan los montos para cada divisa en operaciones
           de compra y venta.
           <br />
@@ -147,8 +147,8 @@ const CurrencyBehaviorManager = ({
           Monto ÷ Tasa
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
+      <CardContent className="p-3">
+        <div className="space-y-3">
           {currencies.map((currency) => {
             const editing = editingCurrencies[currency.id];
             const changed = hasChanges(currency.id);
@@ -158,38 +158,38 @@ const CurrencyBehaviorManager = ({
             return (
               <div
                 key={currency.id}
-                className="border rounded-lg p-4 space-y-3"
+                className="border rounded-lg p-3 space-y-2"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div>
-                    <h3 className="font-medium">
+                    <h3 className="font-medium text-sm">
                       {currency.codigo} - {currency.nombre}
                     </h3>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {obtenerDescripcionComportamiento(currency)}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Badge
-                      className={getBehaviorColor(
+                      className={`text-xs ${getBehaviorColor(
                         currency.comportamiento_compra
-                      )}
+                      )}`}
                     >
                       Compra: {currency.comportamiento_compra}
                     </Badge>
                     <Badge
-                      className={getBehaviorColor(
+                      className={`text-xs ${getBehaviorColor(
                         currency.comportamiento_venta
-                      )}
+                      )}`}
                     >
                       Venta: {currency.comportamiento_venta}
                     </Badge>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium">
                       Comportamiento en COMPRA
                     </label>
                     <Select
@@ -198,22 +198,22 @@ const CurrencyBehaviorManager = ({
                         handleBehaviorChange(currency.id, "compra", value)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="MULTIPLICA">
+                        <SelectItem value="MULTIPLICA" className="text-xs">
                           MULTIPLICA (Monto × Tasa)
                         </SelectItem>
-                        <SelectItem value="DIVIDE">
+                        <SelectItem value="DIVIDE" className="text-xs">
                           DIVIDE (Monto ÷ Tasa)
                         </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium">
                       Comportamiento en VENTA
                     </label>
                     <Select
@@ -222,14 +222,14 @@ const CurrencyBehaviorManager = ({
                         handleBehaviorChange(currency.id, "venta", value)
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="MULTIPLICA">
+                        <SelectItem value="MULTIPLICA" className="text-xs">
                           MULTIPLICA (Monto × Tasa)
                         </SelectItem>
-                        <SelectItem value="DIVIDE">
+                        <SelectItem value="DIVIDE" className="text-xs">
                           DIVIDE (Monto ÷ Tasa)
                         </SelectItem>
                       </SelectContent>
@@ -238,12 +238,12 @@ const CurrencyBehaviorManager = ({
                 </div>
 
                 {changed && (
-                  <div className="flex gap-2 pt-2">
+                  <div className="flex gap-2 pt-1">
                     <Button
                       size="sm"
                       onClick={() => saveChanges(currency.id)}
                       disabled={isLoading}
-                      className="flex items-center gap-1"
+                      className="flex items-center gap-1 h-7 text-xs"
                     >
                       <Save className="h-3 w-3" />
                       Guardar Cambios
@@ -253,7 +253,7 @@ const CurrencyBehaviorManager = ({
                       variant="outline"
                       onClick={() => resetChanges(currency.id)}
                       disabled={isLoading}
-                      className="flex items-center gap-1"
+                      className="flex items-center gap-1 h-7 text-xs"
                     >
                       <RefreshCw className="h-3 w-3" />
                       Descartar

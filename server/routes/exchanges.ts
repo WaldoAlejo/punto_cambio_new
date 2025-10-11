@@ -144,18 +144,21 @@ async function logMovimientoSaldo(
   // pero el servicio espera monto positivo, así que tomamos el valor absoluto
   const montoAbsoluto = Math.abs(data.monto);
 
-  await registrarMovimientoSaldo({
-    puntoAtencionId: data.punto_atencion_id,
-    monedaId: data.moneda_id,
-    tipoMovimiento: tipoMov,
-    monto: montoAbsoluto, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
-    saldoAnterior: round2(data.saldo_anterior),
-    saldoNuevo: round2(data.saldo_nuevo),
-    tipoReferencia: tipoRef,
-    referenciaId: data.referencia_id,
-    descripcion: data.descripcion || undefined,
-    usuarioId: data.usuario_id,
-  });
+  await registrarMovimientoSaldo(
+    {
+      puntoAtencionId: data.punto_atencion_id,
+      monedaId: data.moneda_id,
+      tipoMovimiento: tipoMov,
+      monto: montoAbsoluto, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
+      saldoAnterior: round2(data.saldo_anterior),
+      saldoNuevo: round2(data.saldo_nuevo),
+      tipoReferencia: tipoRef,
+      referenciaId: data.referencia_id,
+      descripcion: data.descripcion || undefined,
+      usuarioId: data.usuario_id,
+    },
+    tx
+  ); // ⚠️ Pasar el cliente de transacción para atomicidad
 }
 
 /* ========================= Validación payload ========================= */

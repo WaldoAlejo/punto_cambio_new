@@ -167,9 +167,10 @@ export const PointManagement = () => {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">
+    <div className="h-full flex flex-col gap-4">
+      {/* Header - Siempre visible */}
+      <div className="flex-shrink-0 flex items-center justify-between">
+        <h1 className="text-lg font-bold text-gray-800">
           Gestión de Puntos de Atención
         </h1>
         <Button
@@ -180,215 +181,223 @@ export const PointManagement = () => {
         </Button>
       </div>
 
-      {showForm && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Crear Nuevo Punto de Atención</CardTitle>
-            <CardDescription>
-              Complete la información del nuevo punto de atención
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="max-h-[70vh] overflow-y-auto">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Información básica */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Nombre *</Label>
-                  <Input
-                    value={formData.nombre}
-                    onChange={(e) =>
-                      setFormData({ ...formData, nombre: e.target.value })
-                    }
-                    placeholder="Nombre del punto de atención"
-                  />
+      {/* Contenido scrolleable */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+        {showForm && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Crear Nuevo Punto de Atención</CardTitle>
+              <CardDescription>
+                Complete la información del nuevo punto de atención
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="max-h-[70vh] overflow-y-auto">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Información básica */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Nombre *</Label>
+                    <Input
+                      value={formData.nombre}
+                      onChange={(e) =>
+                        setFormData({ ...formData, nombre: e.target.value })
+                      }
+                      placeholder="Nombre del punto de atención"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Ciudad *</Label>
+                    <Input
+                      value={formData.ciudad}
+                      onChange={(e) =>
+                        setFormData({ ...formData, ciudad: e.target.value })
+                      }
+                      placeholder="Ciudad"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Ciudad *</Label>
-                  <Input
-                    value={formData.ciudad}
-                    onChange={(e) =>
-                      setFormData({ ...formData, ciudad: e.target.value })
-                    }
-                    placeholder="Ciudad"
-                  />
-                </div>
-              </div>
 
-              {/* Dirección completa */}
-              <div className="space-y-2">
-                <Label>Dirección *</Label>
-                <Input
-                  value={formData.direccion}
-                  onChange={(e) =>
-                    setFormData({ ...formData, direccion: e.target.value })
-                  }
-                  placeholder="Dirección completa"
-                />
-              </div>
-
-              {/* Información adicional */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Dirección completa */}
                 <div className="space-y-2">
-                  <Label>Provincia *</Label>
+                  <Label>Dirección *</Label>
                   <Input
-                    value={formData.provincia}
+                    value={formData.direccion}
                     onChange={(e) =>
-                      setFormData({ ...formData, provincia: e.target.value })
+                      setFormData({ ...formData, direccion: e.target.value })
                     }
-                    placeholder="Provincia"
+                    placeholder="Dirección completa"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Código Postal</Label>
-                  <Input
-                    value={formData.codigo_postal}
-                    onChange={(e) =>
+
+                {/* Información adicional */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Provincia *</Label>
+                    <Input
+                      value={formData.provincia}
+                      onChange={(e) =>
+                        setFormData({ ...formData, provincia: e.target.value })
+                      }
+                      placeholder="Provincia"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Código Postal</Label>
+                    <Input
+                      value={formData.codigo_postal}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          codigo_postal: e.target.value,
+                        })
+                      }
+                      placeholder="Código postal"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Teléfono</Label>
+                    <Input
+                      value={formData.telefono}
+                      onChange={(e) =>
+                        setFormData({ ...formData, telefono: e.target.value })
+                      }
+                      placeholder="Número de teléfono"
+                    />
+                  </div>
+                </div>
+
+                {/* Selector de agencia */}
+                <div className="border-t pt-4">
+                  <AgenciaSelector
+                    value={formData.servientrega_agencia_nombre}
+                    onAgenciaSelect={(agencia) => {
                       setFormData({
                         ...formData,
-                        codigo_postal: e.target.value,
-                      })
-                    }
-                    placeholder="Código postal"
+                        servientrega_agencia_codigo: agencia?.tipo_cs || "",
+                        servientrega_agencia_nombre: agencia?.nombre || "",
+                      });
+                    }}
+                    placeholder="Seleccionar agencia de Servientrega..."
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Teléfono</Label>
-                  <Input
-                    value={formData.telefono}
-                    onChange={(e) =>
-                      setFormData({ ...formData, telefono: e.target.value })
-                    }
-                    placeholder="Número de teléfono"
-                  />
+
+                {/* Botones de acción */}
+                <div className="flex gap-3 pt-4 border-t bg-gray-50 -mx-6 px-6 py-4 mt-6">
+                  <Button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Crear Punto
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowForm(false)}
+                  >
+                    Cancelar
+                  </Button>
                 </div>
-              </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
-              {/* Selector de agencia */}
-              <div className="border-t pt-4">
-                <AgenciaSelector
-                  value={formData.servientrega_agencia_nombre}
-                  onAgenciaSelect={(agencia) => {
-                    setFormData({
-                      ...formData,
-                      servientrega_agencia_codigo: agencia?.tipo_cs || "",
-                      servientrega_agencia_nombre: agencia?.nombre || "",
-                    });
-                  }}
-                  placeholder="Seleccionar agencia de Servientrega..."
-                />
+        <Card>
+          <CardHeader>
+            <CardTitle>Puntos de Atención del Sistema</CardTitle>
+            <CardDescription>
+              Lista de todos los puntos de atención registrados
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {points.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500 text-lg">
+                  No hay puntos registrados
+                </p>
+                <p className="text-gray-400 mt-2">
+                  Cree uno haciendo clic en "Nuevo Punto"
+                </p>
               </div>
-
-              {/* Botones de acción */}
-              <div className="flex gap-3 pt-4 border-t bg-gray-50 -mx-6 px-6 py-4 mt-6">
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  Crear Punto
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowForm(false)}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </form>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Dirección</TableHead>
+                    <TableHead>Ciudad</TableHead>
+                    <TableHead>Provincia</TableHead>
+                    <TableHead>Teléfono</TableHead>
+                    <TableHead>Agencia Servientrega</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Fecha Creación</TableHead>
+                    <TableHead>Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {points.map((point) => (
+                    <TableRow key={point.id}>
+                      <TableCell className="font-medium">
+                        {point.nombre}
+                      </TableCell>
+                      <TableCell>{point.direccion}</TableCell>
+                      <TableCell>{point.ciudad}</TableCell>
+                      <TableCell>{point.provincia}</TableCell>
+                      <TableCell>{point.telefono || "N/A"}</TableCell>
+                      <TableCell>
+                        {point.servientrega_agencia_nombre || "No asignada"}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            point.activo
+                              ? "bg-green-100 text-green-800"
+                              : "bg-red-100 text-red-800"
+                          }`}
+                        >
+                          {point.activo ? "Activo" : "Inactivo"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(point.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditingPoint(point)}
+                            title="Editar punto"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant={point.activo ? "destructive" : "default"}
+                            onClick={() => togglePointStatus(point.id)}
+                          >
+                            {point.activo ? "Desactivar" : "Activar"}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
-      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Puntos de Atención del Sistema</CardTitle>
-          <CardDescription>
-            Lista de todos los puntos de atención registrados
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {points.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-lg">No hay puntos registrados</p>
-              <p className="text-gray-400 mt-2">
-                Cree uno haciendo clic en "Nuevo Punto"
-              </p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Dirección</TableHead>
-                  <TableHead>Ciudad</TableHead>
-                  <TableHead>Provincia</TableHead>
-                  <TableHead>Teléfono</TableHead>
-                  <TableHead>Agencia Servientrega</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Fecha Creación</TableHead>
-                  <TableHead>Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {points.map((point) => (
-                  <TableRow key={point.id}>
-                    <TableCell className="font-medium">
-                      {point.nombre}
-                    </TableCell>
-                    <TableCell>{point.direccion}</TableCell>
-                    <TableCell>{point.ciudad}</TableCell>
-                    <TableCell>{point.provincia}</TableCell>
-                    <TableCell>{point.telefono || "N/A"}</TableCell>
-                    <TableCell>
-                      {point.servientrega_agencia_nombre || "No asignada"}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          point.activo
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {point.activo ? "Activo" : "Inactivo"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(point.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setEditingPoint(point)}
-                          title="Editar punto"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={point.activo ? "destructive" : "default"}
-                          onClick={() => togglePointStatus(point.id)}
-                        >
-                          {point.activo ? "Desactivar" : "Activar"}
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* MODAL de edición */}
-      {editingPoint && (
-        <EditPointDialog
-          point={editingPoint}
-          isOpen={!!editingPoint}
-          onClose={() => setEditingPoint(null)}
-          onPointUpdated={loadPoints}
-        />
-      )}
+        {/* MODAL de edición */}
+        {editingPoint && (
+          <EditPointDialog
+            point={editingPoint}
+            isOpen={!!editingPoint}
+            onClose={() => setEditingPoint(null)}
+            onPointUpdated={loadPoints}
+          />
+        )}
+      </div>
     </div>
   );
 };

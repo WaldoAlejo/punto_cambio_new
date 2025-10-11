@@ -270,19 +270,22 @@ router.post(
           });
         }
 
-        // ⚠️ USAR SERVICIO CENTRALIZADO para registrar el movimiento
-        await registrarMovimientoSaldo({
-          puntoAtencionId: punto_atencion_id,
-          monedaId: moneda_id,
-          tipoMovimiento: TipoMovimiento.SALDO_INICIAL,
-          monto: decCantidad, // Monto positivo
-          saldoAnterior: new Prisma.Decimal(existingSaldo?.cantidad ?? 0),
-          saldoNuevo: saldoResult.cantidad,
-          tipoReferencia: TipoReferencia.SALDO_INICIAL,
-          referenciaId: saldoInicialResult.id,
-          descripcion: observaciones || undefined,
-          usuarioId: user.id,
-        });
+        // ⚠️ USAR SERVICIO CENTRALIZADO para registrar el movimiento (dentro de la transacción)
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId: punto_atencion_id,
+            monedaId: moneda_id,
+            tipoMovimiento: TipoMovimiento.SALDO_INICIAL,
+            monto: decCantidad, // Monto positivo
+            saldoAnterior: new Prisma.Decimal(existingSaldo?.cantidad ?? 0),
+            saldoNuevo: saldoResult.cantidad,
+            tipoReferencia: TipoReferencia.SALDO_INICIAL,
+            referenciaId: saldoInicialResult.id,
+            descripcion: observaciones || undefined,
+            usuarioId: user.id,
+          },
+          tx
+        ); // ⚠️ Pasar el cliente de transacción para atomicidad
 
         // Registrar historial consolidado de saldo (para auditoría)
         await tx.historialSaldo.create({

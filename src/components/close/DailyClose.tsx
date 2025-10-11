@@ -351,9 +351,12 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       // Se incluyen automáticamente en el cierre diario
 
       // 3. Validaciones de saldos solo si hay movimientos de cambios de divisas
+      // IMPORTANTE: Solo validar si hay cambios Y hay detalles
+      // Si no hay detalles pero sí cambios, es un error de carga
       if (
         cierres_requeridos.cambios_divisas &&
-        cuadreData.detalles.length === 0
+        cuadreData.detalles.length === 0 &&
+        (validacion.conteos?.cambios_divisas || 0) > 0
       ) {
         toast({
           title: "Error",
@@ -426,14 +429,44 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
       console.log("📊 Detalles prepared:", detalles);
 
-      // 5. Realizar el cierre diario usando el nuevo servicio
+      // 5. Guardar el cierre con el conteo físico de billetes y monedas
+      const token = localStorage.getItem("authToken");
+      const guardarResponse = await fetch(
+        `${
+          import.meta.env.VITE_API_URL || "http://localhost:3001/api"
+        }/guardar-cierre`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            detalles,
+            observaciones: cuadreData.observaciones || "",
+            tipo_cierre: "CERRADO",
+            allowMismatch: false,
+          }),
+        }
+      );
+
+      if (!guardarResponse.ok) {
+        const errorData = await guardarResponse.json();
+        throw new Error(errorData.error || "Error al guardar el cierre");
+      }
+
+      const guardarData = await guardarResponse.json();
+
+      if (!guardarData.success) {
+        throw new Error(guardarData.error || "Error al guardar el cierre");
+      }
+
+      // 6. Marcar el cierre diario como CERRADO
       const resultado = await contabilidadDiariaService.realizarCierreDiario(
         selectedPoint.id,
         fechaHoy,
-        {
-          observaciones: cuadreData.observaciones || "",
-          diferencias_reportadas: null,
-        }
+        cuadreData.observaciones || "",
+        null
       );
 
       if (!resultado.success) {
@@ -608,19 +641,36 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             )}
 
             {cuadreData?.detalles.length === 0 ? (
-              <div className="text-center py-8">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                  <h3 className="text-lg font-semibold text-blue-800 mb-2">
-                    ✅ Cierre sin Movimientos de Divisas
-                  </h3>
-                  <p className="text-blue-700 mb-4">
-                    No se registraron cambios de divisas hoy, pero puede
-                    proceder con el cierre.
-                  </p>
-                  <p className="text-sm text-blue-600">
-                    El cierre incluirá todos los movimientos del día (servicios
-                    externos, transferencias, etc.).
-                  </p>
+              <div className="space-y-6">
+                <div className="text-center py-8">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-blue-800 mb-2">
+                      ✅ Cierre sin Movimientos de Divisas
+                    </h3>
+                    <p className="text-blue-700 mb-4">
+                      No se registraron cambios de divisas hoy, pero puede
+                      proceder con el cierre.
+                    </p>
+                    <p className="text-sm text-blue-600">
+                      El cierre incluirá todos los movimientos del día
+                      (servicios externos, transferencias, etc.).
+                    </p>
+                  </div>
+                </div>
+
+                {/* Botón de cierre para días sin movimientos */}
+                <Button
+                  onClick={performDailyClose}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
+                  size="lg"
+                  disabled={false}
+                >
+                  Realizar Cierre Diario
+                </Button>
+
+                <div className="mt-3 text-xs text-gray-600 text-center">
+                  El cierre se realizará sin detalles de cuadre de caja, ya que
+                  no hubo movimientos de divisas.
                 </div>
               </div>
             ) : (

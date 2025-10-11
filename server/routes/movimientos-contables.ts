@@ -369,18 +369,21 @@ router.post(
               ? TipoReferencia.SERVICIO_EXTERNO
               : TipoReferencia.AJUSTE_MANUAL;
 
-          await registrarMovimientoSaldo({
-            puntoAtencionId: punto_atencion_id,
-            monedaId: moneda_id,
-            tipoMovimiento: tipoMov,
-            monto: montoNum, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
-            saldoAnterior: cantidadActual,
-            saldoNuevo: nuevaCantidad,
-            tipoReferencia: tipoRef,
-            referenciaId: referencia_id || undefined,
-            descripcion: descripcion || undefined,
-            usuarioId: usuario_id,
-          });
+          await registrarMovimientoSaldo(
+            {
+              puntoAtencionId: punto_atencion_id,
+              monedaId: moneda_id,
+              tipoMovimiento: tipoMov,
+              monto: montoNum, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
+              saldoAnterior: cantidadActual,
+              saldoNuevo: nuevaCantidad,
+              tipoReferencia: tipoRef,
+              referenciaId: referencia_id || undefined,
+              descripcion: descripcion || undefined,
+              usuarioId: usuario_id,
+            },
+            tx
+          ); // ⚠️ Pasar el cliente de transacción para atomicidad
 
           // Upsert de Saldo
           if (saldoActual?.id) {

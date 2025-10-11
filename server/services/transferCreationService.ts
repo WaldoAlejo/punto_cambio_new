@@ -191,18 +191,21 @@ async function upsertSaldoBanco(
   // }
 }
 
-async function logMovimientoSaldo(args: {
-  punto_atencion_id: string;
-  moneda_id: string;
-  tipo_movimiento: "INGRESO" | "EGRESO" | "AJUSTE";
-  monto: number;
-  saldo_anterior: number;
-  saldo_nuevo: number;
-  usuario_id: string;
-  referencia_id: string;
-  tipo_referencia: "TRANSFERENCIA";
-  descripcion?: string;
-}) {
+async function logMovimientoSaldo(
+  args: {
+    punto_atencion_id: string;
+    moneda_id: string;
+    tipo_movimiento: "INGRESO" | "EGRESO" | "AJUSTE";
+    monto: number;
+    saldo_anterior: number;
+    saldo_nuevo: number;
+    usuario_id: string;
+    referencia_id: string;
+    tipo_referencia: "TRANSFERENCIA";
+    descripcion?: string;
+  },
+  tx?: any
+) {
   // Usar servicio centralizado
   const tipoMov =
     args.tipo_movimiento === "INGRESO"
@@ -215,18 +218,21 @@ async function logMovimientoSaldo(args: {
   // pero el servicio espera monto positivo, así que tomamos el valor absoluto
   const montoAbsoluto = Math.abs(args.monto);
 
-  await registrarMovimientoSaldo({
-    puntoAtencionId: args.punto_atencion_id,
-    monedaId: args.moneda_id,
-    tipoMovimiento: tipoMov,
-    monto: montoAbsoluto, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
-    saldoAnterior: args.saldo_anterior,
-    saldoNuevo: args.saldo_nuevo,
-    tipoReferencia: TipoReferencia.TRANSFER,
-    referenciaId: args.referencia_id,
-    descripcion: args.descripcion || undefined,
-    usuarioId: args.usuario_id,
-  });
+  await registrarMovimientoSaldo(
+    {
+      puntoAtencionId: args.punto_atencion_id,
+      monedaId: args.moneda_id,
+      tipoMovimiento: tipoMov,
+      monto: montoAbsoluto, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
+      saldoAnterior: args.saldo_anterior,
+      saldoNuevo: args.saldo_nuevo,
+      tipoReferencia: TipoReferencia.TRANSFER,
+      referenciaId: args.referencia_id,
+      descripcion: args.descripcion || undefined,
+      usuarioId: args.usuario_id,
+    },
+    tx
+  ); // ⚠️ Pasar el cliente de transacción para atomicidad (si se proporciona)
 }
 
 export const transferCreationService = {

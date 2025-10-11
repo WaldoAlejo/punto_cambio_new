@@ -198,6 +198,18 @@ router.patch(
             },
           });
           const saldoAnteriorOrigen = Number(saldoOrigen?.cantidad || 0);
+
+          // 🛡️ VALIDACIÓN CRÍTICA: Verificar saldo suficiente antes de aprobar
+          if (saldoAnteriorOrigen < Number(transfer.monto)) {
+            throw new Error(
+              `Saldo insuficiente en punto origen. Saldo actual: ${saldoAnteriorOrigen.toFixed(
+                2
+              )} ${transferAprobada.moneda?.codigo || ""}, requerido: ${Number(
+                transfer.monto
+              ).toFixed(2)}. La transferencia no puede ser aprobada.`
+            );
+          }
+
           const saldoNuevoOrigen = saldoAnteriorOrigen - Number(transfer.monto);
 
           await tx.saldo.upsert({
@@ -220,21 +232,24 @@ router.patch(
             },
           });
 
-          // Registrar movimiento de salida en MovimientoSaldo
-          await registrarMovimientoSaldo({
-            puntoAtencionId: transfer.origen_id,
-            monedaId: transfer.moneda_id,
-            tipoMovimiento: TipoMovimiento.EGRESO,
-            monto: Number(transfer.monto),
-            saldoAnterior: saldoAnteriorOrigen,
-            saldoNuevo: saldoNuevoOrigen,
-            tipoReferencia: TipoReferencia.TRANSFER,
-            referenciaId: transfer.id,
-            descripcion: `Transferencia de salida a ${
-              transferAprobada.destino?.nombre || "Externa"
-            } - ${transfer.monto}`,
-            usuarioId: req.user!.id,
-          });
+          // Registrar movimiento de salida en MovimientoSaldo (dentro de la transacción)
+          await registrarMovimientoSaldo(
+            {
+              puntoAtencionId: transfer.origen_id,
+              monedaId: transfer.moneda_id,
+              tipoMovimiento: TipoMovimiento.EGRESO,
+              monto: Number(transfer.monto),
+              saldoAnterior: saldoAnteriorOrigen,
+              saldoNuevo: saldoNuevoOrigen,
+              tipoReferencia: TipoReferencia.TRANSFER,
+              referenciaId: transfer.id,
+              descripcion: `Transferencia de salida a ${
+                transferAprobada.destino?.nombre || "Externa"
+              } - ${transfer.monto}`,
+              usuarioId: req.user!.id,
+            },
+            tx
+          ); // ⚠️ Pasar el cliente de transacción para atomicidad
 
           // Registrar movimiento de salida en HistorialSaldo (legacy)
           await tx.historialSaldo.create({
@@ -287,21 +302,24 @@ router.patch(
           },
         });
 
-        // Registrar movimiento de entrada en MovimientoSaldo
-        await registrarMovimientoSaldo({
-          puntoAtencionId: transfer.destino_id,
-          monedaId: transfer.moneda_id,
-          tipoMovimiento: TipoMovimiento.INGRESO,
-          monto: Number(transfer.monto),
-          saldoAnterior: saldoAnteriorDestino,
-          saldoNuevo: saldoNuevoDestino,
-          tipoReferencia: TipoReferencia.TRANSFER,
-          referenciaId: transfer.id,
-          descripcion: `Transferencia de entrada desde ${
-            transferAprobada.origen?.nombre || "Externa"
-          } - ${transfer.monto}`,
-          usuarioId: req.user!.id,
-        });
+        // Registrar movimiento de entrada en MovimientoSaldo (dentro de la transacción)
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId: transfer.destino_id,
+            monedaId: transfer.moneda_id,
+            tipoMovimiento: TipoMovimiento.INGRESO,
+            monto: Number(transfer.monto),
+            saldoAnterior: saldoAnteriorDestino,
+            saldoNuevo: saldoNuevoDestino,
+            tipoReferencia: TipoReferencia.TRANSFER,
+            referenciaId: transfer.id,
+            descripcion: `Transferencia de entrada desde ${
+              transferAprobada.origen?.nombre || "Externa"
+            } - ${transfer.monto}`,
+            usuarioId: req.user!.id,
+          },
+          tx
+        ); // ⚠️ Pasar el cliente de transacción para atomicidad
 
         // Registrar movimiento de entrada en HistorialSaldo (legacy)
         await tx.historialSaldo.create({

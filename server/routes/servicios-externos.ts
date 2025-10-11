@@ -162,35 +162,54 @@ router.post(
       const usdId = await ensureUsdMonedaId();
 
       const movimiento = await prisma.$transaction(async (tx) => {
-        // Saldo USD del punto
-        const saldo = await tx.saldo.findUnique({
+        // Obtener saldo del servicio externo específico
+        const saldoServicio = await tx.servicioExternoSaldo.findUnique({
           where: {
-            punto_atencion_id_moneda_id: {
+            punto_atencion_id_servicio_moneda_id: {
               punto_atencion_id: puntoId,
+              servicio,
               moneda_id: usdId,
             },
           },
         });
-        const anterior = Number(saldo?.cantidad || 0);
+
+        const anterior = Number(saldoServicio?.cantidad || 0);
         const delta = tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
         const nuevo = anterior + delta;
 
-        if (saldo) {
-          await tx.saldo.update({
-            where: { id: saldo.id },
+        // Validar saldo suficiente para EGRESOS
+        if (tipo_movimiento === "EGRESO" && nuevo < 0) {
+          throw new Error(
+            `Saldo insuficiente para el servicio ${servicio}. Saldo actual: $${anterior.toFixed(
+              2
+            )}, Monto requerido: $${montoNum.toFixed(2)}`
+          );
+        }
+
+        // Actualizar o crear saldo del servicio externo
+        if (saldoServicio) {
+          await tx.servicioExternoSaldo.update({
+            where: { id: saldoServicio.id },
             data: {
               cantidad: nuevo,
               updated_at: new Date(),
             },
           });
         } else {
-          await tx.saldo.create({
+          // Si no existe saldo y es EGRESO, no permitir
+          if (tipo_movimiento === "EGRESO") {
+            throw new Error(
+              `No hay saldo asignado para el servicio ${servicio}. Debe asignarse saldo antes de registrar egresos.`
+            );
+          }
+          // Si es INGRESO, crear el saldo
+          await tx.servicioExternoSaldo.create({
             data: {
               punto_atencion_id: puntoId,
+              servicio,
               moneda_id: usdId,
               cantidad: nuevo,
-              billetes: 0,
-              monedas_fisicas: 0,
+              updated_at: new Date(),
             },
           });
         }
@@ -214,20 +233,23 @@ router.post(
           },
         });
 
-        // Trazabilidad en MovimientoSaldo usando servicio centralizado
-        await registrarMovimientoSaldo({
-          puntoAtencionId: puntoId,
-          monedaId: usdId,
-          tipoMovimiento:
-            tipo_movimiento === "INGRESO" ? TipoMov.INGRESO : TipoMov.EGRESO,
-          monto: montoNum, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
-          saldoAnterior: anterior,
-          saldoNuevo: nuevo,
-          tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
-          referenciaId: svcMov.id,
-          descripcion: descripcion || undefined,
-          usuarioId: (req as any).user.id,
-        });
+        // Trazabilidad en MovimientoSaldo usando servicio centralizado (dentro de la transacción)
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId: puntoId,
+            monedaId: usdId,
+            tipoMovimiento:
+              tipo_movimiento === "INGRESO" ? TipoMov.INGRESO : TipoMov.EGRESO,
+            monto: montoNum, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
+            saldoAnterior: anterior,
+            saldoNuevo: nuevo,
+            tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
+            referenciaId: svcMov.id,
+            descripcion: descripcion || undefined,
+            usuarioId: (req as any).user.id,
+          },
+          tx
+        ); // ⚠️ Pasar el cliente de transacción para atomicidad
 
         return {
           id: svcMov.id,
@@ -394,6 +416,7 @@ router.delete(
           select: {
             id: true,
             punto_atencion_id: true,
+            servicio: true,
             moneda_id: true,
             monto: true,
             tipo_movimiento: true,
@@ -419,16 +442,17 @@ router.delete(
           throw new Error("abort");
         }
 
-        // Saldo actual
-        const saldo = await tx.saldo.findUnique({
+        // Saldo actual del servicio externo
+        const saldoServicio = await tx.servicioExternoSaldo.findUnique({
           where: {
-            punto_atencion_id_moneda_id: {
+            punto_atencion_id_servicio_moneda_id: {
               punto_atencion_id: mov.punto_atencion_id,
+              servicio: mov.servicio,
               moneda_id: mov.moneda_id,
             },
           },
         });
-        const anterior = Number(saldo?.cantidad || 0);
+        const anterior = Number(saldoServicio?.cantidad || 0);
 
         // Ajuste inverso: si era INGRESO, ahora es EGRESO (negativo)
         // Si era EGRESO, ahora es INGRESO (positivo)
@@ -438,37 +462,41 @@ router.delete(
             : Number(mov.monto);
         const nuevo = anterior + delta;
 
-        if (saldo) {
-          await tx.saldo.update({
-            where: { id: saldo.id },
+        if (saldoServicio) {
+          await tx.servicioExternoSaldo.update({
+            where: { id: saldoServicio.id },
             data: { cantidad: nuevo, updated_at: new Date() },
           });
         } else {
-          await tx.saldo.create({
+          // Si no existe saldo, crear uno
+          await tx.servicioExternoSaldo.create({
             data: {
               punto_atencion_id: mov.punto_atencion_id,
+              servicio: mov.servicio,
               moneda_id: mov.moneda_id,
               cantidad: nuevo,
-              billetes: 0,
-              monedas_fisicas: 0,
+              updated_at: new Date(),
             },
           });
         }
 
-        // ⚠️ USAR SERVICIO CENTRALIZADO para registrar el ajuste
+        // ⚠️ USAR SERVICIO CENTRALIZADO para registrar el ajuste (dentro de la transacción)
         // El servicio espera monto positivo y aplica el signo según el tipo
-        await registrarMovimientoSaldo({
-          puntoAtencionId: mov.punto_atencion_id,
-          monedaId: mov.moneda_id,
-          tipoMovimiento: TipoMov.AJUSTE,
-          monto: delta, // AJUSTE mantiene el signo original (positivo o negativo)
-          saldoAnterior: anterior,
-          saldoNuevo: nuevo,
-          tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
-          referenciaId: mov.id,
-          descripcion: `Reverso eliminación servicio externo ${mov.tipo_movimiento}`,
-          usuarioId: (req as any).user.id,
-        });
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId: mov.punto_atencion_id,
+            monedaId: mov.moneda_id,
+            tipoMovimiento: TipoMov.AJUSTE,
+            monto: delta, // AJUSTE mantiene el signo original (positivo o negativo)
+            saldoAnterior: anterior,
+            saldoNuevo: nuevo,
+            tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
+            referenciaId: mov.id,
+            descripcion: `Reverso eliminación servicio externo ${mov.tipo_movimiento}`,
+            usuarioId: (req as any).user.id,
+          },
+          tx
+        ); // ⚠️ Pasar el cliente de transacción para atomicidad
 
         await tx.servicioExternoMovimiento.delete({ where: { id: mov.id } });
       });

@@ -277,16 +277,16 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5">
-      <div className="container mx-auto p-6 space-y-6">
-        {/* Header */}
-        <div className="bg-card rounded-xl shadow-lg p-6 border border-border/50">
+    <div className="h-full flex flex-col gap-4">
+      {/* Header - Siempre visible */}
+      <div className="flex-shrink-0">
+        <div className="bg-card rounded-lg shadow-sm p-4 border border-border/50">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h1 className="text-2xl font-bold text-primary">
+              <h1 className="text-lg font-bold text-primary">
                 Cambios de Divisas (Admin)
               </h1>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Visualiza y gestiona cambios de todos los puntos. Solo se pueden
                 eliminar operaciones del día actual.
               </p>
@@ -447,274 +447,279 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Body */}
-        <div className="grid grid-cols-1 gap-6">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-            <TabsList className="mb-2">
-              <TabsTrigger value="cambios">Cambios</TabsTrigger>
-              <TabsTrigger value="cambiosParciales">
-                Cambios Parciales
-              </TabsTrigger>
-              <TabsTrigger value="serviciosExternos">
-                Servicios Externos
-              </TabsTrigger>
-            </TabsList>
+      {/* Body - Scrolleable */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as any)}
+          className="h-full flex flex-col"
+        >
+          <TabsList className="mb-2 flex-shrink-0">
+            <TabsTrigger value="cambios">Cambios</TabsTrigger>
+            <TabsTrigger value="cambiosParciales">
+              Cambios Parciales
+            </TabsTrigger>
+            <TabsTrigger value="serviciosExternos">
+              Servicios Externos
+            </TabsTrigger>
+          </TabsList>
 
-            {/* Tab: Cambios */}
-            <div role="tabpanel" hidden={activeTab !== "cambios"}>
-              <Card className="overflow-hidden">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">
-                    Listado{" "}
-                    {selectedPointId === "ALL"
-                      ? "(Todos los puntos)"
-                      : "(Punto seleccionado)"}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {error && (
-                    <div className="mb-3 text-sm text-red-600">{error}</div>
-                  )}
-                  <ExchangeList
-                    exchanges={filteredExchanges}
-                    currencies={currencies}
-                    onDeleted={handleDeleted}
-                    onReprintReceipt={undefined}
-                    /* Mostrar punto y usuario al admin */
-                    showPointName
-                    showUserName
-                  />
-                </CardContent>
-              </Card>
-            </div>
+          {/* Tab: Cambios */}
+          <div role="tabpanel" hidden={activeTab !== "cambios"}>
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">
+                  Listado{" "}
+                  {selectedPointId === "ALL"
+                    ? "(Todos los puntos)"
+                    : "(Punto seleccionado)"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {error && (
+                  <div className="mb-3 text-sm text-red-600">{error}</div>
+                )}
+                <ExchangeList
+                  exchanges={filteredExchanges}
+                  currencies={currencies}
+                  onDeleted={handleDeleted}
+                  onReprintReceipt={undefined}
+                  /* Mostrar punto y usuario al admin */
+                  showPointName
+                  showUserName
+                />
+              </CardContent>
+            </Card>
+          </div>
 
-            {/* Tab: Cambios Parciales */}
-            <div role="tabpanel" hidden={activeTab !== "cambiosParciales"}>
-              <Card className="overflow-hidden">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">
-                    Cambios Parciales{" "}
-                    {selectedPointId === "ALL"
-                      ? "(Todos los puntos)"
-                      : "(Punto seleccionado)"}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Cambios con saldo pendiente que requieren completar la
-                    entrega
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <PartialExchangesList
-                    exchanges={partialExchanges}
-                    onCompleted={(id: string) => {
-                      setPartialExchanges((prev) => prev.filter((e) => e.id !== id));
-                      toast.success("Cambio parcial completado");
-                    }}
-                    showPointName
-                    showUserName
-                  />
-                </CardContent>
-              </Card>
-            </div>
+          {/* Tab: Cambios Parciales */}
+          <div role="tabpanel" hidden={activeTab !== "cambiosParciales"}>
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">
+                  Cambios Parciales{" "}
+                  {selectedPointId === "ALL"
+                    ? "(Todos los puntos)"
+                    : "(Punto seleccionado)"}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Cambios con saldo pendiente que requieren completar la entrega
+                </p>
+              </CardHeader>
+              <CardContent>
+                <PartialExchangesList
+                  exchanges={partialExchanges}
+                  onCompleted={(id: string) => {
+                    setPartialExchanges((prev) =>
+                      prev.filter((e) => e.id !== id)
+                    );
+                    toast.success("Cambio parcial completado");
+                  }}
+                  showPointName
+                  showUserName
+                />
+              </CardContent>
+            </Card>
+          </div>
 
-            {/* Tab: Servicios Externos */}
-            <div role="tabpanel" hidden={activeTab !== "serviciosExternos"}>
-              <Card className="overflow-hidden">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">
-                    Servicios Externos (Admin)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {/* Filtros fecha para servicios externos */}
-                  <div className="flex items-end gap-2 mb-3">
-                    <div>
-                      <label className="text-xs text-muted-foreground">
-                        Desde
-                      </label>
-                      <Input
-                        type="date"
-                        value={extDesde}
-                        onChange={(e) => setExtDesde(e.target.value)}
-                        className="w-[150px]"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-muted-foreground">
-                        Hasta
-                      </label>
-                      <Input
-                        type="date"
-                        value={extHasta}
-                        onChange={(e) => setExtHasta(e.target.value)}
-                        className="w-[150px]"
-                      />
-                    </div>
-                    <Button
-                      variant="secondary"
-                      onClick={async () => {
-                        setIsRefreshing(true);
-                        await loadExternalServices(
-                          selectedPointId === "ALL"
-                            ? (undefined as any)
-                            : selectedPointId
-                        );
-                        setIsRefreshing(false);
-                      }}
-                      disabled={isLoading || isRefreshing}
-                    >
-                      Aplicar
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={async () => {
-                        setExtDesde("");
-                        setExtHasta("");
-                        setIsRefreshing(true);
-                        await loadExternalServices(
-                          selectedPointId === "ALL"
-                            ? (undefined as any)
-                            : selectedPointId
-                        );
-                        setIsRefreshing(false);
-                      }}
-                      disabled={isLoading || isRefreshing}
-                    >
-                      Limpiar
-                    </Button>
+          {/* Tab: Servicios Externos */}
+          <div role="tabpanel" hidden={activeTab !== "serviciosExternos"}>
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">
+                  Servicios Externos (Admin)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {/* Filtros fecha para servicios externos */}
+                <div className="flex items-end gap-2 mb-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground">
+                      Desde
+                    </label>
+                    <Input
+                      type="date"
+                      value={extDesde}
+                      onChange={(e) => setExtDesde(e.target.value)}
+                      className="w-[150px]"
+                    />
                   </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">
+                      Hasta
+                    </label>
+                    <Input
+                      type="date"
+                      value={extHasta}
+                      onChange={(e) => setExtHasta(e.target.value)}
+                      className="w-[150px]"
+                    />
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={async () => {
+                      setIsRefreshing(true);
+                      await loadExternalServices(
+                        selectedPointId === "ALL"
+                          ? (undefined as any)
+                          : selectedPointId
+                      );
+                      setIsRefreshing(false);
+                    }}
+                    disabled={isLoading || isRefreshing}
+                  >
+                    Aplicar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={async () => {
+                      setExtDesde("");
+                      setExtHasta("");
+                      setIsRefreshing(true);
+                      await loadExternalServices(
+                        selectedPointId === "ALL"
+                          ? (undefined as any)
+                          : selectedPointId
+                      );
+                      setIsRefreshing(false);
+                    }}
+                    disabled={isLoading || isRefreshing}
+                  >
+                    Limpiar
+                  </Button>
+                </div>
 
-                  {/* Tabla servicios externos */}
-                  <div className="rounded border overflow-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="p-2 text-left">Fecha</th>
-                          <th className="p-2 text-left">Punto</th>
-                          <th className="p-2 text-left">Servicio</th>
-                          <th className="p-2 text-left">Tipo</th>
-                          <th className="p-2 text-right">Monto (USD)</th>
-                          <th className="p-2 text-left">Referencia</th>
-                          <th className="p-2 text-left">Descripción</th>
-                          <th className="p-2 text-left">Usuario</th>
-                          <th className="p-2 text-right">Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {externalServices.map((it) => (
-                          <tr key={it.id} className="border-t">
-                            <td className="p-2">
-                              {new Date(it.fecha).toLocaleString(undefined, {
-                                year: "numeric",
-                                month: "2-digit",
-                                day: "2-digit",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </td>
-                            <td className="p-2">
-                              {points.find((p) => p.id === it.punto_atencion_id)
-                                ?.nombre || it.punto_atencion_id}
-                            </td>
-                            <td className="p-2">{it.servicio}</td>
-                            <td className="p-2">
-                              <Badge
-                                variant={
-                                  it.tipo_movimiento === "INGRESO"
-                                    ? "secondary"
-                                    : "destructive"
-                                }
-                                className={
-                                  it.tipo_movimiento === "INGRESO"
-                                    ? "bg-green-100 text-green-800 border-green-200"
-                                    : "bg-red-100 text-red-800 border-red-200"
-                                }
-                              >
-                                {it.tipo_movimiento === "INGRESO"
-                                  ? "Ingreso"
-                                  : "Egreso"}
-                              </Badge>
-                            </td>
-                            <td className="p-2 text-right">
-                              <span
-                                className={
-                                  it.tipo_movimiento === "INGRESO"
-                                    ? "text-green-700"
-                                    : "text-red-700"
-                                }
-                              >
-                                {Number(it.monto).toFixed(2)}
-                              </span>
-                            </td>
-                            <td className="p-2">
-                              {it.numero_referencia?.trim()
-                                ? it.numero_referencia
-                                : "-"}
-                            </td>
-                            <td className="p-2">{it.descripcion || "-"}</td>
-                            <td className="p-2">{it.usuario?.nombre || "-"}</td>
-                            <td className="p-2 text-right">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                                onClick={() => {
-                                  showConfirmation(
-                                    "Eliminar movimiento",
-                                    "¿Eliminar este movimiento? Esto revertirá el saldo con un ajuste. Solo se permiten eliminaciones del día actual.",
-                                    async () => {
-                                      try {
-                                        const {
-                                          eliminarMovimientoServicioExterno,
-                                        } = await import(
-                                          "@/services/externalServicesService"
+                {/* Tabla servicios externos */}
+                <div className="rounded border overflow-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="p-2 text-left">Fecha</th>
+                        <th className="p-2 text-left">Punto</th>
+                        <th className="p-2 text-left">Servicio</th>
+                        <th className="p-2 text-left">Tipo</th>
+                        <th className="p-2 text-right">Monto (USD)</th>
+                        <th className="p-2 text-left">Referencia</th>
+                        <th className="p-2 text-left">Descripción</th>
+                        <th className="p-2 text-left">Usuario</th>
+                        <th className="p-2 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {externalServices.map((it) => (
+                        <tr key={it.id} className="border-t">
+                          <td className="p-2">
+                            {new Date(it.fecha).toLocaleString(undefined, {
+                              year: "numeric",
+                              month: "2-digit",
+                              day: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </td>
+                          <td className="p-2">
+                            {points.find((p) => p.id === it.punto_atencion_id)
+                              ?.nombre || it.punto_atencion_id}
+                          </td>
+                          <td className="p-2">{it.servicio}</td>
+                          <td className="p-2">
+                            <Badge
+                              variant={
+                                it.tipo_movimiento === "INGRESO"
+                                  ? "secondary"
+                                  : "destructive"
+                              }
+                              className={
+                                it.tipo_movimiento === "INGRESO"
+                                  ? "bg-green-100 text-green-800 border-green-200"
+                                  : "bg-red-100 text-red-800 border-red-200"
+                              }
+                            >
+                              {it.tipo_movimiento === "INGRESO"
+                                ? "Ingreso"
+                                : "Egreso"}
+                            </Badge>
+                          </td>
+                          <td className="p-2 text-right">
+                            <span
+                              className={
+                                it.tipo_movimiento === "INGRESO"
+                                  ? "text-green-700"
+                                  : "text-red-700"
+                              }
+                            >
+                              {Number(it.monto).toFixed(2)}
+                            </span>
+                          </td>
+                          <td className="p-2">
+                            {it.numero_referencia?.trim()
+                              ? it.numero_referencia
+                              : "-"}
+                          </td>
+                          <td className="p-2">{it.descripcion || "-"}</td>
+                          <td className="p-2">{it.usuario?.nombre || "-"}</td>
+                          <td className="p-2 text-right">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => {
+                                showConfirmation(
+                                  "Eliminar movimiento",
+                                  "¿Eliminar este movimiento? Esto revertirá el saldo con un ajuste. Solo se permiten eliminaciones del día actual.",
+                                  async () => {
+                                    try {
+                                      const {
+                                        eliminarMovimientoServicioExterno,
+                                      } = await import(
+                                        "@/services/externalServicesService"
+                                      );
+                                      const resp =
+                                        await eliminarMovimientoServicioExterno(
+                                          it.id
                                         );
-                                        const resp =
-                                          await eliminarMovimientoServicioExterno(
-                                            it.id
-                                          );
-                                        if (resp?.success) {
-                                          toast.success("Movimiento eliminado");
-                                          setExternalServices((prev) =>
-                                            prev.filter((r) => r.id !== it.id)
-                                          );
-                                          window.dispatchEvent(
-                                            new CustomEvent("saldosUpdated")
-                                          );
-                                        } else {
-                                          toast.error(
-                                            resp?.error || "No se pudo eliminar"
-                                          );
-                                        }
-                                      } catch (e: any) {
+                                      if (resp?.success) {
+                                        toast.success("Movimiento eliminado");
+                                        setExternalServices((prev) =>
+                                          prev.filter((r) => r.id !== it.id)
+                                        );
+                                        window.dispatchEvent(
+                                          new CustomEvent("saldosUpdated")
+                                        );
+                                      } else {
                                         toast.error(
-                                          e?.friendlyMessage ||
-                                            e?.message ||
-                                            "Error de conexión"
+                                          resp?.error || "No se pudo eliminar"
                                         );
                                       }
-                                    },
-                                    "destructive"
-                                  );
-                                }}
-                                title="Eliminar movimiento"
-                                aria-label="Eliminar movimiento"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <ConfirmationDialog />
-                </CardContent>
-              </Card>
-            </div>
-          </Tabs>
-        </div>
+                                    } catch (e: any) {
+                                      toast.error(
+                                        e?.friendlyMessage ||
+                                          e?.message ||
+                                          "Error de conexión"
+                                      );
+                                    }
+                                  },
+                                  "destructive"
+                                );
+                              }}
+                              title="Eliminar movimiento"
+                              aria-label="Eliminar movimiento"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ConfirmationDialog />
+              </CardContent>
+            </Card>
+          </div>
+        </Tabs>
       </div>
     </div>
   );

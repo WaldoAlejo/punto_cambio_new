@@ -153,6 +153,7 @@ function validarMovimiento(params: RegistrarMovimientoParams): void {
  * Esta es la ÚNICA función que debe usarse para registrar movimientos.
  *
  * @param params - Parámetros del movimiento
+ * @param tx - Cliente de transacción opcional (para atomicidad)
  * @returns El movimiento creado
  *
  * @example
@@ -186,9 +187,28 @@ function validarMovimiento(params: RegistrarMovimientoParams): void {
  *   usuarioId: 1
  * });
  * // Resultado: Se registra con monto = +30.00
+ *
+ * @example
+ * // Usar dentro de una transacción (RECOMENDADO para atomicidad)
+ * await prisma.$transaction(async (tx) => {
+ *   // ... otras operaciones ...
+ *   await registrarMovimientoSaldo({
+ *     puntoAtencionId: 1,
+ *     monedaId: 2,
+ *     tipoMovimiento: TipoMovimiento.INGRESO,
+ *     monto: 30.00,
+ *     saldoAnterior: 50.00,
+ *     saldoNuevo: 80.00,
+ *     tipoReferencia: TipoReferencia.EXCHANGE,
+ *     referenciaId: 456,
+ *     descripcion: 'Cambio de divisa',
+ *     usuarioId: 1
+ *   }, tx); // ⚠️ Pasar el cliente de transacción
+ * });
  */
 export async function registrarMovimientoSaldo(
-  params: RegistrarMovimientoParams
+  params: RegistrarMovimientoParams,
+  tx?: Prisma.TransactionClient
 ) {
   // 1. Validar el movimiento
   validarMovimiento(params);
@@ -199,8 +219,11 @@ export async function registrarMovimientoSaldo(
     params.monto
   );
 
-  // 3. Registrar en la base de datos
-  const movimiento = await prisma.movimientoSaldo.create({
+  // 3. Usar el cliente de transacción si se proporciona, sino usar prisma directamente
+  const client = tx || prisma;
+
+  // 4. Registrar en la base de datos
+  const movimiento = await client.movimientoSaldo.create({
     data: {
       punto_atencion_id: String(params.puntoAtencionId),
       moneda_id: String(params.monedaId),

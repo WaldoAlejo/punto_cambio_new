@@ -1,6 +1,11 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { subDays } from "date-fns";
+import {
+  registrarMovimientoSaldo,
+  TipoMovimiento,
+  TipoReferencia,
+} from "./movimientoSaldoService.js";
 
 export interface RemitenteData {
   identificacion?: string;
@@ -25,6 +30,9 @@ export interface GuiaData {
   base64_response: string;
   remitente_id: string;
   destinatario_id: string;
+  punto_atencion_id?: string;
+  costo_envio?: number;
+  valor_declarado?: number;
 }
 
 export interface SaldoData {
@@ -32,6 +40,58 @@ export interface SaldoData {
   monto_total: number;
   monto_usado?: number;
   creado_por?: string;
+}
+
+/**
+ * Función auxiliar para obtener el ID de la moneda USD
+ * Servientrega siempre opera en dólares
+ */
+async function ensureUsdMonedaId(): Promise<string> {
+  const existing = await prisma.moneda.findUnique({
+    where: { codigo: "USD" },
+    select: { id: true },
+  });
+  if (existing?.id) return existing.id;
+
+  const created = await prisma.moneda.create({
+    data: {
+      nombre: "Dólar estadounidense",
+      simbolo: "$",
+      codigo: "USD",
+      activo: true,
+      orden_display: 0,
+      comportamiento_compra: "MULTIPLICA",
+      comportamiento_venta: "DIVIDE",
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+/**
+ * Función auxiliar para obtener el ID del usuario SYSTEM
+ * Se usa para registrar movimientos automáticos del sistema
+ */
+async function ensureSystemUserId(): Promise<string> {
+  const existing = await prisma.usuario.findFirst({
+    where: { correo: "system@puntocambio.com" },
+    select: { id: true },
+  });
+  if (existing?.id) return existing.id;
+
+  // Si no existe, crear usuario SYSTEM
+  const created = await prisma.usuario.create({
+    data: {
+      username: "system",
+      nombre: "Sistema",
+      correo: "system@puntocambio.com",
+      password: "SYSTEM_NO_LOGIN", // Password inválido para evitar login
+      rol: "ADMIN",
+      activo: true,
+    },
+    select: { id: true },
+  });
+  return created.id;
 }
 
 export class ServientregaDBService {
@@ -206,11 +266,28 @@ export class ServientregaDBService {
 
   /**
    * Asignación de saldo: transacción + historial + upsert con increment.
+   * Ahora también registra en MovimientoSaldo para trazabilidad completa.
    */
   async gestionarSaldo(data: SaldoData) {
     const { punto_atencion_id, monto_total, creado_por } = data;
 
     return prisma.$transaction(async (tx) => {
+      // Obtener IDs necesarios
+      const usdId = await ensureUsdMonedaId();
+      const systemUserId = await ensureSystemUserId();
+
+      // Obtener saldo anterior (disponible = monto_total - monto_usado)
+      const saldoExistente = await tx.servientregaSaldo.findUnique({
+        where: { punto_atencion_id },
+      });
+      const montoTotalAnterior = saldoExistente?.monto_total
+        ? Number(saldoExistente.monto_total)
+        : 0;
+      const montoUsadoAnterior = saldoExistente?.monto_usado
+        ? Number(saldoExistente.monto_usado)
+        : 0;
+      const saldoDisponibleAnterior = montoTotalAnterior - montoUsadoAnterior;
+
       // Obtener información del punto de atención
       const puntoAtencion = await tx.puntoAtencion.findUnique({
         where: { id: punto_atencion_id },
@@ -242,15 +319,43 @@ export class ServientregaDBService {
         },
       });
 
+      // Calcular nuevo saldo disponible
+      const montoTotalNuevo = Number(actualizado.monto_total);
+      const montoUsadoNuevo = Number(actualizado.monto_usado);
+      const saldoDisponibleNuevo = montoTotalNuevo - montoUsadoNuevo;
+
+      // Registrar en MovimientoSaldo para trazabilidad (dentro de la transacción)
+      await registrarMovimientoSaldo(
+        {
+          puntoAtencionId: punto_atencion_id,
+          monedaId: usdId,
+          tipoMovimiento: TipoMovimiento.INGRESO,
+          monto: monto_total, // Monto positivo, el servicio aplica el signo
+          saldoAnterior: saldoDisponibleAnterior,
+          saldoNuevo: saldoDisponibleNuevo,
+          tipoReferencia: TipoReferencia.SERVIENTREGA,
+          descripcion: `Asignación de saldo Servientrega por ${
+            creado_por || "SYSTEM"
+          }`,
+          usuarioId: systemUserId,
+        },
+        tx
+      ); // ⚠️ Pasar el cliente de transacción para atomicidad
+
       return actualizado;
     });
   }
 
   /**
    * Descuento de saldo: transacción, evita sobregiros y registra historial (débito).
+   * Ahora también registra en MovimientoSaldo para trazabilidad completa.
    */
   async descontarSaldo(puntoAtencionId: string, monto: number) {
     return prisma.$transaction(async (tx) => {
+      // Obtener IDs necesarios
+      const usdId = await ensureUsdMonedaId();
+      const systemUserId = await ensureSystemUserId();
+
       const saldo = await tx.servientregaSaldo.findUnique({
         where: { punto_atencion_id: puntoAtencionId },
       });
@@ -265,12 +370,16 @@ export class ServientregaDBService {
         throw new Error("Saldo insuficiente");
       }
 
+      // Calcular saldo disponible anterior y nuevo
+      const saldoDisponibleAnterior = Number(total.sub(usado));
+      const saldoDisponibleNuevo = Number(disponible);
+
       const actualizado = await tx.servientregaSaldo.update({
         where: { punto_atencion_id: puntoAtencionId },
         data: { monto_usado: nuevoUsado, updated_at: new Date() },
       });
 
-      // Registrar movimiento en historial (débito). Si tu esquema soporta 'tipo', úsalo; si no, dejamos el monto negativo.
+      // Registrar movimiento en historial (débito)
       const puntoAtencion = await tx.puntoAtencion.findUnique({
         where: { id: puntoAtencionId },
         select: { nombre: true },
@@ -284,6 +393,90 @@ export class ServientregaDBService {
           creado_por: "SYSTEM:DESCUENTO_GUIA",
         },
       });
+
+      // Registrar en MovimientoSaldo para trazabilidad (dentro de la transacción)
+      await registrarMovimientoSaldo(
+        {
+          puntoAtencionId: puntoAtencionId,
+          monedaId: usdId,
+          tipoMovimiento: TipoMovimiento.EGRESO,
+          monto: monto, // Monto positivo, el servicio aplica el signo negativo
+          saldoAnterior: saldoDisponibleAnterior,
+          saldoNuevo: saldoDisponibleNuevo,
+          tipoReferencia: TipoReferencia.SERVIENTREGA,
+          descripcion: "Descuento por generación de guía Servientrega",
+          usuarioId: systemUserId,
+        },
+        tx
+      ); // ⚠️ Pasar el cliente de transacción para atomicidad
+
+      return actualizado;
+    });
+  }
+
+  /**
+   * Devolver saldo al anular una guía el mismo día
+   * Ahora también registra en MovimientoSaldo para trazabilidad completa.
+   */
+  async devolverSaldo(puntoAtencionId: string, monto: number) {
+    return prisma.$transaction(async (tx) => {
+      // Obtener IDs necesarios
+      const usdId = await ensureUsdMonedaId();
+      const systemUserId = await ensureSystemUserId();
+
+      const saldo = await tx.servientregaSaldo.findUnique({
+        where: { punto_atencion_id: puntoAtencionId },
+      });
+      if (!saldo) return null;
+
+      const usado = saldo.monto_usado ?? new Prisma.Decimal(0);
+      const total = saldo.monto_total ?? new Prisma.Decimal(0);
+      const nuevoUsado = usado.sub(new Prisma.Decimal(monto));
+
+      // No permitir que el usado sea negativo
+      if (nuevoUsado.lt(0)) {
+        throw new Error("No se puede devolver más saldo del que se ha usado");
+      }
+
+      // Calcular saldo disponible anterior y nuevo
+      const saldoDisponibleAnterior = Number(total.sub(usado));
+      const saldoDisponibleNuevo = Number(total.sub(nuevoUsado));
+
+      const actualizado = await tx.servientregaSaldo.update({
+        where: { punto_atencion_id: puntoAtencionId },
+        data: { monto_usado: nuevoUsado, updated_at: new Date() },
+      });
+
+      // Registrar movimiento en historial (crédito por devolución)
+      const puntoAtencion = await tx.puntoAtencion.findUnique({
+        where: { id: puntoAtencionId },
+        select: { nombre: true },
+      });
+
+      await tx.servientregaHistorialSaldo.create({
+        data: {
+          punto_atencion_id: puntoAtencionId,
+          punto_atencion_nombre: puntoAtencion?.nombre || "Punto desconocido",
+          monto_total: new Prisma.Decimal(monto), // positivo = crédito por devolución
+          creado_por: "SYSTEM:DEVOLUCION_ANULACION",
+        },
+      });
+
+      // Registrar en MovimientoSaldo para trazabilidad (dentro de la transacción)
+      await registrarMovimientoSaldo(
+        {
+          puntoAtencionId: puntoAtencionId,
+          monedaId: usdId,
+          tipoMovimiento: TipoMovimiento.INGRESO,
+          monto: monto, // Monto positivo, el servicio aplica el signo
+          saldoAnterior: saldoDisponibleAnterior,
+          saldoNuevo: saldoDisponibleNuevo,
+          tipoReferencia: TipoReferencia.SERVIENTREGA,
+          descripcion: "Devolución por anulación de guía Servientrega",
+          usuarioId: systemUserId,
+        },
+        tx
+      ); // ⚠️ Pasar el cliente de transacción para atomicidad
 
       return actualizado;
     });

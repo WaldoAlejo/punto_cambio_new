@@ -339,11 +339,17 @@ export default function ServiciosExternosAdmin() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-          💼 Gestión de Saldos - Servicios Externos
-        </h1>
+    <div className="h-full flex flex-col gap-4">
+      {/* Header - Siempre visible */}
+      <div className="flex-shrink-0 flex justify-between items-center">
+        <div>
+          <h1 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+            💼 Gestión de Saldos - Servicios Externos
+          </h1>
+          <p className="text-xs text-gray-600">
+            Administra saldos y movimientos de servicios externos por punto
+          </p>
+        </div>
         <div className="flex gap-2">
           <div className="flex bg-gray-100 rounded-lg p-1">
             <Button
@@ -380,496 +386,517 @@ export default function ServiciosExternosAdmin() {
         </div>
       </div>
 
-      {vistaActual === "asignacion" ? (
-        <>
-          {/* Resumen de Saldos Totales */}
-          <Card>
-            <CardHeader>
-              <CardTitle>📊 Saldos Totales por Servicio</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {saldos.map((saldo) => (
-                  <div key={saldo.servicio} className="p-4 border rounded-lg">
-                    <h3 className="font-semibold text-sm text-gray-600 mb-1">
-                      {saldo.servicio}
-                    </h3>
-                    <p className="text-2xl font-bold text-green-600">
-                      ${saldo.saldo_actual.toFixed(2)}
-                    </p>
-                    {saldo.ultimo_movimiento && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Último:{" "}
-                        {new Date(saldo.ultimo_movimiento).toLocaleDateString()}
+      {/* Contenido scrolleable */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+        {vistaActual === "asignacion" ? (
+          <>
+            {/* Resumen de Saldos Totales */}
+            <Card className="flex-shrink-0">
+              <CardHeader className="p-3">
+                <CardTitle className="text-sm">
+                  📊 Saldos Totales por Servicio
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {saldos.map((saldo) => (
+                    <div key={saldo.servicio} className="p-3 border rounded-lg">
+                      <h3 className="font-semibold text-xs text-gray-600 mb-1">
+                        {saldo.servicio}
+                      </h3>
+                      <p className="text-lg font-bold text-green-600">
+                        ${saldo.saldo_actual.toFixed(2)}
                       </p>
-                    )}
-                  </div>
-                ))}
+                      {saldo.ultimo_movimiento && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Último:{" "}
+                          {new Date(
+                            saldo.ultimo_movimiento
+                          ).toLocaleDateString()}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Grid de Puntos de Atención para Asignación */}
+            {puntos.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-6xl mb-4">📍</div>
+                <h3 className="text-lg font-semibold text-gray-600 mb-2">
+                  No se encontraron puntos de atención
+                </h3>
+                <p className="text-gray-500 mb-4">
+                  Verifica que existan puntos de atención activos en el sistema
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={obtenerPuntos}
+                  className="mx-auto"
+                >
+                  🔄 Recargar puntos
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                {puntos.map((punto) => (
+                  <Card key={punto.id} className="p-4 bg-white shadow-sm">
+                    <div className="mb-3">
+                      <h3 className="font-semibold text-base text-gray-800">
+                        {punto.nombre}
+                      </h3>
+                      <p className="text-gray-500 text-xs">
+                        {punto.ciudad}, {punto.provincia}
+                      </p>
+                    </div>
 
-          {/* Grid de Puntos de Atención para Asignación */}
-          {puntos.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-gray-400 text-6xl mb-4">📍</div>
-              <h3 className="text-lg font-semibold text-gray-600 mb-2">
-                No se encontraron puntos de atención
-              </h3>
-              <p className="text-gray-500 mb-4">
-                Verifica que existan puntos de atención activos en el sistema
-              </p>
-              <Button
-                variant="outline"
-                onClick={obtenerPuntos}
-                className="mx-auto"
-              >
-                🔄 Recargar puntos
-              </Button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              {puntos.map((punto) => (
-                <Card key={punto.id} className="p-6 bg-white shadow-sm">
-                  <div className="mb-4">
-                    <h3 className="font-semibold text-lg text-gray-800">
-                      {punto.nombre}
-                    </h3>
-                    <p className="text-gray-500 text-sm">
-                      {punto.ciudad}, {punto.provincia}
-                    </p>
-                  </div>
+                    {/* Saldos actuales del punto */}
+                    <div className="mb-3">
+                      <h4 className="font-medium text-sm text-gray-700 mb-2">
+                        Saldos Asignados:
+                      </h4>
+                      <div className="space-y-2 max-h-32 overflow-y-auto">
+                        {SERVICIOS_EXTERNOS.map((servicio) => {
+                          const saldoPunto = saldosPorPunto.find(
+                            (s) =>
+                              s.punto_atencion_id === punto.id &&
+                              s.servicio === servicio
+                          );
+                          const saldoActual = saldoPunto?.saldo_actual || 0;
+                          const saldoBajo = saldoActual < UMBRAL_SALDO_BAJO;
 
-                  {/* Saldos actuales del punto */}
-                  <div className="mb-4">
-                    <h4 className="font-medium text-gray-700 mb-2">
-                      Saldos Asignados:
-                    </h4>
-                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                          return (
+                            <div
+                              key={servicio}
+                              className="flex justify-between items-center text-sm"
+                            >
+                              <span className="text-gray-600">{servicio}:</span>
+                              <span
+                                className={`font-semibold ${
+                                  saldoBajo ? "text-red-600" : "text-green-600"
+                                }`}
+                              >
+                                ${saldoActual.toFixed(2)}
+                                {saldoBajo && (
+                                  <span className="ml-1 text-xs">⚠️</span>
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Formulario de asignación */}
+                    <div className="space-y-2">
+                      <h4 className="font-medium text-sm text-gray-700">
+                        Asignar Nuevo Saldo:
+                      </h4>
                       {SERVICIOS_EXTERNOS.map((servicio) => {
-                        const saldoPunto = saldosPorPunto.find(
-                          (s) =>
-                            s.punto_atencion_id === punto.id &&
-                            s.servicio === servicio
-                        );
-                        const saldoActual = saldoPunto?.saldo_actual || 0;
-                        const saldoBajo = saldoActual < UMBRAL_SALDO_BAJO;
+                        const key = `${punto.id}-${servicio}`;
+                        const loading = loadingAsignaciones[key] || false;
+                        const montoInput =
+                          montosAsignacion[punto.id]?.[servicio] || "";
 
                         return (
-                          <div
-                            key={servicio}
-                            className="flex justify-between items-center text-sm"
-                          >
-                            <span className="text-gray-600">{servicio}:</span>
-                            <span
-                              className={`font-semibold ${
-                                saldoBajo ? "text-red-600" : "text-green-600"
-                              }`}
+                          <div key={servicio} className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <Label className="text-xs text-gray-600">
+                                {servicio}
+                              </Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={montoInput}
+                                onChange={(e) =>
+                                  setMontosAsignacion((prev) => ({
+                                    ...prev,
+                                    [punto.id]: {
+                                      ...prev[punto.id],
+                                      [servicio]: e.target.value,
+                                    },
+                                  }))
+                                }
+                                placeholder="0.00"
+                                className="text-sm"
+                                disabled={loading}
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => {
+                                const monto = parseFloat(montoInput);
+                                if (isNaN(monto) || monto <= 0) {
+                                  toast.error(
+                                    "Ingrese un monto válido mayor a 0"
+                                  );
+                                  return;
+                                }
+                                asignarSaldo(punto.id, servicio, monto);
+                              }}
+                              disabled={
+                                loading ||
+                                !montoInput.trim() ||
+                                parseFloat(montoInput) <= 0
+                              }
+                              className="text-xs px-2"
                             >
-                              ${saldoActual.toFixed(2)}
-                              {saldoBajo && (
-                                <span className="ml-1 text-xs">⚠️</span>
+                              {loading ? (
+                                <span className="animate-spin">⏳</span>
+                              ) : (
+                                "💰"
                               )}
-                            </span>
+                            </Button>
                           </div>
                         );
                       })}
                     </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* Historial de Asignaciones */}
+            <Card>
+              <CardHeader className="p-3">
+                <CardTitle className="text-sm">
+                  📋 Historial de Asignaciones
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3">
+                {historialAsignaciones.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">
+                      📭 No hay asignaciones registradas
+                    </p>
                   </div>
-
-                  {/* Formulario de asignación */}
-                  <div className="space-y-3">
-                    <h4 className="font-medium text-gray-700">
-                      Asignar Nuevo Saldo:
-                    </h4>
-                    {SERVICIOS_EXTERNOS.map((servicio) => {
-                      const key = `${punto.id}-${servicio}`;
-                      const loading = loadingAsignaciones[key] || false;
-                      const montoInput =
-                        montosAsignacion[punto.id]?.[servicio] || "";
-
-                      return (
-                        <div key={servicio} className="flex gap-2 items-end">
-                          <div className="flex-1">
-                            <Label className="text-xs text-gray-600">
-                              {servicio}
-                            </Label>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={montoInput}
-                              onChange={(e) =>
-                                setMontosAsignacion((prev) => ({
-                                  ...prev,
-                                  [punto.id]: {
-                                    ...prev[punto.id],
-                                    [servicio]: e.target.value,
-                                  },
-                                }))
-                              }
-                              placeholder="0.00"
-                              className="text-sm"
-                              disabled={loading}
-                            />
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              const monto = parseFloat(montoInput);
-                              if (isNaN(monto) || monto <= 0) {
-                                toast.error(
-                                  "Ingrese un monto válido mayor a 0"
-                                );
-                                return;
-                              }
-                              asignarSaldo(punto.id, servicio, monto);
-                            }}
-                            disabled={
-                              loading ||
-                              !montoInput.trim() ||
-                              parseFloat(montoInput) <= 0
-                            }
-                            className="text-xs px-2"
-                          >
-                            {loading ? (
-                              <span className="animate-spin">⏳</span>
-                            ) : (
-                              "💰"
-                            )}
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* Historial de Asignaciones */}
-          <Card>
-            <CardHeader>
-              <CardTitle>📋 Historial de Asignaciones</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {historialAsignaciones.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">
-                    📭 No hay asignaciones registradas
-                  </p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2">Fecha</th>
-                        <th className="text-left p-2">Punto</th>
-                        <th className="text-left p-2">Servicio</th>
-                        <th className="text-left p-2">Monto</th>
-                        <th className="text-left p-2">Creado por</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {historialAsignaciones.slice(0, 10).map((asignacion) => (
-                        <tr
-                          key={asignacion.id}
-                          className="border-b hover:bg-gray-50"
-                        >
-                          <td className="p-2">
-                            {new Date(
-                              asignacion.creado_en
-                            ).toLocaleDateString()}
-                          </td>
-                          <td className="p-2">
-                            {asignacion.punto_atencion_nombre}
-                          </td>
-                          <td className="p-2">{asignacion.servicio}</td>
-                          <td className="p-2 font-semibold text-green-600">
-                            ${asignacion.monto_asignado.toFixed(2)}
-                          </td>
-                          <td className="p-2">{asignacion.creado_por}</td>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-2">Fecha</th>
+                          <th className="text-left p-2">Punto</th>
+                          <th className="text-left p-2">Servicio</th>
+                          <th className="text-left p-2">Monto</th>
+                          <th className="text-left p-2">Creado por</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      ) : (
-        <>
-          {/* Vista de Movimientos */}
-          {/* Formulario para Nuevo Movimiento */}
-          <Card>
-            <CardHeader>
-              <CardTitle>➕ Crear Nuevo Movimiento</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div>
-                  <Label>Punto de Atención</Label>
-                  <Select
-                    value={nuevoMovimiento.punto_atencion_id}
-                    onValueChange={(value) =>
-                      setNuevoMovimiento((prev) => ({
-                        ...prev,
-                        punto_atencion_id: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar punto" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {puntos.map((punto) => (
-                        <SelectItem key={punto.id} value={punto.id}>
-                          {punto.nombre} - {punto.ciudad}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Servicio</Label>
-                  <Select
-                    value={nuevoMovimiento.servicio}
-                    onValueChange={(value) =>
-                      setNuevoMovimiento((prev) => ({
-                        ...prev,
-                        servicio: value as ServicioExterno,
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar servicio" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SERVICIOS_EXTERNOS.map((servicio) => (
-                        <SelectItem key={servicio} value={servicio}>
-                          {servicio}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Tipo</Label>
-                  <Select
-                    value={nuevoMovimiento.tipo}
-                    onValueChange={(value) =>
-                      setNuevoMovimiento((prev) => ({
-                        ...prev,
-                        tipo: value as "INGRESO" | "EGRESO",
-                      }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="INGRESO">INGRESO</SelectItem>
-                      <SelectItem value="EGRESO">EGRESO</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Monto (USD)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={nuevoMovimiento.monto}
-                    onChange={(e) =>
-                      setNuevoMovimiento((prev) => ({
-                        ...prev,
-                        monto: e.target.value,
-                      }))
-                    }
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div>
-                  <Label>Descripción</Label>
-                  <Input
-                    value={nuevoMovimiento.descripcion}
-                    onChange={(e) =>
-                      setNuevoMovimiento((prev) => ({
-                        ...prev,
-                        descripcion: e.target.value,
-                      }))
-                    }
-                    placeholder="Opcional"
-                  />
-                </div>
-              </div>
-
-              <Button
-                onClick={crearMovimiento}
-                disabled={saving}
-                className="w-full md:w-auto"
-              >
-                {saving ? "Guardando..." : "💾 Crear Movimiento"}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Filtros */}
-          <Card>
-            <CardHeader>
-              <CardTitle>🔍 Filtros de Búsqueda</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                  <Label>Punto de Atención</Label>
-                  <Select
-                    value={filtros.punto_id}
-                    onValueChange={(value) =>
-                      setFiltros((prev) => ({ ...prev, punto_id: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos los puntos</SelectItem>
-                      {puntos.map((punto) => (
-                        <SelectItem key={punto.id} value={punto.id}>
-                          {punto.nombre}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Servicio</Label>
-                  <Select
-                    value={filtros.servicio}
-                    onValueChange={(value) =>
-                      setFiltros((prev) => ({ ...prev, servicio: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos los servicios</SelectItem>
-                      {SERVICIOS_EXTERNOS.map((servicio) => (
-                        <SelectItem key={servicio} value={servicio}>
-                          {servicio}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label>Fecha Desde</Label>
-                  <Input
-                    type="date"
-                    value={filtros.fecha_desde}
-                    onChange={(e) =>
-                      setFiltros((prev) => ({
-                        ...prev,
-                        fecha_desde: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label>Fecha Hasta</Label>
-                  <Input
-                    type="date"
-                    value={filtros.fecha_hasta}
-                    onChange={(e) =>
-                      setFiltros((prev) => ({
-                        ...prev,
-                        fecha_hasta: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Historial de Movimientos */}
-          <Card>
-            <CardHeader>
-              <CardTitle>📋 Historial de Movimientos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="text-center py-8">
-                  <p>Cargando movimientos...</p>
-                </div>
-              ) : movimientos.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No se encontraron movimientos con los filtros aplicados</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Fecha</th>
-                        <th className="px-3 py-2 text-left">Punto</th>
-                        <th className="px-3 py-2 text-left">Servicio</th>
-                        <th className="px-3 py-2 text-left">Tipo</th>
-                        <th className="px-3 py-2 text-right">Monto</th>
-                        <th className="px-3 py-2 text-left">Descripción</th>
-                        <th className="px-3 py-2 text-left">Creado por</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {movimientos.map((mov) => (
-                        <tr key={mov.id} className="border-t">
-                          <td className="px-3 py-2">
-                            {new Date(mov.creado_en).toLocaleDateString()}
-                          </td>
-                          <td className="px-3 py-2">
-                            {mov.punto_atencion_nombre}
-                          </td>
-                          <td className="px-3 py-2">{mov.servicio}</td>
-                          <td className="px-3 py-2">
-                            <span
-                              className={`px-2 py-1 rounded text-xs ${
-                                mov.tipo === "INGRESO"
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
+                      </thead>
+                      <tbody>
+                        {historialAsignaciones
+                          .slice(0, 10)
+                          .map((asignacion) => (
+                            <tr
+                              key={asignacion.id}
+                              className="border-b hover:bg-gray-50"
                             >
-                              {mov.tipo}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono">
-                            ${mov.monto.toFixed(2)}
-                          </td>
-                          <td className="px-3 py-2">
-                            {mov.descripcion || "-"}
-                          </td>
-                          <td className="px-3 py-2">{mov.creado_por}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+                              <td className="p-2">
+                                {new Date(
+                                  asignacion.creado_en
+                                ).toLocaleDateString()}
+                              </td>
+                              <td className="p-2">
+                                {asignacion.punto_atencion_nombre}
+                              </td>
+                              <td className="p-2">{asignacion.servicio}</td>
+                              <td className="p-2 font-semibold text-green-600">
+                                ${asignacion.monto_asignado.toFixed(2)}
+                              </td>
+                              <td className="p-2">{asignacion.creado_por}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            {/* Vista de Movimientos */}
+            {/* Formulario para Nuevo Movimiento */}
+            <Card className="flex-shrink-0">
+              <CardHeader className="p-3">
+                <CardTitle className="text-sm">
+                  ➕ Crear Nuevo Movimiento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 p-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div>
+                    <Label>Punto de Atención</Label>
+                    <Select
+                      value={nuevoMovimiento.punto_atencion_id}
+                      onValueChange={(value) =>
+                        setNuevoMovimiento((prev) => ({
+                          ...prev,
+                          punto_atencion_id: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar punto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {puntos.map((punto) => (
+                          <SelectItem key={punto.id} value={punto.id}>
+                            {punto.nombre} - {punto.ciudad}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-      <ConfirmationDialog />
+                  <div>
+                    <Label>Servicio</Label>
+                    <Select
+                      value={nuevoMovimiento.servicio}
+                      onValueChange={(value) =>
+                        setNuevoMovimiento((prev) => ({
+                          ...prev,
+                          servicio: value as ServicioExterno,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar servicio" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SERVICIOS_EXTERNOS.map((servicio) => (
+                          <SelectItem key={servicio} value={servicio}>
+                            {servicio}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Tipo</Label>
+                    <Select
+                      value={nuevoMovimiento.tipo}
+                      onValueChange={(value) =>
+                        setNuevoMovimiento((prev) => ({
+                          ...prev,
+                          tipo: value as "INGRESO" | "EGRESO",
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="INGRESO">INGRESO</SelectItem>
+                        <SelectItem value="EGRESO">EGRESO</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Monto (USD)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={nuevoMovimiento.monto}
+                      onChange={(e) =>
+                        setNuevoMovimiento((prev) => ({
+                          ...prev,
+                          monto: e.target.value,
+                        }))
+                      }
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Descripción</Label>
+                    <Input
+                      value={nuevoMovimiento.descripcion}
+                      onChange={(e) =>
+                        setNuevoMovimiento((prev) => ({
+                          ...prev,
+                          descripcion: e.target.value,
+                        }))
+                      }
+                      placeholder="Opcional"
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  onClick={crearMovimiento}
+                  disabled={saving}
+                  className="w-full md:w-auto"
+                >
+                  {saving ? "Guardando..." : "💾 Crear Movimiento"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Filtros */}
+            <Card className="flex-shrink-0">
+              <CardHeader className="p-3">
+                <CardTitle className="text-sm">
+                  🔍 Filtros de Búsqueda
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label>Punto de Atención</Label>
+                    <Select
+                      value={filtros.punto_id}
+                      onValueChange={(value) =>
+                        setFiltros((prev) => ({ ...prev, punto_id: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos los puntos</SelectItem>
+                        {puntos.map((punto) => (
+                          <SelectItem key={punto.id} value={punto.id}>
+                            {punto.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Servicio</Label>
+                    <Select
+                      value={filtros.servicio}
+                      onValueChange={(value) =>
+                        setFiltros((prev) => ({ ...prev, servicio: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">
+                          Todos los servicios
+                        </SelectItem>
+                        {SERVICIOS_EXTERNOS.map((servicio) => (
+                          <SelectItem key={servicio} value={servicio}>
+                            {servicio}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Fecha Desde</Label>
+                    <Input
+                      type="date"
+                      value={filtros.fecha_desde}
+                      onChange={(e) =>
+                        setFiltros((prev) => ({
+                          ...prev,
+                          fecha_desde: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Fecha Hasta</Label>
+                    <Input
+                      type="date"
+                      value={filtros.fecha_hasta}
+                      onChange={(e) =>
+                        setFiltros((prev) => ({
+                          ...prev,
+                          fecha_hasta: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Historial de Movimientos */}
+            <Card>
+              <CardHeader className="p-3">
+                <CardTitle className="text-sm">
+                  📋 Historial de Movimientos
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3">
+                {loading ? (
+                  <div className="text-center py-8">
+                    <p>Cargando movimientos...</p>
+                  </div>
+                ) : movimientos.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>
+                      No se encontraron movimientos con los filtros aplicados
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Fecha</th>
+                          <th className="px-3 py-2 text-left">Punto</th>
+                          <th className="px-3 py-2 text-left">Servicio</th>
+                          <th className="px-3 py-2 text-left">Tipo</th>
+                          <th className="px-3 py-2 text-right">Monto</th>
+                          <th className="px-3 py-2 text-left">Descripción</th>
+                          <th className="px-3 py-2 text-left">Creado por</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {movimientos.map((mov) => (
+                          <tr key={mov.id} className="border-t">
+                            <td className="px-3 py-2">
+                              {new Date(mov.creado_en).toLocaleDateString()}
+                            </td>
+                            <td className="px-3 py-2">
+                              {mov.punto_atencion_nombre}
+                            </td>
+                            <td className="px-3 py-2">{mov.servicio}</td>
+                            <td className="px-3 py-2">
+                              <span
+                                className={`px-2 py-1 rounded text-xs ${
+                                  mov.tipo === "INGRESO"
+                                    ? "bg-green-100 text-green-800"
+                                    : "bg-red-100 text-red-800"
+                                }`}
+                              >
+                                {mov.tipo}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono">
+                              ${mov.monto.toFixed(2)}
+                            </td>
+                            <td className="px-3 py-2">
+                              {mov.descripcion || "-"}
+                            </td>
+                            <td className="px-3 py-2">{mov.creado_por}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        <ConfirmationDialog />
+      </div>
     </div>
   );
 }

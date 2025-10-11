@@ -53,8 +53,8 @@ const CurrencyBehaviorPage = () => {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center h-64">
+      <div className="h-full flex items-center justify-center">
+        <div className="flex items-center gap-2">
           <RefreshCw className="h-8 w-8 animate-spin" />
           <span className="ml-2">Cargando configuración de divisas...</span>
         </div>
@@ -63,9 +63,9 @@ const CurrencyBehaviorPage = () => {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="h-full flex flex-col gap-4">
+      {/* Header - Siempre visible */}
+      <div className="flex-shrink-0 flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
           <Button
             variant="outline"
@@ -77,10 +77,10 @@ const CurrencyBehaviorPage = () => {
             Volver
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">
+            <h1 className="text-lg font-bold">
               Configuración de Comportamientos de Divisas
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Configure cómo se calculan los montos para cada divisa en
               operaciones de compra y venta
             </p>
@@ -88,6 +88,7 @@ const CurrencyBehaviorPage = () => {
         </div>
         <Button
           variant="outline"
+          size="sm"
           onClick={handleRefresh}
           className="flex items-center gap-2"
         >
@@ -96,60 +97,65 @@ const CurrencyBehaviorPage = () => {
         </Button>
       </div>
 
-      {/* Información explicativa */}
-      <Card className="bg-blue-50 border-blue-200">
-        <CardHeader>
-          <CardTitle className="text-blue-800">
-            ¿Cómo funcionan los comportamientos?
-          </CardTitle>
-          <CardDescription className="text-blue-700">
-            Cada divisa puede tener diferentes comportamientos para compra y
-            venta:
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-blue-700">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h4 className="font-semibold mb-2">🔢 MULTIPLICA</h4>
-              <p className="text-sm">
-                El monto se <strong>multiplica</strong> por la tasa de cambio.
-                <br />
-                <code>Resultado = Monto × Tasa</code>
-              </p>
+      {/* Contenido scrolleable */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
+        {/* Información explicativa */}
+        <Card className="flex-shrink-0 bg-blue-50 border-blue-200">
+          <CardHeader className="p-3">
+            <CardTitle className="text-sm text-blue-800">
+              ¿Cómo funcionan los comportamientos?
+            </CardTitle>
+            <CardDescription className="text-xs text-blue-700">
+              Cada divisa puede tener diferentes comportamientos para compra y
+              venta:
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-3 text-blue-700">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <h4 className="font-semibold text-sm mb-1">🔢 MULTIPLICA</h4>
+                <p className="text-xs">
+                  El monto se <strong>multiplica</strong> por la tasa de cambio.
+                  <br />
+                  <code className="text-xs">Resultado = Monto × Tasa</code>
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-sm mb-1">➗ DIVIDE</h4>
+                <p className="text-xs">
+                  El monto se <strong>divide</strong> por la tasa de cambio.
+                  <br />
+                  <code className="text-xs">Resultado = Monto ÷ Tasa</code>
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="font-semibold mb-2">➗ DIVIDE</h4>
-              <p className="text-sm">
-                El monto se <strong>divide</strong> por la tasa de cambio.
-                <br />
-                <code>Resultado = Monto ÷ Tasa</code>
-              </p>
+            <div className="mt-3 p-2 bg-blue-100 rounded-lg">
+              <h4 className="font-semibold text-sm mb-1">
+                📋 Ejemplos configurados:
+              </h4>
+              <ul className="text-xs space-y-1">
+                <li>
+                  <strong>Euro (EUR):</strong> Compra multiplica, Venta divide
+                </li>
+                <li>
+                  <strong>Peso Argentino (ARS):</strong> Compra divide, Venta
+                  multiplica
+                </li>
+                <li>
+                  <strong>Dólar Australiano (AUD):</strong> Compra multiplica,
+                  Venta divide
+                </li>
+              </ul>
             </div>
-          </div>
-          <div className="mt-4 p-3 bg-blue-100 rounded-lg">
-            <h4 className="font-semibold mb-2">📋 Ejemplos configurados:</h4>
-            <ul className="text-sm space-y-1">
-              <li>
-                <strong>Euro (EUR):</strong> Compra multiplica, Venta divide
-              </li>
-              <li>
-                <strong>Peso Argentino (ARS):</strong> Compra divide, Venta
-                multiplica
-              </li>
-              <li>
-                <strong>Dólar Australiano (AUD):</strong> Compra multiplica,
-                Venta divide
-              </li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Gestor de comportamientos */}
-      <CurrencyBehaviorManager
-        currencies={currencies}
-        onUpdate={fetchCurrencies}
-      />
+        {/* Gestor de comportamientos */}
+        <CurrencyBehaviorManager
+          currencies={currencies}
+          onUpdate={fetchCurrencies}
+        />
+      </div>
     </div>
   );
 };
