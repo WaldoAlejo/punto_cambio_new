@@ -1098,6 +1098,18 @@ router.post(
           throw new Error("abort");
         }
 
+        // Verificar que el usuario (creado_por) existe
+        const usuarioExiste = await tx.usuario.findUnique({
+          where: { id: creado_por },
+          select: { id: true },
+        });
+        if (!usuarioExiste) {
+          res
+            .status(400)
+            .json({ success: false, error: "Usuario (creado_por) no existe" });
+          throw new Error("abort");
+        }
+
         // Registrar asignación
         const asignacion = await tx.servicioExternoAsignacion.create({
           data: {
