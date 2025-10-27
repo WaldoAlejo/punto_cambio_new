@@ -26,7 +26,9 @@ const toNumber = (v: any): number => {
   if (/^\d+(,\d{1,6})$/.test(raw)) return Number(raw.replace(",", "."));
   return Number(raw.replace(",", "."));
 };
-const round2 = (n: number) => Math.round(n * 100) / 100;
+// Redondeo seguro con EPSILON para evitar problemas de punto flotante
+const round2 = (n: number) =>
+  Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 // Tipos de Request
 interface PostSaldoBody {

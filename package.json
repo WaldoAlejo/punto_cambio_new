@@ -36,7 +36,9 @@
     "transfer:fix": "npx tsx server/scripts/fix-historical-transfers.ts",
     "transfer:menu": "npx tsx server/scripts/transfer-fix-menu.ts",
     "script:verificar-limpieza": "npx tsx server/scripts/verificar-antes-limpiar.ts",
-    "script:limpiar-transacciones": "npx tsx server/scripts/limpiar-transacciones.ts"
+    "script:limpiar-transacciones": "npx tsx server/scripts/limpiar-transacciones.ts",
+    "clean:db": "npx tsx scripts/clean-database.ts",
+    "clean:db:safe": "npx tsx scripts/clean-database-safe.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed-complete.ts"

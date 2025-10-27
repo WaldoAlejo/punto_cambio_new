@@ -17,6 +17,7 @@ const router = express.Router();
  * Utilidades de roles exentos de caja
  * ========================= */
 const ROLES_EXENTOS_CIERRE = new Set([
+  "OPERADOR",
   "ADMINISTRATIVO",
   "ADMIN",
   "SUPER_USUARIO",
@@ -414,8 +415,9 @@ router.post(
               );
               res.status(400).json({
                 success: false,
-                error:
-                  "Debe realizar el cierre de caja diario antes de finalizar su jornada",
+                error: "Cierre de caja requerido",
+                details:
+                  "Debe realizar el cierre de caja diario (cuadre de divisas) antes de finalizar su jornada.",
               });
               return;
             }

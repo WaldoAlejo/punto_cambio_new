@@ -32,7 +32,8 @@ const toNumber = (v: unknown): number => {
   if (/^\d+(,\d{1,6})$/.test(raw)) return Number(raw.replace(",", "."));
   return Number(raw.replace(",", "."));
 };
-const n2 = (n: number) => Math.round(n * 100) / 100;
+// Redondeo seguro con EPSILON para evitar problemas de punto flotante
+const n2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 /* ============================================================================
    GET /:pointId
