@@ -1128,10 +1128,16 @@ router.post(
         });
 
         if (saldo) {
+          // Convertir correctamente el Decimal de Prisma a número
+          const cantidadActual =
+            typeof saldo.cantidad === "object" && saldo.cantidad !== null
+              ? (saldo.cantidad as any).toNumber?.() ?? Number(saldo.cantidad)
+              : Number(saldo.cantidad);
+
           await tx.servicioExternoSaldo.update({
             where: { id: saldo.id },
             data: {
-              cantidad: Number(saldo.cantidad) + monto_asignado,
+              cantidad: cantidadActual + monto_asignado,
               updated_at: new Date(),
             },
           });
@@ -1171,6 +1177,57 @@ router.post(
     } catch (error) {
       if ((error as Error).message === "abort") return;
       console.error("Error al asignar saldo (Prisma):", error);
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    }
+  }
+);
+
+/* ==============================
+ * GET /saldos  (ADMIN/SUPER_USUARIO)
+ * Devuelve saldos agrupados por servicio externo
+ * ============================== */
+router.get(
+  "/saldos",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    try {
+      const rows = await prisma.servicioExternoSaldo.findMany({
+        orderBy: { servicio: "asc" },
+      });
+
+      // Agrupar por servicio y sumar saldos
+      const saldosPorServicio: Record<string, number> = {};
+
+      for (const row of rows) {
+        const cantidadActual =
+          typeof row.cantidad === "object" && row.cantidad !== null
+            ? (row.cantidad as any).toNumber?.() ?? Number(row.cantidad)
+            : Number(row.cantidad);
+
+        if (!saldosPorServicio[row.servicio]) {
+          saldosPorServicio[row.servicio] = 0;
+        }
+        saldosPorServicio[row.servicio] += cantidadActual;
+      }
+
+      const saldos = Object.entries(saldosPorServicio).map(
+        ([servicio, saldo_actual]) => ({
+          servicio,
+          saldo_actual,
+          ultimo_movimiento: undefined, // Se puede enriquecer si es necesario
+        })
+      );
+
+      res.json({
+        success: true,
+        saldos,
+      });
+    } catch (error) {
+      console.error("Error al obtener saldos (Prisma):", error);
       res.status(500).json({
         success: false,
         error: "Error interno del servidor",
