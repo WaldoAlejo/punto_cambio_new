@@ -192,18 +192,16 @@ export default function PasoEmpaqueYMedidas({
       return false;
     }
 
-    // 🔓 Valor declarado ya NO es obligatorio
-    if (!medidas.valor_declarado || medidas.valor_declarado <= 0) {
-      toast.error("Debes ingresar un valor declarado válido.");
-      return false;
-    }
-
+    // Para documentos es suficiente solo con el contenido
     if (esDocumento) {
       return true;
     }
 
-    if (esInternacional) {
-      // Mercancía internacional: empaque obligatorio
+    // 🔓 Valor declarado ya NO es obligatorio para mercancía (puede ser 0)
+    // Validación omitida: se permite valor_declarado = 0
+
+    // Para mercancía internacional: empaque obligatorio
+    if (!esDocumento && esInternacional) {
       if (!requiereEmpaque) {
         toast.error("Para envíos internacionales, el empaque es obligatorio.");
         return false;
@@ -215,18 +213,26 @@ export default function PasoEmpaqueYMedidas({
       return true;
     }
 
-    // Nacional con mercancía:
-    if (!requiereEmpaque) {
-      if (!medidas.alto || !medidas.ancho || !medidas.largo || !medidas.peso) {
-        toast.error("Debes ingresar alto, ancho, largo y peso.");
-        return false;
-      }
-    } else {
-      if (!empaque.tipo_empaque) {
-        toast.error("Selecciona un tipo de empaque.");
-        return false;
+    // Para mercancía nacional: requiere medidas SI no lleva empaque, O requiere empaque si lo marcó
+    if (!esDocumento) {
+      if (!requiereEmpaque) {
+        if (
+          !medidas.alto ||
+          !medidas.ancho ||
+          !medidas.largo ||
+          !medidas.peso
+        ) {
+          toast.error("Debes ingresar alto, ancho, largo y peso.");
+          return false;
+        }
+      } else {
+        if (!empaque.tipo_empaque) {
+          toast.error("Selecciona un tipo de empaque.");
+          return false;
+        }
       }
     }
+    // Si es documento, ya validó contenido arriba, no necesita más
 
     return true;
   };

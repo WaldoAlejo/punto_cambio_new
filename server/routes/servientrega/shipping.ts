@@ -363,12 +363,40 @@ router.post("/generar-guia", async (req, res) => {
     if (guia && base64) {
       const db = new ServientregaDBService();
 
-      // Determinar valor total de la transacción
-      const valorTotal =
-        Number(processed?.total_transacion) ||
-        Number(processed?.gtotal) ||
-        Number(payload?.valor_total) ||
-        0;
+      // Calcular valor total de la guía (incluye flete, seguro, empaque, etc.)
+      // IMPORTANTE: No incluir valor_declarado, solo el costo del envío
+      let valorTotalGuia = 0;
+
+      // Primero intentar con total_transacion (suma de todos los costos)
+      if (processed?.total_transacion) {
+        valorTotalGuia = Number(processed.total_transacion);
+      } else if (processed?.gtotal) {
+        // gtotal es el gran total (también incluye todos los costos)
+        valorTotalGuia = Number(processed.gtotal);
+      } else if (processed?.flete) {
+        // Si solo viene el flete, usarlo como base
+        valorTotalGuia = Number(processed.flete);
+        // Sumar otros costos si existen
+        if (processed?.valor_asegurado) {
+          valorTotalGuia += Number(processed.valor_asegurado);
+        }
+        if (processed?.valor_empaque) {
+          valorTotalGuia += Number(processed.valor_empaque);
+        }
+      } else if (payload?.valor_total) {
+        // Fallback al valor_total del payload
+        valorTotalGuia = Number(payload.valor_total);
+      }
+
+      console.log("💰 Desglose de costos para guía:", {
+        flete: Number(processed?.flete || 0),
+        valor_asegurado: Number(processed?.valor_asegurado || 0),
+        valor_empaque: Number(processed?.valor_empaque || 0),
+        total_transacion: Number(processed?.total_transacion || 0),
+        gtotal: Number(processed?.gtotal || 0),
+        valor_total_final: valorTotalGuia,
+        valor_declarado: Number(req.body?.valor_declarado || 0), // ⚠️ NO se descuenta
+      });
 
       try {
         // Si vino en payload remitente/destinatario (flujo no formateado), guardamos
@@ -383,6 +411,7 @@ router.post("/generar-guia", async (req, res) => {
           }
 
           // Guardar cabecera de guía con punto de atención y costo
+          // ⚠️ IMPORTANTE: costo_envio = costo real de envío, NO incluye valor_declarado
           await db.guardarGuia({
             numero_guia: guia,
             proceso: fetchData?.proceso || "Guia Generada",
@@ -391,15 +420,16 @@ router.post("/generar-guia", async (req, res) => {
             remitente_id: "", // opcional: ajusta si quieres relación estricta
             destinatario_id: "",
             punto_atencion_id: req.body?.punto_atencion_id || undefined,
-            costo_envio: valorTotal > 0 ? Number(valorTotal) : undefined,
-            valor_declarado: Number(req.body?.valor_declarado || 0),
+            costo_envio:
+              valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
+            valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta
           });
 
-          // Descontar saldo
-          if (req.body?.punto_atencion_id && valorTotal > 0) {
+          // Descontar del saldo SOLO el costo de la guía (no el valor_declarado)
+          if (req.body?.punto_atencion_id && valorTotalGuia > 0) {
             await db.descontarSaldo(
               req.body.punto_atencion_id,
-              Number(valorTotal)
+              Number(valorTotalGuia)
             );
           }
         }
