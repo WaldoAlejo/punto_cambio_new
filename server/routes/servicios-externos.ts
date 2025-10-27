@@ -1134,10 +1134,12 @@ router.post(
               ? (saldo.cantidad as any).toNumber?.() ?? Number(saldo.cantidad)
               : Number(saldo.cantidad);
 
+          const cantidadNueva = cantidadActual + monto_asignado;
+
           await tx.servicioExternoSaldo.update({
             where: { id: saldo.id },
             data: {
-              cantidad: cantidadActual + monto_asignado,
+              cantidad: cantidadNueva,
               updated_at: new Date(),
             },
           });
