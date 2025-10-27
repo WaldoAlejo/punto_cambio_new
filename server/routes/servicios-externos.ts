@@ -1047,27 +1047,28 @@ router.post(
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
+      const user: any = (req as any).user || {};
+      const creado_por = user.id; // El usuario autenticado es quien crea la asignación
+
       const {
         punto_atencion_id,
         servicio,
         monto_asignado,
-        creado_por,
         tipo_asignacion,
         observaciones,
       } = req.body as {
         punto_atencion_id?: string;
         servicio?: ServicioExterno;
         monto_asignado?: number;
-        creado_por?: string;
         tipo_asignacion?: TipoAsignacionServicio;
         observaciones?: string;
       };
 
-      if (!punto_atencion_id || !servicio || !monto_asignado || !creado_por) {
+      if (!punto_atencion_id || !servicio || !monto_asignado) {
         res.status(400).json({
           success: false,
           error:
-            "Todos los campos son obligatorios: punto_atencion_id, servicio, monto_asignado, creado_por",
+            "Todos los campos son obligatorios: punto_atencion_id, servicio, monto_asignado",
         });
         return;
       }
