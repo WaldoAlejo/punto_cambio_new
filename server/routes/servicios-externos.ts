@@ -214,6 +214,41 @@ router.post(
           });
         }
 
+        // Actualizar saldo general del punto según el tipo de movimiento
+        const saldoGeneral = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: puntoId,
+              moneda_id: usdId,
+            },
+          },
+        });
+
+        const deltaGeneral =
+          tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
+        const nuevoSaldoGeneral =
+          Number(saldoGeneral?.cantidad || 0) + deltaGeneral;
+
+        if (saldoGeneral) {
+          await tx.saldo.update({
+            where: { id: saldoGeneral.id },
+            data: {
+              cantidad: nuevoSaldoGeneral,
+              updated_at: new Date(),
+            },
+          });
+        } else if (nuevoSaldoGeneral !== 0) {
+          // Crear saldo general si no existe y es diferente de 0
+          await tx.saldo.create({
+            data: {
+              punto_atencion_id: puntoId,
+              moneda_id: usdId,
+              cantidad: nuevoSaldoGeneral,
+              updated_at: new Date(),
+            },
+          });
+        }
+
         // Registro principal
         const svcMov = await tx.servicioExternoMovimiento.create({
           data: {
@@ -1322,6 +1357,74 @@ router.get(
         "Error al obtener historial de asignaciones (Prisma):",
         error
       );
+      res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    }
+  }
+);
+
+/* ==============================
+ * GET /saldos-asignados  (OPERADOR — su punto, ADMIN — todos)
+ * Devuelve los saldos asignados (límites de crédito) por cada servicio externo
+ * ============================== */
+router.get(
+  "/saldos-asignados",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const user: any = (req as any).user || {};
+      const isAdmin = ["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"].includes(
+        user.rol
+      );
+
+      let pointId: string | undefined = req.query.pointId as string | undefined;
+      if (!isAdmin) {
+        // OPERADOR: solo puede ver su propio punto
+        pointId = user.punto_atencion_id;
+      }
+
+      if (!pointId) {
+        res.status(400).json({
+          success: false,
+          error: "pointId es requerido o debes tener un punto asignado",
+        });
+        return;
+      }
+
+      const usdId = await ensureUsdMonedaId();
+
+      // Obtener saldos asignados por servicio
+      const saldosAsignados = await prisma.servicioExternoSaldo.findMany({
+        where: {
+          punto_atencion_id: pointId,
+          moneda_id: usdId,
+        },
+        select: {
+          servicio: true,
+          cantidad: true,
+          updated_at: true,
+        },
+      });
+
+      // Obtener nombre del punto
+      const punto = await prisma.puntoAtencion.findUnique({
+        where: { id: pointId },
+        select: { nombre: true },
+      });
+
+      res.json({
+        success: true,
+        punto_nombre: punto?.nombre || "",
+        saldos_asignados: saldosAsignados.map((s) => ({
+          servicio: s.servicio,
+          saldo_asignado: Number(s.cantidad),
+          actualizado_en: s.updated_at.toISOString(),
+        })),
+      });
+    } catch (error) {
+      console.error("Error al obtener saldos asignados (Prisma):", error);
       res.status(500).json({
         success: false,
         error: "Error interno del servidor",
