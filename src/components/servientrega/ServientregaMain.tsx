@@ -96,10 +96,16 @@ export default function ServientregaMain({
     setPasoActual("destinatario");
   };
 
-  const handleDestinatarioNext = (destinatario: Destinatario) => {
+  const handleDestinatarioNext = (
+    destinatario: Destinatario,
+    retiro_oficina: boolean,
+    nombre_agencia?: string
+  ) => {
     setFormData((prev) => ({
       ...prev,
       destinatario,
+      retiro_oficina,
+      ...(nombre_agencia && { nombre_agencia_retiro_oficina: nombre_agencia }),
     }));
     setPasoActual("empaque");
   };

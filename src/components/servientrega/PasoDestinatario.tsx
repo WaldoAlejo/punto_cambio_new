@@ -13,7 +13,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, CheckCircle2, Circle } from "lucide-react";
 import { toast } from "sonner";
 import { Destinatario } from "@/types/servientrega";
 
@@ -27,6 +27,12 @@ interface CiudadCanon {
   ciudad: string;
   provincia: string;
   raw: string;
+}
+
+interface Agencia {
+  nombre: string;
+  codigo?: string;
+  [key: string]: any;
 }
 
 interface PasoDestinatarioProps {
@@ -47,8 +53,10 @@ const clean = (s: string) =>
 export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [paises, setPaises] = useState<Pais[]>([]);
   const [ciudadesCanon, setCiudadesCanon] = useState<CiudadCanon[]>([]);
+  const [agencias, setAgencias] = useState<Agencia[]>([]);
   const [cargandoPaises, setCargandoPaises] = useState(true);
   const [cargandoCiudades, setCargandoCiudades] = useState(true);
+  const [cargandoAgencias, setCargandoAgencias] = useState(false);
 
   const [loading, setLoading] = useState(false);
 
@@ -62,6 +70,10 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
   const [destinatarioExistente, setDestinatarioExistente] =
     useState<Destinatario | null>(null);
+
+  // Retiro en oficina
+  const [retiroEnOficina, setRetiroEnOficina] = useState(false);
+  const [agenciaSeleccionada, setAgenciaSeleccionada] = useState<string>("");
 
   const [form, setForm] = useState<Destinatario>({
     identificacion: "",
@@ -116,6 +128,24 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       }
     };
     loadPaises();
+  }, []);
+
+  // 1.1) Cargar agencias para retiro en oficina
+  useEffect(() => {
+    const loadAgencias = async () => {
+      try {
+        setCargandoAgencias(true);
+        const { data } = await axiosInstance.post("/servientrega/agencias");
+        const lista: Agencia[] = data?.data || [];
+        setAgencias(lista);
+      } catch (e) {
+        console.error("❌ Error al obtener agencias:", e);
+        setAgencias([]);
+      } finally {
+        setCargandoAgencias(false);
+      }
+    };
+    loadAgencias();
   }, []);
 
   // 2) Cargar ciudades por país (codpais)
@@ -323,6 +353,12 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
     if (!validarCodigoPostal()) return;
 
+    // Validar retiro en oficina
+    if (retiroEnOficina && !agenciaSeleccionada) {
+      toast.error("Selecciona una agencia para retiro en oficina.");
+      return;
+    }
+
     const direccionFinal = [
       extraDireccion.callePrincipal.trim(),
       extraDireccion.numeracion && `#${extraDireccion.numeracion.trim()}`,
@@ -370,7 +406,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         );
       }
       toast.success("Destinatario guardado correctamente.");
-      onNext(destinatarioFinal, false, undefined);
+      onNext(
+        destinatarioFinal,
+        retiroEnOficina,
+        retiroEnOficina ? agenciaSeleccionada : undefined
+      );
     } catch (err) {
       console.error("❌ Error al guardar destinatario:", err);
       toast.error("Hubo un problema al guardar el destinatario.");
@@ -600,6 +640,71 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* --- RETIRO EN OFICINA --- */}
+        <div className="p-4 border rounded-md bg-blue-50">
+          <h4 className="font-semibold mb-4">📦 Retiro en Oficina</h4>
+
+          {/* Toggle para retiro en oficina */}
+          <div
+            onClick={() => {
+              setRetiroEnOficina(!retiroEnOficina);
+              if (!retiroEnOficina) {
+                setAgenciaSeleccionada("");
+              }
+            }}
+            className="flex items-center gap-3 cursor-pointer p-3 rounded-md hover:bg-blue-100 transition-colors"
+          >
+            {retiroEnOficina ? (
+              <CheckCircle2 className="h-6 w-6 text-green-600" />
+            ) : (
+              <Circle className="h-6 w-6 text-gray-400" />
+            )}
+            <span className="text-sm font-medium">
+              {retiroEnOficina
+                ? "Retiro en oficina habilitado"
+                : "Desabilitar retiro en oficina"}
+            </span>
+          </div>
+
+          {/* Dropdown de agencias (solo si retiro_oficina = true) */}
+          {retiroEnOficina && (
+            <div className="mt-4">
+              <Label htmlFor="agencia">Agencia de Retiro *</Label>
+              {cargandoAgencias ? (
+                <div className="flex items-center mt-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-gray-400 mr-2" />
+                  <span className="text-sm text-gray-500">
+                    Cargando agencias...
+                  </span>
+                </div>
+              ) : agencias.length === 0 ? (
+                <div className="text-sm text-red-500 mt-2">
+                  No hay agencias disponibles
+                </div>
+              ) : (
+                <Select
+                  value={agenciaSeleccionada}
+                  onValueChange={setAgenciaSeleccionada}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar agencia de retiro" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agencias.map((agencia, idx) => (
+                      <SelectItem
+                        key={idx}
+                        value={agencia.nombre || String(idx)}
+                      >
+                        {agencia.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          )}
         </div>
 
         <Button

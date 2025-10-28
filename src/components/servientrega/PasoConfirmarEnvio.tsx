@@ -167,7 +167,7 @@ export default function PasoConfirmarEnvio({
         largo: largo,
         tipo_guia: "1",
         alianza: "PRUEBAS",
-        alianza_oficina: "OFICINA_PRUEBA",
+        alianza_oficina: "DON JUAN_INICIAL_XR",
         mail_remite: r.email || "correoremitente@gmail.com",
       } as const;
 
