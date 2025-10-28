@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../lib/prisma.js";
+import logger from "../utils/logger.js";
 
 interface SaldoValidationRequest extends Request {
   body: {
@@ -72,7 +71,10 @@ export async function validarSaldoSuficiente(
     // Si todas las validaciones pasan, continuar
     next();
   } catch (error) {
-    console.error("Error en validación de saldo:", error);
+    logger.error("Error en validación de saldo:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     res.status(500).json({
       error: "ERROR_VALIDACION_SALDO",
       message: "Error interno al validar saldo",
@@ -260,7 +262,10 @@ export async function validarSaldoTransferencia(
 
     next();
   } catch (error) {
-    console.error("Error validando saldo para transferencia:", error);
+    logger.error("Error validando saldo para transferencia:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     res.status(500).json({
       error: "ERROR_VALIDACION_TRANSFERENCIA",
       message: "Error interno al validar saldo para transferencia",
@@ -279,21 +284,21 @@ export async function validarSaldoCambioDivisa(
   res: Response,
   next: NextFunction
 ) {
-  try {
-    let {
-      punto_atencion_id,
-      moneda_origen_id,
-      moneda_destino_id,
-      monto_origen,
-      monto_destino,
-      tipo_operacion,
-      divisas_recibidas_billetes,
-      divisas_recibidas_monedas,
-      metodo_entrega,
-      usd_entregado_efectivo,
-      usd_entregado_transfer,
-    } = req.body;
+  let {
+    punto_atencion_id,
+    moneda_origen_id,
+    moneda_destino_id,
+    monto_origen,
+    monto_destino,
+    tipo_operacion,
+    divisas_recibidas_billetes,
+    divisas_recibidas_monedas,
+    metodo_entrega,
+    usd_entregado_efectivo,
+    usd_entregado_transfer,
+  } = req.body;
 
+  try {
     if (
       !punto_atencion_id ||
       !moneda_origen_id ||
@@ -304,6 +309,56 @@ export async function validarSaldoCambioDivisa(
       return res.status(400).json({
         error: "DATOS_INCOMPLETOS",
         message: "Faltan datos requeridos para el cambio de divisa",
+      });
+    }
+
+    // ✅ VALIDAR QUE EL PUNTO DE ATENCIÓN EXISTA
+    const punto = await prisma.puntoAtencion.findUnique({
+      where: { id: punto_atencion_id },
+    });
+
+    if (!punto) {
+      logger.error("Punto de atención no encontrado en validación", {
+        punto_atencion_id,
+      });
+      return res.status(400).json({
+        error: "PUNTO_NO_ENCONTRADO",
+        message: `El punto de atención especificado no fue encontrado`,
+        details: {
+          puntoId: punto_atencion_id,
+        },
+      });
+    }
+
+    // ✅ VALIDAR QUE AMBAS MONEDAS EXISTAN
+    const [monedaOrigenVal, monedaDestinoVal] = await Promise.all([
+      prisma.moneda.findUnique({ where: { id: moneda_origen_id } }),
+      prisma.moneda.findUnique({ where: { id: moneda_destino_id } }),
+    ]);
+
+    if (!monedaOrigenVal) {
+      logger.error("Moneda origen no encontrada en validación", {
+        moneda_origen_id,
+      });
+      return res.status(400).json({
+        error: "MONEDA_ORIGEN_NO_ENCONTRADA",
+        message: `La moneda origen especificada no fue encontrada`,
+        details: {
+          monedaId: moneda_origen_id,
+        },
+      });
+    }
+
+    if (!monedaDestinoVal) {
+      logger.error("Moneda destino no encontrada en validación", {
+        moneda_destino_id,
+      });
+      return res.status(400).json({
+        error: "MONEDA_DESTINO_NO_ENCONTRADA",
+        message: `La moneda destino especificada no fue encontrada`,
+        details: {
+          monedaId: moneda_destino_id,
+        },
       });
     }
 
@@ -340,10 +395,29 @@ export async function validarSaldoCambioDivisa(
         }
       }
     } catch (e) {
-      console.warn(
-        "No se pudo normalizar par USD en validación (continuando)",
-        e
-      );
+      logger.warn("No se pudo normalizar par USD en validación (continuando)", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+
+    // ✅ VALIDAR MONEDA EXISTE ANTES DE CONTINUAR
+    const moneda = await prisma.moneda.findUnique({
+      where: { id: monedaValidar },
+    });
+
+    if (!moneda) {
+      logger.error("Moneda no encontrada en validación", {
+        monedaValidar,
+        moneda_origen_id,
+        moneda_destino_id,
+      });
+      return res.status(400).json({
+        error: "MONEDA_NO_ENCONTRADA",
+        message: `La moneda especificada no fue encontrada`,
+        details: {
+          monedaId: monedaValidar,
+        },
+      });
     }
 
     // ✅ VALIDAR SALDO TOTAL Y BILLETES/MONEDAS POR SEPARADO
@@ -364,11 +438,7 @@ export async function validarSaldoCambioDivisa(
     let efectivoRequerido = montoValidar;
 
     // Si es USD y hay transferencia, restar del requerimiento de efectivo
-    const moneda = await prisma.moneda.findUnique({
-      where: { id: monedaValidar },
-    });
-
-    if (moneda?.codigo === "USD" && metodo_entrega) {
+    if (moneda.codigo === "USD" && metodo_entrega) {
       if (metodo_entrega === "transferencia") {
         efectivoRequerido = 0; // Todo por transferencia
       } else if (metodo_entrega === "mixto") {
@@ -454,7 +524,16 @@ export async function validarSaldoCambioDivisa(
 
     next();
   } catch (error) {
-    console.error("Error validando saldo para cambio de divisa:", error);
+    logger.error("Error validando saldo para cambio de divisa:", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      detalles: {
+        punto_atencion_id: punto_atencion_id || "undefined",
+        moneda_origen_id: moneda_origen_id || "undefined",
+        moneda_destino_id: moneda_destino_id || "undefined",
+        monto_origen: monto_origen || "undefined",
+      },
+    });
     res.status(500).json({
       error: "ERROR_VALIDACION_CAMBIO",
       message: "Error interno al validar saldo para cambio de divisa",
