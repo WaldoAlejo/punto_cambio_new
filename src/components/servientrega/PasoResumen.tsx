@@ -52,7 +52,7 @@ interface FormDataGuia {
 interface PasoResumenProps {
   formData: FormDataGuia;
   onBack: () => void;
-  onConfirm: () => void; // sigue siendo el botón que avanza a generar guía
+  onConfirm: (tarifaData: TarifaResponseUI) => void; // Pasar la tarifa calculada
 }
 
 /** Respuesta que mostramos en la UI */
@@ -318,7 +318,9 @@ export default function PasoResumen({
       console.log("🔍 Validación de saldo:", data);
 
       if (data?.estado === "OK") {
-        onConfirm();
+        if (tarifa) {
+          onConfirm(tarifa);
+        }
       } else {
         // Mostrar mensaje específico según el estado
         let mensaje =

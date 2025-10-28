@@ -47,10 +47,16 @@ export interface Empaque {
 }
 
 export interface ResumenCostos {
-  costo_empaque: number;
-  valor_seguro: number;
-  flete: number;
-  total: number;
+  costo_empaque?: number;
+  valor_seguro?: number;
+  flete?: number;
+  total?: number;
+  // Campos adicionales del tariff
+  valor_empaque?: number;
+  seguro?: number;
+  tiva?: number;
+  gtotal?: number;
+  total_transaccion?: number;
 }
 
 export interface FormDataGuia {

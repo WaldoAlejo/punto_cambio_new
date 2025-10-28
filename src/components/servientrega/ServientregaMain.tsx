@@ -115,7 +115,20 @@ export default function ServientregaMain({
   };
 
   // PasoResumen → “Confirmar y continuar”
-  const handleResumenConfirm = () => {
+  const handleResumenConfirm = (tarifaData: any) => {
+    // Guardar los costos de tarifa en formData
+    setFormData((prev) => ({
+      ...prev,
+      resumen_costos: {
+        flete: tarifaData.flete || 0,
+        valor_empaque: tarifaData.valor_empaque || 0,
+        seguro: tarifaData.seguro || 0,
+        tiva: tarifaData.tiva || 0,
+        total: tarifaData.total_transacion || tarifaData.gtotal || 0,
+        gtotal: tarifaData.gtotal || 0,
+        total_transaccion: tarifaData.total_transacion || 0,
+      },
+    }));
     setPasoActual("confirmar");
   };
 
