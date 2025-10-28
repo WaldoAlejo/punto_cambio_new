@@ -14,7 +14,7 @@ import type { Empaque, Medidas } from "@/types/servientrega";
 
 // Tipado del prop
 interface PasoEmpaqueYMedidasProps {
-  nombre_producto: string; // "MERCANCIA PREMIER" | "DOCUMENTOS"
+  nombre_producto: string; // "MERCANCIA PREMIER" | "DOCUMENTO UNITARIO"
   esDocumento: boolean;
   paisDestino: string;
   ciudadDestino: string;

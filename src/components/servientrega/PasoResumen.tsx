@@ -116,9 +116,11 @@ const DEFAULT_CP_DES = "110111";
 const UMBRAL_SALDO_BAJO = 2.0;
 
 /** Normaliza el nombre del producto según documentación */
-function mapProducto(nombre?: string): "DOCUMENTO" | "MERCANCIA PREMIER" {
+function mapProducto(
+  nombre?: string
+): "DOCUMENTO UNITARIO" | "MERCANCIA PREMIER" {
   const raw = (nombre || "").toUpperCase();
-  if (raw.includes("DOC")) return "DOCUMENTO";
+  if (raw.includes("DOC")) return "DOCUMENTO UNITARIO";
   return "MERCANCIA PREMIER";
 }
 
@@ -237,7 +239,7 @@ export default function PasoResumen({
         ancho: String(medidas?.ancho ?? 0),
         largo: String(medidas?.largo ?? 0),
         recoleccion: "NO",
-        nombre_producto, // "DOCUMENTO" | "MERCANCIA PREMIER"
+        nombre_producto, // "DOCUMENTO UNITARIO" | "MERCANCIA PREMIER"
       };
 
       // Solo agregar empaque si el usuario lo requiere

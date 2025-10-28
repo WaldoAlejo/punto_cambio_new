@@ -15,7 +15,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface ProductoSeleccionado {
-  nombre_producto: string; // "MERCANCIA PREMIER" | "DOCUMENTOS"
+  nombre_producto: string; // "MERCANCIA PREMIER" | "DOCUMENTO UNITARIO"
   esDocumento: boolean;
 }
 
@@ -146,7 +146,7 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
     const nombre = clean(selectedProducto) === clean(DOC) ? DOC : MERC;
 
     const resultado: ProductoSeleccionado = {
-      nombre_producto: nombre, // garantizado: "MERCANCIA PREMIER" | "DOCUMENTOS"
+      nombre_producto: nombre, // garantizado: "MERCANCIA PREMIER" | "DOCUMENTO UNITARIO"
       esDocumento: nombre === DOC,
     };
 

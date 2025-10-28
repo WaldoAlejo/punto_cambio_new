@@ -235,8 +235,8 @@ router.post("/generar-guia", async (req, res) => {
       // Normalizar producto
       const productoUpper = String(nombre_producto || "").toUpperCase();
       const producto =
-        productoUpper.includes("DOC") || productoUpper === "DOCUMENTO"
-          ? "DOCUMENTO"
+        productoUpper.includes("DOC") || productoUpper === "DOCUMENTO UNITARIO"
+          ? "DOCUMENTO UNITARIO"
           : "MERCANCIA PREMIER";
 
       // Formato "CIUDAD-PROVINCIA" en mayúsculas
