@@ -29,12 +29,10 @@ export interface ValidationError {
 }
 
 export class ServientregaValidationService {
+  // SOLO estos dos funcionan con Servientrega API
   private static readonly PRODUCTOS_VALIDOS = [
+    "DOCUMENTO UNITARIO",
     "MERCANCIA PREMIER",
-    "PREMIER",
-    "DOCUMENTO",
-    "ESTANDAR",
-    "EXPRESS",
   ] as const;
 
   private static readonly PESO_MINIMO = 0.5;
@@ -80,14 +78,27 @@ export class ServientregaValidationService {
     }
 
     // Dimensiones
+    // Para "DOCUMENTO UNITARIO", permitir dimensiones = 0
+    // Para "MERCANCIA PREMIER", requieren ser > 0
+    const esDocumento =
+      (request.nombre_producto || "").toUpperCase().trim() ===
+      "DOCUMENTO UNITARIO";
+
     (["alto", "ancho", "largo"] as const).forEach((dim) => {
       const val = parseFloat(String(request[dim]));
-      if (isNaN(val) || val <= 0) {
+      if (isNaN(val)) {
+        errors.push({
+          field: dim,
+          message: `${dim} debe ser un número válido`,
+        });
+      } else if (!esDocumento && val <= 0) {
+        // Solo para mercancía: requiere > 0
         errors.push({
           field: dim,
           message: `${dim} debe ser un número mayor a 0`,
         });
       }
+      // Para documentos: permitir 0
     });
 
     // Valores monetarios

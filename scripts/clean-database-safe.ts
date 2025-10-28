@@ -102,152 +102,175 @@ async function cleanDatabase(options: CleanupOptions) {
       console.log(`  - SaldoInicial: ${stats.saldoInicial}`);
     }
 
-    await prisma.$transaction(async (tx) => {
-      // 1. Eliminar Recibos
-      console.log("\n🗑️  Eliminando Recibos...");
-      const recibosDeleted = await tx.recibo.deleteMany({});
-      console.log(`   ✓ ${recibosDeleted.count} registros eliminados`);
+    await prisma.$transaction(
+      async (tx) => {
+        // 1. Eliminar Recibos
+        console.log("\n🗑️  Eliminando Recibos...");
+        const recibosDeleted = await tx.recibo.deleteMany({});
+        console.log(`   ✓ ${recibosDeleted.count} registros eliminados`);
 
-      // 2. Eliminar CambioDivisa
-      console.log("🗑️  Eliminando CambiosDivisa...");
-      const cambiosDeleted = await tx.cambioDivisa.deleteMany({});
-      console.log(`   ✓ ${cambiosDeleted.count} registros eliminados`);
+        // 2. Eliminar CambioDivisa
+        console.log("🗑️  Eliminando CambiosDivisa...");
+        const cambiosDeleted = await tx.cambioDivisa.deleteMany({});
+        console.log(`   ✓ ${cambiosDeleted.count} registros eliminados`);
 
-      // 3. Eliminar detalles de cuadre y cuadres de caja
-      console.log("🗑️  Eliminando DetalleCuadreCaja...");
-      const detalleCuadreDeleted = await tx.detalleCuadreCaja.deleteMany({});
-      console.log(`   ✓ ${detalleCuadreDeleted.count} registros eliminados`);
+        // 3. Eliminar detalles de cuadre y cuadres de caja
+        console.log("🗑️  Eliminando DetalleCuadreCaja...");
+        const detalleCuadreDeleted = await tx.detalleCuadreCaja.deleteMany({});
+        console.log(`   ✓ ${detalleCuadreDeleted.count} registros eliminados`);
 
-      console.log("🗑️  Eliminando CuadreCaja...");
-      const cuadreDeleted = await tx.cuadreCaja.deleteMany({});
-      console.log(`   ✓ ${cuadreDeleted.count} registros eliminados`);
+        console.log("🗑️  Eliminando CuadreCaja...");
+        const cuadreDeleted = await tx.cuadreCaja.deleteMany({});
+        console.log(`   ✓ ${cuadreDeleted.count} registros eliminados`);
 
-      // 4. Eliminar detalles de cierre de servicios externos
-      console.log("🗑️  Eliminando ServicioExternoDetalleCierre...");
-      const detalleCierreDeleted =
-        await tx.servicioExternoDetalleCierre.deleteMany({});
-      console.log(`   ✓ ${detalleCierreDeleted.count} registros eliminados`);
+        // 4. Eliminar detalles de cierre de servicios externos
+        console.log("🗑️  Eliminando ServicioExternoDetalleCierre...");
+        const detalleCierreDeleted =
+          await tx.servicioExternoDetalleCierre.deleteMany({});
+        console.log(`   ✓ ${detalleCierreDeleted.count} registros eliminados`);
 
-      // 5. Eliminar cierres diarios de servicios externos
-      console.log("🗑️  Eliminando ServicioExternoCierreDiario...");
-      const cierreSEDeleted = await tx.servicioExternoCierreDiario.deleteMany(
-        {}
-      );
-      console.log(`   ✓ ${cierreSEDeleted.count} registros eliminados`);
+        // 5. Eliminar cierres diarios de servicios externos
+        console.log("🗑️  Eliminando ServicioExternoCierreDiario...");
+        const cierreSEDeleted = await tx.servicioExternoCierreDiario.deleteMany(
+          {}
+        );
+        console.log(`   ✓ ${cierreSEDeleted.count} registros eliminados`);
 
-      // 6. Eliminar cierres diarios
-      console.log("🗑️  Eliminando CierreDiario...");
-      const cierreDeleted = await tx.cierreDiario.deleteMany({});
-      console.log(`   ✓ ${cierreDeleted.count} registros eliminados`);
+        // 6. Eliminar cierres diarios
+        console.log("🗑️  Eliminando CierreDiario...");
+        const cierreDeleted = await tx.cierreDiario.deleteMany({});
+        console.log(`   ✓ ${cierreDeleted.count} registros eliminados`);
 
-      // 7. Eliminar Transferencias
-      console.log("🗑️  Eliminando Transferencias...");
-      const transferenciasDeleted = await tx.transferencia.deleteMany({});
-      console.log(`   ✓ ${transferenciasDeleted.count} registros eliminados`);
+        // 7. Eliminar Transferencias
+        console.log("🗑️  Eliminando Transferencias...");
+        const transferenciasDeleted = await tx.transferencia.deleteMany({});
+        console.log(`   ✓ ${transferenciasDeleted.count} registros eliminados`);
 
-      // 8. Eliminar movimientos de servicios externos
-      console.log("🗑️  Eliminando ServicioExternoMovimiento...");
-      const movimientoSEDeleted = await tx.servicioExternoMovimiento.deleteMany(
-        {}
-      );
-      console.log(`   ✓ ${movimientoSEDeleted.count} registros eliminados`);
+        // 8. Eliminar movimientos de servicios externos
+        console.log("🗑️  Eliminando ServicioExternoMovimiento...");
+        const movimientoSEDeleted =
+          await tx.servicioExternoMovimiento.deleteMany({});
+        console.log(`   ✓ ${movimientoSEDeleted.count} registros eliminados`);
 
-      // 9. Eliminar MovimientoSaldo
-      console.log("🗑️  Eliminando MovimientoSaldo...");
-      const movimientoSaldoDeleted = await tx.movimientoSaldo.deleteMany({});
-      console.log(`   ✓ ${movimientoSaldoDeleted.count} registros eliminados`);
+        // 9. Eliminar MovimientoSaldo
+        console.log("🗑️  Eliminando MovimientoSaldo...");
+        const movimientoSaldoDeleted = await tx.movimientoSaldo.deleteMany({});
+        console.log(
+          `   ✓ ${movimientoSaldoDeleted.count} registros eliminados`
+        );
 
-      // 10. Eliminar HistorialSaldo
-      console.log("🗑️  Eliminando HistorialSaldo...");
-      const historialDeleted = await tx.historialSaldo.deleteMany({});
-      console.log(`   ✓ ${historialDeleted.count} registros eliminados`);
+        // 10. Eliminar HistorialSaldo
+        console.log("🗑️  Eliminando HistorialSaldo...");
+        const historialDeleted = await tx.historialSaldo.deleteMany({});
+        console.log(`   ✓ ${historialDeleted.count} registros eliminados`);
 
-      // 11. Eliminar Movimiento
-      console.log("🗑️  Eliminando Movimientos...");
-      const movimientosDeleted = await tx.movimiento.deleteMany({});
-      console.log(`   ✓ ${movimientosDeleted.count} registros eliminados`);
+        // 11. Eliminar Movimiento
+        console.log("🗑️  Eliminando Movimientos...");
+        const movimientosDeleted = await tx.movimiento.deleteMany({});
+        console.log(`   ✓ ${movimientosDeleted.count} registros eliminados`);
 
-      // 12. Eliminar SolicitudSaldo
-      console.log("🗑️  Eliminando SolicitudSaldo...");
-      const solicitudesDeleted = await tx.solicitudSaldo.deleteMany({});
-      console.log(`   ✓ ${solicitudesDeleted.count} registros eliminados`);
+        // 12. Eliminar SolicitudSaldo
+        console.log("🗑️  Eliminando SolicitudSaldo...");
+        const solicitudesDeleted = await tx.solicitudSaldo.deleteMany({});
+        console.log(`   ✓ ${solicitudesDeleted.count} registros eliminados`);
 
-      // 13. Eliminar asignaciones de servicios externos
-      console.log("🗑️  Eliminando ServicioExternoAsignacion...");
-      const asignacionesDeleted = await tx.servicioExternoAsignacion.deleteMany(
-        {}
-      );
-      console.log(`   ✓ ${asignacionesDeleted.count} registros eliminados`);
+        // 13. Eliminar asignaciones de servicios externos
+        console.log("🗑️  Eliminando ServicioExternoAsignacion...");
+        const asignacionesDeleted =
+          await tx.servicioExternoAsignacion.deleteMany({});
+        console.log(`   ✓ ${asignacionesDeleted.count} registros eliminados`);
 
-      // 14. Eliminar historial de asignaciones de puntos
-      console.log("🗑️  Eliminando HistorialAsignacionPunto...");
-      const historialAsignacionDeleted =
-        await tx.historialAsignacionPunto.deleteMany({});
-      console.log(
-        `   ✓ ${historialAsignacionDeleted.count} registros eliminados`
-      );
+        // 14. Eliminar historial de asignaciones de puntos
+        console.log("🗑️  Eliminando HistorialAsignacionPunto...");
+        const historialAsignacionDeleted =
+          await tx.historialAsignacionPunto.deleteMany({});
+        console.log(
+          `   ✓ ${historialAsignacionDeleted.count} registros eliminados`
+        );
 
-      // 15. Eliminar Permisos
-      console.log("🗑️  Eliminando Permisos...");
-      const permisosDeleted = await tx.permiso.deleteMany({});
-      console.log(`   ✓ ${permisosDeleted.count} registros eliminados`);
+        // 14.1 Eliminar historial de saldos de servientrega
+        console.log("🗑️  Eliminando ServientregaHistorialSaldo...");
+        const servientregaHistorialDeleted =
+          await tx.servientregaHistorialSaldo.deleteMany({});
+        console.log(
+          `   ✓ ${servientregaHistorialDeleted.count} registros eliminados`
+        );
 
-      // 16. Eliminar SalidaEspontanea (opcional)
-      if (options.deleteSalidaEspontanea) {
-        console.log("🗑️  Eliminando SalidaEspontanea...");
-        const salidasDeleted = await tx.salidaEspontanea.deleteMany({});
-        console.log(`   ✓ ${salidasDeleted.count} registros eliminados`);
-      }
+        // 14.2 Eliminar solicitudes de saldo de servientrega
+        console.log("🗑️  Eliminando ServientregaSolicitudSaldo...");
+        const servientregaSolicitudDeleted =
+          await tx.servientregaSolicitudSaldo.deleteMany({});
+        console.log(
+          `   ✓ ${servientregaSolicitudDeleted.count} registros eliminados`
+        );
 
-      // 17. Eliminar SaldoInicial (opcional)
-      if (options.deleteSaldoInicial) {
-        console.log("🗑️  Eliminando SaldoInicial...");
-        const saldoInicialDeleted = await tx.saldoInicial.deleteMany({});
-        console.log(`   ✓ ${saldoInicialDeleted.count} registros eliminados`);
-      }
+        // 15. Eliminar Permisos
+        console.log("🗑️  Eliminando Permisos...");
+        const permisosDeleted = await tx.permiso.deleteMany({});
+        console.log(`   ✓ ${permisosDeleted.count} registros eliminados`);
 
-      // 18. Resetear Saldos a 0
-      console.log("\n💰 Reseteando Saldos a 0...");
-      const saldosReseteados = await tx.saldo.updateMany({
-        data: {
-          cantidad: 0,
-          billetes: 0,
-          monedas_fisicas: 0,
-          bancos: 0,
-        },
-      });
-      console.log(`   ✓ ${saldosReseteados.count} saldos reseteados`);
+        // 16. Eliminar SalidaEspontanea (opcional)
+        if (options.deleteSalidaEspontanea) {
+          console.log("🗑️  Eliminando SalidaEspontanea...");
+          const salidasDeleted = await tx.salidaEspontanea.deleteMany({});
+          console.log(`   ✓ ${salidasDeleted.count} registros eliminados`);
+        }
 
-      // 19. Resetear ServicioExternoSaldo a 0
-      console.log("💰 Reseteando ServicioExternoSaldo a 0...");
-      const servicioExternoSaldoReseteado =
-        await tx.servicioExternoSaldo.updateMany({
+        // 17. Eliminar SaldoInicial (opcional)
+        if (options.deleteSaldoInicial) {
+          console.log("🗑️  Eliminando SaldoInicial...");
+          const saldoInicialDeleted = await tx.saldoInicial.deleteMany({});
+          console.log(`   ✓ ${saldoInicialDeleted.count} registros eliminados`);
+        }
+
+        // 18. Resetear Saldos a 0
+        console.log("\n💰 Reseteando Saldos a 0...");
+        const saldosReseteados = await tx.saldo.updateMany({
           data: {
             cantidad: 0,
+            billetes: 0,
+            monedas_fisicas: 0,
+            bancos: 0,
           },
         });
-      console.log(
-        `   ✓ ${servicioExternoSaldoReseteado.count} saldos externos reseteados`
-      );
+        console.log(`   ✓ ${saldosReseteados.count} saldos reseteados`);
 
-      // 20. Resetear ServientregaSaldo
-      console.log("💰 Reseteando ServientregaSaldo a 0...");
-      const servientregaSaldoReseteado = await tx.servientregaSaldo.updateMany({
-        data: {
-          monto_usado: 0,
-        },
-      });
-      console.log(
-        `   ✓ ${servientregaSaldoReseteado.count} saldos servientrega reseteados`
-      );
+        // 19. Resetear ServicioExternoSaldo a 0
+        console.log("💰 Reseteando ServicioExternoSaldo a 0...");
+        const servicioExternoSaldoReseteado =
+          await tx.servicioExternoSaldo.updateMany({
+            data: {
+              cantidad: 0,
+            },
+          });
+        console.log(
+          `   ✓ ${servicioExternoSaldoReseteado.count} saldos externos reseteados`
+        );
 
-      // 21. Opcionalmente resetear Jornadas
-      if (options.resetJornadas) {
-        console.log("🗑️  Eliminando Jornadas antiguas...");
-        const jornadasDeleted = await tx.jornada.deleteMany({});
-        console.log(`   ✓ ${jornadasDeleted.count} jornadas eliminadas`);
+        // 20. Resetear ServientregaSaldo
+        console.log("💰 Reseteando ServientregaSaldo a 0...");
+        const servientregaSaldoReseteado =
+          await tx.servientregaSaldo.updateMany({
+            data: {
+              monto_total: 0,
+              monto_usado: 0,
+            },
+          });
+        console.log(
+          `   ✓ ${servientregaSaldoReseteado.count} saldos servientrega reseteados`
+        );
+
+        // 21. Opcionalmente resetear Jornadas
+        if (options.resetJornadas) {
+          console.log("🗑️  Eliminando Jornadas antiguas...");
+          const jornadasDeleted = await tx.jornada.deleteMany({});
+          console.log(`   ✓ ${jornadasDeleted.count} jornadas eliminadas`);
+        }
+      },
+      {
+        timeout: 30000, // 30 segundos para dar tiempo a todas las operaciones
       }
-    });
+    );
 
     console.log("\n✅ ¡LIMPIEZA COMPLETADA EXITOSAMENTE!");
     console.log("   Base de datos lista para nuevas transacciones\n");
@@ -268,6 +291,8 @@ async function cleanDatabase(options: CleanupOptions) {
     console.log("  ✓ CuadreCaja");
     console.log("  ✓ CierreDiario");
     console.log("  ✓ SolicitudSaldo");
+    console.log("  ✓ ServientregaHistorialSaldo");
+    console.log("  ✓ ServientregaSolicitudSaldo");
     if (options.deleteSalidaEspontanea) {
       console.log("  ✓ SalidaEspontanea");
     }
@@ -276,6 +301,9 @@ async function cleanDatabase(options: CleanupOptions) {
     }
     console.log("  ✓ Saldos (reseteados a 0)");
     console.log("  ✓ ServicioExternoSaldo (reseteados a 0)");
+    console.log(
+      "  ✓ ServientregaSaldo (monto_total y monto_usado reseteados a 0)"
+    );
   } catch (error) {
     console.error("\n❌ Error durante la limpieza:", error);
     process.exit(1);

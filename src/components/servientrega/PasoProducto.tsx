@@ -31,7 +31,7 @@ const clean = (s: string) =>
     .toUpperCase()
     .trim();
 
-const DOC = "DOCUMENTOS";
+const DOC = "DOCUMENTO UNITARIO";
 const MERC = "MERCANCIA PREMIER";
 
 const normalizarProducto = (raw?: string): "" | typeof DOC | typeof MERC => {
