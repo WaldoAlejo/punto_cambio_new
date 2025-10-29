@@ -214,6 +214,14 @@ router.post("/generar-guia", async (req, res) => {
       });
     }
 
+    // 💰 Capturar el costo que viene del frontend (precalculado desde la tarifa)
+    // Este es el costo REAL que debe decontarse del saldo
+    const costoEnvioPrecalculado = Number(req.body?.valor_total ?? 0) || 0;
+    console.log(
+      "💰 Costo de envío precalculado (frontend):",
+      costoEnvioPrecalculado
+    );
+
     // Construcción robusta del payload si NO viene formateado
     let payload: Record<string, any>;
     if (!yaFormateado) {
@@ -475,14 +483,24 @@ router.post("/generar-guia", async (req, res) => {
     if (guia && base64) {
       const db = new ServientregaDBService();
 
-      // Primero intentar con total_transacion (suma de todos los costos)
-      if (processed?.total_transacion) {
+      // 🎯 PRIORIDAD 1: Usar el costo precalculado que viene del frontend (confiable)
+      if (costoEnvioPrecalculado > 0) {
+        valorTotalGuia = costoEnvioPrecalculado;
+        console.log(
+          "✅ Usando costo precalculado del frontend:",
+          valorTotalGuia
+        );
+      }
+      // PRIORIDAD 2: Intentar con total_transacion (suma de todos los costos)
+      else if (processed?.total_transacion) {
         valorTotalGuia = Number(processed.total_transacion);
-      } else if (processed?.gtotal) {
-        // gtotal es el gran total (también incluye todos los costos)
+      }
+      // PRIORIDAD 3: Usar gtotal (gran total que incluye todos los costos)
+      else if (processed?.gtotal) {
         valorTotalGuia = Number(processed.gtotal);
-      } else if (processed?.flete) {
-        // Si solo viene el flete, usarlo como base
+      }
+      // PRIORIDAD 4: Si solo viene el flete, usarlo como base
+      else if (processed?.flete) {
         valorTotalGuia = Number(processed.flete);
         // Sumar otros costos si existen
         if (processed?.valor_asegurado) {
@@ -491,8 +509,9 @@ router.post("/generar-guia", async (req, res) => {
         if (processed?.valor_empaque) {
           valorTotalGuia += Number(processed.valor_empaque);
         }
-      } else if (payload?.valor_total) {
-        // Fallback al valor_total del payload
+      }
+      // PRIORIDAD 5: Fallback al valor_total del payload (si viene formateado)
+      else if (payload?.valor_total) {
         valorTotalGuia = Number(payload.valor_total);
       }
 

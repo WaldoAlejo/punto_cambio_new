@@ -200,6 +200,8 @@ export default function PasoConfirmarEnvio({
         mail_remite: r.email?.trim() || "",
         // 💳 IMPORTANTE: Enviar punto_atencion_id para que el backend pueda descontar del saldo
         punto_atencion_id: selectedPoint?.id || undefined,
+        // 💰 IMPORTANTE: Enviar costo total calculado para que el backend lo use
+        valor_total: totalEstimado || 0,
       } as const;
 
       console.log("📤 Payload GeneracionGuia (Production):", payload);
