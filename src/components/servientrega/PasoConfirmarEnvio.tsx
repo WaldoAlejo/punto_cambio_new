@@ -252,9 +252,36 @@ export default function PasoConfirmarEnvio({
       console.log("🎯 Extracción final:", { guiaStr, guia64 });
 
       if (guiaStr && guia64) {
+        // 🧹 Limpiar base64: remover espacios en blanco, saltos de línea, caracteres especiales
+        const base64Limpio = guia64
+          .replace(/\s+/g, "") // Remover todos los espacios en blanco y saltos de línea
+          .replace(/[^\w+/=]/g, "") // Remover caracteres inválidos en base64
+          .trim();
+
+        console.log("🧹 Base64 original length:", guia64.length);
+        console.log("🧹 Base64 limpio length:", base64Limpio.length);
+        console.log(
+          "🧹 Base64 limpio preview:",
+          base64Limpio.substring(0, 100)
+        );
+
         setGuia(guiaStr);
-        setBase64(guia64);
-        toast.success(`✅ Guía generada: ${guiaStr}`);
+        setBase64(base64Limpio); // Usar base64 limpio
+
+        // 💰 Mostrar valores finales del backend
+        const valorFinal = data?.valorTotalGuia || data?.costo_total || 0;
+        if (valorFinal > 0) {
+          console.log("💰 Valores finales del backend:", {
+            valorTotalGuia: valorFinal,
+            costo_envio: data?.costo_envio,
+          });
+        }
+
+        toast.success(
+          `✅ Guía generada: ${guiaStr} | Costo: $${Number(valorFinal).toFixed(
+            2
+          )}`
+        );
         // 🔧 NO llamar a onSuccess aquí para que el usuario vea los botones
         // Se llamará cuando el usuario haga click en "Generar otra guía"
       } else {
@@ -280,10 +307,53 @@ export default function PasoConfirmarEnvio({
   // 📄 Ver PDF de la guía
   // ==========================
   const handleVerPDF = () => {
-    if (!base64) return;
-    const isBase64 = !/^https?:\/\//i.test(base64);
-    const url = isBase64 ? `data:application/pdf;base64,${base64}` : base64;
-    window.open(url, "_blank");
+    if (!base64) {
+      toast.error("PDF no disponible");
+      return;
+    }
+
+    try {
+      const isBase64 = !/^https?:\/\//i.test(base64);
+      let url: string;
+
+      if (isBase64) {
+        // Validar que sea base64 válido
+        if (!/^[A-Za-z0-9+/=]*$/.test(base64)) {
+          throw new Error("Base64 contiene caracteres inválidos");
+        }
+
+        // Intentar decodificar para verificar que sea válido
+        try {
+          atob(base64.substring(0, 100)); // Probar con primeros 100 caracteres
+        } catch {
+          throw new Error("Base64 no es válido");
+        }
+
+        url = `data:application/pdf;base64,${base64}`;
+      } else {
+        url = base64;
+      }
+
+      console.log("📄 Abriendo PDF:", {
+        isBase64,
+        base64Length: base64.length,
+        urlPreview: url.substring(0, 100),
+      });
+
+      const newWindow = window.open(url, "_blank");
+      if (!newWindow) {
+        toast.error(
+          "No se pudo abrir el PDF. Verifica la configuración del navegador."
+        );
+      }
+    } catch (error) {
+      console.error("❌ Error al abrir PDF:", error);
+      toast.error(
+        error instanceof Error
+          ? `Error en PDF: ${error.message}`
+          : "Error al abrir el PDF. El formato puede estar corrupto."
+      );
+    }
   };
 
   // ==========================

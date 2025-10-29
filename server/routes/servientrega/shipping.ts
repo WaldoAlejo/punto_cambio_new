@@ -467,12 +467,13 @@ router.post("/generar-guia", async (req, res) => {
       proceso: fetchData?.proceso || processed?.proceso || "N/A",
     });
 
+    // 💰 Calcular valor total de la guía (incluye flete, seguro, empaque, etc.)
+    // IMPORTANTE: No incluir valor_declarado, solo el costo del envío
+    // ⚠️ Declarar aquí (fuera del if) para usarlo en la respuesta normalizada
+    let valorTotalGuia = 0;
+
     if (guia && base64) {
       const db = new ServientregaDBService();
-
-      // Calcular valor total de la guía (incluye flete, seguro, empaque, etc.)
-      // IMPORTANTE: No incluir valor_declarado, solo el costo del envío
-      let valorTotalGuia = 0;
 
       // Primero intentar con total_transacion (suma de todos los costos)
       if (processed?.total_transacion) {
@@ -573,12 +574,16 @@ router.post("/generar-guia", async (req, res) => {
     }
 
     // 🔧 Normalizar respuesta: siempre devolver guia/guia_64 a nivel raíz para que el frontend los encuentre
+    // 💾 IMPORTANTE: Incluir valores finales calculados para que el frontend se actualice correctamente
     const normalizedResponse = {
       ...processed,
       guia: guia || processed?.guia || fetchData?.guia,
       guia_64: base64 || processed?.guia_64 || fetchData?.guia_64,
       guia_pdf: processed?.guia_pdf || fetchData?.guia_pdf,
       proceso: fetchData?.proceso || processed?.proceso,
+      // 💰 Valores finales de costos (IMPORTANTES para que el frontend se actualice)
+      valorTotalGuia: valorTotalGuia || 0,
+      costo_total: valorTotalGuia || 0,
       // Si viene en fetch, extraer todos los campos de fetch también
       ...(fetchData && typeof fetchData === "object" ? fetchData : {}),
     };
