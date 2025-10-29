@@ -260,6 +260,30 @@ router.post("/generar-guia", async (req, res) => {
       const peso_volumentrico =
         alto > 0 && ancho > 0 && largo > 0 ? (alto * ancho * largo) / 5000 : 0;
 
+      // Obtener punto de atención si está disponible
+      let servientregaAlianza = "PUNTO CAMBIO SAS";
+      let servientregaOficinaAlianza = "QUITO_PLAZA DEL VALLE_PC";
+
+      if (punto_atencion_id) {
+        try {
+          const punto = await prisma.puntoAtencion.findUnique({
+            where: { id: punto_atencion_id },
+            select: {
+              servientrega_alianza: true,
+              servientrega_oficina_alianza: true,
+            },
+          });
+          if (punto?.servientrega_alianza) {
+            servientregaAlianza = punto.servientrega_alianza;
+          }
+          if (punto?.servientrega_oficina_alianza) {
+            servientregaOficinaAlianza = punto.servientrega_oficina_alianza;
+          }
+        } catch (e) {
+          console.warn("No se pudo obtener datos del punto de atención:", e);
+        }
+      }
+
       payload = {
         tipo: "GeneracionGuia",
         nombre_producto: producto,
@@ -277,13 +301,13 @@ router.post("/generar-guia", async (req, res) => {
         ciudad_destinatario: ciudadDestino,
         pais_destinatario: destinatario?.pais || "ECUADOR",
         codigo_postal_destinatario: destinatario?.codigo_postal || "",
-        contenido: contenido || nombre_producto || "PRUEBA",
+        contenido: contenido || nombre_producto || "DOCUMENTO",
         retiro_oficina: retiro_oficina ? "SI" : "NO",
         ...(retiro_oficina && nombre_agencia_retiro_oficina
           ? { nombre_agencia_retiro_oficina }
           : {}),
-        pedido: pedido || "PRUEBA",
-        factura: factura || "PRUEBA",
+        pedido: pedido || "",
+        factura: factura || "",
 
         // 🔓 valor_declarado puede ir 0 sin problema
         valor_declarado: vd,
@@ -298,8 +322,8 @@ router.post("/generar-guia", async (req, res) => {
         ancho,
         largo,
         tipo_guia: "1",
-        alianza: "PRUEBAS",
-        alianza_oficina: "DON JUAN_INICIAL_XR",
+        alianza: servientregaAlianza,
+        alianza_oficina: servientregaOficinaAlianza,
         mail_remite: remitente?.email || "",
 
         // Credenciales requeridas por el WS dentro del body
@@ -356,7 +380,8 @@ router.post("/generar-guia", async (req, res) => {
     }
 
     // Persistencia cuando hay guia/64
-    const fetchData = processed?.fetch || {};
+    // La respuesta puede venir como {fetch: {...}} o directamente con guia/guia_64
+    const fetchData = processed?.fetch || processed || {};
     const guia = fetchData?.guia;
     const base64 = fetchData?.guia_64;
 

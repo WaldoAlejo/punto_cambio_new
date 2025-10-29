@@ -172,20 +172,20 @@ export default function PasoConfirmarEnvio({
         nombre_remitente: r.nombre || "",
         direccion_remitente: r.direccion || "",
         telefono_remitente: r.telefono || "",
-        codigo_postal_remitente: r.codigo_postal?.trim() || "", // ✅ Enviar vacío en lugar de "PRUEBA"
+        codigo_postal_remitente: r.codigo_postal?.trim() || "",
         cedula_destinatario: (d.identificacion || d.cedula || "").toString(),
         nombre_destinatario: d.nombre || "",
         direccion_destinatario: d.direccion || "",
         telefono_destinatario: d.telefono || "",
         ciudad_destinatario: ciudadProv(d.ciudad, d.provincia),
         pais_destinatario: d.pais || "ECUADOR",
-        codigo_postal_destinatario: d.codigo_postal?.trim() || "", // ✅ Enviar vacío en lugar de "PRUEBA"
+        codigo_postal_destinatario: d.codigo_postal?.trim() || "",
         contenido:
           (formData?.contenido || formData?.nombre_producto || "").trim() ||
           "DOCUMENTO",
-        retiro_oficina: "NO", // ✅ Sin entrega de oficina por ahora (campos en blanco)
-        pedido: (formData as any).pedido?.trim() || "", // ✅ Enviar vacío en lugar de "PRUEBA"
-        factura: (formData as any).factura?.trim() || "", // ✅ Enviar vacío en lugar de "PRUEBA"
+        retiro_oficina: "NO",
+        pedido: (formData as any).pedido?.trim() || "",
+        factura: (formData as any).factura?.trim() || "",
         valor_declarado: Number(m?.valor_declarado || 0),
         valor_asegurado: Number((m as any)?.valor_seguro || 0),
         peso_fisico: Number(m?.peso || 0),
@@ -195,9 +195,10 @@ export default function PasoConfirmarEnvio({
         ancho: ancho,
         largo: largo,
         tipo_guia: "1",
-        alianza: selectedPoint?.servientrega_alianza || "PRUEBAS",
+        alianza: selectedPoint?.servientrega_alianza || "PUNTO CAMBIO SAS",
         alianza_oficina:
-          selectedPoint?.servientrega_oficina_alianza || "DON JUAN_INICIAL_XR",
+          selectedPoint?.servientrega_oficina_alianza ||
+          "QUITO_PLAZA DEL VALLE_PC",
         mail_remite: r.email?.trim() || "",
       } as const;
 
@@ -213,6 +214,8 @@ export default function PasoConfirmarEnvio({
       let guiaStr: string | undefined;
       let guia64: string | undefined;
 
+      console.log("📥 Respuesta del servidor:", data);
+
       if (typeof data === "string") {
         try {
           const parts = data
@@ -227,7 +230,10 @@ export default function PasoConfirmarEnvio({
                 // tarifa: ignorar aquí
               } else if (j?.fetch?.guia) {
                 guiaStr = j.fetch.guia;
-                guia64 = j.fetch.guia_64 || j.fetch.guia_pdf;
+                guia64 = j.fetch.guia_64;
+              } else if (j?.guia) {
+                guiaStr = j.guia;
+                guia64 = j.guia_64;
               }
             } catch {}
           }
@@ -236,11 +242,14 @@ export default function PasoConfirmarEnvio({
         // solo tarifa
       } else if (data?.fetch?.guia) {
         guiaStr = data.fetch.guia;
-        guia64 = data.fetch.guia_64 || data.fetch.guia_pdf;
+        guia64 = data.fetch.guia_64;
       } else if (data?.guia) {
+        // Respuesta directa con guia y guia_64
         guiaStr = data.guia;
-        guia64 = data.guia_64 || data.guia_pdf;
+        guia64 = data.guia_64;
       }
+
+      console.log("🎯 Extracción final:", { guiaStr, guia64 });
 
       if (guiaStr && guia64) {
         setGuia(guiaStr);
@@ -249,7 +258,10 @@ export default function PasoConfirmarEnvio({
         onSuccess?.();
       } else {
         setError("No se pudo generar la guía. Verifica los datos.");
-        toast.error("No se pudo generar la guía.");
+        toast.error(
+          "No se pudo generar la guía. Faltan guia o guia_64 en la respuesta."
+        );
+        console.error("❌ Error: Respuesta incompleta", { data });
       }
     } catch (err: any) {
       setError("Ocurrió un error al generar la guía.");
