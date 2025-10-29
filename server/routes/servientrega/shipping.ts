@@ -560,7 +560,18 @@ router.post("/generar-guia", async (req, res) => {
       });
     }
 
-    return res.json(processed);
+    // 🔧 Normalizar respuesta: siempre devolver guia/guia_64 a nivel raíz para que el frontend los encuentre
+    const normalizedResponse = {
+      ...processed,
+      guia: guia || processed?.guia || fetchData?.guia,
+      guia_64: base64 || processed?.guia_64 || fetchData?.guia_64,
+      guia_pdf: processed?.guia_pdf || fetchData?.guia_pdf,
+      proceso: fetchData?.proceso || processed?.proceso,
+      // Si viene en fetch, extraer todos los campos de fetch también
+      ...(fetchData && typeof fetchData === "object" ? fetchData : {}),
+    };
+
+    return res.json(normalizedResponse);
   } catch (error) {
     console.error("💥 Error al generar guía:", error);
     return res.status(500).json({
