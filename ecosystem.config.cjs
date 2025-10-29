@@ -4,8 +4,7 @@ module.exports = {
     {
       name: "punto-cambio-api",
       cwd: "/home/cevallos_oswaldo/punto_cambio_new",
-      // script: "server-dist/index.js", // ← si compilas a ./server-dist
-      script: "dist/index.js", // ← usa esta línea si decides compilar a ./dist
+      script: "dist-server/server/index.js",
       instances: 1,
       exec_mode: "fork",
       watch: false,
