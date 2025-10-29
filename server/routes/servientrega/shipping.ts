@@ -201,6 +201,23 @@ router.post("/generar-guia", async (req, res) => {
     // Si el frontend ya envía "tipo":"GeneracionGuia" y todos los campos exactos, usamos tal cual.
     const yaFormateado = String(req.body?.tipo || "") === "GeneracionGuia";
 
+    // ✅ IMPORTANTE: Capturar punto_atencion_id y valor_total ANTES de procesar payloads
+    // Esto asegura que se preserven independientemente del formato del request
+    const punto_atencion_id_captado = req.body?.punto_atencion_id || undefined;
+    const costoEnvioPrecalculado = Number(req.body?.valor_total ?? 0) || 0;
+
+    console.log("🔍 CAPTURA INICIAL:", {
+      punto_atencion_id: punto_atencion_id_captado || "NO RECIBIDO",
+      costoEnvioPrecalculado,
+      yaFormateado,
+      req_body_keys: Object.keys(req.body || {}),
+      valor_total_type: typeof req.body?.valor_total,
+      valor_total_raw: req.body?.valor_total,
+      req_user: req.user
+        ? { id: req.user.id, punto_atencion_id: req.user.punto_atencion_id }
+        : "NO AUTH",
+    });
+
     // Validación de retiro en oficina (si llega ya formateado o no)
     const retiroOficinaValor = (req.body?.retiro_oficina ?? "").toString();
     const retiroEsSi =
@@ -214,9 +231,6 @@ router.post("/generar-guia", async (req, res) => {
       });
     }
 
-    // 💰 Capturar el costo que viene del frontend (precalculado desde la tarifa)
-    // Este es el costo REAL que debe decontarse del saldo
-    const costoEnvioPrecalculado = Number(req.body?.valor_total ?? 0) || 0;
     console.log(
       "💰 Costo de envío precalculado (frontend):",
       costoEnvioPrecalculado
@@ -235,9 +249,6 @@ router.post("/generar-guia", async (req, res) => {
         pedido,
         factura,
         medidas,
-        // opcionales auxiliares
-        punto_atencion_id,
-        valor_total,
       } = req.body || {};
 
       // Normalizar producto
@@ -268,14 +279,14 @@ router.post("/generar-guia", async (req, res) => {
       const peso_volumentrico =
         alto > 0 && ancho > 0 && largo > 0 ? (alto * ancho * largo) / 5000 : 0;
 
-      // Obtener punto de atención si está disponible
+      // Obtener punto de atención si está disponible (usar el que se capturó al inicio)
       let servientregaAlianza = "PUNTO CAMBIO SAS";
       let servientregaOficinaAlianza = "QUITO_PLAZA DEL VALLE_PC";
 
-      if (punto_atencion_id) {
+      if (punto_atencion_id_captado) {
         try {
           const punto = await prisma.puntoAtencion.findUnique({
-            where: { id: punto_atencion_id },
+            where: { id: punto_atencion_id_captado },
             select: {
               servientrega_alianza: true,
               servientrega_oficina_alianza: true,
@@ -494,10 +505,15 @@ router.post("/generar-guia", async (req, res) => {
       // PRIORIDAD 2: Intentar con total_transacion (suma de todos los costos)
       else if (processed?.total_transacion) {
         valorTotalGuia = Number(processed.total_transacion);
+        console.log(
+          "✅ Usando PRIORIDAD 2 (total_transacion):",
+          valorTotalGuia
+        );
       }
       // PRIORIDAD 3: Usar gtotal (gran total que incluye todos los costos)
       else if (processed?.gtotal) {
         valorTotalGuia = Number(processed.gtotal);
+        console.log("✅ Usando PRIORIDAD 3 (gtotal):", valorTotalGuia);
       }
       // PRIORIDAD 4: Si solo viene el flete, usarlo como base
       else if (processed?.flete) {
@@ -509,10 +525,36 @@ router.post("/generar-guia", async (req, res) => {
         if (processed?.valor_empaque) {
           valorTotalGuia += Number(processed.valor_empaque);
         }
+        console.log("✅ Usando PRIORIDAD 4 (flete + otros):", valorTotalGuia);
       }
-      // PRIORIDAD 5: Fallback al valor_total del payload (si viene formateado)
+      // PRIORIDAD 5: Calcular desde componentes individuales enviados del frontend
+      else if (
+        payload?.flete ||
+        payload?.valor_empaque ||
+        payload?.seguro ||
+        payload?.tiva
+      ) {
+        valorTotalGuia = 0;
+        if (payload?.flete) valorTotalGuia += Number(payload.flete);
+        if (payload?.valor_empaque)
+          valorTotalGuia += Number(payload.valor_empaque);
+        if (payload?.seguro) valorTotalGuia += Number(payload.seguro);
+        if (payload?.tiva) valorTotalGuia += Number(payload.tiva);
+        console.log("✅ Usando PRIORIDAD 5 (componentes individuales):", {
+          flete: payload?.flete,
+          valor_empaque: payload?.valor_empaque,
+          seguro: payload?.seguro,
+          tiva: payload?.tiva,
+          total: valorTotalGuia,
+        });
+      }
+      // PRIORIDAD 6: Fallback al valor_total del payload (si viene formateado)
       else if (payload?.valor_total) {
         valorTotalGuia = Number(payload.valor_total);
+        console.log(
+          "✅ Usando PRIORIDAD 6 (valor_total del payload):",
+          valorTotalGuia
+        );
       }
 
       console.log("💰 Desglose de costos para guía:", {
@@ -528,7 +570,7 @@ router.post("/generar-guia", async (req, res) => {
       try {
         // 💾 GUARDAR GUÍA SIEMPRE cuando se genera exitosamente
         // (funciona tanto para flujo formateado como no formateado)
-        const { remitente, destinatario, punto_atencion_id } = req.body || {};
+        const { remitente, destinatario } = req.body || {};
 
         // Guardar remitente y destinatario si vienen en el payload (flujo no formateado)
         if (remitente) {
@@ -547,34 +589,62 @@ router.post("/generar-guia", async (req, res) => {
           // En este punto no tenemos los IDs de remitente/destinatario creados (si los necesitas, crea primero y usa sus IDs)
           remitente_id: "", // opcional: ajusta si quieres relación estricta
           destinatario_id: "",
-          punto_atencion_id: punto_atencion_id || undefined,
+          punto_atencion_id: punto_atencion_id_captado || undefined,
           costo_envio: valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
           valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta
         });
 
         console.log("✅ Guía guardada en BD:", {
           numero_guia: guia,
-          punto_atencion_id,
+          punto_atencion_id: punto_atencion_id_captado,
           costo_envio: valorTotalGuia,
         });
 
         // 💳 Descontar del saldo SOLO el costo de la guía (no el valor_declarado)
-        if (punto_atencion_id && valorTotalGuia > 0) {
+        console.log("💳 VERIFICACIÓN ANTES DE DESCONTAR:", {
+          punto_atencion_id_captado,
+          valorTotalGuia,
+          deberia_descontar: punto_atencion_id_captado && valorTotalGuia > 0,
+          costoEnvioPrecalculado,
+          processed_total_transacion: processed?.total_transacion,
+          processed_gtotal: processed?.gtotal,
+          processed_flete: processed?.flete,
+        });
+
+        if (punto_atencion_id_captado && valorTotalGuia > 0) {
           try {
-            await db.descontarSaldo(punto_atencion_id, Number(valorTotalGuia));
-            console.log("✅ Saldo descontado exitosamente:", {
-              punto_atencion_id,
+            console.log("🔄 LLAMANDO descontarSaldo con:", {
+              punto_atencion_id: punto_atencion_id_captado,
               monto: valorTotalGuia,
             });
+
+            const resultadoDescuento = await db.descontarSaldo(
+              punto_atencion_id_captado,
+              Number(valorTotalGuia)
+            );
+
+            console.log("✅ Saldo descontado exitosamente:", {
+              punto_atencion_id: punto_atencion_id_captado,
+              monto: valorTotalGuia,
+              resultado: resultadoDescuento ? "ACTUALIZADO" : "SIN CAMBIOS",
+            });
           } catch (descError) {
-            console.error("❌ Error al descontar saldo:", descError);
+            console.error("❌ Error al descontar saldo:", {
+              punto_atencion_id: punto_atencion_id_captado,
+              monto: valorTotalGuia,
+              error:
+                descError instanceof Error
+                  ? descError.message
+                  : String(descError),
+              stack: descError instanceof Error ? descError.stack : undefined,
+            });
             throw descError; // Re-lanzar para que el usuario sepa que falló
           }
         } else {
           console.warn("⚠️ NO se descontó saldo - razones:", {
-            punto_atencion_id_presente: !!punto_atencion_id,
+            punto_atencion_id_presente: !!punto_atencion_id_captado,
             valorTotalGuia_mayor_que_cero: valorTotalGuia > 0,
-            punto_atencion_id,
+            punto_atencion_id: punto_atencion_id_captado,
             valorTotalGuia,
           });
         }
@@ -707,15 +777,31 @@ router.get("/guias", async (req, res) => {
     const { desde, hasta } = req.query;
     const dbService = new ServientregaDBService();
 
+    // 🔐 Obtener punto_atencion_id del usuario autenticado
+    const punto_atencion_id = req.user?.punto_atencion_id;
+    console.log("🔍 GET /guias - Filtro de búsqueda:", {
+      punto_atencion_id,
+      usuario_id: req.user?.id,
+      desde,
+      hasta,
+    });
+
+    if (!punto_atencion_id) {
+      console.warn("⚠️ Usuario sin punto_atencion_id asignado");
+      return res.json([]);
+    }
+
     const guias = await dbService.obtenerGuias(
       (desde as string) || undefined,
-      (hasta as string) || undefined
+      (hasta as string) || undefined,
+      punto_atencion_id // 👈 FILTRAR por punto de atención del usuario
     );
 
     console.log("📋 Guías recuperadas de BD:", {
       cantidad: guias?.length || 0,
       desde,
       hasta,
+      punto_atencion_id,
     });
 
     // 🔧 Devolver array directamente, no envuelto en objeto

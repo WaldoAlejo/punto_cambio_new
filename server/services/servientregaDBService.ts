@@ -241,9 +241,15 @@ export class ServientregaDBService {
     });
   }
 
-  async obtenerGuias(desde?: string, hasta?: string) {
+  async obtenerGuias(
+    desde?: string,
+    hasta?: string,
+    punto_atencion_id?: string
+  ) {
     return prisma.servientregaGuia.findMany({
       where: {
+        // 🔐 Filtrar por punto de atención si se proporciona
+        ...(punto_atencion_id ? { punto_atencion_id } : {}),
         created_at: {
           gte: desde ? new Date(desde) : subDays(new Date(), 30),
           lte: hasta ? new Date(hasta) : new Date(),

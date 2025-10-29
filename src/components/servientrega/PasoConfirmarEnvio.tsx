@@ -61,12 +61,22 @@ export default function PasoConfirmarEnvio({
     "Punto de Atención";
 
   // Total estimado desde resumen_costos (evita usar 'tarifa' inexistente)
+  const resumenCostos = (formData as any)?.resumen_costos || {};
   const totalEstimado = Number(
-    (formData as any)?.resumen_costos?.total ??
-      (formData as any)?.resumen_costos?.gtotal ??
-      (formData as any)?.resumen_costos?.total_transaccion ??
+    resumenCostos?.total ??
+      resumenCostos?.gtotal ??
+      resumenCostos?.total_transaccion ??
       0
   );
+
+  // DEBUG: Log para verificar qué se está calculando
+  console.log("💰 [PasoConfirmarEnvio] Cálculo de totalEstimado:", {
+    resumen_costos: resumenCostos,
+    total: resumenCostos?.total,
+    gtotal: resumenCostos?.gtotal,
+    total_transaccion: resumenCostos?.total_transaccion,
+    totalEstimado,
+  });
 
   // ==========================
   // 🔍 Validar saldo disponible
@@ -200,7 +210,15 @@ export default function PasoConfirmarEnvio({
         mail_remite: r.email?.trim() || "",
         // 💳 IMPORTANTE: Enviar punto_atencion_id para que el backend pueda descontar del saldo
         punto_atencion_id: selectedPoint?.id || undefined,
-        // 💰 IMPORTANTE: Enviar costo total calculado para que el backend lo use
+        // 💰 IMPORTANTE: Enviar todos los componentes de costo calculados por la tarifa
+        // Esto permite que el backend calcule el total incluso si valor_total es 0
+        flete: Number(resumenCostos?.flete || 0),
+        valor_empaque: Number(resumenCostos?.valor_empaque || 0),
+        seguro: Number(resumenCostos?.seguro || 0),
+        tiva: Number(resumenCostos?.tiva || 0),
+        gtotal: Number(resumenCostos?.gtotal || 0),
+        total_transacion: Number(resumenCostos?.total_transacion || 0),
+        // 💰 Enviar el total calculado del frontend (prioritario)
         valor_total: totalEstimado || 0,
       } as const;
 
