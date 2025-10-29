@@ -1,18 +1,7 @@
 import { Pool } from "pg";
-import dotenv from "dotenv";
-import fs from "fs";
 
-// Cargar variables de entorno según el entorno
-if (fs.existsSync(".env.local")) {
-  console.log("Cargando variables de entorno desde .env.local");
-  dotenv.config({ path: ".env.local" });
-} else if (fs.existsSync(".env.production")) {
-  console.log("Cargando variables de entorno desde .env.production");
-  dotenv.config({ path: ".env.production" });
-} else {
-  console.log("Cargando variables de entorno desde .env");
-  dotenv.config();
-}
+// ⚠️ NO cargar .env aquí - ya se cargó en server/index.ts
+// Confiar en las variables que ya están en process.env
 
 // Configuración de la conexión a la base de datos
 const pool = new Pool({
