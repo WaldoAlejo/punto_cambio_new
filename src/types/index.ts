@@ -28,6 +28,8 @@ export interface PuntoAtencion {
   telefono?: string;
   servientrega_agencia_codigo?: string;
   servientrega_agencia_nombre?: string;
+  servientrega_alianza?: string;
+  servientrega_oficina_alianza?: string;
   activo: boolean;
   es_principal: boolean;
   created_at: string;
@@ -55,6 +57,8 @@ export interface Agencia {
   tipo_cs: string;
   direccion: string;
   ciudad: string;
+  codigo_establecimiento?: string;
+  agencia?: string;
 }
 
 export interface Saldo {
@@ -383,6 +387,8 @@ export interface CreatePointData {
   telefono?: string;
   servientrega_agencia_codigo?: string;
   servientrega_agencia_nombre?: string;
+  servientrega_alianza?: string;
+  servientrega_oficina_alianza?: string;
 }
 
 export interface CreateCurrencyData {

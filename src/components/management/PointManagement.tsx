@@ -38,6 +38,8 @@ export const PointManagement = () => {
     telefono: "",
     servientrega_agencia_codigo: "",
     servientrega_agencia_nombre: "",
+    servientrega_alianza: "",
+    servientrega_oficina_alianza: "",
   });
   const [editingPoint, setEditingPoint] = useState<PuntoAtencion | null>(null);
 
@@ -105,6 +107,8 @@ export const PointManagement = () => {
         telefono: "",
         servientrega_agencia_codigo: "",
         servientrega_agencia_nombre: "",
+        servientrega_alianza: "",
+        servientrega_oficina_alianza: "",
       });
       setShowForm(false);
 
@@ -275,6 +279,9 @@ export const PointManagement = () => {
                         ...formData,
                         servientrega_agencia_codigo: agencia?.tipo_cs || "",
                         servientrega_agencia_nombre: agencia?.nombre || "",
+                        servientrega_alianza: agencia?.agencia || "",
+                        servientrega_oficina_alianza:
+                          agencia?.codigo_establecimiento || "",
                       });
                     }}
                     placeholder="Seleccionar agencia de Servientrega..."

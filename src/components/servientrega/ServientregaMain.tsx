@@ -231,6 +231,7 @@ export default function ServientregaMain({
         return (
           <PasoConfirmarEnvio
             formData={formData as FormDataGuia}
+            selectedPoint={selectedPoint}
             onReset={resetForm}
             onSuccess={handleGuiaGenerada}
           />

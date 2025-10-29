@@ -198,6 +198,8 @@ router.post(
         telefono,
         servientrega_agencia_codigo,
         servientrega_agencia_nombre,
+        servientrega_alianza,
+        servientrega_oficina_alianza,
       } = req.body;
 
       if (!nombre || !direccion || !ciudad) {
@@ -222,6 +224,12 @@ router.post(
         }),
         ...(servientrega_agencia_nombre !== undefined && {
           servientrega_agencia_nombre: servientrega_agencia_nombre || null,
+        }),
+        ...(servientrega_alianza !== undefined && {
+          servientrega_alianza: servientrega_alianza || null,
+        }),
+        ...(servientrega_oficina_alianza !== undefined && {
+          servientrega_oficina_alianza: servientrega_oficina_alianza || null,
         }),
         activo: true,
       };
@@ -272,6 +280,8 @@ router.put(
         activo,
         servientrega_agencia_codigo,
         servientrega_agencia_nombre,
+        servientrega_alianza,
+        servientrega_oficina_alianza,
       } = req.body;
 
       const existingPoint = await prisma.puntoAtencion.findUnique({
@@ -308,6 +318,12 @@ router.put(
         }),
         ...(servientrega_agencia_nombre !== undefined && {
           servientrega_agencia_nombre: servientrega_agencia_nombre || null,
+        }),
+        ...(servientrega_alianza !== undefined && {
+          servientrega_alianza: servientrega_alianza || null,
+        }),
+        ...(servientrega_oficina_alianza !== undefined && {
+          servientrega_oficina_alianza: servientrega_oficina_alianza || null,
         }),
         activo: typeof activo === "boolean" ? activo : existingPoint.activo,
       };

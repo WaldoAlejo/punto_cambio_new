@@ -17,16 +17,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { FormDataGuia } from "@/types/servientrega";
+import type { PuntoAtencion } from "@/types";
 import { ReceiptService } from "@/services/receiptService";
 
 interface PasoConfirmarEnvioProps {
   formData: FormDataGuia;
+  selectedPoint: PuntoAtencion | null;
   onReset: () => void;
   onSuccess?: () => void;
 }
 
 export default function PasoConfirmarEnvio({
   formData,
+  selectedPoint,
   onReset,
   onSuccess,
 }: PasoConfirmarEnvioProps) {
@@ -131,6 +134,36 @@ export default function PasoConfirmarEnvio({
       const pesoVol =
         alto > 0 && ancho > 0 && largo > 0 ? (alto * ancho * largo) / 5000 : 0;
 
+      // Validar campos requeridos antes de enviar
+      const camposRequeridos = {
+        cedula_remitente: (r.identificacion || r.cedula || "").toString(),
+        nombre_remitente: r.nombre || "",
+        direccion_remitente: r.direccion || "",
+        telefono_remitente: r.telefono || "",
+        email_remitente: r.email || "",
+        cedula_destinatario: (d.identificacion || d.cedula || "").toString(),
+        nombre_destinatario: d.nombre || "",
+        direccion_destinatario: d.direccion || "",
+        telefono_destinatario: d.telefono || "",
+        ciudad_origen: ciudadProv(r.ciudad, r.provincia),
+        ciudad_destinatario: ciudadProv(d.ciudad, d.provincia),
+      };
+
+      // Validar que ningún campo requerido esté vacío
+      for (const [campo, valor] of Object.entries(camposRequeridos)) {
+        if (!valor || (typeof valor === "string" && valor.trim() === "")) {
+          const nombreCampo = campo
+            .replace(/_remitente$/, " del remitente")
+            .replace(/_destinatario$/, " del destinatario")
+            .replace(/_/g, " ");
+          const msgError = `Campo requerido incompleto: ${nombreCampo}`;
+          setError(msgError);
+          toast.error(msgError);
+          setLoading(false);
+          return;
+        }
+      }
+
       const payload = {
         tipo: "GeneracionGuia",
         nombre_producto: mapNombreProducto(formData.nombre_producto),
@@ -139,24 +172,20 @@ export default function PasoConfirmarEnvio({
         nombre_remitente: r.nombre || "",
         direccion_remitente: r.direccion || "",
         telefono_remitente: r.telefono || "",
-        codigo_postal_remitente: r.codigo_postal || "PRUEBA",
+        codigo_postal_remitente: r.codigo_postal?.trim() || "", // ✅ Enviar vacío en lugar de "PRUEBA"
         cedula_destinatario: (d.identificacion || d.cedula || "").toString(),
         nombre_destinatario: d.nombre || "",
         direccion_destinatario: d.direccion || "",
         telefono_destinatario: d.telefono || "",
         ciudad_destinatario: ciudadProv(d.ciudad, d.provincia),
         pais_destinatario: d.pais || "ECUADOR",
-        codigo_postal_destinatario: d.codigo_postal || "PRUEBA",
+        codigo_postal_destinatario: d.codigo_postal?.trim() || "", // ✅ Enviar vacío en lugar de "PRUEBA"
         contenido:
-          (formData?.contenido || formData?.nombre_producto || "PRUEBA") + "",
-        retiro_oficina: formData.retiro_oficina ? "SI" : "NO",
-        ...(formData.retiro_oficina &&
-          (formData as any).nombre_agencia_retiro_oficina && {
-            nombre_agencia_retiro_oficina: (formData as any)
-              .nombre_agencia_retiro_oficina,
-          }),
-        pedido: (formData as any).pedido || "PRUEBA",
-        factura: (formData as any).factura || "PRUEBA",
+          (formData?.contenido || formData?.nombre_producto || "").trim() ||
+          "DOCUMENTO",
+        retiro_oficina: "NO", // ✅ Sin entrega de oficina por ahora (campos en blanco)
+        pedido: (formData as any).pedido?.trim() || "", // ✅ Enviar vacío en lugar de "PRUEBA"
+        factura: (formData as any).factura?.trim() || "", // ✅ Enviar vacío en lugar de "PRUEBA"
         valor_declarado: Number(m?.valor_declarado || 0),
         valor_asegurado: Number((m as any)?.valor_seguro || 0),
         peso_fisico: Number(m?.peso || 0),
@@ -166,12 +195,13 @@ export default function PasoConfirmarEnvio({
         ancho: ancho,
         largo: largo,
         tipo_guia: "1",
-        alianza: "PRUEBAS",
-        alianza_oficina: "DON JUAN_INICIAL_XR",
-        mail_remite: r.email || "correoremitente@gmail.com",
+        alianza: selectedPoint?.servientrega_alianza || "PRUEBAS",
+        alianza_oficina:
+          selectedPoint?.servientrega_oficina_alianza || "DON JUAN_INICIAL_XR",
+        mail_remite: r.email?.trim() || "",
       } as const;
 
-      console.log("📤 Payload GeneracionGuia:", payload);
+      console.log("📤 Payload GeneracionGuia (Production):", payload);
 
       const res = await axiosInstance.post(
         "/servientrega/generar-guia",

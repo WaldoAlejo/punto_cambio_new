@@ -61,6 +61,8 @@ model PuntoAtencion {
   telefono                        String?
   servientrega_agencia_codigo     String?
   servientrega_agencia_nombre     String?
+  servientrega_alianza            String?
+  servientrega_oficina_alianza    String?
   activo                          Boolean                       @default(true)
   es_principal                    Boolean                       @default(false)
   created_at                      DateTime                      @default(now())

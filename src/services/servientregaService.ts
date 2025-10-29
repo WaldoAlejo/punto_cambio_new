@@ -7,6 +7,7 @@ type RawAgencia = Partial<{
   tipo_cs: string;
   direccion: string;
   ciudad: string;
+  Codigo_Establecimiento: string;
 }> &
   Record<string, unknown>;
 
@@ -26,7 +27,18 @@ function toAgencia(raw: RawAgencia): Agencia {
   const tipo_cs = String(raw.tipo_cs ?? "").trim();
   const direccion = String(raw.direccion ?? "").trim();
   const ciudad = String(raw.ciudad ?? "").trim();
-  return { nombre, tipo_cs, direccion, ciudad };
+  const codigo_establecimiento = String(
+    raw.Codigo_Establecimiento ?? ""
+  ).trim();
+  const agencia = String(raw.agencia ?? "").trim();
+  return {
+    nombre,
+    tipo_cs,
+    direccion,
+    ciudad,
+    codigo_establecimiento,
+    agencia,
+  };
 }
 
 function dedupeAndSort(agencias: Agencia[]): Agencia[] {
