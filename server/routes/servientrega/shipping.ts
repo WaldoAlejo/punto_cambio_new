@@ -301,7 +301,7 @@ router.post("/generar-guia", async (req, res) => {
         ciudad_destinatario: ciudadDestino,
         pais_destinatario: destinatario?.pais || "ECUADOR",
         codigo_postal_destinatario: destinatario?.codigo_postal || "",
-        contenido: contenido || nombre_producto || "DOCUMENTO",
+        contenido: producto,
         retiro_oficina: retiro_oficina ? "SI" : "NO",
         ...(retiro_oficina && nombre_agencia_retiro_oficina
           ? { nombre_agencia_retiro_oficina }
