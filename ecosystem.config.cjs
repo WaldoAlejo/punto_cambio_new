@@ -1,4 +1,20 @@
 // ecosystem.config.cjs
+const dotenv = require("dotenv");
+const fs = require("fs");
+const path = require("path");
+
+// Load .env.production for PM2
+let envVars = { NODE_ENV: "production", PORT: 3001 };
+
+const prodEnvPath = path.join(__dirname, ".env.production");
+if (fs.existsSync(prodEnvPath)) {
+  const envConfig = dotenv.config({ path: prodEnvPath });
+  if (envConfig.parsed) {
+    envVars = { ...envVars, ...envConfig.parsed };
+    console.log("✅ .env.production loaded for PM2");
+  }
+}
+
 module.exports = {
   apps: [
     {
@@ -10,10 +26,7 @@ module.exports = {
       watch: false,
       time: true,
       node_args: "--enable-source-maps",
-      env: {
-        NODE_ENV: "production",
-        PORT: 3001,
-      },
+      env: envVars,
     },
   ],
 };
