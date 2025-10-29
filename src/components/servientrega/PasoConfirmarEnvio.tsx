@@ -198,6 +198,8 @@ export default function PasoConfirmarEnvio({
           selectedPoint?.servientrega_oficina_alianza ||
           "QUITO_PLAZA DEL VALLE_PC",
         mail_remite: r.email?.trim() || "",
+        // 💳 IMPORTANTE: Enviar punto_atencion_id para que el backend pueda descontar del saldo
+        punto_atencion_id: selectedPoint?.id || undefined,
       } as const;
 
       console.log("📤 Payload GeneracionGuia (Production):", payload);

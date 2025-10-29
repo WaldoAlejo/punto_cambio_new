@@ -540,10 +540,22 @@ router.post("/generar-guia", async (req, res) => {
 
         // 💳 Descontar del saldo SOLO el costo de la guía (no el valor_declarado)
         if (punto_atencion_id && valorTotalGuia > 0) {
-          await db.descontarSaldo(punto_atencion_id, Number(valorTotalGuia));
-          console.log("💳 Saldo descontado:", {
+          try {
+            await db.descontarSaldo(punto_atencion_id, Number(valorTotalGuia));
+            console.log("✅ Saldo descontado exitosamente:", {
+              punto_atencion_id,
+              monto: valorTotalGuia,
+            });
+          } catch (descError) {
+            console.error("❌ Error al descontar saldo:", descError);
+            throw descError; // Re-lanzar para que el usuario sepa que falló
+          }
+        } else {
+          console.warn("⚠️ NO se descontó saldo - razones:", {
+            punto_atencion_id_presente: !!punto_atencion_id,
+            valorTotalGuia_mayor_que_cero: valorTotalGuia > 0,
             punto_atencion_id,
-            monto: valorTotalGuia,
+            valorTotalGuia,
           });
         }
       } catch (dbErr) {
