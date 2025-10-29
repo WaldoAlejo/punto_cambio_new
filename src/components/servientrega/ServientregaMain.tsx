@@ -116,6 +116,7 @@ export default function ServientregaMain({
       medidas: data.medidas,
       empaque: data.empaque,
       requiere_empaque: !!data.empaque,
+      contenido: data.medidas.contenido, // 👈 Propagar contenido del paquete desde medidas
     }));
     setPasoActual("resumen");
   };

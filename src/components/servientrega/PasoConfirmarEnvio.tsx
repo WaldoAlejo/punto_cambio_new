@@ -48,7 +48,7 @@ export default function PasoConfirmarEnvio({
     `${safeUpper(ciudad)}-${safeUpper(provincia)}`;
   const mapNombreProducto = (raw?: string) => {
     const v = (raw || "").toUpperCase();
-    if (v.includes("DOC")) return "DOCUMENTO";
+    if (v.includes("DOC")) return "DOCUMENTO UNITARIO";
     return "MERCANCIA PREMIER";
   };
 
@@ -180,9 +180,7 @@ export default function PasoConfirmarEnvio({
         ciudad_destinatario: ciudadProv(d.ciudad, d.provincia),
         pais_destinatario: d.pais || "ECUADOR",
         codigo_postal_destinatario: d.codigo_postal?.trim() || "",
-        contenido:
-          (formData?.contenido || formData?.nombre_producto || "").trim() ||
-          "DOCUMENTO",
+        contenido: (m?.contenido || "").trim() || "DOCUMENTO",
         retiro_oficina: "NO",
         pedido: (formData as any).pedido?.trim() || "",
         factura: (formData as any).factura?.trim() || "",
