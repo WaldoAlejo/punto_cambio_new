@@ -676,7 +676,14 @@ router.get("/guias", async (req, res) => {
       (hasta as string) || undefined
     );
 
-    return res.json({ guias });
+    console.log("📋 Guías recuperadas de BD:", {
+      cantidad: guias?.length || 0,
+      desde,
+      hasta,
+    });
+
+    // 🔧 Devolver array directamente, no envuelto en objeto
+    return res.json(guias || []);
   } catch (error) {
     console.error("💥 Error al consultar guías:", error);
     return res.status(500).json({

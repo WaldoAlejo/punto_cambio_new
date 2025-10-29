@@ -253,7 +253,8 @@ export default function PasoConfirmarEnvio({
         setGuia(guiaStr);
         setBase64(guia64);
         toast.success(`✅ Guía generada: ${guiaStr}`);
-        onSuccess?.();
+        // 🔧 NO llamar a onSuccess aquí para que el usuario vea los botones
+        // Se llamará cuando el usuario haga click en "Generar otra guía"
       } else {
         setError("No se pudo generar la guía. Verifica los datos.");
         toast.error(
@@ -555,7 +556,10 @@ export default function PasoConfirmarEnvio({
               </div>
 
               <Button
-                onClick={onReset}
+                onClick={() => {
+                  onReset();
+                  onSuccess?.(); // 🔧 Llamar a onSuccess cuando el usuario resetea
+                }}
                 className="w-full bg-gray-100 text-gray-700 hover:bg-gray-200"
                 variant="secondary"
               >
