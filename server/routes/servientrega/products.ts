@@ -24,6 +24,24 @@ function getApiUrl(): string {
 }
 
 // =============================
+// 🔍 DEBUG: Mostrar configuración actual
+// =============================
+router.get("/debug-config", (_req, res) => {
+  const credentials = getCredentials();
+  res.json({
+    nodeEnv: process.env.NODE_ENV,
+    servientrega_user: credentials.usuingreso,
+    servientrega_url: getApiUrl(),
+    all_env_keys: Object.keys(process.env)
+      .filter((k) => k.includes("SERVIENTREGA"))
+      .reduce((acc, k) => {
+        acc[k] = process.env[k];
+        return acc;
+      }, {} as Record<string, string | undefined>),
+  });
+});
+
+// =============================
 // Normalización de productos
 // =============================
 const clean = (s: any) =>
@@ -155,7 +173,38 @@ router.post("/agencias", async (_req, res) => {
     apiService.apiUrl = getApiUrl();
 
     const result: any = await apiService.obtenerAgencias();
-    console.log("📍 Servientrega API: Respuesta de agencias recibida:", result);
+    console.log(
+      "📍 Servientrega API: Respuesta completa de agencias:",
+      JSON.stringify(result, null, 2)
+    );
+
+    // Log detallado del array
+    let agenciasArray: any[] = [];
+    if (Array.isArray(result?.fetch)) {
+      agenciasArray = result.fetch;
+      console.log(
+        `✅ Found agencias in result.fetch: ${agenciasArray.length} items`
+      );
+    } else if (Array.isArray(result?.data)) {
+      agenciasArray = result.data;
+      console.log(
+        `✅ Found agencias in result.data: ${agenciasArray.length} items`
+      );
+    } else if (Array.isArray(result?.agencias)) {
+      agenciasArray = result.agencias;
+      console.log(
+        `✅ Found agencias in result.agencias: ${agenciasArray.length} items`
+      );
+    } else if (Array.isArray(result)) {
+      agenciasArray = result;
+      console.log(`✅ Result is direct array: ${agenciasArray.length} items`);
+    }
+
+    // Log primeros 5 items
+    console.log(
+      "📊 Primeras 5 agencias raw:",
+      JSON.stringify(agenciasArray.slice(0, 5), null, 2)
+    );
 
     if (!result) {
       console.error("❌ Respuesta vacía de la API de Servientrega");

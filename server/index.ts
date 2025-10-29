@@ -2,15 +2,41 @@ import dotenv from "dotenv";
 import fs from "fs";
 
 // Cargar variables de entorno según el entorno
-if (fs.existsSync(".env.local")) {
-  console.log("Cargando variables de entorno desde .env.local");
-  dotenv.config({ path: ".env.local" });
-} else if (fs.existsSync(".env.production")) {
-  console.log("Cargando variables de entorno desde .env.production");
-  dotenv.config({ path: ".env.production" });
+// ORDEN DE PRIORIDAD:
+// 1. NODE_ENV=production → .env.production
+// 2. NODE_ENV=development + .env.local → .env.local
+// 3. NODE_ENV=development → .env
+const nodeEnv = process.env.NODE_ENV || "development";
+console.log(`🔧 NODE_ENV: ${nodeEnv}`);
+
+if (nodeEnv === "production") {
+  if (fs.existsSync(".env.production")) {
+    console.log("✅ Cargando variables de entorno desde .env.production");
+    const result = dotenv.config({ path: ".env.production" });
+    if (result.error) {
+      console.error("❌ Error al cargar .env.production:", result.error);
+    } else {
+      console.log("✅ .env.production cargado correctamente");
+      console.log(
+        `📋 SERVIENTREGA_USER cargado: ${process.env.SERVIENTREGA_USER}`
+      );
+    }
+  } else {
+    console.error("❌ Archivo .env.production no encontrado!");
+    process.exit(1);
+  }
 } else {
-  console.log("Cargando variables de entorno desde .env");
-  dotenv.config();
+  // Desarrollo
+  if (fs.existsSync(".env.local")) {
+    console.log("✅ Cargando variables de entorno desde .env.local");
+    dotenv.config({ path: ".env.local" });
+  } else if (fs.existsSync(".env")) {
+    console.log("✅ Cargando variables de entorno desde .env");
+    dotenv.config({ path: ".env" });
+  } else {
+    console.log("✅ Usando variables de entorno del sistema");
+    dotenv.config();
+  }
 }
 
 import express, {

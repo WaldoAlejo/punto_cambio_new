@@ -23,14 +23,30 @@ interface AgenciasResponse extends Omit<ApiResponse, "success"> {
 }
 
 function toAgencia(raw: RawAgencia): Agencia {
-  const nombre = String(raw.agencia ?? raw.nombre ?? "").trim();
-  const tipo_cs = String(raw.tipo_cs ?? "").trim();
-  const direccion = String(raw.direccion ?? "").trim();
-  const ciudad = String(raw.ciudad ?? "").trim();
-  const codigo_establecimiento = String(
-    raw.Codigo_Establecimiento ?? ""
+  // Intentar múltiples nombres de campo
+  const nombre = String(
+    raw.agencia ?? raw.nombre ?? raw.agencia_nombre ?? raw["agencia"] ?? ""
   ).trim();
+
+  const tipo_cs = String(
+    raw.tipo_cs ?? raw.Codigo_Establecimiento ?? raw.codigo ?? ""
+  ).trim();
+
+  const direccion = String(raw.direccion ?? raw.address ?? "").trim();
+
+  const ciudad = String(raw.ciudad ?? raw.city ?? "").trim();
+
+  const codigo_establecimiento = String(
+    raw.Codigo_Establecimiento ?? raw.codigo_establecimiento ?? raw.codigo ?? ""
+  ).trim();
+
   const agencia = String(raw.agencia ?? "").trim();
+
+  // Debug: log agencias sin nombre
+  if (!nombre) {
+    console.warn("⚠️ toAgencia: Raw agencia sin nombre detectada:", raw);
+  }
+
   return {
     nombre,
     tipo_cs,
@@ -69,10 +85,17 @@ export const servientregaService = {
       );
 
       if (!response) {
+        console.error("❌ getAgencias: Respuesta vacía del servidor");
         return { agencias: [], error: "Respuesta vacía del servidor" };
       }
 
+      console.log("📨 getAgencias: Raw response:", response);
+
       if (response.success === false) {
+        console.error(
+          "❌ getAgencias: API returned success=false:",
+          response.error
+        );
         return {
           agencias: [],
           error: response.error || "Error al obtener agencias de Servientrega",
@@ -83,22 +106,60 @@ export const servientregaService = {
 
       if (Array.isArray(response as unknown as unknown[])) {
         raw = response as unknown as RawAgencia[];
+        console.log(
+          "✅ getAgencias: Detected direct array, length:",
+          raw.length
+        );
       } else if (Array.isArray(response.data)) {
         raw = response.data;
+        console.log(
+          "✅ getAgencias: Found in response.data, length:",
+          raw.length
+        );
       } else if (Array.isArray(response.fetch)) {
         raw = response.fetch;
+        console.log(
+          "✅ getAgencias: Found in response.fetch, length:",
+          raw.length
+        );
       } else if (Array.isArray(response.agencias)) {
         raw = response.agencias;
+        console.log(
+          "✅ getAgencias: Found in response.agencias, length:",
+          raw.length
+        );
       } else {
         const candidate = Object.values(response).find(
           (v) => Array.isArray(v) && (v as unknown[]).length > 0
         );
-        if (candidate) raw = candidate as RawAgencia[];
+        if (candidate) {
+          raw = candidate as RawAgencia[];
+          console.log(
+            "✅ getAgencias: Found in dynamic key, length:",
+            raw.length
+          );
+        }
       }
 
-      if (!raw.length) return { agencias: [], error: null };
+      console.log("📊 getAgencias: Raw items before mapping:", raw.slice(0, 2));
 
-      const agencias = dedupeAndSort(raw.map(toAgencia));
+      if (!raw.length) {
+        console.warn("⚠️ getAgencias: No agencias found after extraction");
+        return { agencias: [], error: null };
+      }
+
+      const mapped = raw.map(toAgencia);
+      console.log(
+        "📊 getAgencias: Mapped items before dedup:",
+        mapped.slice(0, 2)
+      );
+
+      const agencias = dedupeAndSort(mapped);
+      console.log(
+        "✅ getAgencias: Final agencias after dedup and sort:",
+        agencias.length
+      );
+
       return { agencias, error: null };
     } catch (error) {
       let msg = "Error de conexión con el servidor";
@@ -111,6 +172,7 @@ export const servientregaService = {
           msg = "Timeout al conectar con Servientrega";
         else msg = `Error: ${error.message}`;
       }
+      console.error("❌ getAgencias: Exception:", msg, error);
       return { agencias: [], error: msg };
     }
   },
