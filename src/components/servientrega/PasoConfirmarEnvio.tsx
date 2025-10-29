@@ -319,34 +319,63 @@ export default function PasoConfirmarEnvio({
       let url: string;
 
       if (isBase64) {
-        // Validar que sea base64 válido
+        // ✅ Validar que sea base64 válido
         if (!/^[A-Za-z0-9+/=]*$/.test(base64)) {
           throw new Error("Base64 contiene caracteres inválidos");
         }
 
-        // Intentar decodificar para verificar que sea válido
-        try {
-          atob(base64.substring(0, 100)); // Probar con primeros 100 caracteres
-        } catch {
-          throw new Error("Base64 no es válido");
+        // ✅ Verificar que empiece con JVBERi (header de PDF en base64)
+        if (!base64.startsWith("JVBERi")) {
+          throw new Error("Base64 no es un PDF válido (header incorrecto)");
         }
 
-        url = `data:application/pdf;base64,${base64}`;
+        // ✅ Validar que pueda decodificarse
+        try {
+          atob(base64.substring(0, 200));
+        } catch {
+          throw new Error("Base64 no puede ser decodificado");
+        }
+
+        // 🔧 Crear blob en lugar de data URL (para PDFs grandes)
+        try {
+          const binaryString = atob(base64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: "application/pdf" });
+          url = URL.createObjectURL(blob);
+
+          console.log("📄 PDF creado desde Blob:", {
+            base64Length: base64.length,
+            blobSize: blob.size,
+            blobUrl: url.substring(0, 50),
+          });
+        } catch (blobErr) {
+          console.warn(
+            "⚠️ No se pudo crear Blob, intentando data URL:",
+            blobErr
+          );
+          url = `data:application/pdf;base64,${base64}`;
+        }
       } else {
         url = base64;
       }
 
-      console.log("📄 Abriendo PDF:", {
+      console.log("📄 Intentando abrir PDF:", {
         isBase64,
         base64Length: base64.length,
         urlPreview: url.substring(0, 100),
       });
 
+      // 🎯 Intentar abrir en ventana nueva
       const newWindow = window.open(url, "_blank");
-      if (!newWindow) {
-        toast.error(
-          "No se pudo abrir el PDF. Verifica la configuración del navegador."
-        );
+      if (newWindow) {
+        console.log("✅ PDF abierto en ventana nueva");
+      } else {
+        // Si window.open falla, intentar descargar el archivo
+        console.warn("⚠️ No se pudo abrir ventana, intentando descargar...");
+        descargarPDF();
       }
     } catch (error) {
       console.error("❌ Error al abrir PDF:", error);
@@ -355,6 +384,39 @@ export default function PasoConfirmarEnvio({
           ? `Error en PDF: ${error.message}`
           : "Error al abrir el PDF. El formato puede estar corrupto."
       );
+    }
+  };
+
+  // ==========================
+  // 📥 Descargar PDF como archivo
+  // ==========================
+  const descargarPDF = () => {
+    if (!base64 || !guia) {
+      toast.error("Datos insuficientes para descargar");
+      return;
+    }
+
+    try {
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Guia_${guia}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`PDF descargado: Guia_${guia}.pdf`);
+    } catch (error) {
+      console.error("❌ Error al descargar PDF:", error);
+      toast.error("Error al descargar el PDF");
     }
   };
 
@@ -601,13 +663,25 @@ export default function PasoConfirmarEnvio({
               ✅ Guía generada exitosamente: {guia}
             </p>
             <div className="flex flex-col gap-3 mt-4">
-              <Button
-                onClick={handleVerPDF}
-                disabled={!base64}
-                className="w-full bg-blue-600 text-white hover:bg-blue-700"
-              >
-                Ver PDF de la guía
-              </Button>
+              {/* Botones de PDF */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  onClick={handleVerPDF}
+                  disabled={!base64}
+                  className="w-full bg-blue-600 text-white hover:bg-blue-700"
+                  size="sm"
+                >
+                  👁️ Ver PDF
+                </Button>
+                <Button
+                  onClick={descargarPDF}
+                  disabled={!base64}
+                  className="w-full bg-cyan-600 text-white hover:bg-cyan-700"
+                  size="sm"
+                >
+                  ⬇️ Descargar PDF
+                </Button>
+              </div>
 
               {/* Botones de recibos */}
               <div className="grid grid-cols-2 gap-2">
