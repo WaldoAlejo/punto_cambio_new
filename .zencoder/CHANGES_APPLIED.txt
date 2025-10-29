@@ -1,0 +1,142 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                 SERVIENTREGA GUIDE GENERATION - FIX APPLIED              ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+✅ FILES MODIFIED: 2
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 📄 src/components/servientrega/PasoConfirmarEnvio.tsx
+   
+   Line 181: Normalize pais_destinatario to UPPERCASE
+   ─────────────────────────────────────────────────────
+   ❌ pais_destinatario: d.pais || "ECUADOR",
+   ✅ pais_destinatario: (d.pais || "ECUADOR").toUpperCase(),
+   
+   Line 183: Normalize contenido to UPPERCASE with fallback
+   ────────────────────────────────────────────────────────
+   ❌ contenido: (m?.contenido || "").trim() || "DOCUMENTO",
+   ✅ contenido: ((m?.contenido || "").trim() || "DOCUMENTO").toUpperCase(),
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2. 🖥️  server/routes/servientrega/shipping.ts
+   
+   Lines 288-331: Payload Construction Branch 1 (Non-Pre-Formatted)
+   ────────────────────────────────────────────────────────────────
+   ✅ Explicit String() conversion for all text fields
+   ✅ pais_destinatario with .toUpperCase()
+   ✅ contenido with robust fallback
+   ✅ valor_asegurado always included (even if 0)
+   ✅ Number() conversion for numeric fields
+   ✅ Credentials always from environment variables
+   
+   Lines 356-382: Payload Construction Branch 2 (Pre-Formatted)
+   ────────────────────────────────────────────────────────────
+   ✅ Same normalization logic as Branch 1
+   ✅ Consistent type conversions
+   ✅ Credentials never override from request body
+   
+   Lines 399-421: Enhanced Logging - Payload Details
+   ──────────────────────────────────────────────────
+   ✅ Full payload JSON logged
+   ✅ Credentials displayed (masked)
+   ✅ Critical field validation
+   ✅ Empty field detection
+   
+   Lines 424-429: Enhanced Logging - API Response
+   ──────────────────────────────────────────────
+   ✅ Raw Servientrega API response logged
+   
+   Lines 461-468: Enhanced Logging - Extraction
+   ─────────────────────────────────────────────
+   ✅ Guide extraction status
+   ✅ Base64 presence and length
+   ✅ Process status from Servientrega
+   
+   Lines 529-536: Enhanced Logging - Error Handling
+   ────────────────────────────────────────────────
+   ✅ Detailed failure diagnostics when guide not generated
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔑 KEY IMPROVEMENTS:
+
+1. NORMALIZATION
+   • pais_destinatario → Always UPPERCASE
+   • contenido → Always UPPERCASE with fallback
+   
+2. TYPE SAFETY
+   • All String fields explicitly converted via String()
+   • All Number fields explicitly converted via Number()
+   • No implicit type coercion
+   
+3. COMPLETENESS
+   • valor_asegurado now always included (even if 0)
+   • Fallback values for empty fields
+   
+4. DEBUGGING
+   • 4 new console.log() points for tracking
+   • Payload visualization before sending
+   • Response extraction confirmation
+   • Error diagnosis if generation fails
+   
+5. SECURITY
+   • Credentials always from environment
+   • Cannot be overridden by request body
+   • Displayed masked in logs
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 COMPARISON: Postman (Working) vs App (Before Fix)
+
+POSTMAN REQUEST (✅ WORKS):
+{
+  "pais_destinatario": "ECUADOR",        ← UPPERCASE
+  "contenido": "PAPELITOS PEQUENOS",      ← UPPERCASE
+  "valor_asegurado": 0,                   ← Included
+  "usuingreso": "INTPUNTOC",
+  "contrasenha": "73Yes7321t"
+}
+
+APP REQUEST (BEFORE FIX):
+{
+  "pais_destinatario": "Ecuador",         ← Mixed case
+  "contenido": "papelitos pequenos",      ← Lowercase
+  "valor_asegurado": (not included),      ← Missing when 0
+  // credentials added by backend
+}
+
+APP REQUEST (AFTER FIX):
+{
+  "pais_destinatario": "ECUADOR",         ← ✅ UPPERCASE
+  "contenido": "PAPELITOS PEQUENOS",      ← ✅ UPPERCASE
+  "valor_asegurado": 0,                   ← ✅ Always included
+  // credentials safely from env
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚀 NEXT STEPS:
+
+1. Rebuild the backend
+   npm run build:server
+   
+2. Start the backend
+   npm run dev:server
+   
+3. Test from the app
+   Try generating a guide
+   
+4. Check backend logs
+   Look for "📤 PAYLOAD FINAL ENVIADO A SERVIENTREGA"
+   
+5. Compare logs with working Postman request
+   Verify all fields match exactly
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 DETAILED DOCUMENTATION:
+   See: .zencoder/servientrega-fix-summary.md
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

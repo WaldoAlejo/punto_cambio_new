@@ -289,19 +289,24 @@ router.post("/generar-guia", async (req, res) => {
         tipo: "GeneracionGuia",
         nombre_producto: producto,
         ciudad_origen: ciudadOrigen,
-        cedula_remitente: remitente?.identificacion || remitente?.cedula || "",
-        nombre_remitente: remitente?.nombre || "",
-        direccion_remitente: remitente?.direccion || "",
-        telefono_remitente: remitente?.telefono || "",
-        codigo_postal_remitente: remitente?.codigo_postal || "",
-        cedula_destinatario:
-          destinatario?.identificacion || destinatario?.cedula || "",
-        nombre_destinatario: destinatario?.nombre || "",
-        direccion_destinatario: destinatario?.direccion || "",
-        telefono_destinatario: destinatario?.telefono || "",
+        cedula_remitente: String(
+          remitente?.identificacion || remitente?.cedula || ""
+        ),
+        nombre_remitente: String(remitente?.nombre || ""),
+        direccion_remitente: String(remitente?.direccion || ""),
+        telefono_remitente: String(remitente?.telefono || ""),
+        codigo_postal_remitente: String(remitente?.codigo_postal || ""),
+        cedula_destinatario: String(
+          destinatario?.identificacion || destinatario?.cedula || ""
+        ),
+        nombre_destinatario: String(destinatario?.nombre || ""),
+        direccion_destinatario: String(destinatario?.direccion || ""),
+        telefono_destinatario: String(destinatario?.telefono || ""),
         ciudad_destinatario: ciudadDestino,
-        pais_destinatario: destinatario?.pais || "ECUADOR",
-        codigo_postal_destinatario: destinatario?.codigo_postal || "",
+        pais_destinatario: String(
+          destinatario?.pais || "ECUADOR"
+        ).toUpperCase(),
+        codigo_postal_destinatario: String(destinatario?.codigo_postal || ""),
         // 👇 CONTENIDO: normalizar a mayúsculas (el API de Servientrega lo requiere)
         contenido: (
           contenido ||
@@ -309,25 +314,28 @@ router.post("/generar-guia", async (req, res) => {
         ).toUpperCase(),
         retiro_oficina: retiro_oficina ? "SI" : "NO",
         ...(retiro_oficina && nombre_agencia_retiro_oficina
-          ? { nombre_agencia_retiro_oficina }
+          ? {
+              nombre_agencia_retiro_oficina: String(
+                nombre_agencia_retiro_oficina
+              ),
+            }
           : {}),
-        pedido: pedido || "",
-        factura: factura || "",
+        pedido: String(pedido || ""),
+        factura: String(factura || ""),
         valor_declarado: vd,
-        // 🛡️ valor_asegurado SOLO si > 0
-        ...(va > 0 ? { valor_asegurado: va } : {}),
-        peso_fisico,
-        peso_volumentrico,
-        piezas,
-        alto,
-        ancho,
-        largo,
+        valor_asegurado: va,
+        peso_fisico: Number(peso_fisico),
+        peso_volumentrico: Number(peso_volumentrico),
+        piezas: Number(piezas),
+        alto: Number(alto),
+        ancho: Number(ancho),
+        largo: Number(largo),
         tipo_guia: "1",
-        alianza: servientregaAlianza,
-        alianza_oficina: servientregaOficinaAlianza,
-        mail_remite: remitente?.email || "",
-        usuingreso: credentials.usuingreso,
-        contrasenha: credentials.contrasenha,
+        alianza: String(servientregaAlianza),
+        alianza_oficina: String(servientregaOficinaAlianza),
+        mail_remite: String(remitente?.email || ""),
+        usuingreso: String(credentials.usuingreso),
+        contrasenha: String(credentials.contrasenha),
       };
     } else {
       // Ya viene formateado (tipo:"GeneracionGuia") → reorganizar en orden correcto
@@ -339,52 +347,86 @@ router.post("/generar-guia", async (req, res) => {
         tipo: req.body.tipo || "GeneracionGuia",
         nombre_producto: req.body.nombre_producto,
         ciudad_origen: req.body.ciudad_origen,
-        cedula_remitente: req.body.cedula_remitente || "",
-        nombre_remitente: req.body.nombre_remitente || "",
-        direccion_remitente: req.body.direccion_remitente || "",
-        telefono_remitente: req.body.telefono_remitente || "",
-        codigo_postal_remitente: req.body.codigo_postal_remitente || "",
-        cedula_destinatario: req.body.cedula_destinatario || "",
-        nombre_destinatario: req.body.nombre_destinatario || "",
-        direccion_destinatario: req.body.direccion_destinatario || "",
-        telefono_destinatario: req.body.telefono_destinatario || "",
-        ciudad_destinatario: req.body.ciudad_destinatario,
-        pais_destinatario: req.body.pais_destinatario || "ECUADOR",
-        codigo_postal_destinatario: req.body.codigo_postal_destinatario || "",
-        // 👇 CONTENIDO: normalizar a mayúsculas
-        contenido: (req.body.contenido || "").toUpperCase(),
-        retiro_oficina: req.body.retiro_oficina || "NO",
+        cedula_remitente: String(req.body.cedula_remitente || ""),
+        nombre_remitente: String(req.body.nombre_remitente || ""),
+        direccion_remitente: String(req.body.direccion_remitente || ""),
+        telefono_remitente: String(req.body.telefono_remitente || ""),
+        codigo_postal_remitente: String(req.body.codigo_postal_remitente || ""),
+        cedula_destinatario: String(req.body.cedula_destinatario || ""),
+        nombre_destinatario: String(req.body.nombre_destinatario || ""),
+        direccion_destinatario: String(req.body.direccion_destinatario || ""),
+        telefono_destinatario: String(req.body.telefono_destinatario || ""),
+        ciudad_destinatario: String(req.body.ciudad_destinatario || ""),
+        pais_destinatario: String(
+          req.body.pais_destinatario || "ECUADOR"
+        ).toUpperCase(),
+        codigo_postal_destinatario: String(
+          req.body.codigo_postal_destinatario || ""
+        ),
+        // 👇 CONTENIDO: normalizar a mayúsculas con fallback
+        contenido: (
+          (req.body.contenido || "DOCUMENTO").toString().trim() || "DOCUMENTO"
+        ).toUpperCase(),
+        retiro_oficina: String(req.body.retiro_oficina || "NO"),
         ...(req.body.nombre_agencia_retiro_oficina
           ? {
-              nombre_agencia_retiro_oficina:
-                req.body.nombre_agencia_retiro_oficina,
+              nombre_agencia_retiro_oficina: String(
+                req.body.nombre_agencia_retiro_oficina
+              ),
             }
           : {}),
-        pedido: req.body.pedido || "",
-        factura: req.body.factura || "",
+        pedido: String(req.body.pedido || ""),
+        factura: String(req.body.factura || ""),
         valor_declarado: vd,
-        ...(va > 0 ? { valor_asegurado: va } : {}),
-        peso_fisico: req.body.peso_fisico || 0,
-        peso_volumentrico: req.body.peso_volumentrico || 0,
-        piezas: req.body.piezas || 1,
-        alto: req.body.alto || 0,
-        ancho: req.body.ancho || 0,
-        largo: req.body.largo || 0,
-        tipo_guia: req.body.tipo_guia || "1",
-        alianza: req.body.alianza || "PUNTO CAMBIO SAS",
-        alianza_oficina: req.body.alianza_oficina || "QUITO_PLAZA DEL VALLE_PC",
-        mail_remite: req.body.mail_remite || "",
-        usuingreso: req.body.usuingreso || credentials.usuingreso,
-        contrasenha: req.body.contrasenha || credentials.contrasenha,
+        valor_asegurado: va,
+        peso_fisico: Number(req.body.peso_fisico || 0),
+        peso_volumentrico: Number(req.body.peso_volumentrico || 0),
+        piezas: Number(req.body.piezas || 1),
+        alto: Number(req.body.alto || 0),
+        ancho: Number(req.body.ancho || 0),
+        largo: Number(req.body.largo || 0),
+        tipo_guia: String(req.body.tipo_guia || "1"),
+        alianza: String(req.body.alianza || "PUNTO CAMBIO SAS"),
+        alianza_oficina: String(
+          req.body.alianza_oficina || "QUITO_PLAZA DEL VALLE_PC"
+        ),
+        mail_remite: String(req.body.mail_remite || ""),
+        usuingreso: String(credentials.usuingreso),
+        contrasenha: String(credentials.contrasenha),
       };
     }
 
     // 🔍 LOG: Payload final reorganizado en orden correcto
-    console.log("📤 PAYLOAD FINAL (Orden Correcto para Servientrega):");
+    console.log("📤 PAYLOAD FINAL ENVIADO A SERVIENTREGA:");
     console.log(JSON.stringify(payload, null, 2));
 
+    // 🔍 LOG: Mostrar credenciales enmascaradas
+    console.log("🔐 Credenciales (enmascaradas):", {
+      usuingreso: payload.usuingreso,
+      contrasenha: "***",
+    });
+
+    // 🔍 LOG: Validación de campos críticos
+    console.log("✅ Validación de campos críticos:", {
+      tipo: payload.tipo,
+      nombre_producto: payload.nombre_producto,
+      ciudad_origen: payload.ciudad_origen,
+      ciudad_destinatario: payload.ciudad_destinatario,
+      pais_destinatario: payload.pais_destinatario,
+      contenido: payload.contenido,
+      cedula_remitente: payload.cedula_remitente ? "✓ (lleno)" : "✗ (vacío)",
+      cedula_destinatario: payload.cedula_destinatario
+        ? "✓ (lleno)"
+        : "✗ (vacío)",
+    });
+
     // Llamada al WS
+    console.log("📡 Llamando a Servientrega API...");
     const response = (await apiService.callAPI(payload)) as GenerarGuiaResponse;
+
+    // 📥 LOG: Respuesta RAW de Servientrega
+    console.log("📥 RESPUESTA RAW DE SERVIENTREGA:");
+    console.log(JSON.stringify(response, null, 2));
 
     // A veces el WS devuelve la tarifa al inicio y luego {"fetch":{...}} concatenado
     // Intento de "split & merge" cuando llega como string crudo
@@ -415,6 +457,15 @@ router.post("/generar-guia", async (req, res) => {
     const fetchData = processed?.fetch || processed || {};
     const guia = fetchData?.guia;
     const base64 = fetchData?.guia_64;
+
+    // 📊 LOG: Extracción de guía y base64
+    console.log("📊 Extracción de guía y base64:", {
+      guia: guia ? `✓ ${guia}` : "✗ (no encontrada)",
+      base64: base64
+        ? `✓ (${(base64 as string).length} caracteres)`
+        : "✗ (no encontrado)",
+      proceso: fetchData?.proceso || processed?.proceso || "N/A",
+    });
 
     if (guia && base64) {
       const db = new ServientregaDBService();
@@ -492,6 +543,15 @@ router.post("/generar-guia", async (req, res) => {
       } catch (dbErr) {
         console.error("⚠️ Error al persistir en BD (no bloqueante):", dbErr);
       }
+    } else {
+      // ❌ LOG: Guía NO se generó
+      console.error("❌ FALLO: Guía NO se generó correctamente");
+      console.error("Razón:", {
+        guia_presente: !!guia,
+        base64_presente: !!base64,
+        proceso: fetchData?.proceso || processed?.proceso,
+        respuesta_completa: JSON.stringify(processed, null, 2),
+      });
     }
 
     return res.json(processed);
