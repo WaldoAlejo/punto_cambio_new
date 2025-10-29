@@ -170,6 +170,9 @@ router.post("/agencias", async (_req, res) => {
     let agencias: any[] = [];
     if (Array.isArray(result)) {
       agencias = result;
+    } else if (Array.isArray(result?.fetch)) {
+      // ✅ Buscar explícitamente en 'fetch' (donde Servientrega devuelve agencias)
+      agencias = result.fetch;
     } else if (Array.isArray(result?.data)) {
       agencias = result.data;
     } else if (Array.isArray(result?.agencias)) {
@@ -184,6 +187,7 @@ router.post("/agencias", async (_req, res) => {
     }
 
     console.log(`✅ Agencias procesadas: ${agencias.length} encontradas`);
+    console.log(`📊 Primeras 2 agencias:`, agencias.slice(0, 2));
 
     res.json({
       success: true,
