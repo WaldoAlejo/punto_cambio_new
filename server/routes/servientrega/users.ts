@@ -27,8 +27,8 @@ function sendError(
 
 function getCredentialsFromEnv(): ServientregaCredentials {
   return {
-    usuingreso: process.env.SERVIENTREGA_USER || "PRUEBA",
-    contrasenha: process.env.SERVIENTREGA_PASSWORD || "s12345ABCDe",
+    usuingreso: process.env.SERVIENTREGA_USER || "INTPUNTOC",
+    contrasenha: process.env.SERVIENTREGA_PASSWORD || "73Yes7321t",
   };
 }
 
