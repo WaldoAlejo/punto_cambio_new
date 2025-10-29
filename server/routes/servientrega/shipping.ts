@@ -506,39 +506,45 @@ router.post("/generar-guia", async (req, res) => {
       });
 
       try {
-        // Si vino en payload remitente/destinatario (flujo no formateado), guardamos
-        if (!String(req.body?.tipo || "").includes("GeneracionGuia")) {
-          const { remitente, destinatario, punto_atencion_id } = req.body || {};
+        // 💾 GUARDAR GUÍA SIEMPRE cuando se genera exitosamente
+        // (funciona tanto para flujo formateado como no formateado)
+        const { remitente, destinatario, punto_atencion_id } = req.body || {};
 
-          if (remitente) {
-            await db.guardarRemitente(remitente);
-          }
-          if (destinatario) {
-            await db.guardarDestinatario(destinatario);
-          }
+        // Guardar remitente y destinatario si vienen en el payload (flujo no formateado)
+        if (remitente) {
+          await db.guardarRemitente(remitente);
+        }
+        if (destinatario) {
+          await db.guardarDestinatario(destinatario);
+        }
 
-          // Guardar cabecera de guía con punto de atención y costo
-          // ⚠️ IMPORTANTE: costo_envio = costo real de envío, NO incluye valor_declarado
-          await db.guardarGuia({
-            numero_guia: guia,
-            proceso: fetchData?.proceso || "Guia Generada",
-            base64_response: base64,
-            // En este punto no tenemos los IDs de remitente/destinatario creados (si los necesitas, crea primero y usa sus IDs)
-            remitente_id: "", // opcional: ajusta si quieres relación estricta
-            destinatario_id: "",
-            punto_atencion_id: req.body?.punto_atencion_id || undefined,
-            costo_envio:
-              valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
-            valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta
+        // 📌 SIEMPRE guardar la cabecera de guía con punto de atención y costo
+        // ⚠️ IMPORTANTE: costo_envio = costo real de envío, NO incluye valor_declarado
+        await db.guardarGuia({
+          numero_guia: guia,
+          proceso: fetchData?.proceso || "Guia Generada",
+          base64_response: base64,
+          // En este punto no tenemos los IDs de remitente/destinatario creados (si los necesitas, crea primero y usa sus IDs)
+          remitente_id: "", // opcional: ajusta si quieres relación estricta
+          destinatario_id: "",
+          punto_atencion_id: punto_atencion_id || undefined,
+          costo_envio: valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
+          valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta
+        });
+
+        console.log("✅ Guía guardada en BD:", {
+          numero_guia: guia,
+          punto_atencion_id,
+          costo_envio: valorTotalGuia,
+        });
+
+        // 💳 Descontar del saldo SOLO el costo de la guía (no el valor_declarado)
+        if (punto_atencion_id && valorTotalGuia > 0) {
+          await db.descontarSaldo(punto_atencion_id, Number(valorTotalGuia));
+          console.log("💳 Saldo descontado:", {
+            punto_atencion_id,
+            monto: valorTotalGuia,
           });
-
-          // Descontar del saldo SOLO el costo de la guía (no el valor_declarado)
-          if (req.body?.punto_atencion_id && valorTotalGuia > 0) {
-            await db.descontarSaldo(
-              req.body.punto_atencion_id,
-              Number(valorTotalGuia)
-            );
-          }
         }
       } catch (dbErr) {
         console.error("⚠️ Error al persistir en BD (no bloqueante):", dbErr);
