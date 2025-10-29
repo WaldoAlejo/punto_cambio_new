@@ -284,6 +284,7 @@ router.post("/generar-guia", async (req, res) => {
         }
       }
 
+      // 🔧 Construcción del payload en el ORDEN EXACTO que Servientrega requiere
       payload = {
         tipo: "GeneracionGuia",
         nombre_producto: producto,
@@ -301,22 +302,22 @@ router.post("/generar-guia", async (req, res) => {
         ciudad_destinatario: ciudadDestino,
         pais_destinatario: destinatario?.pais || "ECUADOR",
         codigo_postal_destinatario: destinatario?.codigo_postal || "",
-        contenido: producto,
+        // 👇 CONTENIDO: normalizar a mayúsculas (el API de Servientrega lo requiere)
+        contenido: (
+          contenido ||
+          (producto === "DOCUMENTO UNITARIO" ? "DOCUMENTOS" : "MERCANCIA")
+        ).toUpperCase(),
         retiro_oficina: retiro_oficina ? "SI" : "NO",
         ...(retiro_oficina && nombre_agencia_retiro_oficina
           ? { nombre_agencia_retiro_oficina }
           : {}),
         pedido: pedido || "",
         factura: factura || "",
-
-        // 🔓 valor_declarado puede ir 0 sin problema
         valor_declarado: vd,
-
         // 🛡️ valor_asegurado SOLO si > 0
         ...(va > 0 ? { valor_asegurado: va } : {}),
-
         peso_fisico,
-        peso_volumentrico, // ahora calculado
+        peso_volumentrico,
         piezas,
         alto,
         ancho,
@@ -325,32 +326,62 @@ router.post("/generar-guia", async (req, res) => {
         alianza: servientregaAlianza,
         alianza_oficina: servientregaOficinaAlianza,
         mail_remite: remitente?.email || "",
-
-        // Credenciales requeridas por el WS dentro del body
         usuingreso: credentials.usuingreso,
         contrasenha: credentials.contrasenha,
-
-        // Campos opcionales para lógica interna
-        punto_atencion_id,
-        valor_total,
       };
     } else {
-      // Ya viene formateado → sólo inyectamos credenciales si faltan
+      // Ya viene formateado (tipo:"GeneracionGuia") → reorganizar en orden correcto
       const vd = Number(req.body?.valor_declarado ?? 0) || 0;
       const va = Number(req.body?.valor_asegurado ?? 0) || 0;
 
-      // Clonar y forzar las dos reglas:
-      const base = { ...req.body, valor_declarado: vd };
-      if (va <= 0 && "valor_asegurado" in base) {
-        delete (base as any).valor_asegurado;
-      }
-
+      // 🔧 Reorganizar en el ORDEN EXACTO que Servientrega requiere
       payload = {
-        ...base,
-        usuingreso: base.usuingreso || credentials.usuingreso,
-        contrasenha: base.contrasenha || credentials.contrasenha,
+        tipo: req.body.tipo || "GeneracionGuia",
+        nombre_producto: req.body.nombre_producto,
+        ciudad_origen: req.body.ciudad_origen,
+        cedula_remitente: req.body.cedula_remitente || "",
+        nombre_remitente: req.body.nombre_remitente || "",
+        direccion_remitente: req.body.direccion_remitente || "",
+        telefono_remitente: req.body.telefono_remitente || "",
+        codigo_postal_remitente: req.body.codigo_postal_remitente || "",
+        cedula_destinatario: req.body.cedula_destinatario || "",
+        nombre_destinatario: req.body.nombre_destinatario || "",
+        direccion_destinatario: req.body.direccion_destinatario || "",
+        telefono_destinatario: req.body.telefono_destinatario || "",
+        ciudad_destinatario: req.body.ciudad_destinatario,
+        pais_destinatario: req.body.pais_destinatario || "ECUADOR",
+        codigo_postal_destinatario: req.body.codigo_postal_destinatario || "",
+        // 👇 CONTENIDO: normalizar a mayúsculas
+        contenido: (req.body.contenido || "").toUpperCase(),
+        retiro_oficina: req.body.retiro_oficina || "NO",
+        ...(req.body.nombre_agencia_retiro_oficina
+          ? {
+              nombre_agencia_retiro_oficina:
+                req.body.nombre_agencia_retiro_oficina,
+            }
+          : {}),
+        pedido: req.body.pedido || "",
+        factura: req.body.factura || "",
+        valor_declarado: vd,
+        ...(va > 0 ? { valor_asegurado: va } : {}),
+        peso_fisico: req.body.peso_fisico || 0,
+        peso_volumentrico: req.body.peso_volumentrico || 0,
+        piezas: req.body.piezas || 1,
+        alto: req.body.alto || 0,
+        ancho: req.body.ancho || 0,
+        largo: req.body.largo || 0,
+        tipo_guia: req.body.tipo_guia || "1",
+        alianza: req.body.alianza || "PUNTO CAMBIO SAS",
+        alianza_oficina: req.body.alianza_oficina || "QUITO_PLAZA DEL VALLE_PC",
+        mail_remite: req.body.mail_remite || "",
+        usuingreso: req.body.usuingreso || credentials.usuingreso,
+        contrasenha: req.body.contrasenha || credentials.contrasenha,
       };
     }
+
+    // 🔍 LOG: Payload final reorganizado en orden correcto
+    console.log("📤 PAYLOAD FINAL (Orden Correcto para Servientrega):");
+    console.log(JSON.stringify(payload, null, 2));
 
     // Llamada al WS
     const response = (await apiService.callAPI(payload)) as GenerarGuiaResponse;
