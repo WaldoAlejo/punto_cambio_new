@@ -231,15 +231,45 @@ export class ServientregaDBService {
 
   // ===== GUÍAS =====
   async guardarGuia(data: GuiaData) {
+    console.log("🔍 [guardarGuia] Iniciando guardado de guía:", {
+      numero_guia: data.numero_guia,
+      costo_envio: data.costo_envio,
+      punto_atencion_id: data.punto_atencion_id,
+    });
+
     // Filtrar propiedades undefined/null para evitar conflictos con Prisma types
     const cleanData = Object.entries(data).reduce((acc, [key, value]) => {
       if (value !== undefined && value !== null && value !== "") {
-        acc[key as keyof GuiaData] = value;
+        // Convertir números a Decimal para campos monetarios
+        if (
+          (key === "costo_envio" || key === "valor_declarado") &&
+          typeof value === "number"
+        ) {
+          acc[key] = new Prisma.Decimal(value);
+        } else {
+          acc[key] = value;
+        }
       }
       return acc;
     }, {} as Record<string, any>);
 
-    return prisma.servientregaGuia.create({ data: cleanData as any });
+    console.log("🔍 [guardarGuia] Datos limpios antes de crear:", cleanData);
+
+    try {
+      const resultado = await prisma.servientregaGuia.create({
+        data: cleanData as any,
+      });
+      console.log("✅ [guardarGuia] Guía guardada exitosamente:", {
+        id: resultado.id,
+        numero_guia: resultado.numero_guia,
+        costo_envio: resultado.costo_envio,
+        punto_atencion_id: resultado.punto_atencion_id,
+      });
+      return resultado;
+    } catch (error) {
+      console.error("❌ [guardarGuia] Error al guardar guía:", error);
+      throw error;
+    }
   }
 
   async anularGuia(numeroGuia: string) {
@@ -365,67 +395,116 @@ export class ServientregaDBService {
    * Ahora también registra en MovimientoSaldo para trazabilidad completa.
    */
   async descontarSaldo(puntoAtencionId: string, monto: number) {
-    return prisma.$transaction(async (tx) => {
-      // Obtener IDs necesarios
-      const usdId = await ensureUsdMonedaId();
-      const systemUserId = await ensureSystemUserId();
-
-      const saldo = await tx.servientregaSaldo.findUnique({
-        where: { punto_atencion_id: puntoAtencionId },
-      });
-      if (!saldo) return null;
-
-      const usado = saldo.monto_usado ?? new Prisma.Decimal(0);
-      const total = saldo.monto_total ?? new Prisma.Decimal(0);
-      const nuevoUsado = usado.add(new Prisma.Decimal(monto));
-      const disponible = total.sub(nuevoUsado);
-
-      if (disponible.lt(0)) {
-        throw new Error("Saldo insuficiente");
-      }
-
-      // Calcular saldo disponible anterior y nuevo
-      const saldoDisponibleAnterior = Number(total.sub(usado));
-      const saldoDisponibleNuevo = Number(disponible);
-
-      const actualizado = await tx.servientregaSaldo.update({
-        where: { punto_atencion_id: puntoAtencionId },
-        data: { monto_usado: nuevoUsado, updated_at: new Date() },
-      });
-
-      // Registrar movimiento en historial (débito)
-      const puntoAtencion = await tx.puntoAtencion.findUnique({
-        where: { id: puntoAtencionId },
-        select: { nombre: true },
-      });
-
-      await tx.servientregaHistorialSaldo.create({
-        data: {
-          punto_atencion_id: puntoAtencionId,
-          punto_atencion_nombre: puntoAtencion?.nombre || "Punto desconocido",
-          monto_total: new Prisma.Decimal(-monto), // negativo = débito
-          creado_por: "SYSTEM:DESCUENTO_GUIA",
-        },
-      });
-
-      // Registrar en MovimientoSaldo para trazabilidad (dentro de la transacción)
-      await registrarMovimientoSaldo(
-        {
-          puntoAtencionId: puntoAtencionId,
-          monedaId: usdId,
-          tipoMovimiento: TipoMovimiento.EGRESO,
-          monto: monto, // Monto positivo, el servicio aplica el signo negativo
-          saldoAnterior: saldoDisponibleAnterior,
-          saldoNuevo: saldoDisponibleNuevo,
-          tipoReferencia: TipoReferencia.SERVIENTREGA,
-          descripcion: "Descuento por generación de guía Servientrega",
-          usuarioId: systemUserId,
-        },
-        tx
-      ); // ⚠️ Pasar el cliente de transacción para atomicidad
-
-      return actualizado;
+    console.log("🔍 [descontarSaldo] Iniciando descuento:", {
+      puntoAtencionId,
+      monto,
     });
+
+    try {
+      return await prisma.$transaction(async (tx) => {
+        console.log("🔍 [descontarSaldo] Dentro de transacción");
+
+        // Obtener IDs necesarios
+        const usdId = await ensureUsdMonedaId();
+        const systemUserId = await ensureSystemUserId();
+        console.log("🔍 [descontarSaldo] IDs obtenidos:", {
+          usdId,
+          systemUserId,
+        });
+
+        const saldo = await tx.servientregaSaldo.findUnique({
+          where: { punto_atencion_id: puntoAtencionId },
+        });
+
+        console.log("🔍 [descontarSaldo] Saldo encontrado:", saldo);
+        if (!saldo) {
+          console.warn(
+            "⚠️ [descontarSaldo] No hay saldo para este punto de atención:",
+            puntoAtencionId
+          );
+          return null;
+        }
+
+        const usado = saldo.monto_usado ?? new Prisma.Decimal(0);
+        const total = saldo.monto_total ?? new Prisma.Decimal(0);
+        const nuevoUsado = usado.add(new Prisma.Decimal(monto));
+        const disponible = total.sub(nuevoUsado);
+
+        console.log("🔍 [descontarSaldo] Cálculos de saldo:", {
+          usado: Number(usado),
+          total: Number(total),
+          nuevoUsado: Number(nuevoUsado),
+          disponible: Number(disponible),
+        });
+
+        if (disponible.lt(0)) {
+          throw new Error("Saldo insuficiente");
+        }
+
+        // Calcular saldo disponible anterior y nuevo
+        const saldoDisponibleAnterior = Number(total.sub(usado));
+        const saldoDisponibleNuevo = Number(disponible);
+
+        console.log("🔍 [descontarSaldo] Actualizando ServientregaSaldo...");
+        const actualizado = await tx.servientregaSaldo.update({
+          where: { punto_atencion_id: puntoAtencionId },
+          data: { monto_usado: nuevoUsado, updated_at: new Date() },
+        });
+
+        console.log(
+          "✅ [descontarSaldo] ServientregaSaldo actualizado:",
+          actualizado
+        );
+
+        // Registrar movimiento en historial (débito)
+        console.log(
+          "🔍 [descontarSaldo] Buscando nombre del punto de atención..."
+        );
+        const puntoAtencion = await tx.puntoAtencion.findUnique({
+          where: { id: puntoAtencionId },
+          select: { nombre: true },
+        });
+
+        console.log(
+          "🔍 [descontarSaldo] Creando registro en ServientregaHistorialSaldo..."
+        );
+        await tx.servientregaHistorialSaldo.create({
+          data: {
+            punto_atencion_id: puntoAtencionId,
+            punto_atencion_nombre: puntoAtencion?.nombre || "Punto desconocido",
+            monto_total: new Prisma.Decimal(-monto), // negativo = débito
+            creado_por: "SYSTEM:DESCUENTO_GUIA",
+          },
+        });
+
+        console.log("✅ [descontarSaldo] Historial creado");
+
+        // Registrar en MovimientoSaldo para trazabilidad (dentro de la transacción)
+        console.log("🔍 [descontarSaldo] Registrando MovimientoSaldo...");
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId: puntoAtencionId,
+            monedaId: usdId,
+            tipoMovimiento: TipoMovimiento.EGRESO,
+            monto: monto, // Monto positivo, el servicio aplica el signo negativo
+            saldoAnterior: saldoDisponibleAnterior,
+            saldoNuevo: saldoDisponibleNuevo,
+            tipoReferencia: TipoReferencia.SERVIENTREGA,
+            descripcion: "Descuento por generación de guía Servientrega",
+            usuarioId: systemUserId,
+          },
+          tx
+        ); // ⚠️ Pasar el cliente de transacción para atomicidad
+
+        console.log("✅ [descontarSaldo] MovimientoSaldo registrado");
+        console.log("✅ [descontarSaldo] Transacción completada exitosamente");
+
+        return actualizado;
+      });
+    } catch (error) {
+      console.error("❌ [descontarSaldo] Error en transacción:", error);
+      throw error;
+    }
   }
 
   /**
