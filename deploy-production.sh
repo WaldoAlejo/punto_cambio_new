@@ -8,9 +8,9 @@ echo ""
 echo "1️⃣  Actualizar código..."
 git pull origin main || { echo "❌ Error en git pull"; exit 1; }
 
-# 2. Instalar dependencias
+# 2. Instalar TODAS las dependencias (incluyendo dev, necesarias para compilar)
 echo "2️⃣  Instalar dependencias..."
-npm install --production || { echo "❌ Error en npm install"; exit 1; }
+npm install || { echo "❌ Error en npm install"; exit 1; }
 
 # 3. Generar Prisma client
 echo "3️⃣  Generar Prisma Client..."
@@ -31,6 +31,10 @@ npm run build:frontend || { echo "❌ Error en build:frontend"; exit 1; }
 # 6. Build backend (ahora sin cache)
 echo "6️⃣  Compilar backend..."
 npm run build:server || { echo "❌ Error en build:server"; exit 1; }
+
+# 6.5 (Opcional) Remover dev dependencies después de buildear
+echo "6️⃣.5️⃣  Limpiar dependencias de desarrollo..."
+npm install --production --omit=dev || true
 
 # 7. Verificar que existen archivos compilados
 echo "7️⃣  Verificar compilación..."
