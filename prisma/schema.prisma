@@ -45,6 +45,7 @@ model Usuario {
   transferenciasAprobadas                 Transferencia[]               @relation("UsuarioAprobador")
   transferenciasRechazadas                Transferencia[]               @relation("UsuarioRechazador")
   transferenciasSolicitadas               Transferencia[]               @relation("UsuarioSolicitante")
+  guiasServientrega                       ServientregaGuia[]
   puntoAtencion                           PuntoAtencion?                @relation(fields: [punto_atencion_id], references: [id])
 
   @@index([username])
@@ -521,16 +522,20 @@ model ServientregaGuia {
   remitente_id      String?
   destinatario_id   String?
   punto_atencion_id String?
+  usuario_id        String?
   valor_declarado   Decimal?                 @default(0) @db.Decimal(15, 2)
   costo_envio       Decimal?                 @default(0) @db.Decimal(15, 2)
   created_at        DateTime                 @default(now())
   updated_at        DateTime                 @updatedAt
   destinatario      ServientregaDestinatario? @relation(fields: [destinatario_id], references: [id])
   punto_atencion    PuntoAtencion?           @relation(fields: [punto_atencion_id], references: [id])
+  usuario           Usuario?                 @relation(fields: [usuario_id], references: [id])
   remitente         ServientregaRemitente?    @relation(fields: [remitente_id], references: [id])
 
   @@index([numero_guia])
   @@index([punto_atencion_id])
+  @@index([usuario_id])
+  @@index([usuario_id, punto_atencion_id])
   @@index([proceso])
 }
 

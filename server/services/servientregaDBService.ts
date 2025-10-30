@@ -31,6 +31,7 @@ export interface GuiaData {
   remitente_id?: string;
   destinatario_id?: string;
   punto_atencion_id?: string;
+  usuario_id?: string;
   costo_envio?: number;
   valor_declarado?: number;
 }
@@ -282,12 +283,20 @@ export class ServientregaDBService {
   async obtenerGuias(
     desde?: string,
     hasta?: string,
-    punto_atencion_id?: string
+    punto_atencion_id?: string,
+    usuario_id?: string
   ) {
     return prisma.servientregaGuia.findMany({
       where: {
-        // 🔐 Filtrar por punto de atención si se proporciona
-        ...(punto_atencion_id ? { punto_atencion_id } : {}),
+        // 🔐 Filtrar por punto de atención Y/O usuario_id (ambos si están disponibles, cualquiera si solo uno)
+        // Si ambos están presentes, usar AND (la guía debe ser del usuario en ese punto)
+        ...(punto_atencion_id && usuario_id
+          ? { punto_atencion_id, usuario_id }
+          : punto_atencion_id
+          ? { punto_atencion_id }
+          : usuario_id
+          ? { usuario_id }
+          : {}),
         created_at: {
           gte: desde ? new Date(desde) : subDays(new Date(), 30),
           lte: hasta ? new Date(hasta) : new Date(),
@@ -296,6 +305,13 @@ export class ServientregaDBService {
       include: {
         remitente: true,
         destinatario: true,
+        usuario: {
+          select: {
+            id: true,
+            nombre: true,
+            username: true,
+          },
+        },
       },
       orderBy: { created_at: "desc" },
     });

@@ -580,7 +580,7 @@ router.post("/generar-guia", async (req, res) => {
           await db.guardarDestinatario(destinatario);
         }
 
-        // 📌 SIEMPRE guardar la cabecera de guía con punto de atención y costo
+        // 📌 SIEMPRE guardar la cabecera de guía con punto de atención, usuario y costo
         // ⚠️ IMPORTANTE: costo_envio = costo real de envío, NO incluye valor_declarado
         await db.guardarGuia({
           numero_guia: guia,
@@ -590,6 +590,7 @@ router.post("/generar-guia", async (req, res) => {
           remitente_id: undefined, // opcional: los dejaremos sin relación inicial
           destinatario_id: undefined,
           punto_atencion_id: punto_atencion_id_captado || undefined,
+          usuario_id: req.user?.id || undefined, // 👈 IMPORTANTE: Guardar usuario_id para rastrabilidad
           costo_envio: valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
           valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta
         });
@@ -777,24 +778,29 @@ router.get("/guias", async (req, res) => {
     const { desde, hasta } = req.query;
     const dbService = new ServientregaDBService();
 
-    // 🔐 Obtener punto_atencion_id del usuario autenticado
+    // 🔐 Obtener punto_atencion_id Y usuario_id del usuario autenticado
     const punto_atencion_id = req.user?.punto_atencion_id;
+    const usuario_id = req.user?.id;
+
     console.log("🔍 GET /guias - Filtro de búsqueda:", {
       punto_atencion_id,
-      usuario_id: req.user?.id,
+      usuario_id,
       desde,
       hasta,
     });
 
-    if (!punto_atencion_id) {
-      console.warn("⚠️ Usuario sin punto_atencion_id asignado");
+    // ⚠️ IMPORTANTE: Usar usuario_id como filtro principal si no hay punto_atencion_id
+    // Esto asegura que se vean las guías creadas aunque la jornada no esté activa
+    if (!punto_atencion_id && !usuario_id) {
+      console.warn("⚠️ Usuario sin punto_atencion_id ni usuario_id asignado");
       return res.json([]);
     }
 
     const guias = await dbService.obtenerGuias(
       (desde as string) || undefined,
       (hasta as string) || undefined,
-      punto_atencion_id // 👈 FILTRAR por punto de atención del usuario
+      punto_atencion_id || undefined, // 👈 FILTRAR por punto de atención
+      usuario_id || undefined // 👈 FILTRAR por usuario (fallback si no hay punto)
     );
 
     console.log("📋 Guías recuperadas de BD:", {
@@ -802,6 +808,7 @@ router.get("/guias", async (req, res) => {
       desde,
       hasta,
       punto_atencion_id,
+      usuario_id,
     });
 
     // 🔧 Devolver array directamente, no envuelto en objeto
