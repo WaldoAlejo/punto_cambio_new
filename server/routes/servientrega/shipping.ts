@@ -570,7 +570,30 @@ router.post("/generar-guia", async (req, res) => {
       try {
         // 💾 GUARDAR GUÍA SIEMPRE cuando se genera exitosamente
         // (funciona tanto para flujo formateado como no formateado)
-        const { remitente, destinatario } = req.body || {};
+
+        // IMPORTANTE: El frontend envía datos FLATTENED, no objetos anidados
+        // Reconstituir remitente y destinatario desde los campos disponibles
+        const remitente = {
+          cedula: req.body?.cedula_remitente || "",
+          nombre: req.body?.nombre_remitente || "",
+          direccion: req.body?.direccion_remitente || "",
+          telefono: req.body?.telefono_remitente || "",
+          email: req.body?.mail_remite || "",
+          codigo_postal: req.body?.codigo_postal_remitente || "",
+          // Remitente NO incluye ciudad/provincia/pais (ver servientregaDBService.ts)
+        };
+
+        const destinatario = {
+          cedula: req.body?.cedula_destinatario || "",
+          nombre: req.body?.nombre_destinatario || "",
+          direccion: req.body?.direccion_destinatario || "",
+          telefono: req.body?.telefono_destinatario || "",
+          email: req.body?.mail_destinatario || "",
+          ciudad: req.body?.ciudad_destinatario?.split(",")[0] || "",
+          provincia: req.body?.ciudad_destinatario?.split(",")[1] || "",
+          pais: req.body?.pais_destinatario || "ECUADOR",
+          codigo_postal: req.body?.codigo_postal_destinatario || "",
+        };
 
         let remitente_id: string | undefined;
         let destinatario_id: string | undefined;
@@ -578,14 +601,17 @@ router.post("/generar-guia", async (req, res) => {
         console.log(
           "📝 [shipping] Iniciando guardado de remitente/destinatario:",
           {
-            tiene_remitente: !!remitente,
-            tiene_destinatario: !!destinatario,
+            remitente_cedula: remitente?.cedula,
+            remitente_nombre: remitente?.nombre,
+            destinatario_cedula: destinatario?.cedula,
+            destinatario_nombre: destinatario?.nombre,
           }
         );
 
         // Guardar remitente y capturar su ID
-        if (remitente) {
+        if (remitente?.cedula && remitente?.nombre) {
           try {
+            console.log("🔄 [shipping] Guardando remitente:", remitente);
             const remitenteGuardado = await db.guardarRemitente(remitente);
             remitente_id = remitenteGuardado?.id;
             console.log(
@@ -597,11 +623,20 @@ router.post("/generar-guia", async (req, res) => {
           } catch (err) {
             console.error("❌ [shipping] Error guardando remitente:", err);
           }
+        } else {
+          console.log(
+            "⚠️ [shipping] Remitente incompleto, saltando guardado:",
+            {
+              cedula: remitente?.cedula,
+              nombre: remitente?.nombre,
+            }
+          );
         }
 
         // Guardar destinatario y capturar su ID
-        if (destinatario) {
+        if (destinatario?.cedula && destinatario?.nombre) {
           try {
+            console.log("🔄 [shipping] Guardando destinatario:", destinatario);
             const destinatarioGuardado = await db.guardarDestinatario(
               destinatario
             );
@@ -615,6 +650,14 @@ router.post("/generar-guia", async (req, res) => {
           } catch (err) {
             console.error("❌ [shipping] Error guardando destinatario:", err);
           }
+        } else {
+          console.log(
+            "⚠️ [shipping] Destinatario incompleto, saltando guardado:",
+            {
+              cedula: destinatario?.cedula,
+              nombre: destinatario?.nombre,
+            }
+          );
         }
 
         // 📌 SIEMPRE guardar la cabecera de guía con punto de atención, usuario y costo

@@ -14,8 +14,8 @@ export interface RemitenteData {
   direccion: string;
   telefono: string;
   email?: string;
-  ciudad: string;
-  provincia: string;
+  ciudad?: string;
+  provincia?: string;
   codigo_postal?: string;
   pais?: string;
 }
