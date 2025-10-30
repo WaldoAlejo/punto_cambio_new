@@ -758,14 +758,22 @@ export class ServientregaDBService {
   }) {
     const where: any = {};
 
+    console.log("🔍 [obtenerGuiasConFiltros] Filtros recibidos:", filtros);
+
     // Filtro por fechas
     if (filtros.desde || filtros.hasta) {
       where.created_at = {};
       if (filtros.desde) {
-        where.created_at.gte = new Date(filtros.desde);
+        const desdeDate = new Date(filtros.desde);
+        desdeDate.setHours(0, 0, 0, 0); // Inicio del día
+        where.created_at.gte = desdeDate;
+        console.log("📅 Desde (inicio del día):", desdeDate);
       }
       if (filtros.hasta) {
-        where.created_at.lte = new Date(filtros.hasta);
+        const hastaDate = new Date(filtros.hasta);
+        hastaDate.setHours(23, 59, 59, 999); // Final del día
+        where.created_at.lte = hastaDate;
+        console.log("📅 Hasta (final del día):", hastaDate);
       }
     }
 
@@ -789,7 +797,12 @@ export class ServientregaDBService {
       where.punto_atencion_id = filtros.punto_atencion_id;
     }
 
-    return prisma.servientregaGuia.findMany({
+    console.log(
+      "🔍 [obtenerGuiasConFiltros] WHERE clause:",
+      JSON.stringify(where, null, 2)
+    );
+
+    const guias = await prisma.servientregaGuia.findMany({
       where,
       include: {
         remitente: true,
@@ -805,6 +818,11 @@ export class ServientregaDBService {
       },
       orderBy: { created_at: "desc" },
     });
+
+    console.log(
+      `✅ [obtenerGuiasConFiltros] Encontradas ${guias.length} guías`
+    );
+    return guias;
   }
 
   async obtenerEstadisticasGuias(filtros: { desde?: string; hasta?: string }) {
@@ -814,10 +832,14 @@ export class ServientregaDBService {
     if (filtros.desde || filtros.hasta) {
       where.created_at = {};
       if (filtros.desde) {
-        where.created_at.gte = new Date(filtros.desde);
+        const desdeDate = new Date(filtros.desde);
+        desdeDate.setHours(0, 0, 0, 0); // Inicio del día
+        where.created_at.gte = desdeDate;
       }
       if (filtros.hasta) {
-        where.created_at.lte = new Date(filtros.hasta);
+        const hastaDate = new Date(filtros.hasta);
+        hastaDate.setHours(23, 59, 59, 999); // Final del día
+        where.created_at.lte = hastaDate;
       }
     }
 
