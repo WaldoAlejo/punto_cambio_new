@@ -101,13 +101,29 @@ echo "Procesos PM2 actuales:"
 pm2 list
 
 # Detectar el nombre del proceso (puede variar)
-PROCESS_NAME=$(pm2 list --no-color | grep "punto-cambio\|api\|server" | awk '{print $1}' | head -1)
+# Estrategia: primero intentar con el nombre conocido, luego buscar
+PROCESS_NAME=""
 
-if [ -z "$PROCESS_NAME" ]; then
-    echo -e "${YELLOW}⚠ No se encontró proceso PM2 activo. Asumiendo 'punto-cambio-api'${NC}"
+if pm2 describe "punto-cambio-api" > /dev/null 2>&1; then
     PROCESS_NAME="punto-cambio-api"
+elif pm2 describe "api" > /dev/null 2>&1; then
+    PROCESS_NAME="api"
+else
+    # Buscar en la lista usando formato JSON (-m flag)
+    PROCESS_NAME=$(pm2 info all 2>/dev/null | grep -i "name.*:" | head -1 | sed 's/.*name.*:\s*//' | xargs)
 fi
 
+if [ -z "$PROCESS_NAME" ]; then
+    echo -e "${RED}❌ No se pudo detectar el proceso PM2.${NC}"
+    echo "Procesos disponibles:"
+    pm2 list
+    echo ""
+    echo -e "${YELLOW}Especifica el nombre exacto del proceso para reiniciar:${NC}"
+    echo "   pm2 restart <nombre_proceso> --update-env"
+    exit 1
+fi
+
+echo "Reiniciando proceso: $PROCESS_NAME"
 pm2 restart "$PROCESS_NAME" --update-env
 
 echo -e "${GREEN}✓ Servicio reiniciado${NC}"
