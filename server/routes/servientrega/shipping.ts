@@ -572,28 +572,46 @@ router.post("/generar-guia", async (req, res) => {
         // (funciona tanto para flujo formateado como no formateado)
         const { remitente, destinatario } = req.body || {};
 
-        // Guardar remitente y destinatario si vienen en el payload (flujo no formateado)
+        let remitente_id: string | undefined;
+        let destinatario_id: string | undefined;
+
+        // Guardar remitente y capturar su ID
         if (remitente) {
-          await db.guardarRemitente(remitente);
+          const remitenteGuardado = await db.guardarRemitente(remitente);
+          remitente_id = remitenteGuardado.id;
+          console.log("✅ Remitente guardado con ID:", remitente_id);
         }
+
+        // Guardar destinatario y capturar su ID
         if (destinatario) {
-          await db.guardarDestinatario(destinatario);
+          const destinatarioGuardado = await db.guardarDestinatario(
+            destinatario
+          );
+          destinatario_id = destinatarioGuardado.id;
+          console.log("✅ Destinatario guardado con ID:", destinatario_id);
         }
 
         // 📌 SIEMPRE guardar la cabecera de guía con punto de atención, usuario y costo
         // ⚠️ IMPORTANTE: costo_envio = costo real de envío, NO incluye valor_declarado
-        await db.guardarGuia({
+        const guiaData: any = {
           numero_guia: guia,
           proceso: fetchData?.proceso || "Guia Generada",
           base64_response: base64,
-          // En este punto no tenemos los IDs de remitente/destinatario creados (si los necesitas, crea primero y usa sus IDs)
-          remitente_id: undefined, // opcional: los dejaremos sin relación inicial
-          destinatario_id: undefined,
           punto_atencion_id: punto_atencion_id_captado || undefined,
           usuario_id: req.user?.id || undefined, // 👈 IMPORTANTE: Guardar usuario_id para rastrabilidad
           costo_envio: valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
           valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta
-        });
+        };
+
+        // Solo incluir remitente_id y destinatario_id si tienen valor
+        if (remitente_id) {
+          guiaData.remitente_id = remitente_id;
+        }
+        if (destinatario_id) {
+          guiaData.destinatario_id = destinatario_id;
+        }
+
+        await db.guardarGuia(guiaData);
 
         console.log("✅ Guía guardada en BD:", {
           numero_guia: guia,
