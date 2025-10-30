@@ -112,8 +112,16 @@ export class ServientregaDBService {
 
   async guardarRemitente(data: RemitenteData) {
     const sanitizedData = this.sanitizeRemitenteData(data);
-    const resultado = await prisma.servientregaRemitente.create({
-      data: sanitizedData as any, // Prisma types are too estrictos aquí
+    const cedula = sanitizedData.cedula;
+
+    if (!cedula) {
+      throw new Error("Cedula es requerida para guardar remitente");
+    }
+
+    const resultado = await prisma.servientregaRemitente.upsert({
+      where: { cedula },
+      update: sanitizedData as any,
+      create: sanitizedData as any,
       select: {
         id: true,
         cedula: true,
@@ -184,8 +192,16 @@ export class ServientregaDBService {
 
   async guardarDestinatario(data: DestinatarioData) {
     const sanitizedData = this.sanitizeDestinatarioData(data);
-    const resultado = await prisma.servientregaDestinatario.create({
-      data: sanitizedData as any,
+    const cedula = sanitizedData.cedula;
+
+    if (!cedula) {
+      throw new Error("Cedula es requerida para guardar destinatario");
+    }
+
+    const resultado = await prisma.servientregaDestinatario.upsert({
+      where: { cedula },
+      update: sanitizedData as any,
+      create: sanitizedData as any,
       select: {
         id: true,
         cedula: true,
