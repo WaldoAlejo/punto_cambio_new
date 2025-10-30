@@ -587,8 +587,8 @@ router.post("/generar-guia", async (req, res) => {
           proceso: fetchData?.proceso || "Guia Generada",
           base64_response: base64,
           // En este punto no tenemos los IDs de remitente/destinatario creados (si los necesitas, crea primero y usa sus IDs)
-          remitente_id: "", // opcional: ajusta si quieres relación estricta
-          destinatario_id: "",
+          remitente_id: undefined, // opcional: los dejaremos sin relación inicial
+          destinatario_id: undefined,
           punto_atencion_id: punto_atencion_id_captado || undefined,
           costo_envio: valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
           valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta

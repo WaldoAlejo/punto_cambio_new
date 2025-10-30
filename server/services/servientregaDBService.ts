@@ -28,8 +28,8 @@ export interface GuiaData {
   numero_guia: string;
   proceso: string;
   base64_response: string;
-  remitente_id: string;
-  destinatario_id: string;
+  remitente_id?: string;
+  destinatario_id?: string;
   punto_atencion_id?: string;
   costo_envio?: number;
   valor_declarado?: number;
@@ -231,7 +231,15 @@ export class ServientregaDBService {
 
   // ===== GUÍAS =====
   async guardarGuia(data: GuiaData) {
-    return prisma.servientregaGuia.create({ data });
+    // Filtrar propiedades undefined/null para evitar conflictos con Prisma types
+    const cleanData = Object.entries(data).reduce((acc, [key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        acc[key as keyof GuiaData] = value;
+      }
+      return acc;
+    }, {} as Record<string, any>);
+
+    return prisma.servientregaGuia.create({ data: cleanData as any });
   }
 
   async anularGuia(numeroGuia: string) {
