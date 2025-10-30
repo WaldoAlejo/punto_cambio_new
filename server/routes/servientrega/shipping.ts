@@ -575,20 +575,46 @@ router.post("/generar-guia", async (req, res) => {
         let remitente_id: string | undefined;
         let destinatario_id: string | undefined;
 
+        console.log(
+          "📝 [shipping] Iniciando guardado de remitente/destinatario:",
+          {
+            tiene_remitente: !!remitente,
+            tiene_destinatario: !!destinatario,
+          }
+        );
+
         // Guardar remitente y capturar su ID
         if (remitente) {
-          const remitenteGuardado = await db.guardarRemitente(remitente);
-          remitente_id = remitenteGuardado.id;
-          console.log("✅ Remitente guardado con ID:", remitente_id);
+          try {
+            const remitenteGuardado = await db.guardarRemitente(remitente);
+            remitente_id = remitenteGuardado?.id;
+            console.log(
+              "✅ [shipping] Remitente guardado con ID:",
+              remitente_id,
+              "Objeto completo:",
+              remitenteGuardado
+            );
+          } catch (err) {
+            console.error("❌ [shipping] Error guardando remitente:", err);
+          }
         }
 
         // Guardar destinatario y capturar su ID
         if (destinatario) {
-          const destinatarioGuardado = await db.guardarDestinatario(
-            destinatario
-          );
-          destinatario_id = destinatarioGuardado.id;
-          console.log("✅ Destinatario guardado con ID:", destinatario_id);
+          try {
+            const destinatarioGuardado = await db.guardarDestinatario(
+              destinatario
+            );
+            destinatario_id = destinatarioGuardado?.id;
+            console.log(
+              "✅ [shipping] Destinatario guardado con ID:",
+              destinatario_id,
+              "Objeto completo:",
+              destinatarioGuardado
+            );
+          } catch (err) {
+            console.error("❌ [shipping] Error guardando destinatario:", err);
+          }
         }
 
         // 📌 SIEMPRE guardar la cabecera de guía con punto de atención, usuario y costo
@@ -606,10 +632,27 @@ router.post("/generar-guia", async (req, res) => {
         // Solo incluir remitente_id y destinatario_id si tienen valor
         if (remitente_id) {
           guiaData.remitente_id = remitente_id;
+          console.log(
+            "✅ [shipping] Agregado remitente_id a guiaData:",
+            remitente_id
+          );
+        } else {
+          console.log("⚠️ [shipping] NO se agregó remitente_id (es undefined)");
         }
+
         if (destinatario_id) {
           guiaData.destinatario_id = destinatario_id;
+          console.log(
+            "✅ [shipping] Agregado destinatario_id a guiaData:",
+            destinatario_id
+          );
+        } else {
+          console.log(
+            "⚠️ [shipping] NO se agregó destinatario_id (es undefined)"
+          );
         }
+
+        console.log("📋 [shipping] guiaData FINAL antes de guardar:", guiaData);
 
         await db.guardarGuia(guiaData);
 

@@ -112,9 +112,16 @@ export class ServientregaDBService {
 
   async guardarRemitente(data: RemitenteData) {
     const sanitizedData = this.sanitizeRemitenteData(data);
-    return prisma.servientregaRemitente.create({
+    const resultado = await prisma.servientregaRemitente.create({
       data: sanitizedData as any, // Prisma types are too estrictos aquí
+      select: {
+        id: true,
+        cedula: true,
+        nombre: true,
+      },
     });
+    console.log("✅ [guardarRemitente] Resultado con ID:", resultado);
+    return resultado;
   }
 
   async actualizarRemitente(cedula: string, data: Partial<RemitenteData>) {
@@ -177,9 +184,16 @@ export class ServientregaDBService {
 
   async guardarDestinatario(data: DestinatarioData) {
     const sanitizedData = this.sanitizeDestinatarioData(data);
-    return prisma.servientregaDestinatario.create({
+    const resultado = await prisma.servientregaDestinatario.create({
       data: sanitizedData as any,
+      select: {
+        id: true,
+        cedula: true,
+        nombre: true,
+      },
     });
+    console.log("✅ [guardarDestinatario] Resultado con ID:", resultado);
+    return resultado;
   }
 
   async actualizarDestinatario(
