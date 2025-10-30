@@ -286,20 +286,70 @@ export class ServientregaDBService {
     punto_atencion_id?: string,
     usuario_id?: string
   ) {
-    return prisma.servientregaGuia.findMany({
+    // 🔧 Convertir fechas CORRECTAMENTE considerando que PostgreSQL está en Ecuador time (UTC-5)
+    // JavaScript interpreta "2025-10-25" como UTC, pero PostgreSQL lo almacena en Ecuador time
+    // Solución: Restar 5 horas para compensar la diferencia
+
+    let desdeDate: Date;
+    let hastaDate: Date;
+    const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
+
+    if (desde) {
+      desdeDate = new Date(desde);
+      // Restar 5 horas para que "2025-10-25" en Ecuador sea "2025-10-25 00:00:00"
+      desdeDate.setTime(desdeDate.getTime() - ECUADOR_OFFSET_MS);
+      desdeDate.setHours(0, 0, 0, 0); // Inicio del día
+    } else {
+      desdeDate = subDays(new Date(), 30);
+      desdeDate.setTime(desdeDate.getTime() - ECUADOR_OFFSET_MS);
+      desdeDate.setHours(0, 0, 0, 0);
+    }
+
+    if (hasta) {
+      hastaDate = new Date(hasta);
+      // Restar 5 horas para que "2025-10-30" en Ecuador sea "2025-10-30 23:59:59"
+      hastaDate.setTime(hastaDate.getTime() - ECUADOR_OFFSET_MS);
+      hastaDate.setHours(23, 59, 59, 999); // Final del día
+    } else {
+      hastaDate = new Date();
+      hastaDate.setTime(hastaDate.getTime() - ECUADOR_OFFSET_MS);
+      hastaDate.setHours(23, 59, 59, 999);
+    }
+
+    console.log("📅 [obtenerGuias] CORRECCIÓN DE ZONA HORARIA APLICADA", {
+      desde_original: desde,
+      desde_convertido: desdeDate.toISOString(),
+      hasta_original: hasta,
+      hasta_convertido: hastaDate.toISOString(),
+      punto_atencion_id,
+      usuario_id,
+      offset_aplicado_horas: 5,
+      nota: "PostgreSQL está en Ecuador time (UTC-5), JavaScript está en UTC",
+    });
+
+    const WHERE_CLAUSE =
+      punto_atencion_id && usuario_id
+        ? { punto_atencion_id, usuario_id }
+        : punto_atencion_id
+        ? { punto_atencion_id }
+        : usuario_id
+        ? { usuario_id }
+        : {};
+
+    console.log("🔍 [obtenerGuias] WHERE clause para búsqueda:", {
+      ...WHERE_CLAUSE,
+      created_at: {
+        gte: desdeDate.toISOString(),
+        lte: hastaDate.toISOString(),
+      },
+    });
+
+    const guias = await prisma.servientregaGuia.findMany({
       where: {
-        // 🔐 Filtrar por punto de atención Y/O usuario_id (ambos si están disponibles, cualquiera si solo uno)
-        // Si ambos están presentes, usar AND (la guía debe ser del usuario en ese punto)
-        ...(punto_atencion_id && usuario_id
-          ? { punto_atencion_id, usuario_id }
-          : punto_atencion_id
-          ? { punto_atencion_id }
-          : usuario_id
-          ? { usuario_id }
-          : {}),
+        ...WHERE_CLAUSE,
         created_at: {
-          gte: desde ? new Date(desde) : subDays(new Date(), 30),
-          lte: hasta ? new Date(hasta) : new Date(),
+          gte: desdeDate,
+          lte: hastaDate,
         },
       },
       include: {
@@ -315,6 +365,22 @@ export class ServientregaDBService {
       },
       orderBy: { created_at: "desc" },
     });
+
+    console.log("✅ [obtenerGuias] Resultado final:", {
+      guias_encontradas: guias.length,
+      desde: desde,
+      hasta: hasta,
+      punto_atencion_id,
+      usuario_id,
+      guias: guias.map((g) => ({
+        numero_guia: g.numero_guia,
+        created_at: g.created_at,
+        usuario_id: g.usuario_id,
+        punto_atencion_id: g.punto_atencion_id,
+      })),
+    });
+
+    return guias;
   }
 
   // ===== SALDOS =====
@@ -757,23 +823,32 @@ export class ServientregaDBService {
     punto_atencion_id?: string;
   }) {
     const where: any = {};
+    const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
     console.log("🔍 [obtenerGuiasConFiltros] Filtros recibidos:", filtros);
 
-    // Filtro por fechas
+    // Filtro por fechas (CORRECCIÓN: considerar offset Ecuador UTC-5)
     if (filtros.desde || filtros.hasta) {
       where.created_at = {};
       if (filtros.desde) {
         const desdeDate = new Date(filtros.desde);
+        desdeDate.setTime(desdeDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
         desdeDate.setHours(0, 0, 0, 0); // Inicio del día
         where.created_at.gte = desdeDate;
-        console.log("📅 Desde (inicio del día):", desdeDate);
+        console.log(
+          "📅 Desde (inicio del día, con offset Ecuador):",
+          desdeDate.toISOString()
+        );
       }
       if (filtros.hasta) {
         const hastaDate = new Date(filtros.hasta);
+        hastaDate.setTime(hastaDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
         hastaDate.setHours(23, 59, 59, 999); // Final del día
         where.created_at.lte = hastaDate;
-        console.log("📅 Hasta (final del día):", hastaDate);
+        console.log(
+          "📅 Hasta (final del día, con offset Ecuador):",
+          hastaDate.toISOString()
+        );
       }
     }
 
@@ -827,17 +902,20 @@ export class ServientregaDBService {
 
   async obtenerEstadisticasGuias(filtros: { desde?: string; hasta?: string }) {
     const where: any = {};
+    const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
-    // Filtro por fechas
+    // Filtro por fechas (CORRECCIÓN: considerar offset Ecuador UTC-5)
     if (filtros.desde || filtros.hasta) {
       where.created_at = {};
       if (filtros.desde) {
         const desdeDate = new Date(filtros.desde);
+        desdeDate.setTime(desdeDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
         desdeDate.setHours(0, 0, 0, 0); // Inicio del día
         where.created_at.gte = desdeDate;
       }
       if (filtros.hasta) {
         const hastaDate = new Date(filtros.hasta);
+        hastaDate.setTime(hastaDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
         hastaDate.setHours(23, 59, 59, 999); // Final del día
         where.created_at.lte = hastaDate;
       }
@@ -925,14 +1003,21 @@ export class ServientregaDBService {
     estado?: string;
   }) {
     const where: any = {};
+    const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
     if (filtros.desde || filtros.hasta) {
       where.fecha_solicitud = {};
       if (filtros.desde) {
-        where.fecha_solicitud.gte = new Date(filtros.desde);
+        const desdeDate = new Date(filtros.desde);
+        desdeDate.setTime(desdeDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
+        desdeDate.setHours(0, 0, 0, 0); // Inicio del día
+        where.fecha_solicitud.gte = desdeDate;
       }
       if (filtros.hasta) {
-        where.fecha_solicitud.lte = new Date(filtros.hasta);
+        const hastaDate = new Date(filtros.hasta);
+        hastaDate.setTime(hastaDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
+        hastaDate.setHours(23, 59, 59, 999); // Final del día
+        where.fecha_solicitud.lte = hastaDate;
       }
     }
 
