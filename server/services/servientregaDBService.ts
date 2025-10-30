@@ -316,9 +316,10 @@ export class ServientregaDBService {
     punto_atencion_id?: string,
     usuario_id?: string
   ) {
-    // 🔧 Convertir fechas CORRECTAMENTE considerando que PostgreSQL está en Ecuador time (UTC-5)
-    // JavaScript interpreta "2025-10-25" como UTC, pero PostgreSQL lo almacena en Ecuador time
-    // Solución: Restar 5 horas para compensar la diferencia
+    // 🔧 Convertir fechas CORRECTAMENTE considerando que las guías se almacenan en UTC
+    // El usuario proporciona fechas en formato local Ecuador (UTC-5)
+    // Para buscar en la BD (UTC), necesitamos SUMAR 5 horas, no restar
+    // Ejemplo: "2025-10-30" en Ecuador → "2025-10-30 00:00:00 Ecuador" = "2025-10-30 05:00:00 UTC"
 
     let desdeDate: Date;
     let hastaDate: Date;
@@ -326,23 +327,23 @@ export class ServientregaDBService {
 
     if (desde) {
       desdeDate = new Date(desde);
-      // Restar 5 horas para que "2025-10-25" en Ecuador sea "2025-10-25 00:00:00"
-      desdeDate.setTime(desdeDate.getTime() - ECUADOR_OFFSET_MS);
-      desdeDate.setHours(0, 0, 0, 0); // Inicio del día
+      // SUMAR 5 horas para convertir "2025-10-25 00:00:00 Ecuador" a UTC
+      desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS);
+      desdeDate.setHours(0, 0, 0, 0); // Inicio del día en Ecuador = UTC+5
     } else {
       desdeDate = subDays(new Date(), 30);
-      desdeDate.setTime(desdeDate.getTime() - ECUADOR_OFFSET_MS);
+      desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS);
       desdeDate.setHours(0, 0, 0, 0);
     }
 
     if (hasta) {
       hastaDate = new Date(hasta);
-      // Restar 5 horas para que "2025-10-30" en Ecuador sea "2025-10-30 23:59:59"
-      hastaDate.setTime(hastaDate.getTime() - ECUADOR_OFFSET_MS);
-      hastaDate.setHours(23, 59, 59, 999); // Final del día
+      // SUMAR 5 horas para convertir "2025-10-30 23:59:59 Ecuador" a UTC
+      hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS);
+      hastaDate.setHours(23, 59, 59, 999); // Final del día en Ecuador = UTC+5
     } else {
       hastaDate = new Date();
-      hastaDate.setTime(hastaDate.getTime() - ECUADOR_OFFSET_MS);
+      hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS);
       hastaDate.setHours(23, 59, 59, 999);
     }
 
@@ -354,7 +355,7 @@ export class ServientregaDBService {
       punto_atencion_id,
       usuario_id,
       offset_aplicado_horas: 5,
-      nota: "PostgreSQL está en Ecuador time (UTC-5), JavaScript está en UTC",
+      nota: "Se SUMA 5 horas para convertir Ecuador time (UTC-5) a UTC para búsqueda en BD",
     });
 
     const WHERE_CLAUSE =
@@ -858,11 +859,12 @@ export class ServientregaDBService {
     console.log("🔍 [obtenerGuiasConFiltros] Filtros recibidos:", filtros);
 
     // Filtro por fechas (CORRECCIÓN: considerar offset Ecuador UTC-5)
+    // Se SUMA 5 horas para convertir Ecuador time (UTC-5) a UTC para búsqueda en BD
     if (filtros.desde || filtros.hasta) {
       where.created_at = {};
       if (filtros.desde) {
         const desdeDate = new Date(filtros.desde);
-        desdeDate.setTime(desdeDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
+        desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         desdeDate.setHours(0, 0, 0, 0); // Inicio del día
         where.created_at.gte = desdeDate;
         console.log(
@@ -872,7 +874,7 @@ export class ServientregaDBService {
       }
       if (filtros.hasta) {
         const hastaDate = new Date(filtros.hasta);
-        hastaDate.setTime(hastaDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
+        hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         hastaDate.setHours(23, 59, 59, 999); // Final del día
         where.created_at.lte = hastaDate;
         console.log(
@@ -935,17 +937,18 @@ export class ServientregaDBService {
     const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
     // Filtro por fechas (CORRECCIÓN: considerar offset Ecuador UTC-5)
+    // Se SUMA 5 horas para convertir Ecuador time (UTC-5) a UTC para búsqueda en BD
     if (filtros.desde || filtros.hasta) {
       where.created_at = {};
       if (filtros.desde) {
         const desdeDate = new Date(filtros.desde);
-        desdeDate.setTime(desdeDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
+        desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         desdeDate.setHours(0, 0, 0, 0); // Inicio del día
         where.created_at.gte = desdeDate;
       }
       if (filtros.hasta) {
         const hastaDate = new Date(filtros.hasta);
-        hastaDate.setTime(hastaDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
+        hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         hastaDate.setHours(23, 59, 59, 999); // Final del día
         where.created_at.lte = hastaDate;
       }
@@ -1039,13 +1042,13 @@ export class ServientregaDBService {
       where.fecha_solicitud = {};
       if (filtros.desde) {
         const desdeDate = new Date(filtros.desde);
-        desdeDate.setTime(desdeDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
+        desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         desdeDate.setHours(0, 0, 0, 0); // Inicio del día
         where.fecha_solicitud.gte = desdeDate;
       }
       if (filtros.hasta) {
         const hastaDate = new Date(filtros.hasta);
-        hastaDate.setTime(hastaDate.getTime() - ECUADOR_OFFSET_MS); // Restar 5 horas
+        hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         hastaDate.setHours(23, 59, 59, 999); // Final del día
         where.fecha_solicitud.lte = hastaDate;
       }
