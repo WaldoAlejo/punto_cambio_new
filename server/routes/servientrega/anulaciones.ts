@@ -267,6 +267,168 @@ router.put(
         data: solicitudActualizada,
       });
     } catch (error) {
+      console.error("❌ Error al responder solicitud:", error);
+      return sendError(res, 500, error);
+    }
+  }
+);
+
+/* ==============================
+   POST /api/servientrega/solicitar-anulacion (alias)
+============================== */
+router.post("/solicitar-anulacion", authenticateToken, async (req, res) => {
+  try {
+    const { guia_id, numero_guia, motivo } = req.body;
+    const usuario = (req as any).user;
+
+    if (!guia_id || !numero_guia || !motivo) {
+      return res.status(400).json({
+        success: false,
+        error: "Parámetros inválidos",
+        message: "guia_id, numero_guia y motivo son requeridos",
+      });
+    }
+
+    const solicitud = await dbService.crearSolicitudAnulacion({
+      guia_id,
+      numero_guia,
+      motivo_anulacion: motivo,
+      solicitado_por: usuario?.id || "SYSTEM",
+      solicitado_por_nombre: usuario?.nombre || "Sistema",
+    });
+
+    return res.json({
+      success: true,
+      message: "Solicitud de anulación creada exitosamente",
+      data: solicitud,
+    });
+  } catch (error) {
+    console.error("❌ Error al crear solicitud de anulación (alias):", error);
+    return sendError(res, 500, error);
+  }
+});
+
+/* ==============================
+   POST /api/servientrega/responder-solicitud-anulacion (alias)
+============================== */
+router.post(
+  "/responder-solicitud-anulacion",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { solicitud_id, accion, comentario } = req.body;
+      const usuario = (req as any).user;
+
+      if (!solicitud_id || !validarAccion(accion)) {
+        return res.status(400).json({
+          success: false,
+          error: "Parámetros inválidos",
+          message:
+            'solicitud_id es requerido y la acción debe ser "APROBAR" o "RECHAZAR".',
+        });
+      }
+
+      const estado =
+        String(accion).toUpperCase() === "APROBAR" ? "APROBADA" : "RECHAZADA";
+
+      const solicitudActualizada = await dbService.actualizarSolicitudAnulacion(
+        solicitud_id,
+        {
+          estado,
+          respondido_por: usuario?.id || "SYSTEM",
+          respondido_por_nombre: usuario?.nombre || "Sistema",
+          observaciones_respuesta: comentario || "",
+          fecha_respuesta: new Date(),
+        }
+      );
+
+      if (estado === "APROBADA") {
+        try {
+          // 1. Obtener datos de la guía (costo_envio, punto_atencion_id)
+          const guia = await prisma.servientregaGuia.findUnique({
+            where: { numero_guia: solicitudActualizada.numero_guia },
+            select: {
+              id: true,
+              costo_envio: true,
+              punto_atencion_id: true,
+            },
+          });
+
+          if (!guia) {
+            throw new Error(
+              `Guía no encontrada: ${solicitudActualizada.numero_guia}`
+            );
+          }
+
+          if (!guia.punto_atencion_id) {
+            throw new Error(
+              `La guía no tiene punto_atencion_id asignado: ${solicitudActualizada.numero_guia}`
+            );
+          }
+
+          // 2. Procesar anulación en Servientrega API
+          await procesarAnulacionServientrega(solicitudActualizada.numero_guia);
+          await dbService.anularGuia(solicitudActualizada.numero_guia);
+
+          // 3. Revertir los balances (restar del Saldo USD general, sumar al ServientregaSaldo)
+          if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
+            console.log(
+              "💰 Revirtiendo ingreso de servicio externo por anulación de guía..."
+            );
+            try {
+              const resultadoReversal =
+                await dbService.revertirIngresoServicioExterno(
+                  guia.punto_atencion_id,
+                  Number(guia.costo_envio),
+                  solicitudActualizada.numero_guia
+                );
+
+              console.log(
+                "✅ Ingreso de servicio externo revertido exitosamente:",
+                {
+                  numero_guia: solicitudActualizada.numero_guia,
+                  monto: Number(guia.costo_envio),
+                  saldoServicioAnterior:
+                    resultadoReversal.saldoServicio.anterior,
+                  saldoServicioNuevo: resultadoReversal.saldoServicio.nuevo,
+                  saldoGeneralAnterior: resultadoReversal.saldoGeneral.anterior,
+                  saldoGeneralNuevo: resultadoReversal.saldoGeneral.nuevo,
+                }
+              );
+            } catch (reversalError) {
+              console.error(
+                "⚠️ Error al revertir ingreso de servicio externo:",
+                reversalError
+              );
+              // Registrar el error pero no fallar completamente
+              await dbService.actualizarSolicitudAnulacion(solicitud_id, {
+                observaciones_respuesta: `${
+                  comentario || ""
+                }\n\n⚠️ Aviso: Anulación exitosa en Servientrega, pero hubo un error al revertir los movimientos de balance: ${
+                  reversalError instanceof Error
+                    ? reversalError.message
+                    : String(reversalError)
+                }`,
+              });
+            }
+          }
+        } catch (apiError) {
+          await dbService.actualizarSolicitudAnulacion(solicitud_id, {
+            observaciones_respuesta: `${
+              comentario || ""
+            }\n\nError en API Servientrega: ${
+              apiError instanceof Error ? apiError.message : String(apiError)
+            }`,
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        message: `Solicitud ${estado.toLowerCase()} exitosamente`,
+        data: solicitudActualizada,
+      });
+    } catch (error) {
       console.error(
         "❌ Error al responder solicitud de anulación (alias):",
         error
