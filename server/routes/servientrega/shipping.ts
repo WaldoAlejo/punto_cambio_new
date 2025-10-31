@@ -733,6 +733,42 @@ router.post("/generar-guia", async (req, res) => {
               monto: valorTotalGuia,
               resultado: resultadoDescuento ? "ACTUALIZADO" : "SIN CAMBIOS",
             });
+
+            // 📥 NUEVO: Registrar ingreso en servicios externos (USD divisas)
+            // Cuando se genera una guía, el monto se suma al saldo general de USD
+            console.log(
+              "📥 Registrando ingreso de servicio externo (Servientrega)..."
+            );
+            try {
+              const resultadoIngreso = await db.registrarIngresoServicioExterno(
+                punto_atencion_id_captado,
+                Number(valorTotalGuia),
+                guia // numero_guia
+              );
+
+              console.log(
+                "✅ Ingreso de servicio externo registrado exitosamente:",
+                {
+                  numero_guia: guia,
+                  monto: valorTotalGuia,
+                  saldoGeneralAnterior: resultadoIngreso.saldoGeneral.anterior,
+                  saldoGeneralNuevo: resultadoIngreso.saldoGeneral.nuevo,
+                }
+              );
+            } catch (ingresoError) {
+              console.error(
+                "❌ Error al registrar ingreso de servicio externo:",
+                {
+                  numero_guia: guia,
+                  monto: valorTotalGuia,
+                  error:
+                    ingresoError instanceof Error
+                      ? ingresoError.message
+                      : String(ingresoError),
+                }
+              );
+              throw ingresoError;
+            }
           } catch (descError) {
             console.error("❌ Error al descontar saldo:", {
               punto_atencion_id: punto_atencion_id_captado,

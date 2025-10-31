@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, ServicioExterno } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { subDays } from "date-fns";
 import {
@@ -1097,6 +1097,370 @@ export class ServientregaDBService {
     return prisma.servientregaSolicitudAnulacion.update({
       where: { id },
       data,
+    });
+  }
+
+  /**
+   * 📥 INGRESO de servicio externo: Cuando se genera una guía
+   * - Crea MovimientoServicioExterno (INGRESO)
+   * - Actualiza ServicioExternoSaldo (suma)
+   * - Actualiza Saldo general USD (suma)
+   * - Registra en MovimientoSaldo para auditoría
+   * Todo en transacción
+   */
+  async registrarIngresoServicioExterno(
+    puntoAtencionId: string,
+    monto: number,
+    numeroGuia: string
+  ) {
+    return prisma.$transaction(async (tx) => {
+      console.log("📥 [registrarIngresoServicioExterno] Iniciando:", {
+        puntoAtencionId,
+        monto,
+        numeroGuia,
+      });
+
+      // Obtener IDs necesarios
+      const usdId = await ensureUsdMonedaId();
+      const systemUserId = await ensureSystemUserId();
+
+      // 1️⃣ Crear MovimientoServicioExterno
+      console.log("📥 [registrarIngresoServicioExterno] Creando movimiento...");
+      const movimiento = await tx.servicioExternoMovimiento.create({
+        data: {
+          punto_atencion_id: puntoAtencionId,
+          servicio: ServicioExterno.SERVIENTREGA,
+          tipo_movimiento: "INGRESO",
+          moneda_id: usdId,
+          monto: new Prisma.Decimal(monto),
+          numero_referencia: numeroGuia,
+          descripcion: `Ingreso por generación de guía Servientrega #${numeroGuia}`,
+          usuario_id: systemUserId,
+        },
+      });
+
+      console.log(
+        "✅ [registrarIngresoServicioExterno] Movimiento creado:",
+        movimiento.id
+      );
+
+      // 2️⃣ Actualizar ServicioExternoSaldo (crear o actualizar)
+      console.log(
+        "📥 [registrarIngresoServicioExterno] Actualizando saldo de servicio externo..."
+      );
+      const saldoServicio = await tx.servicioExternoSaldo.findUnique({
+        where: {
+          punto_atencion_id_servicio_moneda_id: {
+            punto_atencion_id: puntoAtencionId,
+            servicio: ServicioExterno.SERVIENTREGA,
+            moneda_id: usdId,
+          },
+        },
+      });
+
+      let saldoServicioAnterior = new Prisma.Decimal(0);
+      let saldoServicioNuevo = new Prisma.Decimal(0);
+
+      if (saldoServicio) {
+        saldoServicioAnterior = saldoServicio.cantidad ?? new Prisma.Decimal(0);
+        saldoServicioNuevo = saldoServicioAnterior.add(
+          new Prisma.Decimal(monto)
+        );
+
+        await tx.servicioExternoSaldo.update({
+          where: { id: saldoServicio.id },
+          data: { cantidad: saldoServicioNuevo, updated_at: new Date() },
+        });
+      } else {
+        saldoServicioNuevo = new Prisma.Decimal(monto);
+        await tx.servicioExternoSaldo.create({
+          data: {
+            punto_atencion_id: puntoAtencionId,
+            servicio: ServicioExterno.SERVIENTREGA,
+            moneda_id: usdId,
+            cantidad: saldoServicioNuevo,
+          },
+        });
+      }
+
+      console.log(
+        "✅ [registrarIngresoServicioExterno] Saldo de servicio actualizado"
+      );
+
+      // 3️⃣ Actualizar Saldo general (USD divisas)
+      console.log(
+        "📥 [registrarIngresoServicioExterno] Actualizando saldo general USD..."
+      );
+      const saldoGeneral = await tx.saldo.findUnique({
+        where: {
+          punto_atencion_id_moneda_id: {
+            punto_atencion_id: puntoAtencionId,
+            moneda_id: usdId,
+          },
+        },
+      });
+
+      let saldoGeneralAnterior = new Prisma.Decimal(0);
+      let saldoGeneralNuevo = new Prisma.Decimal(0);
+
+      if (saldoGeneral) {
+        saldoGeneralAnterior = saldoGeneral.cantidad ?? new Prisma.Decimal(0);
+        saldoGeneralNuevo = saldoGeneralAnterior.add(new Prisma.Decimal(monto));
+
+        await tx.saldo.update({
+          where: { id: saldoGeneral.id },
+          data: {
+            cantidad: saldoGeneralNuevo,
+            updated_at: new Date(),
+          },
+        });
+      } else {
+        saldoGeneralNuevo = new Prisma.Decimal(monto);
+        await tx.saldo.create({
+          data: {
+            punto_atencion_id: puntoAtencionId,
+            moneda_id: usdId,
+            cantidad: saldoGeneralNuevo,
+          },
+        });
+      }
+
+      console.log(
+        "✅ [registrarIngresoServicioExterno] Saldo general USD actualizado"
+      );
+
+      // 4️⃣ Registrar en MovimientoSaldo para auditoría
+      console.log(
+        "📥 [registrarIngresoServicioExterno] Registrando MovimientoSaldo..."
+      );
+      await registrarMovimientoSaldo(
+        {
+          puntoAtencionId: puntoAtencionId,
+          monedaId: usdId,
+          tipoMovimiento: TipoMovimiento.INGRESO,
+          monto: monto,
+          saldoAnterior: Number(saldoGeneralAnterior),
+          saldoNuevo: Number(saldoGeneralNuevo),
+          tipoReferencia: TipoReferencia.SERVIENTREGA,
+          referenciaId: numeroGuia,
+          descripcion: `Ingreso por generación de guía Servientrega #${numeroGuia}`,
+          usuarioId: systemUserId,
+        },
+        tx
+      );
+
+      console.log(
+        "✅ [registrarIngresoServicioExterno] MovimientoSaldo registrado"
+      );
+      console.log(
+        "✅ [registrarIngresoServicioExterno] Transacción completada"
+      );
+
+      return {
+        movimiento,
+        saldoServicio: {
+          anterior: Number(saldoServicioAnterior),
+          nuevo: Number(saldoServicioNuevo),
+        },
+        saldoGeneral: {
+          anterior: Number(saldoGeneralAnterior),
+          nuevo: Number(saldoGeneralNuevo),
+        },
+      };
+    });
+  }
+
+  /**
+   * 📤 REVERSIÓN de ingreso: Cuando se cancela una guía
+   * - Crea MovimientoServicioExterno (EGRESO - reversión)
+   * - Actualiza ServicioExternoSaldo (resta)
+   * - Actualiza Saldo general USD (resta)
+   * - Registra en MovimientoSaldo para auditoría
+   * Todo en transacción
+   */
+  async revertirIngresoServicioExterno(
+    puntoAtencionId: string,
+    monto: number,
+    numeroGuia: string
+  ) {
+    return prisma.$transaction(async (tx) => {
+      console.log("📤 [revertirIngresoServicioExterno] Iniciando:", {
+        puntoAtencionId,
+        monto,
+        numeroGuia,
+      });
+
+      // Obtener IDs necesarios
+      const usdId = await ensureUsdMonedaId();
+      const systemUserId = await ensureSystemUserId();
+
+      // 1️⃣ Crear MovimientoServicioExterno (EGRESO - reversión)
+      console.log(
+        "📤 [revertirIngresoServicioExterno] Creando movimiento de reversión..."
+      );
+      const movimiento = await tx.servicioExternoMovimiento.create({
+        data: {
+          punto_atencion_id: puntoAtencionId,
+          servicio: ServicioExterno.SERVIENTREGA,
+          tipo_movimiento: "EGRESO",
+          moneda_id: usdId,
+          monto: new Prisma.Decimal(-monto),
+          numero_referencia: numeroGuia,
+          descripcion: `Reversión por cancelación de guía Servientrega #${numeroGuia}`,
+          usuario_id: systemUserId,
+        },
+      });
+
+      console.log(
+        "✅ [revertirIngresoServicioExterno] Movimiento de reversión creado:",
+        movimiento.id
+      );
+
+      // 2️⃣ Actualizar ServicioExternoSaldo (restar)
+      console.log(
+        "📤 [revertirIngresoServicioExterno] Actualizando saldo de servicio externo..."
+      );
+      const saldoServicio = await tx.servicioExternoSaldo.findUnique({
+        where: {
+          punto_atencion_id_servicio_moneda_id: {
+            punto_atencion_id: puntoAtencionId,
+            servicio: ServicioExterno.SERVIENTREGA,
+            moneda_id: usdId,
+          },
+        },
+      });
+
+      let saldoServicioAnterior = new Prisma.Decimal(0);
+      let saldoServicioNuevo = new Prisma.Decimal(0);
+
+      if (saldoServicio) {
+        saldoServicioAnterior = saldoServicio.cantidad ?? new Prisma.Decimal(0);
+        saldoServicioNuevo = saldoServicioAnterior.sub(
+          new Prisma.Decimal(monto)
+        );
+
+        // Asegurar que no sea negativo
+        if (saldoServicioNuevo.lt(0)) {
+          console.warn(
+            "⚠️ [revertirIngresoServicioExterno] Saldo de servicio sería negativo:",
+            saldoServicioNuevo
+          );
+          // Permitir reversiones incluso si van negativas (para auditoría correcta)
+        }
+
+        await tx.servicioExternoSaldo.update({
+          where: { id: saldoServicio.id },
+          data: { cantidad: saldoServicioNuevo, updated_at: new Date() },
+        });
+      } else {
+        console.warn(
+          "⚠️ [revertirIngresoServicioExterno] No existe saldo de servicio"
+        );
+        saldoServicioNuevo = new Prisma.Decimal(-monto);
+        await tx.servicioExternoSaldo.create({
+          data: {
+            punto_atencion_id: puntoAtencionId,
+            servicio: ServicioExterno.SERVIENTREGA,
+            moneda_id: usdId,
+            cantidad: saldoServicioNuevo,
+          },
+        });
+      }
+
+      console.log(
+        "✅ [revertirIngresoServicioExterno] Saldo de servicio actualizado"
+      );
+
+      // 3️⃣ Actualizar Saldo general (USD divisas) - RESTAR
+      console.log(
+        "📤 [revertirIngresoServicioExterno] Actualizando saldo general USD..."
+      );
+      const saldoGeneral = await tx.saldo.findUnique({
+        where: {
+          punto_atencion_id_moneda_id: {
+            punto_atencion_id: puntoAtencionId,
+            moneda_id: usdId,
+          },
+        },
+      });
+
+      let saldoGeneralAnterior = new Prisma.Decimal(0);
+      let saldoGeneralNuevo = new Prisma.Decimal(0);
+
+      if (saldoGeneral) {
+        saldoGeneralAnterior = saldoGeneral.cantidad ?? new Prisma.Decimal(0);
+        saldoGeneralNuevo = saldoGeneralAnterior.sub(new Prisma.Decimal(monto));
+
+        // Asegurar que no sea negativo
+        if (saldoGeneralNuevo.lt(0)) {
+          console.warn(
+            "⚠️ [revertirIngresoServicioExterno] Saldo general sería negativo:",
+            saldoGeneralNuevo
+          );
+          // Permitir reversiones incluso si van negativas (para auditoría correcta)
+        }
+
+        await tx.saldo.update({
+          where: { id: saldoGeneral.id },
+          data: {
+            cantidad: saldoGeneralNuevo,
+            updated_at: new Date(),
+          },
+        });
+      } else {
+        console.warn(
+          "⚠️ [revertirIngresoServicioExterno] No existe saldo general"
+        );
+        saldoGeneralNuevo = new Prisma.Decimal(-monto);
+        await tx.saldo.create({
+          data: {
+            punto_atencion_id: puntoAtencionId,
+            moneda_id: usdId,
+            cantidad: saldoGeneralNuevo,
+          },
+        });
+      }
+
+      console.log(
+        "✅ [revertirIngresoServicioExterno] Saldo general USD actualizado"
+      );
+
+      // 4️⃣ Registrar en MovimientoSaldo para auditoría
+      console.log(
+        "📤 [revertirIngresoServicioExterno] Registrando MovimientoSaldo..."
+      );
+      await registrarMovimientoSaldo(
+        {
+          puntoAtencionId: puntoAtencionId,
+          monedaId: usdId,
+          tipoMovimiento: TipoMovimiento.EGRESO,
+          monto: monto,
+          saldoAnterior: Number(saldoGeneralAnterior),
+          saldoNuevo: Number(saldoGeneralNuevo),
+          tipoReferencia: TipoReferencia.SERVIENTREGA,
+          referenciaId: numeroGuia,
+          descripcion: `Reversión por cancelación de guía Servientrega #${numeroGuia}`,
+          usuarioId: systemUserId,
+        },
+        tx
+      );
+
+      console.log(
+        "✅ [revertirIngresoServicioExterno] MovimientoSaldo registrado"
+      );
+      console.log("✅ [revertirIngresoServicioExterno] Transacción completada");
+
+      return {
+        movimiento,
+        saldoServicio: {
+          anterior: Number(saldoServicioAnterior),
+          nuevo: Number(saldoServicioNuevo),
+        },
+        saldoGeneral: {
+          anterior: Number(saldoGeneralAnterior),
+          nuevo: Number(saldoGeneralNuevo),
+        },
+      };
     });
   }
 }

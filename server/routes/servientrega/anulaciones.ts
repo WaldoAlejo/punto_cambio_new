@@ -2,6 +2,7 @@ import express from "express";
 import { authenticateToken } from "../../middleware/auth.js";
 import { ServientregaDBService } from "../../services/servientregaDBService.js";
 import { ServientregaAPIService } from "../../services/servientregaAPIService.js";
+import prisma from "../../lib/prisma.js";
 
 const router = express.Router();
 const dbService = new ServientregaDBService();
@@ -181,8 +182,74 @@ router.put(
 
       if (estado === "APROBADA") {
         try {
+          // 1. Obtener datos de la guía (costo_envio, punto_atencion_id)
+          const guia = await prisma.servientregaGuia.findUnique({
+            where: { numero_guia: solicitudActualizada.numero_guia },
+            select: {
+              id: true,
+              costo_envio: true,
+              punto_atencion_id: true,
+            },
+          });
+
+          if (!guia) {
+            throw new Error(
+              `Guía no encontrada: ${solicitudActualizada.numero_guia}`
+            );
+          }
+
+          if (!guia.punto_atencion_id) {
+            throw new Error(
+              `La guía no tiene punto_atencion_id asignado: ${solicitudActualizada.numero_guia}`
+            );
+          }
+
+          // 2. Procesar anulación en Servientrega API
           await procesarAnulacionServientrega(solicitudActualizada.numero_guia);
           await dbService.anularGuia(solicitudActualizada.numero_guia);
+
+          // 3. Revertir los balances (restar del Saldo USD general, sumar al ServientregaSaldo)
+          if (guia.costo_envio && guia.costo_envio > 0) {
+            console.log(
+              "💰 Revirtiendo ingreso de servicio externo por anulación de guía..."
+            );
+            try {
+              const resultadoReversal =
+                await dbService.revertirIngresoServicioExterno(
+                  guia.punto_atencion_id,
+                  Number(guia.costo_envio),
+                  solicitudActualizada.numero_guia
+                );
+
+              console.log(
+                "✅ Ingreso de servicio externo revertido exitosamente:",
+                {
+                  numero_guia: solicitudActualizada.numero_guia,
+                  monto: Number(guia.costo_envio),
+                  saldoServicioAnterior:
+                    resultadoReversal.saldoServicio.anterior,
+                  saldoServicioNuevo: resultadoReversal.saldoServicio.nuevo,
+                  saldoGeneralAnterior: resultadoReversal.saldoGeneral.anterior,
+                  saldoGeneralNuevo: resultadoReversal.saldoGeneral.nuevo,
+                }
+              );
+            } catch (reversalError) {
+              console.error(
+                "⚠️ Error al revertir ingreso de servicio externo:",
+                reversalError
+              );
+              // Registrar el error pero no fallar completamente
+              await dbService.actualizarSolicitudAnulacion(id, {
+                observaciones_respuesta: `${
+                  observaciones || ""
+                }\n\n⚠️ Aviso: Anulación exitosa en Servientrega, pero hubo un error al revertir los movimientos de balance: ${
+                  reversalError instanceof Error
+                    ? reversalError.message
+                    : String(reversalError)
+                }`,
+              });
+            }
+          }
         } catch (apiError) {
           await dbService.actualizarSolicitudAnulacion(id, {
             observaciones_respuesta: `${
@@ -277,8 +344,74 @@ router.post(
 
       if (estado === "APROBADA") {
         try {
+          // 1. Obtener datos de la guía (costo_envio, punto_atencion_id)
+          const guia = await prisma.servientregaGuia.findUnique({
+            where: { numero_guia: solicitudActualizada.numero_guia },
+            select: {
+              id: true,
+              costo_envio: true,
+              punto_atencion_id: true,
+            },
+          });
+
+          if (!guia) {
+            throw new Error(
+              `Guía no encontrada: ${solicitudActualizada.numero_guia}`
+            );
+          }
+
+          if (!guia.punto_atencion_id) {
+            throw new Error(
+              `La guía no tiene punto_atencion_id asignado: ${solicitudActualizada.numero_guia}`
+            );
+          }
+
+          // 2. Procesar anulación en Servientrega API
           await procesarAnulacionServientrega(solicitudActualizada.numero_guia);
           await dbService.anularGuia(solicitudActualizada.numero_guia);
+
+          // 3. Revertir los balances (restar del Saldo USD general, sumar al ServientregaSaldo)
+          if (guia.costo_envio && guia.costo_envio > 0) {
+            console.log(
+              "💰 Revirtiendo ingreso de servicio externo por anulación de guía..."
+            );
+            try {
+              const resultadoReversal =
+                await dbService.revertirIngresoServicioExterno(
+                  guia.punto_atencion_id,
+                  Number(guia.costo_envio),
+                  solicitudActualizada.numero_guia
+                );
+
+              console.log(
+                "✅ Ingreso de servicio externo revertido exitosamente:",
+                {
+                  numero_guia: solicitudActualizada.numero_guia,
+                  monto: Number(guia.costo_envio),
+                  saldoServicioAnterior:
+                    resultadoReversal.saldoServicio.anterior,
+                  saldoServicioNuevo: resultadoReversal.saldoServicio.nuevo,
+                  saldoGeneralAnterior: resultadoReversal.saldoGeneral.anterior,
+                  saldoGeneralNuevo: resultadoReversal.saldoGeneral.nuevo,
+                }
+              );
+            } catch (reversalError) {
+              console.error(
+                "⚠️ Error al revertir ingreso de servicio externo:",
+                reversalError
+              );
+              // Registrar el error pero no fallar completamente
+              await dbService.actualizarSolicitudAnulacion(solicitud_id, {
+                observaciones_respuesta: `${
+                  comentario || ""
+                }\n\n⚠️ Aviso: Anulación exitosa en Servientrega, pero hubo un error al revertir los movimientos de balance: ${
+                  reversalError instanceof Error
+                    ? reversalError.message
+                    : String(reversalError)
+                }`,
+              });
+            }
+          }
         } catch (apiError) {
           await dbService.actualizarSolicitudAnulacion(solicitud_id, {
             observaciones_respuesta: `${
