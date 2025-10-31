@@ -518,6 +518,7 @@ model ServientregaGuia {
   id                String                   @id @default(uuid())
   numero_guia       String                   @unique
   proceso           String
+  estado            String                   @default("ACTIVA") // ACTIVA, ANULADA, PENDIENTE_ANULACION
   base64_response   String?
   remitente_id      String?
   destinatario_id   String?
@@ -537,6 +538,7 @@ model ServientregaGuia {
   @@index([usuario_id])
   @@index([usuario_id, punto_atencion_id])
   @@index([proceso])
+  @@index([estado])
 }
 
 model ServientregaSaldo {

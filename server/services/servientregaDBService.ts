@@ -306,7 +306,10 @@ export class ServientregaDBService {
   async anularGuia(numeroGuia: string) {
     return prisma.servientregaGuia.updateMany({
       where: { numero_guia: numeroGuia },
-      data: { proceso: "Anulada" },
+      data: {
+        proceso: "Anulada",
+        estado: "ANULADA",
+      },
     });
   }
 
@@ -1071,16 +1074,30 @@ export class ServientregaDBService {
     solicitado_por: string;
     solicitado_por_nombre: string;
   }) {
-    return prisma.servientregaSolicitudAnulacion.create({
-      data: {
-        guia_id: data.guia_id,
-        numero_guia: data.numero_guia,
-        motivo_anulacion: data.motivo_anulacion,
-        estado: "PENDIENTE",
-        solicitado_por: data.solicitado_por,
-        solicitado_por_nombre: data.solicitado_por_nombre,
-        fecha_solicitud: new Date(),
-      },
+    return prisma.$transaction(async (tx) => {
+      // Crear la solicitud de anulación
+      const solicitud = await tx.servientregaSolicitudAnulacion.create({
+        data: {
+          guia_id: data.guia_id,
+          numero_guia: data.numero_guia,
+          motivo_anulacion: data.motivo_anulacion,
+          estado: "PENDIENTE",
+          solicitado_por: data.solicitado_por,
+          solicitado_por_nombre: data.solicitado_por_nombre,
+          fecha_solicitud: new Date(),
+        },
+      });
+
+      // Actualizar el estado de la guía a PENDIENTE_ANULACION
+      await tx.servientregaGuia.updateMany({
+        where: { numero_guia: data.numero_guia },
+        data: {
+          estado: "PENDIENTE_ANULACION",
+          updated_at: new Date(),
+        },
+      });
+
+      return solicitud;
     });
   }
 
