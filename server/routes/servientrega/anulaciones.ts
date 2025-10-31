@@ -239,9 +239,9 @@ router.put(
                 reversalError
               );
               // Registrar el error pero no fallar completamente
-              await dbService.actualizarSolicitudAnulacion(solicitud_id, {
+              await dbService.actualizarSolicitudAnulacion(id, {
                 observaciones_respuesta: `${
-                  comentario || ""
+                  observaciones || ""
                 }\n\n⚠️ Aviso: Anulación exitosa en Servientrega, pero hubo un error al revertir los movimientos de balance: ${
                   reversalError instanceof Error
                     ? reversalError.message
@@ -251,9 +251,9 @@ router.put(
             }
           }
         } catch (apiError) {
-          await dbService.actualizarSolicitudAnulacion(solicitud_id, {
+          await dbService.actualizarSolicitudAnulacion(id, {
             observaciones_respuesta: `${
-              comentario || ""
+              observaciones || ""
             }\n\nError en API Servientrega: ${
               apiError instanceof Error ? apiError.message : String(apiError)
             }`,
