@@ -222,7 +222,7 @@ const Reports: React.FC<ReportsProps> = ({ user: _user }) => {
       const token = localStorage.getItem("authToken");
       const response = await fetch(
         `${
-          import.meta.env.VITE_API_URL || "http://34.70.184.11:3001/api"
+          import.meta.env.VITE_API_URL || "http://34.122.108.114:3001/api"
         }/reports`,
         {
           method: "POST",

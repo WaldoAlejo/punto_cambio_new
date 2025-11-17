@@ -191,9 +191,9 @@ app.use(
       "http://localhost:3000",
       "http://localhost:3001",
       "http://localhost:8080",
-      "http://34.70.184.11:3001", // IP pública puerto 3001 (producción)
-      "http://34.70.184.11:8080", // IP pública frontend puerto 8080
-      "http://34.70.184.11", // IP pública frontend puerto 80
+      "http://34.122.108.114:3001", // IP pública puerto 3001 (producción)
+      "http://34.122.108.114:8080", // IP pública frontend puerto 8080
+      "http://34.122.108.114", // IP pública frontend puerto 80
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
