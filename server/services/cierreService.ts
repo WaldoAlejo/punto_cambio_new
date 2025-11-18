@@ -357,11 +357,20 @@ class CierreService {
 
   /**
    * Realiza el cierre diario completo (transaccional)
-   * 1. Valida que sea posible
-   * 2. Guarda el cuadre de caja con detalles
-   * 3. Marca el cierre diario como CERRADO
-   * 4. Finaliza la jornada si existe una activa
-   * 5. Actualiza saldos en la tabla Saldo (opcional, ya que MovimientoSaldo es la fuente de verdad)
+   *
+   * REGLAS DE NEGOCIO:
+   * ══════════════════════════════════════════════════════════════════════════
+   * 1. El saldo CUADRADO al cierre se convierte en el saldo inicial del siguiente día
+   * 2. Si el administrador hace una asignación nueva, se suma al saldo inicial existente
+   * 3. El operador inicia el siguiente día con el saldo que cuadró el día anterior
+   * 4. Proceso:
+   *    a) Validar que sea posible realizar el cierre
+   *    b) Guardar el cuadre de caja con detalles (conteo físico vs teórico)
+   *    c) Marcar el cierre diario como CERRADO
+   *    d) Finalizar la jornada activa si existe
+   *    e) Actualizar saldos en tabla Saldo con el CONTEO FÍSICO (saldo cuadrado)
+   *    f) Este saldo cuadrado será el punto de partida del siguiente día
+   * ══════════════════════════════════════════════════════════════════════════
    */
   async realizarCierreDiario(datos: DatosCierre): Promise<ResultadoCierre> {
     const { punto_atencion_id, usuario_id, fecha, detalles, observaciones } =
@@ -555,7 +564,11 @@ class CierreService {
           });
         }
 
-        // 2.5. Actualizar saldos en tabla Saldo (opcional pero recomendado para reportes rápidos)
+        // 2.5. Actualizar saldos en tabla Saldo con CONTEO FÍSICO
+        // ═══════════════════════════════════════════════════════════════════
+        // CRÍTICO: El saldo al cierre (conteo físico) es el saldo inicial
+        // del siguiente día. Este es el dinero real que tiene el punto.
+        // ═══════════════════════════════════════════════════════════════════
         for (const detalle of detalles) {
           await tx.saldo.upsert({
             where: {
@@ -565,7 +578,7 @@ class CierreService {
               },
             },
             update: {
-              cantidad: detalle.conteo_fisico,
+              cantidad: detalle.conteo_fisico, // ✅ SALDO CUADRADO = SALDO INICIAL del siguiente día
               billetes: detalle.billetes || 0,
               monedas_fisicas: detalle.monedas_fisicas || 0,
               updated_at: new Date(),
@@ -577,6 +590,14 @@ class CierreService {
               billetes: detalle.billetes || 0,
               monedas_fisicas: detalle.monedas_fisicas || 0,
             },
+          });
+
+          logger.info("✅ Saldo actualizado para siguiente día", {
+            punto_atencion_id,
+            moneda_id: detalle.moneda_id,
+            saldo_nuevo_inicial: detalle.conteo_fisico,
+            billetes: detalle.billetes || 0,
+            monedas: detalle.monedas_fisicas || 0,
           });
         }
 

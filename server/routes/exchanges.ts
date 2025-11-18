@@ -715,10 +715,20 @@ router.post(
           },
         });
 
-        // 3) SALDOS (cuadre SOLO EFECTIVO; bancos se registran pero NO se cuadran)
-        // ✅ NUEVO: Calcular porcentaje de actualización según estado
-        // Si es PENDIENTE (con abono inicial), solo actualizar proporcionalmente
-        // Si es COMPLETADO, actualizar el monto completo
+        // 3) SALDOS Y CUADRE DE CAJA
+        // ═══════════════════════════════════════════════════════════════════════
+        // REGLAS DE NEGOCIO:
+        // 1. EFECTIVO: Se controla al centavo, afecta cuadre de caja
+        // 2. BANCOS: NO tiene límites, solo es registro, NO afecta cuadre
+        // 3. CAMBIOS PARCIALES: Cuando el punto no tiene divisas suficientes:
+        //    - Cliente deja abono inicial (ej: 30% del total)
+        //    - Sistema actualiza SOLO el 30% de los saldos físicos
+        //    - Cliente firma compromiso y regresa después
+        //    - Al completar, se actualiza el 70% restante
+        // 4. TRANSFERENCIAS: Poco común, solo cuando hay cantidades muy grandes
+        // ═══════════════════════════════════════════════════════════════════════
+
+        // ✅ Calcular porcentaje de actualización según estado
         const porcentajeActualizacion =
           cambio.estado === EstadoTransaccion.PENDIENTE &&
           num(abono_inicial_monto) > 0
@@ -816,6 +826,8 @@ router.post(
             descripcion: `Ingreso por cambio (efectivo, origen) ${numeroRecibo}`,
           });
         }
+        // BANCOS: Solo registro, NO afecta cuadre de caja
+        // Los bancos NO tienen límite ni control estricto, solo son para trazabilidad
         if (ingresoBk > 0 && typeof saldoOrigen?.bancos !== "undefined") {
           await logMovimientoSaldo(tx, {
             punto_atencion_id,
@@ -827,7 +839,7 @@ router.post(
             usuario_id: req.user!.id,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
-            descripcion: `Ingreso por cambio (bancos, origen)`,
+            descripcion: `Ingreso por cambio (transferencia bancaria - NO afecta cuadre físico)`,
           });
         }
 
@@ -890,20 +902,19 @@ router.post(
         egresoEf = round2(egresoEf * porcentajeActualizacion);
         egresoBk = round2(egresoBk * porcentajeActualizacion);
 
-        // Validaciones (evitamos números negativos)
+        // Validaciones de EFECTIVO (estrictas al centavo)
         if (destinoAnteriorEf < egresoEf) {
           throw new Error(
-            "Saldo efectivo insuficiente en moneda destino para realizar el cambio"
+            `Saldo efectivo insuficiente en moneda destino. Disponible: $${destinoAnteriorEf.toFixed(
+              2
+            )}, Requerido: $${egresoEf.toFixed(2)}. ` +
+              `Considera: 1) Hacer cambio PARCIAL (abono inicial), 2) Transferir desde otro punto, 3) Solicitar asignación de saldo.`
           );
         }
-        if (
-          typeof saldoDestino?.bancos !== "undefined" &&
-          destinoAnteriorBk < egresoBk
-        ) {
-          throw new Error(
-            "Saldo en bancos insuficiente para realizar el cambio por transferencia"
-          );
-        }
+
+        // BANCOS: NO validar límites (puede ser negativo, es solo registro)
+        // Los bancos NO tienen monto mínimo/máximo, solo control para reportes
+        // Si hay egreso por banco, simplemente se registra sin validación de saldo
 
         const destinoNuevoEf = round2(destinoAnteriorEf - egresoEf);
         const destinoNuevoBk = round2(destinoAnteriorBk - egresoBk);

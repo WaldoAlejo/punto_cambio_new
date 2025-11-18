@@ -214,7 +214,24 @@ router.post(
           });
         }
 
-        // Actualizar saldo general del punto según el tipo de movimiento
+        // ═══════════════════════════════════════════════════════════════════════
+        // SERVICIOS EXTERNOS - LÓGICA DE SALDOS
+        // ═══════════════════════════════════════════════════════════════════════
+        // El operador tiene:
+        // 1. Saldo digital del servicio (ej: $100 en Western) - Control administrativo
+        // 2. Saldo físico general del punto (ej: $500 en caja) - Control estricto
+        //
+        // EJEMPLO REAL:
+        // - Operador tiene $100 saldo digital Western y $500 efectivo en caja
+        // - Llega pago Western de $300 por transferencia del exterior
+        // - Operador TOMA $300 del saldo físico de caja y le paga al cliente
+        // - Sistema: RESTA $300 del saldo físico general (queda $200 en caja)
+        // - Sistema: RESTA $300 del saldo digital Western (queda -$200, necesita recarga)
+        //
+        // CONCLUSIÓN: Los movimientos de servicios externos SIEMPRE afectan
+        // el saldo físico porque el operador usa el efectivo de la caja.
+        // ═══════════════════════════════════════════════════════════════════════
+
         const saldoGeneral = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -268,7 +285,9 @@ router.post(
           },
         });
 
-        // Trazabilidad en MovimientoSaldo usando servicio centralizado (dentro de la transacción)
+        // Trazabilidad en MovimientoSaldo para el SALDO FÍSICO GENERAL
+        // Nota: También se registró el movimiento en ServicioExternoMovimiento
+        // para control del saldo digital específico del servicio
         await registrarMovimientoSaldo(
           {
             puntoAtencionId: puntoId,
@@ -276,11 +295,12 @@ router.post(
             tipoMovimiento:
               tipo_movimiento === "INGRESO" ? TipoMov.INGRESO : TipoMov.EGRESO,
             monto: montoNum, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
-            saldoAnterior: anterior,
-            saldoNuevo: nuevo,
+            saldoAnterior: Number(saldoGeneral?.cantidad || 0),
+            saldoNuevo: nuevoSaldoGeneral,
             tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
             referenciaId: svcMov.id,
-            descripcion: descripcion || undefined,
+            descripcion:
+              `${servicio} - ${descripcion || tipo_movimiento}` || undefined,
             usuarioId: (req as any).user.id,
           },
           tx

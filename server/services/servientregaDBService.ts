@@ -1118,6 +1118,15 @@ export class ServientregaDBService {
   }
 
   /**
+   * Obtener una solicitud de anulación por ID
+   */
+  async obtenerSolicitudAnulacion(id: string) {
+    return prisma.servientregaSolicitudAnulacion.findUnique({
+      where: { id },
+    });
+  }
+
+  /**
    * 📥 INGRESO de servicio externo: Cuando se genera una guía
    * - Crea MovimientoServicioExterno (INGRESO)
    * - Actualiza ServicioExternoSaldo (suma)

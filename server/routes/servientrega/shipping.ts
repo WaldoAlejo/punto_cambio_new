@@ -288,18 +288,57 @@ router.post("/generar-guia", async (req, res) => {
           const punto = await prisma.puntoAtencion.findUnique({
             where: { id: punto_atencion_id_captado },
             select: {
+              nombre: true,
+              servientrega_agencia_codigo: true,
+              servientrega_agencia_nombre: true,
               servientrega_alianza: true,
               servientrega_oficina_alianza: true,
             },
           });
-          if (punto?.servientrega_alianza) {
+
+          // ⚠️ VALIDACIÓN CRÍTICA: Solo puntos con Servientrega configurado pueden generar guías
+          if (!punto) {
+            return res.status(404).json({
+              error: "Punto de atención no encontrado",
+              mensaje: `No se encontró el punto de atención con ID: ${punto_atencion_id_captado}`,
+            });
+          }
+
+          if (!punto.servientrega_agencia_codigo) {
+            return res.status(403).json({
+              error: "Servientrega no habilitado",
+              mensaje:
+                `El punto "${punto.nombre}" no tiene Servientrega configurado. ` +
+                `Por favor, contacta al administrador para asignar una agencia de Servientrega a este punto.`,
+              punto_nombre: punto.nombre,
+              punto_id: punto_atencion_id_captado,
+              solucion:
+                "El administrador debe ir a Puntos de Atención y configurar los campos de Servientrega para este punto.",
+            });
+          }
+
+          // Si tiene agencia configurada, usar los datos específicos del punto
+          if (punto.servientrega_alianza) {
             servientregaAlianza = punto.servientrega_alianza;
           }
-          if (punto?.servientrega_oficina_alianza) {
+          if (punto.servientrega_oficina_alianza) {
             servientregaOficinaAlianza = punto.servientrega_oficina_alianza;
           }
+
+          console.log("✅ Punto con Servientrega habilitado:", {
+            punto_id: punto_atencion_id_captado,
+            punto_nombre: punto.nombre,
+            agencia_codigo: punto.servientrega_agencia_codigo,
+            agencia_nombre: punto.servientrega_agencia_nombre,
+          });
         } catch (e) {
-          console.warn("No se pudo obtener datos del punto de atención:", e);
+          console.error("❌ Error al validar punto de atención:", e);
+          return res.status(500).json({
+            error: "Error de validación",
+            mensaje:
+              "No se pudo validar la configuración de Servientrega para este punto",
+            detalles: e instanceof Error ? e.message : String(e),
+          });
         }
       }
 

@@ -169,44 +169,67 @@ router.put(
       const estado =
         String(accion).toUpperCase() === "APROBAR" ? "APROBADA" : "RECHAZADA";
 
-      const solicitudActualizada = await dbService.actualizarSolicitudAnulacion(
-        id,
-        {
-          estado,
-          respondido_por: usuario?.id || "SYSTEM",
-          respondido_por_nombre: usuario?.nombre || "Sistema",
-          observaciones_respuesta: observaciones || "",
-          fecha_respuesta: new Date(),
-        }
-      );
-
+      // ⚠️ FLUJO CORREGIDO: Primero validar y anular en API, LUEGO actualizar solicitud
       if (estado === "APROBADA") {
         try {
-          // 1. Obtener datos de la guía (costo_envio, punto_atencion_id)
+          // 1. Obtener la solicitud actual para tener el numero_guia
+          const solicitudActual = await dbService.obtenerSolicitudAnulacion(id);
+          if (!solicitudActual) {
+            return res.status(404).json({
+              success: false,
+              error: "Solicitud no encontrada",
+            });
+          }
+
+          // 2. Obtener datos de la guía (costo_envio, punto_atencion_id)
           const guia = await prisma.servientregaGuia.findUnique({
-            where: { numero_guia: solicitudActualizada.numero_guia },
+            where: { numero_guia: solicitudActual.numero_guia },
             select: {
               id: true,
               costo_envio: true,
               punto_atencion_id: true,
+              numero_guia: true,
             },
           });
 
           if (!guia) {
-            throw new Error(
-              `Guía no encontrada: ${solicitudActualizada.numero_guia}`
-            );
+            return res.status(404).json({
+              success: false,
+              error: "Guía no encontrada",
+              message: `No se encontró la guía ${solicitudActual.numero_guia} en el sistema`,
+            });
           }
 
           if (!guia.punto_atencion_id) {
-            throw new Error(
-              `La guía no tiene punto_atencion_id asignado: ${solicitudActualizada.numero_guia}`
-            );
+            return res.status(400).json({
+              success: false,
+              error: "Punto de atención no asignado",
+              message: `La guía ${guia.numero_guia} no tiene punto de atención asignado`,
+            });
           }
 
-          // 2. Procesar anulación en Servientrega API
-          await procesarAnulacionServientrega(solicitudActualizada.numero_guia);
-          await dbService.anularGuia(solicitudActualizada.numero_guia);
+          // 3. ✅ PRIMERO intentar anular en Servientrega API (CRÍTICO)
+          console.log("🔄 Intentando anular guía en Servientrega API...", {
+            numero_guia: guia.numero_guia,
+            solicitud_id: id,
+          });
+
+          await procesarAnulacionServientrega(guia.numero_guia);
+
+          console.log("✅ Anulación exitosa en Servientrega API");
+
+          // 4. Solo si la API confirmó, actualizar en nuestra BD
+          await dbService.anularGuia(guia.numero_guia);
+
+          // 5. Ahora sí, actualizar la solicitud como APROBADA
+          const solicitudActualizada =
+            await dbService.actualizarSolicitudAnulacion(id, {
+              estado: "APROBADA",
+              respondido_por: usuario?.id || "SYSTEM",
+              respondido_por_nombre: usuario?.nombre || "Sistema",
+              observaciones_respuesta: observaciones || "",
+              fecha_respuesta: new Date(),
+            });
 
           // 3. Revertir los balances (restar del Saldo USD general, sumar al ServientregaSaldo)
           if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
@@ -218,13 +241,13 @@ router.put(
                 await dbService.revertirIngresoServicioExterno(
                   guia.punto_atencion_id,
                   Number(guia.costo_envio),
-                  solicitudActualizada.numero_guia
+                  guia.numero_guia
                 );
 
               console.log(
                 "✅ Ingreso de servicio externo revertido exitosamente:",
                 {
-                  numero_guia: solicitudActualizada.numero_guia,
+                  numero_guia: guia.numero_guia,
                   monto: Number(guia.costo_envio),
                   saldoServicioAnterior:
                     resultadoReversal.saldoServicio.anterior,
@@ -238,11 +261,11 @@ router.put(
                 "⚠️ Error al revertir ingreso de servicio externo:",
                 reversalError
               );
-              // Registrar el error pero no fallar completamente
+              // Registrar el error pero la anulación ya fue exitosa en Servientrega
               await dbService.actualizarSolicitudAnulacion(id, {
-                observaciones_respuesta: `${
-                  observaciones || ""
-                }\n\n⚠️ Aviso: Anulación exitosa en Servientrega, pero hubo un error al revertir los movimientos de balance: ${
+                observaciones_respuesta: `${observaciones || ""}
+
+⚠️ Aviso: Anulación exitosa en Servientrega, pero hubo un error al revertir los movimientos de balance: ${
                   reversalError instanceof Error
                     ? reversalError.message
                     : String(reversalError)
@@ -250,22 +273,46 @@ router.put(
               });
             }
           }
+
+          return res.json({
+            success: true,
+            message: `Solicitud aprobada y guía anulada exitosamente en Servientrega`,
+            data: solicitudActualizada,
+          });
         } catch (apiError) {
-          await dbService.actualizarSolicitudAnulacion(id, {
-            observaciones_respuesta: `${
-              observaciones || ""
-            }\n\nError en API Servientrega: ${
-              apiError instanceof Error ? apiError.message : String(apiError)
-            }`,
+          // ❌ Si falla la API de Servientrega, NO aprobar la solicitud
+          console.error(
+            "❌ Error en API Servientrega al anular guía:",
+            apiError
+          );
+
+          // Registrar el error en observaciones pero mantener estado PENDIENTE
+          return res.status(500).json({
+            success: false,
+            error: "Error en API Servientrega",
+            message:
+              "No se pudo anular la guía en Servientrega. La solicitud permanece PENDIENTE.",
+            detalles:
+              apiError instanceof Error ? apiError.message : String(apiError),
           });
         }
-      }
+      } else {
+        // Si es rechazo, simplemente actualizar
+        const solicitudActualizada =
+          await dbService.actualizarSolicitudAnulacion(id, {
+            estado: "RECHAZADA",
+            respondido_por: usuario?.id || "SYSTEM",
+            respondido_por_nombre: usuario?.nombre || "Sistema",
+            observaciones_respuesta: observaciones || "",
+            fecha_respuesta: new Date(),
+          });
 
-      return res.json({
-        success: true,
-        message: `Solicitud ${estado.toLowerCase()} exitosamente`,
-        data: solicitudActualizada,
-      });
+        return res.json({
+          success: true,
+          message: `Solicitud rechazada exitosamente`,
+          data: solicitudActualizada,
+        });
+      }
     } catch (error) {
       console.error("❌ Error al responder solicitud:", error);
       return sendError(res, 500, error);

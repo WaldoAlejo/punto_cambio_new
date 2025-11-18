@@ -8,6 +8,27 @@ import transferController from "../controllers/transferController.js";
 
 const router = express.Router();
 
+// ═══════════════════════════════════════════════════════════════════════
+// TRANSFERENCIAS ENTRE PUNTOS - LÓGICA DE NEGOCIO
+// ═══════════════════════════════════════════════════════════════════════
+// IMPORTANTE: Las transferencias son MOVIMIENTOS FÍSICOS DE EFECTIVO
+// NO son transferencias bancarias.
+//
+// PROCESO REAL:
+// 1. Punto A necesita enviar $500 USD a Punto B
+// 2. Sistema resta $500 del saldo físico de Punto A
+// 3. Operador de Punto A toma el efectivo de la caja
+// 4. Operador se traslada físicamente (taxi, caminando, moto) al Punto B
+// 5. Entrega el efectivo al operador de Punto B
+// 6. Sistema suma $500 al saldo físico de Punto B
+// 7. Ambos puntos registran el movimiento en su cuadre de caja
+//
+// NOTA: El campo "via" puede ser:
+// - EFECTIVO: Movimiento físico normal (99% de los casos)
+// - BANCO: Solo para casos excepcionales de control administrativo
+// - MIXTO: Combinación de ambos
+// ═══════════════════════════════════════════════════════════════════════
+
 // Schema para crear transferencias
 const createTransferSchema = z.object({
   origen_id: z.string().uuid().optional().nullable(),
