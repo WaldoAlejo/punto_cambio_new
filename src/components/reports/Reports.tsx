@@ -492,7 +492,11 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
             profesional
           </p>
         </div>
-        <Button variant="outline" onClick={clearFilters} className="shrink-0 w-full sm:w-auto">
+        <Button
+          variant="outline"
+          onClick={clearFilters}
+          className="shrink-0 w-full sm:w-auto"
+        >
           <RefreshCw className="w-4 h-4 mr-2" />
           Limpiar Filtros
         </Button>
