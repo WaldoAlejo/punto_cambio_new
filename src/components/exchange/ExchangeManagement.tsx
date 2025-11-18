@@ -128,7 +128,7 @@ const ExchangeManagement = ({
         {/* Encabezado */}
         <div className="bg-card rounded-xl shadow-lg p-4 sm:p-6 border border-border/50">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-            <div className="flex-1 min-w-0">className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0">
               <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary mb-1 sm:mb-2">
                 💱 Cambio de Divisas
               </h1>

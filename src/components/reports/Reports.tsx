@@ -482,7 +482,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
   return (
     <div className="w-full p-2 sm:p-3 md:p-4 space-y-4 sm:space-y-6">
       {/* Header mejorado */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">m:gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div className="space-y-1 flex-1 min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
             📊 Reportes Generales
