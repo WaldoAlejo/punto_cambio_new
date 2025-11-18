@@ -124,15 +124,15 @@ const ExchangeManagement = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5">
-      <div className="container mx-auto p-6 space-y-8">
+      <div className="w-full p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 md:space-y-8">
         {/* Encabezado */}
-        <div className="bg-card rounded-xl shadow-lg p-6 border border-border/50">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-primary mb-2">
+        <div className="bg-card rounded-xl shadow-lg p-4 sm:p-6 border border-border/50">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+            <div className="flex-1 min-w-0">className="flex-1 min-w-0">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary mb-1 sm:mb-2">
                 💱 Cambio de Divisas
               </h1>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground text-xs sm:text-sm lg:text-base">
                 Gestiona las operaciones donde el cliente entrega una divisa y
                 recibe otra.
               </p>

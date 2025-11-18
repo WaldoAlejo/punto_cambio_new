@@ -216,7 +216,7 @@ export const ServientregaInformes = ({
   // Si hay error 404, mostrar mensaje informativo
   if (error && error.includes("no están disponibles")) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-800">
             Informes de Servientrega

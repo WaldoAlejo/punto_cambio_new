@@ -76,8 +76,8 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#C21807]/90 via-[#FFD600]/70 to-[#0D47A1]/80 p-4 transition-all duration-300">
-      <div className="backdrop-blur-xl bg-white/70 rounded-3xl shadow-2xl ring-2 ring-[#C21807]/10 hover:ring-[#C21807]/30 transition-all w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#C21807]/90 via-[#FFD600]/70 to-[#0D47A1]/80 p-3 sm:p-4 md:p-6 transition-all duration-300">
+      <div className="backdrop-blur-xl bg-white/70 rounded-3xl shadow-2xl ring-2 ring-[#C21807]/10 hover:ring-[#C21807]/30 transition-all w-full max-w-lg">
         <Card className="bg-transparent shadow-none border-none">
           <CardHeader className="space-y-3">
             {/* LOGO SI EXISTE, SINO ICON */}
@@ -85,10 +85,10 @@ const Login = () => {
               {/* Cambia por <img src="/logo.svg" ... /> si tienes logo SVG */}
               <ShieldCheck className="w-12 h-12 text-[#C21807]" />
             </div>
-            <CardTitle className="text-3xl text-center font-bold text-[#C21807] tracking-tight drop-shadow">
+            <CardTitle className="text-2xl sm:text-3xl text-center font-bold text-[#C21807] tracking-tight drop-shadow">
               Casas de Cambios
             </CardTitle>
-            <CardDescription className="text-center text-base text-[#0D47A1]/80">
+            <CardDescription className="text-center text-sm sm:text-base text-[#0D47A1]/80">
               Ingresa tus credenciales para acceder al sistema
             </CardDescription>
           </CardHeader>

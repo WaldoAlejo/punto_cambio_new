@@ -35,9 +35,9 @@ const Header = ({
   };
 
   return (
-    <header className="bg-white border-b px-3 py-2 flex items-center justify-between min-h-[48px]">
+    <header className="bg-white border-b px-2 sm:px-3 md:px-4 py-2 flex items-center justify-between min-h-[48px] sm:min-h-[56px]">
       {/* Izquierda: Logo + Título + Info */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
         <Button
           variant="ghost"
           size="sm"
@@ -63,10 +63,10 @@ const Header = ({
       </div>
 
       {/* Derecha: Notificación + Usuario + Logout */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
         <TransferNotifications onNotificationClick={handleNotificationClick} />
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <div className="text-right hidden sm:block">
             <p className="text-xs font-medium text-gray-900 truncate">
               {user.nombre}

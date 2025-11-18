@@ -265,7 +265,7 @@ const Sidebar = ({
         className={`
           fixed top-0 left-0 h-screen bg-white border-r z-50 transition-all duration-300
           flex flex-col
-          ${isOpen ? "w-56" : "w-14"}
+          ${isOpen ? "w-64 sm:w-72 lg:w-64" : "w-12 sm:w-14"}
           ${isMobile ? "shadow-xl" : ""}
           lg:relative lg:z-auto
         `}

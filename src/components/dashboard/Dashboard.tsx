@@ -438,12 +438,12 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         // Bienvenida
         return (
           <div className="w-full h-full flex justify-center items-start">
-            <div className="bg-white rounded-lg shadow p-4 sm:p-6 mx-auto max-w-4xl w-full">
-              <h2 className="text-2xl font-bold text-blue-800 mb-4 text-center">
+            <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6 mx-2 sm:mx-4 lg:mx-auto max-w-7xl w-full">
+              <h2 className="text-xl sm:text-2xl font-bold text-blue-800 mb-3 sm:mb-4 text-center">
                 Bienvenido al Sistema Punto Cambio
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 w-full">
-                <div className="bg-blue-50 p-4 rounded-lg text-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 w-full">
+                <div className="bg-blue-50 p-3 sm:p-4 rounded-lg text-center">
                   <h3 className="font-semibold text-blue-700 mb-2">
                     Usuario Activo
                   </h3>
@@ -511,8 +511,8 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           onNotificationClick={handleNotificationClick}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
-          <div className="max-w-[1920px] mx-auto h-full">
+        <main className="flex-1 overflow-y-auto p-2 sm:p-3 md:p-4 lg:p-6">
+          <div className="w-full h-full">
             <Suspense
               fallback={
                 <div className="w-full h-full flex items-center justify-center">

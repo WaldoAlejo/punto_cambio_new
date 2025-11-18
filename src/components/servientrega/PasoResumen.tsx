@@ -353,7 +353,7 @@ export default function PasoResumen({
   }, [formData]);
 
   return (
-    <Card className="w-full max-w-4xl mx-auto mt-6 shadow-lg border rounded-xl">
+    <Card className="w-full max-w-5xl mx-auto mt-4 sm:mt-6 shadow-lg border rounded-xl">
       <CardHeader>
         <CardTitle className="text-xl">Resumen de la Guía</CardTitle>
       </CardHeader>

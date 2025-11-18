@@ -148,7 +148,7 @@ export default function ServientregaMain({
     switch (pasoActual) {
       case "menu":
         return (
-          <div className="max-w-4xl mx-auto space-y-6">
+          <div className="w-full max-w-6xl mx-auto space-y-4 sm:space-y-6">
             {/* Información del saldo */}
             {selectedPoint && (
               <div className="max-w-md mx-auto">
@@ -249,7 +249,7 @@ export default function ServientregaMain({
   const showBackButton = pasoActual !== "menu" && pasoActual !== "listado";
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="w-full p-2 sm:p-3 md:p-4">
       {showBackButton && (
         <Button
           onClick={() => {
@@ -277,9 +277,9 @@ export default function ServientregaMain({
             }
           }}
           variant="ghost"
-          className="mb-4"
+          className="mb-3 sm:mb-4"
         >
-          <ArrowLeft className="mr-2 h-4 w-4" />
+          <ArrowLeft className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
           Volver
         </Button>
       )}
@@ -288,9 +288,9 @@ export default function ServientregaMain({
         <Button
           onClick={() => setPasoActual("menu")}
           variant="ghost"
-          className="mb-4"
+          className="mb-3 sm:mb-4"
         >
-          <ArrowLeft className="mr-2 h-4 w-4" />
+          <ArrowLeft className="mr-2 h-3 w-3 sm:h-4 sm:w-4" />
           Volver al Menú
         </Button>
       )}

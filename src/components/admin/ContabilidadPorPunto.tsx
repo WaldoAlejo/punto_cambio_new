@@ -263,7 +263,7 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
   const selectedPoint = points.find((p) => p.id === selectedPointId);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
       {/* Encabezado */}
       <div className="flex items-center justify-between">
         <div>
@@ -575,7 +575,7 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
           <CardTitle className="text-lg">Resumen de Operaciones</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
             <div className="text-center p-4 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600 mb-1">Total Movimientos</p>
               <p className="text-3xl font-bold text-gray-900">

@@ -147,7 +147,7 @@ export default function ListadoGuias() {
   }, [desde, hasta]);
 
   return (
-    <div className="w-full max-w-4xl mx-auto mt-4 space-y-3">
+    <div className="w-full max-w-7xl mx-auto mt-3 sm:mt-4 space-y-2 sm:space-y-3">
       {/* Información del saldo */}
       {user?.punto_atencion_id && (
         <SaldoCompacto

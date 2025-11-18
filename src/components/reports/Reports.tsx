@@ -480,19 +480,19 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
   const showMetodoEntregaFilter = mainType === "exchanges" && isDetailed;
 
   return (
-    <div className="container mx-auto p-4 space-y-6 max-w-7xl">
+    <div className="w-full p-2 sm:p-3 md:p-4 space-y-4 sm:space-y-6">
       {/* Header mejorado */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">m:gap-4">
+        <div className="space-y-1 flex-1 min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
             📊 Reportes Generales
           </h1>
-          <p className="text-muted-foreground text-base">
+          <p className="text-muted-foreground text-sm sm:text-base">
             Genera reportes detallados y exporta datos a Excel de forma
             profesional
           </p>
         </div>
-        <Button variant="outline" onClick={clearFilters} className="shrink-0">
+        <Button variant="outline" onClick={clearFilters} className="shrink-0 w-full sm:w-auto">
           <RefreshCw className="w-4 h-4 mr-2" />
           Limpiar Filtros
         </Button>
@@ -515,7 +515,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
             <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
               Configuración Principal
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2 text-sm font-medium">
                   <BarChart2 className="w-4 h-4 text-primary" />

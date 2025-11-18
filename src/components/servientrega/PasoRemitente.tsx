@@ -330,7 +330,7 @@ export default function PasoRemitente({
   };
 
   return (
-    <Card className="w-full max-w-2xl mx-auto mt-6">
+    <Card className="w-full max-w-3xl mx-auto mt-4 sm:mt-6">
       <CardHeader>
         <CardTitle>Información del Remitente</CardTitle>
       </CardHeader>

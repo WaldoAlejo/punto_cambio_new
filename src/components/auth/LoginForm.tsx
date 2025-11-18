@@ -43,10 +43,10 @@ const LoginForm = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center pb-4">
-          <CardTitle className="text-xl font-semibold">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-3 sm:p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center pb-3 sm:pb-4">
+          <CardTitle className="text-lg sm:text-xl font-semibold">
             Sistema de Cambio
           </CardTitle>
           <CardDescription className="text-sm">

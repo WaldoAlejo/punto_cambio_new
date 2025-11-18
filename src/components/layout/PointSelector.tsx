@@ -108,7 +108,7 @@ export const PointSelector: React.FC<PointSelectorProps> = ({
 
   if (loading) {
     return (
-      <div className="max-w-xl mx-auto p-6 text-center text-gray-600">
+      <div className="w-full max-w-2xl mx-auto p-4 sm:p-6 text-center text-gray-600">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3" />
         Cargando puntos de atención…
       </div>
@@ -116,7 +116,7 @@ export const PointSelector: React.FC<PointSelectorProps> = ({
   }
 
   return (
-    <div className="max-w-xl mx-auto p-4 bg-white rounded-lg shadow border">
+    <div className="w-full max-w-2xl mx-auto p-3 sm:p-4 bg-white rounded-lg shadow border">
       <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
         <Building2 className="h-5 w-5 text-blue-600" />
         Selecciona un punto de atención
