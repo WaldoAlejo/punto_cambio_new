@@ -546,7 +546,9 @@ export default function ServiciosExternosAdmin() {
                                 />
                                 <Select
                                   value={tipoAsignacion}
-                                  onValueChange={(value: "INICIAL" | "RECARGA") =>
+                                  onValueChange={(
+                                    value: "INICIAL" | "RECARGA"
+                                  ) =>
                                     setTiposAsignacion((prev) => ({
                                       ...prev,
                                       [punto.id]: {
@@ -561,10 +563,16 @@ export default function ServiciosExternosAdmin() {
                                     <SelectValue />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="INICIAL" className="text-xs">
+                                    <SelectItem
+                                      value="INICIAL"
+                                      className="text-xs"
+                                    >
                                       Inicial
                                     </SelectItem>
-                                    <SelectItem value="RECARGA" className="text-xs">
+                                    <SelectItem
+                                      value="RECARGA"
+                                      className="text-xs"
+                                    >
                                       Recarga
                                     </SelectItem>
                                   </SelectContent>
@@ -581,7 +589,12 @@ export default function ServiciosExternosAdmin() {
                                   );
                                   return;
                                 }
-                                asignarSaldo(punto.id, servicio, monto, tipoAsignacion);
+                                asignarSaldo(
+                                  punto.id,
+                                  servicio,
+                                  monto,
+                                  tipoAsignacion
+                                );
                               }}
                               disabled={
                                 loading ||

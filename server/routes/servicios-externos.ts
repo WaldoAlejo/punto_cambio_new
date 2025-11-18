@@ -1184,9 +1184,10 @@ router.post(
 
           // Si es INICIAL, establecer el monto; si es RECARGA, sumarlo
           const tipoAsignacionFinal = tipo_asignacion || "INICIAL";
-          const cantidadNueva = tipoAsignacionFinal === "INICIAL" 
-            ? monto_asignado 
-            : cantidadActual + monto_asignado;
+          const cantidadNueva =
+            tipoAsignacionFinal === "INICIAL"
+              ? monto_asignado
+              : cantidadActual + monto_asignado;
 
           await tx.servicioExternoSaldo.update({
             where: { id: saldo.id },

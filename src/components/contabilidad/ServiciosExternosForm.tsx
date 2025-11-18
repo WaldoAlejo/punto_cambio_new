@@ -69,7 +69,9 @@ interface ServiciosExternosFormProps {
   onMovimientoCreado?: () => void;
 }
 
-export default function ServiciosExternosForm({ onMovimientoCreado }: ServiciosExternosFormProps) {
+export default function ServiciosExternosForm({
+  onMovimientoCreado,
+}: ServiciosExternosFormProps) {
   const { user } = useAuth();
   const puntoAtencionId = user?.punto_atencion_id || null;
 

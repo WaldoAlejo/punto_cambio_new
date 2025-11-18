@@ -4,7 +4,10 @@ import ServiciosExternosHistory from "./ServiciosExternosHistory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import { obtenerSaldosAsignados, SaldoAsignado } from "@/services/externalServicesService";
+import {
+  obtenerSaldosAsignados,
+  SaldoAsignado,
+} from "@/services/externalServicesService";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
@@ -28,7 +31,7 @@ export default function ServiciosExternosPage() {
 
   const cargarSaldos = async () => {
     if (!user?.punto_atencion_id) return;
-    
+
     setLoading(true);
     try {
       const response = await obtenerSaldosAsignados();
@@ -46,7 +49,7 @@ export default function ServiciosExternosPage() {
   }, [user?.punto_atencion_id, refreshKey]);
 
   const handleRefresh = () => {
-    setRefreshKey(prev => prev + 1);
+    setRefreshKey((prev) => prev + 1);
   };
 
   return (
@@ -72,9 +75,9 @@ export default function ServiciosExternosPage() {
               <CardTitle className="text-sm font-semibold">
                 💰 Saldos Asignados
               </CardTitle>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={handleRefresh}
                 disabled={loading}
                 className="h-7 text-xs"
