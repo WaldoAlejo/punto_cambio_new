@@ -65,7 +65,11 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export default function ServiciosExternosForm() {
+interface ServiciosExternosFormProps {
+  onMovimientoCreado?: () => void;
+}
+
+export default function ServiciosExternosForm({ onMovimientoCreado }: ServiciosExternosFormProps) {
   const { user } = useAuth();
   const puntoAtencionId = user?.punto_atencion_id || null;
 
@@ -133,6 +137,11 @@ export default function ServiciosExternosForm() {
         title: "Movimiento registrado",
         description: "Se guardó el movimiento correctamente.",
       });
+
+      // Llamar callback para actualizar saldos
+      if (onMovimientoCreado) {
+        onMovimientoCreado();
+      }
 
       // Reset limpio: tipo por defecto según si es insumo
       reset({

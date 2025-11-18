@@ -98,6 +98,9 @@ export default function ServiciosExternosAdmin() {
   const [montosAsignacion, setMontosAsignacion] = useState<
     Record<string, Record<string, string>>
   >({});
+  const [tiposAsignacion, setTiposAsignacion] = useState<
+    Record<string, Record<string, "INICIAL" | "RECARGA">>
+  >({});
   const [loadingAsignaciones, setLoadingAsignaciones] = useState<
     Record<string, boolean>
   >({});
@@ -255,12 +258,18 @@ export default function ServiciosExternosAdmin() {
   const asignarSaldo = async (
     puntoId: string,
     servicio: ServicioExterno,
-    monto: number
+    monto: number,
+    tipoAsignacion: "INICIAL" | "RECARGA"
   ) => {
     const punto = puntos.find((p) => p.id === puntoId);
-    const mensaje = `¿Está seguro de asignar $${monto.toFixed(
+    const tipoTexto = tipoAsignacion === "INICIAL" ? "establecer" : "recargar";
+    const mensaje = `¿Está seguro de ${tipoTexto} $${monto.toFixed(
       2
-    )} de ${servicio} al punto "${punto?.nombre}"?`;
+    )} de ${servicio} al punto "${punto?.nombre}"?${
+      tipoAsignacion === "INICIAL"
+        ? " (Esto REEMPLAZARÁ el saldo actual)"
+        : " (Esto se SUMARÁ al saldo actual)"
+    }`;
 
     showConfirmation("Confirmar asignación de saldo", mensaje, async () => {
       const key = `${puntoId}-${servicio}`;
@@ -271,6 +280,7 @@ export default function ServiciosExternosAdmin() {
           punto_atencion_id: puntoId,
           servicio: servicio,
           monto_asignado: monto,
+          tipo_asignacion: tipoAsignacion,
           creado_por: user?.nombre || "admin",
         });
 
@@ -280,12 +290,19 @@ export default function ServiciosExternosAdmin() {
           } para ${servicio}`
         );
 
-        // Limpiar el input
+        // Limpiar el input y el tipo
         setMontosAsignacion((prev) => ({
           ...prev,
           [puntoId]: {
             ...prev[puntoId],
             [servicio]: "",
+          },
+        }));
+        setTiposAsignacion((prev) => ({
+          ...prev,
+          [puntoId]: {
+            ...prev[puntoId],
+            [servicio]: "INICIAL",
           },
         }));
 
@@ -499,6 +516,8 @@ export default function ServiciosExternosAdmin() {
                         const loading = loadingAsignaciones[key] || false;
                         const montoInput =
                           montosAsignacion[punto.id]?.[servicio] || "";
+                        const tipoAsignacion =
+                          tiposAsignacion[punto.id]?.[servicio] || "INICIAL";
 
                         return (
                           <div key={servicio} className="flex gap-2 items-end">
@@ -506,24 +525,51 @@ export default function ServiciosExternosAdmin() {
                               <Label className="text-xs text-gray-600">
                                 {servicio}
                               </Label>
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={montoInput}
-                                onChange={(e) =>
-                                  setMontosAsignacion((prev) => ({
-                                    ...prev,
-                                    [punto.id]: {
-                                      ...prev[punto.id],
-                                      [servicio]: e.target.value,
-                                    },
-                                  }))
-                                }
-                                placeholder="0.00"
-                                className="text-sm"
-                                disabled={loading}
-                              />
+                              <div className="flex gap-1">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={montoInput}
+                                  onChange={(e) =>
+                                    setMontosAsignacion((prev) => ({
+                                      ...prev,
+                                      [punto.id]: {
+                                        ...prev[punto.id],
+                                        [servicio]: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                  placeholder="0.00"
+                                  className="text-sm flex-1"
+                                  disabled={loading}
+                                />
+                                <Select
+                                  value={tipoAsignacion}
+                                  onValueChange={(value: "INICIAL" | "RECARGA") =>
+                                    setTiposAsignacion((prev) => ({
+                                      ...prev,
+                                      [punto.id]: {
+                                        ...prev[punto.id],
+                                        [servicio]: value,
+                                      },
+                                    }))
+                                  }
+                                  disabled={loading}
+                                >
+                                  <SelectTrigger className="text-xs w-24">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="INICIAL" className="text-xs">
+                                      Inicial
+                                    </SelectItem>
+                                    <SelectItem value="RECARGA" className="text-xs">
+                                      Recarga
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
                             </div>
                             <Button
                               size="sm"
@@ -535,7 +581,7 @@ export default function ServiciosExternosAdmin() {
                                   );
                                   return;
                                 }
-                                asignarSaldo(punto.id, servicio, monto);
+                                asignarSaldo(punto.id, servicio, monto, tipoAsignacion);
                               }}
                               disabled={
                                 loading ||

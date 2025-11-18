@@ -1182,7 +1182,11 @@ router.post(
               ? (saldo.cantidad as any).toNumber?.() ?? Number(saldo.cantidad)
               : Number(saldo.cantidad);
 
-          const cantidadNueva = cantidadActual + monto_asignado;
+          // Si es INICIAL, establecer el monto; si es RECARGA, sumarlo
+          const tipoAsignacionFinal = tipo_asignacion || "INICIAL";
+          const cantidadNueva = tipoAsignacionFinal === "INICIAL" 
+            ? monto_asignado 
+            : cantidadActual + monto_asignado;
 
           await tx.servicioExternoSaldo.update({
             where: { id: saldo.id },

@@ -147,3 +147,23 @@ export async function cerrarCierreServiciosExternos(payload: {
   );
   return data as { success: boolean; cierre_id: string };
 }
+
+export interface SaldoAsignado {
+  servicio: ServicioExterno;
+  saldo_asignado: number;
+  actualizado_en: string;
+}
+
+export async function obtenerSaldosAsignados(params?: {
+  pointId?: string;
+}): Promise<{
+  success: boolean;
+  punto_nombre: string;
+  saldos_asignados: SaldoAsignado[];
+}> {
+  const { data } = await axiosInstance.get(
+    `/servicios-externos/saldos-asignados`,
+    { params }
+  );
+  return data;
+}
