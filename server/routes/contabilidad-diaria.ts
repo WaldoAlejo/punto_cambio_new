@@ -7,6 +7,7 @@ import {
   gyeDayRangeUtcFromDateOnly,
   gyeParseDateOnly,
 } from "../utils/timezone.js";
+import cierreService from "../services/cierreService.js";
 
 const router = express.Router();
 
@@ -426,8 +427,9 @@ router.get(
 
 /**
  * POST /api/contabilidad-diaria/:pointId/:fecha/cerrar
- * Marca el cierre del día como CERRADO de forma idempotente usando la clave compuesta
- * @@unique([fecha, punto_atencion_id]) en CierreDiario.
+ * Marca el cierre del día como CERRADO usando el servicio unificado
+ * Este endpoint ahora delega al servicio cierreService para garantizar
+ * consistencia transaccional entre CuadreCaja y CierreDiario
  */
 router.post(
   "/:pointId/:fecha/cerrar",
@@ -435,7 +437,8 @@ router.post(
   async (req: any, res) => {
     try {
       const { pointId, fecha } = req.params;
-      const { observaciones, diferencias_reportadas } = req.body || {};
+      const { observaciones, diferencias_reportadas, detalles } =
+        req.body || {};
       const usuario = req.user as
         | {
             id: string;
@@ -469,30 +472,61 @@ router.post(
 
       // Valida YYYY-MM-DD (lanza si es inválida)
       gyeParseDateOnly(fecha);
-
-      // Prisma usa Date para @db.Date (sin hora).
-      // Usamos medianoche UTC de esa fecha; la lógica de negocio se
-      // apoya en el rango GYE previamente al calcular montos.
       const fechaDate = new Date(`${fecha}T00:00:00.000Z`);
 
-      // Buscar por clave compuesta
-      const existing = await prisma.cierreDiario.findUnique({
-        where: {
-          fecha_punto_atencion_id: {
-            fecha: fechaDate,
-            punto_atencion_id: pointId,
-          },
-        },
-      });
+      // Verificar si ya está cerrado (idempotencia)
+      const estado = await cierreService.obtenerEstadoCierre(
+        pointId,
+        fechaDate
+      );
 
-      // Si ya está CERRADO, devolver idempotente
-      if (existing && existing.estado === "CERRADO") {
+      if (estado.existe && estado.estado === "CERRADO") {
         return res.status(200).json({
           success: true,
           info: "ya_cerrado",
-          cierre: existing,
+          cierre: estado.cierre,
+          mensaje: "El cierre de este día ya fue completado",
         });
       }
+
+      // Si se proporcionan detalles, realizar cierre completo
+      if (detalles && Array.isArray(detalles) && detalles.length > 0) {
+        logger.info("🔄 Realizando cierre con detalles proporcionados", {
+          punto: pointId,
+          fecha,
+          usuario: usuario.id,
+          num_detalles: detalles.length,
+        });
+
+        const resultado = await cierreService.realizarCierreDiario({
+          punto_atencion_id: pointId,
+          usuario_id: usuario.id,
+          fecha: fechaDate,
+          detalles,
+          observaciones,
+          diferencias_reportadas,
+        });
+
+        if (!resultado.success) {
+          return res.status(400).json(resultado);
+        }
+
+        return res.status(200).json({
+          success: true,
+          cierre: { id: resultado.cierre_id },
+          cuadre_id: resultado.cuadre_id,
+          jornada_finalizada: resultado.jornada_finalizada,
+          mensaje: resultado.mensaje,
+        });
+      }
+
+      // Si no se proporcionan detalles, usar el método antiguo (compatibilidad)
+      // Este camino se mantiene para no romper integraciones existentes
+      logger.info("🔄 Realizando cierre sin detalles (modo compatibilidad)", {
+        punto: pointId,
+        fecha,
+        usuario: usuario.id,
+      });
 
       // NOTA: La validación de servicios externos fue eliminada.
       // Los servicios externos ahora se incluyen automáticamente en el cierre diario
@@ -500,6 +534,15 @@ router.post(
 
       // Crear o actualizar a CERRADO y verificar si se puede finalizar jornada
       const result = await prisma.$transaction(async (tx) => {
+        const existing = await tx.cierreDiario.findUnique({
+          where: {
+            fecha_punto_atencion_id: {
+              fecha: fechaDate,
+              punto_atencion_id: pointId,
+            },
+          },
+        });
+
         let cierre;
         if (!existing) {
           cierre = await tx.cierreDiario.create({
@@ -568,7 +611,7 @@ router.post(
         return { cierre, jornadaFinalizada };
       });
 
-      return res.status(existing ? 200 : 201).json({
+      return res.status(200).json({
         success: true,
         cierre: result.cierre,
         jornada_finalizada: !!result.jornadaFinalizada,
@@ -584,6 +627,198 @@ router.post(
           stack: error instanceof Error ? error.stack : undefined,
         }
       );
+      return res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    }
+  }
+);
+
+/**
+ * POST /api/contabilidad-diaria/:pointId/:fecha/cerrar-completo
+ * Nuevo endpoint optimizado que usa el servicio unificado de cierre
+ * Espera recibir los detalles del cuadre ya validados por el frontend
+ */
+router.post(
+  "/:pointId/:fecha/cerrar-completo",
+  authenticateToken,
+  async (req: any, res) => {
+    try {
+      const { pointId, fecha } = req.params;
+      const { detalles, observaciones } = req.body || {};
+      const usuario = req.user as
+        | {
+            id: string;
+            punto_atencion_id?: string;
+            rol?: RolUsuario;
+          }
+        | undefined;
+
+      if (!usuario?.id) {
+        return res
+          .status(401)
+          .json({ success: false, error: "No autenticado" });
+      }
+
+      if (!pointId) {
+        return res.status(400).json({ success: false, error: "Falta pointId" });
+      }
+
+      if (!detalles || !Array.isArray(detalles)) {
+        return res.status(400).json({
+          success: false,
+          error: "Se requieren los detalles del cuadre",
+        });
+      }
+
+      // Seguridad: operadores solo pueden cerrar su propio punto
+      const esAdmin =
+        (usuario?.rol === "ADMIN" || usuario?.rol === "SUPER_USUARIO") ?? false;
+      if (
+        !esAdmin &&
+        usuario?.punto_atencion_id &&
+        usuario.punto_atencion_id !== pointId
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: "No autorizado para cerrar otro punto de atención",
+        });
+      }
+
+      // Validar fecha
+      gyeParseDateOnly(fecha);
+      const fechaDate = new Date(`${fecha}T00:00:00.000Z`);
+
+      logger.info("🔄 Iniciando cierre completo", {
+        punto: pointId,
+        fecha,
+        usuario: usuario.id,
+        num_detalles: detalles.length,
+      });
+
+      // Realizar cierre usando el servicio unificado
+      const resultado = await cierreService.realizarCierreDiario({
+        punto_atencion_id: pointId,
+        usuario_id: usuario.id,
+        fecha: fechaDate,
+        detalles,
+        observaciones,
+      });
+
+      if (!resultado.success) {
+        logger.warn("⚠️ Cierre rechazado", {
+          punto: pointId,
+          fecha,
+          error: resultado.error,
+          codigo: resultado.codigo,
+        });
+        return res.status(400).json(resultado);
+      }
+
+      logger.info("✅ Cierre completado exitosamente", {
+        cierre_id: resultado.cierre_id,
+        cuadre_id: resultado.cuadre_id,
+        punto: pointId,
+        fecha,
+        jornada_finalizada: resultado.jornada_finalizada,
+      });
+
+      return res.status(200).json(resultado);
+    } catch (error) {
+      logger.error("Error en POST /contabilidad-diaria/cerrar-completo", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      return res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/contabilidad-diaria/:pointId/:fecha/resumen-cierre
+ * Obtiene el resumen de movimientos preparado para el cierre
+ */
+router.get(
+  "/:pointId/:fecha/resumen-cierre",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { pointId, fecha } = req.params;
+      const usuario = req.user as
+        | {
+            id: string;
+            punto_atencion_id?: string;
+            rol?: RolUsuario;
+          }
+        | undefined;
+
+      if (!usuario?.id) {
+        return res
+          .status(401)
+          .json({ success: false, error: "No autenticado" });
+      }
+
+      if (!pointId) {
+        return res.status(400).json({ success: false, error: "Falta pointId" });
+      }
+
+      // Seguridad: operadores solo pueden consultar su propio punto
+      const esAdmin =
+        (usuario?.rol === "ADMIN" || usuario?.rol === "SUPER_USUARIO") ?? false;
+      if (
+        !esAdmin &&
+        usuario?.punto_atencion_id &&
+        usuario.punto_atencion_id !== pointId
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: "No autorizado para consultar otro punto de atención",
+        });
+      }
+
+      // Validar fecha
+      gyeParseDateOnly(fecha);
+      const fechaDate = new Date(`${fecha}T00:00:00.000Z`);
+
+      // Verificar si ya existe un cierre
+      const estadoCierre = await cierreService.obtenerEstadoCierre(
+        pointId,
+        fechaDate
+      );
+
+      if (estadoCierre.existe && estadoCierre.estado === "CERRADO") {
+        return res.status(200).json({
+          success: true,
+          cerrado: true,
+          mensaje: "El cierre de este día ya fue completado",
+          cierre: estadoCierre.cierre,
+        });
+      }
+
+      // Obtener resumen de movimientos
+      const resumen = await cierreService.obtenerResumenMovimientos(
+        pointId,
+        fechaDate,
+        usuario.id
+      );
+
+      if (!resumen.success) {
+        return res.status(500).json(resumen);
+      }
+
+      return res.status(200).json({
+        ...resumen,
+        cerrado: false,
+      });
+    } catch (error) {
+      logger.error("Error en GET /contabilidad-diaria/resumen-cierre", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       return res.status(500).json({
         success: false,
         error: "Error interno del servidor",

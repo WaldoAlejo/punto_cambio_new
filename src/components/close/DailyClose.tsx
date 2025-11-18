@@ -326,55 +326,15 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     }
 
     try {
-      // 1. Primero validar qué cierres son requeridos
-      const fechaHoy = new Date().toISOString().split("T")[0];
-      const validacion =
-        await contabilidadDiariaService.validarCierresRequeridos(
-          selectedPoint.id,
-          fechaHoy
-        );
-
-      if (!validacion.success) {
-        toast({
-          title: "Error de validación",
-          description:
-            validacion.error || "No se pudo validar los cierres requeridos",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // 2. Verificar si faltan cierres requeridos
-      const { cierres_requeridos, estado_cierres } = validacion;
-
-      // NOTA: Los servicios externos ya NO requieren cierre separado
-      // Se incluyen automáticamente en el cierre diario
-
-      // 3. Validaciones de saldos solo si hay movimientos de cambios de divisas
-      // IMPORTANTE: Solo validar si hay cambios Y hay detalles
-      // Si no hay detalles pero sí cambios, es un error de carga
-      if (
-        cierres_requeridos.cambios_divisas &&
-        cuadreData.detalles.length === 0 &&
-        (validacion.conteos?.cambios_divisas || 0) > 0
-      ) {
-        toast({
-          title: "Error",
-          description: `Se encontraron ${
-            validacion.conteos?.cambios_divisas || 0
-          } cambios de divisas, pero no hay detalles de cuadre. Recargue la página.`,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Si hay detalles de divisas, validar que estén completos
+      // 1. Validar saldos solo si hay detalles de divisas
       if (cuadreData.detalles.length > 0) {
         // Validar que todos los saldos estén completos
         const incompleteBalances = cuadreData.detalles.some(
           (detalle) =>
-            !userAdjustments[detalle.moneda_id]?.bills ||
-            !userAdjustments[detalle.moneda_id]?.coins
+            userAdjustments[detalle.moneda_id]?.bills === undefined ||
+            userAdjustments[detalle.moneda_id]?.bills === "" ||
+            userAdjustments[detalle.moneda_id]?.coins === undefined ||
+            userAdjustments[detalle.moneda_id]?.coins === ""
         );
 
         if (incompleteBalances) {
@@ -403,7 +363,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             })
             .join(
               "\n"
-            )}\n\nVerifique que todos los movimientos del día estén registrados (cambios, servicios externos, transferencias) y vuelva a intentar.`;
+            )}\n\n⚠️ Verifique que todos los movimientos estén registrados correctamente.`;
           toast({
             title: "No cuadra",
             description: msg,
@@ -413,28 +373,44 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         }
       }
 
-      // 4. Preparar detalles del cuadre con los datos del usuario
-      const detalles = cuadreData.detalles.map((detalle) => ({
-        moneda_id: detalle.moneda_id,
-        conteo_fisico: calculateUserTotal(detalle.moneda_id),
-        billetes: parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0"),
-        monedas: parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0"),
-        saldo_apertura: detalle.saldo_apertura,
-        saldo_cierre: detalle.saldo_cierre,
-        ingresos_periodo: detalle.ingresos_periodo || 0,
-        egresos_periodo: detalle.egresos_periodo || 0,
-        movimientos_periodo: detalle.movimientos_periodo || 0,
-        observaciones_detalle: userAdjustments[detalle.moneda_id]?.note || "",
-      }));
+      // 2. Preparar detalles del cuadre con los datos del usuario
+      const detalles = cuadreData.detalles.map((detalle) => {
+        const conteoFisico = calculateUserTotal(detalle.moneda_id);
+        const billetes = parseFloat(
+          userAdjustments[detalle.moneda_id]?.bills || "0"
+        );
+        const monedas = parseFloat(
+          userAdjustments[detalle.moneda_id]?.coins || "0"
+        );
 
-      console.log("📊 Detalles prepared:", detalles);
+        return {
+          moneda_id: detalle.moneda_id,
+          codigo: detalle.codigo,
+          nombre: detalle.nombre,
+          simbolo: detalle.simbolo,
+          saldo_apertura: detalle.saldo_apertura,
+          saldo_cierre_teorico: detalle.saldo_cierre,
+          conteo_fisico: conteoFisico,
+          billetes: billetes,
+          monedas_fisicas: monedas,
+          diferencia: Number((conteoFisico - detalle.saldo_cierre).toFixed(2)),
+          ingresos_periodo: detalle.ingresos_periodo || 0,
+          egresos_periodo: detalle.egresos_periodo || 0,
+          movimientos_periodo: detalle.movimientos_periodo || 0,
+          observaciones_detalle: userAdjustments[detalle.moneda_id]?.note || "",
+        };
+      });
 
-      // 5. Guardar el cierre con el conteo físico de billetes y monedas
+      console.log("📊 Detalles preparados para cierre:", detalles);
+
+      // 3. Realizar cierre usando el nuevo endpoint optimizado
       const token = localStorage.getItem("authToken");
-      const guardarResponse = await fetch(
+      const fechaHoy = new Date().toISOString().split("T")[0];
+
+      const response = await fetch(
         `${
-          import.meta.env.VITE_API_URL || "http://localhost:3001/api"
-        }/guardar-cierre`,
+          import.meta.env.VITE_API_URL || "http://35.238.95.118/api"
+        }/contabilidad-diaria/${selectedPoint.id}/${fechaHoy}/cerrar-completo`,
         {
           method: "POST",
           headers: {
@@ -444,45 +420,28 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           body: JSON.stringify({
             detalles,
             observaciones: cuadreData.observaciones || "",
-            tipo_cierre: "CERRADO",
-            allowMismatch: false,
           }),
         }
       );
 
-      if (!guardarResponse.ok) {
-        const errorData = await guardarResponse.json();
-        throw new Error(errorData.error || "Error al guardar el cierre");
+      const resultado = await response.json();
+
+      if (!response.ok || !resultado.success) {
+        throw new Error(
+          resultado.error || "Error al realizar el cierre diario"
+        );
       }
 
-      const guardarData = await guardarResponse.json();
-
-      if (!guardarData.success) {
-        throw new Error(guardarData.error || "Error al guardar el cierre");
-      }
-
-      // 6. Marcar el cierre diario como CERRADO
-      const resultado = await contabilidadDiariaService.realizarCierreDiario(
-        selectedPoint.id,
-        fechaHoy,
-        cuadreData.observaciones || "",
-        null
-      );
-
-      if (!resultado.success) {
-        throw new Error(resultado.error || "Error al realizar el cierre");
-      }
-
-      // 6. Actualizar estado y mostrar mensaje de éxito
+      // 4. Actualizar estado y mostrar mensaje de éxito
       setTodayClose({
-        id: resultado.cierre?.id || "",
+        id: resultado.cierre_id || "",
         estado: "CERRADO",
         observaciones: cuadreData.observaciones || "",
       } as unknown as CuadreCaja);
 
       const mensaje = resultado.jornada_finalizada
-        ? "El cierre diario se ha completado correctamente y su jornada fue finalizada automáticamente."
-        : "El cierre diario se ha completado correctamente.";
+        ? "✅ El cierre diario se ha completado correctamente y su jornada fue finalizada automáticamente."
+        : "✅ El cierre diario se ha completado correctamente.";
 
       toast({
         title: "Cierre realizado",
@@ -490,22 +449,30 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       });
 
       // Actualizar validación de cierres
-      setValidacionCierres({
-        ...validacion,
-        estado_cierres: {
-          ...validacion.estado_cierres,
-          cierre_diario: true,
-        },
-        cierres_completos: true,
+      if (validacionCierres) {
+        setValidacionCierres({
+          ...validacionCierres,
+          estado_cierres: {
+            ...validacionCierres.estado_cierres,
+            cierre_diario: true,
+          },
+          cierres_completos: true,
+        });
+      }
+
+      console.log("✅ Cierre completado exitosamente", {
+        cierre_id: resultado.cierre_id,
+        cuadre_id: resultado.cuadre_id,
+        jornada_finalizada: resultado.jornada_finalizada,
       });
     } catch (error) {
       console.error("💥 Error in performDailyClose:", error);
       toast({
-        title: "Error",
+        title: "Error al realizar cierre",
         description:
           error instanceof Error
             ? error.message
-            : "No se pudo guardar el cierre",
+            : "No se pudo completar el cierre diario",
         variant: "destructive",
       });
     }
