@@ -101,6 +101,8 @@ export const movimientosContablesService = {
       moneda_id: string;
       moneda_codigo: string;
       saldo: number;
+      billetes?: number;
+      monedas_fisicas?: number;
     }> | null;
     error: string | null;
   }> {
@@ -110,6 +112,8 @@ export const movimientosContablesService = {
           moneda_id: string;
           moneda_codigo: string;
           saldo: number;
+          billetes?: number;
+          monedas_fisicas?: number;
         }>;
       }>(`/saldos-actuales/${punto_atencion_id}`);
 

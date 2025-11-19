@@ -221,15 +221,23 @@ router.post(
         // 1. Saldo digital del servicio (ej: $100 en Western) - Control administrativo
         // 2. Saldo físico general del punto (ej: $500 en caja) - Control estricto
         //
-        // EJEMPLO REAL:
+        // EJEMPLO REAL - PAGO WESTERN (INGRESO digital):
         // - Operador tiene $100 saldo digital Western y $500 efectivo en caja
         // - Llega pago Western de $300 por transferencia del exterior
         // - Operador TOMA $300 del saldo físico de caja y le paga al cliente
-        // - Sistema: RESTA $300 del saldo físico general (queda $200 en caja)
-        // - Sistema: RESTA $300 del saldo digital Western (queda -$200, necesita recarga)
+        // - Sistema: SUMA $300 al saldo digital Western (queda $400) ✓
+        // - Sistema: RESTA $300 del saldo físico general (queda $200 en caja) ✓
         //
-        // CONCLUSIÓN: Los movimientos de servicios externos SIEMPRE afectan
-        // el saldo físico porque el operador usa el efectivo de la caja.
+        // EJEMPLO REAL - RECARGA WESTERN (EGRESO digital):
+        // - Operador necesita recargar Western, deposita $500
+        // - Operador RECIBE $500 en efectivo que suma a su caja
+        // - Sistema: RESTA $500 del saldo digital Western (queda -$100) ✓
+        // - Sistema: SUMA $500 al saldo físico general (queda $700 en caja) ✓
+        //
+        // CONCLUSIÓN: Los movimientos de servicios externos tienen efecto INVERSO
+        // en el saldo físico porque representan dinero que entra/sale de la caja.
+        // INGRESO digital = EGRESO físico (pagar al cliente)
+        // EGRESO digital = INGRESO físico (recibir recarga)
         // ═══════════════════════════════════════════════════════════════════════
 
         const saldoGeneral = await tx.saldo.findUnique({
@@ -241,8 +249,9 @@ router.post(
           },
         });
 
+        // ⚠️ INVERSIÓN: INGRESO digital → EGRESO físico, EGRESO digital → INGRESO físico
         const deltaGeneral =
-          tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
+          tipo_movimiento === "INGRESO" ? -montoNum : montoNum;
         const nuevoSaldoGeneral =
           Number(saldoGeneral?.cantidad || 0) + deltaGeneral;
 
@@ -288,12 +297,14 @@ router.post(
         // Trazabilidad en MovimientoSaldo para el SALDO FÍSICO GENERAL
         // Nota: También se registró el movimiento en ServicioExternoMovimiento
         // para control del saldo digital específico del servicio
+        // ⚠️ IMPORTANTE: El tipo de movimiento en MovimientoSaldo es OPUESTO
+        // al tipo_movimiento del servicio externo por la lógica de inversión
         await registrarMovimientoSaldo(
           {
             puntoAtencionId: puntoId,
             monedaId: usdId,
             tipoMovimiento:
-              tipo_movimiento === "INGRESO" ? TipoMov.INGRESO : TipoMov.EGRESO,
+              tipo_movimiento === "INGRESO" ? TipoMov.EGRESO : TipoMov.INGRESO,
             monto: montoNum, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
             saldoAnterior: Number(saldoGeneral?.cantidad || 0),
             saldoNuevo: nuevoSaldoGeneral,
@@ -507,20 +518,21 @@ router.delete(
             },
           },
         });
-        const anterior = Number(saldoServicio?.cantidad || 0);
+        const anteriorServicio = Number(saldoServicio?.cantidad || 0);
 
-        // Ajuste inverso: si era INGRESO, ahora es EGRESO (negativo)
-        // Si era EGRESO, ahora es INGRESO (positivo)
-        const delta =
+        // Ajuste inverso para saldo digital del servicio:
+        // Si era INGRESO, ahora restamos (negativo)
+        // Si era EGRESO, ahora sumamos (positivo)
+        const deltaServicio =
           mov.tipo_movimiento === "INGRESO"
             ? -Number(mov.monto)
             : Number(mov.monto);
-        const nuevo = anterior + delta;
+        const nuevoServicio = anteriorServicio + deltaServicio;
 
         if (saldoServicio) {
           await tx.servicioExternoSaldo.update({
             where: { id: saldoServicio.id },
-            data: { cantidad: nuevo, updated_at: new Date() },
+            data: { cantidad: nuevoServicio, updated_at: new Date() },
           });
         } else {
           // Si no existe saldo, crear uno
@@ -529,22 +541,58 @@ router.delete(
               punto_atencion_id: mov.punto_atencion_id,
               servicio: mov.servicio,
               moneda_id: mov.moneda_id,
-              cantidad: nuevo,
+              cantidad: nuevoServicio,
               updated_at: new Date(),
             },
           });
         }
 
-        // ⚠️ USAR SERVICIO CENTRALIZADO para registrar el ajuste (dentro de la transacción)
-        // El servicio espera monto positivo y aplica el signo según el tipo
+        // ⚠️ TAMBIÉN REVERTIR EL SALDO FÍSICO GENERAL
+        // Recordar: la lógica es INVERTIDA
+        // Si era INGRESO digital → fue EGRESO físico → al eliminar sumamos físico
+        // Si era EGRESO digital → fue INGRESO físico → al eliminar restamos físico
+        const saldoGeneral = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: mov.punto_atencion_id,
+              moneda_id: mov.moneda_id,
+            },
+          },
+        });
+        const anteriorGeneral = Number(saldoGeneral?.cantidad || 0);
+
+        // Delta inverso para el saldo físico
+        const deltaGeneral =
+          mov.tipo_movimiento === "INGRESO"
+            ? Number(mov.monto) // Era EGRESO físico, ahora sumamos
+            : -Number(mov.monto); // Era INGRESO físico, ahora restamos
+        const nuevoGeneral = anteriorGeneral + deltaGeneral;
+
+        if (saldoGeneral) {
+          await tx.saldo.update({
+            where: { id: saldoGeneral.id },
+            data: { cantidad: nuevoGeneral, updated_at: new Date() },
+          });
+        } else if (nuevoGeneral !== 0) {
+          await tx.saldo.create({
+            data: {
+              punto_atencion_id: mov.punto_atencion_id,
+              moneda_id: mov.moneda_id,
+              cantidad: nuevoGeneral,
+              updated_at: new Date(),
+            },
+          });
+        }
+
+        // ⚠️ Registrar el ajuste en MovimientoSaldo (saldo físico general)
         await registrarMovimientoSaldo(
           {
             puntoAtencionId: mov.punto_atencion_id,
             monedaId: mov.moneda_id,
             tipoMovimiento: TipoMov.AJUSTE,
-            monto: delta, // AJUSTE mantiene el signo original (positivo o negativo)
-            saldoAnterior: anterior,
-            saldoNuevo: nuevo,
+            monto: deltaGeneral, // AJUSTE mantiene el signo (puede ser + o -)
+            saldoAnterior: anteriorGeneral,
+            saldoNuevo: nuevoGeneral,
             tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
             referenciaId: mov.id,
             descripcion: `Reverso eliminación servicio externo ${mov.tipo_movimiento}`,

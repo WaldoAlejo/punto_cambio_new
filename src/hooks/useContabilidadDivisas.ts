@@ -8,6 +8,8 @@ interface SaldoMoneda {
   moneda_id: string;
   moneda_codigo: string;
   saldo: number;
+  billetes?: number;
+  monedas_fisicas?: number;
 }
 
 interface UseContabilidadDivisasProps {

@@ -35,6 +35,8 @@ type AnySaldo = {
   saldo: number;
   punto_id?: string;
   punto_nombre?: string;
+  billetes?: number;
+  monedas_fisicas?: number;
 };
 
 export const SaldosDivisasEnTiempoReal = ({
@@ -365,6 +367,15 @@ export const SaldosDivisasEnTiempoReal = ({
                         >
                           {formatCurrency(saldo.saldo, saldo.moneda_codigo)}
                         </div>
+
+                        {/* Stock físico */}
+                        {(saldo.billetes !== undefined ||
+                          saldo.monedas_fisicas !== undefined) && (
+                          <div className="mt-2 rounded-md bg-gray-50 p-1.5 text-[11px] text-gray-600">
+                            Stock: <b>{saldo.billetes || 0}</b> billetes •{" "}
+                            <b>{saldo.monedas_fisicas || 0}</b> monedas
+                          </div>
+                        )}
 
                         {isAdminView && saldo.punto_nombre && (
                           <div className="mt-1 text-xs text-gray-600 line-clamp-1">

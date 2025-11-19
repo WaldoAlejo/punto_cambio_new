@@ -28,6 +28,10 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
       moneda_nombre: s.moneda?.nombre ?? null,
       moneda_simbolo: s.moneda?.simbolo ?? null,
       saldo: parseFloat(s.cantidad.toString()),
+      billetes: s.billetes ? parseInt(s.billetes.toString()) : 0,
+      monedas_fisicas: s.monedas_fisicas
+        ? parseInt(s.monedas_fisicas.toString())
+        : 0,
     }));
 
     res.json({ success: true, saldos: payload });
@@ -77,6 +81,10 @@ router.get("/:pointId/:monedaId", authenticateToken, async (req, res) => {
       moneda_codigo: saldo.moneda?.codigo ?? null,
       moneda_nombre: saldo.moneda?.nombre ?? null,
       moneda_simbolo: saldo.moneda?.simbolo ?? null,
+      billetes: saldo.billetes ? parseInt(saldo.billetes.toString()) : 0,
+      monedas_fisicas: saldo.monedas_fisicas
+        ? parseInt(saldo.monedas_fisicas.toString())
+        : 0,
     });
   } catch (error) {
     console.error("Error al obtener saldo específico:", error);
