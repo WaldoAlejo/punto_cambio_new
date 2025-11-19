@@ -233,7 +233,7 @@ router.post(
         // - Sistema: RESTA $300 del saldo físico general (menos efectivo en caja) ✓
         // - Sistema: SUMA $300 al saldo digital Western (se repone el crédito) ✓
         //
-        // CONCLUSIÓN: 
+        // CONCLUSIÓN:
         // INGRESO = Recibo dinero → SUMA físico, RESTA digital
         // EGRESO = Pago dinero → RESTA físico, SUMA digital
         // ═══════════════════════════════════════════════════════════════════════
