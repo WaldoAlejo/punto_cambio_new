@@ -174,13 +174,13 @@ router.post(
         });
 
         const anterior = Number(saldoServicio?.cantidad || 0);
-        const delta = tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
+        const delta = tipo_movimiento === "INGRESO" ? -montoNum : montoNum;
         const nuevo = anterior + delta;
 
-        // Validar saldo suficiente para EGRESOS
-        if (tipo_movimiento === "EGRESO" && nuevo < 0) {
+        // Validar saldo suficiente del SERVICIO para INGRESOS (usa crédito)
+        if (tipo_movimiento === "INGRESO" && nuevo < 0) {
           throw new Error(
-            `Saldo insuficiente para el servicio ${servicio}. Saldo actual: $${anterior.toFixed(
+            `Saldo insuficiente en el servicio ${servicio}. Saldo actual: $${anterior.toFixed(
               2
             )}, Monto requerido: $${montoNum.toFixed(2)}`
           );
@@ -196,13 +196,13 @@ router.post(
             },
           });
         } else {
-          // Si no existe saldo y es EGRESO, no permitir
-          if (tipo_movimiento === "EGRESO") {
+          // Si no existe saldo y es INGRESO (resta), no permitir crear en negativo
+          if (tipo_movimiento === "INGRESO") {
             throw new Error(
-              `No hay saldo asignado para el servicio ${servicio}. Debe asignarse saldo antes de registrar egresos.`
+              `No hay saldo asignado para el servicio ${servicio}. Debe asignarse saldo antes de registrar ingresos.`
             );
           }
-          // Si es INGRESO, crear el saldo
+          // Si es EGRESO, crear el saldo (puede iniciar con movimiento positivo)
           await tx.servicioExternoSaldo.create({
             data: {
               punto_atencion_id: puntoId,
@@ -217,27 +217,25 @@ router.post(
         // ═══════════════════════════════════════════════════════════════════════
         // SERVICIOS EXTERNOS - LÓGICA DE SALDOS
         // ═══════════════════════════════════════════════════════════════════════
-        // El operador tiene:
-        // 1. Saldo digital del servicio (ej: $100 en Western) - Control administrativo
-        // 2. Saldo físico general del punto (ej: $500 en caja) - Control estricto
+        // El operador maneja dos conceptos de saldo:
+        // 1. Saldo digital del servicio (Western/YaGanaste/etc) - Crédito asignado
+        // 2. Saldo físico general del punto (efectivo en caja) - Dinero real
         //
-        // EJEMPLO REAL - PAGO WESTERN (INGRESO digital):
-        // - Operador tiene $100 saldo digital Western y $500 efectivo en caja
-        // - Llega pago Western de $300 por transferencia del exterior
-        // - Operador TOMA $300 del saldo físico de caja y le paga al cliente
-        // - Sistema: SUMA $300 al saldo digital Western (queda $400) ✓
-        // - Sistema: RESTA $300 del saldo físico general (queda $200 en caja) ✓
+        // CASO 1 - INGRESO (Cliente deposita/envía dinero):
+        // - Cliente viene a enviar $300 por Western Union
+        // - Operador RECIBE $300 en efectivo del cliente
+        // - Sistema: SUMA $300 al saldo físico general (más efectivo en caja) ✓
+        // - Sistema: RESTA $300 del saldo digital Western (se usa el crédito) ✓
         //
-        // EJEMPLO REAL - RECARGA WESTERN (EGRESO digital):
-        // - Operador necesita recargar Western, deposita $500
-        // - Operador RECIBE $500 en efectivo que suma a su caja
-        // - Sistema: RESTA $500 del saldo digital Western (queda -$100) ✓
-        // - Sistema: SUMA $500 al saldo físico general (queda $700 en caja) ✓
+        // CASO 2 - EGRESO (Operador paga/entrega dinero):
+        // - Cliente viene a cobrar envío Western de $300
+        // - Operador ENTREGA $300 en efectivo al cliente
+        // - Sistema: RESTA $300 del saldo físico general (menos efectivo en caja) ✓
+        // - Sistema: SUMA $300 al saldo digital Western (se repone el crédito) ✓
         //
-        // CONCLUSIÓN: Los movimientos de servicios externos tienen efecto INVERSO
-        // en el saldo físico porque representan dinero que entra/sale de la caja.
-        // INGRESO digital = EGRESO físico (pagar al cliente)
-        // EGRESO digital = INGRESO físico (recibir recarga)
+        // CONCLUSIÓN: 
+        // INGRESO = Recibo dinero → SUMA físico, RESTA digital
+        // EGRESO = Pago dinero → RESTA físico, SUMA digital
         // ═══════════════════════════════════════════════════════════════════════
 
         const saldoGeneral = await tx.saldo.findUnique({
@@ -249,9 +247,9 @@ router.post(
           },
         });
 
-        // ⚠️ INVERSIÓN: INGRESO digital → EGRESO físico, EGRESO digital → INGRESO físico
+        // INGRESO → SUMA físico, EGRESO → RESTA físico
         const deltaGeneral =
-          tipo_movimiento === "INGRESO" ? -montoNum : montoNum;
+          tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
         const nuevoSaldoGeneral =
           Number(saldoGeneral?.cantidad || 0) + deltaGeneral;
 
@@ -297,14 +295,12 @@ router.post(
         // Trazabilidad en MovimientoSaldo para el SALDO FÍSICO GENERAL
         // Nota: También se registró el movimiento en ServicioExternoMovimiento
         // para control del saldo digital específico del servicio
-        // ⚠️ IMPORTANTE: El tipo de movimiento en MovimientoSaldo es OPUESTO
-        // al tipo_movimiento del servicio externo por la lógica de inversión
         await registrarMovimientoSaldo(
           {
             puntoAtencionId: puntoId,
             monedaId: usdId,
             tipoMovimiento:
-              tipo_movimiento === "INGRESO" ? TipoMov.EGRESO : TipoMov.INGRESO,
+              tipo_movimiento === "INGRESO" ? TipoMov.INGRESO : TipoMov.EGRESO,
             monto: montoNum, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
             saldoAnterior: Number(saldoGeneral?.cantidad || 0),
             saldoNuevo: nuevoSaldoGeneral,
@@ -521,12 +517,12 @@ router.delete(
         const anteriorServicio = Number(saldoServicio?.cantidad || 0);
 
         // Ajuste inverso para saldo digital del servicio:
-        // Si era INGRESO, ahora restamos (negativo)
-        // Si era EGRESO, ahora sumamos (positivo)
+        // Si era INGRESO (restó), ahora sumamos (positivo)
+        // Si era EGRESO (sumó), ahora restamos (negativo)
         const deltaServicio =
           mov.tipo_movimiento === "INGRESO"
-            ? -Number(mov.monto)
-            : Number(mov.monto);
+            ? Number(mov.monto)
+            : -Number(mov.monto);
         const nuevoServicio = anteriorServicio + deltaServicio;
 
         if (saldoServicio) {
@@ -548,9 +544,6 @@ router.delete(
         }
 
         // ⚠️ TAMBIÉN REVERTIR EL SALDO FÍSICO GENERAL
-        // Recordar: la lógica es INVERTIDA
-        // Si era INGRESO digital → fue EGRESO físico → al eliminar sumamos físico
-        // Si era EGRESO digital → fue INGRESO físico → al eliminar restamos físico
         const saldoGeneral = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -562,10 +555,12 @@ router.delete(
         const anteriorGeneral = Number(saldoGeneral?.cantidad || 0);
 
         // Delta inverso para el saldo físico
+        // Si era INGRESO (sumó físico), ahora restamos
+        // Si era EGRESO (restó físico), ahora sumamos
         const deltaGeneral =
           mov.tipo_movimiento === "INGRESO"
-            ? Number(mov.monto) // Era EGRESO físico, ahora sumamos
-            : -Number(mov.monto); // Era INGRESO físico, ahora restamos
+            ? -Number(mov.monto)
+            : Number(mov.monto);
         const nuevoGeneral = anteriorGeneral + deltaGeneral;
 
         if (saldoGeneral) {
