@@ -7,6 +7,7 @@ async function cleanDatabase() {
 
   try {
     // Usar transacción para asegurar que todo se ejecute atomicamente
+    // Aumentar timeout a 30 segundos por la cantidad de operaciones
     await prisma.$transaction(async (tx) => {
       // 1. Eliminar Recibos (sin dependencias directas que importen)
       console.log("🗑️  Eliminando Recibos...");
@@ -75,7 +76,11 @@ async function cleanDatabase() {
       console.log("🗑️  Eliminando SalidaEspontanea...");
       await tx.salidaEspontanea.deleteMany({});
 
-      // 17. Resetear Saldos a 0
+      // 17. Eliminar SaldoInicial (para evitar inconsistencias después de la limpieza)
+      console.log("🗑️  Eliminando SaldoInicial...");
+      await tx.saldoInicial.deleteMany({});
+
+      // 18. Resetear Saldos a 0
       console.log("💰 Reseteando Saldos a 0...");
       await tx.saldo.updateMany({
         data: {
@@ -86,7 +91,7 @@ async function cleanDatabase() {
         },
       });
 
-      // 18. Resetear ServicioExternoSaldo a 0
+      // 19. Resetear ServicioExternoSaldo a 0
       console.log("💰 Reseteando ServicioExternoSaldo a 0...");
       await tx.servicioExternoSaldo.updateMany({
         data: {
@@ -94,7 +99,7 @@ async function cleanDatabase() {
         },
       });
 
-      // 19. Resetear ServientregaSaldo a 0
+      // 20. Resetear ServientregaSaldo a 0
       console.log("💰 Reseteando ServientregaSaldo a 0...");
       await tx.servientregaSaldo.updateMany({
         data: {
@@ -121,8 +126,12 @@ async function cleanDatabase() {
       console.log("  - CierreDiario ✓");
       console.log("  - SolicitudSaldo ✓");
       console.log("  - SalidaEspontanea ✓");
+      console.log("  - SaldoInicial (eliminados) ✓");
       console.log("  - Saldos (reseteados a 0) ✓");
       console.log("  - ServicioExternoSaldo (reseteados a 0) ✓");
+    }, {
+      maxWait: 30000, // 30 segundos
+      timeout: 30000, // 30 segundos
     });
   } catch (error) {
     console.error("❌ Error durante la limpieza:", error);

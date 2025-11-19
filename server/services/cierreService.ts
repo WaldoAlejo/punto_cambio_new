@@ -125,54 +125,61 @@ class CierreService {
   }
 
   /**
-   * Calcula el saldo de apertura para una moneda específica
-   * Busca el último cierre (CERRADO o PARCIAL) anterior a la fecha
+   * Calcula el saldo de apertura para un punto y moneda
+   * Busca el último cierre con conteo físico o el saldo actual
+   *
+   * ⚠️ IMPORTANTE: El saldo de apertura del día debe ser igual al saldo de cierre del día anterior (conteo_fisico)
+   * Si no hay cierre anterior, el saldo será 0 (caso post-limpieza o primer día de operación)
    */
-  async calcularSaldoApertura(
+  private async calcularSaldoApertura(
     puntoId: string,
     monedaId: string,
     fechaInicio: Date
   ): Promise<number> {
-    try {
-      // Buscar último cierre con conteo físico
-      const ultimoCierre = await prisma.cuadreCaja.findFirst({
-        where: {
-          punto_atencion_id: puntoId,
-          estado: { in: ["CERRADO", "PARCIAL"] },
-          fecha: { lt: fechaInicio },
+    // 1. Buscar el último cierre con conteo físico
+    const ultimoCierre = await prisma.cuadreCaja.findFirst({
+      where: {
+        punto_atencion_id: puntoId,
+        estado: {
+          in: ["CERRADO", "PARCIAL"],
         },
-        orderBy: { fecha: "desc" },
-        include: {
-          detalles: {
-            where: { moneda_id: monedaId },
-            select: { conteo_fisico: true },
-          },
+        fecha: {
+          lt: fechaInicio,
         },
-      });
-
-      if (ultimoCierre?.detalles?.[0]) {
-        return Number(ultimoCierre.detalles[0].conteo_fisico);
-      }
-
-      // Si no hay cierre anterior, usar saldo inicial de la tabla Saldo
-      const saldo = await prisma.saldo.findUnique({
-        where: {
-          punto_atencion_id_moneda_id: {
-            punto_atencion_id: puntoId,
+      },
+      orderBy: {
+        fecha: "desc",
+      },
+      include: {
+        detalles: {
+          where: {
             moneda_id: monedaId,
           },
+          select: {
+            conteo_fisico: true,
+          },
         },
-      });
+      },
+    });
 
-      return saldo ? Number(saldo.cantidad) : 0;
-    } catch (error) {
-      logger.error("Error calculando saldo apertura", {
-        error,
+    if (ultimoCierre?.detalles?.[0]) {
+      const conteoFisico = Number(ultimoCierre.detalles[0].conteo_fisico);
+      logger.info("Saldo de apertura obtenido del último cierre", {
         puntoId,
         monedaId,
+        conteoFisico,
+        fechaCierre: ultimoCierre.fecha,
       });
-      return 0;
+      return conteoFisico;
     }
+
+    // 2. Si no hay cierre anterior, el saldo de apertura es 0
+    // Esto sucede después de ejecutar clean-database.ts o en el primer día de operación
+    logger.info("No hay cierre anterior, saldo de apertura = 0", {
+      puntoId,
+      monedaId,
+    });
+    return 0;
   }
 
   /**

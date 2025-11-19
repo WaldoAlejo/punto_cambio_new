@@ -84,45 +84,30 @@ export const saldoReconciliationService = {
       });
 
       // 4. Calcular saldo basado en movimientos
-      // ⚠️ CRÍTICO: Los montos YA tienen el signo correcto en la BD
+      // ⚠️ CRÍTICO: Los montos YA tienen el signo correcto en la BD gracias a movimientoSaldoService
+      // INGRESO: monto POSITIVO (+50)
+      // EGRESO: monto NEGATIVO (-30)
+      // AJUSTE: monto con signo original (+10 o -10)
+      // Por lo tanto, simplemente SUMAMOS todos los montos
       for (const mov of movimientos) {
         const monto = Number(mov.monto);
         const tipoMovimiento = mov.tipo_movimiento;
 
-        switch (tipoMovimiento) {
-          case "SALDO_INICIAL":
-            // Skip - ya incluido en saldo inicial
-            break;
+        // Skip SALDO_INICIAL porque ya está incluido en la variable saldoCalculado
+        if (tipoMovimiento === "SALDO_INICIAL") {
+          continue;
+        }
 
-          case "INGRESO":
-            // INGRESO: monto positivo en BD, sumar valor absoluto
-            saldoCalculado += Math.abs(monto);
-            break;
+        // Sumar directamente el monto (ya tiene el signo correcto)
+        saldoCalculado += monto;
 
-          case "EGRESO":
-            // EGRESO: monto negativo en BD, restar valor absoluto
-            saldoCalculado -= Math.abs(monto);
-            break;
-
-          case "AJUSTE":
-            // AJUSTE: mantiene signo original
-            if (monto >= 0) {
-              saldoCalculado += monto;
-            } else {
-              saldoCalculado -= Math.abs(monto);
-            }
-            break;
-
-          default:
-            // Tipos desconocidos: sumar el monto tal cual
-            logger.warn("Tipo de movimiento desconocido", {
-              tipo: tipoMovimiento,
-              monto,
-              puntoAtencionId,
-              monedaId,
-            });
-            saldoCalculado += monto;
-            break;
+        // Log para debug si es necesario
+        if (process.env.DEBUG_SALDO === "true") {
+          logger.debug("Procesando movimiento", {
+            tipo: tipoMovimiento,
+            monto,
+            saldoAcumulado: saldoCalculado,
+          });
         }
       }
 
