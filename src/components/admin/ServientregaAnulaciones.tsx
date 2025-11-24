@@ -63,7 +63,7 @@ export const ServientregaAnulaciones = ({
     setError(null);
 
     try {
-      const response = await axiosInstance.get<SolicitudAnulacionGuia[]>(
+      const response = await axiosInstance.get(
         "/servientrega/solicitudes-anulacion",
         {
           params: {
@@ -74,15 +74,20 @@ export const ServientregaAnulaciones = ({
         }
       );
 
-      if (Array.isArray(response.data)) {
-        setSolicitudes(response.data);
-        if (response.data.length === 0) {
+      // El backend devuelve { success: true, data: [...] }
+      const data = response.data?.data || response.data;
+
+      if (Array.isArray(data)) {
+        setSolicitudes(data);
+        if (data.length === 0) {
           toast.info(
             "No se encontraron solicitudes en el período seleccionado."
           );
         }
       } else {
+        console.error("Respuesta inesperada del servidor:", response.data);
         setSolicitudes([]);
+        toast.warning("No se recibieron solicitudes del servidor.");
       }
     } catch (err: any) {
       console.error("Error al cargar solicitudes:", err);
@@ -123,6 +128,7 @@ export const ServientregaAnulaciones = ({
     if (!solicitudSeleccionada) return;
 
     try {
+      // Usar el endpoint correcto con el método y parámetros correctos
       await axiosInstance.post("/servientrega/responder-solicitud-anulacion", {
         solicitud_id: solicitudSeleccionada.id,
         accion: accionRespuesta,
@@ -139,9 +145,9 @@ export const ServientregaAnulaciones = ({
       setSolicitudSeleccionada(null);
       setComentarioRespuesta("");
       fetchSolicitudes();
-    } catch (err) {
+    } catch (err: any) {
       const errorMessage =
-        err instanceof Error ? err.message : "Error desconocido";
+        err?.response?.data?.message || err?.message || "Error desconocido";
       console.error("Error al responder solicitud:", err);
       toast.error(`No se pudo procesar la respuesta: ${errorMessage}`);
     }
@@ -311,7 +317,8 @@ export const ServientregaAnulaciones = ({
                           )}
                         </p>
                         <p>
-                          <strong>Motivo:</strong> {solicitud.motivo}
+                          <strong>Motivo:</strong>{" "}
+                          {solicitud.motivo_anulacion || solicitud.motivo}
                         </p>
                       </div>
                     </div>
@@ -359,10 +366,12 @@ export const ServientregaAnulaciones = ({
                             "yyyy-MM-dd HH:mm"
                           )}
                       </p>
-                      {solicitud.comentario_respuesta && (
+                      {(solicitud.comentario_respuesta ||
+                        solicitud.observaciones_respuesta) && (
                         <p>
                           <strong>Comentario:</strong>{" "}
-                          {solicitud.comentario_respuesta}
+                          {solicitud.comentario_respuesta ||
+                            solicitud.observaciones_respuesta}
                         </p>
                       )}
                     </div>
@@ -393,7 +402,9 @@ export const ServientregaAnulaciones = ({
                 {solicitudSeleccionada?.solicitado_por_nombre}
               </p>
               <p>
-                <strong>Motivo:</strong> {solicitudSeleccionada?.motivo}
+                <strong>Motivo:</strong>{" "}
+                {solicitudSeleccionada?.motivo_anulacion ||
+                  solicitudSeleccionada?.motivo}
               </p>
             </div>
             <div>

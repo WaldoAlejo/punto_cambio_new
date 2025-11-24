@@ -84,31 +84,39 @@ async function calcularSaldoApertura(
   fechaInicioUtc: Date
 ): Promise<number> {
   try {
-    // Último cierre (CERRADO o PARCIAL) anterior a la fecha de inicio
+    // CRÍTICO: El saldo de apertura debe ser el conteo_fisico del último cierre CERRADO
+    // Esto garantiza continuidad: el saldo con el que cerró ayer es el saldo inicial de hoy
     const cierreResult = await pool.query(
       `SELECT dc.conteo_fisico
          FROM "DetalleCuadreCaja" dc
          INNER JOIN "CuadreCaja" c ON dc.cuadre_id = c.id
         WHERE dc.moneda_id = $1
           AND c.punto_atencion_id = $2
-          AND c.estado IN ('CERRADO','PARCIAL')
+          AND c.estado = 'CERRADO'
           AND c.fecha < $3::timestamp
-        ORDER BY c.fecha DESC
+        ORDER BY c.fecha DESC, c.fecha_cierre DESC
         LIMIT 1`,
       [monedaId, puntoAtencionId, fechaInicioUtc.toISOString()]
     );
-    if (cierreResult.rows[0])
-      return Number(cierreResult.rows[0].conteo_fisico) || 0;
 
-    // Si no hay cierre anterior, cae al saldo "inicial" de la tabla Saldo
-    const saldoResult = await pool.query(
-      `SELECT cantidad
-         FROM "Saldo"
-        WHERE punto_atencion_id = $1
-          AND moneda_id = $2`,
-      [puntoAtencionId, monedaId]
-    );
-    return saldoResult.rows[0] ? Number(saldoResult.rows[0].cantidad) || 0 : 0;
+    if (cierreResult.rows[0]) {
+      const apertura = Number(cierreResult.rows[0].conteo_fisico) || 0;
+      logger.info("✅ Saldo de apertura obtenido del último cierre", {
+        puntoAtencionId,
+        monedaId,
+        apertura,
+      });
+      return apertura;
+    }
+
+    // Si no hay cierre anterior (primer día o post-limpieza), el saldo inicial es 0
+    // El operador debe registrar una asignación inicial si recibe dinero
+    logger.info("⚠️ No hay cierre anterior, saldo de apertura = 0", {
+      puntoAtencionId,
+      monedaId,
+      fechaInicioUtc,
+    });
+    return 0;
   } catch (error) {
     logger.error("Error calculando saldo apertura", {
       error,

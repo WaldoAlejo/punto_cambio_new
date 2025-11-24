@@ -101,15 +101,17 @@ export interface SolicitudAnulacionGuia {
   id: string;
   guia_id: string;
   numero_guia: string;
-  motivo: string;
+  motivo?: string; // Alias para compatibilidad
+  motivo_anulacion?: string; // Nombre real del campo en backend
   estado: "PENDIENTE" | "APROBADA" | "RECHAZADA";
   solicitado_por: string;
   solicitado_por_nombre?: string;
-  punto_atencion_id: string;
+  punto_atencion_id?: string;
   punto_atencion_nombre?: string;
   fecha_solicitud: string;
   fecha_respuesta?: string;
   respondido_por?: string;
   respondido_por_nombre?: string;
-  comentario_respuesta?: string;
+  comentario_respuesta?: string; // Alias para compatibilidad
+  observaciones_respuesta?: string; // Nombre real del campo en backend
 }
