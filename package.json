@@ -8,7 +8,7 @@
     "dev:server": "nodemon --watch server --ext ts,tsx,json --exec \"tsx server/index.ts\"",
     "build": "npm run build:frontend && npm run build:server",
     "build:frontend": "vite build",
-    "build:server": "rm -f tsconfig.server.tsbuildinfo && tsc -p tsconfig.server.json",
+    "build:server": "tsc -p tsconfig.server.json",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",

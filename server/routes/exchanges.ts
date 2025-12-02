@@ -2073,136 +2073,31 @@ router.get(
       });
 
       // Enriquecer con datos_cliente desde Recibo.datos_operacion (para históricos)
-    // ========================= Eliminar cambio (solo ADMIN/SUPER_USUARIO) =========================
-    router.delete(
-      "/:id",
-      authenticateToken,
-      async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
-        try {
-          if (!req.user?.id) {
-            res.status(401).json({ success: false, error: "Usuario no autenticado" });
-            return;
-          }
-
-          const isAdmin =
-            req.user.rol === "ADMIN" || req.user.rol === "SUPER_USUARIO";
-          if (!isAdmin) {
-            res.status(403).json({ success: false, error: "Solo administradores" });
-            return;
-          }
-
-          const { id } = req.params;
-          const cambio = await prisma.cambioDivisa.findUnique({ where: { id } });
-          if (!cambio) {
-            res.status(404).json({ success: false, error: "Cambio no encontrado" });
-            return;
-          }
-
-          // Rollback contable y eliminación en transacción
-          await prisma.$transaction(async (tx) => {
-            // 1) Calcular porcentaje aplicado originalmente
-            const montoDestinoTotal = num(cambio.monto_destino);
-            const abonoInicial = num(cambio.abono_inicial_monto);
-            const porcentajeAplicado =
-              cambio.estado === EstadoTransaccion.PENDIENTE && abonoInicial > 0
-                ? abonoInicial / (montoDestinoTotal || 1)
-                : 1.0;
-
-            // 2) Reconstruir montos usados (origen/destino, efectivo/bancos)
-            const usdRecibidoEf = num(cambio.usd_recibido_efectivo) * porcentajeAplicado;
-            const usdRecibidoBk = num(cambio.usd_recibido_transfer) * porcentajeAplicado;
-            const usdEntregadoEf = num(cambio.usd_entregado_efectivo) * porcentajeAplicado;
-            const usdEntregadoBk = num(cambio.usd_entregado_transfer) * porcentajeAplicado;
-
-            // Breakdown físico para reversa
-            const entregadasBilletesRev = round2(num(cambio.divisas_entregadas_billetes) * porcentajeAplicado);
-            const entregadasMonedasRev = round2(num(cambio.divisas_entregadas_monedas) * porcentajeAplicado);
-            const recibidasBilletesRev = round2(num(cambio.divisas_recibidas_billetes) * porcentajeAplicado);
-            const recibidasMonedasRev = round2(num(cambio.divisas_recibidas_monedas) * porcentajeAplicado);
-
-            // 3) ORIGEN: revertir INCREMENTOS (efectivo/bancos)
-            const saldoOrigen = await getSaldo(tx, cambio.punto_atencion_id, cambio.moneda_origen_id);
-            if (saldoOrigen) {
-              const nuevaCantidadOrigen = round2(num(saldoOrigen.cantidad) - usdRecibidoEf);
-              const nuevoBancoOrigen = typeof saldoOrigen.bancos !== "undefined" ? round2(num(saldoOrigen.bancos) - usdRecibidoBk) : undefined;
-              const nuevoBilletesOrigen = round2(num(saldoOrigen.billetes) - entregadasBilletesRev);
-              const nuevoMonedasOrigen = round2(num(saldoOrigen.monedas_fisicas) - entregadasMonedasRev);
-
-              await tx.saldo.update({
-                where: {
-                  punto_atencion_id_moneda_id: {
-                    punto_atencion_id: cambio.punto_atencion_id,
-                    moneda_id: cambio.moneda_origen_id,
-                  },
-                },
-                data: {
-                  cantidad: nuevaCantidadOrigen,
-                  billetes: nuevoBilletesOrigen,
-                  monedas_fisicas: nuevoMonedasOrigen,
-                  ...(typeof nuevoBancoOrigen !== "undefined" ? { bancos: nuevoBancoOrigen } : {}),
-                  updated_at: new Date(),
-                },
-              });
-            }
-
-            // 4) DESTINO: revertir DECREMENTOS (efectivo/bancos)
-            const saldoDestino = await getSaldo(tx, cambio.punto_atencion_id, cambio.moneda_destino_id);
-            if (saldoDestino) {
-              const nuevaCantidadDestino = round2(num(saldoDestino.cantidad) + usdEntregadoEf);
-              const nuevoBancoDestino = typeof saldoDestino.bancos !== "undefined" ? round2(num(saldoDestino.bancos) + usdEntregadoBk) : undefined;
-              const nuevoBilletesDestino = round2(num(saldoDestino.billetes) + recibidasBilletesRev);
-              const nuevoMonedasDestino = round2(num(saldoDestino.monedas_fisicas) + recibidasMonedasRev);
-
-              await tx.saldo.update({
-                where: {
-                  punto_atencion_id_moneda_id: {
-                    punto_atencion_id: cambio.punto_atencion_id,
-                    moneda_id: cambio.moneda_destino_id,
-                  },
-                },
-                data: {
-                  cantidad: nuevaCantidadDestino,
-                  billetes: nuevoBilletesDestino,
-                  monedas_fisicas: nuevoMonedasDestino,
-                  ...(typeof nuevoBancoDestino !== "undefined" ? { bancos: nuevoBancoDestino } : {}),
-                  updated_at: new Date(),
-                },
-              });
-            }
-
-            // 5) Eliminar registros contables y recibos
-            await tx.movimientoSaldo.deleteMany({ where: { referencia_id: id } });
-            await tx.recibo.deleteMany({ where: { referencia_id: id } });
-
-            // 6) Eliminar el cambio
-            await tx.cambioDivisa.delete({ where: { id } });
-          });
-
-          res.json({ success: true, deletedId: id });
-        } catch (error) {
-          logger.error("Error al eliminar cambio de divisa", {
-            error: error instanceof Error ? error.message : "Unknown",
-          });
-          res
-            .status(500)
-            .json({ success: false, error: "Error interno al eliminar cambio" });
-        }
-      }
-    );
-
-    router.patch(
-        const refIds = (exchanges || []).map((e: any) => e.id);
-        if (refIds.length > 0) {
-          const recibos = await prisma.recibo.findMany({
-            where: { referencia_id: { in: Array.from(new Set(refIds)) } },
-            select: { referencia_id: true, datos_operacion: true },
-          });
+      try {
+        const recibos = await prisma.recibo.findMany({
+          where: {
+            referencia_id: { in: (exchanges || []).map((e: any) => e.id) },
+            tipo_operacion: "CAMBIO_DIVISA",
+          },
+          select: {
+            referencia_id: true,
+            datos_operacion: true,
+          },
+        });
+        if (recibos?.length) {
           const datosClienteMap = new Map<string, any>();
           for (const r of recibos) {
-            const op = r.datos_operacion as any;
-            const datos = op?.datos_cliente || op?.cliente || null;
-            if (r.referencia_id && datos) {
-              datosClienteMap.set(r.referencia_id, datos);
+            if (r.datos_operacion && typeof r.datos_operacion === "object") {
+              const datos = (r.datos_operacion as any).datos_cliente;
+              if (datos) datosClienteMap.set(r.referencia_id!, datos);
+            } else if (r.datos_operacion && typeof r.datos_operacion === "string") {
+              try {
+                const parsed = JSON.parse(r.datos_operacion as any);
+                const datos = parsed?.datos_cliente;
+                if (datos) datosClienteMap.set(r.referencia_id!, datos);
+              } catch {
+                // ignore JSON parse errors
+              }
             }
           }
           exchanges = (exchanges || []).map((e: any) => ({
@@ -2211,9 +2106,10 @@ router.get(
           }));
         }
       } catch (e) {
-        logger.warn("No se pudo enriquecer exchanges (partial) con datos_cliente de recibos", {
-          error: e instanceof Error ? e.message : String(e),
-        });
+        logger.warn(
+          "No se pudo enriquecer exchanges (partial) con datos_cliente de recibos",
+          { error: e instanceof Error ? e.message : String(e) }
+        );
       }
 
       res.json({ success: true, exchanges });
@@ -2221,9 +2117,7 @@ router.get(
       logger.error("Error fetching partial exchanges", {
         error: error instanceof Error ? error.message : "Unknown",
       });
-      res
-        .status(500)
-        .json({ success: false, error: "Error interno del servidor" });
+      res.status(500).json({ success: false, error: "Error interno del servidor" });
     }
   }
 );
