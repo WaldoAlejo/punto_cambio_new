@@ -1031,8 +1031,14 @@ router.post(
         numero_recibo: exchange.numero_recibo,
       });
 
+      // Incluir datos del cliente en la respuesta (no se persiste en CambioDivisa)
+      const exchangeResponse = {
+        ...exchange,
+        datos_cliente: datos_cliente_sanitized,
+      };
+
       res.status(201).json({
-        exchange,
+        exchange: exchangeResponse,
         success: true,
         timestamp: new Date().toISOString(),
       });
@@ -1225,6 +1231,33 @@ router.get(
           },
           orderBy: { fecha: "desc" },
           take: 50,
+        });
+      }
+
+      // Enriquecer con datos_cliente desde Recibo.datos_operacion (para históricos)
+      try {
+        const refIds = (exchanges || []).map((e: any) => e.id);
+        if (refIds.length > 0) {
+          const recibos = await prisma.recibo.findMany({
+            where: { referencia_id: { in: Array.from(new Set(refIds)) } },
+            select: { referencia_id: true, datos_operacion: true },
+          });
+          const datosClienteMap = new Map<string, any>();
+          for (const r of recibos) {
+            const op = r.datos_operacion as any;
+            const datos = op?.datos_cliente || op?.cliente || null;
+            if (r.referencia_id && datos) {
+              datosClienteMap.set(r.referencia_id, datos);
+            }
+          }
+          exchanges = (exchanges || []).map((e: any) => ({
+            ...e,
+            datos_cliente: (datosClienteMap.get(e.id) as any) || undefined,
+          }));
+        }
+      } catch (e) {
+        logger.warn("No se pudo enriquecer exchanges con datos_cliente de recibos", {
+          error: e instanceof Error ? e.message : String(e),
         });
       }
 
@@ -1899,7 +1932,7 @@ router.get(
         return;
       }
 
-      const exchanges = await prisma.cambioDivisa.findMany({
+      let exchanges = await prisma.cambioDivisa.findMany({
         where: {
           punto_atencion_id: String(pointId),
           estado: EstadoTransaccion.PENDIENTE,
@@ -1941,6 +1974,33 @@ router.get(
         orderBy: { fecha: "desc" },
       });
 
+      // Enriquecer con datos_cliente desde Recibo.datos_operacion (para históricos)
+      try {
+        const refIds = (exchanges || []).map((e: any) => e.id);
+        if (refIds.length > 0) {
+          const recibos = await prisma.recibo.findMany({
+            where: { referencia_id: { in: Array.from(new Set(refIds)) } },
+            select: { referencia_id: true, datos_operacion: true },
+          });
+          const datosClienteMap = new Map<string, any>();
+          for (const r of recibos) {
+            const op = r.datos_operacion as any;
+            const datos = op?.datos_cliente || op?.cliente || null;
+            if (r.referencia_id && datos) {
+              datosClienteMap.set(r.referencia_id, datos);
+            }
+          }
+          exchanges = (exchanges || []).map((e: any) => ({
+            ...e,
+            datos_cliente: (datosClienteMap.get(e.id) as any) || undefined,
+          }));
+        }
+      } catch (e) {
+        logger.warn("No se pudo enriquecer exchanges (pending) con datos_cliente de recibos", {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+
       res.json({ success: true, exchanges });
     } catch (error) {
       logger.error("Error fetching pending exchanges", {
@@ -1970,7 +2030,7 @@ router.get(
       else if (isAdmin && pointId && pointId !== "ALL")
         where.punto_atencion_id = String(pointId);
 
-      const exchanges = await prisma.cambioDivisa.findMany({
+      let exchanges = await prisma.cambioDivisa.findMany({
         where,
         select: {
           id: true,
@@ -2011,6 +2071,33 @@ router.get(
         },
         orderBy: { fecha: "desc" },
       });
+
+      // Enriquecer con datos_cliente desde Recibo.datos_operacion (para históricos)
+      try {
+        const refIds = (exchanges || []).map((e: any) => e.id);
+        if (refIds.length > 0) {
+          const recibos = await prisma.recibo.findMany({
+            where: { referencia_id: { in: Array.from(new Set(refIds)) } },
+            select: { referencia_id: true, datos_operacion: true },
+          });
+          const datosClienteMap = new Map<string, any>();
+          for (const r of recibos) {
+            const op = r.datos_operacion as any;
+            const datos = op?.datos_cliente || op?.cliente || null;
+            if (r.referencia_id && datos) {
+              datosClienteMap.set(r.referencia_id, datos);
+            }
+          }
+          exchanges = (exchanges || []).map((e: any) => ({
+            ...e,
+            datos_cliente: (datosClienteMap.get(e.id) as any) || undefined,
+          }));
+        }
+      } catch (e) {
+        logger.warn("No se pudo enriquecer exchanges (partial) con datos_cliente de recibos", {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
 
       res.json({ success: true, exchanges });
     } catch (error) {

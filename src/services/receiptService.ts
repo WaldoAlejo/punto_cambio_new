@@ -150,6 +150,9 @@ export class ReceiptService {
       : exchange.numero_recibo_completar ||
         this.generateReceiptNumber("COMPLETAR_CAMBIO");
 
+    const fallbackNombre = (exchange.cliente || "").trim().split(" ")[0] || "";
+    const fallbackApellido = (exchange.cliente || "").trim().split(" ").slice(1).join(" ") || "";
+
     return {
       numeroRecibo,
       fecha: new Date().toLocaleString(),
@@ -170,8 +173,8 @@ export class ReceiptService {
         tasaCambioMonedas: Number(exchange.tasa_cambio_monedas) || 0,
         observacion: observacionCompleta,
         cliente: {
-          nombre: exchange.datos_cliente?.nombre || "",
-          apellido: exchange.datos_cliente?.apellido || "",
+          nombre: exchange.datos_cliente?.nombre || fallbackNombre,
+          apellido: exchange.datos_cliente?.apellido || fallbackApellido,
           cedula: exchange.datos_cliente?.cedula || "",
           telefono: exchange.datos_cliente?.telefono || "",
         },
@@ -194,6 +197,9 @@ export class ReceiptService {
     puntoNombre: string,
     usuarioNombre: string
   ): ReceiptData {
+    const fallbackNombre = (exchange.cliente || "").trim().split(" ")[0] || "";
+    const fallbackApellido = (exchange.cliente || "").trim().split(" ").slice(1).join(" ") || "";
+
     return {
       numeroRecibo:
         exchange.numero_recibo || this.generateReceiptNumber("CAMBIO_DIVISA"),
@@ -218,8 +224,8 @@ export class ReceiptService {
 
         observacion: exchange.observacion,
         cliente: {
-          nombre: exchange.datos_cliente?.nombre || "",
-          apellido: exchange.datos_cliente?.apellido || "",
+          nombre: exchange.datos_cliente?.nombre || fallbackNombre,
+          apellido: exchange.datos_cliente?.apellido || fallbackApellido,
           cedula: exchange.datos_cliente?.cedula || "",
           telefono: exchange.datos_cliente?.telefono || "",
         },
