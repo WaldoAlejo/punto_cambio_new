@@ -175,11 +175,26 @@ export const useExchangeProcess = ({
         return;
       }
 
-      if (totalEntregado <= 0 || totalRecibido <= 0) {
-        toast.error("Montos totales inválidos. Verifique los valores.");
+      // Validación explícita de totales: lo que recibe el cliente (destino) y lo que entrega (origen)
+      if (totalEntregado <= 0) {
+        toast.error(
+          "Monto total ENTREGADO por el cliente debe ser mayor a 0 (origen)."
+        );
         setIsProcessing(false);
         return;
       }
+      if (totalRecibido <= 0) {
+        toast.error(
+          "Monto total RECIBIDO por el cliente debe ser mayor a 0 (destino)."
+        );
+        setIsProcessing(false);
+        return;
+      }
+
+      // Mensaje informativo para evitar confusiones (se puede ocultar luego)
+      toast.info(
+        `Cliente ENTREGA: ${totalEntregado} (${fromCurrency}) • Cliente RECIBE: ${totalRecibido} (${toCurrency})`
+      );
 
       // Transferencia: validar banco y número
       if (data.metodoEntrega === "transferencia") {
