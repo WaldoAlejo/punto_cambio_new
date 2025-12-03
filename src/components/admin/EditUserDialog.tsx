@@ -30,6 +30,7 @@ interface EditUserDialogProps {
 
 const initialFormState = (user: Usuario) => ({
   nombre: user.nombre || "",
+  username: user.username || "",
   correo: user.correo || "",
   telefono: user.telefono || "",
   rol: user.rol,
@@ -118,6 +119,18 @@ const EditUserDialog = ({
               />
             </div>
             <div className="space-y-2">
+              <Label>Usuario</Label>
+              <Input
+                value={formData.username}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, username: e.target.value }))
+                }
+                placeholder="Nombre de usuario"
+                required
+                disabled={user.rol !== "CONCESION"}
+              />
+            </div>
+            <div className="space-y-2">
               <Label>Email</Label>
               <Input
                 type="email"
@@ -163,7 +176,20 @@ const EditUserDialog = ({
                 </SelectContent>
               </Select>
             </div>
-            {/* Puedes agregar más campos si tu modelo lo necesita */}
+            {/* Solo para CONCESION: permitir cambiar punto de atención */}
+            {formData.rol === "CONCESION" && (
+              <div className="space-y-2">
+                <Label>Punto de Atención</Label>
+                <PointSelectModal
+                  open={true}
+                  onClose={() => {}}
+                  onSelect={(point) => setFormData((prev) => ({ ...prev, punto_atencion_id: point.id }))}
+                />
+                <div className="text-xs text-gray-500">
+                  Selecciona el punto de atención para este usuario de concesión.
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button type="submit" disabled={isLoading}>
                 {isLoading ? "Actualizando..." : "Actualizar Usuario"}

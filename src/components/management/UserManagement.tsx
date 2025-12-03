@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Usuario, PuntoAtencion } from "../../types";
+import { PointSelectModal } from "./PointSelectModal";
 import { userService } from "../../services/userService";
 import { pointService } from "../../services/pointService";
 import EditUserDialog from "../../components/admin/EditUserDialog";
@@ -53,6 +54,7 @@ export const UserManagement = () => {
     nombre: "",
     rol: "OPERADOR" as Usuario["rol"],
     password: "",
+    punto_atencion_id: "",
   });
 
   // Caches para evitar llamar de nuevo si ya se cargó en esta sesión
@@ -108,6 +110,20 @@ export const UserManagement = () => {
     };
   }, []);
 
+  const [showPointModal, setShowPointModal] = useState(false);
+
+  // Cuando cambia el rol a CONCESION, mostrar modal
+  useEffect(() => {
+    if (formData.rol === "CONCESION") {
+      setShowPointModal(true);
+    }
+  }, [formData.rol]);
+
+  const handlePointSelect = (point: PuntoAtencion) => {
+    setFormData((prev) => ({ ...prev, punto_atencion_id: point.id }));
+    setShowPointModal(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -132,6 +148,12 @@ export const UserManagement = () => {
       return;
     }
 
+    if (formData.rol === "CONCESION" && !formData.punto_atencion_id) {
+      toast.error("Debes seleccionar un punto para el usuario concesión");
+      setShowPointModal(true);
+      return;
+    }
+
     try {
       const { user: newUser } = await userService.createUser({
         username: formData.username,
@@ -139,6 +161,7 @@ export const UserManagement = () => {
         nombre: formData.nombre,
         correo: formData.correo,
         rol: formData.rol,
+        punto_atencion_id: formData.rol === "CONCESION" ? formData.punto_atencion_id : undefined,
       });
 
       if (!newUser) {
@@ -157,6 +180,7 @@ export const UserManagement = () => {
         nombre: "",
         rol: "OPERADOR",
         password: "",
+        punto_atencion_id: "",
       });
       setShowForm(false);
 
@@ -266,15 +290,21 @@ export const UserManagement = () => {
       {/* Contenido scrolleable */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
         {showForm && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Crear Nuevo Usuario</CardTitle>
-              <CardDescription>
-                Complete la información del nuevo usuario
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+          <>
+            <PointSelectModal
+              open={showPointModal}
+              onClose={() => setShowPointModal(false)}
+              onSelect={handlePointSelect}
+            />
+            <Card>
+              <CardHeader>
+                <CardTitle>Crear Nuevo Usuario</CardTitle>
+                <CardDescription>
+                  Complete la información del nuevo usuario
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Nombre Completo</Label>

@@ -70,44 +70,33 @@ router.post(
         return;
       }
 
-      // Validar permisos según rol
+      // Lógica de punto según rol
       if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
-        // Si el admin no tiene punto_atencion_id, asignar el principal automáticamente
-        if (!user.punto_atencion_id) {
+        // Siempre asignar el punto principal
+        if (user.punto_atencion_id !== "ed61308a-edd8-4637-8a95-1156962d023d") {
           await prisma.usuario.update({
             where: { id: user.id },
             data: { punto_atencion_id: "ed61308a-edd8-4637-8a95-1156962d023d" },
           });
           user.punto_atencion_id = "ed61308a-edd8-4637-8a95-1156962d023d";
         }
-        // Asignar a todos los ADMIN sin punto principal (por si hay más de uno)
-        await prisma.usuario.updateMany({
-          where: {
-            rol: { in: ["ADMIN", "SUPER_USUARIO"] },
-            OR: [
-              { punto_atencion_id: null },
-              { punto_atencion_id: { not: "ed61308a-edd8-4637-8a95-1156962d023d" } },
-            ],
-          },
-          data: { punto_atencion_id: "ed61308a-edd8-4637-8a95-1156962d023d" },
-        });
-        // Validar que el punto asignado sea principal
-        const principal = await prisma.puntoAtencion.findUnique({
-          where: { id: user.punto_atencion_id },
-          select: { es_principal: true },
-        });
-        if (!principal?.es_principal) {
-          logger.warn("Admin en punto no principal", {
-            username,
-            punto_atencion_id: user.punto_atencion_id,
-          });
+      } else if (user.rol === "CONCESION") {
+        // Debe tener un punto asignado, si no, error
+        if (!user.punto_atencion_id) {
+          logger.warn("Usuario concesion sin punto asignado", { username, ip: req.ip });
           res.status(403).json({
-            error: "Administrador debe usar el punto de atención principal",
+            error: "El usuario concesion debe tener un punto de atención asignado.",
             success: false,
             timestamp: new Date().toISOString(),
           });
           return;
         }
+      } else if (user.rol === "ADMINISTRATIVO") {
+        // No requiere punto para login, pero no debe seleccionar punto
+        // No se hace nada, solo permitir login
+      } else if (user.rol === "OPERADOR") {
+        // OPERADOR: debe seleccionar punto al iniciar sesión (frontend debe mostrar selección)
+        // La jornada activa se maneja abajo
       }
 
       // Buscar si tiene jornada activa (solo para OPERADOR)
@@ -135,16 +124,25 @@ router.post(
         ip: req.ip,
       });
 
+      // Respuesta según rol
+      let punto_atencion_id = null;
+      if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
+        punto_atencion_id = user.punto_atencion_id;
+      } else if (user.rol === "CONCESION") {
+        punto_atencion_id = user.punto_atencion_id;
+      } else if (user.rol === "ADMINISTRATIVO") {
+        punto_atencion_id = null; // No requiere punto
+      } else if (user.rol === "OPERADOR") {
+        punto_atencion_id = jornadaActiva?.punto_atencion_id || null;
+      }
+
       res.status(200).json({
         user: {
           ...userWithoutPassword,
           created_at: user.created_at.toISOString(),
           updated_at: user.updated_at.toISOString(),
           jornada_id: jornadaActiva?.id || null,
-          punto_atencion_id:
-            user.rol === "ADMIN" || user.rol === "SUPER_USUARIO"
-              ? user.punto_atencion_id
-              : jornadaActiva?.punto_atencion_id || null,
+          punto_atencion_id,
         },
         token,
         success: true,
