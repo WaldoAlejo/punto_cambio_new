@@ -17,8 +17,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { Usuario } from "../../types";
+import { Usuario, PuntoAtencion } from "../../types";
 import { userService } from "../../services/userService";
+import { PointSelectModal } from "../management/PointSelectModal";
 
 interface EditUserDialogProps {
   user: Usuario;
@@ -35,7 +36,9 @@ const initialFormState = (user: Usuario) => ({
   telefono: user.telefono || "",
   rol: user.rol,
   punto_atencion_id: user.punto_atencion_id || "",
+  punto_atencion_nombre: user.punto_atencion_id ? user.punto_atencion_id : "",
 });
+  const [showPointModal, setShowPointModal] = useState(false);
 
 const EditUserDialog = ({
   user,
@@ -127,7 +130,7 @@ const EditUserDialog = ({
                 }
                 placeholder="Nombre de usuario"
                 required
-                disabled={user.rol !== "CONCESION"}
+                disabled={formData.rol !== "CONCESION"}
               />
             </div>
             <div className="space-y-2">
@@ -180,14 +183,25 @@ const EditUserDialog = ({
             {formData.rol === "CONCESION" && (
               <div className="space-y-2">
                 <Label>Punto de Atención</Label>
-                <PointSelectModal
-                  open={true}
-                  onClose={() => {}}
-                  onSelect={(point) => setFormData((prev) => ({ ...prev, punto_atencion_id: point.id }))}
-                />
+                <div className="flex gap-2 items-center">
+                  <span className="text-sm font-medium">
+                    {formData.punto_atencion_id ? `ID: ${formData.punto_atencion_id}` : "No asignado"}
+                  </span>
+                  <Button type="button" size="sm" onClick={() => setShowPointModal(true)}>
+                    Cambiar Punto
+                  </Button>
+                </div>
                 <div className="text-xs text-gray-500">
                   Selecciona el punto de atención para este usuario de concesión.
                 </div>
+                <PointSelectModal
+                  open={showPointModal}
+                  onClose={() => setShowPointModal(false)}
+                  onSelect={(point: PuntoAtencion) => {
+                    setFormData((prev) => ({ ...prev, punto_atencion_id: point.id }));
+                    setShowPointModal(false);
+                  }}
+                />
               </div>
             )}
             <div className="flex gap-2">
