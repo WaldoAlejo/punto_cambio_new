@@ -29,6 +29,7 @@ interface EditUserDialogProps {
   currentUser: Usuario;
 }
 
+
 const initialFormState = (user: Usuario) => ({
   nombre: user.nombre || "",
   username: user.username || "",
@@ -38,7 +39,7 @@ const initialFormState = (user: Usuario) => ({
   punto_atencion_id: user.punto_atencion_id || "",
   punto_atencion_nombre: user.punto_atencion_id ? user.punto_atencion_id : "",
 });
-  const [showPointModal, setShowPointModal] = useState(false);
+
 
 const EditUserDialog = ({
   user,
@@ -49,6 +50,7 @@ const EditUserDialog = ({
 }: EditUserDialogProps) => {
   const [formData, setFormData] = useState(initialFormState(user));
   const [isLoading, setIsLoading] = useState(false);
+  const [showPointModal, setShowPointModal] = useState(false);
 
   // Resetear el form cuando cambie usuario o se abra/cierre el modal
   useEffect(() => {
