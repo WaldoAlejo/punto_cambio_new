@@ -275,7 +275,7 @@ export const UserManagement = () => {
   }
 
   return (
-    <div className="h-full flex flex-col gap-4">
+    <>
       {/* Header - Siempre visible */}
       <div className="flex-shrink-0 flex items-center justify-between">
         <h1 className="text-lg font-bold text-gray-800">Gestión de Usuarios</h1>
@@ -286,7 +286,6 @@ export const UserManagement = () => {
           {showForm ? "Cancelar" : "Nuevo Usuario"}
         </Button>
       </div>
-
       {/* Contenido scrolleable */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
         {showForm && (
@@ -305,123 +304,120 @@ export const UserManagement = () => {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Nombre Completo</Label>
+                      <Input
+                        value={formData.nombre}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            nombre: e.target.value,
+                          }))
+                        }
+                        placeholder="Nombre completo"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Rol</Label>
+                      <Select
+                        value={formData.rol}
+                        onValueChange={(value: Usuario["rol"]) =>
+                          setFormData((prev) => ({ ...prev, rol: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="OPERADOR">Operador</SelectItem>
+                          <SelectItem value="ADMINISTRATIVO">
+                            Administrativo
+                          </SelectItem>
+                          <SelectItem value="CONCESION">Concesión</SelectItem>
+                          <SelectItem value="ADMIN">Administrador</SelectItem>
+                          <SelectItem value="SUPER_USUARIO">
+                            Super Usuario
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Usuario</Label>
+                      <Input
+                        value={formData.username}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            username: e.target.value,
+                          }))
+                        }
+                        placeholder="Nombre de usuario"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input
+                        type="email"
+                        value={formData.correo}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            correo: e.target.value,
+                          }))
+                        }
+                        placeholder="email@ejemplo.com"
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <Label>Nombre Completo</Label>
+                    <Label>Contraseña Temporal</Label>
                     <Input
-                      value={formData.nombre}
+                      type="password"
+                      value={formData.password}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
-                          nombre: e.target.value,
+                          password: e.target.value,
                         }))
                       }
-                      placeholder="Nombre completo"
+                      placeholder="Mín. 8 caracteres: A-z, 0-9, @$!%*?&"
                     />
+                    <div className="text-xs text-gray-600 bg-yellow-50 p-2 rounded">
+                      <p>
+                        <strong>Requisitos de contraseña:</strong>
+                      </p>
+                      <ul className="list-disc list-inside mt-1">
+                        <li>Mínimo 8 caracteres</li>
+                        <li>Al menos 1 mayúscula (A-Z)</li>
+                        <li>Al menos 1 minúscula (a-z)</li>
+                        <li>Al menos 1 número (0-9)</li>
+                        <li>Al menos 1 símbolo (@$!%*?&)</li>
+                      </ul>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Rol</Label>
-                    <Select
-                      value={formData.rol}
-                      onValueChange={(value: Usuario["rol"]) =>
-                        setFormData((prev) => ({ ...prev, rol: value }))
-                      }
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      className="bg-blue-600 hover:bg-blue-700"
                     >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="OPERADOR">Operador</SelectItem>
-                        <SelectItem value="ADMINISTRATIVO">
-                          Administrativo
-                        </SelectItem>
-                        <SelectItem value="CONCESION">Concesión</SelectItem>
-                        <SelectItem value="ADMIN">Administrador</SelectItem>
-                        <SelectItem value="SUPER_USUARIO">
-                          Super Usuario
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                      Crear Usuario
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowForm(false)}
+                    >
+                      Cancelar
+                    </Button>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Usuario</Label>
-                    <Input
-                      value={formData.username}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          username: e.target.value,
-                        }))
-                      }
-                      placeholder="Nombre de usuario"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input
-                      type="email"
-                      value={formData.correo}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          correo: e.target.value,
-                        }))
-                      }
-                      placeholder="email@ejemplo.com"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Contraseña Temporal</Label>
-                  <Input
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        password: e.target.value,
-                      }))
-                    }
-                    placeholder="Mín. 8 caracteres: A-z, 0-9, @$!%*?&"
-                  />
-                  <div className="text-xs text-gray-600 bg-yellow-50 p-2 rounded">
-                    <p>
-                      <strong>Requisitos de contraseña:</strong>
-                    </p>
-                    <ul className="list-disc list-inside mt-1">
-                      <li>Mínimo 8 caracteres</li>
-                      <li>Al menos 1 mayúscula (A-Z)</li>
-                      <li>Al menos 1 minúscula (a-z)</li>
-                      <li>Al menos 1 número (0-9)</li>
-                      <li>Al menos 1 símbolo (@$!%*?&)</li>
-                    </ul>
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    type="submit"
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    Crear Usuario
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowForm(false)}
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                </form>
+              </CardContent>
+            </Card>
+          </>
         )}
-
         <Card>
           <CardHeader>
             <CardTitle>Usuarios del Sistema</CardTitle>
@@ -520,7 +516,6 @@ export const UserManagement = () => {
             )}
           </CardContent>
         </Card>
-
         {/* Diálogos */}
         {editingUser && (
           <EditUserDialog
@@ -528,7 +523,6 @@ export const UserManagement = () => {
             isOpen={true}
             onClose={() => setEditingUser(null)}
             onUserUpdated={() => {
-              // invalidar cache y recargar
               usersCacheRef.current = null;
               pointsCacheRef.current = null;
               loadData();
@@ -543,11 +537,10 @@ export const UserManagement = () => {
             onClose={() => setResetPasswordUser(null)}
           />
         )}
-
         <ConfirmationDialog />
       </div>
-    </div>
+    </>
   );
-};
+}
 
 export default UserManagement;
