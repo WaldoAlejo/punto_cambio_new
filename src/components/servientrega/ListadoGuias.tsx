@@ -219,6 +219,12 @@ export default function ListadoGuias() {
                       )}
                     </p>
                     <p>
+                      <strong>Costo:</strong>{" "}
+                      {typeof guia.costo_envio === "number"
+                        ? `$${guia.costo_envio.toFixed(2)}`
+                        : "N/A"}
+                    </p>
+                    <p>
                       <strong>Estado:</strong>{" "}
                       <span
                         className={`px-2 py-1 rounded text-xs font-medium ${
