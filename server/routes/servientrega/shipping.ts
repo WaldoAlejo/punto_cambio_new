@@ -239,7 +239,9 @@ router.post("/generar-guia", async (req, res) => {
     // Construcción robusta del payload si NO viene formateado
     let payload: Record<string, any>;
     if (!yaFormateado) {
+            // ...existing code...
       const {
+          // ...existing code...
         remitente,
         destinatario,
         nombre_producto,
@@ -267,6 +269,22 @@ router.post("/generar-guia", async (req, res) => {
       ).toUpperCase()}-${String(destinatario?.provincia || "").toUpperCase()}`;
 
       // Normalizaciones numéricas seguras
+            // Validar identificación de remitente y destinatario (después de declarar las variables)
+            const { ServientregaValidationService } = require("../../services/servientregaValidationService.js");
+            const idRemitente = String(remitente?.identificacion || remitente?.cedula || "");
+            const idDestinatario = String(destinatario?.identificacion || destinatario?.cedula || "");
+            if (!ServientregaValidationService.validarIdentificacionEcuatorianaOExtranjera(idRemitente)) {
+              return res.status(400).json({
+                error: "IDENTIFICACION_INVALIDA",
+                message: `La identificación del remitente (${idRemitente}) no es válida. Debe ser cédula, RUC o pasaporte (nacional o extranjero).`
+              });
+            }
+            if (!ServientregaValidationService.validarIdentificacionEcuatorianaOExtranjera(idDestinatario)) {
+              return res.status(400).json({
+                error: "IDENTIFICACION_INVALIDA",
+                message: `La identificación del destinatario (${idDestinatario}) no es válida. Debe ser cédula, RUC o pasaporte (nacional o extranjero).`
+              });
+            }
       const vd = Number(medidas?.valor_declarado ?? 0) || 0; // 👈 default 0
       const va = Number(medidas?.valor_seguro ?? 0) || 0;
       const alto = Number(medidas?.alto ?? 0) || 0;
@@ -533,53 +551,66 @@ router.post("/generar-guia", async (req, res) => {
     if (guia && base64) {
       const db = new ServientregaDBService();
 
+      console.log("💰 INICIANDO CÁLCULO DE valorTotalGuia...");
+      console.log("💰 Fuentes disponibles:", {
+        costoEnvioPrecalculado,
+        processed_total_transacion: processed?.total_transacion,
+        processed_gtotal: processed?.gtotal,
+        processed_flete: processed?.flete,
+        payload_valor_total: payload?.valor_total,
+        payload_gtotal: payload?.gtotal,
+        payload_total_transacion: payload?.total_transacion,
+        payload_flete: payload?.flete,
+        payload_valor_empaque: payload?.valor_empaque,
+        payload_seguro: payload?.seguro,
+        payload_tiva: payload?.tiva,
+      });
+
       // 🎯 PRIORIDAD 1: Usar el costo precalculado que viene del frontend (confiable)
       if (costoEnvioPrecalculado > 0) {
         valorTotalGuia = costoEnvioPrecalculado;
         console.log(
-          "✅ Usando costo precalculado del frontend:",
+          "✅ PRIORIDAD 1 MATCH: Usando costo precalculado del frontend:",
           valorTotalGuia
         );
       }
-      // PRIORIDAD 2: Intentar con total_transacion (suma de todos los costos)
-      else if (processed?.total_transacion) {
+      // PRIORIDAD 2: Intentar con total_transacion de respuesta de Servientrega
+      else if (processed?.total_transacion && Number(processed.total_transacion) > 0) {
         valorTotalGuia = Number(processed.total_transacion);
         console.log(
-          "✅ Usando PRIORIDAD 2 (total_transacion):",
+          "✅ PRIORIDAD 2 MATCH: Usando total_transacion de Servientrega:",
           valorTotalGuia
         );
       }
-      // PRIORIDAD 3: Usar gtotal (gran total que incluye todos los costos)
-      else if (processed?.gtotal) {
+      // PRIORIDAD 3: Usar gtotal de respuesta de Servientrega
+      else if (processed?.gtotal && Number(processed.gtotal) > 0) {
         valorTotalGuia = Number(processed.gtotal);
-        console.log("✅ Usando PRIORIDAD 3 (gtotal):", valorTotalGuia);
+        console.log("✅ PRIORIDAD 3 MATCH: Usando gtotal de Servientrega:", valorTotalGuia);
       }
-      // PRIORIDAD 4: Si solo viene el flete, usarlo como base
-      else if (processed?.flete) {
-        valorTotalGuia = Number(processed.flete);
-        // Sumar otros costos si existen
+      // PRIORIDAD 4: Combinar componentes de la respuesta de Servientrega
+      else if (processed?.flete && Number(processed.flete) > 0) {
+        valorTotalGuia = Number(processed.flete) || 0;
         if (processed?.valor_asegurado) {
-          valorTotalGuia += Number(processed.valor_asegurado);
+          valorTotalGuia += Number(processed.valor_asegurado) || 0;
         }
         if (processed?.valor_empaque) {
-          valorTotalGuia += Number(processed.valor_empaque);
+          valorTotalGuia += Number(processed.valor_empaque) || 0;
         }
-        console.log("✅ Usando PRIORIDAD 4 (flete + otros):", valorTotalGuia);
+        console.log("✅ PRIORIDAD 4 MATCH: Sumando componentes de Servientrega:", {
+          flete: Number(processed.flete),
+          valor_asegurado: Number(processed.valor_asegurado || 0),
+          valor_empaque: Number(processed.valor_empaque || 0),
+          total: valorTotalGuia,
+        });
       }
-      // PRIORIDAD 5: Calcular desde componentes individuales enviados del frontend
-      else if (
-        payload?.flete ||
-        payload?.valor_empaque ||
-        payload?.seguro ||
-        payload?.tiva
-      ) {
+      // PRIORIDAD 5: Combinar componentes enviados desde el payload del frontend
+      else if (payload?.flete || payload?.valor_empaque || payload?.seguro || payload?.tiva) {
         valorTotalGuia = 0;
-        if (payload?.flete) valorTotalGuia += Number(payload.flete);
-        if (payload?.valor_empaque)
-          valorTotalGuia += Number(payload.valor_empaque);
-        if (payload?.seguro) valorTotalGuia += Number(payload.seguro);
-        if (payload?.tiva) valorTotalGuia += Number(payload.tiva);
-        console.log("✅ Usando PRIORIDAD 5 (componentes individuales):", {
+        if (payload?.flete) valorTotalGuia += Number(payload.flete) || 0;
+        if (payload?.valor_empaque) valorTotalGuia += Number(payload.valor_empaque) || 0;
+        if (payload?.seguro) valorTotalGuia += Number(payload.seguro) || 0;
+        if (payload?.tiva) valorTotalGuia += Number(payload.tiva) || 0;
+        console.log("✅ PRIORIDAD 5 MATCH: Sumando componentes del payload:", {
           flete: payload?.flete,
           valor_empaque: payload?.valor_empaque,
           seguro: payload?.seguro,
@@ -587,22 +618,30 @@ router.post("/generar-guia", async (req, res) => {
           total: valorTotalGuia,
         });
       }
-      // PRIORIDAD 6: Fallback al valor_total del payload (si viene formateado)
-      else if (payload?.valor_total) {
+      // PRIORIDAD 6: Usar gtotal del payload
+      else if (payload?.gtotal && Number(payload.gtotal) > 0) {
+        valorTotalGuia = Number(payload.gtotal);
+        console.log("✅ PRIORIDAD 6 MATCH: Usando gtotal del payload:", valorTotalGuia);
+      }
+      // PRIORIDAD 7: Fallback al valor_total del payload
+      else if (payload?.valor_total && Number(payload.valor_total) > 0) {
         valorTotalGuia = Number(payload.valor_total);
-        console.log(
-          "✅ Usando PRIORIDAD 6 (valor_total del payload):",
-          valorTotalGuia
-        );
+        console.log("✅ PRIORIDAD 7 MATCH: Usando valor_total del payload:", valorTotalGuia);
       }
 
-      console.log("💰 Desglose de costos para guía:", {
-        flete: Number(processed?.flete || 0),
-        valor_asegurado: Number(processed?.valor_asegurado || 0),
-        valor_empaque: Number(processed?.valor_empaque || 0),
-        total_transacion: Number(processed?.total_transacion || 0),
-        gtotal: Number(processed?.gtotal || 0),
-        valor_total_final: valorTotalGuia,
+      // ⚠️ FALLBACK FINAL: Si aún es 0, registramos advertencia
+      if (valorTotalGuia === 0) {
+        console.warn("⚠️ ADVERTENCIA: valorTotalGuia calculado como 0 después de todas las prioridades");
+        console.warn("⚠️ NO se descontará saldo ni se registrará ingreso de servicio externo");
+      }
+
+      console.log("💰 DESGLOSE FINAL DE COSTOS:", {
+        flete_servientrega: Number(processed?.flete || 0),
+        valor_asegurado_servientrega: Number(processed?.valor_asegurado || 0),
+        valor_empaque_servientrega: Number(processed?.valor_empaque || 0),
+        total_transacion_servientrega: Number(processed?.total_transacion || 0),
+        gtotal_servientrega: Number(processed?.gtotal || 0),
+        valorTotalGuia_FINAL: valorTotalGuia,
         valor_declarado: Number(req.body?.valor_declarado || 0), // ⚠️ NO se descuenta
       });
 
@@ -756,70 +795,49 @@ router.post("/generar-guia", async (req, res) => {
         });
 
         if (punto_atencion_id_captado && valorTotalGuia > 0) {
-          try {
-            console.log("🔄 LLAMANDO descontarSaldo con:", {
-              punto_atencion_id: punto_atencion_id_captado,
+          console.log("💳 PROCESANDO FLUJO DE SALDO:", {
+            punto_atencion_id: punto_atencion_id_captado,
+            monto: valorTotalGuia,
+            numero_guia: guia,
+          });
+
+          const resultadoDescuento = await db.descontarSaldo(
+            punto_atencion_id_captado,
+            Number(valorTotalGuia)
+          );
+
+          console.log("✅ PASO 1: Saldo descontado de Servientrega", {
+            punto_atencion_id: punto_atencion_id_captado,
+            monto: valorTotalGuia,
+            resultado: resultadoDescuento ? "ACTUALIZADO" : "SIN CAMBIOS",
+          });
+
+          console.log("🔄 PASO 2: Registrando ingreso de servicio externo...");
+          const resultadoIngreso = await db.registrarIngresoServicioExterno(
+            punto_atencion_id_captado,
+            Number(valorTotalGuia),
+            guia,
+            Number(req.body?.billetes || 0),
+            Number(req.body?.monedas_fisicas || 0)
+          );
+
+          console.log(
+            "✅ PASO 2: Ingreso registrado en saldo general USD",
+            {
+              numero_guia: guia,
               monto: valorTotalGuia,
-            });
-
-            const resultadoDescuento = await db.descontarSaldo(
-              punto_atencion_id_captado,
-              Number(valorTotalGuia)
-            );
-
-            console.log("✅ Saldo descontado exitosamente:", {
-              punto_atencion_id: punto_atencion_id_captado,
-              monto: valorTotalGuia,
-              resultado: resultadoDescuento ? "ACTUALIZADO" : "SIN CAMBIOS",
-            });
-
-            // 📥 NUEVO: Registrar ingreso en servicios externos (USD divisas)
-            // Cuando se genera una guía, el monto se suma al saldo general de USD
-            console.log(
-              "📥 Registrando ingreso de servicio externo (Servientrega)..."
-            );
-            try {
-              const resultadoIngreso = await db.registrarIngresoServicioExterno(
-                punto_atencion_id_captado,
-                Number(valorTotalGuia),
-                guia // numero_guia
-              );
-
-              console.log(
-                "✅ Ingreso de servicio externo registrado exitosamente:",
-                {
-                  numero_guia: guia,
-                  monto: valorTotalGuia,
-                  saldoGeneralAnterior: resultadoIngreso.saldoGeneral.anterior,
-                  saldoGeneralNuevo: resultadoIngreso.saldoGeneral.nuevo,
-                }
-              );
-            } catch (ingresoError) {
-              console.error(
-                "❌ Error al registrar ingreso de servicio externo:",
-                {
-                  numero_guia: guia,
-                  monto: valorTotalGuia,
-                  error:
-                    ingresoError instanceof Error
-                      ? ingresoError.message
-                      : String(ingresoError),
-                }
-              );
-              throw ingresoError;
+              saldoServicio: {
+                anterior: resultadoIngreso.saldoServicio.anterior,
+                nuevo: resultadoIngreso.saldoServicio.nuevo,
+              },
+              saldoGeneral: {
+                anterior: resultadoIngreso.saldoGeneral.anterior,
+                nuevo: resultadoIngreso.saldoGeneral.nuevo,
+              },
             }
-          } catch (descError) {
-            console.error("❌ Error al descontar saldo:", {
-              punto_atencion_id: punto_atencion_id_captado,
-              monto: valorTotalGuia,
-              error:
-                descError instanceof Error
-                  ? descError.message
-                  : String(descError),
-              stack: descError instanceof Error ? descError.stack : undefined,
-            });
-            throw descError; // Re-lanzar para que el usuario sepa que falló
-          }
+          );
+
+          console.log("✅ FLUJO COMPLETADO: Descuento e ingreso realizados");
         } else {
           console.warn("⚠️ NO se descontó saldo - razones:", {
             punto_atencion_id_presente: !!punto_atencion_id_captado,
@@ -829,7 +847,14 @@ router.post("/generar-guia", async (req, res) => {
           });
         }
       } catch (dbErr) {
-        console.error("⚠️ Error al persistir en BD (no bloqueante):", dbErr);
+        console.error("❌ ERROR CRÍTICO al persistir en BD:", {
+          numero_guia: guia,
+          punto_atencion_id: punto_atencion_id_captado,
+          monto: valorTotalGuia,
+          error: dbErr instanceof Error ? dbErr.message : String(dbErr),
+          stack: dbErr instanceof Error ? dbErr.stack : undefined,
+        });
+        throw dbErr;
       }
     } else {
       // ❌ LOG: Guía NO se generó

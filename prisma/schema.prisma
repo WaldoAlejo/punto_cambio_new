@@ -606,6 +606,8 @@ model ServicioExternoMovimiento {
   descripcion       String?
   numero_referencia String?
   comprobante_url   String?
+  billetes          Decimal?        @db.Decimal(15, 2)
+  monedas_fisicas   Decimal?        @db.Decimal(15, 2)
   moneda            Moneda          @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
   puntoAtencion     PuntoAtencion   @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
   usuario           Usuario         @relation(fields: [usuario_id], references: [id])

@@ -1137,13 +1137,17 @@ export class ServientregaDBService {
   async registrarIngresoServicioExterno(
     puntoAtencionId: string,
     monto: number,
-    numeroGuia: string
+    numeroGuia: string,
+    billetes?: number,
+    monedas?: number
   ) {
     return prisma.$transaction(async (tx) => {
       console.log("📥 [registrarIngresoServicioExterno] Iniciando:", {
         puntoAtencionId,
         monto,
         numeroGuia,
+        billetes,
+        monedas,
       });
 
       // Obtener IDs necesarios
@@ -1162,6 +1166,8 @@ export class ServientregaDBService {
           numero_referencia: numeroGuia,
           descripcion: `Ingreso por generación de guía Servientrega #${numeroGuia}`,
           usuario_id: systemUserId,
+          billetes: billetes ? new Prisma.Decimal(billetes) : undefined,
+          monedas_fisicas: monedas ? new Prisma.Decimal(monedas) : undefined,
         },
       });
 
@@ -1237,6 +1243,8 @@ export class ServientregaDBService {
           where: { id: saldoGeneral.id },
           data: {
             cantidad: saldoGeneralNuevo,
+            billetes: billetes !== undefined ? new Prisma.Decimal((saldoGeneral.billetes || 0) + billetes) : saldoGeneral.billetes,
+            monedas_fisicas: monedas !== undefined ? new Prisma.Decimal((saldoGeneral.monedas_fisicas || 0) + monedas) : saldoGeneral.monedas_fisicas,
             updated_at: new Date(),
           },
         });
@@ -1247,6 +1255,8 @@ export class ServientregaDBService {
             punto_atencion_id: puntoAtencionId,
             moneda_id: usdId,
             cantidad: saldoGeneralNuevo,
+            billetes: billetes !== undefined ? new Prisma.Decimal(billetes) : undefined,
+            monedas_fisicas: monedas !== undefined ? new Prisma.Decimal(monedas) : undefined,
           },
         });
       }

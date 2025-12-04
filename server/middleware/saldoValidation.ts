@@ -50,17 +50,26 @@ export async function validarSaldoSuficiente(
       );
 
       if (saldoActual < validacion.montoRequerido) {
+        // Obtener desglose de billetes y monedas
+        const saldo = await prisma.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: validacion.puntoAtencionId,
+              moneda_id: validacion.monedaId,
+            },
+          },
+        });
+        const saldoBilletes = Number(saldo?.billetes || 0);
+        const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
         return res.status(400).json({
           error: "SALDO_INSUFICIENTE",
-          message: `Saldo insuficiente en ${
-            validacion.puntoNombre
-          }. Saldo actual: $${saldoActual.toFixed(2)} ${
-            validacion.monedaCodigo
-          }, requerido: $${validacion.montoRequerido.toFixed(2)}`,
+          message: `Saldo insuficiente en ${validacion.puntoNombre}. Saldo actual: $${saldoActual.toFixed(2)} (${saldoBilletes.toFixed(2)} billetes, ${saldoMonedas.toFixed(2)} monedas) ${validacion.monedaCodigo}, requerido: $${validacion.montoRequerido.toFixed(2)}`,
           details: {
             punto: validacion.puntoNombre,
             moneda: validacion.monedaCodigo,
             saldoActual: saldoActual,
+            saldoBilletes,
+            saldoMonedas,
             montoRequerido: validacion.montoRequerido,
             deficit: validacion.montoRequerido - saldoActual,
           },
@@ -210,7 +219,10 @@ async function obtenerSaldoActual(
     },
   });
 
-  return Number(saldo?.cantidad || 0);
+  // Retornar la suma de billetes y monedas físicas
+  const saldoBilletes = Number(saldo?.billetes || 0);
+  const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
+  return saldoBilletes + saldoMonedas;
 }
 
 /**

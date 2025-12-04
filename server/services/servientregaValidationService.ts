@@ -29,6 +29,51 @@ export interface ValidationError {
 }
 
 export class ServientregaValidationService {
+    /**
+     * Valida RUC, cédula y pasaporte ecuatorianos
+     * Retorna true si es válido, false si no
+     */
+    static validarIdentificacionEcuatorianaOExtranjera(valor: string): boolean {
+      if (!valor || typeof valor !== "string") return false;
+      const clean = valor.trim();
+      // Cédula ecuatoriana (10 dígitos, algoritmo oficial)
+      if (/^\d{10}$/.test(clean)) {
+        return ServientregaValidationService.validarCedula(clean);
+      }
+      // RUC ecuatoriano (13 dígitos, empieza con cédula válida, termina en 001)
+      if (/^\d{13}$/.test(clean)) {
+        const cedula = clean.slice(0, 10);
+        const sufijo = clean.slice(10);
+        return ServientregaValidationService.validarCedula(cedula) && sufijo === "001";
+      }
+      // Pasaporte (extranjero o ecuatoriano): letras y números, 6-12 caracteres
+      if (/^[A-Z0-9]{6,12}$/i.test(clean)) {
+        return true;
+      }
+      return false;
+    }
+
+    /**
+     * Algoritmo oficial de validación de cédula ecuatoriana
+     */
+    static validarCedula(cedula: string): boolean {
+      if (!/^\d{10}$/.test(cedula)) return false;
+      const provincia = parseInt(cedula.slice(0, 2), 10);
+      if (provincia < 1 || provincia > 24) return false;
+      const tercer = parseInt(cedula[2], 10);
+      if (tercer > 6) return false;
+      let suma = 0;
+      for (let i = 0; i < 9; i++) {
+        let num = parseInt(cedula[i], 10);
+        if (i % 2 === 0) {
+          num *= 2;
+          if (num > 9) num -= 9;
+        }
+        suma += num;
+      }
+      const digitoVerificador = (10 - (suma % 10)) % 10;
+      return digitoVerificador === parseInt(cedula[9], 10);
+    }
   // SOLO estos dos funcionan con Servientrega API
   private static readonly PRODUCTOS_VALIDOS = [
     "DOCUMENTO UNITARIO",

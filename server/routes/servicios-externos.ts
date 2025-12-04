@@ -106,6 +106,8 @@ router.post(
         descripcion,
         numero_referencia,
         comprobante_url,
+        billetes,
+        monedas_fisicas,
       } = req.body as {
         servicio?: ServicioExterno;
         tipo_movimiento?: TipoMovimiento;
@@ -113,6 +115,8 @@ router.post(
         descripcion?: string;
         numero_referencia?: string;
         comprobante_url?: string;
+        billetes?: number;
+        monedas_fisicas?: number;
       };
 
       const puntoId = (req as any).user?.punto_atencion_id as
@@ -258,6 +262,8 @@ router.post(
             where: { id: saldoGeneral.id },
             data: {
               cantidad: nuevoSaldoGeneral,
+              billetes: billetes !== undefined ? new prisma.Prisma.Decimal((saldoGeneral.billetes || 0) + Number(billetes)) : saldoGeneral.billetes,
+              monedas_fisicas: monedas_fisicas !== undefined ? new prisma.Prisma.Decimal((saldoGeneral.monedas_fisicas || 0) + Number(monedas_fisicas)) : saldoGeneral.monedas_fisicas,
               updated_at: new Date(),
             },
           });
@@ -268,6 +274,8 @@ router.post(
               punto_atencion_id: puntoId,
               moneda_id: usdId,
               cantidad: nuevoSaldoGeneral,
+              billetes: billetes !== undefined ? new prisma.Prisma.Decimal(Number(billetes)) : undefined,
+              monedas_fisicas: monedas_fisicas !== undefined ? new prisma.Prisma.Decimal(Number(monedas_fisicas)) : undefined,
               updated_at: new Date(),
             },
           });
@@ -286,6 +294,8 @@ router.post(
             descripcion: descripcion || null,
             numero_referencia: numero_referencia || null,
             comprobante_url: comprobante_url || null,
+            billetes: billetes !== undefined ? new prisma.Prisma.Decimal(Number(billetes)) : undefined,
+            monedas_fisicas: monedas_fisicas !== undefined ? new prisma.Prisma.Decimal(Number(monedas_fisicas)) : undefined,
           },
           include: {
             // por si luego quieres enriquecer respuesta

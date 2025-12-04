@@ -510,11 +510,23 @@ router.post(
       }
 
       // Normalización de datos de cliente
+      // Validar identificación del cliente (cedula o documento)
+      const { ServientregaValidationService } = require("../services/servientregaValidationService.js");
+      const idCliente = String(
+        (datos_cliente?.documento && String(datos_cliente.documento).trim()) ||
+        (datos_cliente?.cedula && String(datos_cliente.cedula).trim()) ||
+        ""
+      );
+      if (!ServientregaValidationService.validarIdentificacionEcuatorianaOExtranjera(idCliente)) {
+        return res.status(400).json({
+          error: "IDENTIFICACION_INVALIDA",
+          message: `La identificación del cliente (${idCliente}) no es válida. Debe ser cédula, RUC o pasaporte (nacional o extranjero).`
+        });
+      }
       const datos_cliente_sanitized = {
         ...datos_cliente,
         documento:
-          (datos_cliente?.documento &&
-            String(datos_cliente.documento).trim()) ||
+          (datos_cliente?.documento && String(datos_cliente.documento).trim()) ||
           (datos_cliente?.cedula && String(datos_cliente.cedula).trim()) ||
           "",
       };

@@ -43,13 +43,13 @@ export default function ListadoGuias() {
     setError(null);
 
     try {
-      const response = await axiosInstance.get<Guia[]>("/servientrega/guias", {
+      const response = await axiosInstance.get("/servientrega/informes/guias", {
         params: { desde, hasta },
       });
 
-      if (Array.isArray(response.data)) {
-        setGuias(response.data);
-        if (response.data.length === 0) {
+      if (response.data && Array.isArray(response.data.data)) {
+        setGuias(response.data.data);
+        if (response.data.data.length === 0) {
           toast.info("No se encontraron guías en el período seleccionado.");
         }
       } else {
