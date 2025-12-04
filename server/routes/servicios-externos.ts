@@ -1,4 +1,5 @@
 import express, { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import saldoValidation from "../middleware/saldoValidation.js";
 import prisma from "../lib/prisma.js";
@@ -262,8 +263,16 @@ router.post(
             where: { id: saldoGeneral.id },
             data: {
               cantidad: nuevoSaldoGeneral,
-              billetes: billetes !== undefined ? new prisma.Prisma.Decimal((saldoGeneral.billetes || 0) + Number(billetes)) : saldoGeneral.billetes,
-              monedas_fisicas: monedas_fisicas !== undefined ? new prisma.Prisma.Decimal((saldoGeneral.monedas_fisicas || 0) + Number(monedas_fisicas)) : saldoGeneral.monedas_fisicas,
+              billetes: billetes !== undefined
+                ? (saldoGeneral.billetes
+                    ? saldoGeneral.billetes.add(new Prisma.Decimal(billetes))
+                    : new Prisma.Decimal(billetes))
+                : saldoGeneral.billetes,
+              monedas_fisicas: monedas_fisicas !== undefined
+                ? (saldoGeneral.monedas_fisicas
+                    ? saldoGeneral.monedas_fisicas.add(new Prisma.Decimal(monedas_fisicas))
+                    : new Prisma.Decimal(monedas_fisicas))
+                : saldoGeneral.monedas_fisicas,
               updated_at: new Date(),
             },
           });
@@ -274,8 +283,8 @@ router.post(
               punto_atencion_id: puntoId,
               moneda_id: usdId,
               cantidad: nuevoSaldoGeneral,
-              billetes: billetes !== undefined ? new prisma.Prisma.Decimal(Number(billetes)) : undefined,
-              monedas_fisicas: monedas_fisicas !== undefined ? new prisma.Prisma.Decimal(Number(monedas_fisicas)) : undefined,
+              billetes: billetes !== undefined ? new Prisma.Decimal(billetes) : undefined,
+              monedas_fisicas: monedas_fisicas !== undefined ? new Prisma.Decimal(monedas_fisicas) : undefined,
               updated_at: new Date(),
             },
           });
@@ -294,8 +303,8 @@ router.post(
             descripcion: descripcion || null,
             numero_referencia: numero_referencia || null,
             comprobante_url: comprobante_url || null,
-            billetes: billetes !== undefined ? new prisma.Prisma.Decimal(Number(billetes)) : undefined,
-            monedas_fisicas: monedas_fisicas !== undefined ? new prisma.Prisma.Decimal(Number(monedas_fisicas)) : undefined,
+            billetes: billetes !== undefined ? new Prisma.Decimal(billetes) : undefined,
+            monedas_fisicas: monedas_fisicas !== undefined ? new Prisma.Decimal(monedas_fisicas) : undefined,
           },
           include: {
             // por si luego quieres enriquecer respuesta

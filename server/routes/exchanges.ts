@@ -518,10 +518,11 @@ router.post(
         ""
       );
       if (!ServientregaValidationService.validarIdentificacionEcuatorianaOExtranjera(idCliente)) {
-        return res.status(400).json({
+        res.status(400).json({
           error: "IDENTIFICACION_INVALIDA",
           message: `La identificación del cliente (${idCliente}) no es válida. Debe ser cédula, RUC o pasaporte (nacional o extranjero).`
         });
+        return;
       }
       const datos_cliente_sanitized = {
         ...datos_cliente,

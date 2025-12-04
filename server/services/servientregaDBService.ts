@@ -1243,8 +1243,16 @@ export class ServientregaDBService {
           where: { id: saldoGeneral.id },
           data: {
             cantidad: saldoGeneralNuevo,
-            billetes: billetes !== undefined ? new Prisma.Decimal((saldoGeneral.billetes || 0) + billetes) : saldoGeneral.billetes,
-            monedas_fisicas: monedas !== undefined ? new Prisma.Decimal((saldoGeneral.monedas_fisicas || 0) + monedas) : saldoGeneral.monedas_fisicas,
+            billetes: billetes !== undefined
+              ? (saldoGeneral.billetes
+                  ? saldoGeneral.billetes.add(new Prisma.Decimal(billetes))
+                  : new Prisma.Decimal(billetes))
+              : saldoGeneral.billetes,
+            monedas_fisicas: monedas !== undefined
+              ? (saldoGeneral.monedas_fisicas
+                  ? saldoGeneral.monedas_fisicas.add(new Prisma.Decimal(monedas))
+                  : new Prisma.Decimal(monedas))
+              : saldoGeneral.monedas_fisicas,
             updated_at: new Date(),
           },
         });
