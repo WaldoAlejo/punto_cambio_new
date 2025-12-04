@@ -1062,7 +1062,7 @@ router.post(
         usuario_id: req.user?.id,
       });
       res.status(500).json({
-        error: "Error interno del servidor al crear cambio de divisa",
+        error: error instanceof Error ? error.message : String(error),
         success: false,
         timestamp: new Date().toISOString(),
       });
