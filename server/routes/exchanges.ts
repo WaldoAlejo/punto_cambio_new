@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
+import { ServientregaValidationService } from "../services/servientregaValidationService.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { validarSaldoCambioDivisa } from "../middleware/saldoValidation.js";
@@ -511,7 +512,6 @@ router.post(
 
       // Normalización de datos de cliente
       // Validar identificación del cliente (cedula o documento)
-      const { ServientregaValidationService } = require("../services/servientregaValidationService.js");
       const idCliente = String(
         (datos_cliente?.documento && String(datos_cliente.documento).trim()) ||
         (datos_cliente?.cedula && String(datos_cliente.cedula).trim()) ||

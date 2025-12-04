@@ -3,9 +3,9 @@ import {
   ServientregaAPIService,
   ServientregaCredentials,
 } from "../../services/servientregaAPIService.js";
-import { ServientregaValidationService } from "../../services/servientregaValidationService.js";
 import { ServientregaDBService } from "../../services/servientregaDBService.js";
 import prisma from "../../lib/prisma.js";
+import { ServientregaValidationService } from "../../services/servientregaValidationService.js";
 
 const router = express.Router();
 
@@ -270,7 +270,7 @@ router.post("/generar-guia", async (req, res) => {
 
       // Normalizaciones numéricas seguras
             // Validar identificación de remitente y destinatario (después de declarar las variables)
-            const { ServientregaValidationService } = require("../../services/servientregaValidationService.js");
+              // const { ServientregaValidationService } = require("../../services/servientregaValidationService.js");
             const idRemitente = String(remitente?.identificacion || remitente?.cedula || "");
             const idDestinatario = String(destinatario?.identificacion || destinatario?.cedula || "");
             if (!ServientregaValidationService.validarIdentificacionEcuatorianaOExtranjera(idRemitente)) {
