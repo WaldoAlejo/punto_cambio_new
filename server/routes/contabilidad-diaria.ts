@@ -1,4 +1,5 @@
 // server/routes/contabilidad-diaria.ts
+console.log('[CONTABILIDAD_DIARIA] Archivo de rutas cargado');
 import express from "express";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
