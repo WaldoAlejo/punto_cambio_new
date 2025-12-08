@@ -1,3 +1,48 @@
+// Endpoint para crear cuadre abierto del día si no existe
+router.post("/", authenticateToken, async (req, res) => {
+  const usuario = req.user as UsuarioAutenticado;
+  if (!usuario?.punto_atencion_id) {
+    return res.status(401).json({ success: false, error: "Sin punto de atención" });
+  }
+
+  try {
+    const puntoAtencionId = usuario.punto_atencion_id;
+    const fechaBase = parseFechaParam((req.body.fecha as string | undefined)?.trim());
+    const { gte } = gyeDayRangeUtcFromDate(fechaBase);
+    const fechaInicioDia: Date = new Date(gte);
+
+    // Verificar si ya existe cuadre abierto
+    const cuadreResult = await pool.query<CuadreCaja>(
+      `SELECT * FROM "CuadreCaja"
+        WHERE punto_atencion_id = $1
+          AND fecha >= $2::timestamp
+          AND estado = 'ABIERTO'
+        LIMIT 1`,
+      [String(puntoAtencionId), fechaInicioDia.toISOString()]
+    );
+    if (cuadreResult.rows[0]) {
+      return res.status(200).json({ success: true, cuadre: cuadreResult.rows[0], message: "Ya existe cuadre abierto" });
+    }
+
+    // Crear cuadre abierto
+    const insertResult = await pool.query<CuadreCaja>(
+      `INSERT INTO "CuadreCaja" (estado, fecha, punto_atencion_id, observaciones)
+        VALUES ('ABIERTO', $1, $2, $3)
+        RETURNING *`,
+      [fechaInicioDia.toISOString(), String(puntoAtencionId), req.body.observaciones || ""]
+    );
+    logger.info("✅ Cuadre abierto creado", {
+      usuario_id: usuario.id,
+      punto_atencion_id: puntoAtencionId,
+      fecha: fechaInicioDia.toISOString(),
+      cuadre_id: insertResult.rows[0]?.id
+    });
+    return res.status(201).json({ success: true, cuadre: insertResult.rows[0], message: "Cuadre abierto creado" });
+  } catch (error) {
+    logger.error("❌ Error creando cuadre abierto", { error });
+    return res.status(500).json({ success: false, error: "Error creando cuadre abierto" });
+  }
+});
 // server/routes/cuadreCaja.ts
 import express from "express";
 import { pool } from "../lib/database.js";
