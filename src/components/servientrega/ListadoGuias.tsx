@@ -203,51 +203,64 @@ export default function ListadoGuias() {
           ) : (
             <div className="space-y-4">
               {guias.map((guia) => (
-                <div
-                  key={guia.id}
-                  className="border p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center gap-2"
-                >
-                  <div>
-                    <p>
-                      <strong>Guía:</strong> {guia.numero_guia}
-                    </p>
-                    <p>
-                      <strong>Fecha:</strong>{" "}
-                      {format(
-                        parseISO(guia.created_at || ""),
-                        "yyyy-MM-dd HH:mm"
-                      )}
-                    </p>
-                    <p>
-                      <strong>Costo:</strong>{" "}
-                      {typeof guia.costo_envio === "number"
-                        ? `$${guia.costo_envio.toFixed(2)}`
-                        : "N/A"}
-                    </p>
-                    <p>
-                      <strong>Estado:</strong>{" "}
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          guia.estado === "ACTIVA"
-                            ? "bg-green-100 text-green-800"
-                            : guia.estado === "ANULADA"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
-                        {guia.estado === "ACTIVA"
-                          ? "Activa"
-                          : guia.estado === "ANULADA"
-                          ? "Anulada"
-                          : "Pendiente Anulación"}
-                      </span>
-                    </p>
-                    {guia.motivo_anulacion && (
-                      <p className="text-sm text-gray-600 mt-1">
-                        <strong>Motivo:</strong> {guia.motivo_anulacion}
+                  <div
+                    key={guia.id}
+                    className="border p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center gap-2"
+                  >
+                    <div>
+                      <p>
+                        <strong>Guía:</strong> {guia.numero_guia}
                       </p>
-                    )}
-                  </div>
+                      <p>
+                        <strong>Fecha:</strong>{" "}
+                        {format(
+                          parseISO(guia.created_at || ""),
+                          "yyyy-MM-dd HH:mm"
+                        )}
+                      </p>
+                      <p>
+                        <strong>Costo:</strong>{" "}
+                        {typeof guia.costo_envio === "number"
+                          ? `$${guia.costo_envio.toFixed(2)}`
+                          : "N/A"}
+                      </p>
+                      <p>
+                        <strong>Estado:</strong>{" "}
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${
+                            guia.estado === "ACTIVA"
+                              ? "bg-green-100 text-green-800"
+                              : guia.estado === "ANULADA"
+                              ? "bg-red-100 text-red-800"
+                              : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
+                          {guia.estado === "ACTIVA"
+                            ? "Activa"
+                            : guia.estado === "ANULADA"
+                            ? "Anulada"
+                            : "Pendiente Anulación"}
+                        </span>
+                      </p>
+                      {guia.motivo_anulacion && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          <strong>Motivo:</strong> {guia.motivo_anulacion}
+                        </p>
+                      )}
+                      {/* Campos de agencia/oficina */}
+                      <p>
+                        <strong>Agencia Código:</strong> {guia.agencia_codigo || "N/A"}
+                      </p>
+                      <p>
+                        <strong>Agencia Nombre:</strong> {guia.agencia_nombre || "N/A"}
+                      </p>
+                      <p>
+                        <strong>Alianza:</strong> {guia.alianza || "N/A"}
+                      </p>
+                      <p>
+                        <strong>Oficina Alianza:</strong> {guia.oficina_alianza || "N/A"}
+                      </p>
+                    </div>
                   <div className="flex gap-2 flex-wrap">
                     <Button
                       onClick={() => handleVerPDF(guia.base64_response || "")}

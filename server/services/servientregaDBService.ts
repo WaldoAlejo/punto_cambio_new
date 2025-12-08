@@ -923,6 +923,10 @@ export class ServientregaDBService {
             nombre: true,
             ciudad: true,
             provincia: true,
+            servientrega_agencia_codigo: true,
+            servientrega_agencia_nombre: true,
+            servientrega_alianza: true,
+            servientrega_oficina_alianza: true,
           },
         },
       },
@@ -1166,8 +1170,8 @@ export class ServientregaDBService {
           numero_referencia: numeroGuia,
           descripcion: `Ingreso por generación de guía Servientrega #${numeroGuia}`,
           usuario_id: systemUserId,
-          billetes: billetes ? new Prisma.Decimal(billetes) : undefined,
-          monedas_fisicas: monedas ? new Prisma.Decimal(monedas) : undefined,
+          billetes: billetes !== undefined ? new Prisma.Decimal(billetes) : undefined,
+          monedas_fisicas: monedas !== undefined ? new Prisma.Decimal(monedas) : undefined,
         },
       });
 
