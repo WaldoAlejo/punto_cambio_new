@@ -1,4 +1,4 @@
-import express, { Request, Response } from "express";
+import express, { Request, Response, NextFunction } from "express";
 import { Prisma } from "@prisma/client";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import saldoValidation from "../middleware/saldoValidation.js";
@@ -84,12 +84,33 @@ async function ensureUsdMonedaId(): Promise<string> {
 }
 
 /* ==============================
+ * Middleware personalizado para validar saldo en servicios externos
+ * OTROS no requiere validación de saldo propio (no tiene ServicioExternoSaldo)
+ * pero SÍ valida saldo general para EGRESO
+ * ============================== */
+async function validarSaldoServicioExterno(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const { servicio, tipo_movimiento } = req.body;
+  
+  // OTROS con INGRESO no necesita validación (cliente trae dinero)
+  if (servicio === "OTROS" && tipo_movimiento === "INGRESO") {
+    return next();
+  }
+  
+  // OTROS con EGRESO Y otros servicios: aplicar validación general (saldo general)
+  return saldoValidation.validarSaldoSuficiente(req, res, next);
+}
+
+/* ==============================
  * POST /servicios-externos/movimientos  (OPERADOR)
  * ============================== */
 router.post(
   "/movimientos",
   authenticateToken,
-  saldoValidation.validarSaldoSuficiente,
+  validarSaldoServicioExterno,
   async (req: Request, res: Response) => {
     try {
       if (!isOperador(req)) {
@@ -167,56 +188,62 @@ router.post(
       const usdId = await ensureUsdMonedaId();
 
       const movimiento = await prisma.$transaction(async (tx) => {
-        // Obtener saldo del servicio externo específico
-        const saldoServicio = await tx.servicioExternoSaldo.findUnique({
-          where: {
-            punto_atencion_id_servicio_moneda_id: {
-              punto_atencion_id: puntoId,
-              servicio,
-              moneda_id: usdId,
-            },
-          },
-        });
+        // Para OTROS no usar saldo propio del servicio, solo saldo general
+        let saldoServicioAnterior: number | null = null;
+        let saldoServicioNuevo: number | null = null;
 
-        const anterior = Number(saldoServicio?.cantidad || 0);
-        const delta = tipo_movimiento === "INGRESO" ? -montoNum : montoNum;
-        const nuevo = anterior + delta;
-
-        // Validar saldo suficiente del SERVICIO para INGRESOS (usa crédito)
-        if (tipo_movimiento === "INGRESO" && nuevo < 0) {
-          throw new Error(
-            `Saldo insuficiente en el servicio ${servicio}. Saldo actual: $${anterior.toFixed(
-              2
-            )}, Monto requerido: $${montoNum.toFixed(2)}`
-          );
-        }
-
-        // Actualizar o crear saldo del servicio externo
-        if (saldoServicio) {
-          await tx.servicioExternoSaldo.update({
-            where: { id: saldoServicio.id },
-            data: {
-              cantidad: nuevo,
-              updated_at: new Date(),
+        if (servicio !== "OTROS") {
+          // Obtener saldo del servicio externo específico
+          const saldoServicio = await tx.servicioExternoSaldo.findUnique({
+            where: {
+              punto_atencion_id_servicio_moneda_id: {
+                punto_atencion_id: puntoId,
+                servicio,
+                moneda_id: usdId,
+              },
             },
           });
-        } else {
-          // Si no existe saldo y es INGRESO (resta), no permitir crear en negativo
-          if (tipo_movimiento === "INGRESO") {
+
+          saldoServicioAnterior = Number(saldoServicio?.cantidad || 0);
+          const delta = tipo_movimiento === "INGRESO" ? -montoNum : montoNum;
+          saldoServicioNuevo = saldoServicioAnterior + delta;
+
+          // Validar saldo suficiente del SERVICIO para INGRESOS (usa crédito)
+          if (tipo_movimiento === "INGRESO" && saldoServicioNuevo < 0) {
             throw new Error(
-              `No hay saldo asignado para el servicio ${servicio}. Debe asignarse saldo antes de registrar ingresos.`
+              `Saldo insuficiente en el servicio ${servicio}. Saldo actual: $${saldoServicioAnterior.toFixed(
+                2
+              )}, Monto requerido: $${montoNum.toFixed(2)}`
             );
           }
-          // Si es EGRESO, crear el saldo (puede iniciar con movimiento positivo)
-          await tx.servicioExternoSaldo.create({
-            data: {
-              punto_atencion_id: puntoId,
-              servicio,
-              moneda_id: usdId,
-              cantidad: nuevo,
-              updated_at: new Date(),
-            },
-          });
+
+          // Actualizar o crear saldo del servicio externo
+          if (saldoServicio) {
+            await tx.servicioExternoSaldo.update({
+              where: { id: saldoServicio.id },
+              data: {
+                cantidad: saldoServicioNuevo,
+                updated_at: new Date(),
+              },
+            });
+          } else {
+            // Si no existe saldo y es INGRESO (resta), no permitir crear en negativo
+            if (tipo_movimiento === "INGRESO") {
+              throw new Error(
+                `No hay saldo asignado para el servicio ${servicio}. Debe asignarse saldo antes de registrar ingresos.`
+              );
+            }
+            // Si es EGRESO, crear el saldo (puede iniciar con movimiento positivo)
+            await tx.servicioExternoSaldo.create({
+              data: {
+                punto_atencion_id: puntoId,
+                servicio,
+                moneda_id: usdId,
+                cantidad: saldoServicioNuevo,
+                updated_at: new Date(),
+              },
+            });
+          }
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -255,8 +282,17 @@ router.post(
         // INGRESO → SUMA físico, EGRESO → RESTA físico
         const deltaGeneral =
           tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
-        const nuevoSaldoGeneral =
-          Number(saldoGeneral?.cantidad || 0) + deltaGeneral;
+        const saldoGeneralAnterior = Number(saldoGeneral?.cantidad || 0);
+        const nuevoSaldoGeneral = saldoGeneralAnterior + deltaGeneral;
+
+        // Para OTROS, validar que no intente crear saldo negativo en EGRESO
+        if (servicio === "OTROS" && tipo_movimiento === "EGRESO" && nuevoSaldoGeneral < 0) {
+          throw new Error(
+            `Saldo insuficiente para registrar EGRESO de OTROS. Saldo actual: $${saldoGeneralAnterior.toFixed(
+              2
+            )}, Monto requerido: $${montoNum.toFixed(2)}`
+          );
+        }
 
         if (saldoGeneral) {
           await tx.saldo.update({
@@ -348,8 +384,10 @@ router.post(
           descripcion: svcMov.descripcion,
           numero_referencia: svcMov.numero_referencia,
           comprobante_url: svcMov.comprobante_url,
-          saldo_anterior: anterior,
-          saldo_nuevo: nuevo,
+          ...(servicio !== "OTROS" && {
+            saldo_anterior: saldoServicioAnterior,
+            saldo_nuevo: saldoServicioNuevo,
+          }),
         };
       });
 
