@@ -325,9 +325,18 @@ router.get(
         | {
             id: string;
             punto_atencion_id?: string;
-            rol?: RolUsuario;
+            rol?: string;
           }
         | undefined;
+
+      // Log de auditoría para depuración de errores 403
+      console.log("[VALIDAR_CIERRES]", {
+        usuario_id: usuario?.id,
+        usuario_rol: usuario?.rol,
+        usuario_punto_atencion_id: usuario?.punto_atencion_id,
+        requested_point_id: pointId,
+        fecha,
+      });
 
       if (!pointId) {
         return res.status(400).json({ success: false, error: "Falta pointId" });
