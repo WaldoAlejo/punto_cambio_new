@@ -146,6 +146,16 @@ router.get("/", authenticateToken, async (req, res) => {
     // const pointParam = (req.query.pointId as string | undefined)?.trim();
     const puntoAtencionId = usuario.punto_atencion_id;
 
+    if (!puntoAtencionId) {
+      logger.error("❌ usuario sin punto de atención asignado", {
+        usuario_id: usuario.id,
+      });
+      return res.status(400).json({
+        success: false,
+        error: "Usuario no tiene punto de atención asignado",
+      });
+    }
+
     // Determinar día GYE desde la fecha solicitada (o hoy)
     const fechaBase = parseFechaParam(fechaParam);
     const { gte } = gyeDayRangeUtcFromDate(fechaBase);
