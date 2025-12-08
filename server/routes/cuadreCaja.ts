@@ -136,6 +136,10 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 
   try {
+    logger.info("🔍 GET /cuadre-caja iniciado", {
+      usuario_id: usuario.id,
+      punto_atencion_id: usuario.punto_atencion_id,
+    });
     // Lee parámetros opcionales
     const fechaParam = (req.query.fecha as string | undefined)?.trim();
     // TODO: habilitar pointId externo solo para ADMIN/SUPER (por ahora, usar el del usuario)
@@ -146,6 +150,10 @@ router.get("/", authenticateToken, async (req, res) => {
     const fechaBase = parseFechaParam(fechaParam);
     const { gte } = gyeDayRangeUtcFromDate(fechaBase);
     const fechaInicioDia: Date = new Date(gte); // Inicio del día GYE (para consultas de movimientos)
+    logger.info("📅 Fechas calculadas", {
+      fechaBase: fechaBase.toISOString(),
+      fechaInicioDia: fechaInicioDia.toISOString(),
+    });
 
     // Cuadre ABIERTO (si existiera) del día
     const cuadreResult = await pool.query<CuadreCaja>(
@@ -179,6 +187,9 @@ router.get("/", authenticateToken, async (req, res) => {
       [puntoAtencionId, fechaInicioDia.toISOString()]
     );
     const cuadre = cuadreResult.rows[0] || null;
+    logger.info("✅ Cuadre consultado", {
+      tiene_cuadre_abierto: !!cuadre,
+    });
 
     // Jornada activa (solo para información, no afecta el rango de consulta de movimientos)
     const jornadaResult = await pool.query<Jornada>(
@@ -192,6 +203,9 @@ router.get("/", authenticateToken, async (req, res) => {
       [usuario.id, puntoAtencionId]
     );
     const jornadaActiva = jornadaResult.rows[0] || null;
+    logger.info("✅ Jornada consultada", {
+      tiene_jornada_activa: !!jornadaActiva,
+    });
 
     // IMPORTANTE: Para el cierre diario, siempre contamos TODOS los movimientos del día,
     // independientemente de cuándo empezó la jornada del operador.
@@ -209,6 +223,9 @@ router.get("/", authenticateToken, async (req, res) => {
       [puntoAtencionId, fechaInicio.toISOString(), "COMPLETADO"]
     );
     const cambiosHoy = cambiosResult.rows;
+    logger.info("✅ Cambios de divisas consultados", {
+      cantidad: cambiosHoy.length,
+    });
 
     const [
       transferIn,
@@ -258,12 +275,19 @@ router.get("/", authenticateToken, async (req, res) => {
         [puntoAtencionId, fechaInicio.toISOString()]
       ),
     ]);
+    logger.info("✅ Movimientos consultados", {
+      transferencias_entrada: transferIn.rowCount,
+      transferencias_salida: transferOut.rowCount,
+      servicios_externos: serviciosExternos.rowCount,
+      servientrega_movimientos: servientregaMovimientos.rowCount,
+    });
 
     // Obtener ID de la moneda USD (dólar) para Servientrega
     const monedaUsdResult = await pool.query<{ id: string }>(
       `SELECT id FROM "Moneda" WHERE codigo = 'USD' LIMIT 1`
     );
     const monedaUsdId = monedaUsdResult.rows[0]?.id;
+    logger.info("✅ Moneda USD identificada", { monedaUsdId });
 
     // IDs de monedas usadas en movimientos (cambios, transferencias y servicios externos)
     const monedaIdsDeCambios = new Set<string>(
@@ -326,6 +350,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
     // Si no hay ninguna moneda, responder vacío pero con metadatos útiles
     if (monedas.length === 0) {
+      logger.info("✅ No hay monedas con movimientos, retornando cuadre vacío");
       return res.status(200).json({
         success: true,
         data: {
@@ -348,6 +373,8 @@ router.get("/", authenticateToken, async (req, res) => {
         },
       });
     }
+    
+    logger.info("📊 Procesando monedas", { cantidad_monedas: monedas.length, monedas_codigos: monedas.map(m => m.codigo).join(",") });
 
     // Pre-índices para sumar rápido
     const cambiosByMoneda = new Map<
@@ -443,8 +470,10 @@ router.get("/", authenticateToken, async (req, res) => {
     }
 
     // Construir detalles por moneda
+    logger.info("🔄 Iniciando construcción de detalles");
     const detallesConValores = await Promise.all(
       monedas.map(async (moneda) => {
+        logger.info(`🔍 Procesando moneda: ${moneda.codigo}`);
         try {
           const saldoApertura = await calcularSaldoApertura(
             puntoAtencionId,
@@ -556,6 +585,9 @@ router.get("/", authenticateToken, async (req, res) => {
         }
       })
     );
+    logger.info("✅ Detalles construidos correctamente", {
+      cantidad_detalles: detallesConValores.length,
+    });
 
     // Totales globales
     const totalCambiosIngresos = cambiosHoy.reduce(
@@ -588,6 +620,11 @@ router.get("/", authenticateToken, async (req, res) => {
     const totalServientregaIngresos = servientregaData?.ingresos || 0;
     const totalServientregaEgresos = servientregaData?.egresos || 0;
     const totalServientregaCantidad = servientregaData?.cantidad || 0;
+
+    logger.info("✅ GET /cuadre-caja completado exitosamente", {
+      detalles: detallesConValores.length,
+      cambios: cambiosHoy.length,
+    });
 
     return res.status(200).json({
       success: true,
@@ -626,10 +663,17 @@ router.get("/", authenticateToken, async (req, res) => {
       },
     });
   } catch (error) {
-    logger.error("❌ CuadreCaja Error Detalle", { error });
-    return res
-      .status(500)
-      .json({ success: false, error: "Error interno del servidor" });
+    logger.error("❌ CuadreCaja Error Detalle", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      usuario_id: usuario?.id,
+      punto_atencion_id: usuario?.punto_atencion_id,
+    });
+    return res.status(500).json({
+      success: false,
+      error: "Error interno del servidor",
+      debug: process.env.LOG_LEVEL === "debug" ? String(error) : undefined,
+    });
   }
 });
 
