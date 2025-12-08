@@ -336,15 +336,16 @@ router.get(
       // Seguridad: operadores solo pueden consultar su propio punto
       const esAdmin =
         (usuario?.rol === "ADMIN" || usuario?.rol === "SUPER_USUARIO") ?? false;
-      if (
-        !esAdmin &&
-        usuario?.punto_atencion_id &&
-        usuario.punto_atencion_id !== pointId
-      ) {
-        return res.status(403).json({
-          success: false,
-          error: "No autorizado para consultar otro punto de atención",
-        });
+      
+      // Si es operador, debe tener acceso al punto
+      if (!esAdmin) {
+        // Si no es admin, verificar que sea operador del punto
+        if (!usuario?.punto_atencion_id || usuario.punto_atencion_id !== pointId) {
+          return res.status(403).json({
+            success: false,
+            error: "No autorizado para consultar otro punto de atención",
+          });
+        }
       }
 
       // Valida YYYY-MM-DD (lanza si no cumple)
@@ -769,15 +770,16 @@ router.get(
       // Seguridad: operadores solo pueden consultar su propio punto
       const esAdmin =
         (usuario?.rol === "ADMIN" || usuario?.rol === "SUPER_USUARIO") ?? false;
-      if (
-        !esAdmin &&
-        usuario?.punto_atencion_id &&
-        usuario.punto_atencion_id !== pointId
-      ) {
-        return res.status(403).json({
-          success: false,
-          error: "No autorizado para consultar otro punto de atención",
-        });
+      
+      // Si es operador, debe tener acceso al punto
+      if (!esAdmin) {
+        // Si no es admin, verificar que sea operador del punto
+        if (!usuario?.punto_atencion_id || usuario.punto_atencion_id !== pointId) {
+          return res.status(403).json({
+            success: false,
+            error: "No autorizado para consultar otro punto de atención",
+          });
+        }
       }
 
       // Validar fecha

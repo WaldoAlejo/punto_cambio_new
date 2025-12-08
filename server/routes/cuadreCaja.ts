@@ -445,89 +445,115 @@ router.get("/", authenticateToken, async (req, res) => {
     // Construir detalles por moneda
     const detallesConValores = await Promise.all(
       monedas.map(async (moneda) => {
-        const saldoApertura = await calcularSaldoApertura(
-          puntoAtencionId,
-          moneda.id,
-          fechaInicio
-        );
-
-        const c = cambiosByMoneda.get(moneda.id) || {
-          ingresos: 0,
-          egresos: 0,
-          cantidad: 0,
-        };
-        const tIn = transfInByMoneda.get(moneda.id) || {
-          monto: 0,
-          cantidad: 0,
-        };
-        const tOut = transfOutByMoneda.get(moneda.id) || {
-          monto: 0,
-          cantidad: 0,
-        };
-        const sExt = serviciosExternosByMoneda.get(moneda.id) || {
-          ingresos: 0,
-          egresos: 0,
-          cantidad: 0,
-        };
-        const servientrega = servientregaByMoneda.get(moneda.id) || {
-          ingresos: 0,
-          egresos: 0,
-          cantidad: 0,
-        };
-
-        // Calcular el saldo real basado en todos los movimientos registrados
-        // Esto incluye cambios, transferencias Y servicios externos automáticamente
-        const saldo_cierre_teorico =
-          await saldoReconciliationService.calcularSaldoReal(
+        try {
+          const saldoApertura = await calcularSaldoApertura(
             puntoAtencionId,
-            moneda.id
+            moneda.id,
+            fechaInicio
           );
 
-        // Para el desglose, mostrar cambios, servicios externos y servientrega como ingresos/egresos del período
-        // Las transferencias se muestran por separado en el desglose pero no se suman al cálculo
-        // ⚠️ IMPORTANTE: Incluir servicios externos y servientrega en ingresos/egresos para que coincida con saldo_cierre_teorico
-        const ingresos_periodo = 
-          (c.ingresos || 0) + 
-          (sExt.ingresos || 0) + 
-          (servientrega.ingresos || 0);
-        const egresos_periodo = 
-          (c.egresos || 0) + 
-          (sExt.egresos || 0) + 
-          (servientrega.egresos || 0);
+          const c = cambiosByMoneda.get(moneda.id) || {
+            ingresos: 0,
+            egresos: 0,
+            cantidad: 0,
+          };
+          const tIn = transfInByMoneda.get(moneda.id) || {
+            monto: 0,
+            cantidad: 0,
+          };
+          const tOut = transfOutByMoneda.get(moneda.id) || {
+            monto: 0,
+            cantidad: 0,
+          };
+          const sExt = serviciosExternosByMoneda.get(moneda.id) || {
+            ingresos: 0,
+            egresos: 0,
+            cantidad: 0,
+          };
+          const servientrega = servientregaByMoneda.get(moneda.id) || {
+            ingresos: 0,
+            egresos: 0,
+            cantidad: 0,
+          };
 
-        return {
-          moneda_id: moneda.id,
-          codigo: moneda.codigo,
-          nombre: moneda.nombre,
-          simbolo: moneda.simbolo,
-          saldo_apertura: saldoApertura,
-          saldo_cierre: saldo_cierre_teorico,
-          ingresos_periodo,
-          egresos_periodo,
-          desglose: {
-            cambios: {
-              ingresos: c.ingresos || 0,
-              egresos: c.egresos || 0,
-              cantidad: c.cantidad || 0,
+          // Calcular el saldo real basado en todos los movimientos registrados
+          // Esto incluye cambios, transferencias Y servicios externos automáticamente
+          let saldo_cierre_teorico = 0;
+          try {
+            saldo_cierre_teorico =
+              await saldoReconciliationService.calcularSaldoReal(
+                puntoAtencionId,
+                moneda.id
+              );
+          } catch (calcError) {
+            logger.error("⚠️ Error calculando saldo real para moneda", {
+              moneda_id: moneda.id,
+              moneda_codigo: moneda.codigo,
+              error: calcError instanceof Error ? calcError.message : String(calcError),
+            });
+            // Fallback: calcular manualmente como saldo_apertura + ingresos - egresos
+            saldo_cierre_teorico = saldoApertura + 
+              (c.ingresos || 0) + 
+              (sExt.ingresos || 0) + 
+              (servientrega.ingresos || 0) - 
+              (c.egresos || 0) - 
+              (sExt.egresos || 0) - 
+              (servientrega.egresos || 0);
+          }
+
+          // Para el desglose, mostrar cambios, servicios externos y servientrega como ingresos/egresos del período
+          // Las transferencias se muestran por separado en el desglose pero no se suman al cálculo
+          // ⚠️ IMPORTANTE: Incluir servicios externos y servientrega en ingresos/egresos para que coincida con saldo_cierre_teorico
+          const ingresos_periodo = 
+            (c.ingresos || 0) + 
+            (sExt.ingresos || 0) + 
+            (servientrega.ingresos || 0);
+          const egresos_periodo = 
+            (c.egresos || 0) + 
+            (sExt.egresos || 0) + 
+            (servientrega.egresos || 0);
+
+          return {
+            moneda_id: moneda.id,
+            codigo: moneda.codigo,
+            nombre: moneda.nombre,
+            simbolo: moneda.simbolo,
+            saldo_apertura: saldoApertura,
+            saldo_cierre: saldo_cierre_teorico,
+            ingresos_periodo,
+            egresos_periodo,
+            desglose: {
+              cambios: {
+                ingresos: c.ingresos || 0,
+                egresos: c.egresos || 0,
+                cantidad: c.cantidad || 0,
+              },
+              servicios_externos: {
+                ingresos: sExt.ingresos || 0,
+                egresos: sExt.egresos || 0,
+                cantidad: sExt.cantidad || 0,
+              },
+              servientrega: {
+                ingresos: servientrega.ingresos || 0,
+                egresos: servientrega.egresos || 0,
+                cantidad: servientrega.cantidad || 0,
+              },
+              transferencias: {
+                entrada: tIn.monto || 0,
+                salida: tOut.monto || 0,
+                cantidad_entrada: tIn.cantidad || 0,
+                cantidad_salida: tOut.cantidad || 0,
+              },
             },
-            servicios_externos: {
-              ingresos: sExt.ingresos || 0,
-              egresos: sExt.egresos || 0,
-              cantidad: sExt.cantidad || 0,
-            },
-            servientrega: {
-              ingresos: servientrega.ingresos || 0,
-              egresos: servientrega.egresos || 0,
-              cantidad: servientrega.cantidad || 0,
-            },
-            transferencias: {
-              entrada: tIn.monto || 0,
-              salida: tOut.monto || 0,
-              cantidad_entrada: tIn.cantidad || 0,
-              cantidad_salida: tOut.cantidad || 0,
-            },
-          },
-        };
+          };
+        } catch (monedaError) {
+          logger.error("❌ Error procesando moneda en cuadre", {
+            moneda_id: moneda.id,
+            moneda_codigo: moneda.codigo,
+            error: monedaError instanceof Error ? monedaError.message : String(monedaError),
+          });
+          throw monedaError;
+        }
       })
     );
 
