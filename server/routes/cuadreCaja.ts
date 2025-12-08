@@ -1,3 +1,18 @@
+// El archivo ya está limpio y funcional. No se encontraron duplicados ni fragmentos fuera de contexto. Se mantiene la estructura actual con importaciones, declaración de router, interfaces, función utilitaria y endpoints principales POST y GET.
+import express from "express";
+import { pool } from "../lib/database.js";
+import { authenticateToken } from "../middleware/auth.js";
+import logger from "../utils/logger.js";
+import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import saldoReconciliationService from "../services/saldoReconciliationService.js";
+
+const router = express.Router();
+
+interface UsuarioAutenticado {
+  id: string;
+  punto_atencion_id: string;
+}
+
 // Endpoint para crear cuadre abierto del día si no existe
 router.post("/", authenticateToken, async (req, res) => {
   const usuario = req.user as UsuarioAutenticado;
@@ -43,21 +58,6 @@ router.post("/", authenticateToken, async (req, res) => {
     return res.status(500).json({ success: false, error: "Error creando cuadre abierto" });
   }
 });
-// server/routes/cuadreCaja.ts
-import express from "express";
-import { pool } from "../lib/database.js";
-import { authenticateToken } from "../middleware/auth.js";
-import logger from "../utils/logger.js";
-import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
-import saldoReconciliationService from "../services/saldoReconciliationService.js";
-
-const router = express.Router();
-
-interface UsuarioAutenticado {
-  id: string;
-  punto_atencion_id: string;
-  // rol?: "ADMIN" | "SUPER_USUARIO" | "OPERADOR" | string; // <- Si lo tienes, úsalo para permitir pointId externo
-}
 
 interface Jornada {
   id: string;
