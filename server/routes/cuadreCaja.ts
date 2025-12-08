@@ -199,6 +199,10 @@ router.get("/", authenticateToken, async (req, res) => {
     const cuadre = cuadreResult.rows[0] || null;
     logger.info("✅ Cuadre consultado", {
       tiene_cuadre_abierto: !!cuadre,
+      usuario_id_type: typeof usuario.id,
+      punto_atencion_id_type: typeof puntoAtencionId,
+      usuario_id: String(usuario.id),
+      punto_atencion_id: String(puntoAtencionId)
     });
 
     // Jornada activa (solo para información, no afecta el rango de consulta de movimientos)
@@ -210,7 +214,7 @@ router.get("/", authenticateToken, async (req, res) => {
           AND estado = 'ACTIVO'
      ORDER BY fecha_inicio DESC
         LIMIT 1`,
-      [usuario.id, puntoAtencionId]
+      [String(usuario.id), String(puntoAtencionId)]
     );
     const jornadaActiva = jornadaResult.rows[0] || null;
     logger.info("✅ Jornada consultada", {
