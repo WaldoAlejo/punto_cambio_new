@@ -244,17 +244,17 @@ router.get("/", authenticateToken, async (req, res) => {
             AND fecha >= $2::timestamp`,
         [puntoAtencionId, fechaInicio.toISOString()]
       ),
-      // Movimientos de Servientrega (historial de asignaciones y devoluciones)
       pool.query<{
         id: string;
-        monto_total: number;
-        creado_por: string;
-        creado_en: string;
+        moneda_id: string;
+        monto: number;
+        tipo_movimiento: string;
       }>(
-        `SELECT id, monto_total, creado_por, creado_en
-           FROM "ServientregaHistorialSaldo"
+        `SELECT id, moneda_id, monto, tipo_movimiento
+           FROM "MovimientoSaldo"
           WHERE punto_atencion_id = $1
-            AND creado_en >= $2::timestamp`,
+            AND fecha >= $2::timestamp
+            AND tipo_referencia = 'SERVIENTREGA'`,
         [puntoAtencionId, fechaInicio.toISOString()]
       ),
     ]);
@@ -421,45 +421,25 @@ router.get("/", authenticateToken, async (req, res) => {
       serviciosExternosByMoneda.set(s.moneda_id, curr);
     }
 
-    // Servientrega: calcular egresos (guías generadas) e ingresos (devoluciones por anulación)
+    // Servientrega: obtener ingresos y egresos desde MovimientoSaldo
     const servientregaByMoneda = new Map<
       string,
       { ingresos: number; egresos: number; cantidad: number }
     >();
-
-    if (monedaUsdId) {
-      // Obtener guías generadas del día (egresos)
-      const guiasDelDia = await pool.query<{
-        costo_envio: number;
-      }>(
-        `SELECT costo_envio
-           FROM "ServientregaGuia"
-          WHERE punto_atencion_id = $1
-            AND created_at >= $2::timestamp
-            AND costo_envio IS NOT NULL
-            AND costo_envio > 0`,
-        [puntoAtencionId, fechaInicio.toISOString()]
-      );
-
-      const totalEgresos = guiasDelDia.rows.reduce(
-        (sum, g) => sum + (Number(g.costo_envio) || 0),
-        0
-      );
-
-      // Calcular ingresos (devoluciones por anulación del mismo día)
-      const totalIngresos = servientregaMovimientos.rows
-        .filter((m) => m.creado_por === "SYSTEM:DEVOLUCION_ANULACION")
-        .reduce((sum, m) => sum + Math.abs(Number(m.monto_total) || 0), 0);
-
-      servientregaByMoneda.set(monedaUsdId, {
-        ingresos: totalIngresos,
-        egresos: totalEgresos,
-        cantidad:
-          guiasDelDia.rows.length +
-          servientregaMovimientos.rows.filter(
-            (m) => m.creado_por === "SYSTEM:DEVOLUCION_ANULACION"
-          ).length,
-      });
+    for (const s of servientregaMovimientos.rows) {
+      const curr = servientregaByMoneda.get(s.moneda_id) || {
+        ingresos: 0,
+        egresos: 0,
+        cantidad: 0,
+      };
+      const monto = Number(s.monto) || 0;
+      if (monto > 0) {
+        curr.ingresos += monto;
+      } else if (monto < 0) {
+        curr.egresos += Math.abs(monto);
+      }
+      curr.cantidad += 1;
+      servientregaByMoneda.set(s.moneda_id, curr);
     }
 
     // Construir detalles por moneda
@@ -505,8 +485,15 @@ router.get("/", authenticateToken, async (req, res) => {
 
         // Para el desglose, mostrar cambios, servicios externos y servientrega como ingresos/egresos del período
         // Las transferencias se muestran por separado en el desglose pero no se suman al cálculo
-        const ingresos_periodo = c.ingresos || 0;
-        const egresos_periodo = c.egresos || 0;
+        // ⚠️ IMPORTANTE: Incluir servicios externos y servientrega en ingresos/egresos para que coincida con saldo_cierre_teorico
+        const ingresos_periodo = 
+          (c.ingresos || 0) + 
+          (sExt.ingresos || 0) + 
+          (servientrega.ingresos || 0);
+        const egresos_periodo = 
+          (c.egresos || 0) + 
+          (sExt.egresos || 0) + 
+          (servientrega.egresos || 0);
 
         return {
           moneda_id: moneda.id,
