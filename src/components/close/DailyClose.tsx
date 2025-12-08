@@ -156,9 +156,11 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       try {
         setLoading(true);
         console.log("🔄 Fetching automated cuadre data...");
+        console.log("📍 Selected point:", selectedPoint?.id, selectedPoint?.nombre);
 
         const token = localStorage.getItem("authToken");
         if (!token) {
+          console.error("❌ No token found in localStorage");
           toast({
             title: "Sesión Expirada",
             description: "Por favor, inicie sesión nuevamente.",
@@ -167,17 +169,22 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           return;
         }
 
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_URL || "http://35.238.95.118/api"
-          }/cuadre-caja`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
+        const endpoint = `${apiUrl}/cuadre-caja`;
+        console.log("🌐 Calling endpoint:", endpoint);
+
+        const response = await fetch(endpoint, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        console.log("📡 Response status:", response.status);
+        console.log("📡 Response headers:", {
+          contentType: response.headers.get("content-type"),
+          contentLength: response.headers.get("content-length"),
+        });
 
         if (response.ok) {
           const data = await response.json();
@@ -197,15 +204,18 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             const initialAdjustments: {
               [key: string]: { bills: string; coins: string; note?: string };
             } = {};
-            data.data.detalles.forEach((detalle: CuadreDetalle) => {
-              // Inicializar con el saldo esperado dividido entre billetes y monedas
-              // Por defecto asumimos todo en billetes, pero el usuario puede ajustar
-              initialAdjustments[detalle.moneda_id] = {
-                bills: detalle.saldo_cierre.toFixed(2),
-                coins: "0.00",
-                note: "",
-              };
-            });
+            if (data.data.detalles && data.data.detalles.length > 0) {
+              data.data.detalles.forEach((detalle: CuadreDetalle) => {
+                // Inicializar con el saldo esperado dividido entre billetes y monedas
+                // Por defecto asumimos todo en billetes, pero el usuario puede ajustar
+                initialAdjustments[detalle.moneda_id] = {
+                  bills: detalle.saldo_cierre.toFixed(2),
+                  coins: "0.00",
+                  note: "",
+                };
+              });
+              console.log("💰 Initial adjustments set for", Object.keys(initialAdjustments).length, "currencies");
+            }
             setUserAdjustments(initialAdjustments);
           } else if (data.data?.mensaje) {
             // No hay movimientos hoy
@@ -214,18 +224,20 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             setUserAdjustments({});
           }
         } else {
+          const errorText = await response.text();
           console.error(
             "❌ Error response from cuadre API:",
             response.status,
-            response.statusText
+            response.statusText,
+            errorText
           );
-          throw new Error("Error al obtener datos de cuadre");
+          throw new Error(`Error al obtener datos de cuadre: ${response.status}`);
         }
       } catch (error) {
-        console.error("Error al obtener datos de cuadre:", error);
+        console.error("❌ Error al obtener datos de cuadre:", error);
         toast({
           title: "Error",
-          description: "No se pudo cargar los datos de cuadre automático.",
+          description: error instanceof Error ? error.message : "No se pudo cargar los datos de cuadre automático.",
           variant: "destructive",
         });
       } finally {
@@ -234,8 +246,11 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     };
 
     if (selectedPoint) {
+      console.log("🔄 useEffect triggered: selectedPoint changed", selectedPoint?.id);
       fetchCuadreData();
       setTodayClose(null);
+    } else {
+      console.log("⚠️ selectedPoint is null, skipping fetchCuadreData");
     }
   }, [selectedPoint]);
 
@@ -315,7 +330,15 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
   const performDailyClose = async () => {
     console.log("🔄 performDailyClose START");
+    console.log("📋 State check:", {
+      selectedPoint: selectedPoint?.id,
+      cuadreData: !!cuadreData,
+      detalles: cuadreData?.detalles?.length || 0,
+      userAdjustments: Object.keys(userAdjustments || {}).length,
+    });
+
     if (!selectedPoint || !cuadreData) {
+      console.error("❌ Missing required data:", { selectedPoint: !!selectedPoint, cuadreData: !!cuadreData });
       toast({
         title: "Error",
         description:
@@ -328,6 +351,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     try {
       // 1. Validar saldos solo si hay detalles de divisas
       if (cuadreData.detalles.length > 0) {
+        console.log("🔍 Validating balances for", cuadreData.detalles.length, "currencies");
+        
         // Validar que todos los saldos estén completos
         const incompleteBalances = cuadreData.detalles.some(
           (detalle) =>
@@ -338,6 +363,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         );
 
         if (incompleteBalances) {
+          console.error("❌ Incomplete balances found");
           toast({
             title: "Error",
             description: "Debe completar todos los saldos antes del cierre",
@@ -353,6 +379,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         });
 
         if (invalidBalances.length > 0) {
+          console.warn("⚠️ Invalid balances found:", invalidBalances.map(d => ({ codigo: d.codigo, expected: d.saldo_cierre, provided: calculateUserTotal(d.moneda_id) })));
           const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
             .map((d) => {
               const userTotal = calculateUserTotal(d.moneda_id);
@@ -406,25 +433,30 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       // 3. Realizar cierre usando el nuevo endpoint optimizado
       const token = localStorage.getItem("authToken");
       const fechaHoy = new Date().toISOString().split("T")[0];
+      const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
+      const endpoint = `${apiUrl}/contabilidad-diaria/${selectedPoint.id}/${fechaHoy}/cerrar-completo`;
 
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_URL || "http://35.238.95.118/api"
-        }/contabilidad-diaria/${selectedPoint.id}/${fechaHoy}/cerrar-completo`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            detalles,
-            observaciones: cuadreData.observaciones || "",
-          }),
-        }
-      );
+      console.log("🌐 Posting to endpoint:", endpoint);
+      console.log("📮 Request body:", {
+        detalles: detalles.length,
+        observaciones: cuadreData.observaciones?.substring(0, 50),
+      });
 
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          detalles,
+          observaciones: cuadreData.observaciones || "",
+        }),
+      });
+
+      console.log("📡 Response status:", response.status);
       const resultado = await response.json();
+      console.log("📦 Response body:", resultado);
 
       if (!response.ok || !resultado.success) {
         throw new Error(
