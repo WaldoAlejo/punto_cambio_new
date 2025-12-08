@@ -29,7 +29,7 @@ router.post("/", authenticateToken, async (req, res) => {
     // Verificar si ya existe cuadre abierto
     const cuadreResult = await pool.query<CuadreCaja>(
       `SELECT * FROM "CuadreCaja"
-        WHERE punto_atencion_id = $1
+        WHERE punto_atencion_id = $1::uuid
           AND fecha >= $2::timestamp
           AND estado = 'ABIERTO'
         LIMIT 1`,
@@ -42,7 +42,7 @@ router.post("/", authenticateToken, async (req, res) => {
     // Crear cuadre abierto
     const insertResult = await pool.query<CuadreCaja>(
       `INSERT INTO "CuadreCaja" (estado, fecha, punto_atencion_id, observaciones)
-        VALUES ('ABIERTO', $1, $2, $3)
+        VALUES ('ABIERTO', $1, $2::uuid, $3)
         RETURNING *`,
       [fechaInicioDia.toISOString(), String(puntoAtencionId), req.body.observaciones || ""]
     );
@@ -135,8 +135,8 @@ async function calcularSaldoApertura(
       `SELECT dc.conteo_fisico
          FROM "DetalleCuadreCaja" dc
          INNER JOIN "CuadreCaja" c ON dc.cuadre_id = c.id
-        WHERE dc.moneda_id = $1
-          AND c.punto_atencion_id = $2
+        WHERE dc.moneda_id = $1::uuid
+          AND c.punto_atencion_id = $2::uuid
           AND c.estado = 'CERRADO'
           AND c.fecha < $3::timestamp
         ORDER BY c.fecha DESC, c.fecha_cierre DESC
@@ -234,7 +234,7 @@ router.get("/", authenticateToken, async (req, res) => {
          FROM "CuadreCaja" c
     LEFT JOIN "DetalleCuadreCaja" dc ON c.id = dc.cuadre_id
     LEFT JOIN "Moneda" m           ON dc.moneda_id = m.id
-        WHERE c.punto_atencion_id = $1
+        WHERE c.punto_atencion_id = $1::uuid
           AND c.fecha >= $2::timestamp
           AND c.estado = 'ABIERTO'
      GROUP BY c.id
@@ -254,8 +254,8 @@ router.get("/", authenticateToken, async (req, res) => {
     const jornadaResult = await pool.query<Jornada>(
       `SELECT *
          FROM "Jornada"
-        WHERE usuario_id = $1
-          AND punto_atencion_id = $2
+        WHERE usuario_id = $1::uuid
+          AND punto_atencion_id = $2::uuid
           AND estado = 'ACTIVO'
      ORDER BY fecha_inicio DESC
         LIMIT 1`,
@@ -276,7 +276,7 @@ router.get("/", authenticateToken, async (req, res) => {
     const cambiosResult = await pool.query<CambioDivisa>(
       `SELECT *
          FROM "CambioDivisa"
-        WHERE punto_atencion_id = $1
+        WHERE punto_atencion_id = $1::uuid
           AND fecha >= $2::timestamp
           AND estado = $3`,
       [puntoAtencionId, fechaInicio.toISOString(), "COMPLETADO"]
@@ -297,7 +297,7 @@ router.get("/", authenticateToken, async (req, res) => {
         pool.query<Transferencia>(
           `SELECT *
              FROM "Transferencia"
-            WHERE destino_id = $1
+            WHERE destino_id = $1::uuid
               AND fecha >= $2::timestamp
               AND estado = 'APROBADO'`,
           [puntoAtencionId, fechaInicio.toISOString()]
@@ -305,7 +305,7 @@ router.get("/", authenticateToken, async (req, res) => {
         pool.query<Transferencia>(
           `SELECT *
              FROM "Transferencia"
-            WHERE origen_id = $1
+            WHERE origen_id = $1::uuid
               AND fecha >= $2::timestamp
               AND estado = 'APROBADO'`,
           [puntoAtencionId, fechaInicio.toISOString()]
@@ -318,7 +318,7 @@ router.get("/", authenticateToken, async (req, res) => {
         }>(
           `SELECT id, moneda_id, monto, tipo_movimiento
              FROM "ServicioExternoMovimiento"
-            WHERE punto_atencion_id = $1
+            WHERE punto_atencion_id = $1::uuid
               AND fecha >= $2::timestamp`,
           [puntoAtencionId, fechaInicio.toISOString()]
         ),
@@ -330,7 +330,7 @@ router.get("/", authenticateToken, async (req, res) => {
         }>(
           `SELECT id, moneda_id, monto, tipo_movimiento
              FROM "MovimientoSaldo"
-            WHERE punto_atencion_id = $1
+            WHERE punto_atencion_id = $1::uuid
               AND fecha >= $2::timestamp
               AND tipo_referencia = 'SERVIENTREGA'`,
           [puntoAtencionId, fechaInicio.toISOString()]
@@ -388,7 +388,7 @@ router.get("/", authenticateToken, async (req, res) => {
     const saldosResult = await pool.query<{ moneda_id: string }>(
       `SELECT DISTINCT moneda_id
          FROM "Saldo"
-        WHERE punto_atencion_id = $1
+        WHERE punto_atencion_id = $1::uuid
           AND COALESCE(cantidad, 0) <> 0`,
       [puntoAtencionId]
     );
