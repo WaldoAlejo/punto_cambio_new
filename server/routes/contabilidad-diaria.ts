@@ -916,7 +916,7 @@ router.post(
         },
       });
 
-      // Actualizar detalles del cuadre
+      // Actualizar o crear detalles del cuadre
       for (const detalle of detalles) {
         const detalleExistente = await prisma.detalleCuadreCaja.findFirst({
           where: {
@@ -934,6 +934,22 @@ router.post(
               monedas_fisicas: detalle.monedas_fisicas || 0,
               diferencia:
                 detalle.conteo_fisico - detalle.saldo_cierre_teorico || 0,
+              observaciones_detalle: detalle.observaciones_detalle || "",
+            },
+          });
+        } else {
+          // Crear nuevo detalle si no existe
+          await prisma.detalleCuadreCaja.create({
+            data: {
+              cuadre_id: cuadreAbierto.id,
+              moneda_id: detalle.moneda_id,
+              saldo_apertura: detalle.saldo_apertura || 0,
+              saldo_cierre: detalle.saldo_cierre_teorico || 0,
+              conteo_fisico: detalle.conteo_fisico,
+              billetes: detalle.billetes || 0,
+              monedas_fisicas: detalle.monedas_fisicas || 0,
+              diferencia:
+                detalle.conteo_fisico - (detalle.saldo_cierre_teorico || 0),
               observaciones_detalle: detalle.observaciones_detalle || "",
             },
           });

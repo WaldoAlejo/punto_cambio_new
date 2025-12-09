@@ -134,26 +134,7 @@ router.post("/", authenticateToken, async (req, res) => {
   }
 });
 
-interface CambioDivisa {
-  id: string;
-  moneda_origen_id: string;
-  moneda_destino_id: string;
-  monto_origen: number;
-  monto_destino: number;
-  fecha: string;
-  estado: string;
-}
 
-interface Transferencia {
-  id: string;
-  monto: number;
-  moneda_id: string;
-  tipo_transferencia: string;
-  estado: string;
-  fecha: string;
-  origen_id: string;
-  destino_id: string;
-}
 
 function parseFechaParam(fecha?: string): Date {
   if (!fecha) return new Date();
@@ -250,43 +231,7 @@ router.get("/", authenticateToken, async (req, res) => {
     });
 
     try {
-      // Consultar movimientos del día
-      const [cambiosHoyResult, transferInResult, transferOutResult, serviciosExternosResult, servientregaMovimientosResult] = await Promise.all([
-        pool.query<CambioDivisa>(
-          `SELECT * FROM "CambioDivisa" WHERE punto_atencion_id = $1::uuid AND fecha >= $2::timestamp AND estado = 'APROBADO'`,
-          [puntoAtencionId, fechaInicioDia.toISOString()]
-        ),
-        pool.query<Transferencia>(
-          `SELECT * FROM "Transferencia" WHERE origen_id = $1::uuid AND fecha >= $2::timestamp AND estado = 'APROBADO'`,
-          [puntoAtencionId, fechaInicioDia.toISOString()]
-        ),
-        pool.query<Transferencia>(
-          `SELECT * FROM "Transferencia" WHERE destino_id = $1::uuid AND fecha >= $2::timestamp AND estado = 'APROBADO'`,
-          [puntoAtencionId, fechaInicioDia.toISOString()]
-        ),
-        pool.query<{ id: string; moneda_id: string; monto: number; tipo_movimiento: string }>(
-          `SELECT id, moneda_id, monto, tipo_movimiento FROM "ServicioExternoMovimiento" WHERE punto_atencion_id = $1::uuid AND fecha >= $2::timestamp`,
-          [puntoAtencionId, fechaInicioDia.toISOString()]
-        ),
-        pool.query<{ id: string; moneda_id: string; monto: number; tipo_movimiento: string }>(
-          `SELECT id, moneda_id, monto, tipo_movimiento FROM "MovimientoSaldo" WHERE punto_atencion_id = $1::uuid AND fecha >= $2::timestamp AND tipo_referencia = 'SERVIENTREGA'`,
-          [puntoAtencionId, fechaInicioDia.toISOString()]
-        ),
-      ]);
-
-      const cambiosHoy = cambiosHoyResult.rows;
-      const transferIn = transferInResult;
-      const transferOut = transferOutResult;
-      const serviciosExternos = serviciosExternosResult;
-      const servientregaMovimientos = servientregaMovimientosResult;
-
-      logger.info("✅ Movimientos consultados", {
-        cambiosHoy: cambiosHoy.length,
-        transferIn: transferIn.rows.length,
-        transferOut: transferOut.rows.length,
-        serviciosExternos: serviciosExternos.rows.length,
-        servientregaMovimientos: servientregaMovimientos.rows.length,
-      });
+      logger.info("📋 Iniciando cálculo de saldos para cuadre");
 
       // Obtener o crear cuadre abierto del día
       const cuadreResult = await pool.query<CuadreCaja>(
@@ -329,21 +274,21 @@ router.get("/", authenticateToken, async (req, res) => {
           fechaInicioDia
         );
 
-        // Calcular movimientos del período por tipo
-        const cambiosResult = await pool.query<{ monto: string; moneda_destino_id: string }>(
-          `SELECT SUM(monto_destino) as monto, moneda_destino_id
+        // Calcular ingresos (cambios de divisa)
+        const cambiosResult = await pool.query<{ total: string }>(
+          `SELECT COALESCE(SUM(CAST(monto_destino AS NUMERIC)), 0)::TEXT as total
             FROM "CambioDivisa"
             WHERE punto_atencion_id = $1::uuid
               AND moneda_destino_id = $2::uuid
               AND fecha >= $3::timestamp
-              AND estado = 'APROBADO'
-            GROUP BY moneda_destino_id`,
+              AND estado = 'COMPLETADO'`,
           [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
         );
-        const montosCambios = cambiosResult.rows[0]?.monto || 0;
+        const montosCambios = Number(cambiosResult.rows[0]?.total || 0);
 
-        const transferenciasInResult = await pool.query<{ monto: string }>(
-          `SELECT SUM(monto) as monto
+        // Calcular transferencias entrantes
+        const transferenciasInResult = await pool.query<{ total: string }>(
+          `SELECT COALESCE(SUM(CAST(monto AS NUMERIC)), 0)::TEXT as total
             FROM "Transferencia"
             WHERE destino_id = $1::uuid
               AND moneda_id = $2::uuid
@@ -351,10 +296,11 @@ router.get("/", authenticateToken, async (req, res) => {
               AND estado = 'APROBADO'`,
           [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
         );
-        const montosTransferIn = transferenciasInResult.rows[0]?.monto || 0;
+        const montosTransferIn = Number(transferenciasInResult.rows[0]?.total || 0);
 
-        const transferenciasOutResult = await pool.query<{ monto: string }>(
-          `SELECT SUM(monto) as monto
+        // Calcular transferencias salientes
+        const transferenciasOutResult = await pool.query<{ total: string }>(
+          `SELECT COALESCE(SUM(CAST(monto AS NUMERIC)), 0)::TEXT as total
             FROM "Transferencia"
             WHERE origen_id = $1::uuid
               AND moneda_id = $2::uuid
@@ -362,21 +308,18 @@ router.get("/", authenticateToken, async (req, res) => {
               AND estado = 'APROBADO'`,
           [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
         );
-        const montosTransferOut = transferenciasOutResult.rows[0]?.monto || 0;
+        const montosTransferOut = Number(transferenciasOutResult.rows[0]?.total || 0);
 
-        const serviciosResult = await pool.query<{ monto: string; tipo_movimiento: string }>(
-          `SELECT SUM(monto) as monto, tipo_movimiento
+        // Calcular servicios externos
+        const serviciosResult = await pool.query<{ total: string }>(
+          `SELECT COALESCE(SUM(CAST(monto AS NUMERIC)), 0)::TEXT as total
             FROM "ServicioExternoMovimiento"
             WHERE punto_atencion_id = $1::uuid
               AND moneda_id = $2::uuid
-              AND fecha >= $3::timestamp
-            GROUP BY tipo_movimiento`,
+              AND fecha >= $3::timestamp`,
           [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
         );
-
-        const movimientosServicioExterno = serviciosResult.rows.reduce((acc, row) => {
-          return acc + Number(row.monto || 0);
-        }, 0);
+        const movimientosServicioExterno = Number(serviciosResult.rows[0]?.total || 0);
 
         // Calcular saldo lógico de cierre
         const totalIngresos = Number(montosCambios) + Number(montosTransferIn) + Number(movimientosServicioExterno);
@@ -462,7 +405,12 @@ router.get("/", authenticateToken, async (req, res) => {
         }
       });
     } catch (movError) {
-      logger.error("❌ Error consultando movimientos para cuadre-caja", { error: movError });
+      logger.error("❌ Error consultando movimientos para cuadre-caja", { 
+        error: movError instanceof Error ? movError.message : String(movError),
+        stack: movError instanceof Error ? movError.stack : undefined,
+        usuario_id: usuario.id,
+        punto_atencion_id: usuario.punto_atencion_id,
+      });
       return res.status(500).json({ success: false, error: "Error consultando movimientos" });
     }
   } catch (error) {
