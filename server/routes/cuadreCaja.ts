@@ -91,10 +91,10 @@ router.post("/", authenticateToken, async (req, res) => {
     }
 
     const insertResult = await pool.query<CuadreCaja>(
-      `INSERT INTO "CuadreCaja" (estado, fecha, punto_atencion_id, observaciones)
-        VALUES ('ABIERTO', $1, $2, $3)
+      `INSERT INTO "CuadreCaja" (id, estado, fecha, punto_atencion_id, usuario_id, observaciones)
+        VALUES (uuid_generate_v4(), 'ABIERTO', $1, $2, $3, $4)
         RETURNING *`,
-      [fechaInicioDia.toISOString(), String(puntoAtencionId), req.body.observaciones || ""]
+      [fechaInicioDia.toISOString(), String(puntoAtencionId), usuario.id, req.body.observaciones || ""]
     );
 
     if (Array.isArray(req.body.movimientos)) {
@@ -216,8 +216,8 @@ router.get("/", authenticateToken, async (req, res) => {
     let cuadre = cuadreResult.rows[0];
     if (!cuadre) {
       const insertResult = await pool.query<CuadreCaja>(
-        `INSERT INTO "CuadreCaja" (estado, fecha, punto_atencion_id, usuario_id, observaciones)
-          VALUES ('ABIERTO', $1, $2, $3, $4)
+        `INSERT INTO "CuadreCaja" (id, estado, fecha, punto_atencion_id, usuario_id, observaciones)
+          VALUES (uuid_generate_v4(), 'ABIERTO', $1, $2, $3, $4)
           RETURNING *`,
         [fechaInicioDia.toISOString(), puntoAtencionId, usuario.id, ""]
       );
@@ -263,9 +263,9 @@ router.get("/", authenticateToken, async (req, res) => {
         if (!detalle) {
           const insertResult = await pool.query<DetalleCuadreCaja>(
             `INSERT INTO "DetalleCuadreCaja" (
-              cuadre_id, moneda_id, saldo_apertura, saldo_cierre, conteo_fisico, 
+              id, cuadre_id, moneda_id, saldo_apertura, saldo_cierre, conteo_fisico, 
               diferencia, billetes, monedas_fisicas, movimientos_periodo
-            ) VALUES ($1::uuid, $2::uuid, $3, $4, 0, 0, 0, 0, 0)
+            ) VALUES (uuid_generate_v4(), $1::uuid, $2::uuid, $3, $4, 0, 0, 0, 0, 0)
             RETURNING *`,
             [cuadre.id, moneda.id, saldoApertura, saldoCierre]
           );
