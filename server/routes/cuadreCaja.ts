@@ -1,4 +1,35 @@
 // El archivo ya está limpio y funcional. No se encontraron duplicados ni fragmentos fuera de contexto. Se mantiene la estructura actual con importaciones, declaración de router, interfaces, función utilitaria y endpoints principales POST y GET.
+
+/**
+ * Actualiza el saldo físico y lógico automáticamente según el tipo de movimiento.
+ * Si el movimiento es EXCHANGE o SERVICIO_EXTERNO, suma/resta a billetes y monedas.
+ */
+async function actualizarSaldoFisicoYLogico(
+  puntoAtencionId: string,
+  monedaId: string,
+  monto: number,
+  tipoMovimiento: string,
+  tipoReferencia: string
+) {
+  // Determina si el movimiento afecta billetes o monedas
+  let billetes = 0;
+  let monedas = 0;
+  // Por simplicidad, EXCHANGE afecta billetes, SERVICIO_EXTERNO afecta monedas
+  if (tipoReferencia === "EXCHANGE") {
+    billetes = monto;
+  } else if (tipoReferencia === "SERVICIO_EXTERNO") {
+    monedas = monto;
+  }
+  await pool.query(
+    `UPDATE "Saldo"
+     SET cantidad = cantidad + $1,
+         billetes = billetes + $2,
+         monedas_fisicas = monedas_fisicas + $3
+     WHERE punto_atencion_id = $4::uuid
+       AND moneda_id = $5::uuid`,
+    [monto, billetes, monedas, puntoAtencionId, monedaId]
+  );
+}
 import express from "express";
 import { pool } from "../lib/database.js";
 import { authenticateToken } from "../middleware/auth.js";
@@ -46,6 +77,21 @@ router.post("/", authenticateToken, async (req, res) => {
         RETURNING *`,
       [fechaInicioDia.toISOString(), String(puntoAtencionId), req.body.observaciones || ""]
     );
+
+    // Si se envían movimientos iniciales en el body, actualiza los saldos físicos y lógicos
+    if (Array.isArray(req.body.movimientos)) {
+      for (const mov of req.body.movimientos) {
+        // mov: { moneda_id, monto, tipoMovimiento, tipoReferencia }
+        await actualizarSaldoFisicoYLogico(
+          puntoAtencionId,
+          mov.moneda_id,
+          mov.monto,
+          mov.tipoMovimiento,
+          mov.tipoReferencia
+        );
+      }
+    }
+
     logger.info("✅ Cuadre abierto creado", {
       usuario_id: usuario.id,
       punto_atencion_id: puntoAtencionId,
@@ -286,6 +332,30 @@ router.get("/", authenticateToken, async (req, res) => {
       cantidad: cambiosHoy.length,
     });
 
+    // Actualiza saldos físicos y lógicos por cada movimiento EXCHANGE del día
+    for (const cambio of cambiosHoy) {
+      // Solo actualiza si la moneda destino es USD y el monto es positivo
+      if (cambio.moneda_destino_id && cambio.monto_destino > 0) {
+        await actualizarSaldoFisicoYLogico(
+          puntoAtencionId,
+          cambio.moneda_destino_id,
+          cambio.monto_destino,
+          "INGRESO",
+          "EXCHANGE"
+        );
+      }
+      // Si hay egreso de moneda origen
+      if (cambio.moneda_origen_id && cambio.monto_origen > 0) {
+        await actualizarSaldoFisicoYLogico(
+          puntoAtencionId,
+          cambio.moneda_origen_id,
+          -cambio.monto_origen,
+          "EGRESO",
+          "EXCHANGE"
+        );
+      }
+    }
+
     let transferIn, transferOut, serviciosExternos, servientregaMovimientos;
     try {
       [
@@ -516,8 +586,24 @@ router.get("/", authenticateToken, async (req, res) => {
       };
       if (s.tipo_movimiento === "INGRESO") {
         curr.ingresos += Number(s.monto) || 0;
+        // Actualiza saldo físico y lógico para ingresos de servicio externo
+        await actualizarSaldoFisicoYLogico(
+          puntoAtencionId,
+          s.moneda_id,
+          Number(s.monto) || 0,
+          "INGRESO",
+          "SERVICIO_EXTERNO"
+        );
       } else {
         curr.egresos += Number(s.monto) || 0;
+        // Actualiza saldo físico y lógico para egresos de servicio externo
+        await actualizarSaldoFisicoYLogico(
+          puntoAtencionId,
+          s.moneda_id,
+          -Number(s.monto) || 0,
+          "EGRESO",
+          "SERVICIO_EXTERNO"
+        );
       }
       curr.cantidad += 1;
       serviciosExternosByMoneda.set(s.moneda_id, curr);
