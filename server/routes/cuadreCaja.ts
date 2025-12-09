@@ -80,7 +80,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     const cuadreResult = await pool.query<CuadreCaja>(
       `SELECT * FROM "CuadreCaja"
-        WHERE punto_atencion_id = $1::uuid
+        WHERE punto_atencion_id = $1
           AND fecha >= $2::timestamp
           AND estado = 'ABIERTO'
         LIMIT 1`,
@@ -92,7 +92,7 @@ router.post("/", authenticateToken, async (req, res) => {
 
     const insertResult = await pool.query<CuadreCaja>(
       `INSERT INTO "CuadreCaja" (estado, fecha, punto_atencion_id, observaciones)
-        VALUES ('ABIERTO', $1, $2::uuid, $3)
+        VALUES ('ABIERTO', $1, $2, $3)
         RETURNING *`,
       [fechaInicioDia.toISOString(), String(puntoAtencionId), req.body.observaciones || ""]
     );
@@ -139,7 +139,7 @@ async function calcularSaldoApertura(
          FROM "DetalleCuadreCaja" dc
          INNER JOIN "CuadreCaja" c ON dc.cuadre_id = c.id
         WHERE dc.moneda_id = $1::uuid
-          AND c.punto_atencion_id = $2::uuid
+          AND c.punto_atencion_id = $2
           AND c.estado = 'CERRADO'
           AND c.fecha < $3::timestamp
         ORDER BY c.fecha DESC, c.fecha_cierre DESC
@@ -206,7 +206,7 @@ router.get("/", authenticateToken, async (req, res) => {
     // Obtener o crear cuadre abierto del día
     const cuadreResult = await pool.query<CuadreCaja>(
       `SELECT * FROM "CuadreCaja"
-        WHERE punto_atencion_id = $1::uuid
+        WHERE punto_atencion_id = $1
           AND fecha >= $2::timestamp
           AND estado = 'ABIERTO'
         LIMIT 1`,
@@ -217,7 +217,7 @@ router.get("/", authenticateToken, async (req, res) => {
     if (!cuadre) {
       const insertResult = await pool.query<CuadreCaja>(
         `INSERT INTO "CuadreCaja" (estado, fecha, punto_atencion_id, usuario_id, observaciones)
-          VALUES ('ABIERTO', $1, $2::uuid, $3, $4)
+          VALUES ('ABIERTO', $1, $2, $3, $4)
           RETURNING *`,
         [fechaInicioDia.toISOString(), puntoAtencionId, usuario.id, ""]
       );
