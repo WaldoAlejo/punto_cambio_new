@@ -295,13 +295,175 @@ router.get("/", authenticateToken, async (req, res) => {
         servientregaMovimientos: servientregaMovimientos.rows.length,
       });
 
-      // Si no hay movimientos, retornar respuesta vacía pero exitosa
-      if (!cambiosHoy && !transferIn && !transferOut && !serviciosExternos && !servientregaMovimientos) {
-        logger.warn("No hay movimientos para el cuadre de caja");
-        return res.status(200).json({ success: true, data: { detalles: [], totales: {} } });
+      // Obtener o crear cuadre abierto del día
+      const cuadreResult = await pool.query<CuadreCaja>(
+        `SELECT * FROM "CuadreCaja"
+          WHERE punto_atencion_id = $1::uuid
+            AND fecha >= $2::timestamp
+            AND estado = 'ABIERTO'
+          LIMIT 1`,
+        [puntoAtencionId, fechaInicioDia.toISOString()]
+      );
+
+      let cuadre = cuadreResult.rows[0];
+      if (!cuadre) {
+        const insertResult = await pool.query<CuadreCaja>(
+          `INSERT INTO "CuadreCaja" (estado, fecha, punto_atencion_id, usuario_id, observaciones)
+            VALUES ('ABIERTO', $1, $2::uuid, $3, $4)
+            RETURNING *`,
+          [fechaInicioDia.toISOString(), puntoAtencionId, usuario.id, ""]
+        );
+        cuadre = insertResult.rows[0];
       }
 
-      // ...existing code...
+      // Obtener todas las monedas activas
+      const monedasResult = await pool.query<Moneda>(
+        `SELECT id, codigo, nombre, simbolo, activo, orden_display
+          FROM "Moneda"
+          WHERE activo = true
+          ORDER BY orden_display ASC`
+      );
+      const monedas = monedasResult.rows;
+
+      // Calcular saldos para cada moneda
+      const detalles: DetalleCuadreCaja[] = [];
+
+      for (const moneda of monedas) {
+        // Obtener saldo de apertura (del cierre anterior)
+        const saldoApertura = await calcularSaldoApertura(
+          puntoAtencionId,
+          moneda.id,
+          fechaInicioDia
+        );
+
+        // Calcular movimientos del período por tipo
+        const cambiosResult = await pool.query<{ monto: string; moneda_destino_id: string }>(
+          `SELECT SUM(monto_destino) as monto, moneda_destino_id
+            FROM "CambioDivisa"
+            WHERE punto_atencion_id = $1::uuid
+              AND moneda_destino_id = $2::uuid
+              AND fecha >= $3::timestamp
+              AND estado = 'APROBADO'
+            GROUP BY moneda_destino_id`,
+          [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
+        );
+        const montosCambios = cambiosResult.rows[0]?.monto || 0;
+
+        const transferenciasInResult = await pool.query<{ monto: string }>(
+          `SELECT SUM(monto) as monto
+            FROM "Transferencia"
+            WHERE destino_id = $1::uuid
+              AND moneda_id = $2::uuid
+              AND fecha >= $3::timestamp
+              AND estado = 'APROBADO'`,
+          [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
+        );
+        const montosTransferIn = transferenciasInResult.rows[0]?.monto || 0;
+
+        const transferenciasOutResult = await pool.query<{ monto: string }>(
+          `SELECT SUM(monto) as monto
+            FROM "Transferencia"
+            WHERE origen_id = $1::uuid
+              AND moneda_id = $2::uuid
+              AND fecha >= $3::timestamp
+              AND estado = 'APROBADO'`,
+          [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
+        );
+        const montosTransferOut = transferenciasOutResult.rows[0]?.monto || 0;
+
+        const serviciosResult = await pool.query<{ monto: string; tipo_movimiento: string }>(
+          `SELECT SUM(monto) as monto, tipo_movimiento
+            FROM "ServicioExternoMovimiento"
+            WHERE punto_atencion_id = $1::uuid
+              AND moneda_id = $2::uuid
+              AND fecha >= $3::timestamp
+            GROUP BY tipo_movimiento`,
+          [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
+        );
+
+        const movimientosServicioExterno = serviciosResult.rows.reduce((acc, row) => {
+          return acc + Number(row.monto || 0);
+        }, 0);
+
+        const servientregaResult = await pool.query<{ monto: string }>(
+          `SELECT SUM(monto) as monto
+            FROM "MovimientoSaldo"
+            WHERE punto_atencion_id = $1::uuid
+              AND moneda_id = $2::uuid
+              AND fecha >= $3::timestamp
+              AND tipo_referencia = 'SERVIENTREGA'`,
+          [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
+        );
+        const montosServientrega = servientregaResult.rows[0]?.monto || 0;
+
+        // Calcular saldo lógico de cierre
+        const totalIngresos = Number(montosCambios) + Number(montosTransferIn) + Number(movimientosServicioExterno);
+        const totalEgresos = Number(montosTransferOut);
+        const saldoCierre = saldoApertura + totalIngresos - totalEgresos;
+
+        // Obtener o crear detalle del cuadre
+        const detalleResult = await pool.query<DetalleCuadreCaja>(
+          `SELECT * FROM "DetalleCuadreCaja"
+            WHERE cuadre_id = $1::uuid AND moneda_id = $2::uuid`,
+          [cuadre.id, moneda.id]
+        );
+
+        let detalle = detalleResult.rows[0];
+        if (!detalle) {
+          const insertDetalleResult = await pool.query<DetalleCuadreCaja>(
+            `INSERT INTO "DetalleCuadreCaja" (
+              cuadre_id, moneda_id, saldo_apertura, saldo_cierre, conteo_fisico, 
+              diferencia, billetes, monedas_fisicas, movimientos_periodo
+            ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING *`,
+            [
+              cuadre.id,
+              moneda.id,
+              saldoApertura,
+              saldoCierre,
+              0,
+              0,
+              0,
+              0,
+              cambiosResult.rows.length + transferenciasInResult.rows.length + 
+              transferenciasOutResult.rows.length + serviciosResult.rows.length
+            ]
+          );
+          detalle = insertDetalleResult.rows[0];
+        } else {
+          // Actualizar detalle existente
+          await pool.query(
+            `UPDATE "DetalleCuadreCaja"
+              SET saldo_apertura = $1, saldo_cierre = $2
+              WHERE id = $3::uuid`,
+            [saldoApertura, saldoCierre, detalle.id]
+          );
+          detalle.saldo_apertura = saldoApertura;
+          detalle.saldo_cierre = saldoCierre;
+        }
+
+        // Solo incluir monedas con saldo o movimientos
+        if (saldoApertura !== 0 || saldoCierre !== 0 || totalIngresos > 0 || totalEgresos > 0) {
+          detalles.push({
+            ...detalle,
+            moneda: moneda
+          });
+        }
+      }
+
+      logger.info("✅ Cuadre de caja obtenido", {
+        cuadre_id: cuadre.id,
+        detalles_count: detalles.length,
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          cuadre,
+          detalles,
+          total_detalles: detalles.length
+        }
+      });
     } catch (movError) {
       logger.error("❌ Error consultando movimientos para cuadre-caja", { error: movError });
       return res.status(500).json({ success: false, error: "Error consultando movimientos" });
