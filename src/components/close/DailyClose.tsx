@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +44,7 @@ interface CuadreDetalle {
 }
 
 const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
+  const navigate = useNavigate();
   const [cuadreData, setCuadreData] = useState<{
     detalles: CuadreDetalle[];
     observaciones: string;
@@ -497,6 +499,18 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         cuadre_id: resultado.cuadre_id,
         jornada_finalizada: resultado.jornada_finalizada,
       });
+
+      // Si jornada fue finalizada, limpiar sesión y redirigir al login
+      if (resultado.jornada_finalizada) {
+        console.log("🔐 Finalizando sesión del usuario...");
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("user");
+        
+        setTimeout(() => {
+          console.log("🔄 Redirigiendo al login...");
+          navigate("/login", { replace: true });
+        }, 2000);
+      }
     } catch (error) {
       console.error("💥 Error in performDailyClose:", error);
       toast({

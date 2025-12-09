@@ -968,7 +968,7 @@ router.post(
         cierre_id: cuadreCerrado.id,
         cuadre_id: cuadreCerrado.id,
         mensaje: "Cierre diario completado exitosamente",
-        jornada_finalizada: false,
+        jornada_finalizada: true,
       });
     } catch (error) {
       logger.error("Error en POST /contabilidad-diaria/cerrar-completo", {
