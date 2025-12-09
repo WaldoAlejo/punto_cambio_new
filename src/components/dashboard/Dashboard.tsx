@@ -366,7 +366,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         );
 
       case "contabilidad-divisas":
-        if (!isOperador && !isAdministrativo)
+        if (!isOperador)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
         if (!selectedPoint) return <div>Seleccione un punto de atención</div>;
         return (

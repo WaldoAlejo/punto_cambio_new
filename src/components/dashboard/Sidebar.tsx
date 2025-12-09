@@ -92,7 +92,7 @@ const Sidebar = ({
       id: "contabilidad-divisas",
       label: "Contabilidad por Punto",
       color: "text-emerald-600",
-      roles: ["OPERADOR", "ADMINISTRATIVO"],
+      roles: ["OPERADOR"],
     },
     {
       id: "servicios-externos",

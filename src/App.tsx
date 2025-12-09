@@ -108,11 +108,11 @@ function App() {
     }
   }, [user, selectedPoint]);
 
-  // Carga los puntos de atención libres si corresponde (solo para OPERADOR)
+  // Carga los puntos de atención libres si corresponde (para OPERADOR y ADMINISTRATIVO)
   useEffect(() => {
     if (
       user &&
-      user.rol === "OPERADOR" &&
+      (user.rol === "OPERADOR" || user.rol === "ADMINISTRATIVO") &&
       !selectedPoint &&
       !verifyingJornada
     ) {
@@ -137,7 +137,7 @@ function App() {
           <LoginForm />
           <Toaster />
         </>
-      ) : user.rol === "OPERADOR" && !selectedPoint ? (
+      ) : (user.rol === "OPERADOR" || user.rol === "ADMINISTRATIVO") && !selectedPoint ? (
         <>
           <PointSelection user={user} points={points} onLogout={logout} />
           <Toaster />
