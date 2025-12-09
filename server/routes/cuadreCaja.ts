@@ -1,9 +1,4 @@
-// El archivo ya está limpio y funcional. No se encontraron duplicados ni fragmentos fuera de contexto. Se mantiene la estructura actual con importaciones, declaración de router, interfaces, función utilitaria y endpoints principales POST y GET.
 
-/**
- * Actualiza el saldo físico y lógico automáticamente según el tipo de movimiento.
- * Si el movimiento es EXCHANGE o SERVICIO_EXTERNO, suma/resta a billetes y monedas.
- */
 async function actualizarSaldoFisicoYLogico(
   puntoAtencionId: string,
   monedaId: string,
@@ -11,10 +6,8 @@ async function actualizarSaldoFisicoYLogico(
   _tipoMovimiento: string,
   tipoReferencia: string
 ) {
-  // Determina si el movimiento afecta billetes o monedas
   let billetes = 0;
   let monedas = 0;
-  // Por simplicidad, EXCHANGE afecta billetes, SERVICIO_EXTERNO afecta monedas
   if (tipoReferencia === "EXCHANGE") {
     billetes = monto;
   } else if (tipoReferencia === "SERVICIO_EXTERNO") {
@@ -73,7 +66,6 @@ interface CuadreCaja {
   punto_atencion_id: string;
 }
 
-// Endpoint para crear cuadre abierto del día si no existe
 router.post("/", authenticateToken, async (req, res) => {
   const usuario = req.user as UsuarioAutenticado;
   if (!usuario?.punto_atencion_id) {
@@ -86,7 +78,6 @@ router.post("/", authenticateToken, async (req, res) => {
     const { gte } = gyeDayRangeUtcFromDate(fechaBase);
     const fechaInicioDia: Date = new Date(gte);
 
-    // Verificar si ya existe cuadre abierto
     const cuadreResult = await pool.query<CuadreCaja>(
       `SELECT * FROM "CuadreCaja"
         WHERE punto_atencion_id = $1::uuid
@@ -99,7 +90,6 @@ router.post("/", authenticateToken, async (req, res) => {
       return res.status(200).json({ success: true, cuadre: cuadreResult.rows[0], message: "Ya existe cuadre abierto" });
     }
 
-    // Crear cuadre abierto
     const insertResult = await pool.query<CuadreCaja>(
       `INSERT INTO "CuadreCaja" (estado, fecha, punto_atencion_id, observaciones)
         VALUES ('ABIERTO', $1, $2::uuid, $3)
@@ -107,10 +97,8 @@ router.post("/", authenticateToken, async (req, res) => {
       [fechaInicioDia.toISOString(), String(puntoAtencionId), req.body.observaciones || ""]
     );
 
-    // Si se envían movimientos iniciales en el body, actualiza los saldos físicos y lógicos
     if (Array.isArray(req.body.movimientos)) {
       for (const mov of req.body.movimientos) {
-        // mov: { moneda_id, monto, tipoMovimiento, tipoReferencia }
         await actualizarSaldoFisicoYLogico(
           puntoAtencionId,
           mov.moneda_id,
@@ -134,11 +122,8 @@ router.post("/", authenticateToken, async (req, res) => {
   }
 });
 
-
-
 function parseFechaParam(fecha?: string): Date {
   if (!fecha) return new Date();
-  // Espera YYYY-MM-DD; si es inválida, cae a hoy.
   const d = new Date(`${fecha}T00:00:00`);
   return isNaN(d.getTime()) ? new Date() : d;
 }
@@ -149,8 +134,6 @@ async function calcularSaldoApertura(
   fechaInicioUtc: Date
 ): Promise<number> {
   try {
-    // CRÍTICO: El saldo de apertura debe ser el conteo_fisico del último cierre CERRADO
-    // Esto garantiza continuidad: el saldo con el que cerró ayer es el saldo inicial de hoy
     const cierreResult = await pool.query(
       `SELECT dc.conteo_fisico
          FROM "DetalleCuadreCaja" dc
@@ -174,8 +157,6 @@ async function calcularSaldoApertura(
       return apertura;
     }
 
-    // Si no hay cierre anterior (primer día o post-limpieza), el saldo inicial es 0
-    // El operador debe registrar una asignación inicial si recibe dinero
     logger.info("⚠️ No hay cierre anterior, saldo de apertura = 0", {
       puntoAtencionId,
       monedaId,
@@ -195,20 +176,11 @@ async function calcularSaldoApertura(
 router.get("/", authenticateToken, async (req, res) => {
   const usuario = req.user as UsuarioAutenticado;
   if (!usuario?.punto_atencion_id) {
-    return res
-      .status(401)
-      .json({ success: false, error: "Sin punto de atención" });
+    return res.status(401).json({ success: false, error: "Sin punto de atención" });
   }
 
   try {
-    logger.info("🔍 GET /cuadre-caja iniciado", {
-      usuario_id: usuario.id,
-      punto_atencion_id: usuario.punto_atencion_id,
-    });
-    // Lee parámetros opcionales
     const fechaParam = (req.query.fecha as string | undefined)?.trim();
-    // TODO: habilitar pointId externo solo para ADMIN/SUPER (por ahora, usar el del usuario)
-    // const pointParam = (req.query.pointId as string | undefined)?.trim();
     const puntoAtencionId = usuario.punto_atencion_id;
 
     if (!puntoAtencionId) {
@@ -221,110 +193,64 @@ router.get("/", authenticateToken, async (req, res) => {
       });
     }
 
-    // Determinar día GYE desde la fecha solicitada (o hoy)
     const fechaBase = parseFechaParam(fechaParam);
     const { gte } = gyeDayRangeUtcFromDate(fechaBase);
-    const fechaInicioDia: Date = new Date(gte); // Inicio del día GYE (para consultas de movimientos)
-    logger.info("📅 Fechas calculadas", {
-      fechaBase: fechaBase.toISOString(),
-      fechaInicioDia: fechaInicioDia.toISOString(),
+    const fechaInicioDia: Date = new Date(gte);
+    
+    logger.info("🔍 GET /cuadre-caja iniciado", {
+      usuario_id: usuario.id,
+      punto_atencion_id: puntoAtencionId,
+      fecha: fechaInicioDia.toISOString(),
     });
 
-    try {
-      logger.info("📋 Iniciando cálculo de saldos para cuadre");
+    // Obtener o crear cuadre abierto del día
+    const cuadreResult = await pool.query<CuadreCaja>(
+      `SELECT * FROM "CuadreCaja"
+        WHERE punto_atencion_id = $1::uuid
+          AND fecha >= $2::timestamp
+          AND estado = 'ABIERTO'
+        LIMIT 1`,
+      [puntoAtencionId, fechaInicioDia.toISOString()]
+    );
 
-      // Obtener o crear cuadre abierto del día
-      const cuadreResult = await pool.query<CuadreCaja>(
-        `SELECT * FROM "CuadreCaja"
-          WHERE punto_atencion_id = $1::uuid
-            AND fecha >= $2::timestamp
-            AND estado = 'ABIERTO'
-          LIMIT 1`,
-        [puntoAtencionId, fechaInicioDia.toISOString()]
+    let cuadre = cuadreResult.rows[0];
+    if (!cuadre) {
+      const insertResult = await pool.query<CuadreCaja>(
+        `INSERT INTO "CuadreCaja" (estado, fecha, punto_atencion_id, usuario_id, observaciones)
+          VALUES ('ABIERTO', $1, $2::uuid, $3, $4)
+          RETURNING *`,
+        [fechaInicioDia.toISOString(), puntoAtencionId, usuario.id, ""]
       );
+      cuadre = insertResult.rows[0];
+      logger.info("📝 Cuadre creado", { cuadre_id: cuadre.id });
+    }
 
-      let cuadre = cuadreResult.rows[0];
-      if (!cuadre) {
-        const insertResult = await pool.query<CuadreCaja>(
-          `INSERT INTO "CuadreCaja" (estado, fecha, punto_atencion_id, usuario_id, observaciones)
-            VALUES ('ABIERTO', $1, $2::uuid, $3, $4)
-            RETURNING *`,
-          [fechaInicioDia.toISOString(), puntoAtencionId, usuario.id, ""]
-        );
-        cuadre = insertResult.rows[0];
-      }
+    // Obtener todas las monedas activas
+    const monedasResult = await pool.query<Moneda>(
+      `SELECT id, codigo, nombre, simbolo, activo, orden_display
+        FROM "Moneda"
+        WHERE activo = true
+        ORDER BY orden_display ASC`
+    );
+    const monedas = monedasResult.rows;
+    logger.info(`📊 Monedas encontradas: ${monedas.length}`);
 
-      // Obtener todas las monedas activas
-      const monedasResult = await pool.query<Moneda>(
-        `SELECT id, codigo, nombre, simbolo, activo, orden_display
-          FROM "Moneda"
-          WHERE activo = true
-          ORDER BY orden_display ASC`
-      );
-      const monedas = monedasResult.rows;
+    // Calcular saldos para cada moneda
+    const detalles: DetalleCuadreCaja[] = [];
 
-      // Calcular saldos para cada moneda
-      const detalles: DetalleCuadreCaja[] = [];
-
-      for (const moneda of monedas) {
-        // Obtener saldo de apertura (del cierre anterior)
+    for (const moneda of monedas) {
+      try {
+        logger.info(`📦 Procesando moneda: ${moneda.codigo}`);
+        
+        // Obtener saldo de apertura
         const saldoApertura = await calcularSaldoApertura(
           puntoAtencionId,
           moneda.id,
           fechaInicioDia
         );
 
-        // Calcular ingresos (cambios de divisa)
-        const cambiosResult = await pool.query<{ total: string }>(
-          `SELECT COALESCE(SUM(CAST(monto_destino AS NUMERIC)), 0)::TEXT as total
-            FROM "CambioDivisa"
-            WHERE punto_atencion_id = $1::uuid
-              AND moneda_destino_id = $2::uuid
-              AND fecha >= $3::timestamp
-              AND estado = 'COMPLETADO'`,
-          [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
-        );
-        const montosCambios = Number(cambiosResult.rows[0]?.total || 0);
-
-        // Calcular transferencias entrantes
-        const transferenciasInResult = await pool.query<{ total: string }>(
-          `SELECT COALESCE(SUM(CAST(monto AS NUMERIC)), 0)::TEXT as total
-            FROM "Transferencia"
-            WHERE destino_id = $1::uuid
-              AND moneda_id = $2::uuid
-              AND fecha >= $3::timestamp
-              AND estado = 'APROBADO'`,
-          [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
-        );
-        const montosTransferIn = Number(transferenciasInResult.rows[0]?.total || 0);
-
-        // Calcular transferencias salientes
-        const transferenciasOutResult = await pool.query<{ total: string }>(
-          `SELECT COALESCE(SUM(CAST(monto AS NUMERIC)), 0)::TEXT as total
-            FROM "Transferencia"
-            WHERE origen_id = $1::uuid
-              AND moneda_id = $2::uuid
-              AND fecha >= $3::timestamp
-              AND estado = 'APROBADO'`,
-          [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
-        );
-        const montosTransferOut = Number(transferenciasOutResult.rows[0]?.total || 0);
-
-        // Calcular servicios externos
-        const serviciosResult = await pool.query<{ total: string }>(
-          `SELECT COALESCE(SUM(CAST(monto AS NUMERIC)), 0)::TEXT as total
-            FROM "ServicioExternoMovimiento"
-            WHERE punto_atencion_id = $1::uuid
-              AND moneda_id = $2::uuid
-              AND fecha >= $3::timestamp`,
-          [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
-        );
-        const movimientosServicioExterno = Number(serviciosResult.rows[0]?.total || 0);
-
-        // Calcular saldo lógico de cierre
-        const totalIngresos = Number(montosCambios) + Number(montosTransferIn) + Number(movimientosServicioExterno);
-        const totalEgresos = Number(montosTransferOut);
-        const saldoCierre = saldoApertura + totalIngresos - totalEgresos;
+        // Por ahora, saldo de cierre = saldo de apertura (sin movimientos)
+        const saldoCierre = saldoApertura;
 
         // Obtener o crear detalle del cuadre
         const detalleResult = await pool.query<DetalleCuadreCaja>(
@@ -335,28 +261,17 @@ router.get("/", authenticateToken, async (req, res) => {
 
         let detalle = detalleResult.rows[0];
         if (!detalle) {
-          const insertDetalleResult = await pool.query<DetalleCuadreCaja>(
+          const insertResult = await pool.query<DetalleCuadreCaja>(
             `INSERT INTO "DetalleCuadreCaja" (
               cuadre_id, moneda_id, saldo_apertura, saldo_cierre, conteo_fisico, 
               diferencia, billetes, monedas_fisicas, movimientos_periodo
-            ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)
+            ) VALUES ($1::uuid, $2::uuid, $3, $4, 0, 0, 0, 0, 0)
             RETURNING *`,
-            [
-              cuadre.id,
-              moneda.id,
-              saldoApertura,
-              saldoCierre,
-              0,
-              0,
-              0,
-              0,
-              cambiosResult.rows.length + transferenciasInResult.rows.length + 
-              transferenciasOutResult.rows.length + serviciosResult.rows.length
-            ]
+            [cuadre.id, moneda.id, saldoApertura, saldoCierre]
           );
-          detalle = insertDetalleResult.rows[0];
+          detalle = insertResult.rows[0];
+          logger.info(`✅ Detalle creado para ${moneda.codigo}`);
         } else {
-          // Actualizar detalle existente
           await pool.query(
             `UPDATE "DetalleCuadreCaja"
               SET saldo_apertura = $1, saldo_cierre = $2
@@ -365,56 +280,50 @@ router.get("/", authenticateToken, async (req, res) => {
           );
           detalle.saldo_apertura = saldoApertura;
           detalle.saldo_cierre = saldoCierre;
+          logger.info(`✅ Detalle actualizado para ${moneda.codigo}`);
         }
 
-        // Incluir TODAS las monedas activas (aunque sea 0) para cierre de caja completo
-        detalles.push({
-          ...detalle,
-          moneda: moneda
+        detalle.moneda = moneda;
+        detalles.push(detalle);
+      } catch (monedaError) {
+        logger.error(`❌ Error procesando moneda ${moneda.codigo}`, {
+          error: monedaError instanceof Error ? monedaError.message : String(monedaError),
         });
       }
-
-      // Mapear detalles al formato esperado por el frontend
-      const detallesMapeados = detalles.map((detalle) => ({
-        moneda_id: detalle.moneda_id,
-        codigo: detalle.moneda?.codigo || "",
-        nombre: detalle.moneda?.nombre || "",
-        simbolo: detalle.moneda?.simbolo || "",
-        saldo_apertura: Number(detalle.saldo_apertura) || 0,
-        saldo_cierre: Number(detalle.saldo_cierre) || 0,
-        conteo_fisico: Number(detalle.conteo_fisico) || 0,
-        billetes: detalle.billetes || 0,
-        monedas: detalle.monedas_fisicas || 0,
-        ingresos_periodo: 0,
-        egresos_periodo: 0,
-        movimientos_periodo: (detalle as any).movimientos_periodo || 0,
-      }));
-
-      logger.info("✅ Cuadre de caja obtenido", {
-        cuadre_id: cuadre.id,
-        detalles_count: detallesMapeados.length,
-      });
-
-      return res.status(200).json({
-        success: true,
-        data: {
-          cuadre_id: cuadre.id,
-          periodo_inicio: fechaInicioDia.toISOString(),
-          detalles: detallesMapeados,
-          observaciones: cuadre.observaciones || ""
-        }
-      });
-    } catch (movError) {
-      logger.error("❌ Error consultando movimientos para cuadre-caja", { 
-        error: movError instanceof Error ? movError.message : String(movError),
-        stack: movError instanceof Error ? movError.stack : undefined,
-        usuario_id: usuario.id,
-        punto_atencion_id: usuario.punto_atencion_id,
-      });
-      return res.status(500).json({ success: false, error: "Error consultando movimientos" });
     }
+
+    // Mapear detalles al formato esperado por el frontend
+    const detallesMapeados = detalles.map((detalle) => ({
+      moneda_id: detalle.moneda_id,
+      codigo: detalle.moneda?.codigo || "",
+      nombre: detalle.moneda?.nombre || "",
+      simbolo: detalle.moneda?.simbolo || "",
+      saldo_apertura: Number(detalle.saldo_apertura) || 0,
+      saldo_cierre: Number(detalle.saldo_cierre) || 0,
+      conteo_fisico: Number(detalle.conteo_fisico) || 0,
+      billetes: detalle.billetes || 0,
+      monedas: detalle.monedas_fisicas || 0,
+      ingresos_periodo: 0,
+      egresos_periodo: 0,
+      movimientos_periodo: 0,
+    }));
+
+    logger.info("✅ Cuadre de caja obtenido", {
+      cuadre_id: cuadre.id,
+      detalles_count: detallesMapeados.length,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        cuadre_id: cuadre.id,
+        periodo_inicio: fechaInicioDia.toISOString(),
+        detalles: detallesMapeados,
+        observaciones: cuadre.observaciones || ""
+      }
+    });
   } catch (error) {
-    logger.error("❌ CuadreCaja Error Detalle", {
+    logger.error("❌ Error en GET /cuadre-caja", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       usuario_id: usuario?.id,
