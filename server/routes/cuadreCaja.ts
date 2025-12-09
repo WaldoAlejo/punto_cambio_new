@@ -442,13 +442,11 @@ router.get("/", authenticateToken, async (req, res) => {
           detalle.saldo_cierre = saldoCierre;
         }
 
-        // Solo incluir monedas con saldo o movimientos
-        if (saldoApertura !== 0 || saldoCierre !== 0 || totalIngresos > 0 || totalEgresos > 0) {
-          detalles.push({
-            ...detalle,
-            moneda: moneda
-          });
-        }
+        // Incluir TODAS las monedas activas (aunque sea 0) para cierre de caja completo
+        detalles.push({
+          ...detalle,
+          moneda: moneda
+        });
       }
 
       logger.info("✅ Cuadre de caja obtenido", {
