@@ -962,6 +962,22 @@ router.post(
 
           // Validar que hay suficiente saldo de billetes y monedas
           if (destinoAnteriorBil < billetesEgreso) {
+            logger.warn('[DEFENSIVO] Saldo de billetes insuficiente', {
+              destinoAnteriorBil,
+              billetesEgreso,
+              punto_atencion_id,
+              moneda_destino_id,
+              usuario_id: req.user?.id,
+              cambio_id: cambio?.id,
+              divisas_recibidas_billetes,
+              divisas_recibidas_monedas,
+              egresoEf,
+              porcentajeActualizacion,
+              metodo_entrega,
+              usd_entregado_efectivo,
+              usd_entregado_transfer,
+              abono_inicial_monto,
+            });
             throw new Error(
               `Saldo de billetes insuficiente en moneda destino. Disponible: ${destinoAnteriorBil}, Requerido: ${billetesEgreso}`
             );
