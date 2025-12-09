@@ -839,4 +839,132 @@ router.get(
   }
 );
 
+/**
+ * POST /api/contabilidad-diaria/:pointId/:fecha/cerrar-completo
+ * Realiza el cierre diario completo del punto de atención
+ */
+router.post(
+  "/:pointId/:fecha/cerrar-completo",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { pointId, fecha } = req.params;
+      const { detalles, observaciones } = req.body;
+      const usuario = req.user as
+        | {
+            id: string;
+            punto_atencion_id?: string;
+            rol?: string;
+          }
+        | undefined;
+
+      if (!pointId || !fecha) {
+        return res.status(400).json({
+          success: false,
+          error: "Falta pointId o fecha",
+        });
+      }
+
+      if (!Array.isArray(detalles) || detalles.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Debe proporcionar detalles del cuadre",
+        });
+      }
+
+      // Validar permisos
+      const esAdmin =
+        (usuario?.rol === "ADMIN" || usuario?.rol === "SUPER_USUARIO") ?? false;
+      if (
+        !esAdmin &&
+        usuario?.punto_atencion_id &&
+        usuario.punto_atencion_id !== pointId
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: "No autorizado para cerrar otro punto de atención",
+        });
+      }
+
+      // Validar YYYY-MM-DD
+      gyeParseDateOnly(fecha);
+      const fechaDate = new Date(`${fecha}T00:00:00.000Z`);
+
+      // Buscar cuadre abierto del día
+      const cuadreAbierto = await prisma.cuadreCaja.findFirst({
+        where: {
+          punto_atencion_id: pointId,
+          fecha: { gte: new Date(fecha + "T00:00:00.000Z") },
+          estado: "ABIERTO",
+        },
+      });
+
+      if (!cuadreAbierto) {
+        return res.status(400).json({
+          success: false,
+          error: "No hay cuadre abierto para esta fecha",
+        });
+      }
+
+      // Actualizar cuadre a CERRADO
+      const cuadreCerrado = await prisma.cuadreCaja.update({
+        where: { id: cuadreAbierto.id },
+        data: {
+          estado: "CERRADO",
+          fecha_cierre: new Date(),
+          observaciones: observaciones || "",
+        },
+      });
+
+      // Actualizar detalles del cuadre
+      for (const detalle of detalles) {
+        const detalleExistente = await prisma.detalleCuadreCaja.findFirst({
+          where: {
+            cuadre_id: cuadreAbierto.id,
+            moneda_id: detalle.moneda_id,
+          },
+        });
+
+        if (detalleExistente) {
+          await prisma.detalleCuadreCaja.update({
+            where: { id: detalleExistente.id },
+            data: {
+              conteo_fisico: detalle.conteo_fisico,
+              billetes: detalle.billetes || 0,
+              monedas_fisicas: detalle.monedas_fisicas || 0,
+              diferencia:
+                detalle.conteo_fisico - detalle.saldo_cierre_teorico || 0,
+              observaciones_detalle: detalle.observaciones_detalle || "",
+            },
+          });
+        }
+      }
+
+      logger.info("✅ Cierre diario completado", {
+        cuadre_id: cuadreCerrado.id,
+        punto_atencion_id: pointId,
+        usuario_id: usuario?.id,
+        fecha,
+      });
+
+      return res.status(200).json({
+        success: true,
+        cierre_id: cuadreCerrado.id,
+        cuadre_id: cuadreCerrado.id,
+        mensaje: "Cierre diario completado exitosamente",
+        jornada_finalizada: false,
+      });
+    } catch (error) {
+      logger.error("Error en POST /contabilidad-diaria/cerrar-completo", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      return res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    }
+  }
+);
+
 export default router;

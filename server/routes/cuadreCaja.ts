@@ -8,7 +8,7 @@ async function actualizarSaldoFisicoYLogico(
   puntoAtencionId: string,
   monedaId: string,
   monto: number,
-  tipoMovimiento: string,
+  _tipoMovimiento: string,
   tipoReferencia: string
 ) {
   // Determina si el movimiento afecta billetes o monedas
@@ -35,12 +35,41 @@ import { pool } from "../lib/database.js";
 import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
-import saldoReconciliationService from "../services/saldoReconciliationService.js";
 
 const router = express.Router();
 
 interface UsuarioAutenticado {
   id: string;
+  punto_atencion_id: string;
+}
+
+interface Moneda {
+  id: string;
+  codigo: string;
+  nombre: string;
+  simbolo: string;
+  activo?: boolean;
+  orden_display?: number;
+}
+
+interface DetalleCuadreCaja {
+  id: string;
+  moneda_id: string;
+  saldo_apertura: number;
+  saldo_cierre: number;
+  conteo_fisico: number;
+  billetes: number;
+  monedas_fisicas: number;
+  diferencia: number;
+  movimientos_periodo?: number;
+  moneda?: Moneda;
+}
+
+interface CuadreCaja {
+  id: string;
+  estado: string;
+  observaciones: string;
+  fecha: string;
   punto_atencion_id: string;
 }
 
@@ -105,12 +134,6 @@ router.post("/", authenticateToken, async (req, res) => {
   }
 });
 
-interface Jornada {
-  id: string;
-  fecha_inicio: string;
-  estado: string;
-}
-
 interface CambioDivisa {
   id: string;
   moneda_origen_id: string;
@@ -130,36 +153,6 @@ interface Transferencia {
   fecha: string;
   origen_id: string;
   destino_id: string;
-}
-
-interface Moneda {
-  id: string;
-  codigo: string;
-  nombre: string;
-  simbolo: string;
-  activo?: boolean;
-  orden_display?: number;
-}
-
-interface DetalleCuadreCaja {
-  id: string;
-  moneda_id: string;
-  saldo_apertura: number;
-  saldo_cierre: number;
-  conteo_fisico: number;
-  billetes: number;
-  monedas_fisicas: number;
-  diferencia: number;
-  moneda: Moneda;
-}
-
-interface CuadreCaja {
-  id: string;
-  estado: string;
-  observaciones: string;
-  fecha: string;
-  punto_atencion_id: string;
-  detalles?: DetalleCuadreCaja[];
 }
 
 function parseFechaParam(fecha?: string): Date {
@@ -385,17 +378,6 @@ router.get("/", authenticateToken, async (req, res) => {
           return acc + Number(row.monto || 0);
         }, 0);
 
-        const servientregaResult = await pool.query<{ monto: string }>(
-          `SELECT SUM(monto) as monto
-            FROM "MovimientoSaldo"
-            WHERE punto_atencion_id = $1::uuid
-              AND moneda_id = $2::uuid
-              AND fecha >= $3::timestamp
-              AND tipo_referencia = 'SERVIENTREGA'`,
-          [puntoAtencionId, moneda.id, fechaInicioDia.toISOString()]
-        );
-        const montosServientrega = servientregaResult.rows[0]?.monto || 0;
-
         // Calcular saldo lógico de cierre
         const totalIngresos = Number(montosCambios) + Number(montosTransferIn) + Number(movimientosServicioExterno);
         const totalEgresos = Number(montosTransferOut);
@@ -449,17 +431,34 @@ router.get("/", authenticateToken, async (req, res) => {
         });
       }
 
+      // Mapear detalles al formato esperado por el frontend
+      const detallesMapeados = detalles.map((detalle) => ({
+        moneda_id: detalle.moneda_id,
+        codigo: detalle.moneda?.codigo || "",
+        nombre: detalle.moneda?.nombre || "",
+        simbolo: detalle.moneda?.simbolo || "",
+        saldo_apertura: Number(detalle.saldo_apertura) || 0,
+        saldo_cierre: Number(detalle.saldo_cierre) || 0,
+        conteo_fisico: Number(detalle.conteo_fisico) || 0,
+        billetes: detalle.billetes || 0,
+        monedas: detalle.monedas_fisicas || 0,
+        ingresos_periodo: 0,
+        egresos_periodo: 0,
+        movimientos_periodo: (detalle as any).movimientos_periodo || 0,
+      }));
+
       logger.info("✅ Cuadre de caja obtenido", {
         cuadre_id: cuadre.id,
-        detalles_count: detalles.length,
+        detalles_count: detallesMapeados.length,
       });
 
       return res.status(200).json({
         success: true,
         data: {
-          cuadre,
-          detalles,
-          total_detalles: detalles.length
+          cuadre_id: cuadre.id,
+          periodo_inicio: fechaInicioDia.toISOString(),
+          detalles: detallesMapeados,
+          observaciones: cuadre.observaciones || ""
         }
       });
     } catch (movError) {
