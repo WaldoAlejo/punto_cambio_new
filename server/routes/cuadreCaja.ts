@@ -256,37 +256,56 @@ router.get("/", authenticateToken, async (req, res) => {
       fechaInicioDia: fechaInicioDia.toISOString(),
     });
 
-    // Consultar movimientos del día
-    const [cambiosHoyResult, transferInResult, transferOutResult, serviciosExternosResult, servientregaMovimientosResult] = await Promise.all([
-      pool.query<CambioDivisa>(
-        `SELECT * FROM "CambioDivisa" WHERE punto_atencion_id = $1::uuid AND fecha >= $2::timestamp AND estado = 'APROBADO'`,
-        [puntoAtencionId, fechaInicioDia.toISOString()]
-      ),
-      pool.query<Transferencia>(
-        `SELECT * FROM "Transferencia" WHERE origen_id = $1::uuid AND fecha >= $2::timestamp AND estado = 'APROBADO'`,
-        [puntoAtencionId, fechaInicioDia.toISOString()]
-      ),
-      pool.query<Transferencia>(
-        `SELECT * FROM "Transferencia" WHERE destino_id = $1::uuid AND fecha >= $2::timestamp AND estado = 'APROBADO'`,
-        [puntoAtencionId, fechaInicioDia.toISOString()]
-      ),
-      pool.query<{ id: string; moneda_id: string; monto: number; tipo_movimiento: string }>(
-        `SELECT id, moneda_id, monto, tipo_movimiento FROM "ServicioExternoMovimiento" WHERE punto_atencion_id = $1::uuid AND fecha >= $2::timestamp`,
-        [puntoAtencionId, fechaInicioDia.toISOString()]
-      ),
-      pool.query<{ id: string; moneda_id: string; monto: number; tipo_movimiento: string }>(
-        `SELECT id, moneda_id, monto, tipo_movimiento FROM "MovimientoSaldo" WHERE punto_atencion_id = $1::uuid AND fecha >= $2::timestamp AND tipo_referencia = 'SERVIENTREGA'`,
-        [puntoAtencionId, fechaInicioDia.toISOString()]
-      ),
-    ]);
+    try {
+      // Consultar movimientos del día
+      const [cambiosHoyResult, transferInResult, transferOutResult, serviciosExternosResult, servientregaMovimientosResult] = await Promise.all([
+        pool.query<CambioDivisa>(
+          `SELECT * FROM "CambioDivisa" WHERE punto_atencion_id = $1::uuid AND fecha >= $2::timestamp AND estado = 'APROBADO'`,
+          [puntoAtencionId, fechaInicioDia.toISOString()]
+        ),
+        pool.query<Transferencia>(
+          `SELECT * FROM "Transferencia" WHERE origen_id = $1::uuid AND fecha >= $2::timestamp AND estado = 'APROBADO'`,
+          [puntoAtencionId, fechaInicioDia.toISOString()]
+        ),
+        pool.query<Transferencia>(
+          `SELECT * FROM "Transferencia" WHERE destino_id = $1::uuid AND fecha >= $2::timestamp AND estado = 'APROBADO'`,
+          [puntoAtencionId, fechaInicioDia.toISOString()]
+        ),
+        pool.query<{ id: string; moneda_id: string; monto: number; tipo_movimiento: string }>(
+          `SELECT id, moneda_id, monto, tipo_movimiento FROM "ServicioExternoMovimiento" WHERE punto_atencion_id = $1::uuid AND fecha >= $2::timestamp`,
+          [puntoAtencionId, fechaInicioDia.toISOString()]
+        ),
+        pool.query<{ id: string; moneda_id: string; monto: number; tipo_movimiento: string }>(
+          `SELECT id, moneda_id, monto, tipo_movimiento FROM "MovimientoSaldo" WHERE punto_atencion_id = $1::uuid AND fecha >= $2::timestamp AND tipo_referencia = 'SERVIENTREGA'`,
+          [puntoAtencionId, fechaInicioDia.toISOString()]
+        ),
+      ]);
 
-    const cambiosHoy = cambiosHoyResult.rows;
-    const transferIn = transferInResult;
-    const transferOut = transferOutResult;
-    const serviciosExternos = serviciosExternosResult;
-    const servientregaMovimientos = servientregaMovimientosResult;
+      const cambiosHoy = cambiosHoyResult.rows;
+      const transferIn = transferInResult;
+      const transferOut = transferOutResult;
+      const serviciosExternos = serviciosExternosResult;
+      const servientregaMovimientos = servientregaMovimientosResult;
 
-    // ...existing code...
+      logger.info("✅ Movimientos consultados", {
+        cambiosHoy: cambiosHoy.length,
+        transferIn: transferIn.rows.length,
+        transferOut: transferOut.rows.length,
+        serviciosExternos: serviciosExternos.rows.length,
+        servientregaMovimientos: servientregaMovimientos.rows.length,
+      });
+
+      // Si no hay movimientos, retornar respuesta vacía pero exitosa
+      if (!cambiosHoy && !transferIn && !transferOut && !serviciosExternos && !servientregaMovimientos) {
+        logger.warn("No hay movimientos para el cuadre de caja");
+        return res.status(200).json({ success: true, data: { detalles: [], totales: {} } });
+      }
+
+      // ...existing code...
+    } catch (movError) {
+      logger.error("❌ Error consultando movimientos para cuadre-caja", { error: movError });
+      return res.status(500).json({ success: false, error: "Error consultando movimientos" });
+    }
   } catch (error) {
     logger.error("❌ CuadreCaja Error Detalle", {
       error: error instanceof Error ? error.message : String(error),
