@@ -92,6 +92,7 @@ function App() {
           const points = result.points || [];
           const puntoPrincipal =
             points.find((p) => p.es_principal) ||
+            points.find((p) => p.id === user.punto_atencion_id) ||
             points.find(
               (p) =>
                 p.nombre.toLowerCase().includes("principal") ||
@@ -141,14 +142,6 @@ function App() {
           <PointSelection user={user} points={points} onLogout={logout} />
           <Toaster />
         </>
-      ) : user.rol !== "OPERADOR" && !user.punto_atencion_id && !selectedPoint ? (
-        // Para ADMINISTRATIVO y CONCESION: nunca mostrar selección de punto, solo permitir acceso directo
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-lg">Bienvenido, {user.nombre}.</p>
-            <p className="text-gray-600 mt-2">No es necesario seleccionar un punto de atención.</p>
-          </div>
-        </div>
       ) : (
         <div className="App">
           <Routes>

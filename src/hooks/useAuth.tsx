@@ -72,14 +72,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               verifiedUser.rol === "ADMIN" ||
               verifiedUser.rol === "SUPER_USUARIO"
             ) {
-              if (verifiedUser.punto_atencion_id) {
+              try {
                 const { points } = await pointService.getAllPoints();
                 const adminPoint = points.find(
                   (p) => p.id === verifiedUser.punto_atencion_id
-                );
+                ) || points.find((p) => p.es_principal);
                 if (adminPoint) {
                   setSelectedPointState(adminPoint);
                 }
+              } catch (error) {
+                console.error("Error al cargar punto principal para admin:", error);
               }
             } else if (verifiedUser.rol === "OPERADOR") {
               // Para operadores, usar la lógica existente de jornada activa
@@ -128,15 +130,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         // Si es admin, conectar automáticamente al punto principal
         if (loggedUser.rol === "ADMIN" || loggedUser.rol === "SUPER_USUARIO") {
-          if (loggedUser.punto_atencion_id) {
+          try {
             // Cargar el punto de atención del admin desde su perfil
             const { points } = await pointService.getAllPoints();
             const adminPoint = points.find(
               (p) => p.id === loggedUser.punto_atencion_id
-            );
+            ) || points.find((p) => p.es_principal);
             if (adminPoint) {
               setSelectedPointState(adminPoint);
             }
+          } catch (error) {
+            console.error("Error al cargar punto principal para admin:", error);
           }
         } else if (loggedUser.rol === "OPERADOR") {
           // Para operadores, usar la lógica existente de jornada activa

@@ -72,13 +72,18 @@ router.post(
 
       // Lógica de punto según rol
       if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
-        // Siempre asignar el punto principal
-        if (user.punto_atencion_id !== "ed61308a-edd8-4637-8a95-1156962d023d") {
+        // Buscar punto principal dinámicamente
+        const puntoPrincipal = await prisma.puntoAtencion.findFirst({
+          where: { es_principal: true },
+          select: { id: true },
+        });
+        
+        if (puntoPrincipal && user.punto_atencion_id !== puntoPrincipal.id) {
           await prisma.usuario.update({
             where: { id: user.id },
-            data: { punto_atencion_id: "ed61308a-edd8-4637-8a95-1156962d023d" },
+            data: { punto_atencion_id: puntoPrincipal.id },
           });
-          user.punto_atencion_id = "ed61308a-edd8-4637-8a95-1156962d023d";
+          user.punto_atencion_id = puntoPrincipal.id;
         }
       } else if (user.rol === "CONCESION") {
         // Debe tener un punto asignado, si no, error
