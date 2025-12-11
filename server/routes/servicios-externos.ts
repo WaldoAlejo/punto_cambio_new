@@ -211,36 +211,36 @@ router.post(
             );
           }
 
-          // Actualizar o crear saldo del servicio externo
+          // Actualizar saldo del servicio externo si existe
           if (saldoServicio) {
             await tx.servicioExternoSaldo.update({
               where: { id: saldoServicio.id },
               data: {
                 cantidad: saldoServicioNuevo,
-                billetes: Number(saldoServicio.billetes ?? 0) + Number(billetes),
-                monedas_fisicas: Number(saldoServicio.monedas_fisicas ?? 0) + Number(monedas_fisicas),
+                billetes: Number(saldoServicio.billetes ?? 0) + (typeof billetes === 'number' && !isNaN(billetes) ? billetes : 0),
+                monedas_fisicas: Number(saldoServicio.monedas_fisicas ?? 0) + (typeof monedas_fisicas === 'number' && !isNaN(monedas_fisicas) ? monedas_fisicas : 0),
                 updated_at: new Date(),
               },
             });
           } else {
-            // Si no existe saldo y es INGRESO (resta), no permitir crear en negativo
-            if (tipo_movimiento === "INGRESO") {
+            // Solo OTROS puede crear saldo automáticamente
+            if (servicio === "OTROS") {
+              await tx.servicioExternoSaldo.create({
+                data: {
+                  punto_atencion_id: puntoId,
+                  servicio: servicio as any,
+                  moneda_id: usdId,
+                  cantidad: saldoServicioNuevo,
+                  billetes: typeof billetes === 'number' ? billetes : 0,
+                  monedas_fisicas: typeof monedas_fisicas === 'number' ? monedas_fisicas : 0,
+                  updated_at: new Date(),
+                },
+              });
+            } else {
               throw new Error(
-                `No hay saldo asignado para el servicio ${servicio}. Debe asignarse saldo antes de registrar ingresos.`
+                `No hay saldo asignado para el servicio ${servicio}. Debe asignarse saldo antes de registrar movimientos.`
               );
             }
-            // Si es EGRESO, crear el saldo (puede iniciar con movimiento positivo)
-            await tx.servicioExternoSaldo.create({
-              data: {
-                punto_atencion_id: puntoId,
-                servicio: servicio as any,
-                moneda_id: usdId,
-                cantidad: saldoServicioNuevo,
-                billetes: typeof billetes === 'number' ? billetes : 0,
-                monedas_fisicas: typeof monedas_fisicas === 'number' ? monedas_fisicas : 0,
-                updated_at: new Date(),
-              },
-            });
           }
         }
 
@@ -587,12 +587,12 @@ router.delete(
             where: { id: saldoServicio.id },
             data: {
               cantidad: nuevoServicio,
-              billetes: typeof mov.billetes === 'number'
+              billetes: (typeof mov.billetes === 'number' && !isNaN(mov.billetes)
                 ? (saldoServicio.billetes ?? 0) + mov.billetes
-                : saldoServicio.billetes ?? 0,
-              monedas_fisicas: typeof mov.monedas_fisicas === 'number'
+                : saldoServicio.billetes ?? 0),
+              monedas_fisicas: (typeof mov.monedas_fisicas === 'number' && !isNaN(mov.monedas_fisicas)
                 ? (saldoServicio.monedas_fisicas ?? 0) + mov.monedas_fisicas
-                : saldoServicio.monedas_fisicas ?? 0,
+                : saldoServicio.monedas_fisicas ?? 0),
               updated_at: new Date(),
             },
           });
@@ -1347,8 +1347,8 @@ router.post(
             where: { id: saldo.id },
             data: {
               cantidad: cantidadNueva,
-              billetes: Number(saldo.billetes ?? 0) + Number(typeof billetes !== 'undefined' ? billetes : 0),
-              monedas_fisicas: Number(saldo.monedas_fisicas ?? 0) + Number(typeof monedas_fisicas !== 'undefined' ? monedas_fisicas : 0),
+              billetes: Number(saldo.billetes ?? 0) + (typeof billetes === 'number' && !isNaN(billetes) ? billetes : 0),
+              monedas_fisicas: Number(saldo.monedas_fisicas ?? 0) + (typeof monedas_fisicas === 'number' && !isNaN(monedas_fisicas) ? monedas_fisicas : 0),
               updated_at: new Date(),
             },
           });

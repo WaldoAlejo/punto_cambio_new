@@ -1218,12 +1218,12 @@ export class ServientregaDBService {
           where: { id: saldoServicio.id },
           data: {
             cantidad: saldoServicioNuevo,
-            billetes: typeof billetes === 'number'
+            billetes: (typeof billetes === 'number' && !isNaN(billetes)
               ? (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0) + billetes
-              : saldoServicio.billetes ? Number(saldoServicio.billetes) : 0,
-            monedas_fisicas: typeof monedas === 'number'
+              : saldoServicio.billetes ? Number(saldoServicio.billetes) : 0),
+            monedas_fisicas: (typeof monedas === 'number' && !isNaN(monedas)
               ? (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0) + monedas
-              : saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0,
+              : saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0),
             updated_at: new Date(),
           },
         });
@@ -1422,12 +1422,12 @@ export class ServientregaDBService {
           where: { id: saldoServicio.id },
           data: {
             cantidad: saldoServicioNuevo,
-            billetes: typeof billetes === 'number'
+            billetes: (typeof billetes === 'number' && !isNaN(billetes)
               ? (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0) - billetes
-              : saldoServicio.billetes ? Number(saldoServicio.billetes) : 0,
-            monedas_fisicas: typeof monedas === 'number'
+              : saldoServicio.billetes ? Number(saldoServicio.billetes) : 0),
+            monedas_fisicas: (typeof monedas === 'number' && !isNaN(monedas)
               ? (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0) - monedas
-              : saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0,
+              : saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0),
             updated_at: new Date(),
           },
         });
