@@ -146,6 +146,8 @@ export default function PasoResumen({
 
   const [saldo, setSaldo] = useState<{
     disponible: number;
+    billetes?: number;
+    monedas_fisicas?: number;
     estado: "OK" | "SALDO_BAJO" | "ERROR";
     mensaje?: string;
   } | null>(null);
@@ -192,6 +194,8 @@ export default function PasoResumen({
       const estado = disponible < UMBRAL_SALDO_BAJO ? "SALDO_BAJO" : "OK";
       setSaldo({
         disponible,
+        billetes: Number(data.billetes ?? 0),
+        monedas_fisicas: Number(data.monedas_fisicas ?? 0),
         estado,
         mensaje:
           estado === "SALDO_BAJO"
@@ -202,6 +206,8 @@ export default function PasoResumen({
       console.error("❌ Error al obtener saldo:", error);
       setSaldo({
         disponible: 0,
+        billetes: 0,
+        monedas_fisicas: 0,
         estado: "ERROR",
         mensaje: "Error al consultar el saldo",
       });
@@ -399,6 +405,16 @@ export default function PasoResumen({
                 >
                   ${saldo?.disponible?.toFixed(2) || "0.00"}
                 </div>
+                {saldo?.billetes !== undefined && saldo?.monedas_fisicas !== undefined && (
+                  <div className="flex flex-col mt-2 text-xs text-gray-700">
+                    <div>
+                      <span className="font-semibold">Billetes:</span> ${saldo.billetes?.toFixed(2)}
+                    </div>
+                    <div>
+                      <span className="font-semibold">Monedas:</span> ${saldo.monedas_fisicas?.toFixed(2)}
+                    </div>
+                  </div>
+                )}
                 {saldo?.mensaje && (
                   <p
                     className={`text-sm ${

@@ -545,6 +545,8 @@ model ServientregaSaldo {
   id                String        @id @default(uuid())
   monto_total       Decimal       @db.Decimal(15, 2)
   monto_usado       Decimal       @default(0) @db.Decimal(15, 2)
+  billetes          Decimal       @default(0) @db.Decimal(15, 2)
+  monedas_fisicas   Decimal       @default(0) @db.Decimal(15, 2)
   creado_por        String
   punto_atencion_id String        @unique
   created_at        DateTime      @default(now())
@@ -624,6 +626,8 @@ model ServicioExternoSaldo {
   servicio          ServicioExterno
   moneda_id         String
   cantidad          Decimal         @default(0) @db.Decimal(15, 2)
+  billetes          Decimal         @default(0) @db.Decimal(15, 2)
+  monedas_fisicas   Decimal         @default(0) @db.Decimal(15, 2)
   updated_at        DateTime        @updatedAt
   moneda            Moneda          @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
   puntoAtencion     PuntoAtencion   @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)

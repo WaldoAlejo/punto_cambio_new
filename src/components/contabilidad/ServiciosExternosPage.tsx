@@ -106,6 +106,10 @@ export default function ServiciosExternosPage() {
                     <p className="text-base font-bold text-green-600">
                       ${saldo.saldo_asignado.toFixed(2)}
                     </p>
+                    <div className="text-xs text-gray-500 mt-1">
+                      <span>Billetes: <b>${saldo.billetes?.toFixed(2) ?? '0.00'}</b></span><br />
+                      <span>Monedas: <b>${saldo.monedas_fisicas?.toFixed(2) ?? '0.00'}</b></span>
+                    </div>
                   </div>
                 ))}
               </div>

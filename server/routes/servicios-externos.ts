@@ -1,14 +1,8 @@
 import express, { Request, Response, NextFunction } from "express";
-import { Prisma } from "@prisma/client";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import saldoValidation from "../middleware/saldoValidation.js";
 import prisma from "../lib/prisma.js";
 import { randomUUID } from "crypto";
-import {
-  ServicioExterno,
-  TipoAsignacionServicio,
-  TipoMovimiento,
-} from "@prisma/client";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento as TipoMov,
@@ -42,7 +36,7 @@ function isOperador(
 }
 
 /** Catálogos válidos (coinciden con Prisma enums) */
-const SERVICIOS_VALIDOS: ServicioExterno[] = [
+const SERVICIOS_VALIDOS = [
   "YAGANASTE",
   "BANCO_GUAYAQUIL",
   "WESTERN",
@@ -52,7 +46,7 @@ const SERVICIOS_VALIDOS: ServicioExterno[] = [
   "INSUMOS_LIMPIEZA",
   "OTROS",
 ];
-const TIPOS_VALIDOS: TipoMovimiento[] = ["INGRESO", "EGRESO"];
+const TIPOS_VALIDOS = ["INGRESO", "EGRESO"];
 
 /** Utils fecha GYE */
 async function gyeTodayWindow() {
@@ -131,8 +125,8 @@ router.post(
         billetes,
         monedas_fisicas,
       } = req.body as {
-        servicio?: ServicioExterno;
-        tipo_movimiento?: TipoMovimiento;
+        servicio?: string;
+        tipo_movimiento?: string;
         monto?: number | string;
         descripcion?: string;
         numero_referencia?: string;
@@ -198,7 +192,7 @@ router.post(
             where: {
               punto_atencion_id_servicio_moneda_id: {
                 punto_atencion_id: puntoId,
-                servicio,
+                servicio: servicio as any,
                 moneda_id: usdId,
               },
             },
@@ -223,6 +217,8 @@ router.post(
               where: { id: saldoServicio.id },
               data: {
                 cantidad: saldoServicioNuevo,
+                billetes: Number(saldoServicio.billetes ?? 0) + Number(billetes),
+                monedas_fisicas: Number(saldoServicio.monedas_fisicas ?? 0) + Number(monedas_fisicas),
                 updated_at: new Date(),
               },
             });
@@ -237,9 +233,11 @@ router.post(
             await tx.servicioExternoSaldo.create({
               data: {
                 punto_atencion_id: puntoId,
-                servicio,
+                servicio: servicio as any,
                 moneda_id: usdId,
                 cantidad: saldoServicioNuevo,
+                billetes: typeof billetes === 'number' ? billetes : 0,
+                monedas_fisicas: typeof monedas_fisicas === 'number' ? monedas_fisicas : 0,
                 updated_at: new Date(),
               },
             });
@@ -301,13 +299,13 @@ router.post(
               cantidad: nuevoSaldoGeneral,
               billetes: billetes !== undefined
                 ? (saldoGeneral.billetes
-                    ? saldoGeneral.billetes.add(new Prisma.Decimal(billetes))
-                    : new Prisma.Decimal(billetes))
+                    ? Number(saldoGeneral.billetes ?? 0) + Number(typeof billetes !== 'undefined' ? billetes : 0)
+                    : Number(typeof billetes !== 'undefined' ? billetes : 0))
                 : saldoGeneral.billetes,
               monedas_fisicas: monedas_fisicas !== undefined
                 ? (saldoGeneral.monedas_fisicas
-                    ? saldoGeneral.monedas_fisicas.add(new Prisma.Decimal(monedas_fisicas))
-                    : new Prisma.Decimal(monedas_fisicas))
+                    ? Number(saldoGeneral.monedas_fisicas ?? 0) + Number(typeof monedas_fisicas !== 'undefined' ? monedas_fisicas : 0)
+                    : Number(typeof monedas_fisicas !== 'undefined' ? monedas_fisicas : 0))
                 : saldoGeneral.monedas_fisicas,
               updated_at: new Date(),
             },
@@ -319,8 +317,8 @@ router.post(
               punto_atencion_id: puntoId,
               moneda_id: usdId,
               cantidad: nuevoSaldoGeneral,
-              billetes: billetes !== undefined ? new Prisma.Decimal(billetes) : undefined,
-              monedas_fisicas: monedas_fisicas !== undefined ? new Prisma.Decimal(monedas_fisicas) : undefined,
+              billetes: typeof billetes !== 'undefined' ? Number(billetes) : undefined,
+              monedas_fisicas: typeof monedas_fisicas !== 'undefined' ? Number(monedas_fisicas) : undefined,
               updated_at: new Date(),
             },
           });
@@ -330,8 +328,8 @@ router.post(
         const svcMov = await tx.servicioExternoMovimiento.create({
           data: {
             punto_atencion_id: puntoId,
-            servicio,
-            tipo_movimiento,
+            servicio: servicio as any,
+            tipo_movimiento: tipo_movimiento as any,
             moneda_id: usdId,
             monto: montoNum,
             usuario_id: (req as any).user.id,
@@ -339,8 +337,8 @@ router.post(
             descripcion: descripcion || null,
             numero_referencia: numero_referencia || null,
             comprobante_url: comprobante_url || null,
-            billetes: billetes !== undefined ? new Prisma.Decimal(billetes) : undefined,
-            monedas_fisicas: monedas_fisicas !== undefined ? new Prisma.Decimal(monedas_fisicas) : undefined,
+            billetes: billetes !== undefined ? Number(billetes) : undefined,
+            monedas_fisicas: monedas_fisicas !== undefined ? Number(monedas_fisicas) : undefined,
           },
           include: {
             // por si luego quieres enriquecer respuesta
@@ -442,8 +440,8 @@ router.get(
       }
 
       const { servicio, tipo_movimiento, desde, hasta, limit } = req.query as {
-        servicio?: ServicioExterno;
-        tipo_movimiento?: TipoMovimiento;
+        servicio?: string;
+        tipo_movimiento?: string;
         desde?: string;
         hasta?: string;
         limit?: string;
@@ -587,7 +585,16 @@ router.delete(
         if (saldoServicio) {
           await tx.servicioExternoSaldo.update({
             where: { id: saldoServicio.id },
-            data: { cantidad: nuevoServicio, updated_at: new Date() },
+            data: {
+              cantidad: nuevoServicio,
+              billetes: typeof mov.billetes === 'number'
+                ? (saldoServicio.billetes ?? 0) + mov.billetes
+                : saldoServicio.billetes ?? 0,
+              monedas_fisicas: typeof mov.monedas_fisicas === 'number'
+                ? (saldoServicio.monedas_fisicas ?? 0) + mov.monedas_fisicas
+                : saldoServicio.monedas_fisicas ?? 0,
+              updated_at: new Date(),
+            },
           });
         } else {
           // Si no existe saldo, crear uno
@@ -597,6 +604,8 @@ router.delete(
               servicio: mov.servicio,
               moneda_id: mov.moneda_id,
               cantidad: nuevoServicio,
+              billetes: typeof mov.billetes === 'number' ? mov.billetes : 0,
+              monedas_fisicas: typeof mov.monedas_fisicas === 'number' ? mov.monedas_fisicas : 0,
               updated_at: new Date(),
             },
           });
@@ -702,8 +711,8 @@ router.get(
       const { pointId, servicio, tipo_movimiento, desde, hasta, limit } =
         req.query as {
           pointId?: string;
-          servicio?: ServicioExterno;
-          tipo_movimiento?: TipoMovimiento;
+          servicio?: string;
+          tipo_movimiento?: string;
           desde?: string;
           hasta?: string;
           limit?: string;
@@ -941,7 +950,7 @@ router.get(
         },
         select: { servicio: true, tipo_movimiento: true, monto: true },
       });
-      const netoMap = new Map<ServicioExterno, number>();
+      const netoMap = new Map<string, number>();
       for (const s of SERVICIOS_VALIDOS) netoMap.set(s, 0);
       for (const r of rows) {
         const prev = netoMap.get(r.servicio) || 0;
@@ -997,7 +1006,7 @@ router.post(
       }
 
       const detallesInput: Array<{
-        servicio: ServicioExterno;
+        servicio: string;
         monto_validado: number;
         observaciones?: string;
       }> = Array.isArray(req.body?.detalles) ? req.body.detalles : [];
@@ -1043,7 +1052,7 @@ router.post(
           },
           select: { servicio: true, tipo_movimiento: true, monto: true },
         });
-        const netoByServicio = new Map<ServicioExterno, number>();
+        const netoByServicio = new Map<string, number>();
         for (const s of SERVICIOS_VALIDOS) netoByServicio.set(s, 0);
         for (const r of rows) {
           const prev = netoByServicio.get(r.servicio) || 0;
@@ -1054,21 +1063,21 @@ router.post(
           netoByServicio.set(r.servicio, +(prev + delta).toFixed(2));
         }
 
-        const serviciosSet = new Set<ServicioExterno>([
+        const serviciosSet = new Set<string>([
           ...Array.from(netoByServicio.keys()),
           ...detallesInput.map((d) => d.servicio),
         ]);
 
         const TOL = 1.0;
         const detalles: Array<{
-          servicio: ServicioExterno;
+          servicio: string;
           monto_movimientos: number;
           monto_validado: number;
           diferencia: number;
           observaciones?: string;
         }> = [];
         const errores: Array<{
-          servicio: ServicioExterno;
+          servicio: string;
           diferencia: number;
         }> = [];
 
@@ -1107,7 +1116,7 @@ router.post(
           await tx.servicioExternoDetalleCierre.create({
             data: {
               cierre_id: cierre.id,
-              servicio: d.servicio,
+              servicio: d.servicio as any,
               moneda_id: usdId,
               monto_movimientos: d.monto_movimientos,
               monto_validado: d.monto_validado,
@@ -1161,7 +1170,7 @@ router.get(
     try {
       const { punto_id, servicio, fecha_desde, fecha_hasta } = req.query as {
         punto_id?: string;
-        servicio?: ServicioExterno | "todos";
+        servicio?: string | "todos";
         fecha_desde?: string;
         fecha_hasta?: string;
       };
@@ -1225,18 +1234,23 @@ router.post(
       const user: any = (req as any).user || {};
       const creado_por = user.id; // El usuario autenticado es quien crea la asignación
 
+
       const {
         punto_atencion_id,
         servicio,
         monto_asignado,
         tipo_asignacion,
         observaciones,
+        billetes,
+        monedas_fisicas,
       } = req.body as {
         punto_atencion_id?: string;
-        servicio?: ServicioExterno;
+        servicio?: string;
         monto_asignado?: number;
-        tipo_asignacion?: TipoAsignacionServicio;
+        tipo_asignacion?: string;
         observaciones?: string;
+        billetes?: number;
+        monedas_fisicas?: number;
       };
 
       if (!punto_atencion_id || !servicio || !monto_asignado) {
@@ -1290,10 +1304,10 @@ router.post(
         const asignacion = await tx.servicioExternoAsignacion.create({
           data: {
             punto_atencion_id,
-            servicio,
+            servicio: servicio as any,
             moneda_id: usdId,
             monto: monto_asignado,
-            tipo: tipo_asignacion || "INICIAL",
+            tipo: (tipo_asignacion || "INICIAL") as any,
             observaciones: observaciones || null,
             asignado_por: creado_por,
             fecha: new Date(),
@@ -1309,7 +1323,7 @@ router.post(
           where: {
             punto_atencion_id_servicio_moneda_id: {
               punto_atencion_id,
-              servicio,
+              servicio: servicio as any,
               moneda_id: usdId,
             },
           },
@@ -1333,6 +1347,8 @@ router.post(
             where: { id: saldo.id },
             data: {
               cantidad: cantidadNueva,
+              billetes: Number(saldo.billetes ?? 0) + Number(typeof billetes !== 'undefined' ? billetes : 0),
+              monedas_fisicas: Number(saldo.monedas_fisicas ?? 0) + Number(typeof monedas_fisicas !== 'undefined' ? monedas_fisicas : 0),
               updated_at: new Date(),
             },
           });
@@ -1340,9 +1356,11 @@ router.post(
           await tx.servicioExternoSaldo.create({
             data: {
               punto_atencion_id,
-              servicio,
+              servicio: servicio as any,
               moneda_id: usdId,
               cantidad: monto_asignado,
+              billetes: typeof billetes !== 'undefined' ? Number(billetes) : 0,
+              monedas_fisicas: typeof monedas_fisicas !== 'undefined' ? Number(monedas_fisicas) : 0,
               updated_at: new Date(),
             },
           });
@@ -1550,6 +1568,8 @@ router.get(
           servicio: true,
           cantidad: true,
           updated_at: true,
+          billetes: true,
+          monedas_fisicas: true,
         },
       });
 
@@ -1566,6 +1586,8 @@ router.get(
           servicio: s.servicio,
           saldo_asignado: Number(s.cantidad),
           actualizado_en: s.updated_at.toISOString(),
+          billetes: s.billetes !== undefined && s.billetes !== null ? Number(s.billetes) : 0,
+          monedas_fisicas: s.monedas_fisicas !== undefined && s.monedas_fisicas !== null ? Number(s.monedas_fisicas) : 0,
         })),
       });
     } catch (error) {

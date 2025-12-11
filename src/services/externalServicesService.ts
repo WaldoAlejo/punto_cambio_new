@@ -152,6 +152,8 @@ export interface SaldoAsignado {
   servicio: ServicioExterno;
   saldo_asignado: number;
   actualizado_en: string;
+  billetes: number;
+  monedas_fisicas: number;
 }
 
 export async function obtenerSaldosAsignados(params?: {

@@ -562,9 +562,16 @@ export class ServientregaDBService {
         const saldoDisponibleNuevo = Number(disponible);
 
         console.log("🔍 [descontarSaldo] Actualizando ServientregaSaldo...");
+        // Sumar/restar billetes y monedas si se proveen (opcional: puedes pasar como argumento)
+        const saldoActual = await tx.servientregaSaldo.findUnique({ where: { punto_atencion_id: puntoAtencionId } });
         const actualizado = await tx.servientregaSaldo.update({
           where: { punto_atencion_id: puntoAtencionId },
-          data: { monto_usado: nuevoUsado, updated_at: new Date() },
+          data: {
+            monto_usado: nuevoUsado,
+            billetes: saldoActual?.billetes ?? 0, // mantener valor anterior si no hay desglose
+            monedas_fisicas: saldoActual?.monedas_fisicas ?? 0,
+            updated_at: new Date(),
+          },
         });
 
         console.log(
@@ -651,9 +658,15 @@ export class ServientregaDBService {
       const saldoDisponibleAnterior = Number(total.sub(usado));
       const saldoDisponibleNuevo = Number(total.sub(nuevoUsado));
 
+      const saldoActual = await tx.servientregaSaldo.findUnique({ where: { punto_atencion_id: puntoAtencionId } });
       const actualizado = await tx.servientregaSaldo.update({
         where: { punto_atencion_id: puntoAtencionId },
-        data: { monto_usado: nuevoUsado, updated_at: new Date() },
+        data: {
+          monto_usado: nuevoUsado,
+          billetes: saldoActual?.billetes ?? 0,
+          monedas_fisicas: saldoActual?.monedas_fisicas ?? 0,
+          updated_at: new Date(),
+        },
       });
 
       // Registrar movimiento en historial (crédito por devolución)
@@ -1199,13 +1212,20 @@ export class ServientregaDBService {
 
       if (saldoServicio) {
         saldoServicioAnterior = saldoServicio.cantidad ?? new Prisma.Decimal(0);
-        saldoServicioNuevo = saldoServicioAnterior.add(
-          new Prisma.Decimal(monto)
-        );
+        saldoServicioNuevo = saldoServicioAnterior.add(new Prisma.Decimal(monto));
 
         await tx.servicioExternoSaldo.update({
           where: { id: saldoServicio.id },
-          data: { cantidad: saldoServicioNuevo, updated_at: new Date() },
+          data: {
+            cantidad: saldoServicioNuevo,
+            billetes: typeof billetes === 'number'
+              ? (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0) + billetes
+              : saldoServicio.billetes ? Number(saldoServicio.billetes) : 0,
+            monedas_fisicas: typeof monedas === 'number'
+              ? (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0) + monedas
+              : saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0,
+            updated_at: new Date(),
+          },
         });
       } else {
         saldoServicioNuevo = new Prisma.Decimal(monto);
@@ -1215,6 +1235,8 @@ export class ServientregaDBService {
             servicio: ServicioExterno.SERVIENTREGA,
             moneda_id: usdId,
             cantidad: saldoServicioNuevo,
+            billetes: typeof billetes === 'number' ? billetes : 0,
+            monedas_fisicas: typeof monedas === 'number' ? monedas : 0,
           },
         });
       }
@@ -1329,7 +1351,9 @@ export class ServientregaDBService {
   async revertirIngresoServicioExterno(
     puntoAtencionId: string,
     monto: number,
-    numeroGuia: string
+    numeroGuia: string,
+    billetes?: number,
+    monedas?: number
   ) {
     return prisma.$transaction(async (tx) => {
       console.log("📤 [revertirIngresoServicioExterno] Iniciando:", {
@@ -1383,9 +1407,7 @@ export class ServientregaDBService {
 
       if (saldoServicio) {
         saldoServicioAnterior = saldoServicio.cantidad ?? new Prisma.Decimal(0);
-        saldoServicioNuevo = saldoServicioAnterior.sub(
-          new Prisma.Decimal(monto)
-        );
+        saldoServicioNuevo = saldoServicioAnterior.sub(new Prisma.Decimal(monto));
 
         // Asegurar que no sea negativo
         if (saldoServicioNuevo.lt(0)) {
@@ -1398,7 +1420,16 @@ export class ServientregaDBService {
 
         await tx.servicioExternoSaldo.update({
           where: { id: saldoServicio.id },
-          data: { cantidad: saldoServicioNuevo, updated_at: new Date() },
+          data: {
+            cantidad: saldoServicioNuevo,
+            billetes: typeof billetes === 'number'
+              ? (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0) - billetes
+              : saldoServicio.billetes ? Number(saldoServicio.billetes) : 0,
+            monedas_fisicas: typeof monedas === 'number'
+              ? (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0) - monedas
+              : saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0,
+            updated_at: new Date(),
+          },
         });
       } else {
         console.warn(
@@ -1411,6 +1442,8 @@ export class ServientregaDBService {
             servicio: ServicioExterno.SERVIENTREGA,
             moneda_id: usdId,
             cantidad: saldoServicioNuevo,
+            billetes: typeof billetes === 'number' ? -billetes : 0,
+            monedas_fisicas: typeof monedas === 'number' ? -monedas : 0,
           },
         });
       }
