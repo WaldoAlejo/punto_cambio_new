@@ -930,61 +930,70 @@ router.post(
         let monedasEgreso = 0;
 
         if (egresoEf > 0) {
-          // Calcular proporción de billetes y monedas
-          const totalRecibido =
-            num(divisas_recibidas_billetes) + num(divisas_recibidas_monedas);
+          // ✅ NUEVA LÓGICA: Distribuir dinero de forma flexible
+          // El cliente DESEA recibir X billetes y Y monedas
+          // Pero el punto TIENE A billetes y B monedas
+          // Intentamos satisfacer el deseo del cliente con lo que tenemos
+          
+          const billetesDeseados = num(divisas_recibidas_billetes);
+          const monedasDeseadas = num(divisas_recibidas_monedas);
+          const billetesDisponibles = destinoAnteriorBil;
+          const monedasDisponibles = destinoAnteriorMon;
 
-          if (totalRecibido > 0) {
-            const proporcionBilletes =
-              num(divisas_recibidas_billetes) / totalRecibido;
-            const proporcionMonedas =
-              num(divisas_recibidas_monedas) / totalRecibido;
+          // Estrategia: Intentar dar al cliente lo que quiere, pero con lo que tenemos
+          if (billetesDeseados > 0 || monedasDeseadas > 0) {
+            // Caso 1: Cliente especificó una mezcla de billetes y monedas
+            const totalDeseado = billetesDeseados + monedasDeseadas;
+            
+            if (totalDeseado > 0) {
+              // Intentar respetar la proporción deseada
+              const proporcionBilletesDeseada = billetesDeseados / totalDeseado;
+              const proporcionMonedasDeseada = monedasDeseadas / totalDeseado;
 
-            // Aplicar proporción al egreso efectivo para mantener coherencia
-            billetesEgreso = round2(egresoEf * proporcionBilletes);
-            monedasEgreso = round2(egresoEf * proporcionMonedas);
+              billetesEgreso = round2(egresoEf * proporcionBilletesDeseada);
+              monedasEgreso = round2(egresoEf * proporcionMonedasDeseada);
 
-            // Ajustar por diferencias de redondeo: asegurar que billetes + monedas = total
-            const diferencia = egresoEf - (billetesEgreso + monedasEgreso);
-            if (Math.abs(diferencia) > 0.01) {
-              // Si hay diferencia significativa, ajustar el componente mayor
-              if (billetesEgreso >= monedasEgreso) {
-                billetesEgreso = round2(billetesEgreso + diferencia);
-              } else {
-                monedasEgreso = round2(monedasEgreso + diferencia);
+              // Si no tenemos suficientes billetes, usar monedas
+              if (billetesEgreso > billetesDisponibles) {
+                const excesoBilletes = billetesEgreso - billetesDisponibles;
+                billetesEgreso = billetesDisponibles;
+                monedasEgreso = round2(monedasEgreso + excesoBilletes);
               }
+
+              // Si no tenemos suficientes monedas, usar billetes
+              if (monedasEgreso > monedasDisponibles) {
+                const excesoMonedas = monedasEgreso - monedasDisponibles;
+                monedasEgreso = monedasDisponibles;
+                billetesEgreso = round2(billetesEgreso + excesoMonedas);
+              }
+
+              // Ajustar redondeo para que suma = total
+              const diferencia = egresoEf - (billetesEgreso + monedasEgreso);
+              if (Math.abs(diferencia) > 0.01) {
+                if (billetesEgreso <= billetesDisponibles) {
+                  billetesEgreso = round2(billetesEgreso + diferencia);
+                } else if (monedasEgreso <= monedasDisponibles) {
+                  monedasEgreso = round2(monedasEgreso + diferencia);
+                }
+              }
+            } else {
+              // No se especificó proporción, usar lo disponible
+              billetesEgreso = Math.min(egresoEf, billetesDisponibles);
+              monedasEgreso = egresoEf - billetesEgreso;
             }
           } else {
-            // Si no hay breakdown, todo sale de billetes por defecto
-            billetesEgreso = egresoEf;
-            monedasEgreso = 0;
+            // Cliente no especificó, usar lo disponible (preferir billetes)
+            billetesEgreso = Math.min(egresoEf, billetesDisponibles);
+            monedasEgreso = Math.min(egresoEf - billetesEgreso, monedasDisponibles);
           }
 
-          // Validar que hay suficiente saldo de billetes y monedas
-          if (destinoAnteriorBil < billetesEgreso) {
-            logger.warn('[DEFENSIVO] Saldo de billetes insuficiente', {
-              destinoAnteriorBil,
-              billetesEgreso,
-              punto_atencion_id,
-              moneda_destino_id,
-              usuario_id: req.user?.id,
-              cambio_id: cambio?.id,
-              divisas_recibidas_billetes,
-              divisas_recibidas_monedas,
-              egresoEf,
-              porcentajeActualizacion,
-              metodo_entrega,
-              usd_entregado_efectivo,
-              usd_entregado_transfer,
-              abono_inicial_monto,
-            });
+          // Validación final: ¿tenemos suficiente dinero en total?
+          const totalFisicoDisponible = billetesDisponibles + monedasDisponibles;
+          const totalFisicoRequerido = billetesEgreso + monedasEgreso;
+          
+          if (totalFisicoDisponible < egresoEf - 0.01) {
             throw new Error(
-              `Saldo de billetes insuficiente en moneda destino. Disponible: ${destinoAnteriorBil}, Requerido: ${billetesEgreso}`
-            );
-          }
-          if (destinoAnteriorMon < monedasEgreso) {
-            throw new Error(
-              `Saldo de monedas insuficiente en moneda destino. Disponible: ${destinoAnteriorMon}, Requerido: ${monedasEgreso}`
+              `Saldo de efectivo insuficiente en moneda destino. Disponible: ${totalFisicoDisponible.toFixed(2)} (${billetesDisponibles.toFixed(2)} billetes + ${monedasDisponibles.toFixed(2)} monedas), Requerido: ${egresoEf.toFixed(2)}`
             );
           }
         }

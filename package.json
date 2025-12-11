@@ -38,7 +38,8 @@
     "script:verificar-limpieza": "npx tsx server/scripts/verificar-antes-limpiar.ts",
     "script:limpiar-transacciones": "npx tsx server/scripts/limpiar-transacciones.ts",
     "clean:db": "npx tsx scripts/clean-database.ts",
-    "clean:db:safe": "npx tsx scripts/clean-database-safe.ts"
+    "clean:db:safe": "npx tsx scripts/clean-database-safe.ts",
+    "audit:saldos": "npx tsx scripts/audit-saldos-inconsistentes.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed-complete.ts"

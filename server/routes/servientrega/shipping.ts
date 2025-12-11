@@ -313,7 +313,8 @@ router.post("/generar-guia", async (req, res) => {
               servientrega_oficina_alianza: true,
             },
           });
-
+          // LOG DETALLADO: Mostrar el objeto punto recuperado
+          console.log("[DEBUG] Punto recuperado por Prisma:", JSON.stringify(punto, null, 2));
           // ⚠️ VALIDACIÓN CRÍTICA: Solo puntos con Servientrega configurado pueden generar guías
           if (!punto) {
             return res.status(404).json({
@@ -321,12 +322,18 @@ router.post("/generar-guia", async (req, res) => {
               mensaje: `No se encontró el punto de atención con ID: ${punto_atencion_id_captado}`,
             });
           }
-
+          // Si tiene agencia configurada, usar los datos específicos del punto SOLO si no son vacíos
+          if (typeof punto.servientrega_alianza === "string" && punto.servientrega_alianza.trim() !== "") {
+            servientregaAlianza = punto.servientrega_alianza;
+          }
+          if (typeof punto.servientrega_oficina_alianza === "string" && punto.servientrega_oficina_alianza.trim() !== "") {
+            servientregaOficinaAlianza = punto.servientrega_oficina_alianza;
+          }
           if (!punto.servientrega_agencia_codigo) {
             return res.status(403).json({
               error: "Servientrega no habilitado",
               mensaje:
-                `El punto "${punto.nombre}" no tiene Servientrega configurado. ` +
+                `El punto \"${punto.nombre}\" no tiene Servientrega configurado. ` +
                 `Por favor, contacta al administrador para asignar una agencia de Servientrega a este punto.`,
               punto_nombre: punto.nombre,
               punto_id: punto_atencion_id_captado,
@@ -334,15 +341,6 @@ router.post("/generar-guia", async (req, res) => {
                 "El administrador debe ir a Puntos de Atención y configurar los campos de Servientrega para este punto.",
             });
           }
-
-          // Si tiene agencia configurada, usar los datos específicos del punto
-          if (punto.servientrega_alianza) {
-            servientregaAlianza = punto.servientrega_alianza;
-          }
-          if (punto.servientrega_oficina_alianza) {
-            servientregaOficinaAlianza = punto.servientrega_oficina_alianza;
-          }
-
           console.log("✅ Punto con Servientrega habilitado:", {
             punto_id: punto_atencion_id_captado,
             punto_nombre: punto.nombre,

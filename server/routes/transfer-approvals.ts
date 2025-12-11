@@ -198,6 +198,8 @@ router.patch(
             },
           });
           const saldoAnteriorOrigen = Number(saldoOrigen?.cantidad || 0);
+          const billetesAnterior = Number(saldoOrigen?.billetes || 0);
+          const monedasAnterior = Number(saldoOrigen?.monedas_fisicas || 0);
 
           // 🛡️ VALIDACIÓN CRÍTICA: Verificar saldo suficiente antes de aprobar
           if (saldoAnteriorOrigen < Number(transfer.monto)) {
@@ -211,6 +213,35 @@ router.patch(
           }
 
           const saldoNuevoOrigen = saldoAnteriorOrigen - Number(transfer.monto);
+          
+          // ✅ Distribuir el egreso entre billetes y monedas físicas
+          // Intentar mantener la proporción existente
+          const totalFisico = billetesAnterior + monedasAnterior;
+          let billetesEgreso = 0;
+          let monedasEgreso = 0;
+          
+          if (totalFisico > 0) {
+            const proporcionBilletes = billetesAnterior / totalFisico;
+            const proporcionMonedas = monedasAnterior / totalFisico;
+            
+            billetesEgreso = Math.min(
+              billetesAnterior,
+              Number(transfer.monto) * proporcionBilletes
+            );
+            monedasEgreso = Number(transfer.monto) - billetesEgreso;
+            
+            // Ajustar si no hay suficientes monedas
+            if (monedasEgreso > monedasAnterior) {
+              monedasEgreso = monedasAnterior;
+              billetesEgreso = Number(transfer.monto) - monedasEgreso;
+            }
+          } else {
+            // Si no hay desglose, asumir todo sale de billetes (por defecto)
+            billetesEgreso = Number(transfer.monto);
+          }
+
+          const billetesNuevoOrigen = Math.max(0, billetesAnterior - billetesEgreso);
+          const monedasNuevaOrigen = Math.max(0, monedasAnterior - monedasEgreso);
 
           await tx.saldo.upsert({
             where: {
@@ -221,14 +252,16 @@ router.patch(
             },
             update: {
               cantidad: saldoNuevoOrigen,
+              billetes: billetesNuevoOrigen,
+              monedas_fisicas: monedasNuevaOrigen,
               updated_at: new Date(),
             },
             create: {
               punto_atencion_id: transfer.origen_id,
               moneda_id: transfer.moneda_id,
               cantidad: saldoNuevoOrigen,
-              billetes: 0,
-              monedas_fisicas: 0,
+              billetes: billetesNuevoOrigen,
+              monedas_fisicas: monedasNuevaOrigen,
             },
           });
 
@@ -267,76 +300,179 @@ router.patch(
               numero_referencia: transfer.numero_recibo || transfer.id,
             },
           });
+
+          // 3. Actualizar saldo del punto destino (sumar) - aprovechando la proporción del origen
+          // Obtener saldo anterior
+          const saldoDestino = await tx.saldo.findUnique({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: transfer.destino_id,
+                moneda_id: transfer.moneda_id,
+              },
+            },
+          });
+          const saldoAnteriorDestino = Number(saldoDestino?.cantidad || 0);
+          const billetesAnteriorDestino = Number(saldoDestino?.billetes || 0);
+          const monedasAnteriorDestino = Number(saldoDestino?.monedas_fisicas || 0);
+          const saldoNuevoDestino = saldoAnteriorDestino + Number(transfer.monto);
+          
+          // ✅ Para ingreso, mantener la proporción del origen si es posible
+          let billetesIngresoDestino = 0;
+          let monedasIngresoDestino = 0;
+          
+          const totalFisicoOrigen = billetesAnterior + monedasAnterior;
+          if (totalFisicoOrigen > 0) {
+            const proporcionBilletes = billetesAnterior / totalFisicoOrigen;
+            const proporcionMonedas = monedasAnterior / totalFisicoOrigen;
+            
+            billetesIngresoDestino = Number(transfer.monto) * proporcionBilletes;
+            monedasIngresoDestino = Number(transfer.monto) * proporcionMonedas;
+          } else {
+            // Si origen no tenía desglose, distribuir 50/50
+            billetesIngresoDestino = Number(transfer.monto) / 2;
+            monedasIngresoDestino = Number(transfer.monto) / 2;
+          }
+          
+          const billetesNuevoDestino = billetesAnteriorDestino + billetesIngresoDestino;
+          const monedasNuevaDestino = monedasAnteriorDestino + monedasIngresoDestino;
+
+          await tx.saldo.upsert({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: transfer.destino_id,
+                moneda_id: transfer.moneda_id,
+              },
+            },
+            update: {
+              cantidad: saldoNuevoDestino,
+              billetes: billetesNuevoDestino,
+              monedas_fisicas: monedasNuevaDestino,
+              updated_at: new Date(),
+            },
+            create: {
+              punto_atencion_id: transfer.destino_id,
+              moneda_id: transfer.moneda_id,
+              cantidad: saldoNuevoDestino,
+              billetes: billetesNuevoDestino,
+              monedas_fisicas: monedasNuevaDestino,
+            },
+          });
+
+          // Registrar movimiento de entrada en MovimientoSaldo (dentro de la transacción)
+          await registrarMovimientoSaldo(
+            {
+              puntoAtencionId: transfer.destino_id,
+              monedaId: transfer.moneda_id,
+              tipoMovimiento: TipoMovimiento.INGRESO,
+              monto: Number(transfer.monto),
+              saldoAnterior: saldoAnteriorDestino,
+              saldoNuevo: saldoNuevoDestino,
+              tipoReferencia: TipoReferencia.TRANSFER,
+              referenciaId: transfer.id,
+              descripcion: `Transferencia de entrada desde ${
+                transferAprobada.origen?.nombre || "Externa"
+              } - ${transfer.monto}`,
+              usuarioId: req.user!.id,
+            },
+            tx
+          ); // ⚠️ Pasar el cliente de transacción para atomicidad
+
+          // Registrar movimiento de entrada en HistorialSaldo (legacy)
+          await tx.historialSaldo.create({
+            data: {
+              punto_atencion_id: transfer.destino_id,
+              moneda_id: transfer.moneda_id,
+              usuario_id: req.user!.id,
+              cantidad_anterior: saldoAnteriorDestino,
+              cantidad_incrementada: Number(transfer.monto),
+              cantidad_nueva: saldoNuevoDestino,
+              tipo_movimiento: "INGRESO",
+              descripcion: `Transferencia de entrada desde ${
+                transferAprobada.origen?.nombre || "Externa"
+              } - ${transfer.monto}`,
+              numero_referencia: transfer.numero_recibo || transfer.id,
+            },
+          });
+        } else {
+          // Si NO hay origen, solo actualizar destino (sin cambios en billetes/monedas)
+          const saldoDestino = await tx.saldo.findUnique({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: transfer.destino_id,
+                moneda_id: transfer.moneda_id,
+              },
+            },
+          });
+          const saldoAnteriorDestino = Number(saldoDestino?.cantidad || 0);
+          const billetesAnteriorDestino = Number(saldoDestino?.billetes || 0);
+          const monedasAnteriorDestino = Number(saldoDestino?.monedas_fisicas || 0);
+          const saldoNuevoDestino = saldoAnteriorDestino + Number(transfer.monto);
+          
+          // Distribuir 50/50 si no hay origen
+          const billetesIngresoDestino = Number(transfer.monto) / 2;
+          const monedasIngresoDestino = Number(transfer.monto) / 2;
+          
+          const billetesNuevoDestino = billetesAnteriorDestino + billetesIngresoDestino;
+          const monedasNuevaDestino = monedasAnteriorDestino + monedasIngresoDestino;
+
+          await tx.saldo.upsert({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: transfer.destino_id,
+                moneda_id: transfer.moneda_id,
+              },
+            },
+            update: {
+              cantidad: saldoNuevoDestino,
+              billetes: billetesNuevoDestino,
+              monedas_fisicas: monedasNuevaDestino,
+              updated_at: new Date(),
+            },
+            create: {
+              punto_atencion_id: transfer.destino_id,
+              moneda_id: transfer.moneda_id,
+              cantidad: saldoNuevoDestino,
+              billetes: billetesNuevoDestino,
+              monedas_fisicas: monedasNuevaDestino,
+            },
+          });
+
+          // Registrar movimiento de entrada en MovimientoSaldo (dentro de la transacción)
+          await registrarMovimientoSaldo(
+            {
+              puntoAtencionId: transfer.destino_id,
+              monedaId: transfer.moneda_id,
+              tipoMovimiento: TipoMovimiento.INGRESO,
+              monto: Number(transfer.monto),
+              saldoAnterior: saldoAnteriorDestino,
+              saldoNuevo: saldoNuevoDestino,
+              tipoReferencia: TipoReferencia.TRANSFER,
+              referenciaId: transfer.id,
+              descripcion: `Transferencia de entrada desde ${
+                transferAprobada.origen?.nombre || "Externa"
+              } - ${transfer.monto}`,
+              usuarioId: req.user!.id,
+            },
+            tx
+          ); // ⚠️ Pasar el cliente de transacción para atomicidad
+
+          // Registrar movimiento de entrada en HistorialSaldo (legacy)
+          await tx.historialSaldo.create({
+            data: {
+              punto_atencion_id: transfer.destino_id,
+              moneda_id: transfer.moneda_id,
+              usuario_id: req.user!.id,
+              cantidad_anterior: saldoAnteriorDestino,
+              cantidad_incrementada: Number(transfer.monto),
+              cantidad_nueva: saldoNuevoDestino,
+              tipo_movimiento: "INGRESO",
+              descripcion: `Transferencia de entrada desde ${
+                transferAprobada.origen?.nombre || "Externa"
+              } - ${transfer.monto}`,
+              numero_referencia: transfer.numero_recibo || transfer.id,
+            },
+          });
         }
-
-        // 3. Actualizar saldo del punto destino (sumar)
-        // Obtener saldo anterior
-        const saldoDestino = await tx.saldo.findUnique({
-          where: {
-            punto_atencion_id_moneda_id: {
-              punto_atencion_id: transfer.destino_id,
-              moneda_id: transfer.moneda_id,
-            },
-          },
-        });
-        const saldoAnteriorDestino = Number(saldoDestino?.cantidad || 0);
-        const saldoNuevoDestino = saldoAnteriorDestino + Number(transfer.monto);
-
-        await tx.saldo.upsert({
-          where: {
-            punto_atencion_id_moneda_id: {
-              punto_atencion_id: transfer.destino_id,
-              moneda_id: transfer.moneda_id,
-            },
-          },
-          update: {
-            cantidad: saldoNuevoDestino,
-            updated_at: new Date(),
-          },
-          create: {
-            punto_atencion_id: transfer.destino_id,
-            moneda_id: transfer.moneda_id,
-            cantidad: saldoNuevoDestino,
-            billetes: 0,
-            monedas_fisicas: 0,
-          },
-        });
-
-        // Registrar movimiento de entrada en MovimientoSaldo (dentro de la transacción)
-        await registrarMovimientoSaldo(
-          {
-            puntoAtencionId: transfer.destino_id,
-            monedaId: transfer.moneda_id,
-            tipoMovimiento: TipoMovimiento.INGRESO,
-            monto: Number(transfer.monto),
-            saldoAnterior: saldoAnteriorDestino,
-            saldoNuevo: saldoNuevoDestino,
-            tipoReferencia: TipoReferencia.TRANSFER,
-            referenciaId: transfer.id,
-            descripcion: `Transferencia de entrada desde ${
-              transferAprobada.origen?.nombre || "Externa"
-            } - ${transfer.monto}`,
-            usuarioId: req.user!.id,
-          },
-          tx
-        ); // ⚠️ Pasar el cliente de transacción para atomicidad
-
-        // Registrar movimiento de entrada en HistorialSaldo (legacy)
-        await tx.historialSaldo.create({
-          data: {
-            punto_atencion_id: transfer.destino_id,
-            moneda_id: transfer.moneda_id,
-            usuario_id: req.user!.id,
-            cantidad_anterior: saldoAnteriorDestino,
-            cantidad_incrementada: Number(transfer.monto),
-            cantidad_nueva: saldoNuevoDestino,
-            tipo_movimiento: "INGRESO",
-            descripcion: `Transferencia de entrada desde ${
-              transferAprobada.origen?.nombre || "Externa"
-            } - ${transfer.monto}`,
-            numero_referencia: transfer.numero_recibo || transfer.id,
-          },
-        });
 
         return transferAprobada;
       });

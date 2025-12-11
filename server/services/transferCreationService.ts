@@ -310,9 +310,45 @@ export const transferCreationService = {
 
     // === EFECTIVO (afecta cuadre)
     if (efectivo > 0) {
-      const { cantidad: antEf } = await getSaldo(destino_id, moneda_id);
+      // Obtener desglose físico si está disponible
+      let billetes = 0;
+      let monedas = 0;
+      if (typeof (args as any).detalle_divisas === "object" && (args as any).detalle_divisas !== null) {
+        billetes = Number((args as any).detalle_divisas.billetes ?? 0);
+        monedas = Number((args as any).detalle_divisas.monedas ?? 0);
+        // Si el total no cuadra, ajustar todo a billetes
+        if ((billetes + monedas).toFixed(2) !== efectivo.toFixed(2)) {
+          billetes = efectivo;
+          monedas = 0;
+        }
+      } else {
+        billetes = efectivo;
+        monedas = 0;
+      }
+
+      // Leer saldo actual
+      const saldoActual = await getSaldo(destino_id, moneda_id);
+      const antEf = saldoActual.cantidad || 0;
+      const antBil = (saldoActual as any).billetes ?? 0;
+      const antMon = (saldoActual as any).monedas_fisicas ?? 0;
       const nuevoEf = +(antEf + efectivo).toFixed(2);
-      await upsertSaldoEfectivo(destino_id, moneda_id, nuevoEf, usuario_id);
+      const nuevoBil = +(Number(antBil) + billetes).toFixed(2);
+      const nuevoMon = +(Number(antMon) + monedas).toFixed(2);
+
+      // Actualizar saldo con desglose
+      await prisma.saldo.update({
+        where: {
+          punto_atencion_id_moneda_id: {
+            punto_atencion_id: destino_id,
+            moneda_id: moneda_id,
+          },
+        },
+        data: {
+          cantidad: nuevoEf,
+          billetes: nuevoBil,
+          monedas_fisicas: nuevoMon,
+        },
+      });
 
       await logMovimientoSaldo({
         punto_atencion_id: destino_id,
@@ -418,9 +454,45 @@ export const transferCreationService = {
 
     // === EFECTIVO (afecta cuadre) - RESTAR del origen
     if (efectivo > 0) {
-      const { cantidad: antEf } = await getSaldo(origen_id, moneda_id);
+      // Obtener desglose físico si está disponible
+      let billetes = 0;
+      let monedas = 0;
+      if (typeof (args as any).detalle_divisas === "object" && (args as any).detalle_divisas !== null) {
+        billetes = Number((args as any).detalle_divisas.billetes ?? 0);
+        monedas = Number((args as any).detalle_divisas.monedas ?? 0);
+        // Si el total no cuadra, ajustar todo a billetes
+        if ((billetes + monedas).toFixed(2) !== efectivo.toFixed(2)) {
+          billetes = efectivo;
+          monedas = 0;
+        }
+      } else {
+        billetes = efectivo;
+        monedas = 0;
+      }
+
+      // Leer saldo actual
+      const saldoActual = await getSaldo(origen_id, moneda_id);
+      const antEf = saldoActual.cantidad || 0;
+      const antBil = (saldoActual as any).billetes ?? 0;
+      const antMon = (saldoActual as any).monedas_fisicas ?? 0;
       const nuevoEf = +(antEf - efectivo).toFixed(2);
-      await upsertSaldoEfectivo(origen_id, moneda_id, nuevoEf, usuario_id);
+      const nuevoBil = +(Number(antBil) - billetes).toFixed(2);
+      const nuevoMon = +(Number(antMon) - monedas).toFixed(2);
+
+      // Actualizar saldo con desglose
+      await prisma.saldo.update({
+        where: {
+          punto_atencion_id_moneda_id: {
+            punto_atencion_id: origen_id,
+            moneda_id: moneda_id,
+          },
+        },
+        data: {
+          cantidad: nuevoEf,
+          billetes: nuevoBil,
+          monedas_fisicas: nuevoMon,
+        },
+      });
 
       await logMovimientoSaldo({
         punto_atencion_id: origen_id,

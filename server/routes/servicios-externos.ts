@@ -541,6 +541,8 @@ router.delete(
             tipo_movimiento: true,
             usuario_id: true,
             fecha: true,
+            billetes: true,
+            monedas_fisicas: true,
           },
         });
         if (!mov) {
@@ -621,9 +623,25 @@ router.delete(
         const nuevoGeneral = anteriorGeneral + deltaGeneral;
 
         if (saldoGeneral) {
+          const billetes = Number(mov.billetes || 0);
+          const monedas = Number(mov.monedas_fisicas || 0);
+          
+          const billetesSiguientes = mov.tipo_movimiento === "INGRESO"
+            ? (saldoGeneral.billetes ? Number(saldoGeneral.billetes) + billetes : billetes)
+            : (saldoGeneral.billetes ? Number(saldoGeneral.billetes) - billetes : -billetes);
+          
+          const monedasSiguientes = mov.tipo_movimiento === "INGRESO"
+            ? (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) + monedas : monedas)
+            : (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) - monedas : -monedas);
+          
           await tx.saldo.update({
             where: { id: saldoGeneral.id },
-            data: { cantidad: nuevoGeneral, updated_at: new Date() },
+            data: { 
+              cantidad: nuevoGeneral,
+              billetes: Math.max(0, billetesSiguientes),
+              monedas_fisicas: Math.max(0, monedasSiguientes),
+              updated_at: new Date() 
+            },
           });
         } else if (nuevoGeneral !== 0) {
           await tx.saldo.create({
@@ -631,6 +649,8 @@ router.delete(
               punto_atencion_id: mov.punto_atencion_id,
               moneda_id: mov.moneda_id,
               cantidad: nuevoGeneral,
+              billetes: mov.tipo_movimiento === "EGRESO" ? Number(mov.billetes || 0) : undefined,
+              monedas_fisicas: mov.tipo_movimiento === "EGRESO" ? Number(mov.monedas_fisicas || 0) : undefined,
               updated_at: new Date(),
             },
           });

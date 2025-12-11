@@ -188,20 +188,62 @@ router.post("/", authenticateToken, async (req, res) => {
         await tx.detalleCuadreCaja.createMany({ data: payload });
       }
 
-      // Si el cierre es definitivo, cerrar jornada activa del usuario y liberar punto
+      // Si el cierre es definitivo, actualizar saldos, cerrar jornada y liberar punto
       if (tipo_cierre === "CERRADO") {
-        await tx.jornada.updateMany({
+        // Actualizar tabla Saldo con el conteo_fisico (saldo cuadrado = saldo inicial siguiente día)
+        if (detalles.length > 0) {
+          for (const detalle of detalles) {
+            const conteoFisico = asNumber(detalle.conteo_fisico);
+            const billetes = asNumber(detalle.billetes);
+            const monedas_fisicas = asNumber(detalle.monedas);
+
+            await tx.saldo.upsert({
+              where: {
+                punto_atencion_id_moneda_id: {
+                  punto_atencion_id: puntoAtencionId,
+                  moneda_id: detalle.moneda_id,
+                },
+              },
+              update: {
+                cantidad: conteoFisico,
+                billetes: billetes,
+                monedas_fisicas: monedas_fisicas,
+                updated_at: new Date(),
+              },
+              create: {
+                punto_atencion_id: puntoAtencionId,
+                moneda_id: detalle.moneda_id,
+                cantidad: conteoFisico,
+                billetes: billetes,
+                monedas_fisicas: monedas_fisicas,
+              },
+            });
+          }
+        }
+
+        // Cerrar jornada activa del usuario (si existe)
+        const jornadaActiva = await tx.jornada.findFirst({
           where: {
             usuario_id: usuario.id,
             punto_atencion_id: puntoAtencionId,
-            estado: "ACTIVO",
+            fecha_salida: null,
+            estado: { in: ["ACTIVO", "ALMUERZO"] },
           },
-          data: {
-            fecha_salida: new Date(),
-            estado: "COMPLETADO",
-          },
+          orderBy: { fecha_inicio: "desc" },
         });
 
+        if (jornadaActiva) {
+          await tx.jornada.update({
+            where: { id: jornadaActiva.id },
+            data: {
+              fecha_salida: new Date(),
+              estado: "COMPLETADO",
+              observaciones: "Jornada finalizada automáticamente al completar cierre de caja",
+            },
+          });
+        }
+
+        // Liberar punto de atención del usuario
         await tx.usuario.update({
           where: { id: usuario.id },
           data: { punto_atencion_id: null },

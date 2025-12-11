@@ -171,10 +171,45 @@ router.post(
         });
       }
 
+      // ✅ NUEVA LÓGICA: Garantizar coherencia
       let cantidad = totalFromField;
-      if (billetesNum !== undefined || monedasNum !== undefined) {
-        cantidad = (billetesNum || 0) + (monedasNum || 0);
+      let incBilletes = round2(billetesNum ?? 0);
+      let incMonedas = round2(monedasNum ?? 0);
+
+      // Caso 1: Se envía CANTIDAD e DESGLOSE
+      if (hasCantidad && hasDesglose) {
+        cantidad = round2(cantidad);
+        const desgloseTotal = incBilletes + incMonedas;
+        
+        // ⚠️ Validar consistencia
+        if (Math.abs(cantidad - desgloseTotal) > 0.01) {
+          return res.status(400).json({
+            success: false,
+            error: "Inconsistencia de datos",
+            details: {
+              mensaje: "La cantidad_inicial debe ser igual a billetes + monedas",
+              cantidad_inicial: cantidad,
+              billetes: incBilletes,
+              monedas: incMonedas,
+              suma_recibida: desgloseTotal,
+              diferencia: Math.abs(cantidad - desgloseTotal),
+            },
+          });
+        }
       }
+      // Caso 2: Se envía SOLO DESGLOSE
+      else if (!hasCantidad && hasDesglose) {
+        cantidad = round2(incBilletes + incMonedas);
+      }
+      // Caso 3: Se envía SOLO CANTIDAD
+      else if (hasCantidad && !hasDesglose) {
+        cantidad = round2(cantidad);
+        // Distribuir 50/50 para mantener consistencia
+        incBilletes = round2(cantidad / 2);
+        incMonedas = round2(cantidad - incBilletes); // Asegurar suma exacta
+      }
+
+      // Validaciones finales
       if (!Number.isFinite(cantidad) || isNaN(cantidad)) {
         return res
           .status(400)
@@ -185,11 +220,20 @@ router.post(
           .status(400)
           .json({ success: false, error: "La cantidad debe ser mayor a 0" });
       }
-
-      // Redondeo para cumplir DECIMAL(15,2)
-      cantidad = round2(cantidad);
-      const incBilletes = round2(billetesNum ?? 0);
-      const incMonedas = round2(monedasNum ?? 0);
+      
+      // Verificar que billetes + monedas = cantidad (dentro de tolerancia de redondeo)
+      if (Math.abs((incBilletes + incMonedas) - cantidad) > 0.01) {
+        return res.status(400).json({
+          success: false,
+          error: "Error interno: desglose no suma correctamente",
+          details: {
+            cantidad,
+            billetes: incBilletes,
+            monedas: incMonedas,
+            suma: incBilletes + incMonedas,
+          },
+        });
+      }
 
       // Transacción: incrementar sin usar { increment } (evita fallos con NULL históricos)
       const resultado = await prisma.$transaction(async (tx) => {

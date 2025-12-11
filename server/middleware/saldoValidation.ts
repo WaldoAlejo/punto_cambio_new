@@ -477,60 +477,34 @@ export async function validarSaldoCambioDivisa(
       });
     }
 
-    // ✅ VALIDAR BILLETES Y MONEDAS SI SE ESPECIFICARON
-    if (
-      efectivoRequerido > 0 &&
-      (divisas_recibidas_billetes || divisas_recibidas_monedas)
-    ) {
-      const billetesRecibidos = Number(divisas_recibidas_billetes || 0);
-      const monedasRecibidas = Number(divisas_recibidas_monedas || 0);
-      const totalRecibido = billetesRecibidos + monedasRecibidas;
+    // ✅ VALIDAR DISPONIBILIDAD DE EFECTIVO FÍSICO
+    // IMPORTANTE: No validamos proporciones específicas de billetes/monedas
+    // porque el cliente especifica cómo quiere RECIBIR, pero el punto entrega lo que TIENE
+    // Simplemente validamos que hay SUFICIENTE dinero físico en total
+    
+    if (efectivoRequerido > 0) {
+      const saldoFisicoTotal = saldoBilletes + saldoMonedas;
+      
+      // Validación principal: ¿hay suficiente dinero físico?
+      if (saldoFisicoTotal < efectivoRequerido) {
+        const punto = await prisma.puntoAtencion.findUnique({
+          where: { id: punto_atencion_id },
+        });
 
-      if (totalRecibido > 0) {
-        // Calcular proporción de billetes y monedas requeridos
-        const proporcionBilletes = billetesRecibidos / totalRecibido;
-        const proporcionMonedas = monedasRecibidas / totalRecibido;
-
-        const billetesRequeridos = efectivoRequerido * proporcionBilletes;
-        const monedasRequeridas = efectivoRequerido * proporcionMonedas;
-
-        // Validar billetes
-        if (saldoBilletes < billetesRequeridos) {
-          const punto = await prisma.puntoAtencion.findUnique({
-            where: { id: punto_atencion_id },
-          });
-
-          return res.status(400).json({
-            error: "BILLETES_INSUFICIENTES",
-            message: `Billetes insuficientes en ${moneda?.codigo} para realizar el cambio en ${punto?.nombre}`,
-            details: {
-              punto: punto?.nombre,
-              moneda: moneda?.codigo,
-              saldoBilletes: saldoBilletes,
-              billetesRequeridos: billetesRequeridos,
-              deficit: billetesRequeridos - saldoBilletes,
-            },
-          });
-        }
-
-        // Validar monedas
-        if (saldoMonedas < monedasRequeridas) {
-          const punto = await prisma.puntoAtencion.findUnique({
-            where: { id: punto_atencion_id },
-          });
-
-          return res.status(400).json({
-            error: "MONEDAS_INSUFICIENTES",
-            message: `Monedas insuficientes en ${moneda?.codigo} para realizar el cambio en ${punto?.nombre}`,
-            details: {
-              punto: punto?.nombre,
-              moneda: moneda?.codigo,
-              saldoMonedas: saldoMonedas,
-              monedasRequeridas: monedasRequeridas,
-              deficit: monedasRequeridas - saldoMonedas,
-            },
-          });
-        }
+        return res.status(400).json({
+          error: "SALDO_INSUFICIENTE_CAMBIO",
+          message: `Saldo físico insuficiente en ${moneda?.codigo} para realizar el cambio en ${punto?.nombre}. Disponible: ${saldoFisicoTotal.toFixed(2)} (${saldoBilletes.toFixed(2)} billetes + ${saldoMonedas.toFixed(2)} monedas), Requerido: ${efectivoRequerido.toFixed(2)}`,
+          details: {
+            punto: punto?.nombre,
+            moneda: moneda?.codigo,
+            saldoFisicoTotal: saldoFisicoTotal,
+            saldoBilletes: saldoBilletes,
+            saldoMonedas: saldoMonedas,
+            efectivoRequerido: efectivoRequerido,
+            deficit: efectivoRequerido - saldoFisicoTotal,
+            nota: "El sistema intentará usar billetes y monedas según lo disponible",
+          },
+        });
       }
     }
 

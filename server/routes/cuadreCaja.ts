@@ -1,8 +1,10 @@
 import express from "express";
+import prisma from "../lib/prisma.js";
 import { pool } from "../lib/database.js";
 import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import saldoReconciliationService from "../services/saldoReconciliationService.js";
 
 async function actualizarSaldoFisicoYLogico(
   puntoAtencionId: string,
@@ -235,22 +237,68 @@ router.get("/", authenticateToken, async (req, res) => {
     const monedas = monedasResult.rows;
     logger.info(`📊 Monedas encontradas: ${monedas.length}`);
 
-    // Calcular saldos para cada moneda
+    // Calcular saldos para cada moneda (incluyendo TODAS las monedas activas)
     const detalles: DetalleCuadreCaja[] = [];
 
     for (const moneda of monedas) {
       try {
         logger.info(`📦 Procesando moneda: ${moneda.codigo}`);
         
-        // Obtener saldo de apertura
+        // Obtener saldo de apertura (último conteo físico del cierre anterior)
         const saldoApertura = await calcularSaldoApertura(
           puntoAtencionId,
           moneda.id,
           fechaInicioDia
         );
 
-        // Por ahora, saldo de cierre = saldo de apertura (sin movimientos)
-        const saldoCierre = saldoApertura;
+        // Calcular saldo teórico (cierre) usando reconciliación de movimientos
+        const saldoCierreTeórico = await saldoReconciliationService.calcularSaldoReal(
+          puntoAtencionId,
+          moneda.id
+        );
+
+        // Obtener saldo físico actual de la tabla Saldo
+        const saldoFísico = await prisma.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: puntoAtencionId,
+              moneda_id: moneda.id,
+            },
+          },
+          select: {
+            cantidad: true,
+            billetes: true,
+            monedas_fisicas: true,
+          },
+        });
+
+        const conteoFísico = saldoFísico ? Number(saldoFísico.cantidad) : saldoCierreTeórico;
+        const billetes = saldoFísico ? Number(saldoFísico.billetes) : 0;
+        const monedasFísicas = saldoFísico ? Number(saldoFísico.monedas_fisicas) : 0;
+
+        // Calcular movimientos del período (ingresos y egresos)
+        const movimientosPeriodo = await prisma.movimientoSaldo.findMany({
+          where: {
+            punto_atencion_id: puntoAtencionId,
+            moneda_id: moneda.id,
+            fecha: {
+              gte: new Date(fechaInicioDia),
+              lt: new Date(fechaInicioDia.getTime() + 24 * 60 * 60 * 1000),
+            },
+          },
+        });
+
+        let ingresos = 0;
+        let egresos = 0;
+
+        for (const mov of movimientosPeriodo) {
+          const monto = Number(mov.monto);
+          if (monto > 0) {
+            ingresos += monto;
+          } else {
+            egresos += Math.abs(monto);
+          }
+        }
 
         // Obtener o crear detalle del cuadre
         const detalleResult = await pool.query<DetalleCuadreCaja>(
@@ -260,27 +308,47 @@ router.get("/", authenticateToken, async (req, res) => {
         );
 
         let detalle = detalleResult.rows[0];
+        const diferencia = Number((conteoFísico - saldoCierreTeórico).toFixed(2));
+
         if (!detalle) {
           const insertResult = await pool.query<DetalleCuadreCaja>(
             `INSERT INTO "DetalleCuadreCaja" (
               id, cuadre_id, moneda_id, saldo_apertura, saldo_cierre, conteo_fisico, 
               diferencia, billetes, monedas_fisicas, movimientos_periodo
-            ) VALUES (uuid_generate_v4(), $1::uuid, $2::uuid, $3, $4, 0, 0, 0, 0, 0)
+            ) VALUES (uuid_generate_v4(), $1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *`,
-            [cuadre.id, moneda.id, saldoApertura, saldoCierre]
+            [cuadre.id, moneda.id, saldoApertura, saldoCierreTeórico, conteoFísico, diferencia, billetes, monedasFísicas, movimientosPeriodo.length]
           );
           detalle = insertResult.rows[0];
-          logger.info(`✅ Detalle creado para ${moneda.codigo}`);
+          logger.info(`✅ Detalle creado para ${moneda.codigo}`, {
+            saldo_apertura: saldoApertura,
+            saldo_cierre_teorico: saldoCierreTeórico,
+            conteo_fisico: conteoFísico,
+            ingresos,
+            egresos,
+          });
         } else {
           await pool.query(
             `UPDATE "DetalleCuadreCaja"
-              SET saldo_apertura = $1, saldo_cierre = $2
-              WHERE id = $3::uuid`,
-            [saldoApertura, saldoCierre, detalle.id]
+              SET saldo_apertura = $1, saldo_cierre = $2, conteo_fisico = $3,
+                  diferencia = $4, billetes = $5, monedas_fisicas = $6, movimientos_periodo = $7
+              WHERE id = $8::uuid`,
+            [saldoApertura, saldoCierreTeórico, conteoFísico, diferencia, billetes, monedasFísicas, movimientosPeriodo.length, detalle.id]
           );
           detalle.saldo_apertura = saldoApertura;
-          detalle.saldo_cierre = saldoCierre;
-          logger.info(`✅ Detalle actualizado para ${moneda.codigo}`);
+          detalle.saldo_cierre = saldoCierreTeórico;
+          detalle.conteo_fisico = conteoFísico;
+          detalle.diferencia = diferencia;
+          detalle.billetes = billetes;
+          detalle.monedas_fisicas = monedasFísicas;
+          detalle.movimientos_periodo = movimientosPeriodo.length;
+          logger.info(`✅ Detalle actualizado para ${moneda.codigo}`, {
+            saldo_apertura: saldoApertura,
+            saldo_cierre_teorico: saldoCierreTeórico,
+            conteo_fisico: conteoFísico,
+            ingresos,
+            egresos,
+          });
         }
 
         detalle.moneda = moneda;
@@ -288,25 +356,54 @@ router.get("/", authenticateToken, async (req, res) => {
       } catch (monedaError) {
         logger.error(`❌ Error procesando moneda ${moneda.codigo}`, {
           error: monedaError instanceof Error ? monedaError.message : String(monedaError),
+          stack: monedaError instanceof Error ? monedaError.stack : undefined,
         });
       }
     }
 
     // Mapear detalles al formato esperado por el frontend
-    const detallesMapeados = detalles.map((detalle) => ({
-      moneda_id: detalle.moneda_id,
-      codigo: detalle.moneda?.codigo || "",
-      nombre: detalle.moneda?.nombre || "",
-      simbolo: detalle.moneda?.simbolo || "",
-      saldo_apertura: Number(detalle.saldo_apertura) || 0,
-      saldo_cierre: Number(detalle.saldo_cierre) || 0,
-      conteo_fisico: Number(detalle.conteo_fisico) || 0,
-      billetes: detalle.billetes || 0,
-      monedas: detalle.monedas_fisicas || 0,
-      ingresos_periodo: 0,
-      egresos_periodo: 0,
-      movimientos_periodo: 0,
-    }));
+    const detallesMapeados = await Promise.all(
+      detalles.map(async (detalle) => {
+        // Calcular ingresos y egresos del período para este detalle
+        const movimientosPeriodo = await prisma.movimientoSaldo.findMany({
+          where: {
+            punto_atencion_id: puntoAtencionId,
+            moneda_id: detalle.moneda_id,
+            fecha: {
+              gte: new Date(fechaInicioDia),
+              lt: new Date(fechaInicioDia.getTime() + 24 * 60 * 60 * 1000),
+            },
+          },
+        });
+
+        let ingresos = 0;
+        let egresos = 0;
+
+        for (const mov of movimientosPeriodo) {
+          const monto = Number(mov.monto);
+          if (monto > 0) {
+            ingresos += monto;
+          } else {
+            egresos += Math.abs(monto);
+          }
+        }
+
+        return {
+          moneda_id: detalle.moneda_id,
+          codigo: detalle.moneda?.codigo || "",
+          nombre: detalle.moneda?.nombre || "",
+          simbolo: detalle.moneda?.simbolo || "",
+          saldo_apertura: Number(detalle.saldo_apertura) || 0,
+          saldo_cierre: Number(detalle.saldo_cierre) || 0,
+          conteo_fisico: Number(detalle.conteo_fisico) || 0,
+          billetes: detalle.billetes || 0,
+          monedas: detalle.monedas_fisicas || 0,
+          ingresos_periodo: ingresos,
+          egresos_periodo: egresos,
+          movimientos_periodo: detalle.movimientos_periodo || 0,
+        };
+      })
+    );
 
     logger.info("✅ Cuadre de caja obtenido", {
       cuadre_id: cuadre.id,
