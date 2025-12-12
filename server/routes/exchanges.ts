@@ -748,8 +748,12 @@ router.post(
           moneda_origen_id
         );
         const origenAnteriorEf = num(saldoOrigen?.cantidad);
-        const origenAnteriorBil = num(saldoOrigen?.billetes);
-        const origenAnteriorMon = num(saldoOrigen?.monedas_fisicas);
+        let origenAnteriorBil = num(saldoOrigen?.billetes);
+        let origenAnteriorMon = num(saldoOrigen?.monedas_fisicas);
+        // Fallback: si ambos son 0 pero el total físico es positivo, asignar todo a billetes
+        if (origenAnteriorBil === 0 && origenAnteriorMon === 0 && origenAnteriorEf > 0) {
+          origenAnteriorBil = origenAnteriorEf;
+        }
         const origenAnteriorBk =
           typeof saldoOrigen?.bancos !== "undefined"
             ? num(saldoOrigen?.bancos)
