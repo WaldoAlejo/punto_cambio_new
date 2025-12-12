@@ -443,8 +443,13 @@ export async function validarSaldoCambioDivisa(
     });
 
     const saldoTotal = Number(saldo?.cantidad || 0);
-    const saldoBilletes = Number(saldo?.billetes || 0);
-    const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
+    let saldoBilletes = Number(saldo?.billetes || 0);
+    let saldoMonedas = Number(saldo?.monedas_fisicas || 0);
+
+    // Fallback: si ambos son 0 pero el total es mayor a 0, usar el total como billetes
+    if (saldoBilletes === 0 && saldoMonedas === 0 && saldoTotal > 0) {
+      saldoBilletes = saldoTotal;
+    }
 
 
     // Calcular cuánto efectivo se necesita (excluyendo transferencias)
