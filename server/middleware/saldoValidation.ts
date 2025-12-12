@@ -560,6 +560,10 @@ export async function validarSaldoCambioDivisa(
 
     next();
   } catch (error) {
+    // Confirmar entrada al catch
+    console.log("Entrando a catch de validación de cambio de divisa");
+    // Log detallado del error para stacktrace
+    console.error("[VALIDACION_CAMBIO_DIVISA][ERROR]", error);
     logger.error("Error validando saldo para cambio de divisa:", {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
