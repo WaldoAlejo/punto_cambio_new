@@ -860,8 +860,12 @@ router.post(
           moneda_destino_id
         );
         const destinoAnteriorEf = num(saldoDestino?.cantidad);
-        const destinoAnteriorBil = num(saldoDestino?.billetes);
-        const destinoAnteriorMon = num(saldoDestino?.monedas_fisicas);
+        let destinoAnteriorBil = num(saldoDestino?.billetes);
+        let destinoAnteriorMon = num(saldoDestino?.monedas_fisicas);
+        // Fallback: si ambos son 0 pero el total físico es positivo, asignar todo a billetes
+        if (destinoAnteriorBil === 0 && destinoAnteriorMon === 0 && destinoAnteriorEf > 0) {
+          destinoAnteriorBil = destinoAnteriorEf;
+        }
         const destinoAnteriorBk =
           typeof saldoDestino?.bancos !== "undefined"
             ? num(saldoDestino?.bancos)
