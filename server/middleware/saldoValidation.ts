@@ -446,6 +446,7 @@ export async function validarSaldoCambioDivisa(
     const saldoBilletes = Number(saldo?.billetes || 0);
     const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
 
+
     // Calcular cuánto efectivo se necesita (excluyendo transferencias)
     let efectivoRequerido = montoValidar;
 
@@ -458,10 +459,37 @@ export async function validarSaldoCambioDivisa(
       }
     }
 
+    // LOG DETALLADO PARA DEPURACIÓN DE SALDO FÍSICO
+    logger.info("[VALIDACION_CAMBIO_DIVISA] Estado previo a validación de saldo físico", {
+      punto_atencion_id,
+      monedaValidar,
+      saldoTotal,
+      saldoBilletes,
+      saldoMonedas,
+      efectivoRequerido,
+      metodo_entrega,
+      usd_entregado_efectivo,
+      usd_entregado_transfer,
+      montoValidar,
+      tipo_operacion,
+      moneda_origen_id,
+      moneda_destino_id,
+      monto_origen,
+      monto_destino,
+    });
+
     // Validar saldo total de efectivo
     if (saldoTotal < efectivoRequerido) {
       const punto = await prisma.puntoAtencion.findUnique({
         where: { id: punto_atencion_id },
+      });
+
+      logger.warn("[VALIDACION_CAMBIO_DIVISA] Saldo total insuficiente", {
+        punto: punto?.nombre,
+        moneda: moneda?.codigo,
+        saldoActual: saldoTotal,
+        montoRequerido: efectivoRequerido,
+        deficit: efectivoRequerido - saldoTotal,
       });
 
       return res.status(400).json({
@@ -484,11 +512,28 @@ export async function validarSaldoCambioDivisa(
     
     if (efectivoRequerido > 0) {
       const saldoFisicoTotal = saldoBilletes + saldoMonedas;
+
+      logger.info("[VALIDACION_CAMBIO_DIVISA] Validando saldo físico total", {
+        saldoFisicoTotal,
+        saldoBilletes,
+        saldoMonedas,
+        efectivoRequerido,
+      });
       
       // Validación principal: ¿hay suficiente dinero físico?
       if (saldoFisicoTotal < efectivoRequerido) {
         const punto = await prisma.puntoAtencion.findUnique({
           where: { id: punto_atencion_id },
+        });
+
+        logger.warn("[VALIDACION_CAMBIO_DIVISA] Saldo físico insuficiente", {
+          punto: punto?.nombre,
+          moneda: moneda?.codigo,
+          saldoFisicoTotal,
+          saldoBilletes,
+          saldoMonedas,
+          efectivoRequerido,
+          deficit: efectivoRequerido - saldoFisicoTotal,
         });
 
         return res.status(400).json({
