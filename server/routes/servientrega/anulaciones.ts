@@ -423,11 +423,25 @@ router.post(
               "💰 Revirtiendo ingreso de servicio externo por anulación de guía..."
             );
             try {
+              // Obtener el movimiento original para recuperar billetes y monedas
+              const movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
+                where: {
+                  numero_referencia: solicitudActualizada.numero_guia,
+                  tipo_movimiento: "INGRESO",
+                },
+                select: {
+                  billetes: true,
+                  monedas_fisicas: true,
+                },
+              });
+
               const resultadoReversal =
                 await dbService.revertirIngresoServicioExterno(
                   guia.punto_atencion_id,
                   Number(guia.costo_envio),
-                  solicitudActualizada.numero_guia
+                  solicitudActualizada.numero_guia,
+                  movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : undefined,
+                  movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : undefined
                 );
 
               console.log(

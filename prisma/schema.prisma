@@ -433,8 +433,8 @@ model DetalleCuadreCaja {
   saldo_apertura        Decimal    @db.Decimal(15, 2)
   saldo_cierre          Decimal    @db.Decimal(15, 2)
   conteo_fisico         Decimal    @db.Decimal(15, 2)
-  billetes              Int        @default(0)
-  monedas_fisicas       Int        @default(0)
+  billetes              Decimal    @default(0) @db.Decimal(15, 2)
+  monedas_fisicas       Decimal    @default(0) @db.Decimal(15, 2)
   diferencia            Decimal    @default(0) @db.Decimal(15, 2)
   movimientos_periodo   Int        @default(0)
   observaciones_detalle String?

@@ -300,10 +300,11 @@ router.post("/generar-guia", async (req, res) => {
       // Obtener punto de atención si está disponible (usar el que se capturó al inicio)
       let servientregaAlianza = "PUNTO CAMBIO SAS";
       let servientregaOficinaAlianza = "QUITO_PLAZA DEL VALLE_PC";
+      let punto: any = null;
 
       if (punto_atencion_id_captado) {
         try {
-          const punto = await prisma.puntoAtencion.findUnique({
+          punto = await prisma.puntoAtencion.findUnique({
             where: { id: punto_atencion_id_captado },
             select: {
               nombre: true,
@@ -411,6 +412,14 @@ router.post("/generar-guia", async (req, res) => {
         usuingreso: String(credentials.usuingreso),
         contrasenha: String(credentials.contrasenha),
       };
+
+      console.log("📌 PUNTO DE ATENCIÓN CONFIGURADO:", {
+        punto_atencion_id_captado,
+        agencia_codigo: punto?.servientrega_agencia_codigo,
+        agencia_nombre: punto?.servientrega_agencia_nombre,
+        alianza: servientregaAlianza,
+        alianza_oficina: servientregaOficinaAlianza,
+      });
     } else {
       // Ya viene formateado (tipo:"GeneracionGuia") → reorganizar en orden correcto
       const vd = Number(req.body?.valor_declarado ?? 0) || 0;

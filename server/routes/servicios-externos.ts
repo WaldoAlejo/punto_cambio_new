@@ -293,21 +293,29 @@ router.post(
         }
 
         if (saldoGeneral) {
+          const billetesMonto = typeof billetes === 'number' && !isNaN(billetes) ? billetes : 0;
+          const monedasFisicasMonto = typeof monedas_fisicas === 'number' && !isNaN(monedas_fisicas) ? monedas_fisicas : 0;
+          
+          const saldoBilletes = Number(saldoGeneral?.billetes ?? 0);
+          const saldoMonedas = Number(saldoGeneral?.monedas_fisicas ?? 0);
+          
+          let nuevoBilletes = saldoBilletes;
+          let nuevasMonedas = saldoMonedas;
+          
+          if (tipo_movimiento === "INGRESO") {
+            nuevoBilletes = saldoBilletes + billetesMonto;
+            nuevasMonedas = saldoMonedas + monedasFisicasMonto;
+          } else if (tipo_movimiento === "EGRESO") {
+            nuevoBilletes = saldoBilletes - billetesMonto;
+            nuevasMonedas = saldoMonedas - monedasFisicasMonto;
+          }
+          
           await tx.saldo.update({
             where: { id: saldoGeneral.id },
             data: {
               cantidad: nuevoSaldoGeneral,
-              billetes: billetes !== undefined
-                ? (saldoGeneral.billetes
-                    ? Number(saldoGeneral.billetes ?? 0) + Number(typeof billetes !== 'undefined' ? billetes : 0)
-                    : Number(typeof billetes !== 'undefined' ? billetes : 0))
-                : saldoGeneral.billetes,
-              monedas_fisicas: monedas_fisicas !== undefined
-                ? (saldoGeneral.monedas_fisicas
-                    ? Number(saldoGeneral.monedas_fisicas ?? 0) + Number(typeof monedas_fisicas !== 'undefined' ? monedas_fisicas : 0)
-                    : Number(typeof monedas_fisicas !== 'undefined' ? monedas_fisicas : 0))
-                : saldoGeneral.monedas_fisicas,
-              updated_at: new Date(),
+              billetes: nuevoBilletes >= 0 ? nuevoBilletes : saldoBilletes,
+              monedas_fisicas: nuevasMonedas >= 0 ? nuevasMonedas : saldoMonedas,
             },
           });
         } else if (nuevoSaldoGeneral !== 0) {
@@ -583,16 +591,23 @@ router.delete(
         const nuevoServicio = anteriorServicio + deltaServicio;
 
         if (saldoServicio) {
+          const billetes = Number(mov.billetes || 0);
+          const monedas = Number(mov.monedas_fisicas || 0);
+          
+          const nuevoBilletes = mov.tipo_movimiento === "INGRESO"
+            ? Math.max(0, (Number(saldoServicio.billetes ?? 0) + billetes))
+            : Math.max(0, (Number(saldoServicio.billetes ?? 0) - billetes));
+          
+          const nuevasMonedas = mov.tipo_movimiento === "INGRESO"
+            ? Math.max(0, (Number(saldoServicio.monedas_fisicas ?? 0) + monedas))
+            : Math.max(0, (Number(saldoServicio.monedas_fisicas ?? 0) - monedas));
+          
           await tx.servicioExternoSaldo.update({
             where: { id: saldoServicio.id },
             data: {
               cantidad: nuevoServicio,
-              billetes: (typeof mov.billetes === 'number' && !isNaN(mov.billetes)
-                ? (saldoServicio.billetes ?? 0) + mov.billetes
-                : saldoServicio.billetes ?? 0),
-              monedas_fisicas: (typeof mov.monedas_fisicas === 'number' && !isNaN(mov.monedas_fisicas)
-                ? (saldoServicio.monedas_fisicas ?? 0) + mov.monedas_fisicas
-                : saldoServicio.monedas_fisicas ?? 0),
+              billetes: nuevoBilletes,
+              monedas_fisicas: nuevasMonedas,
               updated_at: new Date(),
             },
           });
@@ -636,12 +651,12 @@ router.delete(
           const monedas = Number(mov.monedas_fisicas || 0);
           
           const billetesSiguientes = mov.tipo_movimiento === "INGRESO"
-            ? (saldoGeneral.billetes ? Number(saldoGeneral.billetes) + billetes : billetes)
-            : (saldoGeneral.billetes ? Number(saldoGeneral.billetes) - billetes : -billetes);
+            ? Math.max(0, (saldoGeneral.billetes ? Number(saldoGeneral.billetes) - billetes : -billetes))
+            : Math.max(0, (saldoGeneral.billetes ? Number(saldoGeneral.billetes) + billetes : billetes));
           
           const monedasSiguientes = mov.tipo_movimiento === "INGRESO"
-            ? (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) + monedas : monedas)
-            : (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) - monedas : -monedas);
+            ? Math.max(0, (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) - monedas : -monedas))
+            : Math.max(0, (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) + monedas : monedas));
           
           await tx.saldo.update({
             where: { id: saldoGeneral.id },

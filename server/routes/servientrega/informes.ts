@@ -16,12 +16,14 @@ router.get(
   async (req: express.Request, res: express.Response) => {
     try {
       const { desde, hasta, estado, punto_atencion_id } = req.query;
+      const usuario_id = req.user?.id;
 
       console.log("🔍 Obteniendo informes de guías:", {
         desde,
         hasta,
         estado,
         punto_atencion_id,
+        usuario_id,
       });
 
       // Obtener guías de la base de datos
@@ -30,6 +32,7 @@ router.get(
         hasta: hasta as string,
         estado: estado as string,
         punto_atencion_id: punto_atencion_id as string,
+        usuario_id,
       });
 
       // Transformar datos para el frontend
@@ -104,12 +107,14 @@ router.get(
   async (req: express.Request, res: express.Response) => {
     try {
       const { desde, hasta, estado, punto_atencion_id } = req.query;
+      const usuario_id = req.user?.id;
 
       console.log("📥 Exportando informes de guías:", {
         desde,
         hasta,
         estado,
         punto_atencion_id,
+        usuario_id,
       });
 
       // Obtener guías
@@ -118,6 +123,7 @@ router.get(
         hasta: hasta as string,
         estado: estado as string,
         punto_atencion_id: punto_atencion_id as string,
+        usuario_id,
       });
 
       // Crear archivo Excel

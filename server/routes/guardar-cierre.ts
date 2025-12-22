@@ -116,6 +116,31 @@ router.post("/", authenticateToken, async (req, res) => {
           })),
         });
       }
+
+      // Validar que billetes + monedas_fisicas = conteo_fisico
+      const breakdownInvalidos = detalles.filter((d) => {
+        const conteoFisico = asNumber(d.conteo_fisico);
+        const billetes = asNumber(d.billetes);
+        const monedas_fisicas = asNumber(d.monedas);
+        const suma = billetes + monedas_fisicas;
+        const diff = Math.abs(suma - conteoFisico);
+        return diff > 0.01; // Tolerancia para errores de redondeo
+      });
+
+      if (breakdownInvalidos.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "El desglose de billetes y monedas no coincide con el conteo físico total. Billetes + Monedas debe ser igual al conteo físico.",
+          detalles_invalidos: breakdownInvalidos.map((d) => ({
+            moneda_id: d.moneda_id,
+            conteo_fisico: asNumber(d.conteo_fisico),
+            billetes: asNumber(d.billetes),
+            monedas_fisicas: asNumber(d.monedas),
+            suma: asNumber(d.billetes) + asNumber(d.monedas),
+          })),
+        });
+      }
     }
 
     // Transacción para mantener consistencia entre header y detalles

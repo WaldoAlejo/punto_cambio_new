@@ -868,6 +868,7 @@ export class ServientregaDBService {
     hasta?: string;
     estado?: string;
     punto_atencion_id?: string;
+    usuario_id?: string;
   }) {
     const where: any = {};
     const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
@@ -913,6 +914,11 @@ export class ServientregaDBService {
           where.proceso = "Pendiente_Anulacion";
           break;
       }
+    }
+
+    // Filtro por usuario (si se proporciona)
+    if (filtros.usuario_id) {
+      where.usuario_id = filtros.usuario_id;
     }
 
     // Filtro por punto de atención
@@ -1485,6 +1491,12 @@ export class ServientregaDBService {
           where: { id: saldoGeneral.id },
           data: {
             cantidad: saldoGeneralNuevo,
+            billetes: (typeof billetes === 'number' && !isNaN(billetes)
+              ? Math.max(0, (saldoGeneral.billetes ? Number(saldoGeneral.billetes) : 0) - billetes)
+              : saldoGeneral.billetes ? Number(saldoGeneral.billetes) : 0),
+            monedas_fisicas: (typeof monedas === 'number' && !isNaN(monedas)
+              ? Math.max(0, (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) : 0) - monedas)
+              : saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) : 0),
             updated_at: new Date(),
           },
         });
@@ -1498,6 +1510,8 @@ export class ServientregaDBService {
             punto_atencion_id: puntoAtencionId,
             moneda_id: usdId,
             cantidad: saldoGeneralNuevo,
+            billetes: typeof billetes === 'number' ? -billetes : 0,
+            monedas_fisicas: typeof monedas === 'number' ? -monedas : 0,
           },
         });
       }
