@@ -356,10 +356,13 @@ router.post(
             }
           }
           
+          // Calcular cantidad como suma de todas las componentes
+          const cantidadActualizada = Math.max(0, nuevoBilletes) + Math.max(0, nuevasMonedas) + Math.max(0, nuevosBancos);
+          
           await tx.saldo.update({
             where: { id: saldoGeneral.id },
             data: {
-              cantidad: nuevoSaldoGeneral,
+              cantidad: cantidadActualizada,
               billetes: Math.max(0, nuevoBilletes),
               monedas_fisicas: Math.max(0, nuevasMonedas),
               bancos: Math.max(0, nuevosBancos),
@@ -388,11 +391,14 @@ router.post(
             bancosMonto = Math.max(0, montoNum - montoEfectivo);
           }
           
+          // Calcular cantidad como suma de todas las componentes
+          const cantidadNueva = billetesMonto + monedasFisicasMonto + bancosMonto;
+          
           await tx.saldo.create({
             data: {
               punto_atencion_id: puntoId,
               moneda_id: usdId,
-              cantidad: nuevoSaldoGeneral,
+              cantidad: cantidadNueva,
               billetes: billetesMonto,
               monedas_fisicas: monedasFisicasMonto,
               bancos: bancosMonto,
@@ -762,10 +768,13 @@ router.delete(
               : Math.max(0, bancosSiguientes + montoBancario);
           }
           
+          // Calcular cantidad como suma de todas las componentes
+          const cantidadActualizada = Math.max(0, billetesSiguientes) + Math.max(0, monedasSiguientes) + Math.max(0, bancosSiguientes);
+          
           await tx.saldo.update({
             where: { id: saldoGeneral.id },
             data: { 
-              cantidad: nuevoGeneral,
+              cantidad: cantidadActualizada,
               billetes: Math.max(0, billetesSiguientes),
               monedas_fisicas: Math.max(0, monedasSiguientes),
               bancos: Math.max(0, bancosSiguientes),
@@ -794,11 +803,14 @@ router.delete(
             bancosMonto = mov.tipo_movimiento === "EGRESO" ? Math.max(0, Number(mov.monto) - montoEfectivo) : 0;
           }
           
+          // Calcular cantidad como suma de todas las componentes
+          const cantidadNueva = billetesMonto + monedasFisicasMonto + bancosMonto;
+          
           await tx.saldo.create({
             data: {
               punto_atencion_id: mov.punto_atencion_id,
               moneda_id: mov.moneda_id,
-              cantidad: nuevoGeneral,
+              cantidad: cantidadNueva,
               billetes: billetesMonto,
               monedas_fisicas: monedasFisicasMonto,
               bancos: bancosMonto,

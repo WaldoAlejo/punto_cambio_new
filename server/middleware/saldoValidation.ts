@@ -50,7 +50,7 @@ export async function validarSaldoSuficiente(
       );
 
       if (saldoActual < validacion.montoRequerido) {
-        // Obtener desglose de billetes y monedas
+        // Obtener desglose de billetes, monedas y bancos
         const saldo = await prisma.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -61,15 +61,17 @@ export async function validarSaldoSuficiente(
         });
         const saldoBilletes = Number(saldo?.billetes || 0);
         const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
+        const saldoBancos = Number(saldo?.bancos || 0);
         return res.status(400).json({
           error: "SALDO_INSUFICIENTE",
-          message: `Saldo insuficiente en ${validacion.puntoNombre}. Saldo actual: $${saldoActual.toFixed(2)} (${saldoBilletes.toFixed(2)} billetes, ${saldoMonedas.toFixed(2)} monedas) ${validacion.monedaCodigo}, requerido: $${validacion.montoRequerido.toFixed(2)}`,
+          message: `Saldo insuficiente en ${validacion.puntoNombre}. Saldo actual: $${saldoActual.toFixed(2)} (${saldoBilletes.toFixed(2)} billetes, ${saldoMonedas.toFixed(2)} monedas, ${saldoBancos.toFixed(2)} banco) ${validacion.monedaCodigo}, requerido: $${validacion.montoRequerido.toFixed(2)}`,
           details: {
             punto: validacion.puntoNombre,
             moneda: validacion.monedaCodigo,
             saldoActual: saldoActual,
             saldoBilletes,
             saldoMonedas,
+            saldoBancos,
             montoRequerido: validacion.montoRequerido,
             deficit: validacion.montoRequerido - saldoActual,
           },
@@ -205,6 +207,7 @@ async function obtenerValidacionesRequeridas(body: any): Promise<
 
 /**
  * Obtiene el saldo actual de un punto para una moneda específica
+ * Incluye billetes, monedas físicas Y bancos (depósitos)
  */
 async function obtenerSaldoActual(
   puntoAtencionId: string,
@@ -219,10 +222,11 @@ async function obtenerSaldoActual(
     },
   });
 
-  // Retornar la suma de billetes y monedas físicas
+  // Retornar la suma de billetes, monedas físicas Y bancos
   const saldoBilletes = Number(saldo?.billetes || 0);
   const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
-  return saldoBilletes + saldoMonedas;
+  const saldoBancos = Number(saldo?.bancos || 0);
+  return saldoBilletes + saldoMonedas + saldoBancos;
 }
 
 /**
@@ -442,11 +446,14 @@ export async function validarSaldoCambioDivisa(
       },
     });
 
-    const saldoTotal = Number(saldo?.cantidad || 0);
     let saldoBilletes = Number(saldo?.billetes || 0);
     let saldoMonedas = Number(saldo?.monedas_fisicas || 0);
+    const saldoBancos = Number(saldo?.bancos || 0);
+    
+    // Calcular saldo total incluyendo billetes, monedas y bancos
+    const saldoTotal = saldoBilletes + saldoMonedas + saldoBancos;
 
-    // Fallback: si ambos son 0 pero el total es mayor a 0, usar el total como billetes
+    // Fallback: si ambos físicos son 0 pero el total es mayor a 0, usar el total como billetes
     if (saldoBilletes === 0 && saldoMonedas === 0 && saldoTotal > 0) {
       saldoBilletes = saldoTotal;
     }
