@@ -320,7 +320,8 @@ router.post(
           
           // Registrar según metodo_ingreso
           if (metodoIngreso === "EFECTIVO") {
-            // Dinero en efectivo (billetes y monedas)
+            // Dinero SOLO en efectivo (billetes y monedas)
+            // NUNCA afecta el saldo de bancos
             if (tipo_movimiento === "INGRESO") {
               nuevoBilletes = saldoBilletes + billetesMonto;
               nuevasMonedas = saldoMonedas + monedasFisicasMonto;
@@ -328,26 +329,27 @@ router.post(
               nuevoBilletes = saldoBilletes - billetesMonto;
               nuevasMonedas = saldoMonedas - monedasFisicasMonto;
             }
+            // nuevosBancos se queda igual (no cambia)
           } else if (metodoIngreso === "BANCO") {
-            // Dinero en depósito bancario
+            // Dinero SOLO en depósito bancario
+            // NUNCA afecta billetes ni monedas
             if (tipo_movimiento === "INGRESO") {
               nuevosBancos = saldoBancos + montoNum;
             } else if (tipo_movimiento === "EGRESO") {
               nuevosBancos = saldoBancos - montoNum;
             }
+            // nuevoBilletes y nuevasMonedas se quedan igual (no cambian)
           } else if (metodoIngreso === "MIXTO") {
-            // Combinación de efectivo y bancario (usa los montos especificados)
+            // Combinación: parte en efectivo, parte en banco
             if (tipo_movimiento === "INGRESO") {
               nuevoBilletes = saldoBilletes + billetesMonto;
               nuevasMonedas = saldoMonedas + monedasFisicasMonto;
-              // Para MIXTO en INGRESO, el resto va a bancos
               const montoEfectivo = billetesMonto + monedasFisicasMonto;
               const montoBancario = Math.max(0, montoNum - montoEfectivo);
               nuevosBancos = saldoBancos + montoBancario;
             } else if (tipo_movimiento === "EGRESO") {
               nuevoBilletes = saldoBilletes - billetesMonto;
               nuevasMonedas = saldoMonedas - monedasFisicasMonto;
-              // Para MIXTO en EGRESO, el resto viene de bancos
               const montoEfectivo = billetesMonto + monedasFisicasMonto;
               const montoBancario = Math.max(0, montoNum - montoEfectivo);
               nuevosBancos = saldoBancos - montoBancario;
@@ -370,11 +372,16 @@ router.post(
           let bancosMonto = 0;
           
           if (metodoIngreso === "EFECTIVO") {
+            // SOLO efectivo, SIN bancos
             billetesMonto = typeof billetes !== 'undefined' ? Number(billetes) : 0;
             monedasFisicasMonto = typeof monedas_fisicas !== 'undefined' ? Number(monedas_fisicas) : 0;
+            // bancosMonto = 0 (no toca bancos)
           } else if (metodoIngreso === "BANCO") {
+            // SOLO bancos, SIN efectivo
             bancosMonto = montoNum;
+            // billetesMonto = 0, monedasFisicasMonto = 0 (no toca efectivo)
           } else if (metodoIngreso === "MIXTO") {
+            // Combinación: parte efectivo, parte banco
             billetesMonto = typeof billetes !== 'undefined' ? Number(billetes) : 0;
             monedasFisicasMonto = typeof monedas_fisicas !== 'undefined' ? Number(monedas_fisicas) : 0;
             const montoEfectivo = billetesMonto + monedasFisicasMonto;
@@ -722,6 +729,7 @@ router.delete(
           
           // Revertir según metodo_ingreso
           if (mov.metodo_ingreso === "EFECTIVO") {
+            // Revertir SOLO efectivo, NO toca bancos
             billetesSiguientes = mov.tipo_movimiento === "INGRESO"
               ? Math.max(0, billetesSiguientes - billetes)
               : Math.max(0, billetesSiguientes + billetes);
@@ -729,11 +737,15 @@ router.delete(
             monedasSiguientes = mov.tipo_movimiento === "INGRESO"
               ? Math.max(0, monedasSiguientes - monedas)
               : Math.max(0, monedasSiguientes + monedas);
+            // bancosSiguientes se queda igual
           } else if (mov.metodo_ingreso === "BANCO") {
+            // Revertir SOLO bancos, NO toca efectivo
             bancosSiguientes = mov.tipo_movimiento === "INGRESO"
               ? Math.max(0, bancosSiguientes - Number(mov.monto))
               : Math.max(0, bancosSiguientes + Number(mov.monto));
+            // billetesSiguientes y monedasSiguientes se quedan igual
           } else if (mov.metodo_ingreso === "MIXTO") {
+            // Revertir MIXTO: parte efectivo, parte banco
             billetesSiguientes = mov.tipo_movimiento === "INGRESO"
               ? Math.max(0, billetesSiguientes - billetes)
               : Math.max(0, billetesSiguientes + billetes);
@@ -766,11 +778,16 @@ router.delete(
           let bancosMonto = 0;
           
           if (mov.metodo_ingreso === "EFECTIVO") {
+            // SOLO efectivo cuando fue EGRESO (si fue INGRESO se resta)
             billetesMonto = mov.tipo_movimiento === "EGRESO" ? Number(mov.billetes || 0) : 0;
             monedasFisicasMonto = mov.tipo_movimiento === "EGRESO" ? Number(mov.monedas_fisicas || 0) : 0;
+            // bancosMonto = 0 (no toca bancos)
           } else if (mov.metodo_ingreso === "BANCO") {
+            // SOLO bancos cuando fue EGRESO (si fue INGRESO se resta)
             bancosMonto = mov.tipo_movimiento === "EGRESO" ? Number(mov.monto) : 0;
+            // billetesMonto = 0, monedasFisicasMonto = 0 (no toca efectivo)
           } else if (mov.metodo_ingreso === "MIXTO") {
+            // MIXTO: efectivo cuando fue EGRESO, banco cuando fue EGRESO
             billetesMonto = mov.tipo_movimiento === "EGRESO" ? Number(mov.billetes || 0) : 0;
             monedasFisicasMonto = mov.tipo_movimiento === "EGRESO" ? Number(mov.monedas_fisicas || 0) : 0;
             const montoEfectivo = billetesMonto + monedasFisicasMonto;
