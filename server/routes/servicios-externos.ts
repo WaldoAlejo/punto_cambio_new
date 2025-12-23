@@ -124,6 +124,7 @@ router.post(
         comprobante_url,
         billetes,
         monedas_fisicas,
+        metodo_ingreso,
       } = req.body as {
         servicio?: string;
         tipo_movimiento?: string;
@@ -133,6 +134,7 @@ router.post(
         comprobante_url?: string;
         billetes?: number;
         monedas_fisicas?: number;
+        metodo_ingreso?: string;
       };
 
       const puntoId = (req as any).user?.punto_atencion_id as
@@ -158,6 +160,18 @@ router.post(
           .json({ success: false, message: "tipo_movimiento inválido" });
         return;
       }
+
+      // Validar metodo_ingreso (EFECTIVO, BANCO, MIXTO)
+      const metodoIngreso = metodo_ingreso?.toUpperCase() || "EFECTIVO";
+      const METODOS_VALIDOS = ["EFECTIVO", "BANCO", "MIXTO"];
+      if (!METODOS_VALIDOS.includes(metodoIngreso)) {
+        res.status(400).json({
+          success: false,
+          message: "metodo_ingreso inválido. Debe ser EFECTIVO, BANCO o MIXTO",
+        });
+        return;
+      }
+
       const montoNum =
         typeof monto === "string" ? parseFloat(monto) : Number(monto);
       if (!isFinite(montoNum) || montoNum <= 0) {
@@ -298,35 +312,83 @@ router.post(
           
           const saldoBilletes = Number(saldoGeneral?.billetes ?? 0);
           const saldoMonedas = Number(saldoGeneral?.monedas_fisicas ?? 0);
+          const saldoBancos = Number(saldoGeneral?.bancos ?? 0);
           
           let nuevoBilletes = saldoBilletes;
           let nuevasMonedas = saldoMonedas;
+          let nuevosBancos = saldoBancos;
           
-          if (tipo_movimiento === "INGRESO") {
-            nuevoBilletes = saldoBilletes + billetesMonto;
-            nuevasMonedas = saldoMonedas + monedasFisicasMonto;
-          } else if (tipo_movimiento === "EGRESO") {
-            nuevoBilletes = saldoBilletes - billetesMonto;
-            nuevasMonedas = saldoMonedas - monedasFisicasMonto;
+          // Registrar según metodo_ingreso
+          if (metodoIngreso === "EFECTIVO") {
+            // Dinero en efectivo (billetes y monedas)
+            if (tipo_movimiento === "INGRESO") {
+              nuevoBilletes = saldoBilletes + billetesMonto;
+              nuevasMonedas = saldoMonedas + monedasFisicasMonto;
+            } else if (tipo_movimiento === "EGRESO") {
+              nuevoBilletes = saldoBilletes - billetesMonto;
+              nuevasMonedas = saldoMonedas - monedasFisicasMonto;
+            }
+          } else if (metodoIngreso === "BANCO") {
+            // Dinero en depósito bancario
+            if (tipo_movimiento === "INGRESO") {
+              nuevosBancos = saldoBancos + montoNum;
+            } else if (tipo_movimiento === "EGRESO") {
+              nuevosBancos = saldoBancos - montoNum;
+            }
+          } else if (metodoIngreso === "MIXTO") {
+            // Combinación de efectivo y bancario (usa los montos especificados)
+            if (tipo_movimiento === "INGRESO") {
+              nuevoBilletes = saldoBilletes + billetesMonto;
+              nuevasMonedas = saldoMonedas + monedasFisicasMonto;
+              // Para MIXTO en INGRESO, el resto va a bancos
+              const montoEfectivo = billetesMonto + monedasFisicasMonto;
+              const montoBancario = Math.max(0, montoNum - montoEfectivo);
+              nuevosBancos = saldoBancos + montoBancario;
+            } else if (tipo_movimiento === "EGRESO") {
+              nuevoBilletes = saldoBilletes - billetesMonto;
+              nuevasMonedas = saldoMonedas - monedasFisicasMonto;
+              // Para MIXTO en EGRESO, el resto viene de bancos
+              const montoEfectivo = billetesMonto + monedasFisicasMonto;
+              const montoBancario = Math.max(0, montoNum - montoEfectivo);
+              nuevosBancos = saldoBancos - montoBancario;
+            }
           }
           
           await tx.saldo.update({
             where: { id: saldoGeneral.id },
             data: {
               cantidad: nuevoSaldoGeneral,
-              billetes: nuevoBilletes >= 0 ? nuevoBilletes : saldoBilletes,
-              monedas_fisicas: nuevasMonedas >= 0 ? nuevasMonedas : saldoMonedas,
+              billetes: Math.max(0, nuevoBilletes),
+              monedas_fisicas: Math.max(0, nuevasMonedas),
+              bancos: Math.max(0, nuevosBancos),
             },
           });
         } else if (nuevoSaldoGeneral !== 0) {
           // Crear saldo general si no existe y es diferente de 0
+          let billetesMonto = 0;
+          let monedasFisicasMonto = 0;
+          let bancosMonto = 0;
+          
+          if (metodoIngreso === "EFECTIVO") {
+            billetesMonto = typeof billetes !== 'undefined' ? Number(billetes) : 0;
+            monedasFisicasMonto = typeof monedas_fisicas !== 'undefined' ? Number(monedas_fisicas) : 0;
+          } else if (metodoIngreso === "BANCO") {
+            bancosMonto = montoNum;
+          } else if (metodoIngreso === "MIXTO") {
+            billetesMonto = typeof billetes !== 'undefined' ? Number(billetes) : 0;
+            monedasFisicasMonto = typeof monedas_fisicas !== 'undefined' ? Number(monedas_fisicas) : 0;
+            const montoEfectivo = billetesMonto + monedasFisicasMonto;
+            bancosMonto = Math.max(0, montoNum - montoEfectivo);
+          }
+          
           await tx.saldo.create({
             data: {
               punto_atencion_id: puntoId,
               moneda_id: usdId,
               cantidad: nuevoSaldoGeneral,
-              billetes: typeof billetes !== 'undefined' ? Number(billetes) : undefined,
-              monedas_fisicas: typeof monedas_fisicas !== 'undefined' ? Number(monedas_fisicas) : undefined,
+              billetes: billetesMonto,
+              monedas_fisicas: monedasFisicasMonto,
+              bancos: bancosMonto,
               updated_at: new Date(),
             },
           });
@@ -347,6 +409,7 @@ router.post(
             comprobante_url: comprobante_url || null,
             billetes: billetes !== undefined ? Number(billetes) : undefined,
             monedas_fisicas: monedas_fisicas !== undefined ? Number(monedas_fisicas) : undefined,
+            metodo_ingreso: metodoIngreso as any,
           },
           include: {
             // por si luego quieres enriquecer respuesta
@@ -381,6 +444,7 @@ router.post(
           tipo_movimiento: svcMov.tipo_movimiento,
           moneda_id: usdId,
           monto: Number(svcMov.monto),
+          metodo_ingreso: svcMov.metodo_ingreso,
           usuario_id: (req as any).user.id,
           usuario: {
             id: (req as any).user.id,
@@ -491,6 +555,7 @@ router.get(
         tipo_movimiento: r.tipo_movimiento,
         moneda_id: r.moneda_id,
         monto: Number(r.monto),
+        metodo_ingreso: r.metodo_ingreso,
         usuario_id: r.usuario_id,
         fecha: r.fecha.toISOString(),
         descripcion: r.descripcion || null,
@@ -549,6 +614,7 @@ router.delete(
             fecha: true,
             billetes: true,
             monedas_fisicas: true,
+            metodo_ingreso: true,
           },
         });
         if (!mov) {
@@ -650,13 +716,39 @@ router.delete(
           const billetes = Number(mov.billetes || 0);
           const monedas = Number(mov.monedas_fisicas || 0);
           
-          const billetesSiguientes = mov.tipo_movimiento === "INGRESO"
-            ? Math.max(0, (saldoGeneral.billetes ? Number(saldoGeneral.billetes) - billetes : -billetes))
-            : Math.max(0, (saldoGeneral.billetes ? Number(saldoGeneral.billetes) + billetes : billetes));
+          let billetesSiguientes = Number(saldoGeneral.billetes || 0);
+          let monedasSiguientes = Number(saldoGeneral.monedas_fisicas || 0);
+          let bancosSiguientes = Number(saldoGeneral.bancos || 0);
           
-          const monedasSiguientes = mov.tipo_movimiento === "INGRESO"
-            ? Math.max(0, (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) - monedas : -monedas))
-            : Math.max(0, (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) + monedas : monedas));
+          // Revertir según metodo_ingreso
+          if (mov.metodo_ingreso === "EFECTIVO") {
+            billetesSiguientes = mov.tipo_movimiento === "INGRESO"
+              ? Math.max(0, billetesSiguientes - billetes)
+              : Math.max(0, billetesSiguientes + billetes);
+            
+            monedasSiguientes = mov.tipo_movimiento === "INGRESO"
+              ? Math.max(0, monedasSiguientes - monedas)
+              : Math.max(0, monedasSiguientes + monedas);
+          } else if (mov.metodo_ingreso === "BANCO") {
+            bancosSiguientes = mov.tipo_movimiento === "INGRESO"
+              ? Math.max(0, bancosSiguientes - Number(mov.monto))
+              : Math.max(0, bancosSiguientes + Number(mov.monto));
+          } else if (mov.metodo_ingreso === "MIXTO") {
+            billetesSiguientes = mov.tipo_movimiento === "INGRESO"
+              ? Math.max(0, billetesSiguientes - billetes)
+              : Math.max(0, billetesSiguientes + billetes);
+            
+            monedasSiguientes = mov.tipo_movimiento === "INGRESO"
+              ? Math.max(0, monedasSiguientes - monedas)
+              : Math.max(0, monedasSiguientes + monedas);
+            
+            const montoEfectivo = billetes + monedas;
+            const montoBancario = Math.max(0, Number(mov.monto) - montoEfectivo);
+            
+            bancosSiguientes = mov.tipo_movimiento === "INGRESO"
+              ? Math.max(0, bancosSiguientes - montoBancario)
+              : Math.max(0, bancosSiguientes + montoBancario);
+          }
           
           await tx.saldo.update({
             where: { id: saldoGeneral.id },
@@ -664,17 +756,35 @@ router.delete(
               cantidad: nuevoGeneral,
               billetes: Math.max(0, billetesSiguientes),
               monedas_fisicas: Math.max(0, monedasSiguientes),
+              bancos: Math.max(0, bancosSiguientes),
               updated_at: new Date() 
             },
           });
         } else if (nuevoGeneral !== 0) {
+          let billetesMonto = 0;
+          let monedasFisicasMonto = 0;
+          let bancosMonto = 0;
+          
+          if (mov.metodo_ingreso === "EFECTIVO") {
+            billetesMonto = mov.tipo_movimiento === "EGRESO" ? Number(mov.billetes || 0) : 0;
+            monedasFisicasMonto = mov.tipo_movimiento === "EGRESO" ? Number(mov.monedas_fisicas || 0) : 0;
+          } else if (mov.metodo_ingreso === "BANCO") {
+            bancosMonto = mov.tipo_movimiento === "EGRESO" ? Number(mov.monto) : 0;
+          } else if (mov.metodo_ingreso === "MIXTO") {
+            billetesMonto = mov.tipo_movimiento === "EGRESO" ? Number(mov.billetes || 0) : 0;
+            monedasFisicasMonto = mov.tipo_movimiento === "EGRESO" ? Number(mov.monedas_fisicas || 0) : 0;
+            const montoEfectivo = billetesMonto + monedasFisicasMonto;
+            bancosMonto = mov.tipo_movimiento === "EGRESO" ? Math.max(0, Number(mov.monto) - montoEfectivo) : 0;
+          }
+          
           await tx.saldo.create({
             data: {
               punto_atencion_id: mov.punto_atencion_id,
               moneda_id: mov.moneda_id,
               cantidad: nuevoGeneral,
-              billetes: mov.tipo_movimiento === "EGRESO" ? Number(mov.billetes || 0) : undefined,
-              monedas_fisicas: mov.tipo_movimiento === "EGRESO" ? Number(mov.monedas_fisicas || 0) : undefined,
+              billetes: billetesMonto,
+              monedas_fisicas: monedasFisicasMonto,
+              bancos: bancosMonto,
               updated_at: new Date(),
             },
           });
@@ -768,6 +878,7 @@ router.get(
         tipo_movimiento: r.tipo_movimiento,
         moneda_id: r.moneda_id,
         monto: Number(r.monto),
+        metodo_ingreso: r.metodo_ingreso,
         usuario_id: r.usuario_id,
         fecha: r.fecha.toISOString(),
         descripcion: r.descripcion || null,

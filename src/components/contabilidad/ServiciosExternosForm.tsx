@@ -59,6 +59,17 @@ const schema = z.object({
   monto: z.coerce
     .number({ invalid_type_error: "Debe ser un número" })
     .gt(0, { message: "Debe ser un número mayor a 0" }),
+  metodo_ingreso: z.enum(["EFECTIVO", "BANCO", "MIXTO"], {
+    required_error: "Selecciona cómo entra el dinero",
+  }),
+  billetes: z.coerce
+    .number({ invalid_type_error: "Debe ser un número" })
+    .nonnegative({ message: "Debe ser un número no negativo" })
+    .optional(),
+  monedas_fisicas: z.coerce
+    .number({ invalid_type_error: "Debe ser un número" })
+    .nonnegative({ message: "Debe ser un número no negativo" })
+    .optional(),
   numero_referencia: z.string().trim().optional(),
   descripcion: z.string().trim().optional(),
 });
@@ -88,7 +99,10 @@ export default function ServiciosExternosForm({
     defaultValues: {
       servicio: undefined,
       tipo_movimiento: "INGRESO",
+      metodo_ingreso: "EFECTIVO",
       monto: undefined as unknown as number,
+      billetes: undefined as unknown as number,
+      monedas_fisicas: undefined as unknown as number,
       numero_referencia: "",
       descripcion: "",
     },
@@ -98,6 +112,7 @@ export default function ServiciosExternosForm({
 
   const servicioActual = watch("servicio");
   const tipoActual = watch("tipo_movimiento");
+  const metodoIngresoActual = watch("metodo_ingreso");
 
   const esInsumo = useMemo(
     () => !!SERVICIOS.find((s) => s.value === servicioActual && s.isInsumo),
@@ -125,7 +140,10 @@ export default function ServiciosExternosForm({
         punto_atencion_id: puntoAtencionId,
         servicio: values.servicio,
         tipo_movimiento: values.tipo_movimiento,
+        metodo_ingreso: values.metodo_ingreso,
         monto: values.monto,
+        billetes: values.billetes || undefined,
+        monedas_fisicas: values.monedas_fisicas || undefined,
         descripcion: values.descripcion || undefined,
         numero_referencia: values.numero_referencia || undefined,
       };
@@ -149,7 +167,10 @@ export default function ServiciosExternosForm({
       reset({
         servicio: undefined,
         tipo_movimiento: esInsumo ? "EGRESO" : "INGRESO",
+        metodo_ingreso: "EFECTIVO",
         monto: undefined as unknown as number,
+        billetes: undefined as unknown as number,
+        monedas_fisicas: undefined as unknown as number,
         numero_referencia: "",
         descripcion: "",
       });
@@ -267,6 +288,71 @@ export default function ServiciosExternosForm({
           <p className="text-sm text-red-500 mt-1">{errors.monto.message}</p>
         )}
       </div>
+
+      {/* Método de Ingreso */}
+      <div>
+        <Label>¿Cómo entra el dinero?</Label>
+        <Controller
+          name="metodo_ingreso"
+          control={control}
+          render={({ field }) => (
+            <Select
+              value={field.value}
+              onValueChange={(v) => field.onChange(v)}
+            >
+              <SelectTrigger className="mt-1" aria-invalid={!!errors.metodo_ingreso}>
+                <SelectValue placeholder="Selecciona" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="EFECTIVO">Efectivo (Billetes y Monedas)</SelectItem>
+                <SelectItem value="BANCO">Depósito Bancario</SelectItem>
+                <SelectItem value="MIXTO">Mixto (Efectivo + Banco)</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+        {errors.metodo_ingreso && (
+          <p className="text-sm text-red-500 mt-1">{errors.metodo_ingreso.message}</p>
+        )}
+      </div>
+
+      {/* Billetes (mostrar si es EFECTIVO o MIXTO) */}
+      {(metodoIngresoActual === "EFECTIVO" || metodoIngresoActual === "MIXTO") && (
+        <div>
+          <Label>Billetes (USD)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            inputMode="decimal"
+            placeholder="0.00"
+            aria-invalid={!!errors.billetes}
+            {...register("billetes")}
+          />
+          {errors.billetes && (
+            <p className="text-sm text-red-500 mt-1">{errors.billetes.message}</p>
+          )}
+        </div>
+      )}
+
+      {/* Monedas Físicas (mostrar si es EFECTIVO o MIXTO) */}
+      {(metodoIngresoActual === "EFECTIVO" || metodoIngresoActual === "MIXTO") && (
+        <div>
+          <Label>Monedas (USD)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            inputMode="decimal"
+            placeholder="0.00"
+            aria-invalid={!!errors.monedas_fisicas}
+            {...register("monedas_fisicas")}
+          />
+          {errors.monedas_fisicas && (
+            <p className="text-sm text-red-500 mt-1">{errors.monedas_fisicas.message}</p>
+          )}
+        </div>
+      )}
 
       {/* Referencia */}
       <div>
