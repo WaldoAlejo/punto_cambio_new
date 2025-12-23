@@ -113,13 +113,17 @@ export class ServientregaDBService {
   async guardarRemitente(data: RemitenteData) {
     const sanitizedData = this.sanitizeRemitenteData(data);
     const cedula = sanitizedData.cedula;
+    const nombre = sanitizedData.nombre;
+    const direccion = sanitizedData.direccion;
 
-    if (!cedula) {
-      throw new Error("Cedula es requerida para guardar remitente");
+    if (!cedula || !nombre || !direccion) {
+      throw new Error("Cedula, nombre y direccion son requeridos para guardar remitente");
     }
 
     const resultado = await prisma.servientregaRemitente.upsert({
-      where: { cedula },
+      where: { 
+        cedula_nombre_direccion: { cedula, nombre, direccion }
+      },
       update: sanitizedData as any,
       create: sanitizedData as any,
       select: {
@@ -135,7 +139,7 @@ export class ServientregaDBService {
   async actualizarRemitente(cedula: string, data: Partial<RemitenteData>) {
     const filteredData = this.sanitizeRemitenteData(data);
     return prisma.servientregaRemitente.updateMany({
-      where: { cedula },
+      where: { cedula: cedula },
       data: filteredData,
     });
   }
@@ -193,13 +197,17 @@ export class ServientregaDBService {
   async guardarDestinatario(data: DestinatarioData) {
     const sanitizedData = this.sanitizeDestinatarioData(data);
     const cedula = sanitizedData.cedula;
+    const nombre = sanitizedData.nombre;
+    const direccion = sanitizedData.direccion;
 
-    if (!cedula) {
-      throw new Error("Cedula es requerida para guardar destinatario");
+    if (!cedula || !nombre || !direccion) {
+      throw new Error("Cedula, nombre y direccion son requeridos para guardar destinatario");
     }
 
     const resultado = await prisma.servientregaDestinatario.upsert({
-      where: { cedula },
+      where: { 
+        cedula_nombre_direccion: { cedula, nombre, direccion }
+      },
       update: sanitizedData as any,
       create: sanitizedData as any,
       select: {
@@ -227,7 +235,7 @@ export class ServientregaDBService {
 
     const filteredData = this.sanitizeDestinatarioData(data);
     return prisma.servientregaDestinatario.updateMany({
-      where: { cedula },
+      where: { cedula: cedula },
       data: filteredData,
     });
   }

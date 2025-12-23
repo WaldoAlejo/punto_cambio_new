@@ -468,13 +468,16 @@ model HistorialAsignacionPunto {
 
 model ServientregaRemitente {
   id            String             @id @default(uuid())
-  cedula        String             @unique
+  cedula        String
   nombre        String
   direccion     String
   telefono      String
   codigo_postal String?
   email         String?
   guias         ServientregaGuia[]
+
+  @@unique([cedula, nombre, direccion])
+  @@index([cedula])
 }
 
 model ServientregaHistorialSaldo {
@@ -502,7 +505,7 @@ model ServientregaSolicitudSaldo {
 
 model ServientregaDestinatario {
   id            String             @id @default(uuid())
-  cedula        String             @unique
+  cedula        String
   nombre        String
   direccion     String
   ciudad        String
@@ -512,6 +515,9 @@ model ServientregaDestinatario {
   email         String?
   codigo_postal String?
   guias         ServientregaGuia[]
+
+  @@unique([cedula, nombre, direccion])
+  @@index([cedula])
 }
 
 model ServientregaGuia {
