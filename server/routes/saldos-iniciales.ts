@@ -2,6 +2,7 @@ import express, { Request, Response } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
+import logger from "../utils/logger.js";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento,
@@ -77,11 +78,13 @@ router.get<{ pointId: string }>(
 
       return res.json({ success: true, saldos });
     } catch (error) {
-      console.error("GET /saldos-iniciales/:pointId error:", error);
+      logger.error("Error al obtener saldos iniciales", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        pointId: req.params.pointId,
+      });
       return res.status(500).json({
         success: false,
         error: "Error interno del servidor",
-        details: (error as any)?.message ?? null,
       });
     }
   }
@@ -93,11 +96,6 @@ router.post(
   authenticateToken,
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: Request<unknown, unknown, PostSaldoBody>, res: Response) => {
-    // logs de entrada (útiles en PM2)
-    console.warn("=== POST /saldos-iniciales START ===");
-    console.warn("user:", req.user);
-    console.warn("body:", req.body);
-
     try {
       const {
         punto_atencion_id,
@@ -192,7 +190,6 @@ router.post(
               billetes: incBilletes,
               monedas: incMonedas,
               suma_recibida: desgloseTotal,
-              diferencia: Math.abs(cantidad - desgloseTotal),
             },
           });
         }
@@ -226,12 +223,6 @@ router.post(
         return res.status(400).json({
           success: false,
           error: "Error interno: desglose no suma correctamente",
-          details: {
-            cantidad,
-            billetes: incBilletes,
-            monedas: incMonedas,
-            suma: incBilletes + incMonedas,
-          },
         });
       }
 
@@ -355,9 +346,12 @@ router.post(
         };
       });
 
-      console.warn("=== POST /saldos-iniciales OK ===", {
+      logger.info("Saldo inicial asignado/incrementado", {
         saldoInicialId: resultado.saldoInicialResult.id,
-        updated: resultado.updated,
+        puntoAtencionId: punto_atencion_id,
+        monedaId: moneda_id,
+        cantidad: cantidad,
+        createdBy: user.id,
       });
 
       return res.json({
@@ -367,47 +361,36 @@ router.post(
       });
     } catch (error: any) {
       const code = error?.code as string | undefined;
-      const meta = error?.meta;
 
-      console.error("=== POST /saldos-iniciales ERROR ===");
-      console.error("message:", error?.message);
-      console.error("code:", code, "meta:", meta);
-      console.error("stack:", error?.stack);
+      logger.error("Error al asignar saldo inicial", {
+        error: error?.message,
+        code,
+        requestedBy: req.user?.id,
+      });
 
       if (code === "P2002") {
         return res.status(409).json({
           success: false,
           error: "Saldo inicial ya existe (unicidad)",
-          code,
-          meta,
         });
       }
       if (code === "P2003") {
         return res.status(400).json({
           success: false,
           error: "Referencia inválida (FK)",
-          code,
-          meta,
         });
       }
       if (code === "P2025") {
         return res.status(404).json({
           success: false,
           error: "Registro no encontrado",
-          code,
-          meta,
         });
       }
 
       return res.status(500).json({
         success: false,
-        error: "Error interno del servidor",
-        code: code ?? null,
-        meta: meta ?? null,
-        details: error?.message ?? null,
+        error: "Error al asignar saldo inicial",
       });
-    } finally {
-      console.warn("=== POST /saldos-iniciales END ===");
     }
   }
 );

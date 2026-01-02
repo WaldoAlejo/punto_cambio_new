@@ -635,6 +635,7 @@ model ServicioExternoSaldo {
   cantidad          Decimal         @default(0) @db.Decimal(15, 2)
   billetes          Decimal         @default(0) @db.Decimal(15, 2)
   monedas_fisicas   Decimal         @default(0) @db.Decimal(15, 2)
+  bancos            Decimal         @default(0) @db.Decimal(15, 2)
   updated_at        DateTime        @updatedAt
   moneda            Moneda          @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
   puntoAtencion     PuntoAtencion   @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)

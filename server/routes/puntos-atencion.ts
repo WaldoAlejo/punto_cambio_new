@@ -1,6 +1,6 @@
 import express from "express";
-import { authenticateToken } from "../middleware/auth.js";
-import { pool } from "../lib/database.js";
+import prisma from "../lib/prisma.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -11,30 +11,15 @@ const router = express.Router();
 // Obtener todos los puntos de atención
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    const query = `
-      SELECT 
-        id,
-        nombre,
-        direccion,
-        ciudad,
-        provincia,
-        codigo_postal,
-        telefono,
-        servientrega_agencia_codigo,
-        servientrega_agencia_nombre,
-        activo,
-        es_principal,
-        created_at,
-        updated_at
-      FROM "PuntoAtencion"
-      ORDER BY nombre ASC
-    `;
-
-    const result = await pool.query(query);
+    const puntos = await prisma.puntoAtencion.findMany({
+      orderBy: {
+        nombre: "asc",
+      },
+    });
 
     res.json({
       success: true,
-      puntos: result.rows,
+      puntos,
     });
   } catch (error) {
     console.error("Error al obtener puntos de atención:", error);
@@ -51,28 +36,11 @@ router.get("/:id", authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const query = `
-      SELECT 
-        id,
-        nombre,
-        direccion,
-        ciudad,
-        provincia,
-        codigo_postal,
-        telefono,
-        servientrega_agencia_codigo,
-        servientrega_agencia_nombre,
-        activo,
-        es_principal,
-        created_at,
-        updated_at
-      FROM "PuntoAtencion"
-      WHERE id = $1
-    `;
+    const punto = await prisma.puntoAtencion.findUnique({
+      where: { id },
+    });
 
-    const result = await pool.query(query, [id]);
-
-    if (result.rows.length === 0) {
+    if (!punto) {
       return res.status(404).json({
         success: false,
         error: "Punto de atención no encontrado",
@@ -81,7 +49,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      punto: result.rows[0],
+      punto,
     });
   } catch (error) {
     console.error("Error al obtener punto de atención:", error);
@@ -93,8 +61,8 @@ router.get("/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// Crear nuevo punto de atención
-router.post("/", authenticateToken, async (req, res) => {
+// Crear nuevo punto de atención (solo admins)
+router.post("/", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const {
       nombre,
@@ -112,32 +80,28 @@ router.post("/", authenticateToken, async (req, res) => {
     if (!nombre || !direccion || !ciudad || !provincia) {
       return res.status(400).json({
         success: false,
-        error:
-          "Los campos nombre, dirección, ciudad y provincia son requeridos",
+        error: "Los campos nombre, dirección, ciudad y provincia son requeridos",
       });
     }
 
-    const query = `
-      INSERT INTO "PuntoAtencion" (nombre, direccion, ciudad, provincia, codigo_postal, telefono, servientrega_agencia_codigo, servientrega_agencia_nombre, es_principal, activo)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
-      RETURNING id, nombre, direccion, ciudad, provincia, codigo_postal, telefono, servientrega_agencia_codigo, servientrega_agencia_nombre, es_principal, activo, created_at, updated_at
-    `;
-
-    const result = await pool.query(query, [
-      nombre,
-      direccion,
-      ciudad,
-      provincia,
-      codigo_postal || null,
-      telefono || null,
-      servientrega_agencia_codigo || null,
-      servientrega_agencia_nombre || null,
-      es_principal || false,
-    ]);
+    const punto = await prisma.puntoAtencion.create({
+      data: {
+        nombre,
+        direccion,
+        ciudad,
+        provincia,
+        codigo_postal: codigo_postal || null,
+        telefono: telefono || null,
+        servientrega_agencia_codigo: servientrega_agencia_codigo || null,
+        servientrega_agencia_nombre: servientrega_agencia_nombre || null,
+        es_principal: es_principal || false,
+        activo: true,
+      },
+    });
 
     res.json({
       success: true,
-      punto: result.rows[0],
+      punto,
       message: "Punto de atención creado correctamente",
     });
   } catch (error) {
@@ -150,8 +114,8 @@ router.post("/", authenticateToken, async (req, res) => {
   }
 });
 
-// Actualizar punto de atención
-router.put("/:id", authenticateToken, async (req, res) => {
+// Actualizar punto de atención (solo admins)
+router.put("/:id", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -168,10 +132,11 @@ router.put("/:id", authenticateToken, async (req, res) => {
     } = req.body;
 
     // Verificar que el punto existe
-    const existsQuery = `SELECT id FROM "PuntoAtencion" WHERE id = $1`;
-    const existsResult = await pool.query(existsQuery, [id]);
+    const puntoExistente = await prisma.puntoAtencion.findUnique({
+      where: { id },
+    });
 
-    if (existsResult.rows.length === 0) {
+    if (!puntoExistente) {
       return res.status(404).json({
         success: false,
         error: "Punto de atención no encontrado",
@@ -182,46 +147,29 @@ router.put("/:id", authenticateToken, async (req, res) => {
     if (!nombre || !direccion || !ciudad || !provincia) {
       return res.status(400).json({
         success: false,
-        error:
-          "Los campos nombre, dirección, ciudad y provincia son requeridos",
+        error: "Los campos nombre, dirección, ciudad y provincia son requeridos",
       });
     }
 
-    const query = `
-      UPDATE "PuntoAtencion" 
-      SET 
-        nombre = $2,
-        direccion = $3,
-        ciudad = $4,
-        provincia = $5,
-        codigo_postal = $6,
-        telefono = $7,
-        servientrega_agencia_codigo = $8,
-        servientrega_agencia_nombre = $9,
-        es_principal = $10,
-        activo = $11,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-      RETURNING id, nombre, direccion, ciudad, provincia, codigo_postal, telefono, servientrega_agencia_codigo, servientrega_agencia_nombre, es_principal, activo, created_at, updated_at
-    `;
-
-    const result = await pool.query(query, [
-      id,
-      nombre,
-      direccion,
-      ciudad,
-      provincia,
-      codigo_postal || null,
-      telefono || null,
-      servientrega_agencia_codigo || null,
-      servientrega_agencia_nombre || null,
-      es_principal !== undefined ? es_principal : false,
-      activo !== undefined ? activo : true,
-    ]);
+    const punto = await prisma.puntoAtencion.update({
+      where: { id },
+      data: {
+        nombre,
+        direccion,
+        ciudad,
+        provincia,
+        codigo_postal: codigo_postal || null,
+        telefono: telefono || null,
+        servientrega_agencia_codigo: servientrega_agencia_codigo || null,
+        servientrega_agencia_nombre: servientrega_agencia_nombre || null,
+        es_principal: es_principal !== undefined ? es_principal : false,
+        activo: activo !== undefined ? activo : true,
+      },
+    });
 
     res.json({
       success: true,
-      punto: result.rows[0],
+      punto,
       message: "Punto de atención actualizado correctamente",
     });
   } catch (error) {
@@ -234,16 +182,22 @@ router.put("/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// Desactivar punto de atención (soft delete)
-router.delete("/:id", authenticateToken, async (req, res) => {
+// Desactivar punto de atención (soft delete, solo admins)
+router.delete("/:id", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { id } = req.params;
 
     // Verificar que el punto existe
-    const existsQuery = `SELECT id, nombre FROM "PuntoAtencion" WHERE id = $1`;
-    const existsResult = await pool.query(existsQuery, [id]);
+    const punto = await prisma.puntoAtencion.findUnique({
+      where: { id },
+      include: {
+        usuarios: {
+          where: { activo: true },
+        },
+      },
+    });
 
-    if (existsResult.rows.length === 0) {
+    if (!punto) {
       return res.status(404).json({
         success: false,
         error: "Punto de atención no encontrado",
@@ -251,29 +205,21 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     }
 
     // Verificar si hay usuarios asignados a este punto
-    const usersQuery = `SELECT COUNT(*) as count FROM "Usuario" WHERE punto_atencion_id = $1 AND activo = true`;
-    const usersResult = await pool.query(usersQuery, [id]);
-
-    if (parseInt(usersResult.rows[0].count) > 0) {
+    if (punto.usuarios.length > 0) {
       return res.status(400).json({
         success: false,
-        error:
-          "No se puede desactivar el punto de atención porque tiene usuarios asignados",
+        error: "No se puede desactivar el punto de atención porque tiene usuarios asignados",
       });
     }
 
-    const query = `
-      UPDATE "PuntoAtencion" 
-      SET activo = false, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-      RETURNING id, nombre, activo
-    `;
-
-    const result = await pool.query(query, [id]);
+    const puntoActualizado = await prisma.puntoAtencion.update({
+      where: { id },
+      data: { activo: false },
+    });
 
     res.json({
       success: true,
-      punto: result.rows[0],
+      punto: puntoActualizado,
       message: "Punto de atención desactivado correctamente",
     });
   } catch (error) {
@@ -286,34 +232,31 @@ router.delete("/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// Reactivar punto de atención
-router.patch("/:id/reactivar", authenticateToken, async (req, res) => {
+// Reactivar punto de atención (solo admins)
+router.patch("/:id/reactivar", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { id } = req.params;
 
     // Verificar que el punto existe
-    const existsQuery = `SELECT id, nombre FROM "PuntoAtencion" WHERE id = $1`;
-    const existsResult = await pool.query(existsQuery, [id]);
+    const puntoExistente = await prisma.puntoAtencion.findUnique({
+      where: { id },
+    });
 
-    if (existsResult.rows.length === 0) {
+    if (!puntoExistente) {
       return res.status(404).json({
         success: false,
         error: "Punto de atención no encontrado",
       });
     }
 
-    const query = `
-      UPDATE "PuntoAtencion" 
-      SET activo = true, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-      RETURNING id, nombre, activo
-    `;
-
-    const result = await pool.query(query, [id]);
+    const punto = await prisma.puntoAtencion.update({
+      where: { id },
+      data: { activo: true },
+    });
 
     res.json({
       success: true,
-      punto: result.rows[0],
+      punto,
       message: "Punto de atención reactivado correctamente",
     });
   } catch (error) {
