@@ -814,4 +814,81 @@ router.get(
   }
 );
 
+// ============ OPERADOR: saldos asignados por servicio (último estado) ============
+router.get(
+  "/saldos-asignados",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      if (!isOperador(req)) {
+        res.status(403).json({
+          success: false,
+          message: "Permisos insuficientes (solo OPERADOR)",
+        });
+        return;
+      }
+
+      const pointId = (req as any).user?.punto_atencion_id;
+      if (!pointId) {
+        res.status(400).json({
+          success: false,
+          message: "No tienes un punto de atención asignado",
+        });
+        return;
+      }
+
+      // Obtener información del punto de atención
+      const punto = await prisma.puntoAtencion.findUnique({
+        where: { id: pointId },
+        select: { nombre: true },
+      });
+
+      if (!punto) {
+        res.status(404).json({
+          success: false,
+          message: "Punto de atención no encontrado",
+        });
+        return;
+      }
+
+      // Obtener saldos actuales por servicio
+      const usdId = await ensureUsdMonedaId();
+      const saldos = await prisma.servicioExternoSaldo.findMany({
+        where: { punto_atencion_id: pointId, moneda_id: usdId },
+        select: { servicio: true, cantidad: true, billetes: true, monedas_fisicas: true },
+      });
+
+      // Obtener últimas asignaciones por servicio
+      const saldosAsignados = await Promise.all(
+        SERVICIOS_VALIDOS.map(async (servicio) => {
+          const ultimaAsignacion = await prisma.servicioExternoAsignacion.findFirst({
+            where: { punto_atencion_id: pointId, servicio: servicio as any },
+            orderBy: { fecha: "desc" },
+            select: { monto: true, fecha: true },
+          });
+
+          const saldoActual = saldos.find((s) => s.servicio === servicio);
+
+          return {
+            servicio,
+            saldo_asignado: ultimaAsignacion ? Number(ultimaAsignacion.monto) : 0,
+            actualizado_en: ultimaAsignacion?.fecha?.toISOString() || null,
+            billetes: saldoActual?.billetes || 0,
+            monedas_fisicas: saldoActual?.monedas_fisicas || 0,
+          };
+        })
+      );
+
+      res.json({
+        success: true,
+        punto_nombre: punto.nombre,
+        saldos_asignados: saldosAsignados,
+      });
+    } catch (error) {
+      console.error("Error obteniendo saldos asignados:", error);
+      res.status(500).json({ success: false, message: "Error obteniendo saldos asignados" });
+    }
+  }
+);
+
 export default router;
