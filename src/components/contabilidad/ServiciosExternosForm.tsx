@@ -252,8 +252,12 @@ export default function ServiciosExternosForm({
                 <SelectValue placeholder="Selecciona" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="INGRESO">Ingreso</SelectItem>
-                <SelectItem value="EGRESO">Egreso</SelectItem>
+                <SelectItem value="INGRESO">
+                  Ingreso (Cliente paga servicio)
+                </SelectItem>
+                <SelectItem value="EGRESO">
+                  Egreso (Punto paga/repone servicio)
+                </SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -262,6 +266,15 @@ export default function ServiciosExternosForm({
           <p className="text-xs text-muted-foreground mt-1">
             Esta categoría es de Insumos, el movimiento se registra como{" "}
             <b>EGRESO</b>.
+          </p>
+        )}
+        {!esInsumo && tipoMovimiento && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {tipoMovimiento === "INGRESO" ? (
+              <>📥 <b>INGRESO</b>: Cliente paga el servicio. Reduce saldo asignado, aumenta efectivo.</>
+            ) : (
+              <>📤 <b>EGRESO</b>: El punto paga o repone el servicio. Aumenta saldo asignado, reduce efectivo.</>
+            )}
           </p>
         )}
         {errors.tipo_movimiento && (

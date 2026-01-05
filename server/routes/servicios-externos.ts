@@ -46,6 +46,23 @@ const SERVICIOS_VALIDOS = [
   "INSUMOS_LIMPIEZA",
   "OTROS",
 ];
+
+// Servicios que tienen asignación de saldo propio (crédito digital)
+const SERVICIOS_CON_ASIGNACION = [
+  "YAGANASTE",
+  "BANCO_GUAYAQUIL",
+  "WESTERN",
+  "PRODUBANCO",
+  "BANCO_PACIFICO",
+];
+
+// Servicios que usan saldo general/efectivo (no tienen asignación)
+const SERVICIOS_SALDO_GENERAL = [
+  "INSUMOS_OFICINA",
+  "INSUMOS_LIMPIEZA",
+  "OTROS",
+];
+
 const TIPOS_VALIDOS = ["INGRESO", "EGRESO"];
 
 /** Utils fecha GYE */
@@ -79,8 +96,8 @@ async function ensureUsdMonedaId(): Promise<string> {
 
 /* ==============================
  * Middleware personalizado para validar saldo en servicios externos
- * OTROS no requiere validación de saldo propio (no tiene ServicioExternoSaldo)
- * pero SÍ valida saldo general para EGRESO
+ * - Servicios con asignación (YaGanaste, Bancos, Western): validan su saldo asignado para INGRESO
+ * - Servicios de saldo general (Insumos, Otros): validan saldo general para EGRESO
  * ============================== */
 async function validarSaldoServicioExterno(
   req: Request,
@@ -89,13 +106,23 @@ async function validarSaldoServicioExterno(
 ) {
   const { servicio, tipo_movimiento } = req.body;
   
-  // OTROS con INGRESO no necesita validación (cliente trae dinero)
-  if (servicio === "OTROS" && tipo_movimiento === "INGRESO") {
+  // Servicios con asignación: INGRESO necesita validar su propio saldo
+  if (SERVICIOS_CON_ASIGNACION.includes(servicio) && tipo_movimiento === "INGRESO") {
+    // La validación del saldo asignado se hace en la transacción principal
     return next();
   }
   
-  // OTROS con EGRESO Y otros servicios: aplicar validación general (saldo general)
-  return saldoValidation.validarSaldoSuficiente(req, res, next);
+  // Servicios de saldo general: INGRESO no requiere validación (cliente trae dinero)
+  if (SERVICIOS_SALDO_GENERAL.includes(servicio) && tipo_movimiento === "INGRESO") {
+    return next();
+  }
+  
+  // EGRESO siempre necesita validar saldo general (sale dinero del punto)
+  if (tipo_movimiento === "EGRESO") {
+    return saldoValidation.validarSaldoSuficiente(req, res, next);
+  }
+  
+  return next();
 }
 
 /* ==============================
@@ -184,11 +211,13 @@ router.post(
       const usdId = await ensureUsdMonedaId();
 
       const movimiento = await prisma.$transaction(async (tx) => {
-        // Para OTROS no usar saldo propio del servicio, solo saldo general
+        // Separar servicios con asignación vs saldo general
         let saldoServicioAnterior: number | null = null;
         let saldoServicioNuevo: number | null = null;
+        
+        const tieneAsignacion = SERVICIOS_CON_ASIGNACION.includes(servicio);
 
-        if (servicio !== "OTROS") {
+        if (tieneAsignacion) {
           // Obtener saldo del servicio externo específico
           const saldoServicio = await tx.servicioExternoSaldo.findUnique({
             where: {
@@ -202,9 +231,9 @@ router.post(
 
           saldoServicioAnterior = Number(saldoServicio?.cantidad || 0);
           
-          // Lógica de saldo digital:
-          // INGRESO (Cliente entrega dinero) -> RESTA crédito digital (porque el punto lo "usa")
-          // EGRESO (Operador entrega dinero) -> SUMA crédito digital (porque el punto lo "repone")
+          // NUEVA LÓGICA CORRECTA:
+          // INGRESO (Cliente paga servicio) -> RESTA del saldo asignado (se usa el crédito)
+          // EGRESO (Operador repone dinero) -> SUMA al saldo asignado (se repone el crédito)
           const deltaDigital = tipo_movimiento === "INGRESO" ? -montoNum : montoNum;
           saldoServicioNuevo = saldoServicioAnterior + deltaDigital;
 
@@ -227,6 +256,7 @@ router.post(
             bancosMonto = Math.max(0, montoNum - (billetesMonto + monedasMonto));
           }
 
+          // INGRESO resta (usa crédito), EGRESO suma (repone crédito)
           const dBil = tipo_movimiento === "INGRESO" ? -billetesMonto : billetesMonto;
           const dMon = tipo_movimiento === "INGRESO" ? -monedasMonto : monedasMonto;
           const dBk = tipo_movimiento === "INGRESO" ? -bancosMonto : bancosMonto;
@@ -258,7 +288,7 @@ router.post(
           }
         }
 
-        // SALDO FÍSICO GENERAL DEL PUNTO
+        // SALDO FÍSICO GENERAL DEL PUNTO (efectivo de cambio de divisas)
         const saldoGeneral = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -269,7 +299,8 @@ router.post(
         });
 
         const saldoGeneralAnterior = Number(saldoGeneral?.cantidad || 0);
-        // INGRESO → SUMA físico, EGRESO → RESTA físico
+        // INGRESO (cliente paga servicio) → SUMA al efectivo (entra dinero)
+        // EGRESO (operador paga servicio) → RESTA del efectivo (sale dinero)
         const deltaGeneral = tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
         const nuevoSaldoGeneralTotal = saldoGeneralAnterior + deltaGeneral;
 
@@ -369,7 +400,7 @@ router.post(
         return {
           ...svcMov,
           monto: Number(svcMov.monto),
-          ...(servicio !== "OTROS" && {
+          ...(tieneAsignacion && {
             saldo_anterior: saldoServicioAnterior,
             saldo_nuevo: saldoServicioNuevo,
           }),
@@ -467,8 +498,10 @@ router.delete(
           throw new Error("Solo se pueden eliminar movimientos del día actual");
         }
 
-        // 1. REVERTIR SALDO DIGITAL DEL SERVICIO
-        if (mov.servicio !== "OTROS") {
+        const tieneAsignacion = SERVICIOS_CON_ASIGNACION.includes(mov.servicio);
+
+        // 1. REVERTIR SALDO DIGITAL DEL SERVICIO (solo para servicios con asignación)
+        if (tieneAsignacion) {
           const sSvc = await tx.servicioExternoSaldo.findUnique({
             where: {
               punto_atencion_id_servicio_moneda_id: {
@@ -484,7 +517,7 @@ router.delete(
             const billetes = Number(mov.billetes || 0);
             const monedas = Number(mov.monedas_fisicas || 0);
             
-            // Si fue INGRESO (restó digital), ahora sumamos
+            // Revertir: Si fue INGRESO (restó digital), ahora sumamos
             // Si fue EGRESO (sumó digital), ahora restamos
             const mult = mov.tipo_movimiento === "INGRESO" ? 1 : -1;
             
@@ -858,9 +891,9 @@ router.get(
         select: { servicio: true, cantidad: true, billetes: true, monedas_fisicas: true },
       });
 
-      // Obtener últimas asignaciones por servicio
+      // Obtener últimas asignaciones solo para servicios con asignación
       const saldosAsignados = await Promise.all(
-        SERVICIOS_VALIDOS.map(async (servicio) => {
+        SERVICIOS_CON_ASIGNACION.map(async (servicio) => {
           const ultimaAsignacion = await prisma.servicioExternoAsignacion.findFirst({
             where: { punto_atencion_id: pointId, servicio: servicio as any },
             orderBy: { fecha: "desc" },

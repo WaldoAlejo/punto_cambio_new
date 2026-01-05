@@ -19,7 +19,6 @@ const SERVICIOS_LABELS: Record<string, string> = {
   BANCO_PACIFICO: "Banco del Pacífico",
   INSUMOS_OFICINA: "Insumos de oficina",
   INSUMOS_LIMPIEZA: "Insumos de limpieza",
-  SERVIENTREGA: "Servientrega",
   OTROS: "Otros",
 };
 
