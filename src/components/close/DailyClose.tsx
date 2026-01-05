@@ -444,29 +444,37 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         observaciones: cuadreData.observaciones?.substring(0, 50),
       });
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          detalles,
-          observaciones: cuadreData.observaciones || "",
-        }),
-      });
+      // Agregar timeout de 60 segundos para evitar colgado
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 segundos
 
-      console.log("📡 Response status:", response.status);
-      const resultado = await response.json();
-      console.log("📦 Response body:", resultado);
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            detalles,
+            observaciones: cuadreData.observaciones || "",
+          }),
+          signal: controller.signal,
+        });
 
-      if (!response.ok || !resultado.success) {
-        throw new Error(
-          resultado.error || "Error al realizar el cierre diario"
-        );
-      }
+        clearTimeout(timeoutId);
 
-      // 4. Actualizar estado y mostrar mensaje de éxito
+        console.log("📡 Response status:", response.status);
+        const resultado = await response.json();
+        console.log("📦 Response body:", resultado);
+
+        if (!response.ok || !resultado.success) {
+          throw new Error(
+            resultado.error || "Error al realizar el cierre diario"
+          );
+        }
+
+        // 4. Actualizar estado y mostrar mensaje de éxito
       setTodayClose({
         id: resultado.cierre_id || "",
         estado: "CERRADO",
@@ -513,14 +521,23 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       }
     } catch (error) {
       console.error("💥 Error in performDailyClose:", error);
+      
+      let errorMessage = "No se pudo completar el cierre diario";
+      
+      // Detectar si fue un timeout
+      if (error instanceof Error && error.name === "AbortError") {
+        errorMessage = "El cierre está tomando más tiempo de lo esperado. El proceso puede estar ejecutándose en segundo plano. Por favor, espera unos momentos y recarga la página para verificar si se completó.";
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error al realizar cierre",
-        description:
-          error instanceof Error
-            ? error.message
-            : "No se pudo completar el cierre diario",
+        description: errorMessage,
         variant: "destructive",
       });
+    } finally {
+      setLoading(false);
     }
   };
 

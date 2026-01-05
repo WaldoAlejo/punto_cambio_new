@@ -391,7 +391,15 @@ class CierreService {
       datos;
 
     try {
+      logger.info("🔄 Iniciando realizarCierreDiario", {
+        punto_atencion_id,
+        usuario_id,
+        fecha: fecha.toISOString(),
+        num_detalles: detalles?.length || 0,
+      });
+
       // 1. Validar que sea posible realizar el cierre
+      logger.info("📋 Validando cierre posible...");
       const validacion = await this.validarCierrePosible(
         punto_atencion_id,
         fecha,
@@ -399,6 +407,10 @@ class CierreService {
       );
 
       if (!validacion.valido) {
+        logger.warn("❌ Validación de cierre falló", {
+          razon: validacion.razon,
+          codigo: validacion.codigo,
+        });
         return {
           success: false,
           error: validacion.razon,
@@ -406,22 +418,27 @@ class CierreService {
         };
       }
 
-      // 2. Ejecutar todo en una transacción
-      const resultado = await prisma.$transaction(async (tx) => {
-        const fechaDate = new Date(
-          `${fecha.toISOString().split("T")[0]}T00:00:00.000Z`
-        );
-        const { gte: fechaInicio } = gyeDayRangeUtcFromDate(fecha);
+      logger.info("✅ Validación exitosa, iniciando transacción...");
 
-        // 2.1. Crear o actualizar CuadreCaja
-        let cuadre;
-        const cuadreExistente = await tx.cuadreCaja.findFirst({
-          where: {
-            punto_atencion_id,
-            fecha: { gte: new Date(fechaInicio) },
-            estado: { in: ["ABIERTO", "PARCIAL"] },
-          },
-        });
+      // 2. Ejecutar todo en una transacción con timeout de 30 segundos
+      const resultado = await prisma.$transaction(
+        async (tx) => {
+          logger.info("🔧 Dentro de la transacción");
+          const fechaDate = new Date(
+            `${fecha.toISOString().split("T")[0]}T00:00:00.000Z`
+          );
+          const { gte: fechaInicio } = gyeDayRangeUtcFromDate(fecha);
+
+          // 2.1. Crear o actualizar CuadreCaja
+          logger.info("📦 Buscando cuadre existente...");
+          let cuadre;
+          const cuadreExistente = await tx.cuadreCaja.findFirst({
+            where: {
+              punto_atencion_id,
+              fecha: { gte: new Date(fechaInicio) },
+              estado: { in: ["ABIERTO", "PARCIAL"] },
+            },
+          });
 
         const totalIngresos = detalles.reduce(
           (sum, d) => sum + d.ingresos_periodo,
@@ -471,6 +488,8 @@ class CierreService {
           });
         }
 
+        logger.info("✅ Cuadre creado/actualizado", { cuadre_id: cuadre.id });
+
         // 2.2. Crear detalles del cuadre (solo si hay detalles)
         if (detalles.length > 0) {
           await tx.detalleCuadreCaja.createMany({
@@ -504,6 +523,7 @@ class CierreService {
         }
 
         // 2.3. Crear o actualizar CierreDiario
+        logger.info("🔍 Buscando cierre diario existente...");
         let cierreDiario;
         const cierreExistente = await tx.cierreDiario.findUnique({
           where: {
@@ -559,7 +579,10 @@ class CierreService {
           });
         }
 
+        logger.info("✅ Cierre diario creado/actualizado", { cierre_id: cierreDiario.id });
+
         // 2.4. Finalizar jornada activa si existe
+        logger.info("🔍 Buscando jornada activa...");
         const jornadaActiva = await tx.jornada.findFirst({
           where: {
             usuario_id,
@@ -595,6 +618,9 @@ class CierreService {
         // CRÍTICO: El saldo al cierre (conteo físico) es el saldo inicial
         // del siguiente día. Este es el dinero real que tiene el punto.
         // ═══════════════════════════════════════════════════════════════════
+        logger.info("💰 Actualizando saldos para siguiente día...", {
+          num_detalles: detalles.length,
+        });
         if (detalles.length > 0) {
           for (const detalle of detalles) {
             await tx.saldo.upsert({
@@ -641,7 +667,12 @@ class CierreService {
           cierreDiario,
           jornadaFinalizada,
         };
-      });
+      },
+      {
+        maxWait: 30000, // Espera máxima de 30 segundos para adquirir lock
+        timeout: 45000, // Timeout total de 45 segundos para toda la transacción
+      }
+      );
 
       logger.info("✅ Cierre diario completado exitosamente", {
         cierre_id: resultado.cierreDiario.id,
