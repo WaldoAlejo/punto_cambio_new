@@ -104,11 +104,11 @@ export default function ServiciosExternosPage() {
                       {SERVICIOS_LABELS[saldo.servicio] || saldo.servicio}
                     </p>
                     <p className="text-base font-bold text-green-600">
-                      ${saldo.saldo_asignado.toFixed(2)}
+                      ${Number(saldo.saldo_asignado).toFixed(2)}
                     </p>
                     <div className="text-xs text-gray-500 mt-1">
-                      <span>Billetes: <b>${saldo.billetes?.toFixed(2) ?? '0.00'}</b></span><br />
-                      <span>Monedas: <b>${saldo.monedas_fisicas?.toFixed(2) ?? '0.00'}</b></span>
+                      <span>Billetes: <b>${Number(saldo.billetes || 0).toFixed(2)}</b></span><br />
+                      <span>Monedas: <b>${Number(saldo.monedas_fisicas || 0).toFixed(2)}</b></span>
                     </div>
                   </div>
                 ))}
