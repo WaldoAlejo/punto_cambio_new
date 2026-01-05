@@ -668,4 +668,148 @@ router.post(
   }
 );
 
+// ============ Admin: resumen de saldos por servicio ============
+router.get(
+  "/saldos",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (_req: Request, res: Response) => {
+    try {
+      const usdId = await ensureUsdMonedaId();
+
+      const rows = await prisma.servicioExternoSaldo.findMany({
+        where: { moneda_id: usdId },
+        select: { servicio: true, cantidad: true },
+      });
+
+      const agg: Record<string, number> = {};
+      for (const r of rows) {
+        agg[r.servicio] = (agg[r.servicio] || 0) + Number(r.cantidad || 0);
+      }
+
+      const result = await Promise.all(
+        Object.keys(agg).map(async (servicio) => {
+          const ultimo = await prisma.servicioExternoMovimiento.findFirst({
+            where: { servicio },
+            orderBy: { fecha: "desc" },
+            select: { fecha: true },
+          });
+          return {
+            servicio,
+            saldo_actual: Number(agg[servicio]),
+            ultimo_movimiento: ultimo?.fecha || null,
+          };
+        })
+      );
+
+      res.json({ success: true, saldos: result });
+    } catch (error) {
+      console.error("Error obteniendo saldos servicios externos:", error);
+      res.status(500).json({ success: false, message: "Error obteniendo saldos" });
+    }
+  }
+);
+
+// ============ Admin: saldos por punto ============
+router.get(
+  "/saldos-por-punto",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (_req: Request, res: Response) => {
+    try {
+      const usdId = await ensureUsdMonedaId();
+      const rows = await prisma.servicioExternoSaldo.findMany({
+        where: { moneda_id: usdId },
+        include: { puntoAtencion: { select: { id: true, nombre: true } } },
+      });
+
+      const mapped = rows.map((r) => ({
+        punto_atencion_id: r.punto_atencion_id,
+        punto_atencion_nombre: r.puntoAtencion?.nombre || null,
+        servicio: r.servicio,
+        saldo_actual: Number(r.cantidad || 0),
+      }));
+
+      res.json({ success: true, saldos: mapped });
+    } catch (error) {
+      console.error("Error obteniendo saldos por punto:", error);
+      res.status(500).json({ success: false, message: "Error obteniendo saldos por punto" });
+    }
+  }
+);
+
+// ============ Admin: historial de asignaciones ============
+router.get(
+  "/historial-asignaciones",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (_req: Request, res: Response) => {
+    try {
+      const rows = await prisma.servicioExternoAsignacion.findMany({
+        orderBy: { created_at: "desc" },
+        take: 200,
+        include: {
+          puntoAtencion: { select: { id: true, nombre: true } },
+          usuarioAsignador: { select: { id: true, nombre: true } },
+        },
+      });
+
+      const mapped = rows.map((r) => ({
+        id: r.id,
+        punto_atencion_id: r.punto_atencion_id,
+        punto_atencion_nombre: r.puntoAtencion?.nombre || null,
+        servicio: r.servicio,
+        monto_asignado: Number(r.monto || 0),
+        creado_por: r.usuarioAsignador?.nombre || null,
+        creado_en: r.created_at,
+      }));
+
+      res.json({ success: true, historial: mapped });
+    } catch (error) {
+      console.error("Error historial asignaciones:", error);
+      res.status(500).json({ success: false, message: "Error obteniendo historial" });
+    }
+  }
+);
+
+// ============ Admin: listar movimientos (query) ============
+router.get(
+  "/movimientos",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    try {
+      const { pointId, servicio, tipo_movimiento, desde, hasta, limit } = req.query as any;
+      const take = Math.min(Math.max(parseInt(limit || "100", 10), 1), 1000);
+
+      const where: any = {};
+      if (pointId && pointId !== "ALL") where.punto_atencion_id = pointId;
+      if (servicio && SERVICIOS_VALIDOS.includes(servicio)) where.servicio = servicio;
+      if (tipo_movimiento && TIPOS_VALIDOS.includes(tipo_movimiento)) where.tipo_movimiento = tipo_movimiento;
+      if (desde || hasta) {
+        where.fecha = {
+          gte: desde ? new Date(`${desde}T00:00:00.000Z`) : undefined,
+          lte: hasta ? new Date(`${hasta}T23:59:59.999Z`) : undefined,
+        };
+      }
+
+      const rows = await prisma.servicioExternoMovimiento.findMany({
+        where,
+        orderBy: { fecha: "desc" },
+        take,
+        include: {
+          usuario: { select: { id: true, nombre: true } },
+          moneda: { select: { id: true, nombre: true, codigo: true, simbolo: true } },
+          puntoAtencion: { select: { id: true, nombre: true } },
+        },
+      });
+
+      res.json({ success: true, movimientos: rows });
+    } catch (error) {
+      console.error("Error listando movimientos admin:", error);
+      res.status(500).json({ success: false, message: "Error listando movimientos" });
+    }
+  }
+);
+
 export default router;

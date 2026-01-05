@@ -223,7 +223,7 @@ export default function ServiciosExternosAdmin() {
     showConfirmation("Confirmar movimiento", mensaje, async () => {
       try {
         setSaving(true);
-        await axiosInstance.post("/servicios-externos", {
+        await axiosInstance.post("/servicios-externos/movimientos", {
           punto_atencion_id: nuevoMovimiento.punto_atencion_id,
           servicio: nuevoMovimiento.servicio,
           tipo: nuevoMovimiento.tipo,
