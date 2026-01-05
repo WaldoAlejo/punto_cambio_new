@@ -325,7 +325,8 @@ export class ServientregaDBService {
     desde?: string,
     hasta?: string,
     punto_atencion_id?: string,
-    usuario_id?: string
+    usuario_id?: string,
+    agencia_codigo?: string
   ) {
     // 🔧 Convertir fechas CORRECTAMENTE considerando que las guías se almacenan en UTC
     // El usuario proporciona fechas en formato local Ecuador (UTC-5)
@@ -365,18 +366,26 @@ export class ServientregaDBService {
       hasta_convertido: hastaDate.toISOString(),
       punto_atencion_id,
       usuario_id,
+      agencia_codigo,
       offset_aplicado_horas: 5,
       nota: "Se SUMA 5 horas para convertir Ecuador time (UTC-5) a UTC para búsqueda en BD",
     });
 
-    const WHERE_CLAUSE =
-      punto_atencion_id && usuario_id
-        ? { punto_atencion_id, usuario_id }
-        : punto_atencion_id
-        ? { punto_atencion_id }
-        : usuario_id
-        ? { usuario_id }
-        : {};
+    // 🏢 IMPORTANTE: Filtrar por agencia si está disponible
+    // Esto asegura que solo se vean guías de la agencia del punto de atención
+    const WHERE_CLAUSE: any = {};
+    
+    if (agencia_codigo) {
+      WHERE_CLAUSE.agencia_codigo = agencia_codigo;
+      console.log("🏢 Filtrando por agencia:", agencia_codigo);
+    } else if (punto_atencion_id && usuario_id) {
+      WHERE_CLAUSE.punto_atencion_id = punto_atencion_id;
+      WHERE_CLAUSE.usuario_id = usuario_id;
+    } else if (punto_atencion_id) {
+      WHERE_CLAUSE.punto_atencion_id = punto_atencion_id;
+    } else if (usuario_id) {
+      WHERE_CLAUSE.usuario_id = usuario_id;
+    }
 
     console.log("🔍 [obtenerGuias] WHERE clause para búsqueda:", {
       ...WHERE_CLAUSE,
@@ -1159,11 +1168,13 @@ export class ServientregaDBService {
 
   /**
    * 📥 INGRESO de servicio externo: Cuando se genera una guía
-   * - Crea MovimientoServicioExterno (INGRESO)
-   * - Actualiza ServicioExternoSaldo (suma)
-   * - Actualiza Saldo general USD (suma)
+   * - Crea MovimientoServicioExterno (INGRESO) para registro
+   * - NO actualiza ServicioExternoSaldo (Servientrega usa ServientregaSaldo separado)
+   * - Actualiza Saldo general USD (suma - entra efectivo al punto)
    * - Registra en MovimientoSaldo para auditoría
    * Todo en transacción
+   * 
+   * NOTA: El descuento del ServientregaSaldo se hace por separado en descontarSaldo()
    */
   async registrarIngresoServicioExterno(
     puntoAtencionId: string,
@@ -1197,7 +1208,7 @@ export class ServientregaDBService {
         }
       }
 
-      // 1️⃣ Crear MovimientoServicioExterno
+      // 1️⃣ Crear MovimientoServicioExterno (solo para registro/auditoría)
       console.log("📥 [registrarIngresoServicioExterno] Creando movimiento...");
       const movimiento = await tx.servicioExternoMovimiento.create({
         data: {
@@ -1221,63 +1232,16 @@ export class ServientregaDBService {
         movimiento.id
       );
 
-      // 2️⃣ Actualizar ServicioExternoSaldo (crear o actualizar)
+      // 2️⃣ NO actualizamos ServicioExternoSaldo para SERVIENTREGA
+      // porque usa ServientregaSaldo (descontado previamente en descontarSaldo)
       console.log(
-        "📥 [registrarIngresoServicioExterno] Actualizando saldo de servicio externo..."
-      );
-      const saldoServicio = await tx.servicioExternoSaldo.findUnique({
-        where: {
-          punto_atencion_id_servicio_moneda_id: {
-            punto_atencion_id: puntoAtencionId,
-            servicio: ServicioExterno.SERVIENTREGA,
-            moneda_id: usdId,
-          },
-        },
-      });
-
-      let saldoServicioAnterior = new Prisma.Decimal(0);
-      let saldoServicioNuevo = new Prisma.Decimal(0);
-
-      if (saldoServicio) {
-        saldoServicioAnterior = saldoServicio.cantidad ?? new Prisma.Decimal(0);
-        saldoServicioNuevo = saldoServicioAnterior.add(new Prisma.Decimal(monto));
-
-        await tx.servicioExternoSaldo.update({
-          where: { id: saldoServicio.id },
-          data: {
-            cantidad: saldoServicioNuevo,
-            billetes: (typeof billetes === 'number' && !isNaN(billetes)
-              ? (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0) + billetes
-              : (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0)),
-            monedas_fisicas: (typeof monedas === 'number' && !isNaN(monedas)
-              ? (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0) + monedas
-              : (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0)),
-            bancos: (typeof bancos === 'number' && !isNaN(bancos)
-              ? (saldoServicio.bancos ? Number(saldoServicio.bancos) : 0) + bancos
-              : (saldoServicio.bancos ? Number(saldoServicio.bancos) : 0)),
-            updated_at: new Date(),
-          },
-        });
-      } else {
-        saldoServicioNuevo = new Prisma.Decimal(monto);
-        await tx.servicioExternoSaldo.create({
-          data: {
-            punto_atencion_id: puntoAtencionId,
-            servicio: ServicioExterno.SERVIENTREGA,
-            moneda_id: usdId,
-            cantidad: saldoServicioNuevo,
-            billetes: typeof billetes === 'number' ? billetes : 0,
-            monedas_fisicas: typeof monedas === 'number' ? monedas : 0,
-            bancos: typeof bancos === 'number' ? bancos : 0,
-          },
-        });
-      }
-
-      console.log(
-        "✅ [registrarIngresoServicioExterno] Saldo de servicio actualizado"
+        "ℹ️ [registrarIngresoServicioExterno] Saltando actualización de ServicioExternoSaldo (Servientrega usa tabla separada)"
       );
 
-      // 3️⃣ Actualizar Saldo general (USD divisas)
+      const saldoServicioAnterior = new Prisma.Decimal(0);
+      const saldoServicioNuevo = new Prisma.Decimal(0);
+
+      // 3️⃣ Actualizar Saldo general (USD divisas) - SUMA porque entra efectivo
       console.log(
         "📥 [registrarIngresoServicioExterno] Actualizando saldo general USD..."
       );

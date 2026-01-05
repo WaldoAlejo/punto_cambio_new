@@ -755,14 +755,40 @@ router.post("/generar-guia", async (req, res) => {
           );
         }
 
-        // 📌 SIEMPRE guardar la cabecera de guía con punto de atención, usuario y costo
+        // 📌 SIEMPRE guardar la cabecera de guía con punto de atención, usuario, agencia y costo
         // ⚠️ IMPORTANTE: costo_envio = costo real de envío, NO incluye valor_declarado
+        
+        // Obtener agencia del punto de atención
+        let agencia_codigo: string | undefined;
+        let agencia_nombre: string | undefined;
+        
+        if (punto_atencion_id_captado) {
+          const puntoAtencion = await prisma.puntoAtencion.findUnique({
+            where: { id: punto_atencion_id_captado },
+            select: {
+              servientrega_agencia_codigo: true,
+              servientrega_agencia_nombre: true,
+            },
+          });
+          
+          agencia_codigo = puntoAtencion?.servientrega_agencia_codigo || undefined;
+          agencia_nombre = puntoAtencion?.servientrega_agencia_nombre || undefined;
+          
+          console.log("🏢 Agencia del punto de atención:", {
+            punto_atencion_id: punto_atencion_id_captado,
+            agencia_codigo,
+            agencia_nombre,
+          });
+        }
+        
         const guiaData: any = {
           numero_guia: guia,
           proceso: fetchData?.proceso || "Guia Generada",
           base64_response: base64,
           punto_atencion_id: punto_atencion_id_captado || undefined,
           usuario_id: req.user?.id || undefined, // 👈 IMPORTANTE: Guardar usuario_id para rastrabilidad
+          agencia_codigo, // 👈 Código de agencia Servientrega
+          agencia_nombre, // 👈 Nombre de agencia Servientrega
           costo_envio: valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
           valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta
         };
@@ -1021,16 +1047,28 @@ router.get("/guias", async (req, res) => {
     // 🔐 Obtener punto_atencion_id Y usuario_id del usuario autenticado
     const punto_atencion_id = req.user?.punto_atencion_id;
     const usuario_id = req.user?.id;
+    
+    // 🏢 Obtener agencia Servientrega del punto de atención
+    let agencia_codigo: string | undefined;
+    
+    if (punto_atencion_id) {
+      const puntoAtencion = await prisma.puntoAtencion.findUnique({
+        where: { id: punto_atencion_id },
+        select: { servientrega_agencia_codigo: true },
+      });
+      agencia_codigo = puntoAtencion?.servientrega_agencia_codigo || undefined;
+    }
 
     console.log("🔍 GET /guias - Filtro de búsqueda:", {
       punto_atencion_id,
       usuario_id,
+      agencia_codigo,
       desde,
       hasta,
     });
 
-    // ⚠️ IMPORTANTE: Usar usuario_id como filtro principal si no hay punto_atencion_id
-    // Esto asegura que se vean las guías creadas aunque la jornada no esté activa
+    // ⚠️ IMPORTANTE: Filtrar por agencia si el punto tiene una asignada
+    // Esto evita que diferentes puntos vean guías de otras agencias
     if (!punto_atencion_id && !usuario_id) {
       console.warn("⚠️ Usuario sin punto_atencion_id ni usuario_id asignado");
       return res.json([]);
@@ -1040,7 +1078,8 @@ router.get("/guias", async (req, res) => {
       (desde as string) || undefined,
       (hasta as string) || undefined,
       punto_atencion_id || undefined, // 👈 FILTRAR por punto de atención
-      usuario_id || undefined // 👈 FILTRAR por usuario (fallback si no hay punto)
+      usuario_id || undefined, // 👈 FILTRAR por usuario (fallback si no hay punto)
+      agencia_codigo // 👈 FILTRAR por agencia Servientrega
     );
 
     console.log("📋 Guías recuperadas de BD:", {

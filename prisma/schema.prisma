@@ -530,6 +530,8 @@ model ServientregaGuia {
   destinatario_id   String?
   punto_atencion_id String?
   usuario_id        String?
+  agencia_codigo    String?                  // Código de agencia Servientrega del punto
+  agencia_nombre    String?                  // Nombre de agencia Servientrega del punto
   valor_declarado   Decimal?                 @default(0) @db.Decimal(15, 2)
   costo_envio       Decimal?                 @default(0) @db.Decimal(15, 2)
   created_at        DateTime                 @default(now())
@@ -545,6 +547,7 @@ model ServientregaGuia {
   @@index([usuario_id, punto_atencion_id])
   @@index([proceso])
   @@index([estado])
+  @@index([agencia_codigo])
 }
 
 model ServientregaSaldo {
