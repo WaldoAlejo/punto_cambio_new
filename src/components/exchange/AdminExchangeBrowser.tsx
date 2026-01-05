@@ -218,13 +218,9 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
       if (activeTab === "cambios") {
         await loadExchanges(selectedPointId);
       } else if (activeTab === "cambiosParciales") {
-        await loadPartialExchanges(
-          selectedPointId === "ALL" ? undefined : selectedPointId
-        );
+        await loadPartialExchanges(selectedPointId);
       } else {
-        await loadExternalServices(
-          selectedPointId === "ALL" ? (undefined as any) : selectedPointId
-        );
+        await loadExternalServices(selectedPointId);
       }
       setIsRefreshing(false);
     })();

@@ -61,7 +61,7 @@ export async function listarMovimientosServiciosExternosAdmin(params: {
   limit?: number;
 }) {
   const { data } = await axiosInstance.get(
-    `/servicios-externos/admin/movimientos`,
+    `/servicios-externos/movimientos`,
     {
       params,
     }

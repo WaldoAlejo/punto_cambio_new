@@ -1135,11 +1135,24 @@ router.get(
         const toStr = (to || (from as string)) as string;
         gte = gyeDayRangeUtcFromDateOnly(fromStr).gte;
         lt = gyeDayRangeUtcFromDateOnly(toStr).lt;
-      } else {
-        const dateStr = (date && String(date)) || todayGyeDateOnly();
+      } else if (date) {
+        const dateStr = String(date);
         const r = gyeDayRangeUtcFromDateOnly(dateStr);
         gte = r.gte;
         lt = r.lt;
+      } else {
+        // Sin filtro de fecha para ADMIN/SUPER_USUARIO: últimos 30 días
+        // Para OPERADOR: día actual
+        if (req.user.rol === "ADMIN" || req.user.rol === "SUPER_USUARIO") {
+          const now = new Date();
+          gte = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 días atrás
+          lt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Mañana
+        } else {
+          const dateStr = todayGyeDateOnly();
+          const r = gyeDayRangeUtcFromDateOnly(dateStr);
+          gte = r.gte;
+          lt = r.lt;
+        }
       }
 
       // Primero intentamos una consulta simple para diagnosticar el problema
@@ -1186,7 +1199,7 @@ router.get(
             punto_atencion_id: true,
           },
           orderBy: { fecha: "desc" },
-          take: 50,
+          take: req.user.rol === "ADMIN" || req.user.rol === "SUPER_USUARIO" ? 500 : 50,
         });
 
         // Si la consulta básica funciona, intentamos agregar las relaciones
@@ -1236,7 +1249,7 @@ router.get(
               puntoAtencion: { select: { id: true, nombre: true } },
             },
             orderBy: { fecha: "desc" },
-            take: 50,
+            take: req.user.rol === "ADMIN" || req.user.rol === "SUPER_USUARIO" ? 500 : 50,
           });
         }
       } catch (relationError) {
@@ -1269,7 +1282,7 @@ router.get(
             punto_atencion_id: true,
           },
           orderBy: { fecha: "desc" },
-          take: 50,
+          take: req.user.rol === "ADMIN" || req.user.rol === "SUPER_USUARIO" ? 500 : 50,
         });
       }
 
