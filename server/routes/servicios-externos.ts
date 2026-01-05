@@ -902,12 +902,21 @@ router.get(
 
           const saldoActual = saldos.find((s) => s.servicio === servicio);
 
+          // Calcular saldo disponible = Asignación inicial + Movimientos acumulados
+          // En ServicioExternoSaldo, el campo cantidad o (billetes + monedas) representa el delta acumulado
+          const montoAsignado = ultimaAsignacion ? Number(ultimaAsignacion.monto) : 0;
+          const billetes = Number(saldoActual?.billetes || 0);
+          const monedas = Number(saldoActual?.monedas_fisicas || 0);
+          const movimientosAcumulados = billetes + monedas;
+          const saldoDisponible = montoAsignado + movimientosAcumulados;
+
           return {
             servicio,
-            saldo_asignado: ultimaAsignacion ? Number(ultimaAsignacion.monto) : 0,
+            saldo_asignado: saldoDisponible, // Saldo disponible actual (no la asignación inicial)
+            monto_asignado_inicial: montoAsignado, // Agregar monto inicial para referencia
             actualizado_en: ultimaAsignacion?.fecha?.toISOString() || null,
-            billetes: saldoActual?.billetes || 0,
-            monedas_fisicas: saldoActual?.monedas_fisicas || 0,
+            billetes: billetes,
+            monedas_fisicas: monedas,
           };
         })
       );
