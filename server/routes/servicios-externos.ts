@@ -688,15 +688,16 @@ router.get(
       }
 
       const result = await Promise.all(
-        Object.keys(agg).map(async (servicio) => {
+        Object.keys(agg).map(async (servicioKey) => {
+          const servicio = servicioKey as any;
           const ultimo = await prisma.servicioExternoMovimiento.findFirst({
-            where: { servicio },
+            where: { servicio: servicio as any },
             orderBy: { fecha: "desc" },
             select: { fecha: true },
           });
           return {
             servicio,
-            saldo_actual: Number(agg[servicio]),
+            saldo_actual: Number(agg[servicioKey]),
             ultimo_movimiento: ultimo?.fecha || null,
           };
         })
@@ -745,23 +746,23 @@ router.get(
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (_req: Request, res: Response) => {
     try {
-      const rows = await prisma.servicioExternoAsignacion.findMany({
-        orderBy: { created_at: "desc" },
+      const rows = (await prisma.servicioExternoAsignacion.findMany({
+        orderBy: { fecha: "desc" },
         take: 200,
         include: {
           puntoAtencion: { select: { id: true, nombre: true } },
           usuarioAsignador: { select: { id: true, nombre: true } },
         },
-      });
+      })) as any[];
 
-      const mapped = rows.map((r) => ({
+      const mapped = rows.map((r: any) => ({
         id: r.id,
         punto_atencion_id: r.punto_atencion_id,
         punto_atencion_nombre: r.puntoAtencion?.nombre || null,
         servicio: r.servicio,
         monto_asignado: Number(r.monto || 0),
         creado_por: r.usuarioAsignador?.nombre || null,
-        creado_en: r.created_at,
+        creado_en: r.fecha,
       }));
 
       res.json({ success: true, historial: mapped });
