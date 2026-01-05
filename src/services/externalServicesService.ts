@@ -150,10 +150,10 @@ export async function cerrarCierreServiciosExternos(payload: {
 
 export interface SaldoAsignado {
   servicio: ServicioExterno;
-  saldo_asignado: number;
+  saldo_asignado: number | null;
   actualizado_en: string;
-  billetes: number;
-  monedas_fisicas: number;
+  billetes: number | null;
+  monedas_fisicas: number | null;
 }
 
 export async function obtenerSaldosAsignados(params?: {
