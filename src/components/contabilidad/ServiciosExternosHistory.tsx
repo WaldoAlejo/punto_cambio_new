@@ -25,7 +25,7 @@ type Row = {
   servicio: ServicioExterno;
   tipo_movimiento: TipoMovimiento;
   moneda_id: string;
-  monto: number;
+  monto: number | null;
   usuario_id: string;
   fecha: string;
   descripcion?: string;
@@ -199,7 +199,7 @@ export default function ServiciosExternosHistory() {
                     ?.label || it.servicio}
                 </td>
                 <td className="p-2">{it.tipo_movimiento}</td>
-                <td className="p-2 text-right">{it.monto.toFixed(2)}</td>
+                <td className="p-2 text-right">{(Number(it.monto) || 0).toFixed(2)}</td>
                 <td className="p-2">
                   {it.numero_referencia?.trim() ? it.numero_referencia : "-"}
                 </td>
