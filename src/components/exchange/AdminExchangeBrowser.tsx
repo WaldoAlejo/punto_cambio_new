@@ -169,24 +169,14 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
 
   const loadPartialExchanges = useCallback(async (pointId?: string) => {
     try {
-      const response = await fetch(
-        `/api/exchanges/partial?pointId=${pointId || "ALL"}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
+      const { exchanges, error } = await exchangeService.getPartialExchanges(
+        pointId
       );
-
-      if (!response.ok) {
-        throw new Error("Error al cargar cambios parciales");
-      }
-
-      const data = await response.json();
-      setPartialExchanges(data.success ? data.exchanges : []);
-
-      if (!data.success) {
-        toast.error("No se pudieron cargar los cambios parciales");
+      if (error) {
+        setPartialExchanges([]);
+        toast.error(error);
+      } else {
+        setPartialExchanges(exchanges);
       }
     } catch (e: any) {
       setPartialExchanges([]);

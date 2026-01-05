@@ -265,6 +265,33 @@ export const exchangeService = {
     }
   },
 
+  async getPartialExchanges(
+    pointId?: string
+  ): Promise<{ exchanges: CambioDivisa[]; error: string | null }> {
+    try {
+      const response = await apiService.get<ExchangesResponse>(
+        `/exchanges/partial?pointId=${encodeURIComponent(pointId || "ALL")}`
+      );
+
+      if (response?.success) {
+        return { exchanges: response.exchanges, error: null };
+      } else {
+        return {
+          exchanges: [],
+          error: response?.error || "Error al obtener los cambios parciales",
+        };
+      }
+    } catch (error: any) {
+      console.error("Error fetching partial exchanges:", error);
+      return {
+        exchanges: [],
+        error:
+          error?.message ||
+          "Error de conexión al obtener cambios parciales",
+      };
+    }
+  },
+
   async closePendingExchange(
     exchangeId: string
   ): Promise<{ exchange: CambioDivisa | null; error: string | null }> {

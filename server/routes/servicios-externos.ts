@@ -569,7 +569,9 @@ router.delete(
             dBk = Math.max(0, montoNum - (billetes + monedas)) * mult;
           }
 
-          const nuevoTotal = Number(sGen.cantidad) + (montoNum * mult);
+          const saldoAnterior = Number(sGen.cantidad);
+          const nuevoTotal = saldoAnterior + (montoNum * mult);
+          const delta = nuevoTotal - saldoAnterior;
 
           await tx.saldo.update({
             where: { id: sGen.id },
@@ -583,12 +585,13 @@ router.delete(
           });
 
           // Trazabilidad del ajuste
+          // Para AJUSTE, el monto debe incluir el signo (positivo o negativo)
           await registrarMovimientoSaldo({
             puntoAtencionId: mov.punto_atencion_id,
             monedaId: mov.moneda_id,
             tipoMovimiento: TipoMov.AJUSTE,
-            monto: montoNum,
-            saldoAnterior: Number(sGen.cantidad),
+            monto: delta,
+            saldoAnterior: saldoAnterior,
             saldoNuevo: nuevoTotal,
             tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
             referenciaId: mov.id,
