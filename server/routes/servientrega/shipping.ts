@@ -206,9 +206,19 @@ router.post("/generar-guia", async (req, res) => {
     const punto_atencion_id_captado = req.body?.punto_atencion_id || undefined;
     const costoEnvioPrecalculado = Number(req.body?.valor_total ?? 0) || 0;
 
+    // Capturar desglose de pago (Efectivo/Banco/Mixto)
+    const metodoIngreso = (req.body?.metodo_ingreso || "EFECTIVO").toString().toUpperCase();
+    const billetesCaptados = Number(req.body?.billetes || 0);
+    const monedasCaptadas = Number(req.body?.monedas_fisicas || 0);
+    const bancosCaptados = Number(req.body?.bancos || 0);
+
     console.log("🔍 CAPTURA INICIAL:", {
       punto_atencion_id: punto_atencion_id_captado || "NO RECIBIDO",
       costoEnvioPrecalculado,
+      metodoIngreso,
+      billetesCaptados,
+      monedasCaptadas,
+      bancosCaptados,
       yaFormateado,
       req_body_keys: Object.keys(req.body || {}),
       valor_total_type: typeof req.body?.valor_total,
@@ -820,12 +830,31 @@ router.post("/generar-guia", async (req, res) => {
           });
 
           console.log("🔄 PASO 2: Registrando ingreso de servicio externo...");
+          
+          // Calcular desglose final basado en el valor real de la guía
+          let billetes = 0;
+          let monedas = 0;
+          let bancos = 0;
+
+          if (metodoIngreso === "BANCO") {
+            bancos = valorTotalGuia;
+          } else if (metodoIngreso === "MIXTO") {
+            billetes = billetesCaptados;
+            monedas = monedasCaptadas;
+            bancos = Math.max(0, valorTotalGuia - (billetes + monedas));
+          } else {
+            // EFECTIVO o default
+            billetes = billetesCaptados || valorTotalGuia; // Si no enviaron desglose, asumir todo billetes
+            monedas = monedasCaptadas;
+          }
+
           const resultadoIngreso = await db.registrarIngresoServicioExterno(
             punto_atencion_id_captado,
             Number(valorTotalGuia),
             guia,
-            Number(req.body?.billetes || 0),
-            Number(req.body?.monedas_fisicas || 0)
+            billetes,
+            monedas,
+            bancos
           );
 
           console.log(

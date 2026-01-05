@@ -1170,7 +1170,8 @@ export class ServientregaDBService {
     monto: number,
     numeroGuia: string,
     billetes?: number,
-    monedas?: number
+    monedas?: number,
+    bancos?: number
   ) {
     return prisma.$transaction(async (tx) => {
       console.log("📥 [registrarIngresoServicioExterno] Iniciando:", {
@@ -1179,11 +1180,22 @@ export class ServientregaDBService {
         numeroGuia,
         billetes,
         monedas,
+        bancos,
       });
 
       // Obtener IDs necesarios
       const usdId = await ensureUsdMonedaId();
       const systemUserId = await ensureSystemUserId();
+
+      // Determinar método de ingreso para el movimiento
+      let metodoIngreso = "EFECTIVO";
+      if (bancos && bancos > 0) {
+        if ((billetes && billetes > 0) || (monedas && monedas > 0)) {
+          metodoIngreso = "MIXTO";
+        } else {
+          metodoIngreso = "BANCO";
+        }
+      }
 
       // 1️⃣ Crear MovimientoServicioExterno
       console.log("📥 [registrarIngresoServicioExterno] Creando movimiento...");
@@ -1199,6 +1211,8 @@ export class ServientregaDBService {
           usuario_id: systemUserId,
           billetes: billetes !== undefined ? new Prisma.Decimal(billetes) : undefined,
           monedas_fisicas: monedas !== undefined ? new Prisma.Decimal(monedas) : undefined,
+          bancos: bancos !== undefined ? new Prisma.Decimal(bancos) : undefined,
+          metodo_ingreso: metodoIngreso as any,
         },
       });
 
@@ -1234,10 +1248,13 @@ export class ServientregaDBService {
             cantidad: saldoServicioNuevo,
             billetes: (typeof billetes === 'number' && !isNaN(billetes)
               ? (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0) + billetes
-              : saldoServicio.billetes ? Number(saldoServicio.billetes) : 0),
+              : (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0)),
             monedas_fisicas: (typeof monedas === 'number' && !isNaN(monedas)
               ? (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0) + monedas
-              : saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0),
+              : (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0)),
+            bancos: (typeof bancos === 'number' && !isNaN(bancos)
+              ? (saldoServicio.bancos ? Number(saldoServicio.bancos) : 0) + bancos
+              : (saldoServicio.bancos ? Number(saldoServicio.bancos) : 0)),
             updated_at: new Date(),
           },
         });
@@ -1251,6 +1268,7 @@ export class ServientregaDBService {
             cantidad: saldoServicioNuevo,
             billetes: typeof billetes === 'number' ? billetes : 0,
             monedas_fisicas: typeof monedas === 'number' ? monedas : 0,
+            bancos: typeof bancos === 'number' ? bancos : 0,
           },
         });
       }
@@ -1293,6 +1311,11 @@ export class ServientregaDBService {
                   ? saldoGeneral.monedas_fisicas.add(new Prisma.Decimal(monedas))
                   : new Prisma.Decimal(monedas))
               : saldoGeneral.monedas_fisicas,
+            bancos: bancos !== undefined
+              ? (saldoGeneral.bancos
+                  ? saldoGeneral.bancos.add(new Prisma.Decimal(bancos))
+                  : new Prisma.Decimal(bancos))
+              : saldoGeneral.bancos,
             updated_at: new Date(),
           },
         });
@@ -1305,6 +1328,7 @@ export class ServientregaDBService {
             cantidad: saldoGeneralNuevo,
             billetes: billetes !== undefined ? new Prisma.Decimal(billetes) : undefined,
             monedas_fisicas: monedas !== undefined ? new Prisma.Decimal(monedas) : undefined,
+            bancos: bancos !== undefined ? new Prisma.Decimal(bancos) : undefined,
           },
         });
       }
@@ -1367,18 +1391,32 @@ export class ServientregaDBService {
     monto: number,
     numeroGuia: string,
     billetes?: number,
-    monedas?: number
+    monedas?: number,
+    bancos?: number
   ) {
     return prisma.$transaction(async (tx) => {
       console.log("📤 [revertirIngresoServicioExterno] Iniciando:", {
         puntoAtencionId,
         monto,
         numeroGuia,
+        billetes,
+        monedas,
+        bancos,
       });
 
       // Obtener IDs necesarios
       const usdId = await ensureUsdMonedaId();
       const systemUserId = await ensureSystemUserId();
+
+      // Determinar método de ingreso para el movimiento de reversión
+      let metodoIngreso = "EFECTIVO";
+      if (bancos && bancos > 0) {
+        if ((billetes && billetes > 0) || (monedas && monedas > 0)) {
+          metodoIngreso = "MIXTO";
+        } else {
+          metodoIngreso = "BANCO";
+        }
+      }
 
       // 1️⃣ Crear MovimientoServicioExterno (EGRESO - reversión)
       console.log(
@@ -1394,6 +1432,10 @@ export class ServientregaDBService {
           numero_referencia: numeroGuia,
           descripcion: `Reversión por cancelación de guía Servientrega #${numeroGuia}`,
           usuario_id: systemUserId,
+          billetes: billetes !== undefined ? new Prisma.Decimal(-billetes) : undefined,
+          monedas_fisicas: monedas !== undefined ? new Prisma.Decimal(-monedas) : undefined,
+          bancos: bancos !== undefined ? new Prisma.Decimal(-bancos) : undefined,
+          metodo_ingreso: metodoIngreso as any,
         },
       });
 
@@ -1438,10 +1480,13 @@ export class ServientregaDBService {
             cantidad: saldoServicioNuevo,
             billetes: (typeof billetes === 'number' && !isNaN(billetes)
               ? (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0) - billetes
-              : saldoServicio.billetes ? Number(saldoServicio.billetes) : 0),
+              : (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0)),
             monedas_fisicas: (typeof monedas === 'number' && !isNaN(monedas)
               ? (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0) - monedas
-              : saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0),
+              : (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0)),
+            bancos: (typeof bancos === 'number' && !isNaN(bancos)
+              ? (saldoServicio.bancos ? Number(saldoServicio.bancos) : 0) - bancos
+              : (saldoServicio.bancos ? Number(saldoServicio.bancos) : 0)),
             updated_at: new Date(),
           },
         });
@@ -1458,6 +1503,7 @@ export class ServientregaDBService {
             cantidad: saldoServicioNuevo,
             billetes: typeof billetes === 'number' ? -billetes : 0,
             monedas_fisicas: typeof monedas === 'number' ? -monedas : 0,
+            bancos: typeof bancos === 'number' ? -bancos : 0,
           },
         });
       }
@@ -1501,10 +1547,13 @@ export class ServientregaDBService {
             cantidad: saldoGeneralNuevo,
             billetes: (typeof billetes === 'number' && !isNaN(billetes)
               ? Math.max(0, (saldoGeneral.billetes ? Number(saldoGeneral.billetes) : 0) - billetes)
-              : saldoGeneral.billetes ? Number(saldoGeneral.billetes) : 0),
+              : (saldoGeneral.billetes ? Number(saldoGeneral.billetes) : 0)),
             monedas_fisicas: (typeof monedas === 'number' && !isNaN(monedas)
               ? Math.max(0, (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) : 0) - monedas)
-              : saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) : 0),
+              : (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) : 0)),
+            bancos: (typeof bancos === 'number' && !isNaN(bancos)
+              ? Math.max(0, (saldoGeneral.bancos ? Number(saldoGeneral.bancos) : 0) - bancos)
+              : (saldoGeneral.bancos ? Number(saldoGeneral.bancos) : 0)),
             updated_at: new Date(),
           },
         });
@@ -1520,6 +1569,7 @@ export class ServientregaDBService {
             cantidad: saldoGeneralNuevo,
             billetes: typeof billetes === 'number' ? -billetes : 0,
             monedas_fisicas: typeof monedas === 'number' ? -monedas : 0,
+            bancos: typeof bancos === 'number' ? -bancos : 0,
           },
         });
       }

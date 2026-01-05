@@ -1518,27 +1518,26 @@ router.patch(
           });
 
           // Registrar movimiento de saldo
-          await tx.movimientoSaldo.create({
-            data: {
-              punto_atencion_id: cambio.punto_atencion_id,
-              moneda_id: cambio.moneda_origen_id,
-              tipo_movimiento: TipoMovimiento.INGRESO,
-              monto: montoRestante,
-              saldo_anterior:
-                num(saldoOrigen.cantidad) + num(saldoOrigen.bancos),
-              saldo_nuevo:
+          await registrarMovimientoSaldo(
+            {
+              puntoAtencionId: cambio.punto_atencion_id,
+              monedaId: cambio.moneda_origen_id,
+              tipoMovimiento: TipoMovimiento.INGRESO,
+              monto: round2(ingresoEfRestante + ingresoBkRestante),
+              saldoAnterior: round2(num(saldoOrigen.cantidad) + num(saldoOrigen.bancos)),
+              saldoNuevo: round2(
                 num(saldoOrigen.cantidad) +
-                num(saldoOrigen.bancos) +
-                ingresoEfRestante +
-                ingresoBkRestante,
-              tipo_referencia: "CAMBIO_DIVISA_CIERRE",
-              referencia_id: cambio.id,
-              usuario_id: req.user!.id,
-              descripcion: `Cierre de cambio pendiente - Monto restante: ${montoRestante.toFixed(
-                2
-              )}`,
+                  num(saldoOrigen.bancos) +
+                  ingresoEfRestante +
+                  ingresoBkRestante
+              ),
+              tipoReferencia: TipoReferencia.EXCHANGE,
+              referenciaId: cambio.id,
+              descripcion: `Cierre de cambio pendiente (ingreso restante) - Recibo: ${cambio.numero_recibo}`,
+              usuarioId: req.user!.id,
             },
-          });
+            tx
+          );
         });
       }
 
@@ -1807,7 +1806,23 @@ router.patch(
 
         // Actualizar saldos en transacción
         await prisma.$transaction(async (tx) => {
-          // Actualizar saldo origen (ingreso)
+          // 1) Actualizar saldo origen (ingreso del monto restante)
+          const existingSaldoOrigen = await tx.saldo.findUnique({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: cambio.punto_atencion_id,
+                moneda_id: cambio.moneda_origen_id,
+              },
+            },
+          });
+
+          const origenAnteriorEf = num(existingSaldoOrigen?.cantidad);
+          const origenAnteriorBk = num(existingSaldoOrigen?.bancos);
+          const origenNuevoEf = round2(origenAnteriorEf + ingresoEfRestante);
+          const origenNuevoBk = round2(origenAnteriorBk + ingresoBkRestante);
+          const origenNuevoBil = round2(num(existingSaldoOrigen?.billetes) + ingresoBilRestante);
+          const origenNuevoMon = round2(num(existingSaldoOrigen?.monedas_fisicas) + ingresoMonRestante);
+
           await tx.saldo.update({
             where: {
               punto_atencion_id_moneda_id: {
@@ -1816,14 +1831,49 @@ router.patch(
               },
             },
             data: {
-              cantidad: { increment: ingresoEfRestante },
-              bancos: { increment: ingresoBkRestante },
-              billetes: { increment: ingresoBilRestante },
-              monedas_fisicas: { increment: ingresoMonRestante },
+              cantidad: origenNuevoEf,
+              bancos: origenNuevoBk,
+              billetes: origenNuevoBil,
+              monedas_fisicas: origenNuevoMon,
             },
           });
 
-          // Actualizar saldo destino (egreso)
+          // Registrar movimiento origen
+          if (ingresoEfRestante > 0 || ingresoBkRestante > 0) {
+            await registrarMovimientoSaldo(
+              {
+                puntoAtencionId: cambio.punto_atencion_id,
+                monedaId: cambio.moneda_origen_id,
+                tipoMovimiento: TipoMovimiento.INGRESO,
+                monto: round2(ingresoEfRestante + ingresoBkRestante),
+                saldoAnterior: round2(origenAnteriorEf + origenAnteriorBk),
+                saldoNuevo: round2(origenNuevoEf + origenNuevoBk),
+                tipoReferencia: TipoReferencia.EXCHANGE,
+                referenciaId: cambio.id,
+                descripcion: `Completar cambio pendiente (ingreso restante) - Recibo: ${cambio.numero_recibo}`,
+                usuarioId: req.user!.id,
+              },
+              tx
+            );
+          }
+
+          // 2) Actualizar saldo destino (egreso del monto restante)
+          const existingSaldoDestino = await tx.saldo.findUnique({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: cambio.punto_atencion_id,
+                moneda_id: cambio.moneda_destino_id,
+              },
+            },
+          });
+
+          const destinoAnteriorEf = num(existingSaldoDestino?.cantidad);
+          const destinoAnteriorBk = num(existingSaldoDestino?.bancos);
+          const destinoNuevoEf = round2(destinoAnteriorEf - egresoEfRestante);
+          const destinoNuevoBk = round2(destinoAnteriorBk - egresoBkRestante);
+          const destinoNuevoBil = round2(num(existingSaldoDestino?.billetes) - billetesEgresoRestante);
+          const destinoNuevoMon = round2(num(existingSaldoDestino?.monedas_fisicas) - monedasEgresoRestante);
+
           await tx.saldo.update({
             where: {
               punto_atencion_id_moneda_id: {
@@ -1832,35 +1882,31 @@ router.patch(
               },
             },
             data: {
-              cantidad: { decrement: egresoEfRestante },
-              bancos: { decrement: egresoBkRestante },
-              billetes: { decrement: billetesEgresoRestante },
-              monedas_fisicas: { decrement: monedasEgresoRestante },
+              cantidad: destinoNuevoEf,
+              bancos: destinoNuevoBk,
+              billetes: destinoNuevoBil,
+              monedas_fisicas: destinoNuevoMon,
             },
           });
 
-          // Registrar movimiento de saldo
-          await tx.movimientoSaldo.create({
-            data: {
-              punto_atencion_id: cambio.punto_atencion_id,
-              moneda_id: cambio.moneda_origen_id,
-              tipo_movimiento: TipoMovimiento.INGRESO,
-              monto: montoRestante,
-              saldo_anterior:
-                num(saldoOrigen.cantidad) + num(saldoOrigen.bancos),
-              saldo_nuevo:
-                num(saldoOrigen.cantidad) +
-                num(saldoOrigen.bancos) +
-                ingresoEfRestante +
-                ingresoBkRestante,
-              tipo_referencia: "CAMBIO_DIVISA_COMPLETAR",
-              referencia_id: cambio.id,
-              usuario_id: req.user!.id,
-              descripcion: `Completar cambio pendiente - Monto restante: ${montoRestante.toFixed(
-                2
-              )}`,
-            },
-          });
+          // Registrar movimiento destino
+          if (egresoEfRestante > 0 || egresoBkRestante > 0) {
+            await registrarMovimientoSaldo(
+              {
+                puntoAtencionId: cambio.punto_atencion_id,
+                monedaId: cambio.moneda_destino_id,
+                tipoMovimiento: TipoMovimiento.EGRESO,
+                monto: round2(egresoEfRestante + egresoBkRestante),
+                saldoAnterior: round2(destinoAnteriorEf + destinoAnteriorBk),
+                saldoNuevo: round2(destinoNuevoEf + destinoNuevoBk),
+                tipoReferencia: TipoReferencia.EXCHANGE,
+                referenciaId: cambio.id,
+                descripcion: `Completar cambio pendiente (egreso restante) - Recibo: ${cambio.numero_recibo}`,
+                usuarioId: req.user!.id,
+              },
+              tx
+            );
+          }
         });
       }
 

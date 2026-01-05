@@ -237,11 +237,28 @@ router.put(
               "💰 Revirtiendo ingreso de servicio externo por anulación de guía..."
             );
             try {
+              // 🔍 Buscar el movimiento original para obtener el desglose (billetes, monedas, bancos)
+              const movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
+                where: {
+                  numero_referencia: guia.numero_guia,
+                  servicio: "SERVIENTREGA",
+                  tipo_movimiento: "INGRESO",
+                },
+                orderBy: { fecha: "desc" },
+              });
+
+              const billetes = movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : 0;
+              const monedas = movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : 0;
+              const bancos = movimientoOriginal?.bancos ? Number(movimientoOriginal.bancos) : 0;
+
               const resultadoReversal =
                 await dbService.revertirIngresoServicioExterno(
                   guia.punto_atencion_id,
                   Number(guia.costo_envio),
-                  guia.numero_guia
+                  guia.numero_guia,
+                  billetes,
+                  monedas,
+                  bancos
                 );
 
               console.log(
@@ -249,6 +266,9 @@ router.put(
                 {
                   numero_guia: guia.numero_guia,
                   monto: Number(guia.costo_envio),
+                  billetes,
+                  monedas,
+                  bancos,
                   saldoServicioAnterior:
                     resultadoReversal.saldoServicio.anterior,
                   saldoServicioNuevo: resultadoReversal.saldoServicio.nuevo,
@@ -423,7 +443,7 @@ router.post(
               "💰 Revirtiendo ingreso de servicio externo por anulación de guía..."
             );
             try {
-              // Obtener el movimiento original para recuperar billetes y monedas
+              // Obtener el movimiento original para recuperar billetes, monedas y bancos
               const movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
                 where: {
                   numero_referencia: solicitudActualizada.numero_guia,
@@ -432,6 +452,7 @@ router.post(
                 select: {
                   billetes: true,
                   monedas_fisicas: true,
+                  bancos: true,
                 },
               });
 
@@ -441,7 +462,8 @@ router.post(
                   Number(guia.costo_envio),
                   solicitudActualizada.numero_guia,
                   movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : undefined,
-                  movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : undefined
+                  movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : undefined,
+                  movimientoOriginal?.bancos ? Number(movimientoOriginal.bancos) : undefined
                 );
 
               console.log(
