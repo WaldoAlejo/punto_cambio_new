@@ -17,6 +17,7 @@ const SERVICIOS_LABELS: Record<string, string> = {
   WESTERN: "Western Union",
   PRODUBANCO: "Produbanco",
   BANCO_PACIFICO: "Banco del Pacífico",
+  SERVIENTREGA: "Servientrega",
   INSUMOS_OFICINA: "Insumos de oficina",
   INSUMOS_LIMPIEZA: "Insumos de limpieza",
   OTROS: "Otros",

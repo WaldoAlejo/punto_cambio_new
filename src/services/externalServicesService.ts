@@ -6,6 +6,7 @@ export type ServicioExterno =
   | "WESTERN"
   | "PRODUBANCO"
   | "BANCO_PACIFICO"
+  | "SERVIENTREGA"
   // Nuevas categorías de egresos:
   | "INSUMOS_OFICINA"
   | "INSUMOS_LIMPIEZA"
@@ -18,6 +19,9 @@ export interface CrearMovimientoServicioExternoInput {
   servicio: ServicioExterno;
   tipo_movimiento: TipoMovimiento;
   monto: number;
+  metodo_ingreso?: "EFECTIVO" | "BANCO" | "MIXTO";
+  billetes?: number;
+  monedas_fisicas?: number;
   descripcion?: string;
   numero_referencia?: string;
   comprobante_url?: string;

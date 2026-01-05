@@ -42,6 +42,7 @@ const SERVICIOS_VALIDOS = [
   "WESTERN",
   "PRODUBANCO",
   "BANCO_PACIFICO",
+  "SERVIENTREGA",
   "INSUMOS_OFICINA",
   "INSUMOS_LIMPIEZA",
   "OTROS",
@@ -54,6 +55,7 @@ const SERVICIOS_CON_ASIGNACION = [
   "WESTERN",
   "PRODUBANCO",
   "BANCO_PACIFICO",
+  "SERVIENTREGA",
 ];
 
 // Servicios que usan saldo general/efectivo (no tienen asignación)

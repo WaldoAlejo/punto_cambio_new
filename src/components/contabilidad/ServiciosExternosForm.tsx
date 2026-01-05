@@ -32,6 +32,7 @@ const SERVICIOS: {
   { value: "WESTERN", label: "Western Union" },
   { value: "PRODUBANCO", label: "Produbanco" },
   { value: "BANCO_PACIFICO", label: "Banco del Pacífico" },
+  { value: "SERVIENTREGA", label: "Servientrega" },
   // Insumos (EGRESO)
   { value: "INSUMOS_OFICINA", label: "Insumos de oficina", isInsumo: true },
   { value: "INSUMOS_LIMPIEZA", label: "Insumos de limpieza", isInsumo: true },
@@ -47,6 +48,7 @@ const schema = z.object({
       "WESTERN",
       "PRODUBANCO",
       "BANCO_PACIFICO",
+      "SERVIENTREGA",
       "INSUMOS_OFICINA",
       "INSUMOS_LIMPIEZA",
       "OTROS",
