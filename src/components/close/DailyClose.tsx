@@ -475,68 +475,78 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         }
 
         // 4. Actualizar estado y mostrar mensaje de éxito
-      setTodayClose({
-        id: resultado.cierre_id || "",
-        estado: "CERRADO",
-        observaciones: cuadreData.observaciones || "",
-      } as unknown as CuadreCaja);
+        setTodayClose({
+          id: resultado.cierre_id || "",
+          estado: "CERRADO",
+          observaciones: cuadreData.observaciones || "",
+        } as unknown as CuadreCaja);
 
-      const mensaje = resultado.jornada_finalizada
-        ? "✅ El cierre diario se ha completado correctamente y su jornada fue finalizada automáticamente."
-        : "✅ El cierre diario se ha completado correctamente.";
+        const mensaje = resultado.jornada_finalizada
+          ? "✅ El cierre diario se ha completado correctamente y su jornada fue finalizada automáticamente."
+          : "✅ El cierre diario se ha completado correctamente.";
 
-      toast({
-        title: "Cierre realizado",
-        description: mensaje,
-      });
-
-      // Actualizar validación de cierres
-      if (validacionCierres) {
-        setValidacionCierres({
-          ...validacionCierres,
-          estado_cierres: {
-            ...validacionCierres.estado_cierres,
-            cierre_diario: true,
-          },
-          cierres_completos: true,
+        toast({
+          title: "Cierre realizado",
+          description: mensaje,
         });
-      }
 
-      console.log("✅ Cierre completado exitosamente", {
-        cierre_id: resultado.cierre_id,
-        cuadre_id: resultado.cuadre_id,
-        jornada_finalizada: resultado.jornada_finalizada,
-      });
+        // Actualizar validación de cierres
+        if (validacionCierres) {
+          setValidacionCierres({
+            ...validacionCierres,
+            estado_cierres: {
+              ...validacionCierres.estado_cierres,
+              cierre_diario: true,
+            },
+            cierres_completos: true,
+          });
+        }
 
-      // Si jornada fue finalizada, limpiar sesión y redirigir al login
-      if (resultado.jornada_finalizada) {
-        console.log("🔐 Finalizando sesión del usuario...");
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("user");
+        console.log("✅ Cierre completado exitosamente", {
+          cierre_id: resultado.cierre_id,
+          cuadre_id: resultado.cuadre_id,
+          jornada_finalizada: resultado.jornada_finalizada,
+        });
+
+        // Si jornada fue finalizada, limpiar sesión y redirigir al login
+        if (resultado.jornada_finalizada) {
+          console.log("🔐 Finalizando sesión del usuario...");
+          localStorage.removeItem("authToken");
+          localStorage.removeItem("user");
+          
+          setTimeout(() => {
+            console.log("🔄 Redirigiendo al login...");
+            navigate("/login", { replace: true });
+          }, 2000);
+        }
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error("💥 Error in performDailyClose:", error);
         
-        setTimeout(() => {
-          console.log("🔄 Redirigiendo al login...");
-          navigate("/login", { replace: true });
-        }, 2000);
+        let errorMessage = "No se pudo completar el cierre diario";
+        
+        // Detectar si fue un timeout
+        if (error instanceof Error && error.name === "AbortError") {
+          errorMessage = "El cierre está tomando más tiempo de lo esperado. El proceso puede estar ejecutándose en segundo plano. Por favor, espera unos momentos y recarga la página para verificar si se completó.";
+        } else if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+        
+        toast({
+          title: "Error al realizar cierre",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
       }
     } catch (error) {
-      console.error("💥 Error in performDailyClose:", error);
-      
-      let errorMessage = "No se pudo completar el cierre diario";
-      
-      // Detectar si fue un timeout
-      if (error instanceof Error && error.name === "AbortError") {
-        errorMessage = "El cierre está tomando más tiempo de lo esperado. El proceso puede estar ejecutándose en segundo plano. Por favor, espera unos momentos y recarga la página para verificar si se completó.";
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      
+      console.error("💥 Error general en performDailyClose:", error);
       toast({
-        title: "Error al realizar cierre",
-        description: errorMessage,
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error inesperado",
         variant: "destructive",
       });
-    } finally {
       setLoading(false);
     }
   };
