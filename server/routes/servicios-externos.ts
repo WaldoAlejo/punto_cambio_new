@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import saldoValidation from "../middleware/saldoValidation.js";
 import prisma from "../lib/prisma.js";
+import { Prisma } from "@prisma/client";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento as TipoMov,
@@ -621,7 +622,7 @@ router.post(
             punto_atencion_id,
             servicio: servicio as any,
             moneda_id: usdId,
-            monto: new (require("@prisma/client").Prisma).Decimal(montoNum),
+            monto: new Prisma.Decimal(montoNum),
             tipo: tipo as any,
             observaciones: creado_por ? `Asignado por ${creado_por}` : undefined,
             asignado_por: (req as any).user.id,
@@ -651,9 +652,9 @@ router.post(
               punto_atencion_id,
               servicio: servicio as any,
               moneda_id: usdId,
-              cantidad: new (require("@prisma/client").Prisma).Decimal(montoNum),
-              billetes: new (require("@prisma/client").Prisma).Decimal(0),
-              monedas_fisicas: new (require("@prisma/client").Prisma).Decimal(0),
+              cantidad: new Prisma.Decimal(montoNum),
+              billetes: new Prisma.Decimal(0),
+              monedas_fisicas: new Prisma.Decimal(0),
             },
           });
           return { asign, saldo: creado };
