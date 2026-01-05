@@ -268,9 +268,9 @@ export default function ServiciosExternosForm({
             <b>EGRESO</b>.
           </p>
         )}
-        {!esInsumo && tipoMovimiento && (
+        {!esInsumo && tipoActual && (
           <p className="text-xs text-muted-foreground mt-1">
-            {tipoMovimiento === "INGRESO" ? (
+            {tipoActual === "INGRESO" ? (
               <>📥 <b>INGRESO</b>: Cliente paga el servicio. Reduce saldo asignado, aumenta efectivo.</>
             ) : (
               <>📤 <b>EGRESO</b>: El punto paga o repone el servicio. Aumenta saldo asignado, reduce efectivo.</>
