@@ -585,4 +585,87 @@ router.post("/cierre/abrir", authenticateToken, async (req, res) => {
 
 // (Se omiten los cierres para brevedad, pero deben usar gyeTodayWindow)
 
+// ==============================
+// POST /asignar-saldo  (ADMIN/SUPER_USUARIO)
+// Permite a administradores asignar / recargar saldo digital de un servicio externo
+// ==============================
+router.post(
+  "/asignar-saldo",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    try {
+      const { punto_atencion_id, servicio, monto_asignado, tipo_asignacion, creado_por } = req.body as any;
+
+      if (!punto_atencion_id || !servicio || !monto_asignado) {
+        return res.status(400).json({ success: false, message: "Datos incompletos" });
+      }
+
+      if (!SERVICIOS_VALIDOS.includes(servicio)) {
+        return res.status(400).json({ success: false, message: "Servicio inválido" });
+      }
+
+      const montoNum = Number(monto_asignado);
+      if (!isFinite(montoNum) || montoNum <= 0) {
+        return res.status(400).json({ success: false, message: "monto_asignado debe ser > 0" });
+      }
+
+      const tipo = tipo_asignacion === "INICIAL" ? "INICIAL" : "RECARGA";
+
+      const usdId = await ensureUsdMonedaId();
+
+      const resultado = await prisma.$transaction(async (tx) => {
+        // 1) Crear registro de asignación
+        const asign = await tx.servicioExternoAsignacion.create({
+          data: {
+            punto_atencion_id,
+            servicio: servicio as any,
+            moneda_id: usdId,
+            monto: new (require("@prisma/client").Prisma).Decimal(montoNum),
+            tipo: tipo as any,
+            observaciones: creado_por ? `Asignado por ${creado_por}` : undefined,
+            asignado_por: (req as any).user.id,
+          },
+        });
+
+        // 2) Upsert saldo del servicio
+        const existing = await tx.servicioExternoSaldo.findUnique({
+          where: {
+            punto_atencion_id_servicio_moneda_id: {
+              punto_atencion_id,
+              servicio: servicio as any,
+              moneda_id: usdId,
+            },
+          },
+        });
+
+        if (existing) {
+          const actualizado = await tx.servicioExternoSaldo.update({
+            where: { id: existing.id },
+            data: { cantidad: { increment: montoNum }, updated_at: new Date() },
+          });
+          return { asign, saldo: actualizado };
+        } else {
+          const creado = await tx.servicioExternoSaldo.create({
+            data: {
+              punto_atencion_id,
+              servicio: servicio as any,
+              moneda_id: usdId,
+              cantidad: new (require("@prisma/client").Prisma).Decimal(montoNum),
+              billetes: new (require("@prisma/client").Prisma).Decimal(0),
+              monedas_fisicas: new (require("@prisma/client").Prisma).Decimal(0),
+            },
+          });
+          return { asign, saldo: creado };
+        }
+      });
+
+      res.json({ success: true, resultado });
+    } catch (error) {
+      console.error("Error asignando saldo servicio externo:", error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Error desconocido" });
+    }
+  }
+);
+
 export default router;

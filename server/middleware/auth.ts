@@ -179,17 +179,17 @@ export const authenticateToken: RequestHandler = async (
 
       // --- ADMIN / SUPER_USUARIO: exigir punto principal si lo requieres estrictamente ---
       if (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") {
-        // DEBUG: Temporalmente más permisivo para reportes
-        if (req.originalUrl.includes("/reports")) {
-          logger.info(
-            "🚨 DEBUG - SALTANDO verificación de punto principal para reportes",
-            {
-              userId: user.id,
-              rol: user.rol,
-              punto_atencion_id: user.punto_atencion_id,
-              path: req.originalUrl,
-            }
-          );
+        // Permitir accesos administrativos a ciertos endpoints de gestión
+        // (reportes, Servientrega y servicios externos) sin exigir punto principal.
+        const adminBypassPaths = ["/reports", "/servientrega", "/servicios-externos", "/servicio-externo"];
+        const isBypass = adminBypassPaths.some((p) => req.originalUrl.includes(p));
+
+        if (isBypass) {
+          logger.info("Admin acceso especial: saltando verificación de punto principal", {
+            userId: user.id,
+            rol: user.rol,
+            path: req.originalUrl,
+          });
         } else {
           if (!user.punto_atencion_id) {
             logger.warn("Admin sin punto de atención asignado en middleware", {
