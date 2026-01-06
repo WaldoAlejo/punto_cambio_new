@@ -40,11 +40,19 @@ export class ServientregaValidationService {
       if (/^\d{10}$/.test(clean)) {
         return ServientregaValidationService.validarCedula(clean);
       }
-      // RUC ecuatoriano (13 dígitos, empieza con cédula válida, termina en 001)
+      // RUC ecuatoriano (13 dígitos).
+      // - Natural persons have RUC formed by a valid cédula + suffix '001'.
+      // - Legal entities / empresas also have 13-digit RUCs that do not derive
+      //   from a valid cédula; accept any 13-digit numeric RUC to allow empresas.
       if (/^\d{13}$/.test(clean)) {
         const cedula = clean.slice(0, 10);
         const sufijo = clean.slice(10);
-        return ServientregaValidationService.validarCedula(cedula) && sufijo === "001";
+        // Keep the strict check for natural-person RUCs (cedula + 001)
+        if (ServientregaValidationService.validarCedula(cedula) && sufijo === "001") {
+          return true;
+        }
+        // Permit other 13-digit numeric RUCs (empresas / instituciones)
+        return true;
       }
       // Pasaporte (extranjero o ecuatoriano): letras y números, 6-12 caracteres
       if (/^[A-Z0-9]{6,12}$/i.test(clean)) {
