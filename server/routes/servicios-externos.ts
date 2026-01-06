@@ -907,18 +907,17 @@ router.get(
 
           const saldoActual = saldos.find((s) => s.servicio === servicio);
 
-          // Calcular saldo disponible = Asignación inicial + Movimientos acumulados
-          // En ServicioExternoSaldo, el campo cantidad o (billetes + monedas) representa el delta acumulado
-          const montoAsignado = ultimaAsignacion ? Number(ultimaAsignacion.monto) : 0;
+          // ✅ CORRECCIÓN: El campo cantidad ya contiene el saldo correcto
+          // cantidad = monto_asignado + movimientos (INGRESO resta, EGRESO suma)
+          // Los campos billetes/monedas/bancos son solo para desglose, NO se suman al total
+          const saldoDisponible = Number(saldoActual?.cantidad || 0);
           const billetes = Number(saldoActual?.billetes || 0);
           const monedas = Number(saldoActual?.monedas_fisicas || 0);
-          const movimientosAcumulados = billetes + monedas;
-          const saldoDisponible = montoAsignado + movimientosAcumulados;
 
           return {
             servicio,
-            saldo_asignado: saldoDisponible, // Saldo disponible actual (no la asignación inicial)
-            monto_asignado_inicial: montoAsignado, // Agregar monto inicial para referencia
+            saldo_asignado: saldoDisponible, // Saldo disponible actual (cantidad ya incluye todo)
+            monto_asignado_inicial: ultimaAsignacion ? Number(ultimaAsignacion.monto) : 0, // Monto inicial para referencia
             actualizado_en: ultimaAsignacion?.fecha?.toISOString() || null,
             billetes: billetes,
             monedas_fisicas: monedas,

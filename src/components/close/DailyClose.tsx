@@ -64,6 +64,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const [hasActiveJornada, setHasActiveJornada] = useState<boolean | null>(
     null
   );
+  const [jornadaFinalizada, setJornadaFinalizada] = useState(false);
   const [loading, setLoading] = useState(false);
   const [validacionCierres, setValidacionCierres] = useState<{
     cierres_requeridos?: {
@@ -474,12 +475,11 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           );
         }
 
-        // 4. Actualizar estado y mostrar mensaje de éxito
-        setTodayClose({
-          id: resultado.cierre_id || "",
-          estado: "CERRADO",
-          observaciones: cuadreData.observaciones || "",
-        } as unknown as CuadreCaja);
+        console.log("✅ Cierre completado exitosamente", {
+          cierre_id: resultado.cierre_id,
+          cuadre_id: resultado.cuadre_id,
+          jornada_finalizada: resultado.jornada_finalizada,
+        });
 
         const mensaje = resultado.jornada_finalizada
           ? "✅ El cierre diario se ha completado correctamente y su jornada fue finalizada automáticamente."
@@ -489,6 +489,16 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           title: "Cierre realizado",
           description: mensaje,
         });
+
+        // Actualizar estado de jornada finalizada
+        if (resultado.jornada_finalizada) {
+          setJornadaFinalizada(true);
+          setHasActiveJornada(false);
+        }
+
+        // 4. Recargar datos completos del cierre para mostrar el informe
+        console.log("🔄 Recargando datos del cierre...");
+        await fetchTodayClose(); // Esto actualizará todayClose con los datos completos
 
         // Actualizar validación de cierres
         if (validacionCierres) {
@@ -502,23 +512,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           });
         }
 
-        console.log("✅ Cierre completado exitosamente", {
-          cierre_id: resultado.cierre_id,
-          cuadre_id: resultado.cuadre_id,
-          jornada_finalizada: resultado.jornada_finalizada,
-        });
-
-        // Si jornada fue finalizada, limpiar sesión y redirigir al login
-        if (resultado.jornada_finalizada) {
-          console.log("🔐 Finalizando sesión del usuario...");
-          localStorage.removeItem("authToken");
-          localStorage.removeItem("user");
-          
-          setTimeout(() => {
-            console.log("🔄 Redirigiendo al login...");
-            navigate("/login", { replace: true });
-          }, 2000);
-        }
+        // NO redirigir automáticamente - permitir que el operador vea el informe
+        // La jornada ya fue finalizada en el backend, pero el operador debe poder
+        // ver el resumen del cierre antes de cerrar sesión manualmente
       } catch (error) {
         clearTimeout(timeoutId);
         console.error("💥 Error in performDailyClose:", error);
@@ -558,6 +554,20 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       title: "Reporte generado",
       description: "El reporte de cierre diario se ha generado",
     });
+  };
+
+  const handleLogout = () => {
+    // Limpiar datos de autenticación
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("user");
+    
+    toast({
+      title: "Sesión cerrada",
+      description: "Ha cerrado sesión exitosamente",
+    });
+
+    // Redirigir al login
+    navigate("/login");
   };
 
   if (!selectedPoint) {
@@ -1139,7 +1149,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex justify-between items-center gap-4">
                 <Button
                   onClick={generateCloseReport}
                   variant="outline"
@@ -1147,6 +1157,21 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 >
                   Generar Reporte
                 </Button>
+                
+                {jornadaFinalizada && (
+                  <div className="flex flex-col items-end gap-2">
+                    <p className="text-sm text-orange-600 font-medium">
+                      ⚠️ Su jornada ha sido finalizada
+                    </p>
+                    <Button
+                      onClick={handleLogout}
+                      variant="destructive"
+                      className="bg-red-600 hover:bg-red-700"
+                    >
+                      Cerrar Sesión
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
