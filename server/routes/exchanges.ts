@@ -604,6 +604,19 @@ router.post(
       // ========= Transacción atómica =========
       const exchange = await prisma.$transaction(async (tx) => {
         // 1) Crear cambio
+        // DEBUG: mostrar payload que vamos a insertar en DB (evitar datos sensibles)
+        try {
+          console.log("[DEBUG] intento crear CambioDivisa con valores:", JSON.stringify({
+            moneda_origen_id,
+            moneda_destino_id,
+            monto_origen: round2(monto_origen_final),
+            monto_destino: round2(monto_destino_final),
+            tasa_cambio_billetes: num(tasa_cambio_billetes),
+            tasa_cambio_monedas: num(tasa_cambio_monedas),
+          }));
+        } catch (dbgErr) {
+          console.warn("[DEBUG] No se pudo serializar payload de cambio:", dbgErr);
+        }
         const cambio = await tx.cambioDivisa.create({
           data: {
             moneda_origen_id,
