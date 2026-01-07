@@ -36,6 +36,11 @@ const isUSDByCode = (codigo?: string | null) =>
 
 const round2 = (x: number) =>
   Math.round((Number(x) + Number.EPSILON) * 100) / 100;
+// General rounding helper for N decimals (useful for DB fields with scale > 2)
+const roundN = (x: number, n = 6) => {
+  const factor = Math.pow(10, n);
+  return Math.round((Number(x) + Number.EPSILON) * factor) / factor;
+};
 
 async function getSaldo(tx: any, puntoId: string, monedaId: string) {
   return tx.saldo.findUnique({
@@ -576,6 +581,26 @@ router.post(
         .toString(36)
         .slice(2, 6)}`;
 
+      // Validar que las tasas caben en la columna Decimal(10,6) de la BD.
+      // Decimal(10,6) permite como máximo 4 dígitos en la parte entera (|int| < 10^4).
+      const MAX_INT_FOR_RATE = 10000; // exclusive upper bound
+      if (
+        Math.abs(num(tasa_cambio_billetes)) >= MAX_INT_FOR_RATE ||
+        Math.abs(num(tasa_cambio_monedas)) >= MAX_INT_FOR_RATE
+      ) {
+        res.status(400).json({
+          success: false,
+          error:
+            "tasa_cambio fuera de rango para almacenamiento (Decimal(10,6)).",
+          detalles: {
+            tasa_cambio_billetes: tasa_cambio_billetes,
+            tasa_cambio_monedas: tasa_cambio_monedas,
+            max_integer_allowed: MAX_INT_FOR_RATE - 1,
+          },
+        });
+        return;
+      }
+
       // ========= Transacción atómica =========
       const exchange = await prisma.$transaction(async (tx) => {
         // 1) Crear cambio
@@ -585,8 +610,8 @@ router.post(
             moneda_destino_id,
             monto_origen: round2(monto_origen_final),
             monto_destino: round2(monto_destino_final),
-            tasa_cambio_billetes: round2(num(tasa_cambio_billetes)),
-            tasa_cambio_monedas: round2(num(tasa_cambio_monedas)),
+            tasa_cambio_billetes: roundN(num(tasa_cambio_billetes), 6),
+            tasa_cambio_monedas: roundN(num(tasa_cambio_monedas), 6),
             tipo_operacion,
             usuario_id: req.user!.id,
             punto_atencion_id,
