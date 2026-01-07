@@ -142,7 +142,7 @@ export function validarTasaCambio(
   }
 
   // Para divisas que se multiplican, tasas muy grandes pueden indicar error
-  if (comportamiento === "MULTIPLICA" && tasa > 10000) {
+  if (comportamiento === "MULTIPLICA" && tasa >= 10000) {
     return false;
   }
 

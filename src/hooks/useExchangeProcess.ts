@@ -74,6 +74,13 @@ const parseNum = (v: unknown): number => {
   return 0;
 };
 
+// Sanitiza tasas antes de enviarlas al backend: 6 decimales y validación de magnitud
+const sanitizeRate = (v: unknown): number => {
+  const n = parseNum(v);
+  const fixed = Number.isFinite(n) ? Number(Number(n).toFixed(6)) : 0;
+  return fixed;
+};
+
 const trimOrEmpty = (v?: string | null) => (v ?? "").trim();
 
 export const useExchangeProcess = ({
@@ -133,8 +140,8 @@ export const useExchangeProcess = ({
 
     try {
       // --- Normalizar tasas y montos recibidos del paso anterior ---
-      const rateBilletes = parseNum(data.exchangeData.rateBilletes);
-      const rateMonedas = parseNum(data.exchangeData.rateMonedas);
+      const rateBilletes = sanitizeRate(data.exchangeData.rateBilletes);
+      const rateMonedas = sanitizeRate(data.exchangeData.rateMonedas);
 
       const amountBilletes = parseNum(data.exchangeData.amountBilletes);
       const amountMonedas = parseNum(data.exchangeData.amountMonedas);
@@ -187,6 +194,13 @@ export const useExchangeProcess = ({
         toast.error(
           "Monto total RECIBIDO por el cliente debe ser mayor a 0 (destino)."
         );
+        setIsProcessing(false);
+        return;
+      }
+
+      // Validación cliente-side: tasas deben caber en Decimal(10,6) (parte entera < 10000)
+      if (Math.abs(rateBilletes) >= 10000 || Math.abs(rateMonedas) >= 10000) {
+        toast.error("Tasa de cambio inválida — verifique el valor de las tasas.");
         setIsProcessing(false);
         return;
       }
