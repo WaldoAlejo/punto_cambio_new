@@ -141,8 +141,9 @@ export function validarTasaCambio(
     return false;
   }
 
-  // Para divisas que se multiplican, tasas muy grandes pueden indicar error
-  if (comportamiento === "MULTIPLICA" && tasa >= 10000) {
+  // Para divisas que se multiplican, rechazamos tasas no positivas o extremadamente grandes
+  const MAX_RATE_ALLOWED = 1e12;
+  if (comportamiento === "MULTIPLICA" && (tasa <= 0 || tasa >= MAX_RATE_ALLOWED)) {
     return false;
   }
 

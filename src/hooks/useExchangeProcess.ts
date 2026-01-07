@@ -77,7 +77,7 @@ const parseNum = (v: unknown): number => {
 // Sanitiza tasas antes de enviarlas al backend: 6 decimales y validación de magnitud
 const sanitizeRate = (v: unknown): number => {
   const n = parseNum(v);
-  const fixed = Number.isFinite(n) ? Number(Number(n).toFixed(6)) : 0;
+  const fixed = Number.isFinite(n) ? Number(Number(n).toFixed(3)) : 0;
   return fixed;
 };
 
@@ -198,8 +198,17 @@ export const useExchangeProcess = ({
         return;
       }
 
-      // Validación cliente-side: tasas deben caber en Decimal(10,6) (parte entera < 10000)
-      if (Math.abs(rateBilletes) >= 10000 || Math.abs(rateMonedas) >= 10000) {
+      // Validación cliente-side: tasas deben ser razonables y ya están redondeadas a 3 decimales
+      // Permitimos tasas grandes (ej. COP por USD) hasta un tope alto para evitar overflows irreales.
+      const MAX_RATE_ALLOWED = 1e12; // parte entera hasta 10^(18-3) es segura con Decimal(18,3)
+      if (
+        !Number.isFinite(rateBilletes) ||
+        !Number.isFinite(rateMonedas) ||
+        Math.abs(rateBilletes) <= 0 ||
+        Math.abs(rateMonedas) <= 0 ||
+        Math.abs(rateBilletes) >= MAX_RATE_ALLOWED ||
+        Math.abs(rateMonedas) >= MAX_RATE_ALLOWED
+      ) {
         toast.error("Tasa de cambio inválida — verifique el valor de las tasas.");
         setIsProcessing(false);
         return;

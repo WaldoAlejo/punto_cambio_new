@@ -37,7 +37,7 @@ const isUSDByCode = (codigo?: string | null) =>
 const round2 = (x: number) =>
   Math.round((Number(x) + Number.EPSILON) * 100) / 100;
 // General rounding helper for N decimals (useful for DB fields with scale > 2)
-const roundN = (x: number, n = 6) => {
+const roundN = (x: number, n = 3) => {
   const factor = Math.pow(10, n);
   return Math.round((Number(x) + Number.EPSILON) * factor) / factor;
 };
@@ -581,21 +581,25 @@ router.post(
         .toString(36)
         .slice(2, 6)}`;
 
-      // Validar que las tasas caben en la columna Decimal(10,6) de la BD.
-      // Decimal(10,6) permite como máximo 4 dígitos en la parte entera (|int| < 10^4).
-      const MAX_INT_FOR_RATE = 10000; // exclusive upper bound
+      // Validar que las tasas son números finitos y no absurdamente grandes.
+      // Con la columna ahora en Decimal(18,3) la parte entera puede ser muy grande,
+      // pero rechazamos valores no finitos o extremos por seguridad.
+      const MAX_RATE_ALLOWED = 1e12; // permite tasas muy grandes (ej. COP per USD ~ thousands)
       if (
-        Math.abs(num(tasa_cambio_billetes)) >= MAX_INT_FOR_RATE ||
-        Math.abs(num(tasa_cambio_monedas)) >= MAX_INT_FOR_RATE
+        !Number.isFinite(Number(tasa_cambio_billetes)) ||
+        !Number.isFinite(Number(tasa_cambio_monedas)) ||
+        Math.abs(Number(tasa_cambio_billetes)) <= 0 ||
+        Math.abs(Number(tasa_cambio_monedas)) <= 0 ||
+        Math.abs(Number(tasa_cambio_billetes)) >= MAX_RATE_ALLOWED ||
+        Math.abs(Number(tasa_cambio_monedas)) >= MAX_RATE_ALLOWED
       ) {
         res.status(400).json({
           success: false,
-          error:
-            "tasa_cambio fuera de rango para almacenamiento (Decimal(10,6)).",
+          error: "tasa_cambio fuera de rango o inválida para almacenamiento.",
           detalles: {
             tasa_cambio_billetes: tasa_cambio_billetes,
             tasa_cambio_monedas: tasa_cambio_monedas,
-            max_integer_allowed: MAX_INT_FOR_RATE - 1,
+            max_integer_allowed: MAX_RATE_ALLOWED - 1,
           },
         });
         return;
@@ -623,8 +627,8 @@ router.post(
             moneda_destino_id,
             monto_origen: round2(monto_origen_final),
             monto_destino: round2(monto_destino_final),
-            tasa_cambio_billetes: roundN(num(tasa_cambio_billetes), 6),
-            tasa_cambio_monedas: roundN(num(tasa_cambio_monedas), 6),
+            tasa_cambio_billetes: roundN(num(tasa_cambio_billetes), 3),
+            tasa_cambio_monedas: roundN(num(tasa_cambio_monedas), 3),
             tipo_operacion,
             usuario_id: req.user!.id,
             punto_atencion_id,
