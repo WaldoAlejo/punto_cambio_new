@@ -582,23 +582,40 @@ router.post(
         .slice(2, 6)}`;
 
       // Validar que las tasas son números finitos y no absurdamente grandes.
-      // Con la columna ahora en Decimal(18,3) la parte entera puede ser muy grande,
+      // Solo validamos las tasas que corresponden a montos distintos de 0.
+      // Con la columna en Decimal(18,3) la parte entera puede ser muy grande,
       // pero rechazamos valores no finitos o extremos por seguridad.
       const MAX_RATE_ALLOWED = 1e12; // permite tasas muy grandes (ej. COP per USD ~ thousands)
-      if (
-        !Number.isFinite(Number(tasa_cambio_billetes)) ||
-        !Number.isFinite(Number(tasa_cambio_monedas)) ||
-        Math.abs(Number(tasa_cambio_billetes)) <= 0 ||
-        Math.abs(Number(tasa_cambio_monedas)) <= 0 ||
-        Math.abs(Number(tasa_cambio_billetes)) >= MAX_RATE_ALLOWED ||
-        Math.abs(Number(tasa_cambio_monedas)) >= MAX_RATE_ALLOWED
-      ) {
+
+      const requiereTasaBilletes = Number(divisas_entregadas_billetes) > 0 || Number(divisas_recibidas_billetes) > 0;
+      const requiereTasaMonedas = Number(divisas_entregadas_monedas) > 0 || Number(divisas_recibidas_monedas) > 0;
+
+      const erroresTasas: string[] = [];
+
+      if (requiereTasaBilletes) {
+        const tb = Number(tasa_cambio_billetes);
+        if (!Number.isFinite(tb) || tb <= 0 || Math.abs(tb) >= MAX_RATE_ALLOWED) {
+          erroresTasas.push("tasa_cambio_billetes inválida");
+        }
+      }
+
+      if (requiereTasaMonedas) {
+        const tm = Number(tasa_cambio_monedas);
+        if (!Number.isFinite(tm) || tm <= 0 || Math.abs(tm) >= MAX_RATE_ALLOWED) {
+          erroresTasas.push("tasa_cambio_monedas inválida");
+        }
+      }
+
+      if (erroresTasas.length > 0) {
         res.status(400).json({
           success: false,
           error: "tasa_cambio fuera de rango o inválida para almacenamiento.",
           detalles: {
-            tasa_cambio_billetes: tasa_cambio_billetes,
-            tasa_cambio_monedas: tasa_cambio_monedas,
+            requeridas: {
+              billetes: requiereTasaBilletes,
+              monedas: requiereTasaMonedas,
+            },
+            mensajes: erroresTasas,
             max_integer_allowed: MAX_RATE_ALLOWED - 1,
           },
         });
@@ -607,6 +624,13 @@ router.post(
 
       // ========= Transacción atómica =========
       const exchange = await prisma.$transaction(async (tx) => {
+        // Preparar tasas para almacenamiento: si no se requieren (no hay monto), guardar 0
+        const tasaBilletesToStore = requiereTasaBilletes
+          ? roundN(num(tasa_cambio_billetes), 3)
+          : 0;
+        const tasaMonedasToStore = requiereTasaMonedas
+          ? roundN(num(tasa_cambio_monedas), 3)
+          : 0;
         // 1) Crear cambio
         // DEBUG: mostrar payload que vamos a insertar en DB (evitar datos sensibles)
         try {
@@ -627,8 +651,8 @@ router.post(
             moneda_destino_id,
             monto_origen: round2(monto_origen_final),
             monto_destino: round2(monto_destino_final),
-            tasa_cambio_billetes: roundN(num(tasa_cambio_billetes), 3),
-            tasa_cambio_monedas: roundN(num(tasa_cambio_monedas), 3),
+            tasa_cambio_billetes: tasaBilletesToStore,
+            tasa_cambio_monedas: tasaMonedasToStore,
             tipo_operacion,
             usuario_id: req.user!.id,
             punto_atencion_id,

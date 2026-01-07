@@ -199,16 +199,24 @@ export const useExchangeProcess = ({
       }
 
       // Validación cliente-side: tasas deben ser razonables y ya están redondeadas a 3 decimales
-      // Permitimos tasas grandes (ej. COP por USD) hasta un tope alto para evitar overflows irreales.
+      // Solo validamos las tasas cuando el canal correspondiente tiene monto > 0.
       const MAX_RATE_ALLOWED = 1e12; // parte entera hasta 10^(18-3) es segura con Decimal(18,3)
-      if (
-        !Number.isFinite(rateBilletes) ||
-        !Number.isFinite(rateMonedas) ||
-        Math.abs(rateBilletes) <= 0 ||
-        Math.abs(rateMonedas) <= 0 ||
-        Math.abs(rateBilletes) >= MAX_RATE_ALLOWED ||
-        Math.abs(rateMonedas) >= MAX_RATE_ALLOWED
-      ) {
+      const requiereTasaBilletes = amountBilletes > 0;
+      const requiereTasaMonedas = amountMonedas > 0;
+      const erroresTasas: string[] = [];
+
+      if (requiereTasaBilletes) {
+        if (!Number.isFinite(rateBilletes) || rateBilletes <= 0 || Math.abs(rateBilletes) >= MAX_RATE_ALLOWED) {
+          erroresTasas.push("tasa billetes inválida");
+        }
+      }
+      if (requiereTasaMonedas) {
+        if (!Number.isFinite(rateMonedas) || rateMonedas <= 0 || Math.abs(rateMonedas) >= MAX_RATE_ALLOWED) {
+          erroresTasas.push("tasa monedas inválida");
+        }
+      }
+
+      if (erroresTasas.length > 0) {
         toast.error("Tasa de cambio inválida — verifique el valor de las tasas.");
         setIsProcessing(false);
         return;
