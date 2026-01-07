@@ -418,6 +418,14 @@ router.post("/generar-guia", async (req, res) => {
         tipo_guia: "1",
         alianza: String(servientregaAlianza),
         alianza_oficina: String(servientregaOficinaAlianza),
+        ...(punto?.servientrega_agencia_nombre && punto.servientrega_agencia_nombre.trim() !== ""
+          ? { nombre_agencia: punto.servientrega_agencia_nombre }
+          : punto?.servientrega_oficina_alianza
+          ? { nombre_agencia: punto.servientrega_oficina_alianza }
+          : {}),
+        ...(punto?.servientrega_agencia_codigo
+          ? { agencia_codigo: punto.servientrega_agencia_codigo }
+          : {}),
         mail_remite: String(remitente?.email || ""),
         usuingreso: String(credentials.usuingreso),
         contrasenha: String(credentials.contrasenha),
@@ -487,6 +495,38 @@ router.post("/generar-guia", async (req, res) => {
         usuingreso: String(credentials.usuingreso),
         contrasenha: String(credentials.contrasenha),
       };
+
+      // Si el request viene formateado pero hay un punto_atencion asociado,
+      // preferimos usar la agencia configurada en la BD para evitar envíos con valores por defecto.
+      if (punto_atencion_id_captado) {
+        try {
+          const puntoInfo = await prisma.puntoAtencion.findUnique({
+            where: { id: punto_atencion_id_captado },
+            select: {
+              servientrega_agencia_codigo: true,
+              servientrega_agencia_nombre: true,
+              servientrega_oficina_alianza: true,
+            },
+          });
+          if (puntoInfo) {
+            if (puntoInfo.servientrega_agencia_nombre && puntoInfo.servientrega_agencia_nombre.trim() !== "") {
+              payload = { ...payload, nombre_agencia: puntoInfo.servientrega_agencia_nombre };
+            } else if (puntoInfo.servientrega_oficina_alianza) {
+              payload = { ...payload, nombre_agencia: puntoInfo.servientrega_oficina_alianza };
+            }
+            if (puntoInfo.servientrega_agencia_codigo) {
+              payload = { ...payload, agencia_codigo: puntoInfo.servientrega_agencia_codigo };
+            }
+            console.log("🔧 [shipping] Se ajustó payload formateado con agencia del punto:", {
+              punto_atencion_id_captado,
+              servientrega_agencia_nombre: puntoInfo.servientrega_agencia_nombre,
+              servientrega_agencia_codigo: puntoInfo.servientrega_agencia_codigo,
+            });
+          }
+        } catch (e) {
+          console.warn("⚠️ [shipping] No se pudo recuperar agencia del punto para payload formateado:", e);
+        }
+      }
     }
 
     // 🔍 LOG: Payload final reorganizado en orden correcto
