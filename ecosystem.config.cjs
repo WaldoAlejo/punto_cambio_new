@@ -19,7 +19,7 @@ module.exports = {
   apps: [
     {
       name: "punto-cambio-api",
-      cwd: "/home/cevallos_oswaldo/punto_cambio_new",
+      cwd: path.join(__dirname),
       script: "dist-server/server/index.js",
       instances: 1,
       exec_mode: "fork",
