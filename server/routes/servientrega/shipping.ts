@@ -1085,18 +1085,32 @@ router.get("/guias", async (req, res) => {
     const dbService = new ServientregaDBService();
 
     // 🔐 Obtener punto_atencion_id Y usuario_id del usuario autenticado
-    const punto_atencion_id = req.user?.punto_atencion_id;
-    const usuario_id = req.user?.id;
-    
-    // 🏢 Obtener agencia Servientrega del punto de atención
+    let punto_atencion_id = req.user?.punto_atencion_id;
+    let usuario_id = req.user?.id;
+
+    // Determinar si el usuario es administrador (puede ver TODAS las guías)
+    const isAdmin = req.user && (req.user.rol === "ADMIN" || req.user.rol === "SUPER_USUARIO");
+
+    // 🏢 Obtener agencia Servientrega del punto de atención (si aplica)
     let agencia_codigo: string | undefined;
-    
+
     if (punto_atencion_id) {
       const puntoAtencion = await prisma.puntoAtencion.findUnique({
         where: { id: punto_atencion_id },
         select: { servientrega_agencia_codigo: true },
       });
       agencia_codigo = puntoAtencion?.servientrega_agencia_codigo || undefined;
+    }
+
+    // Si es admin, eliminar filtros por punto/usuario/agencia para mostrar todas las guías
+    if (isAdmin) {
+      console.log("🔓 Admin request - mostrando guías sin filtrar por punto/usuario/agencia", {
+        userId: req.user?.id,
+        rol: req.user?.rol,
+      });
+      punto_atencion_id = undefined;
+      usuario_id = undefined;
+      agencia_codigo = undefined;
     }
 
     console.log("🔍 GET /guias - Filtro de búsqueda:", {

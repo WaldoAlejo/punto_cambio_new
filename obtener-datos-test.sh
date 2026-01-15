@@ -2,7 +2,7 @@
 
 # Script para obtener datos de prueba de la BD
 
-DATABASE_URL="postgresql://postgres:Esh2ew8p@34.66.51.85:5432/punto_cambio"
+DATABASE_URL="postgresql://postgres:Esh2ew8p@34.74.127.173:5432/punto_cambio"
 
 echo "🔍 Obteniendo datos de prueba de la base de datos..."
 

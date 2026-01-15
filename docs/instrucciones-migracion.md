@@ -29,7 +29,7 @@ Si no tienes Node.js, usa el script SQL:
 
 ```bash
 # Conectar a PostgreSQL y ejecutar:
-psql -h 34.66.51.85 -U postgres -d punto_cambio -f scripts/full-database-reset.sql
+psql -h 34.74.127.173 -U postgres -d punto_cambio -f scripts/full-database-reset.sql
 ```
 
 O ejecutar el contenido del archivo `scripts/full-database-reset.sql` directamente en tu cliente de base de datos.
