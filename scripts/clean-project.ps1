@@ -1,6 +1,0 @@
-Write-Host "Cleaning project artifacts..."
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "dist-server"
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "backups"
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "prisma/migrations"
-Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "node_modules/.cache"
-Write-Host "Done. Review 'git status' to see deletions."
