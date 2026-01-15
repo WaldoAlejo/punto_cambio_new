@@ -18,6 +18,8 @@
     "seed:admin": "npx tsx prisma/seed-admin.ts",
     "seed:complete": "npx tsx prisma/seed-complete.ts",
     "seed:production": "npx tsx prisma/seed-production.ts",
+    "prisma:clear-migrations": "npx tsx scripts/clear-migrations.ts",
+    "migrate:fresh": "npm run prisma:clear-migrations && npx prisma migrate dev --name init",
     "add:point": "npx tsx prisma/add-point.ts",
     "audit": "npm audit",
     "audit:fix": "npm audit fix",
