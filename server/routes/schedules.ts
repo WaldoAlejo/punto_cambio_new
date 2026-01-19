@@ -315,7 +315,7 @@ router.post(
       const esPrivilegiado =
         rol === "ADMINISTRATIVO" || rol === "ADMIN" || rol === "SUPER_USUARIO";
 
-      // Validar que OPERADOR/CONCESION NO puedan usar el punto principal
+      // Bloquear que OPERADOR/CONCESION inicien jornada en el punto principal
       if (rol === "OPERADOR" || rol === "CONCESION") {
         const puntoAtencion = await prisma.puntoAtencion.findUnique({
           where: { id: punto_atencion_id },
@@ -358,6 +358,8 @@ router.post(
               { estado: EstadoJornada.ACTIVO },
               { estado: EstadoJornada.ALMUERZO },
             ],
+            // Considerar ocupado solo si la jornada pertenece a roles que bloquean el punto
+            usuario: { rol: { in: ["OPERADOR", "CONCESION"] } },
           },
           select: { id: true },
         });

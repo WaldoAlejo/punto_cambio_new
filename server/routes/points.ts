@@ -99,7 +99,7 @@ router.get(
           },
         };
 
-        // Excluir principal para OPERADOR (mantiene tu regla existente)
+        // Excluir principal para OPERADOR
         if (rol === "OPERADOR") {
           whereClause.es_principal = false;
         }
