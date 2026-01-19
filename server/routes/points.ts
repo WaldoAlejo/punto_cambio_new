@@ -90,6 +90,10 @@ router.get(
               some: {
                 estado: { in: ["ACTIVO", "ALMUERZO"] },
                 fecha_inicio: { gte: hoy, lt: manana },
+                // Solo considerar ocupados si la jornada pertenece a roles que bloquean el punto
+                usuario: {
+                  rol: { in: ["OPERADOR", "CONCESION"] },
+                },
               },
             },
           },

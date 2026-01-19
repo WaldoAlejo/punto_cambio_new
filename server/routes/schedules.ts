@@ -752,7 +752,10 @@ router.post(
   validate(reassignSchema),
   async (req, res) => {
     try {
-      if (!req.user || !["ADMIN", "SUPER_USUARIO"].includes(req.user.rol)) {
+      if (
+        !req.user ||
+        !["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"].includes(req.user.rol)
+      ) {
         res
           .status(403)
           .json({ success: false, error: "Permisos insuficientes" });

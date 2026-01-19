@@ -57,6 +57,8 @@ router.get(
             some: {
               estado: { in: ESTADOS_OCUPADOS },
               fecha_inicio: { gte: hoy, lt: manana },
+              // Ocupado solo si la jornada es de roles que bloquean el punto
+              usuario: { rol: { in: ["OPERADOR", "CONCESION"] } },
             },
           },
         },
@@ -139,6 +141,8 @@ router.get(
         where: {
           estado: { in: ESTADOS_OCUPADOS },
           fecha_inicio: { gte: hoy, lt: manana },
+          // Contabilizar ocupados solo de operadores/concesión
+          usuario: { rol: { in: ["OPERADOR", "CONCESION"] } },
         },
         select: {
           punto_atencion_id: true,
