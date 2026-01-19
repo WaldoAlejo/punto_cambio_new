@@ -484,21 +484,56 @@ router.post(
 
       // Recalcular destino si está en cero (aunque vengan parciales de UI)
       if (
-        tasaEfectiva > 0 &&
+        (tasaEfectiva > 0 || num(tasa_cambio_billetes) > 0 || num(tasa_cambio_monedas) > 0) &&
         (codigoOrigen === "USD" || codigoDestino === "USD")
       ) {
         const modo = getRateModeForPair(codigoOrigen, codigoDestino);
         if (monto_destino_final === 0 && monto_origen_final > 0) {
-          const { montoDestinoCalc } = convertir(
-            tipo_operacion,
-            modo,
-            monto_origen_final,
-            tasaEfectiva,
-            codigoOrigen,
-            codigoDestino
-          );
-          if (montoDestinoCalc > 0) {
-            monto_destino_final = round2(montoDestinoCalc);
+          let totalCalc = 0;
+          const entBilletes = num(divisas_entregadas_billetes);
+          const entMonedas = num(divisas_entregadas_monedas);
+          const tasaB = num(tasa_cambio_billetes);
+          const tasaM = num(tasa_cambio_monedas);
+
+          // Calcular por componente usando su tasa correspondiente
+          if (entBilletes > 0 && tasaB > 0) {
+            const { montoDestinoCalc } = convertir(
+              tipo_operacion,
+              modo,
+              entBilletes,
+              tasaB,
+              codigoOrigen,
+              codigoDestino
+            );
+            if (montoDestinoCalc > 0) totalCalc += montoDestinoCalc;
+          }
+          if (entMonedas > 0 && tasaM > 0) {
+            const { montoDestinoCalc } = convertir(
+              tipo_operacion,
+              modo,
+              entMonedas,
+              tasaM,
+              codigoOrigen,
+              codigoDestino
+            );
+            if (montoDestinoCalc > 0) totalCalc += montoDestinoCalc;
+          }
+
+          // Si no hubo desagregación útil, caer al cálculo con tasa efectiva
+          if (totalCalc === 0 && tasaEfectiva > 0) {
+            const { montoDestinoCalc } = convertir(
+              tipo_operacion,
+              modo,
+              monto_origen_final,
+              tasaEfectiva,
+              codigoOrigen,
+              codigoDestino
+            );
+            if (montoDestinoCalc > 0) totalCalc = montoDestinoCalc;
+          }
+
+          if (totalCalc > 0) {
+            monto_destino_final = round2(totalCalc);
           }
         }
       }
@@ -594,14 +629,14 @@ router.post(
 
       if (requiereTasaBilletes) {
         const tb = Number(tasa_cambio_billetes);
-        if (!Number.isFinite(tb) || tb <= 0 || Math.abs(tb) >= MAX_RATE_ALLOWED) {
+        if (!Number.isFinite(tb) || tb < 0 || Math.abs(tb) >= MAX_RATE_ALLOWED) {
           erroresTasas.push("tasa_cambio_billetes inválida");
         }
       }
 
       if (requiereTasaMonedas) {
         const tm = Number(tasa_cambio_monedas);
-        if (!Number.isFinite(tm) || tm <= 0 || Math.abs(tm) >= MAX_RATE_ALLOWED) {
+        if (!Number.isFinite(tm) || tm < 0 || Math.abs(tm) >= MAX_RATE_ALLOWED) {
           erroresTasas.push("tasa_cambio_monedas inválida");
         }
       }
