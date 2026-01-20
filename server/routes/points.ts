@@ -89,7 +89,6 @@ router.get(
             estado: { in: ["ACTIVO", "ALMUERZO"] },
             fecha_inicio: { gte: hoy, lt: manana },
             usuario: { rol: { in: ["OPERADOR", "CONCESION"] } },
-            punto_atencion_id: { not: null },
           },
           select: { punto_atencion_id: true },
         });
