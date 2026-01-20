@@ -83,20 +83,26 @@ router.get(
         });
       } else {
         // 🔒 Roles no privilegiados: listar SOLO puntos libres hoy (sin jornada ACTIVO/ALMUERZO)
+        // Calcula explícitamente los puntos ocupados por OPERADOR/CONCESION y exclúyelos.
+        const jornadasOcupadas = await prisma.jornada.findMany({
+          where: {
+            estado: { in: ["ACTIVO", "ALMUERZO"] },
+            fecha_inicio: { gte: hoy, lt: manana },
+            usuario: { rol: { in: ["OPERADOR", "CONCESION"] } },
+            punto_atencion_id: { not: null },
+          },
+          select: { punto_atencion_id: true },
+        });
+
+        const ocupadosSet = new Set<string>();
+        for (const j of jornadasOcupadas) {
+          if (j.punto_atencion_id) ocupadosSet.add(j.punto_atencion_id);
+        }
+        const ocupados = Array.from(ocupadosSet);
+
         const whereClause: any = {
           activo: true,
-          NOT: {
-            jornadas: {
-              some: {
-                estado: { in: ["ACTIVO", "ALMUERZO"] },
-                fecha_inicio: { gte: hoy, lt: manana },
-                // Solo considerar ocupados si la jornada pertenece a roles que bloquean el punto
-                usuario: {
-                  rol: { in: ["OPERADOR", "CONCESION"] },
-                },
-              },
-            },
-          },
+          id: { notIn: ocupados },
         };
 
         // Excluir principal para OPERADOR
