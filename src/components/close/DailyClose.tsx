@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +48,7 @@ interface CuadreDetalle {
 
 const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [cuadreData, setCuadreData] = useState<{
     detalles: CuadreDetalle[];
     observaciones: string;
@@ -700,7 +702,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     });
 
     // Redirigir al login
-    navigate("/login");
+    try {
+      logout();
+    } catch {}
+    navigate("/login", { replace: true });
   };
 
   if (!selectedPoint) {

@@ -175,6 +175,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setSelectedPointState(null);
     localStorage.removeItem("puntoAtencionSeleccionado");
+    // Limpiar también claves de vista y punto para evitar continuar en el mismo punto
+    localStorage.removeItem("pc_selected_point_id");
+    localStorage.removeItem("pc_active_view");
   };
 
   const setSelectedPoint = (point: PuntoAtencion | null) => {
