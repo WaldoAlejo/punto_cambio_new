@@ -424,12 +424,35 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     } catch (error) {
       console.error("❌ Error al obtener datos de cuadre:", error);
       const msg = error instanceof Error ? error.message : "No se pudo cargar los datos de cuadre automático.";
-      toast({
-        title: "Error",
-        description: msg,
-        variant: "destructive",
-      });
       setFetchError(msg);
+
+      // Fallback: si el backend de cuadre falla, intentar detectar "sin movimientos"
+      try {
+        if (selectedPoint) {
+          const fechaHoy = new Date().toISOString().split("T")[0];
+          const valid = await contabilidadDiariaService.validarCierresRequeridos(
+            selectedPoint.id,
+            fechaHoy
+          );
+          if (
+            valid?.success &&
+            typeof valid.conteos?.cambios_divisas === "number" &&
+            valid.conteos.cambios_divisas === 0
+          ) {
+            // Proceder como "sin movimientos de divisas": permitir cierre
+            setCuadreData({ detalles: [], observaciones: "" });
+            setUserAdjustments({});
+            setFetchError(null);
+            toast({
+              title: "Sin movimientos de divisas",
+              description:
+                "No se pudo obtener el cuadre automático, pero se detecta 0 cambios. Puede realizar el cierre diario sin conteo.",
+            });
+          }
+        }
+      } catch (fbErr) {
+        console.warn("Fallback sin movimientos no disponible:", fbErr);
+      }
     } finally {
       setLoading(false);
     }
@@ -509,20 +532,17 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       userAdjustments: Object.keys(userAdjustments || {}).length,
     });
 
-    if (!selectedPoint || !cuadreData) {
-      console.error("❌ Missing required data:", { selectedPoint: !!selectedPoint, cuadreData: !!cuadreData });
-      toast({
-        title: "Error",
-        description: "Debe seleccionar un punto de atención y tener datos de cuadre",
-        variant: "destructive",
-      });
+    if (!selectedPoint) {
+      console.error("❌ Missing selectedPoint for closing");
+      toast({ title: "Error", description: "Debe seleccionar un punto de atención", variant: "destructive" });
       setClosing(false);
       return;
     }
 
     try {
       // 1. Validar saldos solo si hay detalles de divisas
-      if (cuadreData.detalles.length > 0) {
+      const tieneDetalles = (cuadreData?.detalles?.length ?? 0) > 0;
+      if (tieneDetalles) {
         console.log("🔍 Validating balances for", cuadreData.detalles.length, "currencies");
         const incompleteBalances = cuadreData.detalles.some(
           (detalle) =>
@@ -568,7 +588,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       }
 
       // 2. Preparar detalles para enviar
-      const detalles = (cuadreData.detalles || []).map((detalle) => {
+      const detalles = (cuadreData?.detalles || []).map((detalle) => {
         const bills = parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0");
         const coins = parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0");
         const conteo = bills + coins;
@@ -602,7 +622,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ detalles, observaciones: cuadreData.observaciones || "" }),
+          body: JSON.stringify({ detalles, observaciones: cuadreData?.observaciones || "" }),
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
