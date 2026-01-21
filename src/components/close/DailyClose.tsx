@@ -689,6 +689,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     // Limpiar datos de autenticación
     localStorage.removeItem("authToken");
     localStorage.removeItem("user");
+    // Limpiar selección y vista activa para forzar selección de punto al reingresar
+    localStorage.removeItem("puntoAtencionSeleccionado");
+    localStorage.removeItem("pc_selected_point_id");
+    localStorage.removeItem("pc_active_view");
     
     toast({
       title: "Sesión cerrada",
