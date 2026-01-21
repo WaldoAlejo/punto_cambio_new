@@ -42,87 +42,7 @@ interface CuadreDetalle {
   monedas: number;
   ingresos_periodo: number;
   egresos_periodo: number;
-  movimientos_periodo: number;
-}
-
-const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
-  const navigate = useNavigate();
-  const [cuadreData, setCuadreData] = useState<{
-    detalles: CuadreDetalle[];
-    observaciones: string;
-    cuadre_id?: string;
-    periodo_inicio?: string;
-    totales?: {
-      cambios: number | { cantidad: number };
-      servicios_externos?: number | { cantidad: number };
-      transferencias_entrada: number | { cantidad: number };
-      transferencias_salida: number | { cantidad: number };
-    };
-  } | null>(null);
-  const [userAdjustments, setUserAdjustments] = useState<{
-    [key: string]: { bills: string; coins: string; note?: string };
-  }>({});
-  const [todayClose, setTodayClose] = useState<CuadreCaja | null>(null);
-  const [hasActiveJornada, setHasActiveJornada] = useState<boolean | null>(
-    null
-  );
-  const [jornadaFinalizada, setJornadaFinalizada] = useState(false);
-  const [loading, setLoading] = useState(false); // carga de cuadre
-  const [closing, setClosing] = useState(false); // estado de cierre en progreso
-  const [fetchError, setFetchError] = useState<string | null>(null);
-  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
-
-  // Cargar el cierre de hoy (para mostrar el resumen cuando ya está cerrado)
-  const fetchTodayClose = useCallback(async () => {
-    if (!selectedPoint) return;
-    try {
-      // Usar el mismo resumen de cuadre para construir la tarjeta de "Cierre Completado"
-      const resp = await cuatreCajaService.getCuadre();
-      const tot = resp?.data?.totales || {};
-
-      const mapCantidad = (v: any) => {
-        if (typeof v === "number") return v;
-        if (v && typeof v.cantidad === "number") return v.cantidad;
-        return 0;
-      };
-
-      const built: CuadreCaja = {
-        id: (resp?.data?.cuadre_id as any) || "",
-        usuario_id: user.id,
-        punto_atencion_id: selectedPoint.id,
-        fecha: new Date().toISOString().split("T")[0],
-        estado: "CERRADO",
-        total_cambios: tot.cambios ? tot.cambios : mapCantidad(tot.cambios),
-        total_transferencias_entrada: tot.transferencias_entrada
-          ? tot.transferencias_entrada
-          : mapCantidad(tot.transferencias_entrada),
-        total_transferencias_salida: tot.transferencias_salida
-          ? tot.transferencias_salida
-          : mapCantidad(tot.transferencias_salida),
-        fecha_cierre: new Date().toISOString(),
-        observaciones: cuadreData?.observaciones || null,
-      };
-
-      setTodayClose(built);
-    } catch (e) {
-      console.warn("No se pudo cargar el cierre de hoy:", e);
-    }
-  }, [selectedPoint, user.id, cuadreData?.observaciones]);
-  const [validacionCierres, setValidacionCierres] = useState<{
-    cierres_requeridos?: {
-      servicios_externos: boolean;
-      cambios_divisas: boolean;
-      cierre_diario: boolean;
-    };
-    estado_cierres?: {
-      servicios_externos: boolean;
-      cambios_divisas: boolean;
-      cierre_diario: boolean;
-    };
-    cierres_completos?: boolean;
-    conteos?: {
-      cambios_divisas: number;
-      servicios_externos: number;
+  // Obtener datos de cuadre automático (implementado más abajo con useCallback)
     };
   } | null>(null);
 
@@ -135,9 +55,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           "🔍 DailyClose - localStorage keys:",
           Object.keys(localStorage)
         );
-        const performDailyClose = async (opts?: { allowMismatch?: boolean }) => {
+        console.log("🔍 DailyClose - token check:", {
           tokenExists: !!token,
-          setClosing(true);
           tokenPreview: token ? token.substring(0, 30) + "..." : "No token",
           userInfo: { id: user.id, rol: user.rol, nombre: user.nombre },
         });
@@ -150,16 +69,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
         console.log("🔍 Checking active jornada for user:", user.rol);
         const response = await fetch(
-          `${
-            import.meta.env.VITE_API_URL || "http://35.238.95.118/api"
-          }/schedules/active`,
-            setClosing(false);
+          `${(import.meta as any).env.VITE_API_URL || "http://35.238.95.118/api"}/schedules/active`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
-            if (!opts?.allowMismatch && cuadreData.detalles.length > 0) {
+          }
         );
 
         console.log("🕒 Active jornada response status:", response.status);
@@ -177,8 +93,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           console.log("🕒 Has active jornada:", hasJornada);
           setHasActiveJornada(hasJornada);
         } else {
-          console.log("❌ No active jornada or error:", response.status);
-                setClosing(false);
+              console.log("❌ No active jornada or error:", response.status);
           setHasActiveJornada(false);
         }
       } catch (error) {
@@ -205,8 +120,6 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         setLoading(true);
         console.log("🔄 Fetching automated cuadre data...");
         console.log("📍 Selected point:", selectedPoint?.id, selectedPoint?.nombre);
-
-                setClosing(false);
         const token = localStorage.getItem("authToken");
         if (!token) {
           console.error("❌ No token found in localStorage");
@@ -307,7 +220,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     monedaId: string,
     type: "bills" | "coins" | "note",
     value: string
-      try {
+  ) => {
     if (type === "note") {
       setUserAdjustments((prev) => ({
         ...prev,
@@ -316,8 +229,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           note: value,
         },
       }));
-            observaciones: cuadreData.observaciones || "",
-            allowMismatch: !!opts?.allowMismatch,
+      return;
     }
 
     // No permitir valores negativos
@@ -377,6 +289,115 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       validarCierresRequeridos();
     }
   }, [selectedPoint]);
+
+  // Obtener datos de cuadre automático (reusable + retry)
+  const fetchCuadreData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setFetchError(null);
+      console.log("🔄 Fetching automated cuadre data...");
+      console.log("📍 Selected point:", selectedPoint?.id, selectedPoint?.nombre);
+
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        console.error("❌ No token found in localStorage");
+        const msg = "Por favor, inicie sesión nuevamente.";
+        toast({
+          title: "Sesión Expirada",
+          description: msg,
+          variant: "destructive",
+        });
+        setFetchError(msg);
+        return;
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
+      const endpoint = `${apiUrl}/cuadre-caja`;
+      console.log("🌐 Calling endpoint:", endpoint);
+
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("📡 Response status:", response.status);
+      console.log("📡 Response headers:", {
+        contentType: response.headers.get("content-type"),
+        contentLength: response.headers.get("content-length"),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("📊 Cuadre data received:", data);
+
+        if (data.success && data.data) {
+          console.log("✅ Cuadre data details:", {
+            detallesCount: data.data.detalles?.length || 0,
+            detalles: data.data.detalles,
+            mensaje: data.data.mensaje,
+            periodoInicio: data.data.periodo_inicio,
+          });
+
+          setCuadreData(data.data);
+
+          // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
+          const initialAdjustments: {
+            [key: string]: { bills: string; coins: string; note?: string };
+          } = {};
+          if (data.data.detalles && data.data.detalles.length > 0) {
+            data.data.detalles.forEach((detalle: CuadreDetalle) => {
+              initialAdjustments[detalle.moneda_id] = {
+                bills: detalle.saldo_cierre.toFixed(2),
+                coins: "0.00",
+                note: "",
+              };
+            });
+            console.log("💰 Initial adjustments set for", Object.keys(initialAdjustments).length, "currencies");
+          }
+          setUserAdjustments(initialAdjustments);
+          setFetchError(null);
+        } else if (data.data?.mensaje) {
+          // No hay movimientos hoy
+          console.log("⚠️ No hay movimientos:", data.data.mensaje);
+          setCuadreData({ detalles: [], observaciones: "" });
+          setUserAdjustments({});
+          setFetchError(null);
+        }
+      } else {
+        const errorText = await response.text();
+        console.error(
+          "❌ Error response from cuadre API:",
+          response.status,
+          response.statusText,
+          errorText
+        );
+        throw new Error(`Error al obtener datos de cuadre: ${response.status}`);
+      }
+    } catch (error) {
+      console.error("❌ Error al obtener datos de cuadre:", error);
+      const msg = error instanceof Error ? error.message : "No se pudo cargar los datos de cuadre automático.";
+      toast({
+        title: "Error",
+        description: msg,
+        variant: "destructive",
+      });
+      setFetchError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedPoint]);
+
+  useEffect(() => {
+    if (selectedPoint) {
+      console.log("🔄 useEffect triggered: selectedPoint changed", selectedPoint?.id);
+      fetchCuadreData();
+      setTodayClose(null);
+    } else {
+      console.log("⚠️ selectedPoint is null, skipping fetchCuadreData");
+    }
+  }, [selectedPoint, fetchCuadreData]);
 
   // Si ya existe un cierre para hoy, mostrar tarjeta de "Cierre Completado"
   useEffect(() => {
@@ -438,115 +459,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         );
 
         if (incompleteBalances) {
-          // Obtener datos de cuadre automático (reusable + retry)
-          const fetchCuadreData = useCallback(async () => {
-            try {
-              setLoading(true);
-              setFetchError(null);
-              console.log("🔄 Fetching automated cuadre data...");
-              console.log("📍 Selected point:", selectedPoint?.id, selectedPoint?.nombre);
-
-              const token = localStorage.getItem("authToken");
-              if (!token) {
-                console.error("❌ No token found in localStorage");
-                const msg = "Por favor, inicie sesión nuevamente.";
-                toast({
-                  title: "Sesión Expirada",
-                  description: msg,
-                  variant: "destructive",
-                });
-                setFetchError(msg);
-                return;
-              }
-
-              const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
-              const endpoint = `${apiUrl}/cuadre-caja`;
-              console.log("🌐 Calling endpoint:", endpoint);
-
-              const response = await fetch(endpoint, {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  "Content-Type": "application/json",
-                },
-              });
-
-              console.log("📡 Response status:", response.status);
-              console.log("📡 Response headers:", {
-                contentType: response.headers.get("content-type"),
-                contentLength: response.headers.get("content-length"),
-              });
-
-              if (response.ok) {
-                const data = await response.json();
-                console.log("📊 Cuadre data received:", data);
-
-                if (data.success && data.data) {
-                  console.log("✅ Cuadre data details:", {
-                    detallesCount: data.data.detalles?.length || 0,
-                    detalles: data.data.detalles,
-                    mensaje: data.data.mensaje,
-                    periodoInicio: data.data.periodo_inicio,
-                  });
-
-                  setCuadreData(data.data);
-
-                  // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
-                  const initialAdjustments: {
-                    [key: string]: { bills: string; coins: string; note?: string };
-                  } = {};
-                  if (data.data.detalles && data.data.detalles.length > 0) {
-                    data.data.detalles.forEach((detalle: CuadreDetalle) => {
-                      initialAdjustments[detalle.moneda_id] = {
-                        bills: detalle.saldo_cierre.toFixed(2),
-                        coins: "0.00",
-                        note: "",
-                      };
-                    });
-                    console.log("💰 Initial adjustments set for", Object.keys(initialAdjustments).length, "currencies");
-                  }
-                  setUserAdjustments(initialAdjustments);
-                  setFetchError(null);
-                } else if (data.data?.mensaje) {
-                  // No hay movimientos hoy
-                  console.log("⚠️ No hay movimientos:", data.data.mensaje);
-                  setCuadreData({ detalles: [], observaciones: "" });
-                  setUserAdjustments({});
-                  setFetchError(null);
-                }
-              } else {
-                const errorText = await response.text();
-                console.error(
-                  "❌ Error response from cuadre API:",
-                  response.status,
-                  response.statusText,
-                  errorText
-                );
-                throw new Error(`Error al obtener datos de cuadre: ${response.status}`);
-              }
-            } catch (error) {
-              console.error("❌ Error al obtener datos de cuadre:", error);
-              const msg = error instanceof Error ? error.message : "No se pudo cargar los datos de cuadre automático.";
-              toast({
-                title: "Error",
-                description: msg,
-                variant: "destructive",
-              });
-              setFetchError(msg);
-            } finally {
-              setLoading(false);
-            }
-          }, [selectedPoint, toast]);
-
-          useEffect(() => {
-            if (selectedPoint) {
-              console.log("🔄 useEffect triggered: selectedPoint changed", selectedPoint?.id);
-              fetchCuadreData();
-              setTodayClose(null);
-            } else {
-              console.log("⚠️ selectedPoint is null, skipping fetchCuadreData");
-            }
-          }, [selectedPoint, fetchCuadreData]);
-          );
+          console.error("❌ Incomplete balances found");
+          toast({
+            title: "Error",
+            description: "Debe completar todos los saldos antes del cierre",
+            variant: "destructive",
+          });
+          setClosing(false);
+          return;
         }
 
         console.log("✅ Cierre completado exitosamente", {
