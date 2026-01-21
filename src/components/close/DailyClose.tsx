@@ -42,9 +42,35 @@ interface CuadreDetalle {
   monedas: number;
   ingresos_periodo: number;
   egresos_periodo: number;
-  // Obtener datos de cuadre automático (implementado más abajo con useCallback)
+  movimientos_periodo: number;
+}
+
+const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
+  const navigate = useNavigate();
+  const [cuadreData, setCuadreData] = useState<{
+    detalles: CuadreDetalle[];
+    observaciones: string;
+    cuadre_id?: string;
+    periodo_inicio?: string;
+    totales?: {
+      cambios: number | { cantidad: number };
+      servicios_externos?: number | { cantidad: number };
+      transferencias_entrada: number | { cantidad: number };
+      transferencias_salida: number | { cantidad: number };
     };
   } | null>(null);
+  const [userAdjustments, setUserAdjustments] = useState<{
+    [key: string]: { bills: string; coins: string; note?: string };
+  }>({});
+  const [todayClose, setTodayClose] = useState<CuadreCaja | null>(null);
+  const [hasActiveJornada, setHasActiveJornada] = useState<boolean | null>(
+    null
+  );
+  const [jornadaFinalizada, setJornadaFinalizada] = useState(false);
+  const [loading, setLoading] = useState(false); // carga de cuadre
+  const [closing, setClosing] = useState(false); // estado de cierre en progreso
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
 
   // Verificar jornada activa
   useEffect(() => {
