@@ -43,7 +43,9 @@ const Index = () => {
 
         const { points } = await pointService.getActivePoints();
 
-        if (user.punto_atencion_id) {
+        // Solo perfiles CONCESION pueden reconectar automáticamente al punto asignado.
+        // OPERADOR/ADMINISTRATIVO deben seleccionar punto tras reingresar (si no hay jornada activa).
+        if (user.rol === "CONCESION" && user.punto_atencion_id) {
           const userPoint = points.find((p) => p.id === user.punto_atencion_id);
           if (userPoint) {
             setSelectedPoint(userPoint);
