@@ -71,6 +71,26 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const [closing, setClosing] = useState(false); // estado de cierre en progreso
   const [fetchError, setFetchError] = useState<string | null>(null);
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
+  const [validacionCierres, setValidacionCierres] = useState<
+    | {
+        cierres_requeridos: {
+          servicios_externos: boolean;
+          cambios_divisas: boolean;
+          cierre_diario: boolean;
+        };
+        estado_cierres: {
+          servicios_externos: boolean;
+          cambios_divisas: boolean;
+          cierre_diario: boolean;
+        };
+        cierres_completos: boolean;
+        conteos?: {
+          cambios_divisas: number;
+          servicios_externos: number;
+        };
+      }
+    | null
+  >(null);
 
   // Verificar jornada activa
   useEffect(() => {
@@ -424,6 +444,35 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       console.log("⚠️ selectedPoint is null, skipping fetchCuadreData");
     }
   }, [selectedPoint, fetchCuadreData]);
+
+  // Construir y mostrar tarjeta de "Cierre Completado" a partir del cuadre/totales
+  const fetchTodayClose = useCallback(async () => {
+    try {
+      const fechaHoy = new Date().toISOString().split("T")[0];
+      const resp = await cuatreCajaService.getCuadre({ fecha: fechaHoy });
+      if (resp?.success && resp.data) {
+        const tot = resp.data.totales || {};
+        const cierre: CuadreCaja = {
+          id: resp.data.cuadre_id || "cuadre-hoy",
+          usuario_id: user.id,
+          punto_atencion_id: selectedPoint?.id || "",
+          fecha: fechaHoy,
+          estado: "CERRADO",
+          total_cambios: (tot as any).cambios ?? 0,
+          total_transferencias_entrada: (tot as any).transferencias_entrada ?? 0,
+          total_transferencias_salida: (tot as any).transferencias_salida ?? 0,
+          fecha_cierre: new Date().toISOString(),
+          observaciones: (resp.data as any).observaciones ?? null,
+        };
+        setTodayClose(cierre);
+      } else {
+        setTodayClose(null);
+      }
+    } catch (e) {
+      console.warn("No se pudo obtener cierre de hoy:", e);
+      setTodayClose(null);
+    }
+  }, [selectedPoint?.id, user.id]);
 
   // Si ya existe un cierre para hoy, mostrar tarjeta de "Cierre Completado"
   useEffect(() => {
