@@ -247,14 +247,32 @@ router.get("/", authenticateToken, async (req, res) => {
 
     let cuadre = cuadreResult.rows[0];
     if (!cuadre) {
-      const insertResult = await pool.query<CuadreCaja>(
-        `INSERT INTO "CuadreCaja" (id, estado, fecha, punto_atencion_id, usuario_id, observaciones)
-          VALUES (uuid_generate_v4(), 'ABIERTO', $1, $2, $3, $4)
-          RETURNING *`,
-        [fechaInicioDia.toISOString(), puntoAtencionId, usuario.id, ""]
+      // Si no hay ABIERTO, verificar si ya existe uno CERRADO para el mismo día
+      const cerradoRes = await pool.query<CuadreCaja>(
+        `SELECT * FROM "CuadreCaja"
+          WHERE punto_atencion_id = $1
+            AND fecha >= $2::timestamp
+            AND estado = 'CERRADO'
+          ORDER BY fecha_cierre DESC
+          LIMIT 1`,
+        [puntoAtencionId, fechaInicioDia.toISOString()]
       );
-      cuadre = insertResult.rows[0];
-      logger.info("📝 Cuadre creado", { cuadre_id: cuadre.id });
+
+      if (cerradoRes.rows[0]) {
+        cuadre = cerradoRes.rows[0];
+        logger.info("ℹ️ Usando cuadre CERRADO existente para el día", {
+          cuadre_id: cuadre.id,
+        });
+      } else {
+        const insertResult = await pool.query<CuadreCaja>(
+          `INSERT INTO "CuadreCaja" (id, estado, fecha, punto_atencion_id, usuario_id, observaciones)
+            VALUES (uuid_generate_v4(), 'ABIERTO', $1, $2, $3, $4)
+            RETURNING *`,
+          [fechaInicioDia.toISOString(), puntoAtencionId, usuario.id, ""]
+        );
+        cuadre = insertResult.rows[0];
+        logger.info("📝 Cuadre creado", { cuadre_id: cuadre.id });
+      }
     }
 
     // Obtener todas las monedas activas
