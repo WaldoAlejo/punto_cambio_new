@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,9 +13,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
+import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, CuadreCaja } from "../../types";
 // import ExternalServicesClose from "./ExternalServicesClose"; // Ya no se requiere cierre separado
 import { contabilidadDiariaService } from "../../services/contabilidadDiariaService";
+import cuatreCajaService from "@/services/cuatreCajaService";
 
 function getCantidad(val: any): number {
   if (typeof val === "number") return val;
@@ -65,7 +67,47 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     null
   );
   const [jornadaFinalizada, setJornadaFinalizada] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // carga de cuadre
+  const [closing, setClosing] = useState(false); // estado de cierre en progreso
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
+
+  // Cargar el cierre de hoy (para mostrar el resumen cuando ya está cerrado)
+  const fetchTodayClose = useCallback(async () => {
+    if (!selectedPoint) return;
+    try {
+      // Usar el mismo resumen de cuadre para construir la tarjeta de "Cierre Completado"
+      const resp = await cuatreCajaService.getCuadre();
+      const tot = resp?.data?.totales || {};
+
+      const mapCantidad = (v: any) => {
+        if (typeof v === "number") return v;
+        if (v && typeof v.cantidad === "number") return v.cantidad;
+        return 0;
+      };
+
+      const built: CuadreCaja = {
+        id: (resp?.data?.cuadre_id as any) || "",
+        usuario_id: user.id,
+        punto_atencion_id: selectedPoint.id,
+        fecha: new Date().toISOString().split("T")[0],
+        estado: "CERRADO",
+        total_cambios: tot.cambios ? tot.cambios : mapCantidad(tot.cambios),
+        total_transferencias_entrada: tot.transferencias_entrada
+          ? tot.transferencias_entrada
+          : mapCantidad(tot.transferencias_entrada),
+        total_transferencias_salida: tot.transferencias_salida
+          ? tot.transferencias_salida
+          : mapCantidad(tot.transferencias_salida),
+        fecha_cierre: new Date().toISOString(),
+        observaciones: cuadreData?.observaciones || null,
+      };
+
+      setTodayClose(built);
+    } catch (e) {
+      console.warn("No se pudo cargar el cierre de hoy:", e);
+    }
+  }, [selectedPoint, user.id, cuadreData?.observaciones]);
   const [validacionCierres, setValidacionCierres] = useState<{
     cierres_requeridos?: {
       servicios_externos: boolean;
@@ -93,8 +135,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           "🔍 DailyClose - localStorage keys:",
           Object.keys(localStorage)
         );
-        console.log("🔍 DailyClose - token check:", {
+        const performDailyClose = async (opts?: { allowMismatch?: boolean }) => {
           tokenExists: !!token,
+          setClosing(true);
           tokenPreview: token ? token.substring(0, 30) + "..." : "No token",
           userInfo: { id: user.id, rol: user.rol, nombre: user.nombre },
         });
@@ -110,12 +153,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           `${
             import.meta.env.VITE_API_URL || "http://35.238.95.118/api"
           }/schedules/active`,
+            setClosing(false);
           {
             headers: {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
-          }
+            if (!opts?.allowMismatch && cuadreData.detalles.length > 0) {
         );
 
         console.log("🕒 Active jornada response status:", response.status);
@@ -134,6 +178,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           setHasActiveJornada(hasJornada);
         } else {
           console.log("❌ No active jornada or error:", response.status);
+                setClosing(false);
           setHasActiveJornada(false);
         }
       } catch (error) {
@@ -161,6 +206,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         console.log("🔄 Fetching automated cuadre data...");
         console.log("📍 Selected point:", selectedPoint?.id, selectedPoint?.nombre);
 
+                setClosing(false);
         const token = localStorage.getItem("authToken");
         if (!token) {
           console.error("❌ No token found in localStorage");
@@ -261,7 +307,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     monedaId: string,
     type: "bills" | "coins" | "note",
     value: string
-  ) => {
+      try {
     if (type === "note") {
       setUserAdjustments((prev) => ({
         ...prev,
@@ -270,7 +316,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           note: value,
         },
       }));
-      return;
+            observaciones: cuadreData.observaciones || "",
+            allowMismatch: !!opts?.allowMismatch,
     }
 
     // No permitir valores negativos
@@ -331,6 +378,31 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     }
   }, [selectedPoint]);
 
+  // Si ya existe un cierre para hoy, mostrar tarjeta de "Cierre Completado"
+  useEffect(() => {
+    const checkTodayClose = async () => {
+      if (!selectedPoint) return;
+      try {
+        const fechaHoy = new Date().toISOString().split("T")[0];
+        const res = await contabilidadDiariaService.getCierreDiario(
+          selectedPoint.id,
+          fechaHoy
+        );
+        if (res.success && res.cierre) {
+          await fetchTodayClose();
+        } else {
+          setTodayClose(null);
+        }
+      } catch (e) {
+        // Si falla, no bloquear la vista principal
+        console.warn("Error verificando cierre del día:", e);
+        setTodayClose(null);
+      }
+    };
+
+    checkTodayClose();
+  }, [selectedPoint, fetchTodayClose]);
+
   const performDailyClose = async () => {
     console.log("🔄 performDailyClose START");
     console.log("📋 State check:", {
@@ -366,112 +438,114 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         );
 
         if (incompleteBalances) {
-          console.error("❌ Incomplete balances found");
-          toast({
-            title: "Error",
-            description: "Debe completar todos los saldos antes del cierre",
-            variant: "destructive",
-          });
-          return;
-        }
+          // Obtener datos de cuadre automático (reusable + retry)
+          const fetchCuadreData = useCallback(async () => {
+            try {
+              setLoading(true);
+              setFetchError(null);
+              console.log("🔄 Fetching automated cuadre data...");
+              console.log("📍 Selected point:", selectedPoint?.id, selectedPoint?.nombre);
 
-        // Validación estricta: todas las divisas deben cuadrar con tolerancia
-        const invalidBalances = cuadreData.detalles.filter((detalle) => {
-          const userTotal = calculateUserTotal(detalle.moneda_id);
-          return !validateBalance(detalle, userTotal);
-        });
+              const token = localStorage.getItem("authToken");
+              if (!token) {
+                console.error("❌ No token found in localStorage");
+                const msg = "Por favor, inicie sesión nuevamente.";
+                toast({
+                  title: "Sesión Expirada",
+                  description: msg,
+                  variant: "destructive",
+                });
+                setFetchError(msg);
+                return;
+              }
 
-        if (invalidBalances.length > 0) {
-          console.warn("⚠️ Invalid balances found:", invalidBalances.map(d => ({ codigo: d.codigo, expected: d.saldo_cierre, provided: calculateUserTotal(d.moneda_id) })));
-          const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
-            .map((d) => {
-              const userTotal = calculateUserTotal(d.moneda_id);
-              const tolerance = getTolerance(d).toFixed(2);
-              return `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(
-                2
-              )}, Ingresado ${userTotal.toFixed(2)} (tolerancia ±${tolerance})`;
-            })
-            .join(
-              "\n"
-            )}\n\n⚠️ Verifique que todos los movimientos estén registrados correctamente.`;
-          toast({
-            title: "No cuadra",
-            description: msg,
-            variant: "destructive",
-          });
-          return;
-        }
-      }
+              const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
+              const endpoint = `${apiUrl}/cuadre-caja`;
+              console.log("🌐 Calling endpoint:", endpoint);
 
-      // 2. Preparar detalles del cuadre con los datos del usuario
-      const detalles = cuadreData.detalles.map((detalle) => {
-        const conteoFisico = calculateUserTotal(detalle.moneda_id);
-        const billetes = parseFloat(
-          userAdjustments[detalle.moneda_id]?.bills || "0"
-        );
-        const monedas = parseFloat(
-          userAdjustments[detalle.moneda_id]?.coins || "0"
-        );
+              const response = await fetch(endpoint, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+              });
 
-        return {
-          moneda_id: detalle.moneda_id,
-          codigo: detalle.codigo,
-          nombre: detalle.nombre,
-          simbolo: detalle.simbolo,
-          saldo_apertura: detalle.saldo_apertura,
-          saldo_cierre_teorico: detalle.saldo_cierre,
-          conteo_fisico: conteoFisico,
-          billetes: billetes,
-          monedas_fisicas: monedas,
-          diferencia: Number((conteoFisico - detalle.saldo_cierre).toFixed(2)),
-          ingresos_periodo: detalle.ingresos_periodo || 0,
-          egresos_periodo: detalle.egresos_periodo || 0,
-          movimientos_periodo: detalle.movimientos_periodo || 0,
-          observaciones_detalle: userAdjustments[detalle.moneda_id]?.note || "",
-        };
-      });
+              console.log("📡 Response status:", response.status);
+              console.log("📡 Response headers:", {
+                contentType: response.headers.get("content-type"),
+                contentLength: response.headers.get("content-length"),
+              });
 
-      console.log("📊 Detalles preparados para cierre:", detalles);
+              if (response.ok) {
+                const data = await response.json();
+                console.log("📊 Cuadre data received:", data);
 
-      // 3. Realizar cierre usando el nuevo endpoint optimizado
-      const token = localStorage.getItem("authToken");
-      const fechaHoy = new Date().toISOString().split("T")[0];
-      const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
-      const endpoint = `${apiUrl}/contabilidad-diaria/${selectedPoint.id}/${fechaHoy}/cerrar-completo`;
+                if (data.success && data.data) {
+                  console.log("✅ Cuadre data details:", {
+                    detallesCount: data.data.detalles?.length || 0,
+                    detalles: data.data.detalles,
+                    mensaje: data.data.mensaje,
+                    periodoInicio: data.data.periodo_inicio,
+                  });
 
-      console.log("🌐 Posting to endpoint:", endpoint);
-      console.log("📮 Request body:", {
-        detalles: detalles.length,
-        observaciones: cuadreData.observaciones?.substring(0, 50),
-      });
+                  setCuadreData(data.data);
 
-      // Agregar timeout de 60 segundos para evitar colgado
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 segundos
+                  // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
+                  const initialAdjustments: {
+                    [key: string]: { bills: string; coins: string; note?: string };
+                  } = {};
+                  if (data.data.detalles && data.data.detalles.length > 0) {
+                    data.data.detalles.forEach((detalle: CuadreDetalle) => {
+                      initialAdjustments[detalle.moneda_id] = {
+                        bills: detalle.saldo_cierre.toFixed(2),
+                        coins: "0.00",
+                        note: "",
+                      };
+                    });
+                    console.log("💰 Initial adjustments set for", Object.keys(initialAdjustments).length, "currencies");
+                  }
+                  setUserAdjustments(initialAdjustments);
+                  setFetchError(null);
+                } else if (data.data?.mensaje) {
+                  // No hay movimientos hoy
+                  console.log("⚠️ No hay movimientos:", data.data.mensaje);
+                  setCuadreData({ detalles: [], observaciones: "" });
+                  setUserAdjustments({});
+                  setFetchError(null);
+                }
+              } else {
+                const errorText = await response.text();
+                console.error(
+                  "❌ Error response from cuadre API:",
+                  response.status,
+                  response.statusText,
+                  errorText
+                );
+                throw new Error(`Error al obtener datos de cuadre: ${response.status}`);
+              }
+            } catch (error) {
+              console.error("❌ Error al obtener datos de cuadre:", error);
+              const msg = error instanceof Error ? error.message : "No se pudo cargar los datos de cuadre automático.";
+              toast({
+                title: "Error",
+                description: msg,
+                variant: "destructive",
+              });
+              setFetchError(msg);
+            } finally {
+              setLoading(false);
+            }
+          }, [selectedPoint, toast]);
 
-      try {
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            detalles,
-            observaciones: cuadreData.observaciones || "",
-          }),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        console.log("📡 Response status:", response.status);
-        const resultado = await response.json();
-        console.log("📦 Response body:", resultado);
-
-        if (!response.ok || !resultado.success) {
-          throw new Error(
-            resultado.error || "Error al realizar el cierre diario"
+          useEffect(() => {
+            if (selectedPoint) {
+              console.log("🔄 useEffect triggered: selectedPoint changed", selectedPoint?.id);
+              fetchCuadreData();
+              setTodayClose(null);
+            } else {
+              console.log("⚠️ selectedPoint is null, skipping fetchCuadreData");
+            }
+          }, [selectedPoint, fetchCuadreData]);
           );
         }
 
@@ -535,6 +609,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         });
       } finally {
         setLoading(false);
+        setClosing(false);
       }
     } catch (error) {
       console.error("💥 Error general en performDailyClose:", error);
@@ -544,7 +619,21 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         variant: "destructive",
       });
       setLoading(false);
+      setClosing(false);
     }
+  };
+
+  // Confirmación antes de cerrar
+  const confirmDailyClose = () => {
+    const isSinMovimientos = (cuadreData?.detalles?.length ?? 0) === 0;
+    showConfirmation(
+      "Confirmar Cierre Diario",
+      isSinMovimientos
+        ? "No hay movimientos de divisas hoy. ¿Desea realizar el cierre diario de todas formas?"
+        : "Está a punto de realizar el cierre diario. Verifique que los conteos físicos coincidan con los saldos esperados.",
+      () => performDailyClose(),
+      "default"
+    );
   };
 
   const generateCloseReport = () => {
@@ -624,8 +713,19 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Cierre Diario</h1>
-        <div className="text-sm text-gray-500">
-          Punto: {selectedPoint.nombre} - {new Date().toLocaleDateString()}
+        <div className="flex items-center gap-3">
+          <div className="text-sm text-gray-500">
+            Punto: {selectedPoint.nombre} - {new Date().toLocaleDateString()}
+          </div>
+          <Button
+            variant="outline"
+            className="border-gray-300"
+            onClick={fetchCuadreData}
+            disabled={loading}
+            title="Actualizar datos de cuadre"
+          >
+            Actualizar
+          </Button>
         </div>
       </div>
 
@@ -648,12 +748,22 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           <CardHeader>
             <CardTitle>Cuadre de Caja Automático</CardTitle>
             <CardDescription>
-              {cuadreData?.detalles.length === 0
+              {(cuadreData?.detalles?.length ?? 0) === 0
                 ? "No se han registrado movimientos de divisas hoy"
                 : "Revise y ajuste los conteos físicos. Los valores están pre-calculados según los movimientos del día."}
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {fetchError && (
+              <div className="mb-4 p-4 rounded-md border border-red-200 bg-red-50 text-red-700 flex items-center justify-between gap-3">
+                <span className="text-sm">
+                  Ocurrió un problema al cargar el cuadre: {fetchError}
+                </span>
+                <Button onClick={fetchCuadreData} variant="destructive">
+                  Reintentar
+                </Button>
+              </div>
+            )}
             {/* Mostrar totales del día */}
             {cuadreData?.totales && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
@@ -690,7 +800,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               </div>
             )}
 
-            {cuadreData?.detalles.length === 0 ? (
+            {(cuadreData?.detalles?.length ?? 0) === 0 ? (
               <div className="space-y-6">
                 <div className="text-center py-8">
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
@@ -710,12 +820,19 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
                 {/* Botón de cierre para días sin movimientos */}
                 <Button
-                  onClick={performDailyClose}
+                  onClick={confirmDailyClose}
                   className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
                   size="lg"
-                  disabled={false}
+                  disabled={loading || closing || !cuadreData}
                 >
-                  Realizar Cierre Diario
+                  {closing ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-full border-2 border-white border-b-transparent animate-spin"></span>
+                      Cerrando...
+                    </span>
+                  ) : (
+                    "Realizar Cierre Diario"
+                  )}
                 </Button>
 
                 <div className="mt-3 text-xs text-gray-600 text-center">
@@ -725,7 +842,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               </div>
             ) : (
               <div className="grid gap-6">
-                {cuadreData?.detalles.map((detalle) => {
+                {(cuadreData?.detalles ?? []).map((detalle) => {
                   const userTotal = calculateUserTotal(detalle.moneda_id);
                   const isValid = validateBalance(detalle, userTotal);
 
@@ -1095,12 +1212,19 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 )}
 
                 <Button
-                  onClick={performDailyClose}
+                  onClick={confirmDailyClose}
                   className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
                   size="lg"
-                  disabled={false}
+                  disabled={loading || closing || !cuadreData}
                 >
-                  Realizar Cierre Diario
+                  {closing ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-full border-2 border-white border-b-transparent animate-spin"></span>
+                      Cerrando...
+                    </span>
+                  ) : (
+                    "Realizar Cierre Diario"
+                  )}
                 </Button>
 
                 {/* Sugerencia: accesos rápidos para cuadrar */}
@@ -1177,6 +1301,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           </CardContent>
         </Card>
       )}
+      <ConfirmationDialog />
     </div>
   );
 };
