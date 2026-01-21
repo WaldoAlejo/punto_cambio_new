@@ -194,7 +194,7 @@ export const reportDataService = {
   ) {
     const jornadas = await prisma.jornada.findMany({
       where: {
-        fecha_inicio: { gte: startDate, lte: endDate },
+        fecha_inicio: { gte: startDate, lt: endDate },
         ...(filters?.userId ? { usuario_id: filters.userId } : {}),
         ...(filters?.pointId ? { punto_atencion_id: filters.pointId } : {}),
       },
@@ -207,7 +207,7 @@ export const reportDataService = {
 
     const salidas = await prisma.salidaEspontanea.findMany({
       where: {
-        fecha_salida: { gte: startDate, lte: endDate },
+        fecha_salida: { gte: startDate, lt: endDate },
         ...(filters?.userId ? { usuario_id: filters.userId } : {}),
         ...(filters?.pointId ? { punto_atencion_id: filters.pointId } : {}),
       },
