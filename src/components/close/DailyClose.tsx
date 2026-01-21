@@ -452,6 +452,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
   const performDailyClose = async () => {
     console.log("🔄 performDailyClose START");
+    setClosing(true);
     console.log("📋 State check:", {
       selectedPoint: selectedPoint?.id,
       cuadreData: !!cuadreData,
@@ -463,10 +464,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       console.error("❌ Missing required data:", { selectedPoint: !!selectedPoint, cuadreData: !!cuadreData });
       toast({
         title: "Error",
-        description:
-          "Debe seleccionar un punto de atención y tener datos de cuadre",
+        description: "Debe seleccionar un punto de atención y tener datos de cuadre",
         variant: "destructive",
       });
+      setClosing(false);
       return;
     }
 
@@ -474,8 +475,6 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       // 1. Validar saldos solo si hay detalles de divisas
       if (cuadreData.detalles.length > 0) {
         console.log("🔍 Validating balances for", cuadreData.detalles.length, "currencies");
-        
-        // Validar que todos los saldos estén completos
         const incompleteBalances = cuadreData.detalles.some(
           (detalle) =>
             userAdjustments[detalle.moneda_id]?.bills === undefined ||
@@ -483,7 +482,6 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             userAdjustments[detalle.moneda_id]?.coins === undefined ||
             userAdjustments[detalle.moneda_id]?.coins === ""
         );
-
         if (incompleteBalances) {
           console.error("❌ Incomplete balances found");
           toast({
@@ -495,75 +493,105 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           return;
         }
 
-        console.log("✅ Cierre completado exitosamente", {
-          cierre_id: resultado.cierre_id,
-          cuadre_id: resultado.cuadre_id,
-          jornada_finalizada: resultado.jornada_finalizada,
+        // Validación estricta con tolerancia
+        const invalidBalances = cuadreData.detalles.filter((detalle) => {
+          const bills = parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0");
+          const coins = parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0");
+          const total = bills + coins;
+          const diff = Math.abs(total - detalle.saldo_cierre);
+          const tol = detalle.codigo === "USD" ? 1.0 : 0.01;
+          return diff > tol;
         });
+        if (invalidBalances.length > 0) {
+          const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
+            .map((d) => {
+              const bills = parseFloat(userAdjustments[d.moneda_id]?.bills || "0");
+              const coins = parseFloat(userAdjustments[d.moneda_id]?.coins || "0");
+              const total = bills + coins;
+              const tolerance = (d.codigo === "USD" ? 1.0 : 0.01).toFixed(2);
+              return `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(2)}, Ingresado ${total.toFixed(2)} (tolerancia ±${tolerance})`;
+            })
+            .join("\n")}\n\n⚠️ Verifique que todos los movimientos estén registrados correctamente.`;
+          toast({ title: "No cuadra", description: msg, variant: "destructive" });
+          setClosing(false);
+          return;
+        }
+      }
 
-        const mensaje = resultado.jornada_finalizada
-          ? "✅ El cierre diario se ha completado correctamente y su jornada fue finalizada automáticamente."
-          : "✅ El cierre diario se ha completado correctamente.";
+      // 2. Preparar detalles para enviar
+      const detalles = (cuadreData.detalles || []).map((detalle) => {
+        const bills = parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0");
+        const coins = parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0");
+        const conteo = bills + coins;
+        return {
+          moneda_id: detalle.moneda_id,
+          saldo_apertura: detalle.saldo_apertura,
+          saldo_cierre: detalle.saldo_cierre,
+          conteo_fisico: conteo,
+          billetes: bills,
+          monedas: coins,
+          ingresos_periodo: detalle.ingresos_periodo || 0,
+          egresos_periodo: detalle.egresos_periodo || 0,
+          movimientos_periodo: detalle.movimientos_periodo || 0,
+          observaciones_detalle: userAdjustments[detalle.moneda_id]?.note || "",
+        };
+      });
 
-        toast({
-          title: "Cierre realizado",
-          description: mensaje,
+      // 3. Ejecutar cierre
+      const token = localStorage.getItem("authToken");
+      const fechaHoy = new Date().toISOString().split("T")[0];
+      const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
+      const endpoint = `${apiUrl}/contabilidad-diaria/${selectedPoint.id}/${fechaHoy}/cerrar`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+      let resultado: any;
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ detalles, observaciones: cuadreData.observaciones || "" }),
+          signal: controller.signal,
         });
-
-        // Actualizar estado de jornada finalizada
-        if (resultado.jornada_finalizada) {
-          setJornadaFinalizada(true);
-          setHasActiveJornada(false);
-        }
-
-        // 4. Recargar datos completos del cierre para mostrar el informe
-        console.log("🔄 Recargando datos del cierre...");
-        await fetchTodayClose(); // Esto actualizará todayClose con los datos completos
-
-        // Actualizar validación de cierres
-        if (validacionCierres) {
-          setValidacionCierres({
-            ...validacionCierres,
-            estado_cierres: {
-              ...validacionCierres.estado_cierres,
-              cierre_diario: true,
-            },
-            cierres_completos: true,
-          });
-        }
-
-        // NO redirigir automáticamente - permitir que el operador vea el informe
-        // La jornada ya fue finalizada en el backend, pero el operador debe poder
-        // ver el resumen del cierre antes de cerrar sesión manualmente
-      } catch (error) {
         clearTimeout(timeoutId);
-        console.error("💥 Error in performDailyClose:", error);
-        
-        let errorMessage = "No se pudo completar el cierre diario";
-        
-        // Detectar si fue un timeout
-        if (error instanceof Error && error.name === "AbortError") {
-          errorMessage = "El cierre está tomando más tiempo de lo esperado. El proceso puede estar ejecutándose en segundo plano. Por favor, espera unos momentos y recarga la página para verificar si se completó.";
-        } else if (error instanceof Error) {
-          errorMessage = error.message;
+        resultado = await response.json();
+        if (!response.ok || !resultado?.success) {
+          throw new Error(resultado?.error || "Error al realizar el cierre diario");
         }
-        
-        toast({
-          title: "Error al realizar cierre",
-          description: errorMessage,
-          variant: "destructive",
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
+      }
+
+      console.log("✅ Cierre completado exitosamente", {
+        cierre_id: resultado.cierre_id,
+        cuadre_id: resultado.cuadre_id,
+        jornada_finalizada: resultado.jornada_finalizada,
+      });
+      const mensaje = resultado.jornada_finalizada
+        ? "✅ El cierre diario se ha completado correctamente y su jornada fue finalizada automáticamente."
+        : "✅ El cierre diario se ha completado correctamente.";
+      toast({ title: "Cierre realizado", description: mensaje });
+      if (resultado.jornada_finalizada) {
+        setJornadaFinalizada(true);
+        setHasActiveJornada(false);
+      }
+      await fetchTodayClose();
+      if (validacionCierres) {
+        setValidacionCierres({
+          ...validacionCierres,
+          estado_cierres: { ...validacionCierres.estado_cierres, cierre_diario: true },
+          cierres_completos: true,
         });
-      } finally {
-        setLoading(false);
-        setClosing(false);
       }
     } catch (error) {
-      console.error("💥 Error general en performDailyClose:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Error inesperado",
-        variant: "destructive",
-      });
+      console.error("💥 Error en performDailyClose:", error);
+      const errorMessage = error instanceof Error ? error.message : "Error inesperado";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
+    } finally {
       setLoading(false);
       setClosing(false);
     }
