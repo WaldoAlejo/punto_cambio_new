@@ -695,6 +695,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     localStorage.removeItem("puntoAtencionSeleccionado");
     localStorage.removeItem("pc_selected_point_id");
     localStorage.removeItem("pc_active_view");
+    // Forzar selección de punto en el próximo login (solo efecto inmediato)
+    try {
+      sessionStorage.setItem("pc_force_point_select", "1");
+    } catch {}
     
     toast({
       title: "Sesión cerrada",

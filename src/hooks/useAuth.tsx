@@ -67,6 +67,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
           const storedPoint = localStorage.getItem("puntoAtencionSeleccionado");
           if (!storedPoint) {
+            const forcePointSelection =
+              (typeof window !== "undefined" && sessionStorage.getItem("pc_force_point_select") === "1") || false;
+            if (forcePointSelection) {
+              try {
+                sessionStorage.removeItem("pc_force_point_select");
+              } catch {}
+            }
             // Si es admin, conectar automáticamente al punto principal
             if (
               verifiedUser.rol === "ADMIN" ||
@@ -85,11 +92,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               }
             } else if (verifiedUser.rol === "OPERADOR") {
               // Para operadores, usar la lógica existente de jornada activa
-              const res = await scheduleService.getActiveSchedule();
-              if (res?.schedule?.puntoAtencion) {
-                setSelectedPointState(
-                  res.schedule.puntoAtencion as PuntoAtencion
-                );
+              if (!forcePointSelection) {
+                const res = await scheduleService.getActiveSchedule();
+                if (res?.schedule?.puntoAtencion) {
+                  setSelectedPointState(
+                    res.schedule.puntoAtencion as PuntoAtencion
+                  );
+                }
               }
             } else if (verifiedUser.rol === "CONCESION") {
               // Para concesión, usar el punto asignado en su perfil si existe
@@ -127,6 +136,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (loggedUser && token) {
         setUser(loggedUser);
+        const forcePointSelection =
+          (typeof window !== "undefined" && sessionStorage.getItem("pc_force_point_select") === "1") || false;
+        if (forcePointSelection) {
+          try {
+            sessionStorage.removeItem("pc_force_point_select");
+          } catch {}
+        }
 
         // Si es admin, conectar automáticamente al punto principal
         if (loggedUser.rol === "ADMIN" || loggedUser.rol === "SUPER_USUARIO") {
@@ -144,9 +160,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         } else if (loggedUser.rol === "OPERADOR") {
           // Para operadores, usar la lógica existente de jornada activa
-          const res = await scheduleService.getActiveSchedule();
-          if (res?.schedule?.puntoAtencion) {
-            setSelectedPointState(res.schedule.puntoAtencion as PuntoAtencion);
+          if (!forcePointSelection) {
+            const res = await scheduleService.getActiveSchedule();
+            if (res?.schedule?.puntoAtencion) {
+              setSelectedPointState(res.schedule.puntoAtencion as PuntoAtencion);
+            }
           }
         } else if (loggedUser.rol === "CONCESION") {
           // Para concesión, usar el punto asignado en su perfil si existe
