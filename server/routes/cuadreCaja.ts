@@ -196,14 +196,44 @@ router.get("/", authenticateToken, async (req, res) => {
     }
 
     const fechaBase = parseFechaParam(fechaParam);
-    const { gte } = gyeDayRangeUtcFromDate(fechaBase);
+    const { gte, lt } = gyeDayRangeUtcFromDate(fechaBase);
     const fechaInicioDia: Date = new Date(gte);
+    const fechaFinDia: Date = new Date(lt);
     
     logger.info("🔍 GET /cuadre-caja iniciado", {
       usuario_id: usuario.id,
       punto_atencion_id: puntoAtencionId,
       fecha: fechaInicioDia.toISOString(),
     });
+
+    // Short-circuit: si no hay movimientos del día, devolver respuesta vacía
+    const movimientosDelDia = await prisma.movimientoSaldo.count({
+      where: {
+        punto_atencion_id: puntoAtencionId,
+        fecha: { gte: fechaInicioDia, lt: fechaFinDia },
+      },
+    });
+
+    if (movimientosDelDia === 0) {
+      logger.info("ℹ️ Sin movimientos del día; devolviendo cuadre vacío", {
+        punto_atencion_id: puntoAtencionId,
+        fecha: fechaInicioDia.toISOString(),
+      });
+      return res.status(200).json({
+        success: true,
+        data: {
+          detalles: [],
+          observaciones: "",
+          periodo_inicio: fechaInicioDia.toISOString(),
+          totales: {
+            cambios: 0,
+            transferencias_entrada: 0,
+            transferencias_salida: 0,
+          },
+          mensaje: "No hay movimientos de divisas hoy",
+        },
+      });
+    }
 
     // Obtener o crear cuadre abierto del día
     const cuadreResult = await pool.query<CuadreCaja>(

@@ -160,7 +160,7 @@ async function getCuadre(params?: {
   pointId?: string;
 }): Promise<CuadreResponse> {
   try {
-    const res = await axiosInstance.get<CuadreResponse>("/api/cuadre-caja", {
+    const res = await axiosInstance.get<CuadreResponse>("/cuadre-caja", {
       params,
     });
     return res.data;
@@ -179,7 +179,7 @@ async function guardarCierre(
 ): Promise<GuardarCierreResponse> {
   try {
     const res = await axiosInstance.post<GuardarCierreResponse>(
-      "/api/guardar-cierre",
+      "/guardar-cierre",
       body
     );
     return res.data;
@@ -197,7 +197,7 @@ async function guardarParcial(
 ): Promise<GuardarCierreResponse> {
   try {
     const res = await axiosInstance.post<GuardarCierreResponse>(
-      "/api/cierre-parcial/parcial",
+      "/cierre-parcial/parcial",
       body
     );
     return res.data;
@@ -212,7 +212,7 @@ async function guardarParcial(
 async function getParcialesPendientes(): Promise<ParcialesPendientesResponse> {
   try {
     const res = await axiosInstance.get<ParcialesPendientesResponse>(
-      "/api/cierre-parcial/pendientes"
+      "/cierre-parcial/pendientes"
     );
     return res.data;
   } catch (e) {
@@ -235,7 +235,7 @@ async function getContabilidadDiaria(
 ): Promise<ContabilidadDiariaResponse> {
   try {
     const res = await axiosInstance.get<ContabilidadDiariaResponse>(
-      `/api/contabilidad-diaria/${pointId}/${fecha}`
+      `/contabilidad-diaria/${pointId}/${fecha}`
     );
     return res.data;
   } catch (e) {
@@ -256,7 +256,7 @@ async function cerrarContabilidadDiaria(
 ): Promise<CerrarContabilidadResponse> {
   try {
     const res = await axiosInstance.post<CerrarContabilidadResponse>(
-      `/api/contabilidad-diaria/${pointId}/${fecha}/cerrar`,
+      `/contabilidad-diaria/${pointId}/${fecha}/cerrar`,
       body ?? {}
     );
     return res.data;
