@@ -636,26 +636,23 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       }
 
       console.log("✅ Cierre completado exitosamente", {
-        cierre_id: resultado.cierre_id,
-        cuadre_id: resultado.cuadre_id,
-        jornada_finalizada: resultado.jornada_finalizada,
+        cierre_id: (resultado as any)?.cierre_id || (resultado as any)?.cierre?.id,
+        cuadre_id: (resultado as any)?.cuadre_id,
+        jornada_finalizada: (resultado as any)?.jornada_finalizada,
       });
-      const mensaje = resultado.jornada_finalizada
+      const mensaje = (resultado as any)?.jornada_finalizada
         ? "✅ El cierre diario se ha completado correctamente y su jornada fue finalizada automáticamente."
         : "✅ El cierre diario se ha completado correctamente.";
       toast({ title: "Cierre realizado", description: mensaje });
-      if (resultado.jornada_finalizada) {
+      // Marcar flags locales
+      if ((resultado as any)?.jornada_finalizada) {
         setJornadaFinalizada(true);
         setHasActiveJornada(false);
       }
-      await fetchTodayClose();
-      if (validacionCierres) {
-        setValidacionCierres({
-          ...validacionCierres,
-          estado_cierres: { ...validacionCierres.estado_cierres, cierre_diario: true },
-          cierres_completos: true,
-        });
-      }
+      // Requerimiento: tras cerrar, cerrar sesión y salir a Login
+      // Evita llamadas posteriores (como GET /cuadre-caja?fecha) en esta vista
+      handleLogout();
+      return;
     } catch (error) {
       console.error("💥 Error en performDailyClose:", error);
       const errorMessage = error instanceof Error ? error.message : "Error inesperado";
