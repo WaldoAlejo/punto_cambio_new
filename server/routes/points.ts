@@ -83,7 +83,7 @@ router.get(
         });
       } else {
         // 🔒 Roles no privilegiados: listar SOLO puntos libres hoy (sin jornada ACTIVO/ALMUERZO)
-        // Calcula explícitamente los puntos ocupados por OPERADOR/CONCESION y exclúyelos.
+        // Calcula explícitamente los puntos ocupados por OPERADOR/CONCESION (NO administrativos) y exclúyelos.
         const jornadasOcupadas = await prisma.jornada.findMany({
           where: {
             estado: { in: ["ACTIVO", "ALMUERZO"] },
