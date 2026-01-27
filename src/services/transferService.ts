@@ -105,6 +105,58 @@ export const transferService = {
     }
   },
 
+  async getPendingAcceptanceTransfers(): Promise<{
+    transfers: Transferencia[];
+    error: string | null;
+  }> {
+    try {
+      const response = await apiService.get<TransfersResponse>(
+        "/transfers/pending-acceptance"
+      );
+      if (response && response.success) {
+        return { transfers: response.transfers, error: null };
+      } else {
+        return {
+          transfers: [],
+          error: "Error al obtener las transferencias pendientes de aceptación",
+        };
+      }
+    } catch {
+      return {
+        transfers: [],
+        error: "Error de conexión al obtener transferencias pendientes de aceptación",
+      };
+    }
+  },
+
+  async acceptTransfer(
+    transferId: string,
+    observaciones?: string
+  ): Promise<{ transfer: Transferencia | null; error: string | null }> {
+    try {
+      const response = await apiService.post<TransferResponse>(
+        `/transfer-approvals/${transferId}/accept`,
+        { observaciones }
+      );
+      if (response && response.success) {
+        return { transfer: response.transfer, error: null };
+      } else {
+        return { transfer: null, error: response?.message || "Error al aceptar la transferencia" };
+      }
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "response" in error) {
+        const err = error as { response?: { data?: { error?: string } } };
+        if (err.response?.data?.error) {
+          return { transfer: null, error: err.response.data.error };
+        }
+      }
+      return {
+        transfer: null,
+        error: "Error de conexión al aceptar transferencia",
+      };
+    }
+  },
+
   async approveTransfer(
     transferId: string,
     observaciones?: string

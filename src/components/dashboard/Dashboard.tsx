@@ -43,6 +43,9 @@ const PermissionApprovals = React.lazy(
 const TransferApprovals = React.lazy(
   () => import("../admin/TransferApprovals")
 );
+const TransferAcceptance = React.lazy(
+  () => import("../admin/TransferAcceptance")
+);
 const Reports = React.lazy(() => import("../reports/Reports"));
 const DailyClose = React.lazy(() => import("../close/DailyClose"));
 const SaldoInicialManagement = React.lazy(
@@ -227,21 +230,29 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   }, [requiresPoint, selectedPoint, navigate]);
 
   const toggleSidebar = useCallback(() => setSidebarOpen((s) => !s), []);
-  const handleNotificationClick = useCallback(
-    () => setActiveView("transfer-approvals"),
-    []
-  );
-
+  
   const isAdmin = useMemo(
     () => user.rol === "ADMIN" || user.rol === "SUPER_USUARIO",
     [user.rol]
   );
   const isOperador = useMemo(() => user.rol === "OPERADOR", [user.rol]);
+  const isConcesion = useMemo(() => user.rol === "CONCESION", [user.rol]);
+  
+  const handleNotificationClick = useCallback(() => {
+    // Admin/Super: ver transferencias pendientes de aprobación
+    if (isAdmin || isConcesion) {
+      setActiveView("transfer-approvals");
+    } 
+    // Operador: ver transferencias pendientes de aceptación
+    else if (isOperador) {
+      setActiveView("transfer-acceptance");
+    }
+  }, [isAdmin, isOperador, isConcesion]);
+
   const isAdministrativo = useMemo(
     () => user.rol === "ADMINISTRATIVO",
     [user.rol]
   );
-  const isConcesion = useMemo(() => user.rol === "CONCESION", [user.rol]);
 
   const renderContent = useCallback(() => {
     switch (activeView) {
@@ -275,6 +286,11 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isOperador)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
         return <TransferManagement user={user} />;
+
+      case "transfer-acceptance":
+        if (!isOperador && !isConcesion)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <TransferAcceptance />;
 
       case "operator-time-management":
         if (!isOperador && !isAdministrativo)

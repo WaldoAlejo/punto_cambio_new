@@ -5,6 +5,8 @@ import { transferAutoReconciliation } from "../middleware/autoReconciliation.js"
 import { validarSaldoTransferencia } from "../middleware/saldoValidation.js";
 import { z } from "zod";
 import transferController from "../controllers/transferController.js";
+import prisma from "../lib/prisma.js";
+import logger from "../utils/logger.js";
 
 const router = express.Router();
 
@@ -82,5 +84,71 @@ router.post(
 
 // Listar transferencias
 router.get("/", authenticateToken, transferController.getAllTransfers);
+
+// Obtener transferencias EN_TRANSITO pendientes de aceptación para el punto actual
+router.get("/pending-acceptance", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        error: "Usuario no autenticado",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const puntoAtencionId = req.user.punto_atencion_id;
+
+    if (!puntoAtencionId) {
+      return res.status(400).json({
+        error: "Usuario no tiene punto de atención asignado",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const pendingTransfers = await prisma.transferencia.findMany({
+      where: {
+        destino_id: puntoAtencionId,
+        estado: "EN_TRANSITO",
+      },
+      include: {
+        origen: { select: { id: true, nombre: true } },
+        destino: { select: { id: true, nombre: true } },
+        moneda: {
+          select: { id: true, codigo: true, nombre: true, simbolo: true },
+        },
+        usuarioSolicitante: {
+          select: { id: true, nombre: true, username: true },
+        },
+      },
+      orderBy: { fecha: "desc" },
+    });
+
+    const formattedTransfers = pendingTransfers.map((transfer) => ({
+      ...transfer,
+      monto: parseFloat(transfer.monto.toString()),
+      fecha: transfer.fecha.toISOString(),
+      fecha_envio: transfer.fecha_envio?.toISOString() || null,
+    }));
+
+    res.status(200).json({
+      transfers: formattedTransfers,
+      success: true,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Error al obtener transferencias pendientes de aceptación", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+      requestedBy: req.user?.id,
+    });
+
+    res.status(500).json({
+      error: "Error al obtener transferencias pendientes de aceptación",
+      success: false,
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
 
 export default router;

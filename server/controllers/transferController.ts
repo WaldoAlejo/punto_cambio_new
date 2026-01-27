@@ -24,6 +24,15 @@ const controller = {
     res: express.Response
   ): Promise<void> {
     try {
+      if (!req.user) {
+        res.status(401).json({
+          error: "Usuario no autenticado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       const {
         origen_id,
         destino_id,
@@ -102,18 +111,133 @@ const controller = {
       // Crear transferencia
       const numeroRecibo = transferCreationService.generateReceiptNumber();
 
-      const newTransfer = await transferCreationService.createTransfer({
-        origen_id: origen_id || null,
-        destino_id,
-        moneda_id,
-        monto,
-        tipo_transferencia,
-        solicitado_por: req.user.id,
-        descripcion: descripcion || null,
-        numero_recibo: numeroRecibo,
-        estado: "PENDIENTE",
-        fecha: new Date(),
-        via: via as TipoViaTransferencia,
+      // ✅ NUEVO FLUJO: Transferencias directas sin aprobación del admin
+      // Al crear la transferencia:
+      // 1. Se descuenta inmediatamente del punto origen
+      // 2. El estado cambia a EN_TRANSITO
+      // 3. El punto destino la acepta cuando recibe el dinero físico
+      
+      const estadoInicial = "EN_TRANSITO"; // Cambio de PENDIENTE a EN_TRANSITO
+
+      // Crear la transferencia y descontar del origen en una transacción
+      const newTransfer = await prisma.$transaction(async (tx) => {
+        // 1. Crear la transferencia
+        const transfer = await tx.transferencia.create({
+          data: {
+            origen_id: origen_id || null,
+            destino_id,
+            moneda_id,
+            monto,
+            tipo_transferencia,
+            solicitado_por: req.user!.id,
+            descripcion: descripcion || null,
+            numero_recibo: numeroRecibo,
+            estado: estadoInicial,
+            fecha: new Date(),
+            fecha_envio: new Date(), // 👈 Registrar fecha de envío
+            via: via as TipoViaTransferencia,
+          },
+        });
+
+        // 2. Si hay punto origen, descontar del saldo inmediatamente
+        if (origen_id) {
+          // Obtener saldo anterior
+          const saldoOrigen = await tx.saldo.findUnique({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: origen_id,
+                moneda_id,
+              },
+            },
+          });
+
+          const saldoAnteriorOrigen = Number(saldoOrigen?.cantidad || 0);
+          const billetesAnterior = Number(saldoOrigen?.billetes || 0);
+          const monedasAnterior = Number(saldoOrigen?.monedas_fisicas || 0);
+
+          // Validar saldo suficiente
+          if (saldoAnteriorOrigen < Number(monto)) {
+            throw new Error(
+              `Saldo insuficiente en punto origen. Saldo actual: ${saldoAnteriorOrigen.toFixed(
+                2
+              )}, requerido: ${Number(monto).toFixed(2)}`
+            );
+          }
+
+          const saldoNuevoOrigen = saldoAnteriorOrigen - Number(monto);
+
+          // Distribuir el egreso entre billetes y monedas físicas
+          const totalFisico = billetesAnterior + monedasAnterior;
+          let billetesEgreso = 0;
+          let monedasEgreso = 0;
+
+          if (totalFisico > 0) {
+            const proporcionBilletes = billetesAnterior / totalFisico;
+            billetesEgreso = Math.min(
+              billetesAnterior,
+              Number(monto) * proporcionBilletes
+            );
+            monedasEgreso = Number(monto) - billetesEgreso;
+
+            if (monedasEgreso > monedasAnterior) {
+              monedasEgreso = monedasAnterior;
+              billetesEgreso = Number(monto) - monedasEgreso;
+            }
+          } else {
+            billetesEgreso = Number(monto);
+          }
+
+          const billetesNuevoOrigen = Math.max(
+            0,
+            billetesAnterior - billetesEgreso
+          );
+          const monedasNuevaOrigen = Math.max(
+            0,
+            monedasAnterior - monedasEgreso
+          );
+
+          // Actualizar saldo del origen
+          await tx.saldo.upsert({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: origen_id,
+                moneda_id,
+              },
+            },
+            update: {
+              cantidad: saldoNuevoOrigen,
+              billetes: billetesNuevoOrigen,
+              monedas_fisicas: monedasNuevaOrigen,
+              updated_at: new Date(),
+            },
+            create: {
+              punto_atencion_id: origen_id,
+              moneda_id,
+              cantidad: saldoNuevoOrigen,
+              billetes: billetesNuevoOrigen,
+              monedas_fisicas: monedasNuevaOrigen,
+            },
+          });
+
+          // Registrar movimiento de salida
+          await tx.movimientoSaldo.create({
+            data: {
+              punto_atencion_id: origen_id,
+              moneda_id,
+              tipo_movimiento: "TRANSFERENCIA_SALIENTE",
+              monto: Number(monto),
+              saldo_anterior: saldoAnteriorOrigen,
+              saldo_nuevo: saldoNuevoOrigen,
+              usuario_id: req.user!.id,
+              referencia_id: transfer.id,
+              tipo_referencia: "TRANSFERENCIA",
+              descripcion: `Transferencia enviada a punto destino - En tránsito`,
+              fecha: new Date(),
+            },
+          });
+        }
+
+        return transfer;
       });
 
       // ⚠️ IMPORTANTE: NO CONTABILIZAR AL CREAR
@@ -181,20 +305,22 @@ const controller = {
         responsable_movilizacion: responsable_movilizacion || null,
       };
 
-      logger.info("Transferencia creada (pendiente de aprobación)", {
+      logger.info("Transferencia creada (en tránsito)", {
         transferId: newTransfer.id,
         createdBy: req.user.id,
         amount: monto,
         type: tipo_transferencia,
         via,
         numeroRecibo,
+        origenId: origen_id,
+        destinoId: destino_id,
       });
 
       res.status(201).json({
         transfer: formattedTransfer,
         success: true,
         message:
-          "Transferencia creada exitosamente. Pendiente de aprobación para contabilizar.",
+          "Transferencia creada exitosamente. Monto deducido del punto de origen. Pendiente de aceptación en punto destino.",
         timestamp: new Date().toISOString(),
       });
     } catch (error) {

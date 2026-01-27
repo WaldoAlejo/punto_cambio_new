@@ -280,13 +280,17 @@ model Transferencia {
   solicitado_por           String
   aprobado_por             String?
   rechazado_por            String?
+  aceptado_por             String?
   fecha                    DateTime            @default(now())
   fecha_aprobacion         DateTime?
   fecha_rechazo            DateTime?
+  fecha_envio              DateTime?
+  fecha_aceptacion         DateTime?
   descripcion              String?
   numero_recibo            String?             @unique
   via                      TipoViaTransferencia?
   observaciones_aprobacion String?
+  observaciones_aceptacion String?
   usuarioAprobador         Usuario?            @relation("UsuarioAprobador", fields: [aprobado_por], references: [id])
   destino                  PuntoAtencion       @relation("TransferenciasDestino", fields: [destino_id], references: [id])
   moneda                   Moneda              @relation(fields: [moneda_id], references: [id])
@@ -297,6 +301,7 @@ model Transferencia {
   @@index([fecha])
   @@index([estado])
   @@index([destino_id])
+  @@index([origen_id])
 }
 
 model Movimiento {
@@ -789,8 +794,11 @@ enum TipoViaTransferencia {
 
 enum EstadoTransferencia {
   PENDIENTE
+  EN_TRANSITO
+  COMPLETADO
   APROBADO
   RECHAZADO
+  CANCELADO
 }
 
 enum EstadoTransaccion {

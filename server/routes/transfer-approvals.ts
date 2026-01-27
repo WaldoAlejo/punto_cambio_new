@@ -111,7 +111,10 @@ router.patch(
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   validate(approvalSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
-    try {
+    try {      if (!req.user) {
+        res.status(401).json({ error: "Usuario no autenticado", success: false });
+        return;
+      }
       const { transferId } = req.params;
       const { observaciones } = req.body;
 
@@ -617,6 +620,214 @@ router.patch(
 
       res.status(500).json({
         error: "Error al rechazar transferencia",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
+// Endpoint para que el punto DESTINO acepte la transferencia
+// Cuando se acepta, se agrega el monto al saldo del destino y se marca como COMPLETADO
+router.post(
+  "/:id/accept",
+  authenticateToken,
+  requireRole(["OPERADOR", "CONCESION", "ADMIN", "SUPER_USUARIO"]),
+  validate(approvalSchema),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    try {
+      const transferId = req.params.id;
+      const { observaciones } = req.body;
+
+      // Obtener la transferencia
+      const transfer = await prisma.transferencia.findUnique({
+        where: { id: transferId },
+        include: {
+          origen: true,
+          destino: true,
+          moneda: true,
+        },
+      });
+
+      if (!transfer) {
+        logger.warn("Transferencia no encontrada para aceptar", {
+          transferId,
+          requestedBy: req.user!.id,
+        });
+        res.status(404).json({
+          error: "Transferencia no encontrada",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Validar que el usuario pertenece al punto destino (a menos que sea admin/super)
+      if (
+        req.user!.rol !== "ADMIN" &&
+        req.user!.rol !== "SUPER_USUARIO" &&
+        req.user!.punto_atencion_id !== transfer.destino_id
+      ) {
+        logger.warn("Usuario no autorizado para aceptar esta transferencia", {
+          transferId,
+          userId: req.user!.id,
+          userPuntoId: req.user!.punto_atencion_id,
+          destinoId: transfer.destino_id,
+        });
+        res.status(403).json({
+          error: "No tienes permiso para aceptar esta transferencia",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Validar que la transferencia está EN_TRANSITO
+      if (transfer.estado !== "EN_TRANSITO") {
+        logger.warn("Intento de aceptar transferencia que no está en tránsito", {
+          transferId,
+          estadoActual: transfer.estado,
+          requestedBy: req.user!.id,
+        });
+        res.status(400).json({
+          error: `La transferencia no está en tránsito (estado actual: ${transfer.estado})`,
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Realizar la aceptación en una transacción
+      const updatedTransfer = await prisma.$transaction(async (tx) => {
+        const monto = Number(transfer.monto);
+        const monedaId = transfer.moneda_id;
+        const destinoId = transfer.destino_id;
+
+        // 1. Actualizar el estado de la transferencia
+        const updated = await tx.transferencia.update({
+          where: { id: transferId },
+          data: {
+            estado: "COMPLETADO",
+            aceptado_por: req.user!.id,
+            fecha_aceptacion: new Date(),
+            observaciones_aceptacion: observaciones,
+          },
+          include: {
+            origen: true,
+            destino: true,
+            moneda: true,
+            usuarioSolicitante: true,
+          },
+        });
+
+        // 2. Obtener o crear el saldo del punto destino
+        const saldoDestino = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: destinoId,
+              moneda_id: monedaId,
+            },
+          },
+        });
+
+        const saldoAnterior = saldoDestino ? Number(saldoDestino.cantidad) : 0;
+        const billetesAnterior = saldoDestino ? Number(saldoDestino.billetes) : 0;
+        const monedasAnterior = saldoDestino
+          ? Number(saldoDestino.monedas_fisicas)
+          : 0;
+
+        // 3. Calcular el ingreso según la vía de transferencia
+        let billetesIngreso = 0;
+        let monedasIngreso = 0;
+
+        // Para transferencias EFECTIVO, todo va a billetes
+        // Para BANCO y MIXTO, asumimos que todo es efectivo por ahora
+        // TODO: Agregar campos monto_efectivo y monto_banco al schema si se necesita mayor detalle
+        if (transfer.via === "EFECTIVO" || transfer.via === "MIXTO") {
+          billetesIngreso = monto;
+        }
+        // Para BANCO, no se afectan billetes/monedas físicas
+        // El monto se registra solo en cantidad total
+
+        const saldoNuevoDestino = saldoAnterior + monto;
+        const billetesNuevoDestino = billetesAnterior + billetesIngreso;
+        const monedasNuevaDestino = monedasAnterior + monedasIngreso;
+
+        // 4. Actualizar el saldo del destino
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: destinoId,
+              moneda_id: monedaId,
+            },
+          },
+          update: {
+            cantidad: saldoNuevoDestino,
+            billetes: billetesNuevoDestino,
+            monedas_fisicas: monedasNuevaDestino,
+            updated_at: new Date(),
+          },
+          create: {
+            punto_atencion_id: destinoId,
+            moneda_id: monedaId,
+            cantidad: saldoNuevoDestino,
+            billetes: billetesNuevoDestino,
+            monedas_fisicas: monedasNuevaDestino,
+          },
+        });
+
+        // 5. Registrar movimiento de entrada
+        await tx.movimientoSaldo.create({
+          data: {
+            punto_atencion_id: destinoId,
+            moneda_id: monedaId,
+            tipo_movimiento: "TRANSFERENCIA_ENTRANTE",
+            monto: monto,
+            saldo_anterior: saldoAnterior,
+            saldo_nuevo: saldoNuevoDestino,
+            usuario_id: req.user!.id,
+            referencia_id: String(transferId),
+            tipo_referencia: "TRANSFERENCIA",
+            descripcion: `Transferencia aceptada desde punto origen`,
+            fecha: new Date(),
+          },
+        });
+
+        return updated;
+      });
+
+      logger.info("Transferencia aceptada exitosamente", {
+        transferId,
+        acceptedBy: req.user!.id,
+        amount: transfer.monto.toString(),
+        destinoId: transfer.destino_id,
+      });
+
+      res.status(200).json({
+        transfer: {
+          ...updatedTransfer,
+          monto: parseFloat(updatedTransfer.monto.toString()),
+          fecha: updatedTransfer.fecha.toISOString(),
+          fecha_aprobacion:
+            updatedTransfer.fecha_aprobacion?.toISOString() || null,
+          fecha_rechazo: updatedTransfer.fecha_rechazo?.toISOString() || null,
+          fecha_aceptacion:
+            updatedTransfer.fecha_aceptacion?.toISOString() || null,
+        },
+        success: true,
+        message: "Transferencia aceptada. Monto agregado al saldo del punto destino.",
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error al aceptar transferencia", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id,
+        transferId: req.params.id,
+      });
+
+      res.status(500).json({
+        error: "Error al aceptar transferencia",
         success: false,
         timestamp: new Date().toISOString(),
       });

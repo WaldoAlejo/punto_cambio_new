@@ -185,7 +185,7 @@ export interface Transferencia {
   monto: number;
   descripcion?: string | null;
   numero_recibo?: string | null;
-  estado: "PENDIENTE" | "APROBADO" | "RECHAZADO";
+  estado: "PENDIENTE" | "EN_TRANSITO" | "COMPLETADO" | "APROBADO" | "RECHAZADO" | "CANCELADO";
   tipo_transferencia:
     | "ENTRE_PUNTOS"
     | "DEPOSITO_MATRIZ"
@@ -194,10 +194,14 @@ export interface Transferencia {
   solicitado_por: string;
   aprobado_por?: string | null;
   rechazado_por?: string | null;
+  aceptado_por?: string | null;
   fecha: string;
   fecha_aprobacion?: string | null;
   fecha_rechazo?: string | null;
+  fecha_envio?: string | null;
+  fecha_aceptacion?: string | null;
   observaciones_aprobacion?: string | null;
+  observaciones_aceptacion?: string | null;
   detalle_divisas?: DetalleDivisasSimple;
   responsable_movilizacion?: ResponsableMovilizacion;
   origen?: PuntoAtencion;

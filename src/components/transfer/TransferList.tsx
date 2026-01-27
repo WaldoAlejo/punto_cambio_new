@@ -56,7 +56,25 @@ const TransferList = ({
             variant="outline"
             className="bg-yellow-50 text-yellow-800 border-yellow-300"
           >
-            Pendiente
+            Pendiente Aprobación
+          </Badge>
+        );
+      case "EN_TRANSITO":
+        return (
+          <Badge
+            variant="outline"
+            className="bg-blue-50 text-blue-800 border-blue-300"
+          >
+            En Tránsito
+          </Badge>
+        );
+      case "COMPLETADO":
+        return (
+          <Badge
+            variant="outline"
+            className="bg-green-50 text-green-800 border-green-300"
+          >
+            Completado
           </Badge>
         );
       case "APROBADO":
@@ -75,6 +93,15 @@ const TransferList = ({
             className="bg-red-50 text-red-800 border-red-300"
           >
             Rechazado
+          </Badge>
+        );
+      case "CANCELADO":
+        return (
+          <Badge
+            variant="outline"
+            className="bg-gray-50 text-gray-800 border-gray-300"
+          >
+            Cancelado
           </Badge>
         );
       default:

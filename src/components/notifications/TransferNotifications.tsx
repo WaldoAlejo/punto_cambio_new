@@ -3,10 +3,12 @@ import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { transferApprovalService } from "../../services/transferApprovalService";
+import { transferService } from "../../services/transferService";
 import { ApiError } from "../../services/apiService";
 
 interface TransferNotificationsProps {
   onNotificationClick: () => void;
+  userRole?: string;
 }
 
 const BASE_INTERVAL_MS = 30_000; // 30s normal
@@ -15,6 +17,7 @@ const ERR_INTERVAL_MS = 45_000; // fallback si no es 429
 
 const TransferNotifications = ({
   onNotificationClick,
+  userRole,
 }: TransferNotificationsProps) => {
   const [pendingCount, setPendingCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -23,6 +26,10 @@ const TransferNotifications = ({
   const backoffRef = useRef<number>(BASE_INTERVAL_MS);
   const mountedRef = useRef<boolean>(false);
   const fetchingRef = useRef<boolean>(false);
+
+  // Determinar si es admin o operador
+  const isAdmin = userRole === "ADMIN" || userRole === "SUPER_USUARIO";
+  const isOperador = userRole === "OPERADOR" || userRole === "CONCESION";
 
   useEffect(() => {
     mountedRef.current = true;
@@ -56,17 +63,36 @@ const TransferNotifications = ({
       fetchingRef.current = true;
 
       try {
-        const { transfers, error } =
-          await transferApprovalService.getPendingTransfers();
+        let totalCount = 0;
 
-        if (error) {
-          // Error controlado por el servicio
-          backoffRef.current = ERR_INTERVAL_MS;
-          console.warn("Error fetching pending transfers:", error);
-        } else {
-          setPendingCount(transfers.length);
-          backoffRef.current = BASE_INTERVAL_MS; // reset en éxito
+        // Admins: ver transferencias PENDIENTES de aprobación (flujo antiguo)
+        if (isAdmin) {
+          const { transfers, error } =
+            await transferApprovalService.getPendingTransfers();
+
+          if (error) {
+            backoffRef.current = ERR_INTERVAL_MS;
+            console.warn("Error fetching pending transfers:", error);
+          } else {
+            totalCount += transfers.length;
+          }
         }
+
+        // Operadores: ver transferencias EN_TRANSITO pendientes de aceptación
+        if (isOperador) {
+          const { transfers, error } =
+            await transferService.getPendingAcceptanceTransfers();
+
+          if (error) {
+            backoffRef.current = ERR_INTERVAL_MS;
+            console.warn("Error fetching pending acceptance transfers:", error);
+          } else {
+            totalCount += transfers.length;
+          }
+        }
+
+        setPendingCount(totalCount);
+        backoffRef.current = BASE_INTERVAL_MS; // reset en éxito
       } catch (e: any) {
         if (e instanceof ApiError && e.status === 429) {
           backoffRef.current = Math.min(
@@ -105,7 +131,7 @@ const TransferNotifications = ({
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, []);
+  }, [isAdmin, isOperador]);
 
   if (isLoading) {
     return (

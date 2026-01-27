@@ -64,7 +64,10 @@ const Header = ({
 
       {/* Derecha: Notificación + Usuario + Logout */}
       <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-        <TransferNotifications onNotificationClick={handleNotificationClick} />
+        <TransferNotifications 
+          onNotificationClick={handleNotificationClick} 
+          userRole={user.rol}
+        />
 
         <div className="flex items-center gap-1.5 sm:gap-2">
           <div className="text-right hidden sm:block">

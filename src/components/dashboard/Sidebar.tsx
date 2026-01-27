@@ -65,6 +65,12 @@ const Sidebar = ({
       roles: ["OPERADOR"],
     },
     {
+      id: "transfer-acceptance",
+      label: "Recibir Transferencias",
+      color: "text-blue-600",
+      roles: ["OPERADOR", "CONCESION"],
+    },
+    {
       id: "operator-time-management",
       label: "Gestión de Horarios",
       color: "text-purple-600",
