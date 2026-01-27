@@ -100,14 +100,14 @@ export default function ServiciosExternosHistory() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 md:gap-3">
         <div>
-          <label className="text-sm">Servicio/Categoría</label>
+          <label className="text-xs md:text-sm font-medium">Servicio/Categoría</label>
           <Select
             onValueChange={(v) => setServicio((v === "ALL" ? "" : v) as any)}
             defaultValue="ALL"
           >
-            <SelectTrigger className="mt-1">
+            <SelectTrigger className="mt-1 h-9">
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
@@ -121,12 +121,12 @@ export default function ServiciosExternosHistory() {
         </div>
 
         <div>
-          <label className="text-sm">Tipo</label>
+          <label className="text-xs md:text-sm font-medium">Tipo</label>
           <Select
             onValueChange={(v) => setTipo((v === "ALL" ? "" : v) as any)}
             defaultValue="ALL"
           >
-            <SelectTrigger className="mt-1">
+            <SelectTrigger className="mt-1 h-9">
               <SelectValue placeholder="Todos" />
             </SelectTrigger>
             <SelectContent>
@@ -140,20 +140,22 @@ export default function ServiciosExternosHistory() {
         </div>
 
         <div>
-          <label className="text-sm">Desde</label>
+          <label className="text-xs md:text-sm font-medium">Desde</label>
           <Input
             type="date"
             value={desde}
             onChange={(e) => setDesde(e.target.value)}
+            className="mt-1 h-9"
           />
         </div>
 
         <div>
-          <label className="text-sm">Hasta</label>
+          <label className="text-xs md:text-sm font-medium">Hasta</label>
           <Input
             type="date"
             value={hasta}
             onChange={(e) => setHasta(e.target.value)}
+            className="mt-1 h-9"
           />
         </div>
 
@@ -161,25 +163,26 @@ export default function ServiciosExternosHistory() {
           <Button
             onClick={fetchData}
             disabled={!canQuery || loading}
-            className="w-full"
+            className="w-full h-9"
+            size="sm"
           >
-            {loading ? "Cargando..." : "Filtrar"}
+            {loading ? "⏳ Cargando..." : "🔍 Filtrar"}
           </Button>
         </div>
       </div>
 
-      <div className="rounded border overflow-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-muted/50">
+      <div className="rounded border overflow-x-auto">
+        <table className="min-w-full text-xs md:text-sm">
+          <thead className="bg-muted/50 sticky top-0">
             <tr>
-              <th className="p-2 text-left">Fecha</th>
-              <th className="p-2 text-left">Servicio / Categoría</th>
-              <th className="p-2 text-left">Tipo</th>
-              <th className="p-2 text-right">Monto (USD)</th>
-              <th className="p-2 text-left">Referencia</th>
-              <th className="p-2 text-left">Descripción</th>
-              <th className="p-2 text-left">Usuario</th>
-              <th className="p-2 text-right">Acciones</th>
+              <th className="p-2 text-left whitespace-nowrap">Fecha</th>
+              <th className="p-2 text-left whitespace-nowrap">Servicio / Categoría</th>
+              <th className="p-2 text-left whitespace-nowrap">Tipo</th>
+              <th className="p-2 text-right whitespace-nowrap">Monto (USD)</th>
+              <th className="p-2 text-left whitespace-nowrap">Referencia</th>
+              <th className="p-2 text-left whitespace-nowrap">Descripción</th>
+              <th className="p-2 text-left whitespace-nowrap">Usuario</th>
+              <th className="p-2 text-right whitespace-nowrap">Acciones</th>
             </tr>
           </thead>
           <tbody>
