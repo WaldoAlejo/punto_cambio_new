@@ -378,11 +378,21 @@ export async function validarSaldoCambioDivisa(
       });
     }
 
-    // 🔄 NORMALIZACIÓN: Asegurar que moneda_origen sea siempre lo que el PUNTO ENTREGA (egreso)
-    // COMPRA -> El punto compra divisa (recibe divisa, entrega USD) -> Validar USD
-    // VENTA -> El punto vende divisa (entrega divisa, recibe USD) -> Validar divisa
-    let monedaValidar = moneda_origen_id;
-    let montoValidar = Number(monto_origen);
+    // 🔄 NORMALIZACIÓN: Validar la moneda que el PUNTO ENTREGA (egreso)
+    // COMPRA -> El cliente trae divisas y el punto PAGA EN USD -> Validar DESTINO (USD que sale)
+    // VENTA -> El cliente trae USD y el punto ENTREGA DIVISAS -> Validar DESTINO (divisas que salen)
+    
+    // Por defecto: Validamos DESTINO (lo que el punto entrega al cliente)
+    let monedaValidar = moneda_destino_id;
+    let montoValidar = Number(monto_destino);
+
+    logger.info("[VALIDACION_CAMBIO_DIVISA] Determinando moneda a validar", {
+      tipo_operacion,
+      moneda_origen_id,
+      moneda_destino_id,
+      monto_origen,
+      monto_destino,
+    });
 
     try {
       const usdMoneda = await prisma.moneda.findFirst({
@@ -397,18 +407,16 @@ export async function validarSaldoCambioDivisa(
         const isCompra = tipo_operacion === "COMPRA";
         const isVenta = tipo_operacion === "VENTA";
 
-        // Si es COMPRA y USD está como DESTINO, invertir
-        // (el cliente entrega divisa y recibe USD, el punto entrega USD)
-        if (isCompra && moneda_destino_id === usdMoneda.id) {
-          monedaValidar = moneda_destino_id;
-          montoValidar = Number(monto_destino);
-        }
-        // Si es VENTA y USD está como ORIGEN, invertir
-        // (el cliente entrega USD y recibe divisa, el punto entrega divisa)
-        else if (isVenta && moneda_origen_id === usdMoneda.id) {
-          monedaValidar = moneda_destino_id;
-          montoValidar = Number(monto_destino);
-        }
+        // COMPRA: Cliente trae divisas, punto PAGA USD -> Validar USD (destino)
+        // VENTA: Cliente trae USD, punto ENTREGA divisas -> Validar divisas (destino)
+        // En ambos casos, validamos DESTINO, así que no necesitamos hacer nada especial
+        
+        logger.info("[VALIDACION_CAMBIO_DIVISA] Moneda USD detectada", {
+          isCompra,
+          isVenta,
+          monedaValidar,
+          montoValidar,
+        });
       }
     } catch (e) {
       logger.warn("No se pudo normalizar par USD en validación (continuando)", {
