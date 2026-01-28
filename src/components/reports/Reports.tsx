@@ -114,20 +114,47 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
           (mainType === "exchanges" && isDetailed) ||
           (mainType === "transfers" && isDetailed);
 
+        console.log("📊 REPORTES - Cargando catálogos:", {
+          mainType,
+          isDetailed,
+          corte,
+          needUsersPoints,
+          needCurrencies,
+          currentUsersCount: users.length,
+          currentPointsCount: points.length,
+        });
+
         if (needUsersPoints) {
           if (users.length === 0) {
+            console.log("👥 Cargando usuarios...");
             const usersRes = await userService.getAllUsers();
-            if (!usersRes.error) setUsers(usersRes.users);
+            console.log("👥 Resultado de carga de usuarios:", {
+              error: usersRes.error,
+              usersCount: usersRes.users?.length || 0,
+            });
+            if (!usersRes.error) {
+              setUsers(usersRes.users);
+              console.log("✅ Usuarios cargados:", usersRes.users.length);
+            } else {
+              console.error("❌ Error al cargar usuarios:", usersRes.error);
+            }
           }
           if (points.length === 0) {
+            console.log("📍 Cargando puntos de atención...");
             const pointsRes = await pointService.getAllPoints();
+            console.log("📍 Resultado de carga de puntos:", {
+              error: pointsRes.error,
+              pointsCount: pointsRes.points?.length || 0,
+            });
             if (!pointsRes.error) {
-              setPoints(
-                pointsRes.points.map((p: any) => ({
-                  id: p.id,
-                  nombre: p.nombre,
-                }))
-              );
+              const mappedPoints = pointsRes.points.map((p: any) => ({
+                id: p.id,
+                nombre: p.nombre,
+              }));
+              setPoints(mappedPoints);
+              console.log("✅ Puntos cargados:", mappedPoints);
+            } else {
+              console.error("❌ Error al cargar puntos:", pointsRes.error);
             }
           }
         }
@@ -642,6 +669,16 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                     <Label className="flex items-center gap-2 text-sm font-medium">
                       <Users className="w-4 h-4 text-primary" />
                       Usuario
+                      {users.length === 0 && (
+                        <Badge variant="outline" className="ml-2">
+                          Cargando...
+                        </Badge>
+                      )}
+                      {users.length > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          {users.length} disponibles
+                        </Badge>
+                      )}
                     </Label>
                     <div className="space-y-2">
                       <Input
@@ -649,15 +686,17 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                         value={userSearch}
                         onChange={(e) => setUserSearch(e.target.value)}
                         className="h-10"
+                        disabled={users.length === 0}
                       />
                       <Select
                         value={selectedUserId || ""}
                         onValueChange={(v) =>
                           setSelectedUserId(v === "ALL" ? null : v)
                         }
+                        disabled={users.length === 0}
                       >
                         <SelectTrigger className="h-10">
-                          <SelectValue placeholder="Todos los usuarios" />
+                          <SelectValue placeholder={users.length === 0 ? "Cargando usuarios..." : "Todos los usuarios"} />
                         </SelectTrigger>
                         <SelectContent className="max-h-60">
                           <SelectItem value="ALL">
@@ -689,15 +728,26 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                     <Label className="flex items-center gap-2 text-sm font-medium">
                       <MapPin className="w-4 h-4 text-primary" />
                       Punto de Atención
+                      {points.length === 0 && (
+                        <Badge variant="outline" className="ml-2">
+                          Cargando...
+                        </Badge>
+                      )}
+                      {points.length > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          {points.length} disponibles
+                        </Badge>
+                      )}
                     </Label>
                     <Select
                       value={selectedPointId || ""}
                       onValueChange={(v) =>
                         setSelectedPointId(v === "ALL" ? null : v)
                       }
+                      disabled={points.length === 0}
                     >
                       <SelectTrigger className="h-10">
-                        <SelectValue placeholder="Todos los puntos" />
+                        <SelectValue placeholder={points.length === 0 ? "Cargando puntos..." : "Todos los puntos"} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="ALL">
