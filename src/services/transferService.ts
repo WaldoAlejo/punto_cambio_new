@@ -157,6 +157,34 @@ export const transferService = {
     }
   },
 
+  async rejectPendingTransfer(
+    transferId: string,
+    observaciones?: string
+  ): Promise<{ transfer: Transferencia | null; error: string | null }> {
+    try {
+      const response = await apiService.post<TransferResponse>(
+        `/transfer-approvals/${transferId}/reject`,
+        { observaciones }
+      );
+      if (response && response.success) {
+        return { transfer: response.transfer, error: null };
+      } else {
+        return { transfer: null, error: response?.message || "Error al rechazar la transferencia" };
+      }
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "response" in error) {
+        const err = error as { response?: { data?: { error?: string } } };
+        if (err.response?.data?.error) {
+          return { transfer: null, error: err.response.data.error };
+        }
+      }
+      return {
+        transfer: null,
+        error: "Error de conexión al rechazar transferencia",
+      };
+    }
+  },
+
   async approveTransfer(
     transferId: string,
     observaciones?: string

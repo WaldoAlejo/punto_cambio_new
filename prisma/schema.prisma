@@ -291,6 +291,7 @@ model Transferencia {
   via                      TipoViaTransferencia?
   observaciones_aprobacion String?
   observaciones_aceptacion String?
+  observaciones_rechazo    String?
   usuarioAprobador         Usuario?            @relation("UsuarioAprobador", fields: [aprobado_por], references: [id])
   destino                  PuntoAtencion       @relation("TransferenciasDestino", fields: [destino_id], references: [id])
   moneda                   Moneda              @relation(fields: [moneda_id], references: [id])
@@ -766,6 +767,7 @@ enum TipoMovimiento {
   EGRESO
   TRANSFERENCIA_ENTRANTE
   TRANSFERENCIA_SALIENTE
+  TRANSFERENCIA_DEVOLUCION
   CAMBIO_DIVISA
 }
 

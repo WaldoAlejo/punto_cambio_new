@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { transferService } from "../../services/transferService";
 import { Transferencia } from "../../types";
-import { CheckCircle2, Loader2, Package } from "lucide-react";
+import { CheckCircle2, Loader2, Package, XCircle } from "lucide-react";
 
 const TransferAcceptance = () => {
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
@@ -108,6 +108,54 @@ const TransferAcceptance = () => {
           });
         }
       }
+    );
+  };
+
+  const handleReject = (transfer: Transferencia) => {
+    if (processingIds.has(transfer.id)) return;
+
+    showConfirmation(
+      "Rechazar transferencia",
+      `¿Está seguro de rechazar esta transferencia de ${transfer.monto.toLocaleString()} ${
+        transfer.moneda?.codigo
+      }? El dinero será devuelto al punto ${transfer.origen?.nombre || "origen"}.`,
+      async () => {
+        try {
+          setProcessingIds((prev) => new Set(prev).add(transfer.id));
+
+          const { error } = await transferService.rejectPendingTransfer(
+            transfer.id,
+            observaciones[transfer.id] || undefined
+          );
+
+          if (error) {
+            toast.error(`Error al rechazar transferencia: ${error}`);
+          } else {
+            setPendingTransfers((prev) =>
+              prev.filter((t) => t.id !== transfer.id)
+            );
+            toast.success("❌ Transferencia rechazada. Monto devuelto al punto origen.");
+
+            // Limpiar observaciones
+            setObservaciones((prev) => {
+              const newObs = { ...prev };
+              delete newObs[transfer.id];
+              return newObs;
+            });
+          }
+        } catch (error) {
+          console.error("Error rejecting transfer:", error);
+          toast.error("Error al rechazar la transferencia");
+        } finally {
+          setProcessingIds((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(transfer.id);
+            return newSet;
+          });
+        }
+      },
+      "Rechazar",
+      "destructive"
     );
   };
 
@@ -278,7 +326,24 @@ const TransferAcceptance = () => {
                   />
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    onClick={() => handleReject(transfer)}
+                    disabled={processingIds.has(transfer.id)}
+                    variant="destructive"
+                  >
+                    {processingIds.has(transfer.id) ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Procesando...
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="mr-2 h-4 w-4" />
+                        Rechazar
+                      </>
+                    )}
+                  </Button>
                   <Button
                     onClick={() => handleAccept(transfer)}
                     disabled={processingIds.has(transfer.id)}

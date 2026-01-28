@@ -835,4 +835,211 @@ router.post(
   }
 );
 
+// Rechazar/Anular transferencia EN_TRANSITO (por el punto destino)
+router.post(
+  "/:id/reject",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "OPERADOR", "CONCESION"]),
+  validate(approvalSchema),
+  async (req: express.Request, res: express.Response): Promise<void> => {
+    try {
+      const transferId = req.params.id;
+      const { observaciones } = req.body;
+
+      if (!req.user) {
+        res.status(401).json({ error: "Usuario no autenticado", success: false });
+        return;
+      }
+
+      const transfer = await prisma.transferencia.findUnique({
+        where: { id: transferId },
+        include: {
+          origen: true,
+          destino: true,
+          moneda: true,
+        },
+      });
+
+      if (!transfer) {
+        logger.warn("Transferencia no encontrada para rechazar", {
+          transferId,
+          requestedBy: req.user.id,
+        });
+        res.status(404).json({
+          error: "Transferencia no encontrada",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Validar que el usuario pertenece al punto destino (a menos que sea admin/super)
+      if (
+        req.user.rol !== "ADMIN" &&
+        req.user.rol !== "SUPER_USUARIO" &&
+        req.user.punto_atencion_id !== transfer.destino_id
+      ) {
+        logger.warn("Usuario no autorizado para rechazar esta transferencia", {
+          transferId,
+          userId: req.user.id,
+          userPuntoId: req.user.punto_atencion_id,
+          destinoId: transfer.destino_id,
+        });
+        res.status(403).json({
+          error: "No tienes permiso para rechazar esta transferencia",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Validar que la transferencia está EN_TRANSITO
+      if (transfer.estado !== "EN_TRANSITO") {
+        logger.warn("Intento de rechazar transferencia que no está en tránsito", {
+          transferId,
+          estadoActual: transfer.estado,
+          requestedBy: req.user.id,
+        });
+        res.status(400).json({
+          error: `La transferencia no puede ser rechazada (estado actual: ${transfer.estado})`,
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      // Realizar el rechazo en una transacción: devolver el dinero al origen y marcar como CANCELADO
+      const updatedTransfer = await prisma.$transaction(async (tx) => {
+        const monto = Number(transfer.monto);
+        const monedaId = transfer.moneda_id;
+        const origenId = transfer.origen_id;
+
+        // 1. Actualizar el estado de la transferencia a CANCELADO
+        const updated = await tx.transferencia.update({
+          where: { id: transferId },
+          data: {
+            estado: "CANCELADO",
+            fecha_rechazo: new Date(),
+            observaciones_rechazo: observaciones || "Rechazada por el punto destino",
+          },
+          include: {
+            origen: true,
+            destino: true,
+            moneda: true,
+            usuarioSolicitante: true,
+          },
+        });
+
+        // 2. Obtener el saldo actual del punto origen
+        const saldoOrigen = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: origenId!,
+              moneda_id: monedaId,
+            },
+          },
+        });
+
+        if (!saldoOrigen) {
+          throw new Error(
+            "No se encontró el saldo del punto origen. Esto no debería ocurrir."
+          );
+        }
+
+        const saldoAnteriorOrigen = Number(saldoOrigen.cantidad);
+        const billetesAnteriorOrigen = Number(saldoOrigen.billetes);
+        const monedasAnteriorOrigen = Number(saldoOrigen.monedas_fisicas);
+
+        // 3. Devolver el dinero al punto origen
+        let billetesDevolucion = 0;
+        let monedasDevolucion = 0;
+
+        // Para transferencias EFECTIVO, devolvemos a billetes
+        if (transfer.via === "EFECTIVO" || transfer.via === "MIXTO") {
+          billetesDevolucion = monto;
+        }
+
+        const saldoNuevoOrigen = saldoAnteriorOrigen + monto;
+        const billetesNuevoOrigen = billetesAnteriorOrigen + billetesDevolucion;
+        const monedasNuevaOrigen = monedasAnteriorOrigen + monedasDevolucion;
+
+        // 4. Actualizar el saldo del origen (devolver el dinero)
+        await tx.saldo.update({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: origenId!,
+              moneda_id: monedaId,
+            },
+          },
+          data: {
+            cantidad: saldoNuevoOrigen,
+            billetes: billetesNuevoOrigen,
+            monedas_fisicas: monedasNuevaOrigen,
+            updated_at: new Date(),
+          },
+        });
+
+        // 5. Registrar movimiento de devolución (ingreso al origen)
+        await tx.movimientoSaldo.create({
+          data: {
+            punto_atencion_id: origenId!,
+            moneda_id: monedaId,
+            tipo_movimiento: "TRANSFERENCIA_DEVOLUCION",
+            monto: monto,
+            saldo_anterior: saldoAnteriorOrigen,
+            saldo_nuevo: saldoNuevoOrigen,
+            usuario_id: req.user!.id,
+            referencia_id: String(transferId),
+            tipo_referencia: "TRANSFERENCIA",
+            descripcion: `Devolución por transferencia rechazada - ${observaciones || "Sin observaciones"}`,
+            fecha: new Date(),
+          },
+        });
+
+        return updated;
+      });
+
+      logger.info("Transferencia rechazada exitosamente", {
+        transferId,
+        rejectedBy: req.user.id,
+        amount: transfer.monto.toString(),
+        origenId: transfer.origen_id,
+        observaciones,
+      });
+
+      res.status(200).json({
+        transfer: {
+          ...updatedTransfer,
+          monto: parseFloat(updatedTransfer.monto.toString()),
+          fecha: updatedTransfer.fecha.toISOString(),
+          fecha_aprobacion:
+            updatedTransfer.fecha_aprobacion?.toISOString() || null,
+          fecha_rechazo: updatedTransfer.fecha_rechazo?.toISOString() || null,
+          fecha_aceptacion:
+            updatedTransfer.fecha_aceptacion?.toISOString() || null,
+        },
+        success: true,
+        message: "Transferencia rechazada. Monto devuelto al punto origen.",
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error al rechazar transferencia", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id,
+        transferId: req.params.id,
+      });
+
+      res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : "Error al rechazar transferencia",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
 export default router;
