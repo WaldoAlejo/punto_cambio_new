@@ -45,6 +45,15 @@ export const saldoReconciliationService = {
     monedaId: string
   ): Promise<number> {
     try {
+      // Validar parámetros de entrada
+      if (!puntoAtencionId || !monedaId) {
+        logger.error("calcularSaldoReal: Parámetros inválidos", {
+          puntoAtencionId,
+          monedaId,
+        });
+        return 0;
+      }
+
       // 1. Obtener saldo inicial más reciente
       const saldoInicial = await prisma.saldoInicial.findFirst({
         where: {
@@ -93,6 +102,16 @@ export const saldoReconciliationService = {
         const monto = Number(mov.monto);
         const tipoMovimiento = mov.tipo_movimiento;
 
+        // Validar que el monto sea un número válido
+        if (isNaN(monto) || !isFinite(monto)) {
+          logger.warn("Movimiento con monto inválido detectado", {
+            monto: mov.monto,
+            tipo: tipoMovimiento,
+            descripcion: mov.descripcion,
+          });
+          continue;
+        }
+
         // Skip SALDO_INICIAL porque ya está incluido en la variable saldoCalculado
         if (tipoMovimiento === "SALDO_INICIAL") {
           continue;
@@ -109,6 +128,17 @@ export const saldoReconciliationService = {
             saldoAcumulado: saldoCalculado,
           });
         }
+      }
+
+      // Validar resultado final
+      if (isNaN(saldoCalculado) || !isFinite(saldoCalculado)) {
+        logger.error("Saldo calculado resultó en NaN o Infinity", {
+          puntoAtencionId,
+          monedaId,
+          saldoInicial: saldoInicial?.cantidad_inicial,
+          movimientosCount: movimientos.length,
+        });
+        return 0;
       }
 
       return Number(saldoCalculado.toFixed(2));

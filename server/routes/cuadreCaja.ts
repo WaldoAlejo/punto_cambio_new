@@ -300,10 +300,21 @@ router.get("/", authenticateToken, async (req, res) => {
         );
 
         // Calcular saldo teórico (cierre) usando reconciliación de movimientos
-        const saldoCierreTeórico = await saldoReconciliationService.calcularSaldoReal(
-          puntoAtencionId,
-          moneda.id
-        );
+        let saldoCierreTeórico = 0;
+        try {
+          saldoCierreTeórico = await saldoReconciliationService.calcularSaldoReal(
+            puntoAtencionId,
+            moneda.id
+          );
+        } catch (saldoError) {
+          logger.error(`❌ Error calculando saldo real para ${moneda.codigo}, usando saldo de apertura`, {
+            error: saldoError instanceof Error ? saldoError.message : String(saldoError),
+            moneda: moneda.codigo,
+            puntoAtencionId,
+          });
+          // Si falla el cálculo, usar el saldo de apertura como fallback
+          saldoCierreTeórico = saldoApertura;
+        }
 
         // Obtener saldo físico actual de la tabla Saldo
         const saldoFísico = await prisma.saldo.findUnique({
@@ -468,16 +479,24 @@ router.get("/", authenticateToken, async (req, res) => {
       }
     });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
     logger.error("❌ Error en GET /cuadre-caja", {
-      error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
+      error: errorMessage,
+      stack: errorStack,
       usuario_id: usuario?.id,
       punto_atencion_id: usuario?.punto_atencion_id,
     });
+    
     return res.status(500).json({
       success: false,
-      error: "Error interno del servidor",
-      debug: process.env.LOG_LEVEL === "debug" ? String(error) : undefined,
+      error: "Error al obtener datos de cuadre",
+      message: errorMessage,
+      debug: process.env.NODE_ENV === "development" ? {
+        error: errorMessage,
+        stack: errorStack,
+      } : undefined,
     });
   }
 });
