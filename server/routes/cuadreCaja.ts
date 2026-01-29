@@ -1,4 +1,5 @@
 import express from "express";
+import { randomUUID } from "crypto";
 import prisma from "../lib/prisma.js";
 import { pool } from "../lib/database.js";
 import { authenticateToken } from "../middleware/auth.js";
@@ -92,11 +93,12 @@ router.post("/", authenticateToken, async (req, res) => {
       return res.status(200).json({ success: true, cuadre: cuadreResult.rows[0], message: "Ya existe cuadre abierto" });
     }
 
+    const cuadreId = randomUUID();
     const insertResult = await pool.query<CuadreCaja>(
       `INSERT INTO "CuadreCaja" (id, estado, fecha, punto_atencion_id, usuario_id, observaciones)
-        VALUES (uuid_generate_v4(), 'ABIERTO', $1, $2, $3, $4)
+        VALUES ($1, 'ABIERTO', $2, $3, $4, $5)
         RETURNING *`,
-      [fechaInicioDia.toISOString(), String(puntoAtencionId), usuario.id, req.body.observaciones || ""]
+      [cuadreId, fechaInicioDia.toISOString(), String(puntoAtencionId), usuario.id, req.body.observaciones || ""]
     );
 
     if (Array.isArray(req.body.movimientos)) {
@@ -264,11 +266,12 @@ router.get("/", authenticateToken, async (req, res) => {
           cuadre_id: cuadre.id,
         });
       } else {
+        const cuadreId = randomUUID();
         const insertResult = await pool.query<CuadreCaja>(
           `INSERT INTO "CuadreCaja" (id, estado, fecha, punto_atencion_id, usuario_id, observaciones)
-            VALUES (uuid_generate_v4(), 'ABIERTO', $1, $2, $3, $4)
+            VALUES ($1, 'ABIERTO', $2, $3, $4, $5)
             RETURNING *`,
-          [fechaInicioDia.toISOString(), puntoAtencionId, usuario.id, ""]
+          [cuadreId, fechaInicioDia.toISOString(), puntoAtencionId, usuario.id, ""]
         );
         cuadre = insertResult.rows[0];
         logger.info("📝 Cuadre creado", { cuadre_id: cuadre.id });
@@ -370,13 +373,14 @@ router.get("/", authenticateToken, async (req, res) => {
         const diferencia = Number((conteoFísico - saldoCierreTeórico).toFixed(2));
 
         if (!detalle) {
+          const detalleId = randomUUID();
           const insertResult = await pool.query<DetalleCuadreCaja>(
             `INSERT INTO "DetalleCuadreCaja" (
               id, cuadre_id, moneda_id, saldo_apertura, saldo_cierre, conteo_fisico, 
               diferencia, billetes, monedas_fisicas, movimientos_periodo
-            ) VALUES (uuid_generate_v4(), $1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9)
+            ) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *`,
-            [cuadre.id, moneda.id, saldoApertura, saldoCierreTeórico, conteoFísico, diferencia, billetes, monedasFísicas, movimientosPeriodo.length]
+            [detalleId, cuadre.id, moneda.id, saldoApertura, saldoCierreTeórico, conteoFísico, diferencia, billetes, monedasFísicas, movimientosPeriodo.length]
           );
           detalle = insertResult.rows[0];
           logger.info(`✅ Detalle creado para ${moneda.codigo}`, {
