@@ -590,6 +590,11 @@ router.post(
         }
 
         // Verificar si hay jornada activa para finalizar automáticamente
+        logger.info("🔍 Buscando jornada activa para finalizar", {
+          usuario_id: usuario.id,
+          punto_atencion_id: pointId,
+        });
+
         const jornadaActiva = await tx.jornada.findFirst({
           where: {
             usuario_id: usuario.id,
@@ -599,6 +604,12 @@ router.post(
           orderBy: { fecha_inicio: "desc" },
         });
 
+        logger.info("📋 Resultado búsqueda jornada", {
+          jornadaEncontrada: !!jornadaActiva,
+          jornadaId: jornadaActiva?.id,
+          fechaInicio: jornadaActiva?.fecha_inicio,
+        });
+
         let jornadaFinalizada = null;
         if (jornadaActiva) {
           // Finalizar la jornada automáticamente
@@ -606,6 +617,7 @@ router.post(
             where: { id: jornadaActiva.id },
             data: {
               fecha_salida: new Date(),
+              estado: "COMPLETADO",
               observaciones:
                 "Jornada finalizada automáticamente tras completar cierre diario",
             },
@@ -616,6 +628,11 @@ router.post(
             punto: pointId,
             jornada_id: jornadaActiva.id,
             cierre_id: cierre.id,
+          });
+        } else {
+          logger.warn("⚠️ NO SE ENCONTRÓ JORNADA ACTIVA PARA FINALIZAR", {
+            usuario_id: usuario.id,
+            punto_atencion_id: pointId,
           });
         }
 

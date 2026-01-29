@@ -1,7 +1,16 @@
 import { PrismaClient } from "@prisma/client";
-import { pool } from "../server/lib/database.js";
+import pkg from "pg";
+const { Pool } = pkg;
 
 const prisma = new PrismaClient();
+
+// Crear pool de conexión directamente
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
 
 interface Moneda {
   id: string;
