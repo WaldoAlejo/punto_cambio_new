@@ -104,6 +104,76 @@ export const contabilidadDiariaService = {
     }
   },
 
+  // Obtener resumen de saldos antes de cerrar
+  async getResumenCierre(
+    puntoId: string,
+    fecha: string
+  ): Promise<{
+    success: boolean;
+    resumen?: {
+      fecha: string;
+      punto_atencion_id: string;
+      saldos_principales: Array<{
+        moneda_codigo: string;
+        moneda_nombre: string;
+        moneda_simbolo: string;
+        saldo_final: number;
+        tuvo_movimientos: boolean;
+      }>;
+      servicios_externos: Array<{
+        servicio_nombre: string;
+        servicio_tipo: string;
+        saldos: Array<{
+          moneda_codigo: string;
+          moneda_simbolo: string;
+          saldo: number;
+        }>;
+      }>;
+      total_transacciones: number;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/contabilidad-diaria/${puntoId}/${fecha}/resumen-cierre`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        return {
+          success: true,
+          resumen: data.resumen,
+        };
+      } else {
+        return {
+          success: false,
+          error: data.error || "Error desconocido",
+        };
+      }
+    } catch (error) {
+      console.error("Error fetching close summary:", error);
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Error de conexión con el servidor",
+      };
+    }
+  },
+
   // Validar qué cierres son necesarios antes del cierre diario
   async validarCierresRequeridos(
     puntoId: string,

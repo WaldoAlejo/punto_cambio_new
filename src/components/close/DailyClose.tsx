@@ -13,6 +13,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, CuadreCaja } from "../../types";
@@ -73,6 +81,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const [closing, setClosing] = useState(false); // estado de cierre en progreso
   const [fetchError, setFetchError] = useState<string | null>(null);
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
+  const [showResumenModal, setShowResumenModal] = useState(false);
+  const [resumenCierre, setResumenCierre] = useState<any>(null);
+  const [loadingResumen, setLoadingResumen] = useState(false);
   const [validacionCierres, setValidacionCierres] = useState<
     | {
         cierres_requeridos: {
@@ -665,17 +676,44 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     }
   };
 
-  // Confirmación antes de cerrar
-  const confirmDailyClose = () => {
-    const isSinMovimientos = (cuadreData?.detalles?.length ?? 0) === 0;
-    showConfirmation(
-      "Confirmar Cierre Diario",
-      isSinMovimientos
-        ? "No hay movimientos de divisas hoy. ¿Desea realizar el cierre diario de todas formas?"
-        : "Está a punto de realizar el cierre diario. Verifique que los conteos físicos coincidan con los saldos esperados.",
-      () => performDailyClose(),
-      "default"
-    );
+  // Confirmación antes de cerrar - primero muestra resumen
+  const confirmDailyClose = async () => {
+    if (!selectedPoint) return;
+
+    setLoadingResumen(true);
+    try {
+      const fechaHoy = new Date().toISOString().split("T")[0];
+      const resultado = await contabilidadDiariaService.getResumenCierre(
+        selectedPoint.id,
+        fechaHoy
+      );
+
+      if (resultado.success && resultado.resumen) {
+        setResumenCierre(resultado.resumen);
+        setShowResumenModal(true);
+      } else {
+        toast({
+          title: "Error",
+          description: resultado.error || "No se pudo obtener el resumen de cierre",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error obteniendo resumen:", error);
+      toast({
+        title: "Error",
+        description: "Error al obtener resumen de saldos",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingResumen(false);
+    }
+  };
+
+  // Proceder con el cierre después de confirmar resumen
+  const proceedWithClose = () => {
+    setShowResumenModal(false);
+    performDailyClose();
   };
 
   const generateCloseReport = () => {
@@ -1268,9 +1306,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                   onClick={confirmDailyClose}
                   className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
                   size="lg"
-                  disabled={loading || closing || !cuadreData}
+                  disabled={loading || closing || loadingResumen || !cuadreData}
                 >
-                  {closing ? (
+                  {loadingResumen ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-4 w-4 rounded-full border-2 border-white border-b-transparent animate-spin"></span>
+                      Cargando resumen...
+                    </span>
+                  ) : closing ? (
                     <span className="inline-flex items-center gap-2">
                       <span className="h-4 w-4 rounded-full border-2 border-white border-b-transparent animate-spin"></span>
                       Cerrando...
@@ -1354,6 +1397,145 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           </CardContent>
         </Card>
       )}
+
+      {/* Modal de Resumen de Cierre */}
+      <Dialog open={showResumenModal} onOpenChange={setShowResumenModal}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">
+              📊 Resumen de Saldos - Cierre Diario
+            </DialogTitle>
+            <DialogDescription>
+              Verifique los saldos antes de confirmar el cierre
+            </DialogDescription>
+          </DialogHeader>
+
+          {resumenCierre && (
+            <div className="space-y-6 py-4">
+              {/* Total de Transacciones */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <h3 className="font-semibold text-blue-800 mb-2">
+                  Total de Transacciones del Día
+                </h3>
+                <p className="text-3xl font-bold text-blue-600">
+                  {resumenCierre.total_transacciones}
+                </p>
+              </div>
+
+              {/* Saldos Principales */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-gray-800 text-lg flex items-center gap-2">
+                  💰 Saldos Principales
+                </h3>
+                <div className="grid gap-3">
+                  {resumenCierre.saldos_principales.map((saldo: any) => (
+                    <div
+                      key={saldo.moneda_codigo}
+                      className={`p-4 rounded-lg border-2 ${
+                        saldo.moneda_codigo === "USD"
+                          ? "bg-green-50 border-green-300"
+                          : saldo.tuvo_movimientos
+                          ? "bg-blue-50 border-blue-300"
+                          : "bg-gray-50 border-gray-200"
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-lg">
+                              {saldo.moneda_codigo}
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              {saldo.moneda_nombre}
+                            </span>
+                            {saldo.tuvo_movimientos && (
+                              <Badge variant="secondary" className="text-xs">
+                                Con movimientos
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold">
+                            {saldo.moneda_simbolo}{" "}
+                            {saldo.saldo_final.toLocaleString("es-EC", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Servicios Externos */}
+              {resumenCierre.servicios_externos.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-gray-800 text-lg flex items-center gap-2">
+                    🏦 Saldos en Servicios Externos
+                  </h3>
+                  <div className="grid gap-3">
+                    {resumenCierre.servicios_externos.map((servicio: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className="p-4 rounded-lg border-2 bg-purple-50 border-purple-300"
+                      >
+                        <div className="space-y-2">
+                          <div className="font-bold text-purple-800">
+                            {servicio.servicio_nombre}
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              {servicio.servicio_tipo}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {servicio.saldos.map((saldo: any, sidx: number) => (
+                              <div
+                                key={sidx}
+                                className="bg-white p-2 rounded border"
+                              >
+                                <div className="text-xs text-gray-600">
+                                  {saldo.moneda_codigo}
+                                </div>
+                                <div className="font-semibold">
+                                  {saldo.moneda_simbolo}{" "}
+                                  {saldo.saldo.toLocaleString("es-EC", {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowResumenModal(false)}
+              disabled={closing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={proceedWithClose}
+              className="bg-green-600 hover:bg-green-700"
+              disabled={closing}
+            >
+              {closing ? "Cerrando..." : "Confirmar Cierre"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmationDialog />
     </div>
   );

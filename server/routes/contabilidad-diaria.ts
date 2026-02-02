@@ -437,6 +437,163 @@ router.get(
 );
 
 /**
+ * GET /api/contabilidad-diaria/:pointId/:fecha/resumen-cierre
+ * Obtiene el resumen de saldos antes de confirmar el cierre
+ * Muestra: saldos principales (USD y divisas movidas), servicios externos
+ */
+router.get(
+  "/:pointId/:fecha/resumen-cierre",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { pointId, fecha } = req.params;
+      const usuario = req.user as
+        | {
+            id: string;
+            punto_atencion_id?: string;
+            rol?: RolUsuario;
+          }
+        | undefined;
+
+      if (!pointId) {
+        return res.status(400).json({ success: false, error: "Falta pointId" });
+      }
+
+      // Seguridad: operadores solo pueden consultar su propio punto
+      const esAdmin =
+        (usuario?.rol === "ADMIN" || usuario?.rol === "SUPER_USUARIO") ?? false;
+      if (
+        !esAdmin &&
+        usuario?.punto_atencion_id &&
+        usuario.punto_atencion_id !== pointId
+      ) {
+        return res.status(403).json({
+          success: false,
+          error: "No autorizado para consultar otro punto de atención",
+        });
+      }
+
+      // Valida YYYY-MM-DD
+      gyeParseDateOnly(fecha);
+      const { gte, lt } = gyeDayRangeUtcFromDateOnly(fecha);
+
+      // 1. Obtener saldos finales de monedas con movimientos en el día
+      const saldosMonedas = await prisma.saldo.findMany({
+        where: {
+          punto_atencion_id: pointId,
+        },
+        include: {
+          moneda: {
+            select: {
+              codigo: true,
+              nombre: true,
+              simbolo: true,
+            },
+          },
+        },
+      });
+
+      // 2. Obtener cuáles monedas tuvieron movimientos en el día
+      const monedasConMovimientos = await prisma.movimientoSaldo.groupBy({
+        by: ["moneda_id"],
+        where: {
+          punto_atencion_id: pointId,
+          fecha: { gte, lt },
+        },
+        _count: { id: true },
+      });
+
+      const idsConMovimientos = new Set(
+        monedasConMovimientos.map((m) => m.moneda_id)
+      );
+
+      // 3. Filtrar saldos: USD siempre, y divisas que tuvieron movimientos
+      const saldosPrincipales = saldosMonedas
+        .filter(
+          (s) => s.moneda.codigo === "USD" || idsConMovimientos.has(s.moneda_id)
+        )
+        .map((s) => ({
+          moneda_codigo: s.moneda.codigo,
+          moneda_nombre: s.moneda.nombre,
+          moneda_simbolo: s.moneda.simbolo,
+          saldo_final: s.cantidad,
+          tuvo_movimientos: idsConMovimientos.has(s.moneda_id),
+        }))
+        .sort((a, b) => {
+          // USD primero, luego alfabético
+          if (a.moneda_codigo === "USD") return -1;
+          if (b.moneda_codigo === "USD") return 1;
+          return a.moneda_codigo.localeCompare(b.moneda_codigo);
+        });
+
+      // 4. Obtener saldos de servicios externos
+      const serviciosExternos = await prisma.servicioExternoSaldo.findMany({
+        where: {
+          punto_atencion_id: pointId,
+        },
+        include: {
+          moneda: {
+            select: {
+              codigo: true,
+              simbolo: true,
+            },
+          },
+        },
+      });
+
+      // Agrupar por servicio externo
+      const saldosServicios = serviciosExternos.reduce((acc, s) => {
+        const key = s.servicio;
+        if (!acc[key]) {
+          acc[key] = {
+            servicio_nombre: s.servicio,
+            servicio_tipo: s.servicio,
+            saldos: [],
+          };
+        }
+        acc[key].saldos.push({
+          moneda_codigo: s.moneda.codigo,
+          moneda_simbolo: s.moneda.simbolo,
+          saldo: s.cantidad,
+        });
+        return acc;
+      }, {} as Record<string, any>);
+
+      // 5. Obtener total de transacciones del día
+      const totalTransacciones = await prisma.movimientoSaldo.count({
+        where: {
+          punto_atencion_id: pointId,
+          fecha: { gte, lt },
+        },
+      });
+
+      return res.json({
+        success: true,
+        resumen: {
+          fecha,
+          punto_atencion_id: pointId,
+          saldos_principales: saldosPrincipales,
+          servicios_externos: Object.values(saldosServicios),
+          total_transacciones: totalTransacciones,
+        },
+      });
+    } catch (error) {
+      logger.error(
+        "Error en GET /contabilidad-diaria/:pointId/:fecha/resumen-cierre",
+        {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        }
+      );
+      return res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    }
+  }
+);
+
+/**
  * POST /api/contabilidad-diaria/:pointId/:fecha/cerrar
  * Marca el cierre del día como CERRADO usando el servicio unificado
  * Este endpoint ahora delega al servicio cierreService para garantizar
