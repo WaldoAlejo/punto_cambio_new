@@ -26,6 +26,8 @@ export interface ExchangeFormData {
   operationType: "COMPRA" | "VENTA";
   fromCurrency: string;
   toCurrency: string;
+  fromCurrencyName?: string;
+  toCurrencyName?: string;
 
   // Tasas diferenciadas
   rateBilletes: string;
@@ -242,6 +244,8 @@ const ExchangeForm = ({
       operationType,
       fromCurrency,
       toCurrency,
+      fromCurrencyName: getCurrencyName(fromCurrency),
+      toCurrencyName: getCurrencyName(toCurrency),
       rateBilletes,
       rateMonedas,
       amountBilletes,

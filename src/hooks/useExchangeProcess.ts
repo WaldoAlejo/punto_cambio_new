@@ -223,8 +223,10 @@ export const useExchangeProcess = ({
       }
 
       // Mensaje informativo para evitar confusiones (se puede ocultar luego)
+      const fromCurrencyName = data.exchangeData.fromCurrencyName || fromCurrency;
+      const toCurrencyName = data.exchangeData.toCurrencyName || toCurrency;
       toast.info(
-        `Cliente ENTREGA: ${totalEntregado} (${fromCurrency}) • Cliente RECIBE: ${totalRecibido} (${toCurrency})`
+        `Cliente ENTREGA: ${totalEntregado} (${fromCurrencyName}) • Cliente RECIBE: ${totalRecibido} (${toCurrencyName})`
       );
 
       // Transferencia: validar banco y número

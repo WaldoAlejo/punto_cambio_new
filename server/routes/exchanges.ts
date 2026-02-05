@@ -65,6 +65,14 @@ async function upsertSaldoEfectivoYBancos(
 ) {
   const existing = await getSaldo(tx, puntoId, monedaId);
   if (existing) {
+    // Calcular los nuevos valores
+    const newBilletes = typeof data.billetes === "number" ? round2(data.billetes) : existing.billetes;
+    const newMonedas = typeof data.monedas_fisicas === "number" ? round2(data.monedas_fisicas) : existing.monedas_fisicas;
+    const newBancos = typeof data.bancos === "number" ? round2(data.bancos) : (existing.bancos || 0);
+    
+    // Calcular cantidad automáticamente como suma de billetes + monedas + bancos
+    const cantidadCalculada = round2(Number(newBilletes) + Number(newMonedas) + Number(newBancos));
+    
     return tx.saldo.update({
       where: {
         punto_atencion_id_moneda_id: {
@@ -73,36 +81,38 @@ async function upsertSaldoEfectivoYBancos(
         },
       },
       data: {
-        ...(typeof data.cantidad === "number" && {
-          cantidad: round2(data.cantidad),
-        }),
+        cantidad: cantidadCalculada,
         ...(typeof data.billetes === "number" && {
-          billetes: round2(data.billetes),
+          billetes: newBilletes,
         }),
         ...(typeof data.monedas_fisicas === "number" && {
-          monedas_fisicas: round2(data.monedas_fisicas),
+          monedas_fisicas: newMonedas,
         }),
         ...(typeof existing.bancos !== "undefined"
           ? {
-              bancos:
-                typeof data.bancos === "number"
-                  ? round2(data.bancos)
-                  : existing.bancos,
+              bancos: newBancos,
             }
           : {}),
         updated_at: new Date(),
       },
     });
   }
+  
+  // Para crear un nuevo saldo, calcular cantidad automáticamente
+  const billetes = round2(data.billetes ?? 0);
+  const monedas = round2(data.monedas_fisicas ?? 0);
+  const bancos = round2(data.bancos ?? 0);
+  const cantidadCalculada = round2(Number(billetes) + Number(monedas) + Number(bancos));
+  
   return tx.saldo.create({
     data: {
       punto_atencion_id: puntoId,
       moneda_id: monedaId,
-      cantidad: round2(data.cantidad ?? 0),
-      billetes: round2(data.billetes ?? 0),
-      monedas_fisicas: round2(data.monedas_fisicas ?? 0),
+      cantidad: cantidadCalculada,
+      billetes: billetes,
+      monedas_fisicas: monedas,
       ...(typeof data.bancos !== "undefined"
-        ? { bancos: round2(data.bancos) }
+        ? { bancos: bancos }
         : {}),
       updated_at: new Date(),
     },
@@ -129,42 +139,53 @@ async function logMovimientoSaldo(
     descripcion?: string | null;
   }
 ) {
-  // Usar servicio centralizado
-  const tipoMov =
-    data.tipo_movimiento === "INGRESO"
-      ? TipoMovimiento.INGRESO
-      : data.tipo_movimiento === "EGRESO"
-      ? TipoMovimiento.EGRESO
-      : TipoMovimiento.AJUSTE;
+  try {
+    // Usar servicio centralizado
+    const tipoMov =
+      data.tipo_movimiento === "INGRESO"
+        ? TipoMovimiento.INGRESO
+        : data.tipo_movimiento === "EGRESO"
+        ? TipoMovimiento.EGRESO
+        : TipoMovimiento.AJUSTE;
 
-  const tipoRef =
-    data.tipo_referencia === "CAMBIO_DIVISA"
-      ? TipoReferencia.EXCHANGE
-      : data.tipo_referencia === "TRANSFERENCIA"
-      ? TipoReferencia.TRANSFER
-      : data.tipo_referencia === "SERVICIO_EXTERNO"
-      ? TipoReferencia.SERVICIO_EXTERNO
-      : TipoReferencia.AJUSTE_MANUAL;
+    const tipoRef =
+      data.tipo_referencia === "CAMBIO_DIVISA"
+        ? TipoReferencia.EXCHANGE
+        : data.tipo_referencia === "TRANSFERENCIA"
+        ? TipoReferencia.TRANSFER
+        : data.tipo_referencia === "SERVICIO_EXTERNO"
+        ? TipoReferencia.SERVICIO_EXTERNO
+        : TipoReferencia.AJUSTE_MANUAL;
 
-  // El monto ya viene con el signo correcto desde las llamadas
-  // pero el servicio espera monto positivo, así que tomamos el valor absoluto
-  const montoAbsoluto = Math.abs(data.monto);
+    // El monto ya viene con el signo correcto desde las llamadas
+    // pero el servicio espera monto positivo, así que tomamos el valor absoluto
+    const montoAbsoluto = Math.abs(data.monto);
 
-  await registrarMovimientoSaldo(
-    {
-      puntoAtencionId: data.punto_atencion_id,
-      monedaId: data.moneda_id,
-      tipoMovimiento: tipoMov,
-      monto: montoAbsoluto, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
-      saldoAnterior: round2(data.saldo_anterior),
-      saldoNuevo: round2(data.saldo_nuevo),
-      tipoReferencia: tipoRef,
-      referenciaId: data.referencia_id,
-      descripcion: data.descripcion || undefined,
-      usuarioId: data.usuario_id,
-    },
-    tx
-  ); // ⚠️ Pasar el cliente de transacción para atomicidad
+    await registrarMovimientoSaldo(
+      {
+        puntoAtencionId: data.punto_atencion_id,
+        monedaId: data.moneda_id,
+        tipoMovimiento: tipoMov,
+        monto: montoAbsoluto, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
+        saldoAnterior: round2(data.saldo_anterior),
+        saldoNuevo: round2(data.saldo_nuevo),
+        tipoReferencia: tipoRef,
+        referenciaId: data.referencia_id,
+        descripcion: data.descripcion || undefined,
+        usuarioId: data.usuario_id,
+      },
+      tx
+    ); // ⚠️ Pasar el cliente de transacción para atomicidad
+  } catch (error) {
+    console.error('[ERROR] logMovimientoSaldo falló:', {
+      referencia_id: data.referencia_id,
+      tipo_referencia: data.tipo_referencia,
+      tipo_movimiento: data.tipo_movimiento,
+      monto: data.monto,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    throw error; // Re-lanzar para que la transacción falle
+  }
 }
 
 /* ========================= Validación payload ========================= */
@@ -1161,6 +1182,67 @@ router.post(
               transferencia_banco || ""
             } ${transferencia_numero || ""}`.trim(),
           });
+        }
+
+        // ✅ VALIDACIÓN CRÍTICA: Asegurar que SIEMPRE se registren movimientos
+        // Un cambio de divisa DEBE tener exactamente 2 movimientos: 1 ingreso (origen) + 1 egreso (destino)
+        const movimientosCreados = await tx.movimientoSaldo.count({
+          where: {
+            tipo_referencia: 'EXCHANGE',
+            referencia_id: cambio.id
+          }
+        });
+
+        if (movimientosCreados < 2) {
+          console.error(`[CRITICAL] Cambio ${cambio.id} (${numeroRecibo}) solo tiene ${movimientosCreados} movimientos. Se esperaban 2.`);
+          
+          // Crear movimientos faltantes como contingencia
+          const movimientosExistentes = await tx.movimientoSaldo.findMany({
+            where: {
+              tipo_referencia: 'EXCHANGE',
+              referencia_id: cambio.id
+            },
+            select: { moneda_id: true, tipo_movimiento: true }
+          });
+
+          const tieneMovimientoOrigen = movimientosExistentes.some(
+            m => m.moneda_id === moneda_origen_id && m.tipo_movimiento === 'INGRESO'
+          );
+          const tieneMovimientoDestino = movimientosExistentes.some(
+            m => m.moneda_id === moneda_destino_id && m.tipo_movimiento === 'EGRESO'
+          );
+
+          if (!tieneMovimientoOrigen) {
+            console.warn(`[AUTO-FIX] Creando movimiento de ingreso faltante para origen ${cambio.monedaOrigen?.codigo}`);
+            await logMovimientoSaldo(tx, {
+              punto_atencion_id,
+              moneda_id: moneda_origen_id,
+              tipo_movimiento: "INGRESO",
+              monto: monto_origen_final,
+              saldo_anterior: origenAnteriorEf,
+              saldo_nuevo: origenNuevoEf,
+              usuario_id: req.user!.id,
+              referencia_id: cambio.id,
+              tipo_referencia: "CAMBIO_DIVISA",
+              descripcion: `Ingreso por cambio ${numeroRecibo} (auto-creado)`,
+            });
+          }
+
+          if (!tieneMovimientoDestino) {
+            console.warn(`[AUTO-FIX] Creando movimiento de egreso faltante para destino ${cambio.monedaDestino?.codigo}`);
+            await logMovimientoSaldo(tx, {
+              punto_atencion_id,
+              moneda_id: moneda_destino_id,
+              tipo_movimiento: "EGRESO",
+              monto: monto_destino_final,
+              saldo_anterior: destinoAnteriorEf,
+              saldo_nuevo: destinoNuevoEf,
+              usuario_id: req.user!.id,
+              referencia_id: cambio.id,
+              tipo_referencia: "CAMBIO_DIVISA",
+              descripcion: `Egreso por cambio ${numeroRecibo} (auto-creado)`,
+            });
+          }
         }
 
         return cambio;
@@ -2838,24 +2920,8 @@ router.delete(
         return;
       }
 
-      // Restringir al día actual GYE
-      try {
-        const { gyeDayRangeUtcFromDate } = await import("../utils/timezone.js");
-        const { gte, lt } = gyeDayRangeUtcFromDate(new Date());
-        const fecha = new Date(cambio.fecha);
-        if (!(fecha >= gte && fecha < lt)) {
-          res.status(400).json({
-            success: false,
-            error: "Solo se pueden eliminar cambios del día actual",
-          });
-          return;
-        }
-      } catch {
-        res
-          .status(400)
-          .json({ success: false, error: "Restricción de día no disponible" });
-        return;
-      }
+      // Los administradores pueden eliminar cambios de cualquier fecha
+      // (Restricción de día actual eliminada para permitir correcciones de errores)
 
       await prisma.$transaction(async (tx) => {
         // Revertir ORIGEN (había INGRESO efectivo y/o bancos según metodo_pago_origen)
