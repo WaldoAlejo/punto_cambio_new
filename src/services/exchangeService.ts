@@ -424,9 +424,16 @@ export const exchangeService = {
       };
     } catch (error: any) {
       console.error("Error deleting exchange:", error);
+      const status = typeof error?.status === "number" ? error.status : undefined;
+      const serverMsg =
+        error?.payload?.error ||
+        error?.payload?.message ||
+        error?.payload?.details ||
+        error?.message ||
+        "";
+
       // Mapear 400 a mensaje amigable específico
-      if (typeof error?.status === "number" && error.status === 400) {
-        const serverMsg = error?.payload?.error || error?.message || "";
+      if (status === 400) {
         if (
           /Solo se pueden eliminar (cambios|movimientos) del día actual/i.test(
             serverMsg
@@ -439,7 +446,20 @@ export const exchangeService = {
         }
         return { success: false, error: serverMsg || "Solicitud inválida" };
       }
-      return { success: false, error: error?.message || "Error de conexión" };
+
+      if (status === 401 || status === 403) {
+        return {
+          success: false,
+          error: serverMsg || "No autorizado para eliminar este cambio",
+        };
+      }
+
+      // Para 5xx u otros, preferir mensaje del servidor si existe
+      if (serverMsg) {
+        return { success: false, error: serverMsg };
+      }
+
+      return { success: false, error: "Error de conexión" };
     }
   },
 };
