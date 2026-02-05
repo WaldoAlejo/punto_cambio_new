@@ -724,6 +724,232 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     performDailyClose();
   };
 
+  const fmt2 = (n: any) => Number(n || 0).toFixed(2);
+
+  const printBalance = () => {
+    if (!resumenCierre) return;
+
+    const cambios = resumenCierre?.transacciones?.cambios_divisas || [];
+    const servicios = resumenCierre?.transacciones?.servicios_externos || [];
+    const balanceCambios = (resumenCierre as any)?.balance?.cambios_divisas?.por_moneda || [];
+    const balanceServicios = (resumenCierre as any)?.balance?.servicios_externos?.por_moneda || [];
+
+    const fmt = (n: any) => Number(n || 0).toFixed(2);
+    const fmtRate = (n: any) => Number(n || 0).toFixed(3);
+    const safe = (s: any) => (s == null ? "" : String(s));
+
+    const rowsCambios = cambios
+      .map((c: any) => {
+        const fecha = new Date(c.fecha);
+        const hora = isNaN(fecha.getTime()) ? safe(c.fecha) : fecha.toLocaleTimeString();
+        const mo = c.moneda_origen;
+        const md = c.moneda_destino;
+        const tasa =
+          (Number(c.tasa_cambio_billetes || 0) > 0
+            ? `B ${fmtRate(c.tasa_cambio_billetes)}`
+            : "") +
+          (Number(c.tasa_cambio_monedas || 0) > 0
+            ? `${Number(c.tasa_cambio_billetes || 0) > 0 ? " | " : ""}M ${fmtRate(
+                c.tasa_cambio_monedas
+              )}`
+            : "");
+
+        return `
+          <tr>
+            <td>${hora}</td>
+            <td>${safe(c.numero_recibo) || "—"}</td>
+            <td>${safe(c.tipo_operacion)}</td>
+            <td>${safe(c.usuario?.nombre || c.usuario?.username) || "—"}</td>
+            <td>${safe(mo?.codigo) || "—"} ${safe(mo?.nombre) ? `(${safe(mo.nombre)})` : ""}</td>
+            <td>${fmt(c.monto_origen)}</td>
+            <td>${safe(md?.codigo) || "—"} ${safe(md?.nombre) ? `(${safe(md.nombre)})` : ""}</td>
+            <td>${fmt(c.monto_destino)}</td>
+            <td>${tasa || "—"}</td>
+          </tr>`;
+      })
+      .join("");
+
+    const rowsServicios = servicios
+      .map((m: any) => {
+        const fecha = new Date(m.fecha);
+        const hora = isNaN(fecha.getTime()) ? safe(m.fecha) : fecha.toLocaleTimeString();
+        return `
+          <tr>
+            <td>${hora}</td>
+            <td>${safe(m.servicio)}</td>
+            <td>${safe(m.tipo_movimiento)}</td>
+            <td>${safe(m.usuario?.nombre || m.usuario?.username) || "—"}</td>
+            <td>${safe(m.moneda) || "—"}</td>
+            <td>${fmt(m.monto)}</td>
+            <td>${safe(m.numero_referencia) || "—"}</td>
+          </tr>`;
+      })
+      .join("");
+
+    const rowsBalanceCambios = (balanceCambios as any[])
+      .map((r: any) => {
+        return `
+          <tr>
+            <td>${safe(r.moneda?.codigo) || "—"}</td>
+            <td>${safe(r.moneda?.nombre) || ""}</td>
+            <td>${fmt(r.ingresos)}</td>
+            <td>${fmt(r.egresos)}</td>
+            <td>${fmt(r.neto)}</td>
+          </tr>`;
+      })
+      .join("");
+
+    const rowsBalanceServicios = (balanceServicios as any[])
+      .map((r: any) => {
+        return `
+          <tr>
+            <td>${safe(r.moneda?.codigo) || "—"}</td>
+            <td>${safe(r.moneda?.nombre) || ""}</td>
+            <td>${fmt(r.ingresos)}</td>
+            <td>${fmt(r.egresos)}</td>
+            <td>${fmt(r.neto)}</td>
+          </tr>`;
+      })
+      .join("");
+
+    const html = `
+      <html>
+        <head>
+          <title>Balance diario</title>
+          <style>
+            body{font-family: Arial, sans-serif; padding: 24px; color:#111}
+            h1,h2{margin:0 0 8px 0}
+            .muted{color:#555; font-size:12px}
+            .grid{display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px}
+            .card{border:1px solid #ddd; border-radius:8px; padding:12px}
+            table{width:100%; border-collapse:collapse; margin-top:8px}
+            th,td{border:1px solid #ddd; padding:6px; font-size:12px; text-align:left}
+            th{background:#f5f5f5}
+            .section{margin-top:18px}
+            @media print{ .no-print{display:none} }
+          </style>
+        </head>
+        <body>
+          <div class="no-print" style="margin-bottom:12px">
+            <button onclick="window.print()">Imprimir</button>
+          </div>
+
+          <h1>Balance diario</h1>
+          <div class="muted">Fecha: ${safe(resumenCierre.fecha)} | Punto: ${safe(resumenCierre.punto_atencion_id)}</div>
+
+          <div class="grid">
+            <div class="card">
+              <h2>Cambios de divisas</h2>
+              <div class="muted">Cantidad: ${cambios.length}</div>
+            </div>
+            <div class="card">
+              <h2>Servicios externos</h2>
+              <div class="muted">Cantidad: ${servicios.length}</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <h2>Balance por moneda (Cambios)</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Moneda</th>
+                  <th>Nombre</th>
+                  <th>Ingresos</th>
+                  <th>Egresos</th>
+                  <th>Neto</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsBalanceCambios || "<tr><td colspan='5'>Sin datos</td></tr>"}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <h2>Balance por moneda (Servicios externos)</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Moneda</th>
+                  <th>Nombre</th>
+                  <th>Ingresos</th>
+                  <th>Egresos</th>
+                  <th>Neto</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsBalanceServicios || "<tr><td colspan='5'>Sin datos</td></tr>"}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <h2>Cambios (cliente entrega / cliente recibe)</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Hora</th>
+                  <th>Recibo</th>
+                  <th>Operación</th>
+                  <th>Operador</th>
+                  <th>Moneda entrega</th>
+                  <th>Monto entrega</th>
+                  <th>Moneda recibe</th>
+                  <th>Monto recibe</th>
+                  <th>Tasa</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsCambios || "<tr><td colspan='9'>Sin cambios</td></tr>"}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section">
+            <h2>Servicios externos</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Hora</th>
+                  <th>Servicio</th>
+                  <th>Tipo</th>
+                  <th>Operador</th>
+                  <th>Moneda</th>
+                  <th>Monto</th>
+                  <th>Ref</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsServicios || "<tr><td colspan='7'>Sin movimientos</td></tr>"}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section muted">
+            Generado desde el módulo de cierre diario.
+          </div>
+        </body>
+      </html>
+    `;
+
+    const win = window.open("", "_blank", "noopener,noreferrer");
+    if (!win) {
+      toast({
+        title: "No se pudo abrir impresión",
+        description: "Verifique si el navegador bloqueó la ventana emergente.",
+        variant: "destructive",
+      });
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    try {
+      win.focus();
+    } catch {}
+  };
+
   const generateCloseReport = () => {
     if (!todayClose) return;
 
@@ -1531,6 +1757,88 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                     📋 Transacciones del Día (auditoría)
                   </h3>
 
+                  {/* Mini balance */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="p-4 rounded-lg border-2 bg-gray-50 border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold">Cambios de divisas</div>
+                          <div className="text-xs text-gray-600">
+                            Cantidad: {resumenCierre.transacciones?.cambios_divisas?.length || 0}
+                          </div>
+                        </div>
+                        <Badge variant="secondary">Cambios</Badge>
+                      </div>
+                      {(resumenCierre as any)?.balance?.cambios_divisas?.por_moneda?.length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-xs font-medium text-gray-700 mb-1">
+                            Ingresos/Egresos por moneda
+                          </div>
+                          <div className="grid grid-cols-1 gap-1">
+                            {((resumenCierre as any).balance.cambios_divisas.por_moneda as any[]).map(
+                              (r: any) => (
+                                <div
+                                  key={r.moneda?.codigo}
+                                  className="flex items-center justify-between text-xs bg-white border rounded px-2 py-1"
+                                >
+                                  <div className="text-gray-700">
+                                    {r.moneda?.codigo}
+                                    {r.moneda?.nombre ? ` (${r.moneda.nombre})` : ""}
+                                  </div>
+                                  <div className="text-gray-800 tabular-nums">
+                                    +{fmt2(r.ingresos)} / -{fmt2(r.egresos)}
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-600 mt-2">
+                        Recomendación: revise la columna “Cliente recibe (sale)” para validar el egreso.
+                      </div>
+                    </div>
+                    <div className="p-4 rounded-lg border-2 bg-gray-50 border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-semibold">Servicios externos</div>
+                          <div className="text-xs text-gray-600">
+                            Cantidad: {resumenCierre.transacciones?.servicios_externos?.length || 0}
+                          </div>
+                        </div>
+                        <Badge variant="secondary">Servicios</Badge>
+                      </div>
+                      {(resumenCierre as any)?.balance?.servicios_externos?.por_moneda?.length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-xs font-medium text-gray-700 mb-1">
+                            Ingresos/Egresos por moneda
+                          </div>
+                          <div className="grid grid-cols-1 gap-1">
+                            {((resumenCierre as any).balance.servicios_externos.por_moneda as any[]).map(
+                              (r: any) => (
+                                <div
+                                  key={r.moneda?.codigo}
+                                  className="flex items-center justify-between text-xs bg-white border rounded px-2 py-1"
+                                >
+                                  <div className="text-gray-700">
+                                    {r.moneda?.codigo}
+                                    {r.moneda?.nombre ? ` (${r.moneda.nombre})` : ""}
+                                  </div>
+                                  <div className="text-gray-800 tabular-nums">
+                                    +{fmt2(r.ingresos)} / -{fmt2(r.egresos)}
+                                  </div>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-600 mt-2">
+                        Incluye ingresos/egresos del día por servicio.
+                      </div>
+                    </div>
+                  </div>
+
                   <Tabs defaultValue="cambios" className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
                       <TabsTrigger value="cambios">
@@ -1550,8 +1858,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                               <TableHead>Recibo</TableHead>
                               <TableHead>Operación</TableHead>
                               <TableHead>Operador</TableHead>
-                              <TableHead>Origen</TableHead>
-                              <TableHead>Destino</TableHead>
+                              <TableHead>Cliente entrega</TableHead>
+                              <TableHead>Cliente recibe (sale)</TableHead>
                               <TableHead>Tasa</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -1561,6 +1869,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                               const hora = isNaN(d.getTime())
                                 ? String(c.fecha)
                                 : d.toLocaleTimeString();
+                              const mo = c.moneda_origen;
+                              const md = c.moneda_destino;
                               const tasaText =
                                 (Number(c.tasa_cambio_billetes || 0) > 0
                                   ? `B ${Number(c.tasa_cambio_billetes).toFixed(3)}`
@@ -1583,10 +1893,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                                     {c.usuario?.nombre || c.usuario?.username || "—"}
                                   </TableCell>
                                   <TableCell className="whitespace-nowrap">
-                                    {c.moneda_origen || "—"} {Number(c.monto_origen || 0).toFixed(2)}
+                                    {(mo?.codigo || "—") + (mo?.nombre ? ` (${mo.nombre})` : "")} {Number(c.monto_origen || 0).toFixed(2)}
                                   </TableCell>
                                   <TableCell className="whitespace-nowrap">
-                                    {c.moneda_destino || "—"} {Number(c.monto_destino || 0).toFixed(2)}
+                                    {(md?.codigo || "—") + (md?.nombre ? ` (${md.nombre})` : "")} {Number(c.monto_destino || 0).toFixed(2)}
                                   </TableCell>
                                   <TableCell className="whitespace-nowrap">
                                     {tasaText || "—"}
@@ -1654,6 +1964,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           )}
 
           <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={printBalance}
+              disabled={closing}
+            >
+              Imprimir balance
+            </Button>
             <Button
               variant="outline"
               onClick={() => setShowResumenModal(false)}

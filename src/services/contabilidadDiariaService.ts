@@ -139,8 +139,12 @@ export const contabilidadDiariaService = {
           numero_recibo: string | null;
           tipo_operacion: string;
           estado: string;
-          moneda_origen?: string;
-          moneda_destino?: string;
+          moneda_origen?:
+            | { codigo: string; nombre: string; simbolo: string }
+            | null;
+          moneda_destino?:
+            | { codigo: string; nombre: string; simbolo: string }
+            | null;
           monto_origen: number;
           monto_destino: number;
           tasa_cambio_billetes: number;
@@ -169,6 +173,26 @@ export const contabilidadDiariaService = {
           usuario?: { id: string; nombre: string; username: string };
         }>;
         limit?: number;
+      };
+
+      // Balance (ingresos/egresos) del día por tipo
+      balance?: {
+        cambios_divisas?: {
+          por_moneda: Array<{
+            moneda: { codigo: string; nombre?: string; simbolo?: string };
+            ingresos: number;
+            egresos: number;
+            neto: number;
+          }>;
+        };
+        servicios_externos?: {
+          por_moneda: Array<{
+            moneda: { codigo: string; nombre?: string; simbolo?: string };
+            ingresos: number;
+            egresos: number;
+            neto: number;
+          }>;
+        };
       };
     };
     error?: string;

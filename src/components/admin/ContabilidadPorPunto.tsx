@@ -65,6 +65,8 @@ interface SaldoActual {
   moneda_nombre: string | null;
   moneda_simbolo: string | null;
   saldo: number;
+  saldo_calculado?: number;
+  diferencia?: number;
 }
 
 export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
@@ -190,14 +192,19 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
         const data = await apiService.get<{
           saldos: SaldoActual[];
           success: boolean;
-        }>(`/api/saldos-actuales/${selectedPointId}`);
+        }>(`/api/saldos-actuales/${selectedPointId}?reconciliar=true`);
         console.log("💵 Saldos actuales recibidos:", data);
         const saldosActuales: SaldoActual[] = data?.saldos || [];
         const saldoMoneda = saldosActuales.find(
           (s) => s.moneda_codigo === selectedCurrency
         );
         console.log("💸 Saldo actual encontrado:", saldoMoneda);
-        setSaldoActual(saldoMoneda?.saldo || 0);
+        // Preferir saldo calculado (desde movimientos) cuando esté presente
+        const saldoPreferido =
+          typeof saldoMoneda?.saldo_calculado === "number"
+            ? saldoMoneda.saldo_calculado
+            : saldoMoneda?.saldo;
+        setSaldoActual(saldoPreferido || 0);
       } catch (error) {
         console.error("❌ Error al obtener saldos actuales:", error);
         setSaldoActual(0);

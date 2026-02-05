@@ -238,6 +238,29 @@ export async function registrarMovimientoSaldo(
     },
   });
 
+  // 5. Mantener la tabla `Saldo` sincronizada con el saldo_nuevo del movimiento
+  // Nota: no tocamos billetes/monedas_fisicas/bancos aquí; esos se manejan por flujos específicos.
+  await client.saldo.upsert({
+    where: {
+      punto_atencion_id_moneda_id: {
+        punto_atencion_id: String(params.puntoAtencionId),
+        moneda_id: String(params.monedaId),
+      },
+    },
+    update: {
+      cantidad: new Prisma.Decimal(params.saldoNuevo),
+      // updated_at se actualiza automáticamente por @updatedAt
+    },
+    create: {
+      punto_atencion_id: String(params.puntoAtencionId),
+      moneda_id: String(params.monedaId),
+      cantidad: new Prisma.Decimal(params.saldoNuevo),
+      billetes: 0,
+      monedas_fisicas: 0,
+      bancos: 0,
+    },
+  });
+
   return movimiento;
 }
 

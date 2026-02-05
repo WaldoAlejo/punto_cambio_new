@@ -9,6 +9,7 @@ import {
   gyeParseDateOnly,
 } from "../utils/timezone.js";
 import cierreService from "../services/cierreService.js";
+import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
 
 const router = express.Router();
 
@@ -508,15 +509,16 @@ router.get(
       );
 
       // 3. Filtrar saldos: USD siempre, y divisas que tuvieron movimientos
-      const saldosPrincipales = saldosMonedas
+      const saldosPrincipalesBase = saldosMonedas
         .filter(
           (s) => s.moneda.codigo === "USD" || idsConMovimientos.has(s.moneda_id)
         )
         .map((s) => ({
+          moneda_id: s.moneda_id,
           moneda_codigo: s.moneda.codigo,
           moneda_nombre: s.moneda.nombre,
           moneda_simbolo: s.moneda.simbolo,
-          saldo_final: s.cantidad,
+          saldo_registrado: s.cantidad,
           tuvo_movimientos: idsConMovimientos.has(s.moneda_id),
         }))
         .sort((a, b) => {
@@ -525,6 +527,24 @@ router.get(
           if (b.moneda_codigo === "USD") return 1;
           return a.moneda_codigo.localeCompare(b.moneda_codigo);
         });
+
+      // 3.1 Reconciliar saldos (fuente de verdad: saldoInicial + MovimientoSaldo)
+      const saldosPrincipalesReconciliados = await Promise.all(
+        saldosPrincipalesBase.map(async (s) => {
+          const saldoCalculado = await saldoReconciliationService.calcularSaldoReal(
+            pointId,
+            s.moneda_id
+          );
+
+          return {
+            moneda_codigo: s.moneda_codigo,
+            moneda_nombre: s.moneda_nombre,
+            moneda_simbolo: s.moneda_simbolo,
+            saldo_final: saldoCalculado,
+            tuvo_movimientos: s.tuvo_movimientos,
+          };
+        })
+      );
 
       // 4. Obtener saldos de servicios externos
       const serviciosExternos = await prisma.servicioExternoSaldo.findMany({
@@ -596,8 +616,8 @@ router.get(
           transferencia_banco: true,
           transferencia_numero: true,
           observacion: true,
-          monedaOrigen: { select: { codigo: true, simbolo: true } },
-          monedaDestino: { select: { codigo: true, simbolo: true } },
+          monedaOrigen: { select: { codigo: true, nombre: true, simbolo: true } },
+          monedaDestino: { select: { codigo: true, nombre: true, simbolo: true } },
           usuario: { select: { id: true, nombre: true, username: true } },
         },
       });
@@ -631,12 +651,137 @@ router.get(
       const toNumber = (v: any) =>
         typeof v === "number" ? v : v?.toNumber ? v.toNumber() : Number(v);
 
+      const upsertBalance = (
+        map: Map<
+          string,
+          {
+            codigo: string;
+            nombre?: string;
+            simbolo?: string;
+            ingresos: number;
+            egresos: number;
+          }
+        >,
+        moneda:
+          | { codigo: string; nombre?: string | null; simbolo?: string | null }
+          | null
+          | undefined,
+        ingreso: number,
+        egreso: number
+      ) => {
+        if (!moneda?.codigo) return;
+        const codigo = moneda.codigo;
+        const prev = map.get(codigo);
+        if (!prev) {
+          map.set(codigo, {
+            codigo,
+            nombre: moneda.nombre ?? undefined,
+            simbolo: moneda.simbolo ?? undefined,
+            ingresos: ingreso,
+            egresos: egreso,
+          });
+          return;
+        }
+        prev.ingresos += ingreso;
+        prev.egresos += egreso;
+      };
+
+      // 7. Balance (ingresos/egresos) por tipo y moneda, para cuadre rápido
+      const balanceCambiosMap = new Map<
+        string,
+        {
+          codigo: string;
+          nombre?: string;
+          simbolo?: string;
+          ingresos: number;
+          egresos: number;
+        }
+      >();
+
+      for (const c of cambiosDivisas) {
+        upsertBalance(
+          balanceCambiosMap,
+          c.monedaOrigen,
+          toNumber(c.monto_origen || 0),
+          0
+        );
+        upsertBalance(
+          balanceCambiosMap,
+          c.monedaDestino,
+          0,
+          toNumber(c.monto_destino || 0)
+        );
+      }
+
+      const balanceServiciosMap = new Map<
+        string,
+        {
+          codigo: string;
+          nombre?: string;
+          simbolo?: string;
+          ingresos: number;
+          egresos: number;
+        }
+      >();
+
+      for (const m of movimientosServiciosExternos) {
+        const codigo = m.moneda?.codigo;
+        if (!codigo) continue;
+        const tipo = String(m.tipo_movimiento);
+        const monto = toNumber(m.monto || 0);
+
+        const esIngreso =
+          tipo === "INGRESO" ||
+          tipo === "TRANSFERENCIA_ENTRANTE" ||
+          tipo === "TRANSFERENCIA_DEVOLUCION";
+        const esEgreso = tipo === "EGRESO" || tipo === "TRANSFERENCIA_SALIENTE";
+
+        upsertBalance(
+          balanceServiciosMap,
+          { codigo, simbolo: m.moneda?.simbolo },
+          esIngreso ? monto : 0,
+          esEgreso ? monto : 0
+        );
+      }
+
+      const sortBalanceRows = (a: any, b: any) => {
+        if (a.moneda.codigo === "USD") return -1;
+        if (b.moneda.codigo === "USD") return 1;
+        return String(a.moneda.codigo).localeCompare(String(b.moneda.codigo));
+      };
+
+      const balanceCambios = Array.from(balanceCambiosMap.values())
+        .map((r) => ({
+          moneda: {
+            codigo: r.codigo,
+            nombre: r.nombre,
+            simbolo: r.simbolo,
+          },
+          ingresos: r.ingresos,
+          egresos: r.egresos,
+          neto: r.ingresos - r.egresos,
+        }))
+        .sort(sortBalanceRows);
+
+      const balanceServicios = Array.from(balanceServiciosMap.values())
+        .map((r) => ({
+          moneda: {
+            codigo: r.codigo,
+            nombre: r.nombre,
+            simbolo: r.simbolo,
+          },
+          ingresos: r.ingresos,
+          egresos: r.egresos,
+          neto: r.ingresos - r.egresos,
+        }))
+        .sort(sortBalanceRows);
+
       return res.json({
         success: true,
         resumen: {
           fecha,
           punto_atencion_id: pointId,
-          saldos_principales: saldosPrincipales,
+          saldos_principales: saldosPrincipalesReconciliados,
           servicios_externos: Object.values(saldosServicios),
           total_transacciones: totalTransacciones,
           transacciones: {
@@ -646,8 +791,21 @@ router.get(
               numero_recibo: c.numero_recibo,
               tipo_operacion: c.tipo_operacion,
               estado: c.estado,
-              moneda_origen: c.monedaOrigen?.codigo,
-              moneda_destino: c.monedaDestino?.codigo,
+              // En la UI: ORIGEN = lo que entrega el cliente; DESTINO = lo que recibe el cliente (sale del punto)
+              moneda_origen: c.monedaOrigen
+                ? {
+                    codigo: c.monedaOrigen.codigo,
+                    nombre: c.monedaOrigen.nombre,
+                    simbolo: c.monedaOrigen.simbolo,
+                  }
+                : null,
+              moneda_destino: c.monedaDestino
+                ? {
+                    codigo: c.monedaDestino.codigo,
+                    nombre: c.monedaDestino.nombre,
+                    simbolo: c.monedaDestino.simbolo,
+                  }
+                : null,
               monto_origen: toNumber(c.monto_origen),
               monto_destino: toNumber(c.monto_destino),
               tasa_cambio_billetes: toNumber(c.tasa_cambio_billetes),
@@ -677,6 +835,14 @@ router.get(
               usuario: m.usuario,
             })),
             limit,
+          },
+          balance: {
+            cambios_divisas: {
+              por_moneda: balanceCambios,
+            },
+            servicios_externos: {
+              por_moneda: balanceServicios,
+            },
           },
         },
       });
