@@ -157,16 +157,18 @@ async function logMovimientoSaldo(
         ? TipoReferencia.SERVICIO_EXTERNO
         : TipoReferencia.AJUSTE_MANUAL;
 
-    // El monto ya viene con el signo correcto desde las llamadas
-    // pero el servicio espera monto positivo, así que tomamos el valor absoluto
-    const montoAbsoluto = Math.abs(data.monto);
+    // registrarMovimientoSaldo espera:
+    // - INGRESO/EGRESO: monto SIN signo (positivo), el servicio aplica el signo
+    // - AJUSTE: mantiene el signo original (puede ser + o -)
+    const montoParaServicio =
+      tipoMov === TipoMovimiento.AJUSTE ? data.monto : Math.abs(data.monto);
 
     await registrarMovimientoSaldo(
       {
         puntoAtencionId: data.punto_atencion_id,
         monedaId: data.moneda_id,
         tipoMovimiento: tipoMov,
-        monto: montoAbsoluto, // ⚠️ Pasar monto POSITIVO, el servicio aplica el signo
+        monto: montoParaServicio,
         saldoAnterior: round2(data.saldo_anterior),
         saldoNuevo: round2(data.saldo_nuevo),
         tipoReferencia: tipoRef,
