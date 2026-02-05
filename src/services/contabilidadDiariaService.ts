@@ -130,6 +130,46 @@ export const contabilidadDiariaService = {
         }>;
       }>;
       total_transacciones: number;
+
+      // Listado para auditoría previa al cierre
+      transacciones?: {
+        cambios_divisas: Array<{
+          id: string;
+          fecha: string | Date;
+          numero_recibo: string | null;
+          tipo_operacion: string;
+          estado: string;
+          moneda_origen?: string;
+          moneda_destino?: string;
+          monto_origen: number;
+          monto_destino: number;
+          tasa_cambio_billetes: number;
+          tasa_cambio_monedas: number;
+          metodo_entrega: string;
+          metodo_pago_origen: string;
+          transferencia_banco?: string | null;
+          transferencia_numero?: string | null;
+          observacion?: string | null;
+          usuario?: { id: string; nombre: string; username: string };
+        }>;
+        servicios_externos: Array<{
+          id: string;
+          fecha: string | Date;
+          servicio: string;
+          tipo_movimiento: string;
+          moneda?: string;
+          monto: number;
+          metodo_ingreso: string;
+          numero_referencia?: string | null;
+          descripcion?: string | null;
+          comprobante_url?: string | null;
+          billetes?: number | null;
+          monedas_fisicas?: number | null;
+          bancos?: number | null;
+          usuario?: { id: string; nombre: string; username: string };
+        }>;
+        limit?: number;
+      };
     };
     error?: string;
   }> {

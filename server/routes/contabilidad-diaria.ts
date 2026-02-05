@@ -567,6 +567,70 @@ router.get(
         },
       });
 
+      // 6. Listado de transacciones del día (para auditoría previa al cierre)
+      // Nota: puede crecer; mantenemos payload compacto y ordenado por fecha.
+      const limit = Math.min(
+        Math.max(Number(req.query.limit ?? 5000), 0),
+        20000
+      );
+
+      const cambiosDivisas = await prisma.cambioDivisa.findMany({
+        where: {
+          punto_atencion_id: pointId,
+          fecha: { gte, lt },
+        },
+        orderBy: { fecha: "asc" },
+        take: limit,
+        select: {
+          id: true,
+          fecha: true,
+          numero_recibo: true,
+          tipo_operacion: true,
+          estado: true,
+          monto_origen: true,
+          monto_destino: true,
+          tasa_cambio_billetes: true,
+          tasa_cambio_monedas: true,
+          metodo_entrega: true,
+          metodo_pago_origen: true,
+          transferencia_banco: true,
+          transferencia_numero: true,
+          observacion: true,
+          monedaOrigen: { select: { codigo: true, simbolo: true } },
+          monedaDestino: { select: { codigo: true, simbolo: true } },
+          usuario: { select: { id: true, nombre: true, username: true } },
+        },
+      });
+
+      const movimientosServiciosExternos =
+        await prisma.servicioExternoMovimiento.findMany({
+          where: {
+            punto_atencion_id: pointId,
+            fecha: { gte, lt },
+          },
+          orderBy: { fecha: "asc" },
+          take: limit,
+          select: {
+            id: true,
+            fecha: true,
+            servicio: true,
+            tipo_movimiento: true,
+            monto: true,
+            metodo_ingreso: true,
+            numero_referencia: true,
+            descripcion: true,
+            comprobante_url: true,
+            billetes: true,
+            monedas_fisicas: true,
+            bancos: true,
+            moneda: { select: { codigo: true, simbolo: true } },
+            usuario: { select: { id: true, nombre: true, username: true } },
+          },
+        });
+
+      const toNumber = (v: any) =>
+        typeof v === "number" ? v : v?.toNumber ? v.toNumber() : Number(v);
+
       return res.json({
         success: true,
         resumen: {
@@ -575,6 +639,45 @@ router.get(
           saldos_principales: saldosPrincipales,
           servicios_externos: Object.values(saldosServicios),
           total_transacciones: totalTransacciones,
+          transacciones: {
+            cambios_divisas: cambiosDivisas.map((c) => ({
+              id: c.id,
+              fecha: c.fecha,
+              numero_recibo: c.numero_recibo,
+              tipo_operacion: c.tipo_operacion,
+              estado: c.estado,
+              moneda_origen: c.monedaOrigen?.codigo,
+              moneda_destino: c.monedaDestino?.codigo,
+              monto_origen: toNumber(c.monto_origen),
+              monto_destino: toNumber(c.monto_destino),
+              tasa_cambio_billetes: toNumber(c.tasa_cambio_billetes),
+              tasa_cambio_monedas: toNumber(c.tasa_cambio_monedas),
+              metodo_entrega: c.metodo_entrega,
+              metodo_pago_origen: c.metodo_pago_origen,
+              transferencia_banco: c.transferencia_banco,
+              transferencia_numero: c.transferencia_numero,
+              observacion: c.observacion,
+              usuario: c.usuario,
+            })),
+            servicios_externos: movimientosServiciosExternos.map((m) => ({
+              id: m.id,
+              fecha: m.fecha,
+              servicio: m.servicio,
+              tipo_movimiento: m.tipo_movimiento,
+              moneda: m.moneda?.codigo,
+              monto: toNumber(m.monto),
+              metodo_ingreso: m.metodo_ingreso,
+              numero_referencia: m.numero_referencia,
+              descripcion: m.descripcion,
+              comprobante_url: m.comprobante_url,
+              billetes: m.billetes != null ? toNumber(m.billetes) : null,
+              monedas_fisicas:
+                m.monedas_fisicas != null ? toNumber(m.monedas_fisicas) : null,
+              bancos: m.bancos != null ? toNumber(m.bancos) : null,
+              usuario: m.usuario,
+            })),
+            limit,
+          },
         },
       });
     } catch (error) {

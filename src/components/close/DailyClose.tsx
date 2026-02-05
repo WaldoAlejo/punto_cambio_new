@@ -7,6 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -593,7 +601,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               const tolerance = (d.codigo === "USD" ? 1.0 : 0.01).toFixed(2);
               return `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(2)}, Ingresado ${total.toFixed(2)} (tolerancia ±${tolerance})`;
             })
-            .join("\n")}\n\n⚠️ Verifique que todos los movimientos estén registrados correctamente.`;
+            .join("\n")}\n\n⚠️ Revise el Resumen de Cierre para ver el listado de transacciones del día (cambios y servicios externos) y validar qué ocurrió.`;
           toast({ title: "No cuadra", description: msg, variant: "destructive" });
           setClosing(false);
           return;
@@ -1512,6 +1520,134 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Listado de transacciones del día */}
+              {(resumenCierre.transacciones?.cambios_divisas?.length > 0 ||
+                resumenCierre.transacciones?.servicios_externos?.length > 0) && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-gray-800 text-lg flex items-center gap-2">
+                    📋 Transacciones del Día (auditoría)
+                  </h3>
+
+                  <Tabs defaultValue="cambios" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="cambios">
+                        Cambios ({resumenCierre.transacciones?.cambios_divisas?.length || 0})
+                      </TabsTrigger>
+                      <TabsTrigger value="servicios">
+                        Servicios externos ({resumenCierre.transacciones?.servicios_externos?.length || 0})
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="cambios" className="mt-3">
+                      <div className="rounded-lg border bg-white">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Hora</TableHead>
+                              <TableHead>Recibo</TableHead>
+                              <TableHead>Operación</TableHead>
+                              <TableHead>Operador</TableHead>
+                              <TableHead>Origen</TableHead>
+                              <TableHead>Destino</TableHead>
+                              <TableHead>Tasa</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(resumenCierre.transacciones?.cambios_divisas || []).map((c: any) => {
+                              const d = new Date(c.fecha);
+                              const hora = isNaN(d.getTime())
+                                ? String(c.fecha)
+                                : d.toLocaleTimeString();
+                              const tasaText =
+                                (Number(c.tasa_cambio_billetes || 0) > 0
+                                  ? `B ${Number(c.tasa_cambio_billetes).toFixed(3)}`
+                                  : "") +
+                                (Number(c.tasa_cambio_monedas || 0) > 0
+                                  ? `${Number(c.tasa_cambio_billetes || 0) > 0 ? " | " : ""}M ${Number(c.tasa_cambio_monedas).toFixed(3)}`
+                                  : "");
+                              return (
+                                <TableRow key={c.id}>
+                                  <TableCell className="whitespace-nowrap">{hora}</TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {c.numero_recibo || "—"}
+                                  </TableCell>
+                                  <TableCell>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium border ${c.tipo_operacion === "COMPRA" ? "bg-green-50 text-green-700 border-green-200" : "bg-blue-50 text-blue-700 border-blue-200"}`}>
+                                      {c.tipo_operacion}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {c.usuario?.nombre || c.usuario?.username || "—"}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {c.moneda_origen || "—"} {Number(c.monto_origen || 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {c.moneda_destino || "—"} {Number(c.monto_destino || 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {tasaText || "—"}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Usa este listado para validar diferencias antes de cerrar.
+                      </p>
+                    </TabsContent>
+
+                    <TabsContent value="servicios" className="mt-3">
+                      <div className="rounded-lg border bg-white">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Hora</TableHead>
+                              <TableHead>Servicio</TableHead>
+                              <TableHead>Tipo</TableHead>
+                              <TableHead>Operador</TableHead>
+                              <TableHead>Moneda</TableHead>
+                              <TableHead>Monto</TableHead>
+                              <TableHead>Ref</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(resumenCierre.transacciones?.servicios_externos || []).map((m: any) => {
+                              const d = new Date(m.fecha);
+                              const hora = isNaN(d.getTime())
+                                ? String(m.fecha)
+                                : d.toLocaleTimeString();
+                              return (
+                                <TableRow key={m.id}>
+                                  <TableCell className="whitespace-nowrap">{hora}</TableCell>
+                                  <TableCell className="whitespace-nowrap">{m.servicio}</TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium border ${m.tipo_movimiento === "INGRESO" ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
+                                      {m.tipo_movimiento}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {m.usuario?.nombre || m.usuario?.username || "—"}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">{m.moneda || "—"}</TableCell>
+                                  <TableCell className="whitespace-nowrap">{Number(m.monto || 0).toFixed(2)}</TableCell>
+                                  <TableCell className="whitespace-nowrap">{m.numero_referencia || "—"}</TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Incluye ingresos/egresos de servicios externos del día.
+                      </p>
+                    </TabsContent>
+                  </Tabs>
                 </div>
               )}
             </div>
