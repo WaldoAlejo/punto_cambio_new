@@ -236,7 +236,7 @@ router.post(
   async (req: AuthedRequest, res: Response): Promise<void> => {
     try {
       // Verificar que el usuario sea administrador
-      if (req.user?.rol !== "ADMIN" && req.user?.rol !== "SUPER_ADMIN") {
+      if (req.user?.rol !== "ADMIN" && req.user?.rol !== "SUPER_USUARIO") {
         res.status(403).json({
           error: "Solo los administradores pueden ejecutar corrección masiva",
           success: false,
