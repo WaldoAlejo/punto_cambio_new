@@ -190,7 +190,10 @@ const ContabilidadDiaria: React.FC<ContabilidadDiariaProps> = ({
   );
   const totalEgresosDia = useMemo(
     () =>
-      resumenDiario.reduce((acc, r) => acc + Number(r.total_egresos || 0), 0),
+      resumenDiario.reduce(
+        (acc, r) => acc + Math.abs(Number(r.total_egresos || 0)),
+        0
+      ),
     [resumenDiario]
   );
   const balanceGeneralDia = useMemo(
@@ -487,7 +490,7 @@ const ContabilidadDiaria: React.FC<ContabilidadDiariaProps> = ({
                       <p className="text-lg font-bold text-red-800">
                         −
                         {formatMoney(
-                          resumen.total_egresos,
+                          Math.abs(Number(resumen.total_egresos || 0)),
                           resumen.moneda_simbolo
                         )}
                       </p>
@@ -537,7 +540,7 @@ const ContabilidadDiaria: React.FC<ContabilidadDiariaProps> = ({
                                     <p className="font-medium">
                                       {sign}
                                       {formatMoney(
-                                        mov.monto,
+                                        Math.abs(Number(mov.monto || 0)),
                                         mov.moneda_simbolo
                                       )}
                                     </p>

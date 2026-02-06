@@ -29,6 +29,12 @@ export enum TipoMovimiento {
   EGRESO = "EGRESO",
   AJUSTE = "AJUSTE",
   SALDO_INICIAL = "SALDO_INICIAL",
+
+  // Tipos legacy/extendidos (se tratan como ingreso/egreso)
+  TRANSFERENCIA_ENTRANTE = "TRANSFERENCIA_ENTRANTE",
+  TRANSFERENCIA_ENTRADA = "TRANSFERENCIA_ENTRADA",
+  TRANSFERENCIA_SALIENTE = "TRANSFERENCIA_SALIENTE",
+  TRANSFERENCIA_SALIDA = "TRANSFERENCIA_SALIDA",
 }
 
 /**
@@ -37,7 +43,8 @@ export enum TipoMovimiento {
 export enum TipoReferencia {
   EXCHANGE = "EXCHANGE",
   CAMBIO_DIVISA = "CAMBIO_DIVISA",
-  TRANSFER = "TRANSFER",
+  // Usar el string legacy que ya existe en la BD/UI
+  TRANSFER = "TRANSFERENCIA",
   SERVICIO_EXTERNO = "SERVICIO_EXTERNO",
   AJUSTE_MANUAL = "AJUSTE_MANUAL",
   SALDO_INICIAL = "SALDO_INICIAL",
@@ -84,10 +91,14 @@ function calcularMontoConSigno(
   switch (tipoMovimiento) {
     case TipoMovimiento.INGRESO:
     case TipoMovimiento.SALDO_INICIAL:
+    case TipoMovimiento.TRANSFERENCIA_ENTRANTE:
+    case TipoMovimiento.TRANSFERENCIA_ENTRADA:
       // INGRESO y SALDO_INICIAL siempre positivos
       return new Prisma.Decimal(montoAbsoluto);
 
     case TipoMovimiento.EGRESO:
+    case TipoMovimiento.TRANSFERENCIA_SALIENTE:
+    case TipoMovimiento.TRANSFERENCIA_SALIDA:
       // EGRESO siempre negativo
       return new Prisma.Decimal(-montoAbsoluto);
 
@@ -239,7 +250,12 @@ export async function registrarMovimientoSaldo(
   });
 
   // 5. Mantener la tabla `Saldo` sincronizada con el saldo_nuevo del movimiento
-  // Nota: no tocamos billetes/monedas_fisicas/bancos aquí; esos se manejan por flujos específicos.
+  // Regla práctica del sistema:
+  // - Movimientos de BANCOS se marcan en `descripcion` con la palabra "bancos" y NO deben afectar caja.
+  // - Los demás movimientos sincronizan `cantidad` (caja).
+  const desc = (params.descripcion ?? "").toString().toLowerCase();
+  const esMovimientoBancos = desc.includes("bancos");
+
   await client.saldo.upsert({
     where: {
       punto_atencion_id_moneda_id: {
@@ -248,16 +264,18 @@ export async function registrarMovimientoSaldo(
       },
     },
     update: {
-      cantidad: new Prisma.Decimal(params.saldoNuevo),
+      ...(esMovimientoBancos
+        ? { bancos: new Prisma.Decimal(params.saldoNuevo) }
+        : { cantidad: new Prisma.Decimal(params.saldoNuevo) }),
       // updated_at se actualiza automáticamente por @updatedAt
     },
     create: {
       punto_atencion_id: String(params.puntoAtencionId),
       moneda_id: String(params.monedaId),
-      cantidad: new Prisma.Decimal(params.saldoNuevo),
+      cantidad: esMovimientoBancos ? 0 : new Prisma.Decimal(params.saldoNuevo),
       billetes: 0,
       monedas_fisicas: 0,
-      bancos: 0,
+      bancos: esMovimientoBancos ? new Prisma.Decimal(params.saldoNuevo) : 0,
     },
   });
 

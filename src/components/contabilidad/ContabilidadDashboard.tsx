@@ -140,11 +140,15 @@ export const ContabilidadDashboard = ({
         .filter(
           (mov) =>
             mov.tipo_movimiento === "INGRESO" ||
-            mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE"
+            mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE" ||
+            mov.tipo_movimiento === "TRANSFERENCIA_ENTRADA"
         )
         .forEach((mov) => {
           const codigo = mov.moneda_codigo || "USD";
-          ingresosMap.set(codigo, (ingresosMap.get(codigo) || 0) + mov.monto);
+          ingresosMap.set(
+            codigo,
+            (ingresosMap.get(codigo) || 0) + Math.abs(mov.monto)
+          );
         });
 
       // Agrupar egresos por moneda
@@ -153,11 +157,15 @@ export const ContabilidadDashboard = ({
         .filter(
           (mov) =>
             mov.tipo_movimiento === "EGRESO" ||
-            mov.tipo_movimiento === "TRANSFERENCIA_SALIENTE"
+            mov.tipo_movimiento === "TRANSFERENCIA_SALIENTE" ||
+            mov.tipo_movimiento === "TRANSFERENCIA_SALIDA"
         )
         .forEach((mov) => {
           const codigo = mov.moneda_codigo || "USD";
-          egresosMap.set(codigo, (egresosMap.get(codigo) || 0) + mov.monto);
+          egresosMap.set(
+            codigo,
+            (egresosMap.get(codigo) || 0) + Math.abs(mov.monto)
+          );
         });
 
       // Convertir a arrays para mostrar

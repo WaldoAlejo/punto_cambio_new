@@ -98,7 +98,10 @@ export const saldoInicialService = {
   },
 
   // Obtener vista consolidada de saldos por punto
-  async getVistaSaldosPorPunto(): Promise<{
+  async getVistaSaldosPorPunto(opts?: {
+    pointId?: string;
+    reconciliar?: boolean;
+  }): Promise<{
     saldos: VistaSaldosPorPunto[];
     error: string | null;
   }> {
@@ -106,9 +109,16 @@ export const saldoInicialService = {
       console.log(
         "🔍 saldoInicialService.getVistaSaldosPorPunto: Iniciando solicitud..."
       );
+
+      const params = new URLSearchParams();
+      if (opts?.pointId) params.set("pointId", opts.pointId);
+      if (opts?.reconciliar) params.set("reconciliar", "true");
+      const qs = params.toString();
+      const url = qs ? `/vista-saldos-puntos?${qs}` : "/vista-saldos-puntos";
+
       const response = await apiService.get<
         ApiOk<{ saldos: VistaSaldosPorPunto[] }> | ApiFail
-      >("/vista-saldos-puntos");
+      >(url);
       console.log(
         "💰 saldoInicialService.getVistaSaldosPorPunto: Respuesta recibida:",
         response

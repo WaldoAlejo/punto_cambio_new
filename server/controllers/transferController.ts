@@ -4,6 +4,11 @@ import { transferValidationService } from "../services/transferValidationService
 import transferCreationService from "../services/transferCreationService.js";
 import prisma from "../lib/prisma.js";
 import { TipoViaTransferencia } from "@prisma/client";
+import {
+  registrarMovimientoSaldo,
+  TipoMovimiento,
+  TipoReferencia,
+} from "../services/movimientoSaldoService.js";
 
 interface AuthenticatedUser {
   id: string;
@@ -219,22 +224,23 @@ const controller = {
             },
           });
 
-          // Registrar movimiento de salida
-          await tx.movimientoSaldo.create({
-            data: {
-              punto_atencion_id: origen_id,
-              moneda_id,
-              tipo_movimiento: "TRANSFERENCIA_SALIENTE",
-              monto: Number(monto),
-              saldo_anterior: saldoAnteriorOrigen,
-              saldo_nuevo: saldoNuevoOrigen,
-              usuario_id: req.user!.id,
-              referencia_id: transfer.id,
-              tipo_referencia: "TRANSFERENCIA",
-              descripcion: `Transferencia enviada a punto destino - En tránsito`,
-              fecha: new Date(),
+          // Registrar movimiento de salida usando servicio centralizado
+          // Nota: el servicio aplica el signo (salida => monto NEGATIVO en BD)
+          await registrarMovimientoSaldo(
+            {
+              puntoAtencionId: origen_id,
+              monedaId: moneda_id,
+              tipoMovimiento: TipoMovimiento.TRANSFERENCIA_SALIENTE,
+              monto: Number(monto), // ⚠️ pasar monto POSITIVO
+              saldoAnterior: saldoAnteriorOrigen,
+              saldoNuevo: saldoNuevoOrigen,
+              tipoReferencia: TipoReferencia.TRANSFER,
+              referenciaId: transfer.id,
+              descripcion: "Transferencia enviada a punto destino - En tránsito",
+              usuarioId: req.user!.id,
             },
-          });
+            tx
+          );
         }
 
         return transfer;

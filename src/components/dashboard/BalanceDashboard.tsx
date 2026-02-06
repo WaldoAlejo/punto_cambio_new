@@ -107,7 +107,10 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
     if (!selectedPoint) return;
     setLoading(true);
     try {
-      const resp = await saldoInicialService.getVistaSaldosPorPunto();
+      const resp = await saldoInicialService.getVistaSaldosPorPunto({
+        pointId: selectedPoint.id,
+        reconciliar: true,
+      });
       if (resp.error) {
         toast({
           title: "Error",

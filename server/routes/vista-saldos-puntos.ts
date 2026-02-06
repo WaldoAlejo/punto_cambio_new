@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
+import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
 
 const router = express.Router();
 
@@ -13,10 +14,52 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       rol: req.user?.rol,
     });
 
+    const rol = (req.user?.rol || "").toString().toUpperCase();
+    const esAdmin = rol === "ADMIN" || rol === "SUPER_USUARIO";
+    const userPointId = (req.user as any)?.punto_atencion_id as
+      | string
+      | undefined;
+
+    const queryPointId = (req.query.pointId as string | undefined) || undefined;
+    const reconciliarStr = String(req.query.reconciliar ?? "").toLowerCase();
+    const reconciliar = reconciliarStr === "true" || reconciliarStr === "1";
+
+    // Seguridad: operadores solo pueden consultar su propio punto.
+    // Además, si no son admin, forzamos el filtro por punto.
+    let pointIdsFiltro: string[] | undefined;
+    if (esAdmin) {
+      pointIdsFiltro = queryPointId ? [queryPointId] : undefined;
+    } else {
+      if (!userPointId) {
+        return res.status(403).json({
+          success: false,
+          error: "No autorizado: usuario sin punto asignado",
+        });
+      }
+      if (queryPointId && queryPointId !== userPointId) {
+        return res.status(403).json({
+          success: false,
+          error: "No autorizado para consultar otro punto de atención",
+        });
+      }
+      pointIdsFiltro = [userPointId];
+    }
+
+    // Para evitar cargas masivas, si reconciliar=true en admin, exigimos pointId.
+    if (reconciliar && esAdmin && !queryPointId) {
+      return res.status(400).json({
+        success: false,
+        error: "Para reconciliar, envía ?pointId=...",
+      });
+    }
+
     // 1) Traer puntos y monedas activas
     const [puntos, monedas] = await Promise.all([
       prisma.puntoAtencion.findMany({
-        where: { activo: true },
+        where: {
+          activo: true,
+          ...(pointIdsFiltro ? { id: { in: pointIdsFiltro } } : {}),
+        },
         select: { id: true, nombre: true, ciudad: true },
       }),
       prisma.moneda.findMany({
@@ -94,7 +137,51 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       inicialMap.set(key(si.punto_atencion_id, si.moneda_id), si);
     }
 
-    // 4) Armar la “vista” (equivalente a CROSS JOIN en memoria) y calcular campos
+    // 4) (Opcional) Reconciliar saldo_actual (efectivo) desde movimientos.
+    // Optimizamos cargando movimientos una sola vez.
+    const reconciledMap = new Map<string, number>();
+    if (reconciliar) {
+      // Inicializar por saldoInicial activo
+      for (const p of puntos) {
+        for (const m of monedas) {
+          const k = key(p.id, m.id);
+          const si = inicialMap.get(k);
+          reconciledMap.set(k, si ? Number(si.cantidad_inicial) : 0);
+        }
+      }
+
+      const movimientos = await prisma.movimientoSaldo.findMany({
+        where: {
+          punto_atencion_id: { in: puntos.map((p) => p.id) },
+          moneda_id: { in: monedas.map((m) => m.id) },
+        },
+        select: {
+          punto_atencion_id: true,
+          moneda_id: true,
+          monto: true,
+          tipo_movimiento: true,
+          descripcion: true,
+        },
+        orderBy: { fecha: "asc" },
+      });
+
+      for (const mov of movimientos) {
+        const desc = mov.descripcion?.toLowerCase() || "";
+        if (desc.includes("bancos")) continue; // efectivo excluye bancos
+
+        const k = key(mov.punto_atencion_id, mov.moneda_id);
+        const current = reconciledMap.get(k) ?? 0;
+        const delta = saldoReconciliationService._normalizarMonto(
+          mov.tipo_movimiento,
+          Number(mov.monto),
+          mov.descripcion
+        );
+
+        reconciledMap.set(k, Number((current + delta).toFixed(2)));
+      }
+    }
+
+    // 5) Armar la “vista” (equivalente a CROSS JOIN en memoria) y calcular campos
     const rows: Array<{
       punto_atencion_id: string;
       punto_nombre: string;
@@ -122,7 +209,11 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
         const si = inicialMap.get(k);
 
         const saldo_inicial = si ? Number(si.cantidad_inicial) : 0;
-        const saldo_actual = s ? Number(s.cantidad) : 0;
+        const saldo_actual = reconciliar
+          ? Number(reconciledMap.get(k) ?? 0)
+          : s
+            ? Number(s.cantidad)
+            : 0;
         const billetes = s ? Number(s.billetes) : 0;
         const monedas_fisicas = s ? Number(s.monedas_fisicas) : 0;
         const diferencia = Number((saldo_actual - saldo_inicial).toFixed(2));

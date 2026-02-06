@@ -183,7 +183,7 @@ router.get("/:pointId/:fecha", authenticateToken, async (req, res) => {
     const mapEgresos: NumMap = {};
     for (const r of egresosBase) {
       mapEgresos[r.moneda_id] =
-        (mapEgresos[r.moneda_id] || 0) + toNum(r._sum.monto);
+        (mapEgresos[r.moneda_id] || 0) + Math.abs(toNum(r._sum.monto));
     }
     for (const r of egresosAjusteNeg) {
       mapEgresos[r.moneda_id] =
@@ -191,7 +191,7 @@ router.get("/:pointId/:fecha", authenticateToken, async (req, res) => {
     }
     for (const r of egresosCambio) {
       mapEgresos[r.moneda_id] =
-        (mapEgresos[r.moneda_id] || 0) + toNum(r._sum.monto);
+        (mapEgresos[r.moneda_id] || 0) + Math.abs(toNum(r._sum.monto));
     }
 
     const mapCounts: Record<string, number> = {};

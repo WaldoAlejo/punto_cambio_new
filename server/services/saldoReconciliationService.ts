@@ -30,6 +30,91 @@ export interface ReconciliationSummary {
  */
 export const saldoReconciliationService = {
   /**
+   * Normaliza el signo del monto según `tipo_movimiento` + `descripcion`.
+   *
+   * Motivo: existen registros legacy donde el monto fue persistido con signo incorrecto
+   * (por ejemplo egresos guardados como positivos). Para evitar que el saldo en efectivo
+   * quede inflado ("casi el doble"), el cálculo debe inferir el signo por tipo.
+   */
+  _normalizarMonto(
+    tipoMovimiento: string,
+    monto: number,
+    descripcion?: string | null
+  ): number {
+    const abs = Math.abs(monto);
+    const tipo = (tipoMovimiento || "").toUpperCase();
+    const desc = (descripcion || "").toLowerCase();
+
+    // Tipos que se consideran ingreso (siempre suman)
+    const ingresos = new Set([
+      "INGRESO",
+      "INGRESOS",
+      "VENTA",
+      "SALDO",
+      "SALDO EN CAJA",
+      "TRANSFERENCIA_ENTRANTE",
+      "TRANSFERENCIA_ENTRADA",
+      "TRANSFERENCIA_RECIBIDA",
+      "TRANSFERENCIA_DEVOLUCION",
+    ]);
+
+    // Tipos que se consideran egreso (siempre restan)
+    const egresos = new Set([
+      "EGRESO",
+      "EGRESOS",
+      "COMPRA",
+      "TRANSFERENCIA_SALIENTE",
+      "TRANSFERENCIA_SALIDA",
+      "TRANSFERENCIA_ENVIADA",
+    ]);
+
+    if (tipo === "SALDO_INICIAL") return 0;
+
+    if (tipo === "AJUSTE") {
+      // AJUSTE mantiene signo original
+      return monto;
+    }
+
+    if (tipo === "CAMBIO_DIVISA") {
+      // Para cambios, inferir por prefijo de descripcion (patrón usado en rutas)
+      if (desc.startsWith("egreso por cambio")) return -abs;
+      if (desc.startsWith("ingreso por cambio")) return abs;
+      // Fallback: respetar el signo ya persistido
+      return monto;
+    }
+
+    if (ingresos.has(tipo)) {
+      return abs;
+    }
+    if (egresos.has(tipo)) {
+      return -abs;
+    }
+
+    // Fallback heurístico para tipos no contemplados explícitamente
+    // (evita que egresos legacy guardados como positivos inflen el saldo)
+    if (
+      tipo.includes("SALIDA") ||
+      tipo.includes("SALIENTE") ||
+      tipo.includes("EGRESO") ||
+      tipo.includes("COMPRA")
+    ) {
+      return -abs;
+    }
+    if (
+      tipo.includes("ENTRADA") ||
+      tipo.includes("ENTRANTE") ||
+      tipo.includes("INGRESO") ||
+      tipo.includes("VENTA") ||
+      tipo.includes("DEVOLUCION")
+    ) {
+      return abs;
+    }
+
+    // Tipos desconocidos/legacy: respetar el signo ya persistido
+    return monto;
+  },
+
+  /**
    * Calcula el saldo correcto basado en todos los movimientos registrados
    *
    * ⚠️ IMPORTANTE: Esta lógica debe coincidir EXACTAMENTE con calcular-saldos.ts
@@ -93,17 +178,12 @@ export const saldoReconciliationService = {
       });
 
       // 4. Calcular saldo basado en movimientos
-      // ⚠️ CRÍTICO: Los montos YA tienen el signo correcto en la BD gracias a movimientoSaldoService
-      // INGRESO: monto POSITIVO (+50)
-      // EGRESO: monto NEGATIVO (-30)
-      // AJUSTE: monto con signo original (+10 o -10)
-      // Por lo tanto, simplemente SUMAMOS todos los montos
       for (const mov of movimientos) {
-        const monto = Number(mov.monto);
+        const montoRaw = Number(mov.monto);
         const tipoMovimiento = mov.tipo_movimiento;
 
         // Validar que el monto sea un número válido
-        if (isNaN(monto) || !isFinite(monto)) {
+        if (isNaN(montoRaw) || !isFinite(montoRaw)) {
           logger.warn("Movimiento con monto inválido detectado", {
             monto: mov.monto,
             tipo: tipoMovimiento,
@@ -112,19 +192,24 @@ export const saldoReconciliationService = {
           continue;
         }
 
-        // Skip SALDO_INICIAL porque ya está incluido en la variable saldoCalculado
-        if (tipoMovimiento === "SALDO_INICIAL") {
-          continue;
-        }
+        // Normalizar signo para evitar inflación por datos legacy
+        const delta = this._normalizarMonto(
+          tipoMovimiento,
+          montoRaw,
+          mov.descripcion
+        );
 
-        // Sumar directamente el monto (ya tiene el signo correcto)
-        saldoCalculado += monto;
+        // Skip SALDO_INICIAL (delta = 0) porque ya está incluido en la variable saldoCalculado
+        if (tipoMovimiento === "SALDO_INICIAL") continue;
+
+        saldoCalculado += delta;
 
         // Log para debug si es necesario
         if (process.env.DEBUG_SALDO === "true") {
           logger.debug("Procesando movimiento", {
             tipo: tipoMovimiento,
-            monto,
+            monto: montoRaw,
+            delta,
             saldoAcumulado: saldoCalculado,
           });
         }
