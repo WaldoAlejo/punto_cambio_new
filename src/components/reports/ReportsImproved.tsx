@@ -42,22 +42,51 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface ReportsProps {
   user: User;
-  selectedPoint?: any;
+  selectedPoint?: unknown;
 }
+
+type MainReportType =
+  | "exchanges"
+  | "transfers"
+  | "balances"
+  | "users"
+  | "worktime"
+  | "accounting_movements"
+  | "point_assignments"
+  | "summary"
+  | "";
+
+type MetodoEntrega = "efectivo" | "transferencia";
+
+type ReportRow = Record<string, unknown>;
+
+const isMainReportType = (v: string): v is MainReportType =>
+  v === "" ||
+  v === "exchanges" ||
+  v === "transfers" ||
+  v === "balances" ||
+  v === "users" ||
+  v === "worktime" ||
+  v === "accounting_movements" ||
+  v === "point_assignments" ||
+  v === "summary";
+
+const isMetodoEntrega = (v: string): v is MetodoEntrega =>
+  v === "efectivo" || v === "transferencia";
+
+const getRowNumber = (row: ReportRow, key: string): number => {
+  const value = row[key];
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
 
 const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
   // Estados principales
-  const [mainType, setMainType] = useState<
-    | "exchanges"
-    | "transfers"
-    | "balances"
-    | "users"
-    | "worktime"
-    | "accounting_movements"
-    | "point_assignments"
-    | "summary"
-    | ""
-  >("");
+  const [mainType, setMainType] = useState<MainReportType>("");
 
   const [isDetailed, setIsDetailed] = useState<boolean>(false);
   const [corte, setCorte] = useState<"actual" | "eod">("actual");
@@ -68,7 +97,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
 
   // Estados de carga y datos
   const [loading, setLoading] = useState(false);
-  const [reportData, setReportData] = useState<any[]>([]);
+  const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Filtros
@@ -124,7 +153,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
             const pointsRes = await pointService.getAllPoints();
             if (!pointsRes.error) {
               setPoints(
-                pointsRes.points.map((p: any) => ({
+                pointsRes.points.map((p) => ({
                   id: p.id,
                   nombre: p.nombre,
                 }))
@@ -137,7 +166,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
           const currenciesRes = await currencyService.getAllCurrencies();
           if (!currenciesRes.error) {
             setCurrencies(
-              currenciesRes.currencies.map((c: any) => ({
+              currenciesRes.currencies.map((c) => ({
                 id: c.id,
                 codigo: c.codigo,
               }))
@@ -183,14 +212,13 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
 
   // Calcular KPIs
   const kpis = useMemo(() => {
-    const sumByKeys = (arr: any[], keys: string[]) =>
+    const sumByKeys = (arr: ReportRow[], keys: string[]) =>
       arr.reduce(
-        (acc, r) =>
-          acc + keys.reduce((s, k) => s + (Number((r as any)?.[k]) || 0), 0),
+        (acc, r) => acc + keys.reduce((s, k) => s + getRowNumber(r, k), 0),
         0
       );
-    const countBy = (arr: any[], key: string, val: any) =>
-      arr.filter((r) => (r as any)?.[key] === val).length;
+    const countBy = (arr: ReportRow[], key: string, val: unknown) =>
+      arr.filter((r) => r[key] === val).length;
 
     const k: Array<{
       label: string;
@@ -316,8 +344,6 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
           : {}), // ✅ Nuevo filtro para movimientos contables
       };
 
-      console.log("Enviando solicitud de reporte:", { apiUrl, requestBody });
-
       const response = await fetch(`${apiUrl}/reports`, {
         method: "POST",
         headers: {
@@ -328,7 +354,6 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
       });
 
       const data = await response.json();
-      console.log("Respuesta del servidor:", data);
 
       if (!response.ok) {
         throw new Error(
@@ -405,7 +430,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
         title: "✅ Exportación exitosa",
         description: `Archivo ${fullFileName}.xlsx descargado`,
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "❌ Error al exportar",
         description: "No se pudo exportar el archivo",
@@ -502,7 +527,9 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
               </Label>
               <Select
                 value={mainType}
-                onValueChange={(v) => setMainType(v as any)}
+                  onValueChange={(v) => {
+                    setMainType(isMainReportType(v) ? v : "");
+                  }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar tipo" />
@@ -723,7 +750,9 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                 <Select
                   value={metodoEntrega || ""}
                   onValueChange={(v) =>
-                    setMetodoEntrega(v === "ALL" ? null : (v as any))
+                        setMetodoEntrega(
+                          v === "ALL" ? null : isMetodoEntrega(v) ? v : null
+                        )
                   }
                 >
                   <SelectTrigger>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,6 @@ import { User, PuntoAtencion, Moneda } from "@/types";
 import { pointService } from "@/services/pointService";
 import { currencyService } from "@/services/currencyService";
 import { apiService } from "@/services/apiService";
-import { gyeDayRangeUtcFromDate } from "@/utils/timezone";
 
 interface ContabilidadPorPuntoProps {
   user: User;
@@ -69,7 +68,7 @@ interface SaldoActual {
   diferencia?: number;
 }
 
-export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
+export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps) => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [selectedPointId, setSelectedPointId] = useState<string>("");
@@ -96,29 +95,17 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
     const loadInitialData = async () => {
       try {
         // Cargar puntos - usar endpoint específico para gestión de saldos
-        console.log("🔍 Cargando puntos para contabilidad...");
         const { points: pointsData } =
           await pointService.getPointsForBalanceManagement();
-        console.log(
-          "📍 Puntos cargados:",
-          pointsData?.length || 0,
-          pointsData?.map((p) => p.nombre)
-        );
         setPoints(pointsData || []);
         if (pointsData && pointsData.length > 0) {
           setSelectedPointId(pointsData[0].id);
-          console.log(
-            "✅ Punto seleccionado por defecto:",
-            pointsData[0].nombre,
-            pointsData[0].id
-          );
         }
 
         // Cargar monedas
         const { currencies: currenciesData } =
           await currencyService.getAllCurrencies();
         setCurrencies(currenciesData || []);
-        console.log("💱 Monedas cargadas:", currenciesData?.length || 0);
       } catch (error) {
         console.error("❌ Error cargando datos iniciales:", error);
       }
@@ -127,14 +114,7 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
     loadInitialData();
   }, []);
 
-  // Cargar datos cuando cambian los filtros
-  useEffect(() => {
-    if (selectedPointId && selectedCurrency && startDate && endDate) {
-      loadContabilidadData();
-    }
-  }, [selectedPointId, selectedCurrency, startDate, endDate]);
-
-  const loadContabilidadData = async () => {
+  const loadContabilidadData = useCallback(async () => {
     if (!selectedPointId || !selectedCurrency) return;
 
     setIsLoading(true);
@@ -143,29 +123,16 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
       const startDateTime = new Date(startDate + "T00:00:00");
       const endDateTime = new Date(endDate + "T23:59:59");
 
-      console.log("🔍 Cargando datos de contabilidad:", {
-        punto: selectedPointId,
-        moneda: selectedCurrency,
-        fechaInicio: startDateTime.toISOString(),
-        fechaFin: endDateTime.toISOString(),
-      });
-
       // 1. Obtener saldo inicial
       try {
-        console.log(
-          "🔑 Token en localStorage:",
-          localStorage.getItem("authToken") ? "✅ Existe" : "❌ No existe"
-        );
         const data = await apiService.get<{
           saldos: SaldoInicial[];
           success: boolean;
         }>(`/api/saldos-iniciales/${selectedPointId}`);
-        console.log("📊 Saldos iniciales recibidos:", data);
         const saldosIniciales: SaldoInicial[] = data?.saldos || [];
         const saldoMoneda = saldosIniciales.find(
           (s) => s.moneda_codigo === selectedCurrency
         );
-        console.log("💰 Saldo inicial encontrado:", saldoMoneda);
         setSaldoInicial(saldoMoneda?.cantidad_inicial || 0);
       } catch (error) {
         console.error("❌ Error al obtener saldos iniciales:", error);
@@ -175,11 +142,9 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
       // 2. Obtener movimientos del período
       try {
         const movimientosUrl = `/api/movimientos-saldo?puntoId=${selectedPointId}&monedaCodigo=${selectedCurrency}&fechaInicio=${startDateTime.toISOString()}&fechaFin=${endDateTime.toISOString()}`;
-        console.log("🔗 URL movimientos:", movimientosUrl);
         const movimientosData = await apiService.get<MovimientoSaldo[]>(
           movimientosUrl
         );
-        console.log("📈 Movimientos recibidos:", movimientosData);
         // El endpoint devuelve directamente un array
         setMovimientos(Array.isArray(movimientosData) ? movimientosData : []);
       } catch (error) {
@@ -193,12 +158,10 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
           saldos: SaldoActual[];
           success: boolean;
         }>(`/api/saldos-actuales/${selectedPointId}?reconciliar=true`);
-        console.log("💵 Saldos actuales recibidos:", data);
         const saldosActuales: SaldoActual[] = data?.saldos || [];
         const saldoMoneda = saldosActuales.find(
           (s) => s.moneda_codigo === selectedCurrency
         );
-        console.log("💸 Saldo actual encontrado:", saldoMoneda);
         // Preferir saldo calculado (desde movimientos) cuando esté presente
         const saldoPreferido =
           typeof saldoMoneda?.saldo_calculado === "number"
@@ -214,7 +177,14 @@ export const ContabilidadPorPunto = ({ user }: ContabilidadPorPuntoProps) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedPointId, selectedCurrency, startDate, endDate]);
+
+  // Cargar datos cuando cambian los filtros
+  useEffect(() => {
+    if (selectedPointId && selectedCurrency && startDate && endDate) {
+      loadContabilidadData();
+    }
+  }, [selectedPointId, selectedCurrency, startDate, endDate, loadContabilidadData]);
 
   // Calcular estadísticas
   const estadisticas = useMemo(() => {

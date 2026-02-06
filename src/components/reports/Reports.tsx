@@ -42,22 +42,51 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface ReportsProps {
   user: User;
-  selectedPoint?: any;
+  selectedPoint?: unknown;
 }
+
+type MainReportType =
+  | "exchanges"
+  | "transfers"
+  | "balances"
+  | "users"
+  | "worktime"
+  | "accounting_movements"
+  | "point_assignments"
+  | "summary"
+  | "";
+
+type MetodoEntrega = "efectivo" | "transferencia";
+
+type ReportRow = Record<string, unknown>;
+
+const isMainReportType = (v: string): v is MainReportType =>
+  v === "" ||
+  v === "exchanges" ||
+  v === "transfers" ||
+  v === "balances" ||
+  v === "users" ||
+  v === "worktime" ||
+  v === "accounting_movements" ||
+  v === "point_assignments" ||
+  v === "summary";
+
+const isMetodoEntrega = (v: string): v is MetodoEntrega =>
+  v === "efectivo" || v === "transferencia";
+
+const getRowNumber = (row: ReportRow, key: string): number => {
+  const value = row[key];
+  if (typeof value === "number") return value;
+  if (typeof value === "string") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
 
 const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
   // Estados principales
-  const [mainType, setMainType] = useState<
-    | "exchanges"
-    | "transfers"
-    | "balances"
-    | "users"
-    | "worktime"
-    | "accounting_movements"
-    | "point_assignments"
-    | "summary"
-    | ""
-  >("");
+  const [mainType, setMainType] = useState<MainReportType>("");
 
   const [isDetailed, setIsDetailed] = useState<boolean>(false);
   const [corte, setCorte] = useState<"actual" | "eod">("actual");
@@ -68,7 +97,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
 
   // Estados de carga y datos
   const [loading, setLoading] = useState(false);
-  const [reportData, setReportData] = useState<any[]>([]);
+  const [reportData, setReportData] = useState<ReportRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Filtros
@@ -114,45 +143,23 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
           (mainType === "exchanges" && isDetailed) ||
           (mainType === "transfers" && isDetailed);
 
-        console.log("📊 REPORTES - Cargando catálogos:", {
-          mainType,
-          isDetailed,
-          corte,
-          needUsersPoints,
-          needCurrencies,
-          currentUsersCount: users.length,
-          currentPointsCount: points.length,
-        });
-
         if (needUsersPoints) {
           if (users.length === 0) {
-            console.log("👥 Cargando usuarios...");
             const usersRes = await userService.getAllUsers();
-            console.log("👥 Resultado de carga de usuarios:", {
-              error: usersRes.error,
-              usersCount: usersRes.users?.length || 0,
-            });
             if (!usersRes.error) {
               setUsers(usersRes.users);
-              console.log("✅ Usuarios cargados:", usersRes.users.length);
             } else {
               console.error("❌ Error al cargar usuarios:", usersRes.error);
             }
           }
           if (points.length === 0) {
-            console.log("📍 Cargando puntos de atención...");
             const pointsRes = await pointService.getAllPoints();
-            console.log("📍 Resultado de carga de puntos:", {
-              error: pointsRes.error,
-              pointsCount: pointsRes.points?.length || 0,
-            });
             if (!pointsRes.error) {
-              const mappedPoints = pointsRes.points.map((p: any) => ({
+              const mappedPoints = pointsRes.points.map((p) => ({
                 id: p.id,
                 nombre: p.nombre,
               }));
               setPoints(mappedPoints);
-              console.log("✅ Puntos cargados:", mappedPoints);
             } else {
               console.error("❌ Error al cargar puntos:", pointsRes.error);
             }
@@ -163,7 +170,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
           const currenciesRes = await currencyService.getAllCurrencies();
           if (!currenciesRes.error) {
             setCurrencies(
-              currenciesRes.currencies.map((c: any) => ({
+              currenciesRes.currencies.map((c) => ({
                 id: c.id,
                 codigo: c.codigo,
               }))
@@ -209,14 +216,13 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
 
   // Calcular KPIs
   const kpis = useMemo(() => {
-    const sumByKeys = (arr: any[], keys: string[]) =>
+    const sumByKeys = (arr: ReportRow[], keys: string[]) =>
       arr.reduce(
-        (acc, r) =>
-          acc + keys.reduce((s, k) => s + (Number((r as any)?.[k]) || 0), 0),
+        (acc, r) => acc + keys.reduce((s, k) => s + getRowNumber(r, k), 0),
         0
       );
-    const countBy = (arr: any[], key: string, val: any) =>
-      arr.filter((r) => (r as any)?.[key] === val).length;
+    const countBy = (arr: ReportRow[], key: string, val: unknown) =>
+      arr.filter((r) => r[key] === val).length;
 
     const k: Array<{
       label: string;
@@ -339,13 +345,6 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
           : {}),
       };
 
-      console.log("📊 Enviando solicitud de reporte:", { apiUrl, requestBody });
-      console.log("🔐 Token disponible:", !!token);
-      console.log(
-        "🔐 Token (primeros 20 chars):",
-        token?.substring(0, 20) + "..."
-      );
-
       const response = await fetch(`${apiUrl}/reports`, {
         method: "POST",
         headers: {
@@ -355,16 +354,9 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
         body: JSON.stringify(requestBody),
       });
 
-      console.log("📡 Respuesta del servidor - Status:", response.status);
-      console.log(
-        "📡 Respuesta del servidor - StatusText:",
-        response.statusText
-      );
-
       const data = await response.json().catch(() => ({
         error: `HTTP ${response.status}: ${response.statusText}`,
       }));
-      console.log("📡 Respuesta del servidor - Data:", data);
 
       if (!response.ok) {
         if (response.status === 403) {
@@ -451,7 +443,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
         title: "✅ Exportación exitosa",
         description: `Archivo ${fullFileName}.xlsx descargado`,
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "❌ Error al exportar",
         description: "No se pudo exportar el archivo",
@@ -554,7 +546,9 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                 </Label>
                 <Select
                   value={mainType}
-                  onValueChange={(v) => setMainType(v as any)}
+                  onValueChange={(v) => {
+                    setMainType(isMainReportType(v) ? v : "");
+                  }}
                 >
                   <SelectTrigger className="h-10">
                     <SelectValue placeholder="Seleccionar tipo" />
@@ -855,7 +849,9 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                     <Select
                       value={metodoEntrega || ""}
                       onValueChange={(v) =>
-                        setMetodoEntrega(v === "ALL" ? null : (v as any))
+                        setMetodoEntrega(
+                          v === "ALL" ? null : isMetodoEntrega(v) ? v : null
+                        )
                       }
                     >
                       <SelectTrigger className="h-10">

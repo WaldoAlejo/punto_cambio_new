@@ -282,6 +282,9 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
         );
 
       case "details":
+        if (!exchangeData) {
+          return null;
+        }
         return (
           <ExchangeDetailsForm
             fromCurrency={
@@ -298,7 +301,7 @@ const ExchangeSteps = forwardRef<ExchangeStepsRef, ExchangeStepsProps>(
             toCurrencyName={
               exchangeData ? getCurrencyName(exchangeData.toCurrency) : ""
             }
-            exchangeData={exchangeData!}
+            exchangeData={exchangeData}
             onBack={() => setStep("exchange")}
             onComplete={handleDetailsComplete}
             onDivisasRecibidasChange={handleDivisasRecibidasChange}

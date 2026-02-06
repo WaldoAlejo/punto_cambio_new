@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,17 @@ import { Loading } from "@/components/ui/loading";
 import { Guia } from "@/types/servientrega";
 import axiosInstance from "@/services/axiosInstance";
 import { User, PuntoAtencion } from "@/types";
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+const getAxiosStatus = (err: unknown): number | null => {
+  if (!isRecord(err)) return null;
+  const response = err.response;
+  if (!isRecord(response)) return null;
+  const status = response.status;
+  return typeof status === "number" ? status : null;
+};
 
 interface ServientregaInformesProps {
   user: User;
@@ -34,6 +45,14 @@ export const ServientregaInformes = ({
   user: _user,
   selectedPoint: _selectedPoint,
 }: ServientregaInformesProps) => {
+  const isFiltroEstado = (
+    v: string
+  ): v is "TODOS" | "ACTIVA" | "ANULADA" | "PENDIENTE_ANULACION" =>
+    v === "TODOS" ||
+    v === "ACTIVA" ||
+    v === "ANULADA" ||
+    v === "PENDIENTE_ANULACION";
+
   const hoy = new Date();
   const [guias, setGuias] = useState<Guia[]>([]);
   const [estadisticas, setEstadisticas] = useState<EstadisticasGuias | null>(
@@ -48,28 +67,57 @@ export const ServientregaInformes = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchInformes = async () => {
+  const desdeRef = useRef(desde);
+  const hastaRef = useRef(hasta);
+  const filtroEstadoRef = useRef(filtroEstado);
+  const filtroPuntoRef = useRef(filtroPunto);
+
+  useEffect(() => {
+    desdeRef.current = desde;
+  }, [desde]);
+
+  useEffect(() => {
+    hastaRef.current = hasta;
+  }, [hasta]);
+
+  useEffect(() => {
+    filtroEstadoRef.current = filtroEstado;
+  }, [filtroEstado]);
+
+  useEffect(() => {
+    filtroPuntoRef.current = filtroPunto;
+  }, [filtroPunto]);
+
+  const fetchInformes = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
+      const desdeValue = desdeRef.current;
+      const hastaValue = hastaRef.current;
+      const filtroEstadoValue = filtroEstadoRef.current;
+      const filtroPuntoValue = filtroPuntoRef.current;
+
       const [guiasResponse, estadisticasResponse] = await Promise.all([
         axiosInstance.get<{ data: Guia[]; success: boolean }>(
           "/servientrega/informes/guias",
           {
             params: {
-              desde,
-              hasta,
-              estado: filtroEstado === "TODOS" ? undefined : filtroEstado,
+              desde: desdeValue,
+              hasta: hastaValue,
+              estado:
+                filtroEstadoValue === "TODOS"
+                  ? undefined
+                  : filtroEstadoValue,
               punto_atencion_id:
-                filtroPunto === "TODOS" ? undefined : filtroPunto,
+                filtroPuntoValue === "TODOS" ? undefined : filtroPuntoValue,
             },
           }
         ),
         axiosInstance.get<{ data: EstadisticasGuias; success: boolean }>(
           "/servientrega/informes/estadisticas",
           {
-            params: { desde, hasta },
+            params: { desde: desdeValue, hasta: hastaValue },
           }
         ),
       ]);
@@ -90,10 +138,10 @@ export const ServientregaInformes = ({
       if ((guiasResponse.data?.data || []).length === 0) {
         toast.info("No se encontraron guías en el período seleccionado.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error al cargar informes:", err);
 
-      if (err.response?.status === 404) {
+      if (getAxiosStatus(err) === 404) {
         setError(
           "Los endpoints de informes de Servientrega no están disponibles en el backend."
         );
@@ -110,11 +158,11 @@ export const ServientregaInformes = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchInformes();
-  }, []);
+  }, [fetchInformes]);
 
   const handleExportarExcel = async () => {
     try {
@@ -145,10 +193,10 @@ export const ServientregaInformes = ({
       window.URL.revokeObjectURL(url);
 
       toast.success("✅ Informe exportado exitosamente");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error al exportar:", err);
 
-      if (err.response?.status === 404) {
+      if (getAxiosStatus(err) === 404) {
         toast.warning(
           "Funcionalidad de exportación no disponible. Contacte al administrador."
         );
@@ -364,7 +412,10 @@ export const ServientregaInformes = ({
               <Label className="text-sm">Estado</Label>
               <select
                 value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value as any)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFiltroEstado(isFiltroEstado(v) ? v : "TODOS");
+                }}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
               >
                 <option value="TODOS">Todos</option>

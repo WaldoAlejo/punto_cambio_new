@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -57,15 +56,8 @@ export function AgenciaSelector({
   const loadAgencias = async () => {
     setLoading(true);
     try {
-      console.log("🔍 AgenciaSelector: Iniciando carga de agencias...");
       const { agencias: fetchedAgencias, error } =
         await servientregaService.getAgencias();
-
-      console.log("📍 AgenciaSelector: Respuesta del servicio:", {
-        agenciasCount: fetchedAgencias.length,
-        error,
-        firstAgencia: fetchedAgencias[0],
-      });
 
       if (error) {
         console.error("❌ AgenciaSelector: Error del servicio:", error);
@@ -97,8 +89,7 @@ export function AgenciaSelector({
       });
 
       setAgencias(sortedAgencias);
-      console.log(`✅ ${sortedAgencias.length} agencias cargadas y ordenadas`);
-    } catch (error) {
+    } catch {
       toast({
         title: "Error",
         description: "Error al cargar agencias de Servientrega",

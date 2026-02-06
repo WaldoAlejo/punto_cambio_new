@@ -41,10 +41,5 @@ export const env: EnvironmentConfig = {
 
 // Logging de configuración en desarrollo
 if (env.IS_DEVELOPMENT) {
-  console.log("🔧 Configuración de entorno:", {
-    API_URL: env.API_URL,
-    NODE_ENV: env.NODE_ENV,
-    APP_NAME: env.APP_NAME,
-    APP_VERSION: env.APP_VERSION,
-  });
+  // Intencionalmente sin logging por ESLint/no-console
 }

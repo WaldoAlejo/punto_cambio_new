@@ -49,7 +49,7 @@ function PrintCuadre({ open, onClose, data }: PrintCuadreProps) {
   const Box = (p: {
     style?: React.CSSProperties;
     children?: React.ReactNode;
-    onClick?: any;
+    onClick?: React.MouseEventHandler<HTMLDivElement>;
   }) => h("div", { style: p.style, onClick: p.onClick }, p.children);
   const Button = (p: {
     onClick?: () => void;

@@ -1,6 +1,10 @@
 import axios from "axios";
 import https from "https";
 
+const log = (...args: unknown[]) => {
+  console.warn(...args);
+};
+
 const MAIN_URL =
   "https://servientrega-ecuador.appsiscore.com/app/ws/aliados/servicore_ws_aliados.php";
 const RETAIL_URL =
@@ -15,12 +19,12 @@ export interface ServientregaCredentials {
 }
 
 export interface ServientregaAPIResponse {
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 type WireMode = "json" | "form";
 
-function isEmptyUpstream(data: any): boolean {
+function isEmptyUpstream(data: unknown): boolean {
   if (data === null || data === undefined) return true;
   if (typeof data === "string" && data.trim() === "") return true;
   if (Array.isArray(data) && data.length === 0) return true;
@@ -28,7 +32,7 @@ function isEmptyUpstream(data: any): boolean {
 }
 
 // 👉 Quita BOM/whitespace y trata de parsear JSON si viene como string
-function normalizeUpstream<T = any>(raw: any): T {
+function normalizeUpstream<T = unknown>(raw: unknown): T {
   try {
     if (typeof raw !== "string") return raw as T;
     // quitar BOM UTF-8 y espacios
@@ -45,14 +49,56 @@ function normalizeUpstream<T = any>(raw: any): T {
   }
 }
 
+type UpstreamError = Error & {
+  code?: string;
+  httpStatus?: number;
+  endpoint?: string;
+};
+
+function getErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+function getErrorMessage(err: unknown): string {
+  if (!err) return "";
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
+function getAxiosStatus(err: unknown): number | undefined {
+  if (!err || typeof err !== "object") return undefined;
+  const response = (err as { response?: unknown }).response;
+  if (!response || typeof response !== "object") return undefined;
+  const status = (response as { status?: unknown }).status;
+  return typeof status === "number" ? status : undefined;
+}
+
+function createUpstreamError(
+  message: string,
+  extras?: { code?: string; httpStatus?: number; endpoint?: string }
+): UpstreamError {
+  const err = new Error(message) as UpstreamError;
+  if (extras?.code) err.code = extras.code;
+  if (extras?.httpStatus) err.httpStatus = extras.httpStatus;
+  if (extras?.endpoint) err.endpoint = extras.endpoint;
+  return err;
+}
+
 async function doPost(
   url: string,
-  payload: Record<string, any>,
+  payload: Record<string, unknown>,
   mode: WireMode,
   timeoutMs: number
 ) {
-  let body: any;
-  let headers: any;
+  let body: Record<string, unknown> | string;
+  let headers: Record<string, string>;
 
   if (mode === "json") {
     body = payload;
@@ -81,7 +127,7 @@ async function doPost(
   const ms = Date.now() - start;
 
   // Logging útil (moderado)
-  console.log(
+  log(
     `🔗 POST ${url} [${mode}] -> HTTP ${
       res.status
     } en ${ms}ms | vacio=${isEmptyUpstream(res.data)}`
@@ -107,7 +153,7 @@ export class ServientregaAPIService {
    *  4) RETAIL FORM
    */
   async calcularTarifa(
-    payload: Record<string, any>,
+    payload: Record<string, unknown>,
     timeoutMs = 15000
   ): Promise<ServientregaAPIResponse> {
     const basePayload = { ...payload, ...this.credentials };
@@ -119,49 +165,53 @@ export class ServientregaAPIService {
       { url: RETAIL_URL, mode: "form", label: "RETAIL FORM" },
     ];
 
-    let lastErr: any = null;
+    let lastErr: UpstreamError | null = null;
 
     for (const att of attempts) {
       try {
         const res = await doPost(att.url, basePayload, att.mode, timeoutMs);
-        const data = normalizeUpstream(res.data);
+        const data = normalizeUpstream<ServientregaAPIResponse>(res.data);
 
         if (res.status >= 400) {
-          const e: any = new Error(
-            `HTTP ${res.status} en ${att.label}: ${JSON.stringify(data)}`
+          throw createUpstreamError(
+            `HTTP ${res.status} en ${att.label}: ${JSON.stringify(data)}`,
+            { httpStatus: res.status, endpoint: att.url }
           );
-          e.httpStatus = res.status;
-          e.endpoint = att.url;
-          throw e;
         }
 
         if (isEmptyUpstream(data)) {
           console.warn(
             `⚠️ Respuesta vacía en ${att.label}, probando siguiente...`
           );
-          lastErr = new Error("UPSTREAM_EMPTY");
-          (lastErr as any).code = "UPSTREAM_EMPTY";
-          (lastErr as any).endpoint = att.url;
+          lastErr = createUpstreamError("UPSTREAM_EMPTY", {
+            code: "UPSTREAM_EMPTY",
+            endpoint: att.url,
+          });
           continue;
         }
 
         return data;
-      } catch (err: any) {
-        lastErr = err;
+      } catch (err: unknown) {
+        lastErr = (err instanceof Error ? (err as UpstreamError) : null) ?? lastErr;
+
+        const code = getErrorCode(err);
+        const status = getAxiosStatus(err);
+        const message = getErrorMessage(err);
+
         if (
-          err?.code === "ECONNABORTED" ||
-          err?.code === "UPSTREAM_EMPTY" ||
-          err?.response?.status === 408
+          code === "ECONNABORTED" ||
+          code === "UPSTREAM_EMPTY" ||
+          status === 408
         ) {
-          console.warn(`⏳/🈳 ${att.label} falló: ${err?.message || err}`);
+          console.warn(`⏳/🈳 ${att.label} falló: ${message}`);
           continue;
         }
-        console.warn(`❗ ${att.label} error: ${err?.message || err}`);
+        console.warn(`❗ ${att.label} error: ${message}`);
         continue;
       }
     }
 
-    const out: any = new Error(
+    const out = createUpstreamError(
       lastErr?.code === "UPSTREAM_EMPTY"
         ? "Proveedor no devolvió datos (tarifa vacía) en todos los endpoints"
         : "Error al conectar con Servientrega"
@@ -173,20 +223,20 @@ export class ServientregaAPIService {
 
   // Generación de guía (JSON)
   async generarGuia(
-    payload: Record<string, any>,
+    payload: Record<string, unknown>,
     timeoutMs = 20000
   ): Promise<ServientregaAPIResponse> {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "GeneracionGuia", ...payload, ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    const data = normalizeUpstream(res.data);
+    const data = normalizeUpstream<ServientregaAPIResponse>(res.data);
 
     if (isEmptyUpstream(data)) {
-      const e: any = new Error("Respuesta vacía al generar guía");
-      e.code = "UPSTREAM_EMPTY";
-      e.httpStatus = 502;
-      e.endpoint = url;
-      throw e;
+      throw createUpstreamError("Respuesta vacía al generar guía", {
+        code: "UPSTREAM_EMPTY",
+        httpStatus: 502,
+        endpoint: url,
+      });
     }
     return data;
   }
@@ -205,59 +255,62 @@ export class ServientregaAPIService {
       ...this.credentials,
     };
     const res = await doPost(url, full, "json", timeoutMs);
-    const data = normalizeUpstream(res.data);
+    const data = normalizeUpstream<ServientregaAPIResponse>(res.data);
 
     if (isEmptyUpstream(data)) {
-      const e: any = new Error("Respuesta vacía al anular guía");
-      e.code = "UPSTREAM_EMPTY";
-      e.httpStatus = 502;
-      e.endpoint = url;
-      throw e;
+      throw createUpstreamError("Respuesta vacía al anular guía", {
+        code: "UPSTREAM_EMPTY",
+        httpStatus: 502,
+        endpoint: url,
+      });
     }
     return data;
   }
 
   // Catálogos (JSON)
-  async obtenerProductos(timeoutMs = 10000) {
+  async obtenerProductos(timeoutMs = 10000): Promise<ServientregaAPIResponse> {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_producto", ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    return normalizeUpstream(res.data);
+    return normalizeUpstream<ServientregaAPIResponse>(res.data);
   }
 
-  async obtenerPaises(timeoutMs = 10000) {
+  async obtenerPaises(timeoutMs = 10000): Promise<ServientregaAPIResponse> {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_paises", ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    return normalizeUpstream(res.data);
+    return normalizeUpstream<ServientregaAPIResponse>(res.data);
   }
 
-  async obtenerCiudades(codpais: number, timeoutMs = 10000) {
+  async obtenerCiudades(
+    codpais: number,
+    timeoutMs = 10000
+  ): Promise<ServientregaAPIResponse> {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_ciudades", codpais, ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    return normalizeUpstream(res.data);
+    return normalizeUpstream<ServientregaAPIResponse>(res.data);
   }
 
-  async obtenerAgencias(timeoutMs = 10000) {
+  async obtenerAgencias(timeoutMs = 10000): Promise<ServientregaAPIResponse> {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_agencias_aliadas", ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    return normalizeUpstream(res.data);
+    return normalizeUpstream<ServientregaAPIResponse>(res.data);
   }
 
-  async obtenerEmpaques(timeoutMs = 10000) {
+  async obtenerEmpaques(timeoutMs = 10000): Promise<ServientregaAPIResponse> {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "obtener_empaqueyembalaje", ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    return normalizeUpstream(res.data);
+    return normalizeUpstream<ServientregaAPIResponse>(res.data);
   }
 
   // =========================================================
   // 🔁 Compatibilidad: callAPI(payload, timeoutMs?, useRetailUrl?)
   // =========================================================
   public async callAPI(
-    payload: Record<string, any>,
+    payload: Record<string, unknown>,
     timeoutMs: number = 15000,
     useRetailUrl: boolean = false
   ): Promise<ServientregaAPIResponse> {
@@ -298,14 +351,14 @@ export class ServientregaAPIService {
     const url = useRetailUrl ? RETAIL_URL : this.apiUrl || MAIN_URL;
     const full = { ...payload, ...this.credentials };
     const res = await doPost(url, full, "json", timeoutMs);
-    const data = normalizeUpstream(res.data);
+    const data = normalizeUpstream<ServientregaAPIResponse>(res.data);
 
     if (isEmptyUpstream(data)) {
-      const e: any = new Error("Respuesta vacía del proveedor");
-      e.code = "UPSTREAM_EMPTY";
-      e.httpStatus = 502;
-      e.endpoint = url;
-      throw e;
+      throw createUpstreamError("Respuesta vacía del proveedor", {
+        code: "UPSTREAM_EMPTY",
+        httpStatus: 502,
+        endpoint: url,
+      });
     }
     return data;
   }

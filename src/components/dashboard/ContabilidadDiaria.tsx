@@ -201,6 +201,14 @@ const ContabilidadDiaria: React.FC<ContabilidadDiariaProps> = ({
     [totalIngresosDia, totalEgresosDia]
   );
 
+  const fechaBonita = useMemo(
+    () =>
+      format(new Date(fechaSeleccionada), "dd 'de' MMMM, yyyy", {
+        locale: es,
+      }),
+    [fechaSeleccionada]
+  );
+
   if (!selectedPoint) {
     return (
       <div className="p-6">
@@ -213,14 +221,6 @@ const ContabilidadDiaria: React.FC<ContabilidadDiariaProps> = ({
       </div>
     );
   }
-
-  const fechaBonita = useMemo(
-    () =>
-      format(new Date(fechaSeleccionada), "dd 'de' MMMM, yyyy", {
-        locale: es,
-      }),
-    [fechaSeleccionada]
-  );
 
   return (
     <div className="space-y-6">

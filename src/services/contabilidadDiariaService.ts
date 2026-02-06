@@ -310,15 +310,15 @@ export const contabilidadDiariaService = {
     puntoId: string,
     fecha: string,
     observaciones?: string,
-    diferencias_reportadas?: any
+    diferencias_reportadas?: unknown
   ): Promise<{
     success: boolean;
-    cierre?: any;
+    cierre?: unknown;
     jornada_finalizada?: boolean;
     mensaje?: string;
     error?: string;
     codigo?: string;
-    detalles?: any;
+    detalles?: unknown;
   }> {
     try {
       const response = await fetch(

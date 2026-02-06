@@ -5,8 +5,8 @@ const API_BASE_URL = env.API_URL;
 
 export class ApiError extends Error {
   status: number;
-  payload?: any;
-  constructor(message: string, status: number, payload?: any) {
+  payload?: unknown;
+  constructor(message: string, status: number, payload?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;

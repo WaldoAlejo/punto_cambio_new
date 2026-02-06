@@ -16,10 +16,13 @@ interface DetalleMoneda {
   simbolo: string;
   saldo_apertura: number;
   saldo_cierre_teorico: number;
+  bancos_teorico?: number;
   conteo_fisico: number;
+  conteo_bancos?: number;
   billetes: number;
   monedas_fisicas: number;
   diferencia: number;
+  diferencia_bancos?: number;
   ingresos_periodo: number;
   egresos_periodo: number;
   movimientos_periodo: number;
@@ -34,7 +37,7 @@ interface ResultadoCierre {
   mensaje?: string;
   error?: string;
   codigo?: string;
-  detalles?: any;
+  detalles?: unknown;
 }
 
 interface DatosCierre {
@@ -43,7 +46,7 @@ interface DatosCierre {
   fecha: Date;
   detalles: DetalleMoneda[];
   observaciones?: string;
-  diferencias_reportadas?: any;
+  diferencias_reportadas?: unknown;
 }
 
 class CierreService {
@@ -195,11 +198,11 @@ class CierreService {
   async obtenerResumenMovimientos(
     puntoId: string,
     fecha: Date,
-    usuarioId: string
+    _usuarioId: string
   ): Promise<{
     success: boolean;
     detalles?: DetalleMoneda[];
-    totales?: any;
+    totales?: unknown;
     error?: string;
   }> {
     try {
@@ -499,6 +502,11 @@ class CierreService {
               saldo_apertura: d.saldo_apertura,
               saldo_cierre: d.saldo_cierre_teorico,
               conteo_fisico: d.conteo_fisico,
+              bancos_teorico: Number(d.bancos_teorico ?? 0),
+              conteo_bancos: Number(d.conteo_bancos ?? 0),
+              diferencia_bancos: Number(
+                ((Number(d.conteo_bancos ?? 0) - Number(d.bancos_teorico ?? 0)) || 0).toFixed(2)
+              ),
               billetes: d.billetes || 0,
               monedas_fisicas: d.monedas_fisicas || 0,
               diferencia: Number(
@@ -536,13 +544,20 @@ class CierreService {
 
         // Preparar diferencias reportadas
         const diferencias = detalles
-          .filter((d) => Math.abs(d.diferencia) > 0.01)
+          .filter(
+            (d) =>
+              Math.abs(d.diferencia) > 0.01 ||
+              Math.abs(Number(d.diferencia_bancos ?? 0)) > 0.01
+          )
           .map((d) => ({
             moneda_id: d.moneda_id,
             moneda_codigo: d.codigo,
             diferencia_sistema: d.saldo_cierre_teorico,
             diferencia_fisica: d.conteo_fisico,
             diferencia: d.diferencia,
+            bancos_teorico: Number(d.bancos_teorico ?? 0),
+            bancos_conteo: Number(d.conteo_bancos ?? 0),
+            diferencia_bancos: Number(d.diferencia_bancos ?? 0),
             justificacion: d.observaciones_detalle || null,
           }));
 
@@ -623,6 +638,46 @@ class CierreService {
         });
         if (detalles.length > 0) {
           for (const detalle of detalles) {
+            const conteoBancos =
+              detalle.conteo_bancos === null || detalle.conteo_bancos === undefined
+                ? null
+                : Number(detalle.conteo_bancos);
+
+            // Normalizar desglose de efectivo para que billetes+monedas == conteo_fisico
+            // (evita valores duplicados/inconsistentes que bloquean cierres posteriores)
+            const conteoFisico = Number(detalle.conteo_fisico ?? 0);
+            let billetes = Number(detalle.billetes ?? 0);
+            let monedas = Number(detalle.monedas_fisicas ?? 0);
+            if (!Number.isFinite(conteoFisico)) {
+              throw new Error(
+                `conteo_fisico inválido para moneda_id=${detalle.moneda_id}`
+              );
+            }
+            if (!Number.isFinite(billetes)) billetes = 0;
+            if (!Number.isFinite(monedas)) monedas = 0;
+
+            const round2 = (n: number) => Math.round(n * 100) / 100;
+            const clamp0 = (n: number) => (n < 0 ? 0 : n);
+
+            billetes = round2(clamp0(billetes));
+            monedas = round2(clamp0(monedas));
+            const sumEf = round2(billetes + monedas);
+            if (Math.abs(sumEf - conteoFisico) > 0.02) {
+              if (sumEf > 0) {
+                const scale = conteoFisico / sumEf;
+                billetes = round2(clamp0(billetes * scale));
+                monedas = round2(clamp0(monedas * scale));
+                const sumScaled = round2(billetes + monedas);
+                const diff = round2(conteoFisico - sumScaled);
+                if (Math.abs(diff) > 0.01) {
+                  billetes = round2(clamp0(billetes + diff));
+                }
+              } else {
+                billetes = round2(clamp0(conteoFisico));
+                monedas = 0;
+              }
+            }
+
             await tx.saldo.upsert({
               where: {
                 punto_atencion_id_moneda_id: {
@@ -631,17 +686,24 @@ class CierreService {
                 },
               },
               update: {
-                cantidad: detalle.conteo_fisico, // ✅ SALDO CUADRADO = SALDO INICIAL del siguiente día
-                billetes: detalle.billetes || 0,
-                monedas_fisicas: detalle.monedas_fisicas || 0,
+                cantidad: conteoFisico, // ✅ SALDO CUADRADO = SALDO INICIAL del siguiente día
+                billetes,
+                monedas_fisicas: monedas,
+                ...(conteoBancos === null || !Number.isFinite(conteoBancos)
+                  ? {}
+                  : { bancos: conteoBancos }),
                 updated_at: new Date(),
               },
               create: {
                 punto_atencion_id,
                 moneda_id: detalle.moneda_id,
-                cantidad: detalle.conteo_fisico,
-                billetes: detalle.billetes || 0,
-                monedas_fisicas: detalle.monedas_fisicas || 0,
+                cantidad: conteoFisico,
+                billetes,
+                monedas_fisicas: monedas,
+                bancos:
+                  conteoBancos === null || !Number.isFinite(conteoBancos)
+                    ? 0
+                    : conteoBancos,
               },
             });
 
@@ -723,7 +785,7 @@ class CierreService {
   ): Promise<{
     existe: boolean;
     estado?: "ABIERTO" | "CERRADO";
-    cierre?: any;
+    cierre?: unknown;
   }> {
     try {
       const fechaDate = new Date(

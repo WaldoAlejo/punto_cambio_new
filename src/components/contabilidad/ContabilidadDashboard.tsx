@@ -46,7 +46,7 @@ export const ContabilidadDashboard = ({
   const contabilidadNormal = useContabilidadDivisas({ user, selectedPoint });
   const contabilidadAdmin = useContabilidadAdmin({ user });
 
-  const { saldos, movimientos, isLoading, error, refresh } = isAdminView
+  const { saldos, movimientos, isLoading, error: _error, refresh } = isAdminView
     ? user.rol === "ADMIN" || user.rol === "SUPER_USUARIO"
       ? {
           saldos: contabilidadAdmin.saldosConsolidados,
@@ -87,11 +87,6 @@ export const ContabilidadDashboard = ({
   // VISIBILIDAD de secciones (novedad)
   const [showMovimientos, setShowMovimientos] = useState(true);
   const [showSaldos, setShowSaldos] = useState(false); // saldos cerrado por defecto
-
-  // Estado para balance completo
-  const [balanceCompleto, setBalanceCompleto] = useState<any>(null);
-  const [loadingBalanceCompleto, setLoadingBalanceCompleto] = useState(false);
-  const [showBalanceCompleto, setShowBalanceCompleto] = useState(true);
 
   // Cargar monedas si no se proporcionaron
   useEffect(() => {

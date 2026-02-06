@@ -68,8 +68,8 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortKey, setSortKey] = useState<ColKey>("usuario");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortKey, _setSortKey] = useState<ColKey>("usuario");
+  const [sortDir, _setSortDir] = useState<"asc" | "desc">("asc");
 
   const filteredData = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -118,18 +118,6 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
     return data;
   }, [filteredData, sortKey, sortDir]);
 
-  const columnDefs: { key: ColKey; label: string }[] = [
-    { key: "usuario", label: "Usuario" },
-    { key: "username", label: "Username" },
-    { key: "punto", label: "Punto" },
-    { key: "entrada", label: "Entrada" },
-    { key: "almuerzo", label: "Almuerzo" },
-    { key: "regreso", label: "Regreso" },
-    { key: "salida", label: "Salida" },
-    { key: "estado", label: "Estado" },
-  ];
-
-  const totalPages = Math.max(1, Math.ceil(sortedData.length / pageSize));
   const pagedData = useMemo(() => {
     const start = (page - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);
@@ -161,27 +149,30 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
         return;
       }
 
-      const filtered = schedules
-        .filter((schedule) => schedule.usuario && schedule.puntoAtencion)
-        .map((schedule) => ({
-          id: schedule.id,
-          fecha_inicio: schedule.fecha_inicio,
-          fecha_almuerzo: schedule.fecha_almuerzo,
-          fecha_regreso: schedule.fecha_regreso,
-          fecha_salida: schedule.fecha_salida,
-          ubicacion_inicio: schedule.ubicacion_inicio,
-          ubicacion_salida: schedule.ubicacion_salida,
-          estado: schedule.estado,
-          usuario: {
-            id: schedule.usuario!.id,
-            nombre: schedule.usuario!.nombre,
-            username: schedule.usuario!.username,
+      const filtered: ActiveSchedule[] = schedules.flatMap((schedule) => {
+        if (!schedule.usuario || !schedule.puntoAtencion) return [];
+        return [
+          {
+            id: schedule.id,
+            fecha_inicio: schedule.fecha_inicio,
+            fecha_almuerzo: schedule.fecha_almuerzo,
+            fecha_regreso: schedule.fecha_regreso,
+            fecha_salida: schedule.fecha_salida,
+            ubicacion_inicio: schedule.ubicacion_inicio,
+            ubicacion_salida: schedule.ubicacion_salida,
+            estado: schedule.estado,
+            usuario: {
+              id: schedule.usuario.id,
+              nombre: schedule.usuario.nombre,
+              username: schedule.usuario.username,
+            },
+            puntoAtencion: {
+              id: schedule.puntoAtencion.id,
+              nombre: schedule.puntoAtencion.nombre,
+            },
           },
-          puntoAtencion: {
-            id: schedule.puntoAtencion!.id,
-            nombre: schedule.puntoAtencion!.nombre,
-          },
-        })) as ActiveSchedule[];
+        ];
+      });
 
       setActiveSchedules(filtered);
 
@@ -385,7 +376,7 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
         </div>
       </div>
 
-      {activeSchedules.length === 0 ? (
+      {filteredData.length === 0 ? (
         <Card>
           <CardContent className="flex items-center justify-center h-32">
             <div className="text-center">
@@ -399,7 +390,7 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
       ) : (
         <>
           <div className="grid gap-4">
-            {activeSchedules.map((schedule) => (
+            {pagedData.map((schedule) => (
               <Card key={schedule.id} className="overflow-hidden">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">

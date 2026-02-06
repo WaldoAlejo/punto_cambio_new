@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import axios from "axios";
 import axiosInstance from "@/services/axiosInstance";
 import { useAuth } from "@/hooks/useAuth";
 import { useConfirmationDialog } from "@/hooks/useConfirmationDialog";
@@ -16,6 +17,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v === "object";
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data;
+    if (isRecord(data)) {
+      const err = data.error;
+      const msg = data.message;
+      if (typeof err === "string" && err.trim()) return err;
+      if (typeof msg === "string" && msg.trim()) return msg;
+    }
+    return error.message || fallback;
+  }
+
+  return error instanceof Error ? error.message : fallback;
+};
 
 interface PuntoAtencion {
   id: string;
@@ -133,7 +152,7 @@ export default function ServiciosExternosAdmin() {
     }
   };
 
-  const obtenerMovimientos = async () => {
+  const obtenerMovimientos = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -158,7 +177,7 @@ export default function ServiciosExternosAdmin() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filtros]);
 
   const obtenerSaldos = async () => {
     try {
@@ -245,11 +264,9 @@ export default function ServiciosExternosAdmin() {
 
         // Recargar datos
         await Promise.all([obtenerMovimientos(), obtenerSaldos()]);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error al crear movimiento:", error);
-        const mensaje =
-          error.response?.data?.error || "Error al crear el movimiento";
-        toast.error(mensaje);
+        toast.error(getErrorMessage(error, "Error al crear el movimiento"));
       } finally {
         setSaving(false);
       }
@@ -313,11 +330,9 @@ export default function ServiciosExternosAdmin() {
           obtenerHistorialAsignaciones(),
           obtenerSaldos(),
         ]);
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Error al asignar saldo:", error);
-        const mensaje =
-          error.response?.data?.error || "Error al asignar el saldo";
-        toast.error(mensaje);
+        toast.error(getErrorMessage(error, "Error al asignar el saldo"));
       } finally {
         setLoadingAsignaciones((prev) => ({ ...prev, [key]: false }));
       }
@@ -337,7 +352,7 @@ export default function ServiciosExternosAdmin() {
     if (esAdmin) {
       obtenerMovimientos();
     }
-  }, [filtros, esAdmin]);
+  }, [esAdmin, obtenerMovimientos]);
 
   if (!esAdmin) {
     return (

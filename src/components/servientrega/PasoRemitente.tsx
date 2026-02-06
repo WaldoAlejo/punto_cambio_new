@@ -31,7 +31,7 @@ export default function PasoRemitente({
   onNext,
 }: PasoRemitenteProps) {
   // Catálogo oficial de ciudades (Servientrega)
-  const [ciudadesCanon, setCiudadesCanon] = useState<CiudadCanon[]>([]);
+  const [_ciudadesCanon, setCiudadesCanon] = useState<CiudadCanon[]>([]);
   const [cargandoCiudades, setCargandoCiudades] = useState(true);
 
   // Usa SIEMPRE ciudad/provincia del punto de atención (validada contra catálogo)
@@ -108,8 +108,8 @@ export default function PasoRemitente({
         if (match) {
           setFormData((prev) => ({
             ...prev,
-            ciudad: match!.ciudad,
-            provincia: match!.provincia,
+            ciudad: match.ciudad,
+            provincia: match.provincia,
             pais: "ECUADOR",
           }));
           setCiudadValida(true);
@@ -137,7 +137,7 @@ export default function PasoRemitente({
     };
 
     loadCiudades();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [selectedPoint?.ciudad, selectedPoint?.provincia]);
 
   // 2) Búsqueda predictiva de remitente
@@ -155,7 +155,7 @@ export default function PasoRemitente({
     }
   }, [cedulaQuery]);
 
-  const seleccionarRemitente = (rem: any) => {
+  const seleccionarRemitente = (rem: Remitente) => {
     setFormData((prev) => ({
       ...prev,
       identificacion: rem.cedula || rem.identificacion || "",

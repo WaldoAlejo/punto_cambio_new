@@ -52,6 +52,25 @@ const TIPOS: { value: "" | TipoMovimiento; label: string }[] = [
   { value: "EGRESO", label: "Egreso" },
 ];
 
+const extractErrorMessage = (err: unknown): string => {
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object") {
+    const rec = err as Record<string, unknown>;
+    const friendly = rec.friendlyMessage;
+    if (typeof friendly === "string" && friendly.trim()) return friendly;
+    const msg = rec.message;
+    if (typeof msg === "string" && msg.trim()) return msg;
+  }
+  return "";
+};
+
+const isServicioExterno = (v: string): v is ServicioExterno =>
+  SERVICIOS.some((s) => s.value !== "" && s.value === v);
+
+const isTipoMovimiento = (v: string): v is TipoMovimiento =>
+  v === "INGRESO" || v === "EGRESO";
+
 export default function ServiciosExternosHistory() {
   const { user } = useAuth();
   const pointId = user?.punto_atencion_id || null;
@@ -72,9 +91,11 @@ export default function ServiciosExternosHistory() {
     if (!pointId) return;
     setLoading(true);
     try {
+      const servicioParam: ServicioExterno | undefined = servicio || undefined;
+      const tipoParam: TipoMovimiento | undefined = tipo || undefined;
       const resp = await listarMovimientosServiciosExternos(pointId, {
-        servicio: (servicio || undefined) as any,
-        tipo_movimiento: (tipo || undefined) as any,
+        servicio: servicioParam,
+        tipo_movimiento: tipoParam,
         desde: desde || undefined,
         hasta: hasta || undefined,
         limit: 100,
@@ -104,7 +125,11 @@ export default function ServiciosExternosHistory() {
         <div>
           <label className="text-xs md:text-sm font-medium">Servicio/Categoría</label>
           <Select
-            onValueChange={(v) => setServicio((v === "ALL" ? "" : v) as any)}
+            onValueChange={(v) => {
+              if (v === "ALL") return setServicio("");
+              if (isServicioExterno(v)) return setServicio(v);
+              setServicio("");
+            }}
             defaultValue="ALL"
           >
             <SelectTrigger className="mt-1 h-9">
@@ -123,7 +148,11 @@ export default function ServiciosExternosHistory() {
         <div>
           <label className="text-xs md:text-sm font-medium">Tipo</label>
           <Select
-            onValueChange={(v) => setTipo((v === "ALL" ? "" : v) as any)}
+            onValueChange={(v) => {
+              if (v === "ALL") return setTipo("");
+              if (isTipoMovimiento(v)) return setTipo(v);
+              setTipo("");
+            }}
             defaultValue="ALL"
           >
             <SelectTrigger className="mt-1 h-9">
@@ -198,7 +227,7 @@ export default function ServiciosExternosHistory() {
                   })}
                 </td>
                 <td className="p-2">
-                  {SERVICIOS.find((s) => s.value === (it.servicio as any))
+                  {SERVICIOS.find((s) => s.value === it.servicio)
                     ?.label || it.servicio}
                 </td>
                 <td className="p-2">{it.tipo_movimiento}</td>
@@ -232,11 +261,9 @@ export default function ServiciosExternosHistory() {
                                   resp?.error || "No se pudo eliminar"
                                 );
                               }
-                            } catch (e: any) {
+                            } catch (e: unknown) {
                               toast.error(
-                                e?.friendlyMessage ||
-                                  e?.message ||
-                                  "Error de conexión"
+                                extractErrorMessage(e) || "Error de conexión"
                               );
                             }
                           },

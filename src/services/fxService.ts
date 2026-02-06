@@ -38,6 +38,14 @@ function round2(n: number) {
   return Math.round(n * 100) / 100;
 }
 
+type PasoCambio = {
+  descripcion: string;
+  monto: number;
+  moneda: string;
+  tasa: number;
+  comportamiento: ComportamientoCalculo;
+};
+
 /**
  * Calcula el cambio respetando el comportamiento por moneda en cada pierna:
  *  - Pierna 1 (Origen→Base): usar comportamiento_compra de la moneda ORIGEN con tasa de COMPRA[origen]
@@ -225,7 +233,7 @@ export function calcularCambioPuro({
   if (!tasasD || !(tasasD.compra > 0) || !(tasasD.venta > 0))
     throw new Error(`Faltan tasas para ${D}.`);
 
-  const pasos: any[] = [];
+  const pasos: PasoCambio[] = [];
 
   if (O === B) {
     const out = apply(montoOrigen, tasasD.venta, destinoCfg.venta);

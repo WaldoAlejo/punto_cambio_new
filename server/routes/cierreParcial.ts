@@ -1,5 +1,6 @@
 // server/routes/cierreParcial.ts
 import express from "express";
+import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
@@ -12,6 +13,8 @@ type DetalleReq = {
   saldo_apertura: number;
   saldo_cierre: number;
   conteo_fisico: number;
+  bancos_teorico?: number;
+  conteo_bancos?: number;
   billetes: number;
   monedas: number; // alias frontend
   ingresos_periodo?: number;
@@ -163,9 +166,14 @@ router.post("/parcial", authenticateToken, async (req, res) => {
           const saldo_apertura = asNumber(d.saldo_apertura);
           const saldo_cierre = asNumber(d.saldo_cierre);
           const conteo_fisico = asNumber(d.conteo_fisico);
+          const bancos_teorico = asNumber(d.bancos_teorico);
+          const conteo_bancos = asNumber(d.conteo_bancos);
           const billetes = asNumber(d.billetes);
           const monedas_fisicas = asNumber(d.monedas);
           const diferencia = Number((conteo_fisico - saldo_cierre).toFixed(2));
+          const diferencia_bancos = Number(
+            (conteo_bancos - bancos_teorico).toFixed(2)
+          );
 
           return {
             cuadre_id: cabecera.id,
@@ -173,6 +181,9 @@ router.post("/parcial", authenticateToken, async (req, res) => {
             saldo_apertura,
             saldo_cierre,
             conteo_fisico,
+            bancos_teorico,
+            conteo_bancos,
+            diferencia_bancos,
             billetes,
             monedas_fisicas,
             diferencia,
@@ -222,7 +233,7 @@ router.get("/pendientes", authenticateToken, async (req, res) => {
 
     // Por seguridad, mostrar solo los parciales del punto del usuario.
     // TODO: Si hay roles ADMIN/SUPER, permitir filtrar por ?pointId para ver otros puntos.
-    const where: any = {
+    const where: Prisma.CuadreCajaWhereInput = {
       fecha: { gte: hoyGte, lt: hoyLt },
       estado: "PARCIAL",
     };

@@ -176,10 +176,11 @@ export default function ServiciosExternosForm({
         numero_referencia: "",
         descripcion: "",
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Error",
-        description: e?.message || "Error al registrar movimiento",
+        description:
+          e instanceof Error ? e.message : "Error al registrar movimiento",
         variant: "destructive",
       });
     }

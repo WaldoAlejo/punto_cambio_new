@@ -1,5 +1,5 @@
 import { axiosInstance } from "./axiosInstance";
-import type { ApiResponse, Permiso, PermisoTipo, EstadoPermiso } from "@/types";
+import type { Permiso, PermisoTipo, EstadoPermiso } from "@/types";
 
 export interface CreatePermisoData {
   tipo: PermisoTipo;

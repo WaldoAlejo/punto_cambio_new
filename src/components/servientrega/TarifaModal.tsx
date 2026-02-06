@@ -110,12 +110,22 @@ async function fetchPuntos(): Promise<PuntoAtencion[]> {
     return puntosCache.list;
   }
   const { data } = await axiosInstance.get("/servientrega/remitente/puntos");
-  const list: PuntoAtencion[] = (data?.puntos || []).map((p: any) => ({
-    id: p.id,
-    nombre: p.nombre,
-    ciudad: p.ciudad,
-    provincia: p.provincia,
-  }));
+  const list: PuntoAtencion[] = (data?.puntos || []).map((p: unknown) => {
+    const rec = (p && typeof p === "object" ? (p as Record<string, unknown>) : {}) as Record<
+      string,
+      unknown
+    >;
+
+    const ciudad = rec["ciudad"];
+    const provincia = rec["provincia"];
+
+    return {
+      id: String(rec["id"] ?? ""),
+      nombre: String(rec["nombre"] ?? ""),
+      ciudad: typeof ciudad === "string" ? ciudad : undefined,
+      provincia: typeof provincia === "string" ? provincia : undefined,
+    };
+  });
   puntosCache.list = list;
   puntosCache.at = now;
   return list;

@@ -13,6 +13,18 @@ import { exchangeService } from "@/services/exchangeService";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { CambioDivisa, Moneda } from "../../types";
 
+type CambioDivisaView = CambioDivisa & {
+  cliente?: string | null;
+  datos_cliente?: {
+    nombre?: string | null;
+    apellido?: string | null;
+  } | null;
+  tasa_cambio_billetes?: number | string | null;
+  tasa_cambio_monedas?: number | string | null;
+  puntoAtencion?: { nombre?: string | null } | null;
+  usuario?: { nombre?: string | null } | null;
+};
+
 interface ExchangeListProps {
   exchanges: CambioDivisa[];
   currencies: Moneda[];
@@ -30,6 +42,11 @@ const ExchangeList = ({
   showPointName = false,
   showUserName = false,
 }: ExchangeListProps) => {
+  const { user } = useAuth();
+  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
+
+  const canDelete = user?.rol === "ADMIN" || user?.rol === "SUPER_USUARIO";
+
   if (!exchanges || !currencies) {
     return (
       <Card>
@@ -62,29 +79,31 @@ const ExchangeList = ({
   };
 
   // Acepta Date | string | number | null | undefined
-  const formatFecha = (value?: Date | string | number | null) => {
+  const formatFecha = (value?: unknown) => {
     if (value == null) return "Sin fecha";
-    const d = value instanceof Date ? value : new Date(value);
+    const d = value instanceof Date ? value : new Date(String(value));
     if (isNaN(d.getTime())) return "Sin fecha";
     return d.toLocaleString();
   };
 
   const getClienteNombre = (ex: CambioDivisa): string => {
     // En /exchanges (GET) viene `cliente` (string). En la creación puede venir `datos_cliente`.
+    const view = ex as unknown as CambioDivisaView;
     const nombreFromDatos =
-      (ex as any).datos_cliente &&
+      view.datos_cliente &&
       [
-        ((ex as any).datos_cliente?.nombre as string) || "",
-        ((ex as any).datos_cliente?.apellido as string) || "",
+        view.datos_cliente?.nombre || "",
+        view.datos_cliente?.apellido || "",
       ]
         .filter(Boolean)
         .join(" ");
-    return ((ex as any).cliente as string) || nombreFromDatos || "Cliente";
+    return view.cliente || nombreFromDatos || "Cliente";
   };
 
   const getTasaTexto = (ex: CambioDivisa): string => {
-    const tb = Number((ex as any).tasa_cambio_billetes || 0);
-    const tm = Number((ex as any).tasa_cambio_monedas || 0);
+    const view = ex as unknown as CambioDivisaView;
+    const tb = Number(view.tasa_cambio_billetes || 0);
+    const tm = Number(view.tasa_cambio_monedas || 0);
     if (tb > 0 && tm > 0) return `B: ${tb} | M: ${tm}`;
     if (tb > 0) return `Billetes: ${tb}`;
     if (tm > 0) return `Monedas: ${tm}`;
@@ -103,11 +122,6 @@ const ExchangeList = ({
     return `${base} bg-gray-50 text-gray-700 border-gray-200`;
   };
 
-  const { user } = useAuth();
-
-  const canDelete = user?.rol === "ADMIN" || user?.rol === "SUPER_USUARIO";
-  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
-
   const handleDelete = (id: string) => {
     if (!canDelete) return;
     showConfirmation(
@@ -119,7 +133,9 @@ const ExchangeList = ({
           onDeleted?.(id);
           try {
             window.dispatchEvent(new CustomEvent("saldosUpdated"));
-          } catch {}
+          } catch {
+            // noop: CustomEvent may be unavailable in some runtimes
+          }
           toast.success("Cambio eliminado correctamente");
         } else {
           toast.error(error || "No se pudo eliminar");
@@ -144,11 +160,14 @@ const ExchangeList = ({
           </div>
         ) : (
           <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-            {exchanges.map((exchange) => (
-              <div
-                key={exchange.id}
-                className="border rounded-lg p-3 bg-muted/20"
-              >
+            {exchanges.map((exchange) => {
+              const view = exchange as unknown as CambioDivisaView;
+
+              return (
+                <div
+                  key={exchange.id}
+                  className="border rounded-lg p-3 bg-muted/20"
+                >
                 <div className="flex justify-between items-start mb-2 gap-2">
                   <div className="flex items-center gap-2">
                     <span
@@ -170,7 +189,7 @@ const ExchangeList = ({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground shrink-0">
-                      {formatFecha(exchange.fecha as any)}
+                      {formatFecha(exchange.fecha)}
                     </span>
                     {canDelete && (
                       <Button
@@ -205,15 +224,14 @@ const ExchangeList = ({
                   <div className="flex justify-between items-center pt-1">
                     <div className="flex items-center gap-3 text-muted-foreground">
                       <span>Tasa: {getTasaTexto(exchange)}</span>
-                      {showPointName &&
-                        (exchange as any).puntoAtencion?.nombre && (
+                      {showPointName && view.puntoAtencion?.nombre && (
                           <span className="inline-flex items-center text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200">
-                            Punto: {(exchange as any).puntoAtencion.nombre}
+                            Punto: {view.puntoAtencion.nombre}
                           </span>
                         )}
-                      {showUserName && (exchange as any).usuario?.nombre && (
+                      {showUserName && view.usuario?.nombre && (
                         <span className="inline-flex items-center text-xs px-2 py-0.5 bg-slate-50 text-slate-700 rounded border border-slate-200">
-                          Operador: {(exchange as any).usuario.nombre}
+                          Operador: {view.usuario.nombre}
                         </span>
                       )}
                     </div>
@@ -240,8 +258,9 @@ const ExchangeList = ({
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
       </CardContent>

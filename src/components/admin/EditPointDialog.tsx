@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PuntoAtencion, Agencia } from "../../types";
+import { PuntoAtencion } from "../../types";
 import { pointService } from "../../services/pointService";
 import { AgenciaSelector } from "@/components/ui/AgenciaSelector";
 import { toast } from "@/hooks/use-toast";

@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Send, X } from "lucide-react";
 import { User, PuntoAtencion, Moneda } from "../../types";
 import { transferService } from "../../services/transferService";
 import { currencyService } from "../../services/currencyService";

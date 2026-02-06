@@ -47,7 +47,7 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const { pointId } = req.params;
-      const { limit = 50, moneda_id } = req.query as {
+      const { limit = 50, moneda_id, date, from, to } = req.query as {
         limit?: string;
         moneda_id?: string;
         date?: string;
@@ -58,10 +58,6 @@ router.get(
       // Rango de fechas (zona GYE) por día específico o rango
       let gte: Date;
       let lt: Date;
-      const date = (req.query as any).date as string | undefined;
-      const from = (req.query as any).from as string | undefined;
-      const to = (req.query as any).to as string | undefined;
-
       if (from || to) {
         const fromStr = (from || (to as string)) as string;
         const toStr = (to || (from as string)) as string;
@@ -380,6 +376,7 @@ router.post(
               saldoNuevo: nuevaCantidad,
               tipoReferencia: tipoRef,
               referenciaId: referencia_id || undefined,
+              saldoBucket: "CAJA",
               descripcion: descripcion || undefined,
               usuarioId: usuario_id,
             },

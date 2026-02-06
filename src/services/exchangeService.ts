@@ -1,4 +1,4 @@
-import { apiService } from "./apiService";
+import { apiService, ApiError } from "./apiService";
 import { CambioDivisa } from "../types";
 
 export interface CreateExchangeData {
@@ -85,6 +85,46 @@ const toISOIfDate = (v?: string | Date | null): string | null => {
   return s ? new Date(s).toISOString() : null;
 };
 
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v === "object";
+
+const extractServerMessageFromPayload = (payload: unknown): string => {
+  if (!isRecord(payload)) return "";
+  const msg = payload.message;
+  const err = payload.error;
+  const details = payload.details;
+  if (typeof err === "string" && err.trim()) return err;
+  if (typeof msg === "string" && msg.trim()) return msg;
+  if (typeof details === "string" && details.trim()) return details;
+  return "";
+};
+
+const extractErrorMessage = (error: unknown): string => {
+  if (typeof error === "string") return error;
+  if (error instanceof Error && error.message) return error.message;
+  if (isRecord(error)) {
+    const msg = error.message;
+    if (typeof msg === "string" && msg.trim()) return msg;
+  }
+  return "";
+};
+
+const extractStatusAndServerMessage = (
+  error: unknown
+): { status?: number; serverMsg: string } => {
+  if (error instanceof ApiError) {
+    return { status: error.status, serverMsg: extractServerMessageFromPayload(error.payload) };
+  }
+  if (isRecord(error)) {
+    const status = error.status;
+    const payload = error.payload;
+    const statusNum = typeof status === "number" ? status : undefined;
+    const serverMsg = extractServerMessageFromPayload(payload);
+    return { status: statusNum, serverMsg };
+  }
+  return { status: undefined, serverMsg: "" };
+};
+
 /**
  * Sanitiza el payload antes de enviarlo al backend para evitar rechazos por:
  * - strings vacíos en campos opcionales (se mandan como null)
@@ -161,12 +201,13 @@ export const exchangeService = {
           error: response?.error || "Error al crear el cambio de divisa",
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating exchange:", error);
       return {
         exchange: null,
         error:
-          error?.message || "Error de conexión al crear el cambio de divisa",
+          extractErrorMessage(error) ||
+          "Error de conexión al crear el cambio de divisa",
       };
     }
   },
@@ -195,11 +236,11 @@ export const exchangeService = {
           error: response?.error || "Error al obtener los cambios de divisa",
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching exchanges:", error);
       return {
         exchanges: [],
-        error: error?.message || "Error de conexión al obtener cambios",
+        error: extractErrorMessage(error) || "Error de conexión al obtener cambios",
       };
     }
   },
@@ -226,12 +267,13 @@ export const exchangeService = {
           error: response?.error || "Error al obtener los cambios del punto",
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching exchanges by point:", error);
       return {
         exchanges: [],
         error:
-          error?.message || "Error de conexión al obtener cambios del punto",
+          extractErrorMessage(error) ||
+          "Error de conexión al obtener cambios del punto",
       };
     }
   },
@@ -254,12 +296,12 @@ export const exchangeService = {
             "Error al obtener los cambios pendientes del punto",
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching pending exchanges by point:", error);
       return {
         exchanges: [],
         error:
-          error?.message ||
+          extractErrorMessage(error) ||
           "Error de conexión al obtener cambios pendientes del punto",
       };
     }
@@ -281,12 +323,12 @@ export const exchangeService = {
           error: response?.error || "Error al obtener los cambios parciales",
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching partial exchanges:", error);
       return {
         exchanges: [],
         error:
-          error?.message ||
+          extractErrorMessage(error) ||
           "Error de conexión al obtener cambios parciales",
       };
     }
@@ -308,11 +350,11 @@ export const exchangeService = {
           error: response?.error || "Error al cerrar el cambio pendiente",
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error closing pending exchange:", error);
       return {
         exchange: null,
-        error: error?.message || "Error de conexión al cerrar el cambio",
+        error: extractErrorMessage(error) || "Error de conexión al cerrar el cambio",
       };
     }
   },
@@ -366,11 +408,12 @@ export const exchangeService = {
           error: response?.error || "Error al completar el cambio",
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error completing exchange:", error);
       return {
         exchange: null,
-        error: error?.message || "Error de conexión al completar el cambio",
+        error:
+          extractErrorMessage(error) || "Error de conexión al completar el cambio",
       };
     }
   },
@@ -398,11 +441,11 @@ export const exchangeService = {
           error: response?.error || "Error al buscar clientes",
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error searching customers:", error);
       return {
         clientes: [],
-        error: error?.message || "Error de conexión al buscar clientes",
+        error: extractErrorMessage(error) || "Error de conexión al buscar clientes",
       };
     }
   },
@@ -415,28 +458,24 @@ export const exchangeService = {
         success: boolean;
         error?: string;
       }>(`/exchanges/${encodeURIComponent(id)}`);
-      if (resp && (resp as any).success) {
+      if (resp?.success) {
         return { success: true, error: null };
       }
       return {
         success: false,
-        error: (resp as any)?.error || "No se pudo eliminar",
+        error: resp?.error || "No se pudo eliminar",
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error deleting exchange:", error);
-      const status = typeof error?.status === "number" ? error.status : undefined;
-      const serverMsg =
-        error?.payload?.error ||
-        error?.payload?.message ||
-        error?.payload?.details ||
-        error?.message ||
-        "";
+      const { status, serverMsg } = extractStatusAndServerMessage(error);
+      const message = extractErrorMessage(error);
+      const mergedMsg = serverMsg || message;
 
       // Mapear 400 a mensaje amigable específico
       if (status === 400) {
         if (
           /Solo se pueden eliminar (cambios|movimientos) del día actual/i.test(
-            serverMsg
+            mergedMsg
           )
         ) {
           return {
@@ -444,19 +483,19 @@ export const exchangeService = {
             error: "Solo puedes eliminar registros del día de hoy",
           };
         }
-        return { success: false, error: serverMsg || "Solicitud inválida" };
+        return { success: false, error: mergedMsg || "Solicitud inválida" };
       }
 
       if (status === 401 || status === 403) {
         return {
           success: false,
-          error: serverMsg || "No autorizado para eliminar este cambio",
+          error: mergedMsg || "No autorizado para eliminar este cambio",
         };
       }
 
       // Para 5xx u otros, preferir mensaje del servidor si existe
-      if (serverMsg) {
-        return { success: false, error: serverMsg };
+      if (mergedMsg) {
+        return { success: false, error: mergedMsg };
       }
 
       return { success: false, error: "Error de conexión" };

@@ -12,7 +12,7 @@ const router = express.Router();
 router.get("/:pointId", authenticateToken, async (req, res) => {
   try {
     const { pointId } = req.params;
-    const reconciliar = String((req.query as any)?.reconciliar ?? "").toLowerCase();
+    const reconciliar = String(req.query["reconciliar"] ?? "").toLowerCase();
     const usarReconciliacion = reconciliar === "1" || reconciliar === "true";
 
     const saldos = await prisma.saldo.findMany({
@@ -70,7 +70,7 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
 router.get("/:pointId/:monedaId", authenticateToken, async (req, res) => {
   try {
     const { pointId, monedaId } = req.params;
-    const reconciliar = String((req.query as any)?.reconciliar ?? "").toLowerCase();
+    const reconciliar = String(req.query["reconciliar"] ?? "").toLowerCase();
     const usarReconciliacion = reconciliar === "1" || reconciliar === "true";
 
     const saldo = await prisma.saldo.findUnique({

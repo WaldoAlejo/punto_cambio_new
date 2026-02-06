@@ -90,19 +90,7 @@ const ExchangeForm = ({
     initialData?.amountMonedas || ""
   );
 
-  // Validación de monedas cargadas
-  if (!currencies || currencies.length < 2) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Datos del Cambio</CardTitle>
-          <CardDescription>
-            Debe haber al menos 2 monedas registradas para operar un cambio.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
+  const hasEnoughCurrencies = Array.isArray(currencies) && currencies.length >= 2;
 
   const getCurrencyName = (currencyId: string) => {
     const currency = currencies.find((c) => c.id === currencyId);
@@ -186,6 +174,20 @@ const ExchangeForm = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [amountBilletesNum, amountMonedasNum]);
+
+  // Validación de monedas cargadas (después de hooks para no romper el orden)
+  if (!hasEnoughCurrencies) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Datos del Cambio</CardTitle>
+          <CardDescription>
+            Debe haber al menos 2 monedas registradas para operar un cambio.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   const handleSubmit = () => {
     if (!fromCurrency || !toCurrency) {

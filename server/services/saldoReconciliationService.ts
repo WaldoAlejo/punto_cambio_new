@@ -155,11 +155,17 @@ export const saldoReconciliationService = {
         ? Number(saldoInicial.cantidad_inicial)
         : 0;
 
+      // Si existe saldo inicial activo, ese registro actúa como "línea base".
+      // Para evitar doble conteo histórico cuando se reasigna saldo inicial,
+      // solo se deben considerar movimientos posteriores a esa fecha.
+      const fechaCorte = saldoInicial?.fecha_asignacion ?? null;
+
       // 2. Obtener TODOS los movimientos (sin filtrar por tipo)
       const todosMovimientos = await prisma.movimientoSaldo.findMany({
         where: {
           punto_atencion_id: puntoAtencionId,
           moneda_id: monedaId,
+          ...(fechaCorte ? { fecha: { gte: fechaCorte } } : {}),
         },
         select: {
           monto: true,
@@ -174,7 +180,8 @@ export const saldoReconciliationService = {
       // 3. Filtrar movimientos bancarios (igual que en los scripts)
       const movimientos = todosMovimientos.filter((mov) => {
         const desc = mov.descripcion?.toLowerCase() || "";
-        return !desc.includes("bancos");
+        // Movimientos etiquetados como banco/bancos NO afectan caja
+        return !desc.includes("bancos") && !desc.includes("banco");
       });
 
       // 4. Calcular saldo basado en movimientos

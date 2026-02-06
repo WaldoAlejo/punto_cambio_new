@@ -1,5 +1,11 @@
 import { authService } from "@/services/authService";
 
+const devLog: (...args: Parameters<typeof console.warn>) => void = (...args) => {
+  if (import.meta.env.DEV) {
+    console.warn(...args);
+  }
+};
+
 // Configuración base para las llamadas a la API
 export const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://35.238.95.118:3001/api";
@@ -7,7 +13,7 @@ export const API_BASE_URL =
 export const apiClient = {
   async get<TResponse = unknown>(endpoint: string): Promise<TResponse | null> {
     try {
-      console.log(`Making GET request to: ${API_BASE_URL}${endpoint}`);
+      devLog(`Making GET request to: ${API_BASE_URL}${endpoint}`);
 
       const token = authService.getStoredToken();
       const headers: Record<string, string> = {
@@ -29,7 +35,7 @@ export const apiClient = {
       }
 
       const data = await response.json();
-      console.log(`Response for ${endpoint}:`, data);
+      devLog(`Response for ${endpoint}:`, data);
       return data;
     } catch (error) {
       console.error(`Error in GET ${endpoint}:`, error);
@@ -42,7 +48,7 @@ export const apiClient = {
     data: TRequest
   ): Promise<TResponse | null> {
     try {
-      console.log(`Making POST request to: ${API_BASE_URL}${endpoint}`, data);
+      devLog(`Making POST request to: ${API_BASE_URL}${endpoint}`, data);
 
       const token = authService.getStoredToken();
       const headers: Record<string, string> = {
@@ -66,7 +72,7 @@ export const apiClient = {
       }
 
       const responseData = await response.json();
-      console.log(`Response for POST ${endpoint}:`, responseData);
+      devLog(`Response for POST ${endpoint}:`, responseData);
       return responseData;
     } catch (error) {
       console.error(`Error in POST ${endpoint}:`, error);

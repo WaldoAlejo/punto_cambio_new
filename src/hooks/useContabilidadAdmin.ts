@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { User, SaldoMoneda, SaldoConsolidado, MovimientoSaldo } from "@/types";
+import { User, SaldoConsolidado, MovimientoSaldo } from "@/types";
 import { movimientosContablesService } from "@/services/movimientosContablesService";
 import { pointService } from "@/services/pointService";
 
@@ -15,6 +15,13 @@ interface MovimientoConsolidado extends MovimientoSaldo {
 export const useContabilidadAdmin = ({
   user: _user,
 }: UseContabilidadAdminProps) => {
+  type AdminPoint = { id: string; nombre: string };
+
+  const isAdminPoint = useCallback((value: unknown): value is AdminPoint => {
+    if (typeof value !== "object" || value === null) return false;
+    const record = value as Record<string, unknown>;
+    return typeof record.id === "string" && typeof record.nombre === "string";
+  }, []);
   const [saldosConsolidados, setSaldosConsolidados] = useState<
     SaldoConsolidado[]
   >([]);
@@ -52,7 +59,7 @@ export const useContabilidadAdmin = ({
       }
 
       // Obtener saldos de cada punto
-      const saldosPromises = points.map(async (punto: any) => {
+      const saldosPromises = points.filter(isAdminPoint).map(async (punto) => {
         const { saldos, error: saldosError } =
           await movimientosContablesService.getSaldosActualesPorPunto(punto.id);
 
@@ -75,14 +82,14 @@ export const useContabilidadAdmin = ({
       const saldosConsolidados = resultados.flat();
 
       setSaldosConsolidados(saldosConsolidados);
-    } catch (err) {
+    } catch {
       const errorMessage = "Error inesperado al cargar saldos consolidados";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isAdmin, isAdminPoint]);
 
   // Cargar movimientos consolidados de todos los puntos
   const cargarMovimientosConsolidados = useCallback(
@@ -144,14 +151,14 @@ export const useContabilidadAdmin = ({
         );
 
         setMovimientosConsolidados(movimientosConsolidados.slice(0, limit));
-      } catch (err) {
+      } catch {
         const errorMessage =
           "Error inesperado al cargar movimientos consolidados";
         setError(errorMessage);
         toast.error(errorMessage);
       }
     },
-    []
+    [isAdmin]
   );
 
   // Cargar datos iniciales

@@ -32,7 +32,7 @@ interface CiudadCanon {
 interface Agencia {
   nombre: string;
   codigo?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface PasoDestinatarioProps {
@@ -220,7 +220,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   }, [nombreQuery]);
 
   // 4) Seleccionar destinatario existente (homologa la ciudad si coincide en el catálogo de país actual)
-  const seleccionarDestinatario = (dest: any) => {
+  const seleccionarDestinatario = (dest: Destinatario) => {
     // Buscar match canónico en el catálogo actual
     const ciu = clean(dest.ciudad || "");
     const prov = clean(dest.provincia || "");

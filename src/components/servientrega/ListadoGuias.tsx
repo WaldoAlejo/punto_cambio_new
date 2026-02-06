@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import axiosInstance from "@/services/axiosInstance";
 import { format, isToday, parseISO, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Loading } from "@/components/ui/loading";
 import SaldoCompacto from "./SaldoCompacto";
@@ -38,7 +37,7 @@ export default function ListadoGuias() {
   const [guiaParaAnular, setGuiaParaAnular] = useState<Guia | null>(null);
   const [motivoAnulacion, setMotivoAnulacion] = useState("");
 
-  const fetchGuias = async () => {
+  const fetchGuias = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -64,7 +63,7 @@ export default function ListadoGuias() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [desde, hasta]);
 
   const handleSolicitarAnulacion = (guia: Guia) => {
     setGuiaParaAnular(guia);
@@ -144,7 +143,7 @@ export default function ListadoGuias() {
 
   useEffect(() => {
     fetchGuias();
-  }, [desde, hasta]);
+  }, [fetchGuias]);
 
   return (
     <div className="w-full max-w-7xl mx-auto mt-3 sm:mt-4 space-y-2 sm:space-y-3">

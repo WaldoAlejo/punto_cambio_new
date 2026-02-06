@@ -55,12 +55,16 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
       try {
         const u = await userService.getAllUsers();
         if (!u.error) setUsers(u.users);
-      } catch {}
+      } catch {
+        // noop: handled by empty users state
+      }
       try {
         const p = await pointService.getAllPoints();
         if (!p.error)
           setPoints(p.points.map((x) => ({ id: x.id, nombre: x.nombre })));
-      } catch {}
+      } catch {
+        // noop: handled by empty points state
+      }
     })();
   }, []);
 
@@ -142,12 +146,6 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const formatMinutes = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
   };
 
   // Exporta el informe visible a CSV (mismo comportamiento movido desde Usuarios Activos)
@@ -251,7 +249,7 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-    } catch (e) {
+    } catch {
       toast({
         title: "Error",
         description: "No se pudo exportar el informe",

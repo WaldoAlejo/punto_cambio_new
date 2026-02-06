@@ -4,7 +4,7 @@ import useCuadreCaja from "../../hooks/useCuadreCaja";
 // Alias corto para createElement
 const h = React.createElement;
 
-function n2(v?: number | any) {
+function n2(v?: unknown) {
   // Validación defensiva para evitar renderizar objetos
   const n = typeof v === "number" && Number.isFinite(v) ? v : 0;
   return n.toLocaleString(undefined, {
@@ -63,7 +63,6 @@ export default function CuadreCajaPage({ pointId }: Props) {
 
   const onRefresh = async () => {
     await refresh();
-    console.log("Datos actualizados");
   };
 
   const onChangeFecha = (val: string) => {
@@ -172,7 +171,8 @@ export default function CuadreCajaPage({ pointId }: Props) {
             id: "fecha",
             type: "date",
             value: fecha,
-            onChange: (e: any) => onChangeFecha(e.target.value),
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+              onChangeFecha(e.target.value),
             style: { width: 180, padding: "6px 8px" },
           })
         ),
@@ -202,7 +202,8 @@ export default function CuadreCajaPage({ pointId }: Props) {
           h(Input, {
             type: "checkbox",
             checked: allowMismatch,
-            onChange: (e: any) => setAllowMismatch(!!e.target.checked),
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+              setAllowMismatch(!!e.target.checked),
           }),
           "Permitir diferencia"
         ),
@@ -315,6 +316,20 @@ export default function CuadreCajaPage({ pointId }: Props) {
                     style: { padding: "8px 4px", textAlign: "right" as const },
                   },
                   "Teórico"
+                ),
+                h(
+                  TH,
+                  {
+                    style: { padding: "8px 4px", textAlign: "right" as const },
+                  },
+                  "Bancos teórico"
+                ),
+                h(
+                  TH,
+                  {
+                    style: { padding: "8px 4px", textAlign: "right" as const },
+                  },
+                  "Conteo bancos"
                 ),
                 h(
                   TH,
@@ -435,6 +450,44 @@ export default function CuadreCajaPage({ pointId }: Props) {
                             textAlign: "right" as const,
                           },
                         },
+                        n2(d.bancos_teorico)
+                      ),
+                      h(
+                        TD,
+                        {
+                          style: {
+                            padding: "8px 4px",
+                            textAlign: "right" as const,
+                          },
+                        },
+                        h(Input, {
+                          inputMode: "decimal",
+                          value:
+                            typeof d.conteo_bancos === "number" &&
+                            Number.isFinite(d.conteo_bancos)
+                              ? d.conteo_bancos
+                              : 0,
+                          onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+                            const val = parseFloat(e.target.value);
+                            updateConteo(d.moneda_id, {
+                              conteo_bancos: Number.isFinite(val) ? val : 0,
+                            });
+                          },
+                          style: {
+                            width: 120,
+                            padding: "6px 8px",
+                            textAlign: "right",
+                          },
+                        })
+                      ),
+                      h(
+                        TD,
+                        {
+                          style: {
+                            padding: "8px 4px",
+                            textAlign: "right" as const,
+                          },
+                        },
                         h(Input, {
                           inputMode: "decimal",
                           value:
@@ -442,7 +495,7 @@ export default function CuadreCajaPage({ pointId }: Props) {
                             Number.isFinite(d.conteo_fisico)
                               ? d.conteo_fisico
                               : 0,
-                          onChange: (e: any) => {
+                          onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
                             const val = parseFloat(e.target.value);
                             updateConteo(d.moneda_id, {
                               conteo_fisico: Number.isFinite(val) ? val : 0,
@@ -470,7 +523,7 @@ export default function CuadreCajaPage({ pointId }: Props) {
                             Number.isFinite(d.billetes)
                               ? d.billetes
                               : 0,
-                          onChange: (e: any) => {
+                          onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
                             const val = parseFloat(e.target.value);
                             updateConteo(d.moneda_id, {
                               billetes: Number.isFinite(val) ? val : 0,
@@ -498,7 +551,7 @@ export default function CuadreCajaPage({ pointId }: Props) {
                             Number.isFinite(d.monedas)
                               ? d.monedas
                               : 0,
-                          onChange: (e: any) => {
+                          onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
                             const val = parseFloat(e.target.value);
                             updateConteo(d.moneda_id, {
                               monedas: Number.isFinite(val) ? val : 0,
@@ -531,7 +584,7 @@ export default function CuadreCajaPage({ pointId }: Props) {
                     h(
                       TD,
                       {
-                        colSpan: 9,
+                        colSpan: 11,
                         style: {
                           padding: 24,
                           textAlign: "center" as const,
@@ -564,7 +617,8 @@ export default function CuadreCajaPage({ pointId }: Props) {
             id: "obs",
             placeholder: "Notas del cierre, incidencias, soportes…",
             value: estado.observaciones,
-            onChange: (e: any) => setObservaciones(e.target.value),
+            onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) =>
+              setObservaciones(e.target.value),
             style: { minHeight: 90, padding: "8px 10px" },
           })
         ),
@@ -868,7 +922,7 @@ export default function CuadreCajaPage({ pointId }: Props) {
                           Box,
                           { style: { color: "#6b7280", fontSize: 12 } },
                           new Date(
-                            (p as any).fecha_cierre ?? (p as any).fecha
+                            p.fecha_cierre ?? p.fecha
                           ).toLocaleString()
                         )
                       ),

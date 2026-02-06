@@ -69,8 +69,6 @@ async function cerrarJornadasAntiguas() {
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
     // Cerrar todas las jornadas antiguas
-    const ahora = new Date();
-    
     for (const jornada of jornadasAntiguas) {
       // Establecer fecha_salida al final del día en que inició
       const fechaSalida = new Date(jornada.fecha_inicio);

@@ -5,6 +5,10 @@ import getSymbolFromCurrency from 'currency-symbol-map'
 
 const prisma = new PrismaClient()
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 async function main() {
   console.log('Seed: creating unique index for principal PuntoAtencion if not exists...')
   await prisma.$executeRawUnsafe(
@@ -67,7 +71,7 @@ async function main() {
   const hashed = bcrypt.hashSync(adminPassword, 10)
 
   console.log('Seed: upserting admin user ->', adminUsername)
-  const admin = await prisma.usuario.upsert({
+  await prisma.usuario.upsert({
     where: { username: adminUsername },
     update: {
       password: hashed,
@@ -94,8 +98,9 @@ async function main() {
 
   for (let i = 0; i < codes.length; i++) {
     const code = codes[i]
-    const data = currencyCodes.code(code) as any
-    const name = (data && data.currency) || code
+    const data = currencyCodes.code(code) as unknown
+    const name =
+      (isRecord(data) && typeof data.currency === 'string' && data.currency) || code
     const symbol = getSymbolFromCurrency(code) || code
 
     await prisma.moneda.upsert({

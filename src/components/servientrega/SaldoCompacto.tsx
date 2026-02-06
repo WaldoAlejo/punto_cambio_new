@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axiosInstance from "@/services/axiosInstance";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,7 +34,7 @@ export default function SaldoCompacto({
   const [loading, setLoading] = useState(false);
 
   // ✅ Obtener saldo disponible
-  const obtenerSaldo = async () => {
+  const obtenerSaldo = useCallback(async () => {
     if (!puntoAtencionId) return;
 
     setLoading(true);
@@ -61,7 +61,7 @@ export default function SaldoCompacto({
     } finally {
       setLoading(false);
     }
-  };
+  }, [puntoAtencionId]);
 
   // ✅ Solicitar saldo rápido
   const solicitarSaldoRapido = async () => {
@@ -73,14 +73,14 @@ export default function SaldoCompacto({
         creado_por: "Operador",
       });
       toast.success("Solicitud de saldo enviada");
-    } catch (error) {
+    } catch {
       toast.error("Error al solicitar saldo");
     }
   };
 
   useEffect(() => {
     obtenerSaldo();
-  }, [puntoAtencionId]);
+  }, [obtenerSaldo]);
 
   if (!saldo) return null;
 

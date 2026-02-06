@@ -46,8 +46,6 @@ router.get(
 
       const rol = req.user?.rol || "";
       const isOperador = rol === "OPERADOR";
-      const isAdminLike =
-        rol === "ADMIN" || rol === "SUPER_USUARIO" || rol === "ADMINISTRATIVO";
 
       // Base: puntos activos
       const whereOperador = {

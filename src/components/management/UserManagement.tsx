@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,7 +31,7 @@ import { userService } from "../../services/userService";
 import { pointService } from "../../services/pointService";
 import EditUserDialog from "../../components/admin/EditUserDialog";
 import ResetPasswordDialog from "../../components/admin/ResetPasswordDialog";
-import { Edit, Key, UserPlus, UserX, UserCheck } from "lucide-react";
+import { Edit, Key, UserX, UserCheck } from "lucide-react";
 import { useAuth } from "../../hooks/useAuth";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
@@ -40,7 +40,7 @@ export const UserManagement = () => {
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
 
   const [users, setUsers] = useState<Usuario[]>([]);
-  const [points, setPoints] = useState<PuntoAtencion[]>([]);
+  const [_points, setPoints] = useState<PuntoAtencion[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,12 +62,12 @@ export const UserManagement = () => {
   const pointsCacheRef = useRef<PuntoAtencion[] | null>(null);
   const mountedRef = useRef<boolean>(false);
 
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!mountedRef.current) return;
     setIsLoading(true);
     setError(null);
+
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
     try {
       // 1) Users (usar cache si existe)
@@ -100,7 +100,7 @@ export const UserManagement = () => {
     } finally {
       if (mountedRef.current) setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -108,7 +108,7 @@ export const UserManagement = () => {
     return () => {
       mountedRef.current = false;
     };
-  }, []);
+  }, [loadData]);
 
   const [showPointModal, setShowPointModal] = useState(false);
 
@@ -517,7 +517,7 @@ export const UserManagement = () => {
           </CardContent>
         </Card>
         {/* Diálogos */}
-        {editingUser && (
+        {editingUser && currentUser && (
           <EditUserDialog
             user={editingUser}
             isOpen={true}
@@ -527,7 +527,7 @@ export const UserManagement = () => {
               pointsCacheRef.current = null;
               loadData();
             }}
-            currentUser={currentUser!}
+            currentUser={currentUser}
           />
         )}
         {resetPasswordUser && (

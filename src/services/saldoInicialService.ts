@@ -10,17 +10,37 @@ type ApiFail = {
   code?: string;
 };
 
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v === "object";
+
+const getMessageFromPayload = (payload: unknown): string => {
+  if (!isRecord(payload)) return "";
+  const error = payload.error;
+  const message = payload.message;
+  const details = payload.details;
+  if (typeof error === "string" && error.trim()) return error;
+  if (typeof message === "string" && message.trim()) return message;
+  if (typeof details === "string" && details.trim()) return details;
+  return "";
+};
+
 function extractErrorMessage(e: unknown, fallback: string) {
-  const err = e as any;
-  const fromPayload =
-    err?.payload?.error ||
-    err?.payload?.message ||
-    err?.payload?.details ||
-    err?.response?.data?.error ||
-    err?.response?.data?.message ||
-    err?.response?.data?.details;
-  const fromMessage = err?.message;
-  return (fromPayload || fromMessage || fallback) as string;
+  if (e instanceof ApiError) {
+    return getMessageFromPayload(e.payload) || e.message || fallback;
+  }
+
+  if (e instanceof Error) {
+    return e.message || fallback;
+  }
+
+  if (isRecord(e)) {
+    const message = e.message;
+    const payload = e.payload;
+    if (typeof message === "string" && message.trim()) return message;
+    return getMessageFromPayload(payload) || fallback;
+  }
+
+  return fallback;
 }
 
 export const saldoInicialService = {
@@ -33,8 +53,8 @@ export const saldoInicialService = {
         ApiOk<{ saldos: SaldoInicial[] }> | ApiFail
       >(`/saldos-iniciales/${pointId}`);
 
-      if ((response as any).success) {
-        return { saldos: (response as any).saldos ?? [], error: null };
+      if (response.success) {
+        return { saldos: response.saldos ?? [], error: null };
       } else {
         const r = response as ApiFail;
         const msg =
@@ -72,9 +92,8 @@ export const saldoInicialService = {
         ApiOk<{ saldo: SaldoInicial; updated?: boolean }> | ApiFail
       >("/saldos-iniciales", data);
 
-      if ((response as any).success) {
-        const { saldo, updated } = response as any;
-        return { saldo, error: null, updated };
+      if (response.success) {
+        return { saldo: response.saldo, error: null, updated: response.updated };
       } else {
         const r = response as ApiFail;
         const msg =
@@ -85,14 +104,8 @@ export const saldoInicialService = {
         return { saldo: null, error: msg };
       }
     } catch (e) {
-      const err = e as ApiError | Error;
-      const msg =
-        (err as any)?.payload?.error ||
-        (err as any)?.payload?.details ||
-        (err as any)?.payload?.message ||
-        err.message ||
-        "Error de conexión al asignar saldo inicial";
-      console.error("Error assigning initial balance:", err);
+      const msg = extractErrorMessage(e, "Error de conexión al asignar saldo inicial");
+      console.error("Error assigning initial balance:", e);
       return { saldo: null, error: msg };
     }
   },
@@ -106,9 +119,11 @@ export const saldoInicialService = {
     error: string | null;
   }> {
     try {
-      console.log(
-        "🔍 saldoInicialService.getVistaSaldosPorPunto: Iniciando solicitud..."
-      );
+      if (import.meta.env.DEV) {
+        console.warn(
+          "🔍 saldoInicialService.getVistaSaldosPorPunto: Iniciando solicitud..."
+        );
+      }
 
       const params = new URLSearchParams();
       if (opts?.pointId) params.set("pointId", opts.pointId);
@@ -119,16 +134,20 @@ export const saldoInicialService = {
       const response = await apiService.get<
         ApiOk<{ saldos: VistaSaldosPorPunto[] }> | ApiFail
       >(url);
-      console.log(
-        "💰 saldoInicialService.getVistaSaldosPorPunto: Respuesta recibida:",
-        response
-      );
-
-      if ((response as any).success) {
-        const saldos = (response as any).saldos ?? [];
-        console.log(
-          `✅ getVistaSaldosPorPunto: ${saldos.length} saldos obtenidos`
+      if (import.meta.env.DEV) {
+        console.warn(
+          "💰 saldoInicialService.getVistaSaldosPorPunto: Respuesta recibida:",
+          response
         );
+      }
+
+      if (response.success) {
+        const saldos = response.saldos ?? [];
+        if (import.meta.env.DEV) {
+          console.warn(
+            `✅ getVistaSaldosPorPunto: ${saldos.length} saldos obtenidos`
+          );
+        }
         return { saldos, error: null };
       } else {
         const r = response as ApiFail;
@@ -163,9 +182,9 @@ export const saldoInicialService = {
         ApiOk<{ movimientos: MovimientoSaldo[] }> | ApiFail
       >(`/movimientos-saldo/${pointId}?limit=${limit}`);
 
-      if ((response as any).success) {
+      if (response.success) {
         return {
-          movimientos: (response as any).movimientos ?? [],
+          movimientos: response.movimientos ?? [],
           error: null,
         };
       } else {

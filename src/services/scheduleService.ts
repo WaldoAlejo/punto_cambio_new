@@ -42,6 +42,10 @@ interface ScheduleResponse {
 type SchedulesResult = { schedules: Schedule[]; error: string | null };
 type ScheduleResult = { schedule: Schedule | null; error: string | null };
 
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.warn(...args);
+};
+
 // =====================
 // Service
 // =====================
@@ -129,7 +133,7 @@ export const scheduleService = {
     override?: boolean; // <- agregado
   }): Promise<ScheduleResult> {
     try {
-      console.log(
+      devLog(
         "📡 scheduleService.createOrUpdateSchedule - Enviando:",
         scheduleData
       );
@@ -137,7 +141,7 @@ export const scheduleService = {
         "/schedules",
         scheduleData
       );
-      console.log(
+      devLog(
         "📡 scheduleService.createOrUpdateSchedule - Respuesta:",
         response
       );

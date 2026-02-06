@@ -8,7 +8,7 @@ interface AsyncState<T> {
 
 interface UseAsyncOperationReturn<T> {
   state: AsyncState<T>;
-  execute: (...args: any[]) => Promise<T | null>;
+  execute: (...args: unknown[]) => Promise<T | null>;
   reset: () => void;
   setData: (data: T | null) => void;
 }
@@ -18,7 +18,7 @@ interface UseAsyncOperationReturn<T> {
  * Proporciona estado de loading, error y datos de forma consistente
  */
 export function useAsyncOperation<T>(
-  asyncFunction: (...args: any[]) => Promise<T>
+  asyncFunction: (...args: unknown[]) => Promise<T>
 ): UseAsyncOperationReturn<T> {
   const [state, setState] = useState<AsyncState<T>>({
     data: null,
@@ -27,7 +27,7 @@ export function useAsyncOperation<T>(
   });
 
   const execute = useCallback(
-    async (...args: any[]): Promise<T | null> => {
+    async (...args: unknown[]): Promise<T | null> => {
       setState((prev) => ({ ...prev, loading: true, error: null }));
 
       try {
@@ -54,3 +54,4 @@ export function useAsyncOperation<T>(
 
   return { state, execute, reset, setData };
 }
+

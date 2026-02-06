@@ -35,6 +35,7 @@ export enum TipoMovimiento {
   TRANSFERENCIA_ENTRADA = "TRANSFERENCIA_ENTRADA",
   TRANSFERENCIA_SALIENTE = "TRANSFERENCIA_SALIENTE",
   TRANSFERENCIA_SALIDA = "TRANSFERENCIA_SALIDA",
+  TRANSFERENCIA_DEVOLUCION = "TRANSFERENCIA_DEVOLUCION",
 }
 
 /**
@@ -65,6 +66,15 @@ export interface RegistrarMovimientoParams {
   tipoReferencia: TipoReferencia;
   referenciaId?: number | string;
   descripcion?: string | null;
+  /**
+   * Indica qué "bolsillo" de saldo se está moviendo.
+   * - CAJA: afecta `Saldo.cantidad` (efectivo / caja)
+   * - BANCOS: afecta `Saldo.bancos`
+   * - NINGUNO: no sincroniza tabla `Saldo` (solo trazabilidad en `MovimientoSaldo`)
+   *
+   * Si no se provee, se infiere por heurística legacy: si `descripcion` contiene "bancos" => BANCOS, caso contrario => CAJA.
+   */
+  saldoBucket?: "CAJA" | "BANCOS" | "NINGUNO";
   usuarioId: number | string; // Requerido
 }
 
@@ -93,6 +103,7 @@ function calcularMontoConSigno(
     case TipoMovimiento.SALDO_INICIAL:
     case TipoMovimiento.TRANSFERENCIA_ENTRANTE:
     case TipoMovimiento.TRANSFERENCIA_ENTRADA:
+    case TipoMovimiento.TRANSFERENCIA_DEVOLUCION:
       // INGRESO y SALDO_INICIAL siempre positivos
       return new Prisma.Decimal(montoAbsoluto);
 
@@ -249,35 +260,46 @@ export async function registrarMovimientoSaldo(
     },
   });
 
-  // 5. Mantener la tabla `Saldo` sincronizada con el saldo_nuevo del movimiento
-  // Regla práctica del sistema:
-  // - Movimientos de BANCOS se marcan en `descripcion` con la palabra "bancos" y NO deben afectar caja.
-  // - Los demás movimientos sincronizan `cantidad` (caja).
+  // 5. Mantener la tabla `Saldo` sincronizada con el saldo_nuevo del movimiento.
+  // ⚠️ Importante: NO se debe sobreescribir `cantidad` (caja) con saldos de bancos.
+  // Por eso, la sincronización se guía por `saldoBucket`.
   const desc = (params.descripcion ?? "").toString().toLowerCase();
-  const esMovimientoBancos = desc.includes("bancos");
+  const inferredBucket: "CAJA" | "BANCOS" = desc.includes("bancos")
+    ? "BANCOS"
+    : "CAJA";
+  const bucket =
+    params.saldoBucket ??
+    (params.tipoReferencia === TipoReferencia.SERVIENTREGA
+      ? "NINGUNO"
+      : inferredBucket);
 
-  await client.saldo.upsert({
-    where: {
-      punto_atencion_id_moneda_id: {
+  if (bucket !== "NINGUNO") {
+    const saldoNuevoDec = new Prisma.Decimal(
+      typeof params.saldoNuevo === "number"
+        ? params.saldoNuevo
+        : params.saldoNuevo.toNumber()
+    );
+
+    await client.saldo.upsert({
+      where: {
+        punto_atencion_id_moneda_id: {
+          punto_atencion_id: String(params.puntoAtencionId),
+          moneda_id: String(params.monedaId),
+        },
+      },
+      update: {
+        ...(bucket === "BANCOS" ? { bancos: saldoNuevoDec } : { cantidad: saldoNuevoDec }),
+      },
+      create: {
         punto_atencion_id: String(params.puntoAtencionId),
         moneda_id: String(params.monedaId),
+        cantidad: bucket === "CAJA" ? saldoNuevoDec : 0,
+        billetes: 0,
+        monedas_fisicas: 0,
+        bancos: bucket === "BANCOS" ? saldoNuevoDec : 0,
       },
-    },
-    update: {
-      ...(esMovimientoBancos
-        ? { bancos: new Prisma.Decimal(params.saldoNuevo) }
-        : { cantidad: new Prisma.Decimal(params.saldoNuevo) }),
-      // updated_at se actualiza automáticamente por @updatedAt
-    },
-    create: {
-      punto_atencion_id: String(params.puntoAtencionId),
-      moneda_id: String(params.monedaId),
-      cantidad: esMovimientoBancos ? 0 : new Prisma.Decimal(params.saldoNuevo),
-      billetes: 0,
-      monedas_fisicas: 0,
-      bancos: esMovimientoBancos ? new Prisma.Decimal(params.saldoNuevo) : 0,
-    },
-  });
+    });
+  }
 
   return movimiento;
 }

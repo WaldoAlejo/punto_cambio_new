@@ -6,6 +6,10 @@ import {
   ListResponse,
 } from "../types";
 
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.warn(...args);
+};
+
 interface PointsResponse extends ListResponse<PuntoAtencion> {
   points: PuntoAtencion[];
 }
@@ -26,7 +30,7 @@ export const pointService = {
    */
   async getAllPoints(): Promise<GetPointsResult> {
     try {
-      console.log("🔍 pointService.getAllPoints: solicitando /points …");
+      devLog("🔍 pointService.getAllPoints: solicitando /points …");
       const response = await apiService.get<PointsResponse>("/points");
 
       if (!response || !response.success) {
@@ -34,7 +38,7 @@ export const pointService = {
         console.error("❌ getAllPoints:", msg);
         return { points: [], error: msg };
       }
-      console.log(
+      devLog(
         `✅ getAllPoints: ${response.points?.length || 0} puntos`,
         response.points?.map((p) => ({ id: p.id, nombre: p.nombre }))
       );
@@ -105,7 +109,7 @@ export const pointService = {
   /** Puntos para gestión de saldos (admin/super) */
   async getPointsForBalanceManagement(): Promise<GetPointsResult> {
     try {
-      console.log(
+      devLog(
         "🔍 pointService.getPointsForBalanceManagement: /points/for-balance-management …"
       );
       const response = await apiService.get<PointsResponse>(
@@ -119,7 +123,7 @@ export const pointService = {
         return { points: [], error: msg };
       }
 
-      console.log(
+      devLog(
         `✅ getPointsForBalanceManagement: ${
           response.points?.length || 0
         } puntos`,

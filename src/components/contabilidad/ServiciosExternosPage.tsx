@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import ServiciosExternosForm from "./ServiciosExternosForm";
 import ServiciosExternosHistory from "./ServiciosExternosHistory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +29,7 @@ export default function ServiciosExternosPage() {
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const cargarSaldos = async () => {
+  const cargarSaldos = useCallback(async () => {
     if (!user?.punto_atencion_id) return;
 
     setLoading(true);
@@ -42,11 +42,11 @@ export default function ServiciosExternosPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.punto_atencion_id]);
 
   useEffect(() => {
     cargarSaldos();
-  }, [user?.punto_atencion_id, refreshKey]);
+  }, [cargarSaldos, refreshKey]);
 
   const handleRefresh = () => {
     setRefreshKey((prev) => prev + 1);

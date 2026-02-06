@@ -21,10 +21,38 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { RefreshCw, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import type {
+  MovimientoServicioExterno,
+  ExternalServicesMovimientosResponse,
+} from "@/services/externalServicesService";
+import type { PartialExchange } from "./PartialExchangesList";
 
 interface AdminExchangeBrowserProps {
   user: User;
 }
+
+type ActiveTab = "cambios" | "cambiosParciales" | "serviciosExternos";
+
+const extractErrorMessage = (err: unknown): string => {
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err) {
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === "string") return msg;
+  }
+  return "";
+};
+
+const extractFriendlyMessage = (err: unknown): string => {
+  if (err && typeof err === "object" && "friendlyMessage" in err) {
+    const msg = (err as { friendlyMessage?: unknown }).friendlyMessage;
+    if (typeof msg === "string") return msg;
+  }
+  return "";
+};
+
+const isActiveTab = (v: string): v is ActiveTab =>
+  v === "cambios" || v === "cambiosParciales" || v === "serviciosExternos";
 
 /**
  * AdminExchangeBrowser
@@ -52,15 +80,17 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
   const [error, setError] = useState<string | null>(null);
 
   // Tab servicios externos (admin)
-  const [activeTab, setActiveTab] = useState<
-    "cambios" | "cambiosParciales" | "serviciosExternos"
-  >("cambios");
-  const [externalServices, setExternalServices] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("cambios");
+  const [externalServices, setExternalServices] = useState<
+    MovimientoServicioExterno[]
+  >([]);
   const [extDesde, setExtDesde] = useState<string>("");
   const [extHasta, setExtHasta] = useState<string>("");
 
   // Cambios parciales
-  const [partialExchanges, setPartialExchanges] = useState<any[]>([]);
+  const [partialExchanges, setPartialExchanges] = useState<PartialExchange[]>(
+    []
+  );
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
 
   const isAdmin = useMemo(
@@ -131,8 +161,8 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
             setExchanges(exchanges);
           }
         }
-      } catch (e: any) {
-        setError(e?.message || "Error al cargar cambios");
+      } catch (e: unknown) {
+        setError(extractErrorMessage(e) || "Error al cargar cambios");
         setExchanges([]);
       }
     },
@@ -142,24 +172,31 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
   const loadExternalServices = useCallback(
     async (pointId?: string) => {
       try {
-        const params: any = {
+        const params: {
+          pointId?: string;
+          desde?: string;
+          hasta?: string;
+          limit?: number;
+        } = {
           pointId,
           desde: extDesde || undefined,
           hasta: extHasta || undefined,
           limit: 200,
         };
-        const { movimientos, success } = await (
+        const { movimientos, success } = (await (
           await import("@/services/externalServicesService")
-        ).listarMovimientosServiciosExternosAdmin(params);
+        ).listarMovimientosServiciosExternosAdmin(
+          params
+        )) as ExternalServicesMovimientosResponse;
         setExternalServices(success ? movimientos : []);
         if (!success) {
           toast.error("No se pudieron cargar los servicios externos");
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         setExternalServices([]);
         toast.error(
-          e?.friendlyMessage ||
-            e?.message ||
+          extractFriendlyMessage(e) ||
+            extractErrorMessage(e) ||
             "Error cargando servicios externos"
         );
       }
@@ -178,9 +215,11 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
       } else {
         setPartialExchanges(exchanges);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       setPartialExchanges([]);
-      toast.error(e?.message || "Error cargando cambios parciales");
+      toast.error(
+        extractErrorMessage(e) || "Error cargando cambios parciales"
+      );
     }
   }, []);
 
@@ -413,9 +452,7 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
                     );
                   } else {
                     await loadExternalServices(
-                      selectedPointId === "ALL"
-                        ? (undefined as any)
-                        : selectedPointId
+                      selectedPointId === "ALL" ? undefined : selectedPointId
                     );
                   }
                   setIsRefreshing(false);
@@ -439,7 +476,9 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
       <div className="flex-1 min-h-0 overflow-y-auto">
         <Tabs
           value={activeTab}
-          onValueChange={(v) => setActiveTab(v as any)}
+          onValueChange={(v) => {
+            if (isActiveTab(v)) setActiveTab(v);
+          }}
           className="h-full flex flex-col"
         >
           <TabsList className="mb-2 flex-shrink-0">
@@ -549,7 +588,7 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
                       setIsRefreshing(true);
                       await loadExternalServices(
                         selectedPointId === "ALL"
-                          ? (undefined as any)
+                          ? undefined
                           : selectedPointId
                       );
                       setIsRefreshing(false);
@@ -566,7 +605,7 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
                       setIsRefreshing(true);
                       await loadExternalServices(
                         selectedPointId === "ALL"
-                          ? (undefined as any)
+                          ? undefined
                           : selectedPointId
                       );
                       setIsRefreshing(false);
@@ -679,10 +718,10 @@ const AdminExchangeBrowser = ({ user }: AdminExchangeBrowserProps) => {
                                           resp?.error || "No se pudo eliminar"
                                         );
                                       }
-                                    } catch (e: any) {
+                                    } catch (e: unknown) {
                                       toast.error(
-                                        e?.friendlyMessage ||
-                                          e?.message ||
+                                        extractFriendlyMessage(e) ||
+                                          extractErrorMessage(e) ||
                                           "Error de conexión"
                                       );
                                     }

@@ -12,7 +12,7 @@ import {
 const router = express.Router();
 
 // ===== helpers =====
-const toNumber = (v: any): number => {
+const toNumber = (v: unknown): number => {
   if (typeof v === "number") return v;
   if (typeof v !== "string") return Number(v);
   const raw = v.trim();
@@ -120,7 +120,10 @@ router.post(
       if (!req.user?.id) {
         return res.status(401).json({ success: false, error: "No autorizado" });
       }
-      const user = req.user!;
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ success: false, error: "No autorizado" });
+      }
 
       // Validar punto y moneda existen y están activos
       const [punto, moneda] = await Promise.all([
@@ -154,9 +157,9 @@ router.post(
 
       if (
         (billetes !== undefined &&
-          (!Number.isFinite(billetesNum!) || isNaN(billetesNum!))) ||
+          (!Number.isFinite(billetesNum ?? NaN) || isNaN(billetesNum ?? NaN))) ||
         (monedas_fisicas !== undefined &&
-          (!Number.isFinite(monedasNum!) || isNaN(monedasNum!)))
+          (!Number.isFinite(monedasNum ?? NaN) || isNaN(monedasNum ?? NaN)))
       ) {
         return res
           .status(400)
@@ -359,11 +362,15 @@ router.post(
         saldo: resultado.saldoInicialResult,
         updated: resultado.updated,
       });
-    } catch (error: any) {
-      const code = error?.code as string | undefined;
+    } catch (error: unknown) {
+      const code =
+        error instanceof Prisma.PrismaClientKnownRequestError
+          ? error.code
+          : undefined;
+      const message = error instanceof Error ? error.message : String(error);
 
       logger.error("Error al asignar saldo inicial", {
-        error: error?.message,
+        error: message,
         code,
         requestedBy: req.user?.id,
       });

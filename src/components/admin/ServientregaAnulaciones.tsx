@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,6 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Eye,
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
@@ -27,6 +26,28 @@ import { Loading } from "@/components/ui/loading";
 import { SolicitudAnulacionGuia } from "@/types/servientrega";
 import axiosInstance from "@/services/axiosInstance";
 import { User, PuntoAtencion } from "@/types";
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+const getAxiosStatus = (err: unknown): number | null => {
+  if (!isRecord(err)) return null;
+  const response = err.response;
+  if (!isRecord(response)) return null;
+  const status = response.status;
+  return typeof status === "number" ? status : null;
+};
+
+const extractErrorMessage = (err: unknown): string => {
+  if (!isRecord(err)) return "Error desconocido";
+  const response = err.response;
+  if (isRecord(response)) {
+    const data = response.data;
+    if (isRecord(data) && typeof data.message === "string") return data.message;
+  }
+  const message = err.message;
+  return typeof message === "string" ? message : "Error desconocido";
+};
 
 interface ServientregaAnulacionesProps {
   user: User;
@@ -37,6 +58,11 @@ export const ServientregaAnulaciones = ({
   user: _user,
   selectedPoint: _selectedPoint,
 }: ServientregaAnulacionesProps) => {
+  const isFiltroEstado = (
+    v: string
+  ): v is "TODOS" | "PENDIENTE" | "APROBADA" | "RECHAZADA" =>
+    v === "TODOS" || v === "PENDIENTE" || v === "APROBADA" || v === "RECHAZADA";
+
   const hoy = new Date();
   const [solicitudes, setSolicitudes] = useState<SolicitudAnulacionGuia[]>([]);
   const [desde, setDesde] = useState(format(subDays(hoy, 30), "yyyy-MM-dd"));
@@ -47,6 +73,22 @@ export const ServientregaAnulaciones = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const desdeRef = useRef(desde);
+  const hastaRef = useRef(hasta);
+  const filtroEstadoRef = useRef(filtroEstado);
+
+  useEffect(() => {
+    desdeRef.current = desde;
+  }, [desde]);
+
+  useEffect(() => {
+    hastaRef.current = hasta;
+  }, [hasta]);
+
+  useEffect(() => {
+    filtroEstadoRef.current = filtroEstado;
+  }, [filtroEstado]);
+
   // Estados para modal de respuesta
   const [showRespuestaDialog, setShowRespuestaDialog] = useState(false);
   const [solicitudSeleccionada, setSolicitudSeleccionada] =
@@ -56,20 +98,25 @@ export const ServientregaAnulaciones = ({
     "APROBAR" | "RECHAZAR"
   >("APROBAR");
 
-  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
+  const { ConfirmationDialog } = useConfirmationDialog();
 
-  const fetchSolicitudes = async () => {
+  const fetchSolicitudes = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
+      const desdeValue = desdeRef.current;
+      const hastaValue = hastaRef.current;
+      const filtroEstadoValue = filtroEstadoRef.current;
+
       const response = await axiosInstance.get(
         "/servientrega/solicitudes-anulacion",
         {
           params: {
-            desde,
-            hasta,
-            estado: filtroEstado === "TODOS" ? undefined : filtroEstado,
+            desde: desdeValue,
+            hasta: hastaValue,
+            estado:
+              filtroEstadoValue === "TODOS" ? undefined : filtroEstadoValue,
           },
         }
       );
@@ -89,10 +136,10 @@ export const ServientregaAnulaciones = ({
         setSolicitudes([]);
         toast.warning("No se recibieron solicitudes del servidor.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error al cargar solicitudes:", err);
 
-      if (err.response?.status === 404) {
+      if (getAxiosStatus(err) === 404) {
         setError(
           "Los endpoints de anulaciones de Servientrega no están disponibles en el backend."
         );
@@ -108,11 +155,11 @@ export const ServientregaAnulaciones = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchSolicitudes();
-  }, []);
+  }, [fetchSolicitudes]);
 
   const handleResponderSolicitud = (
     solicitud: SolicitudAnulacionGuia,
@@ -145,9 +192,8 @@ export const ServientregaAnulaciones = ({
       setSolicitudSeleccionada(null);
       setComentarioRespuesta("");
       fetchSolicitudes();
-    } catch (err: any) {
-      const errorMessage =
-        err?.response?.data?.message || err?.message || "Error desconocido";
+    } catch (err: unknown) {
+      const errorMessage = extractErrorMessage(err);
       console.error("Error al responder solicitud:", err);
       toast.error(`No se pudo procesar la respuesta: ${errorMessage}`);
     }
@@ -222,7 +268,10 @@ export const ServientregaAnulaciones = ({
               <Label className="text-sm">Estado</Label>
               <select
                 value={filtroEstado}
-                onChange={(e) => setFiltroEstado(e.target.value as any)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setFiltroEstado(isFiltroEstado(v) ? v : "TODOS");
+                }}
                 className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
               >
                 <option value="TODOS">Todos</option>

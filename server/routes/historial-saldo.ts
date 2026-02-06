@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
+import { Prisma } from "@prisma/client";
 
 const router = express.Router();
 
@@ -30,7 +31,7 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
     const take = sizeNum;
 
     // Construir where dinámico
-    const where: any = { punto_atencion_id: pointId };
+    const where: Prisma.HistorialSaldoWhereInput = { punto_atencion_id: pointId };
 
     if (monedaId) {
       where.moneda_id = monedaId;
@@ -39,9 +40,10 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
     // Filtros de fecha (UTC). Si quieres incluir todo el día en 'to',
     // puedes usar fin de día: new Date(`${to}T23:59:59.999Z`)
     if (from || to) {
-      where.fecha = {};
-      if (from) where.fecha.gte = new Date(from as string);
-      if (to) where.fecha.lte = new Date(to as string);
+      where.fecha = {
+        gte: from ? new Date(from) : undefined,
+        lte: to ? new Date(to) : undefined,
+      };
     }
 
     // Conteo total y datos paginados en paralelo
@@ -100,12 +102,13 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
       },
       historial,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error en GET /api/historial-saldo/:pointId:", error);
+    const message = error instanceof Error ? error.message : null;
     return res.status(500).json({
       success: false,
       error: "Error interno del servidor",
-      details: (error as any)?.message ?? null,
+      details: message,
     });
   }
 });

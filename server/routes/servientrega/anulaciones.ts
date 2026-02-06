@@ -7,6 +7,19 @@ import prisma from "../../lib/prisma.js";
 const router = express.Router();
 const dbService = new ServientregaDBService();
 
+type JsonRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null;
+}
+
+type AuthedRequest = express.Request & {
+  user?: {
+    id?: string;
+    nombre?: string;
+  };
+};
+
 /** Helpers */
 function sendError(
   res: express.Response,
@@ -25,11 +38,12 @@ function validarAccion(accion?: string) {
   return val === "APROBAR" || val === "RECHAZAR";
 }
 
-function esAnulacionExitosa(resp: any): boolean {
-  const procesoFetch = resp?.fetch?.proceso;
+function esAnulacionExitosa(resp: unknown): boolean {
+  const procesoFetch =
+    isRecord(resp) && isRecord(resp.fetch) ? resp.fetch.proceso : undefined;
   if (typeof procesoFetch === "string" && /actualizad/i.test(procesoFetch))
     return true;
-  const procesoPlano = resp?.proceso;
+  const procesoPlano = isRecord(resp) ? resp.proceso : undefined;
   if (typeof procesoPlano === "string" && /actualizad/i.test(procesoPlano))
     return true;
   if (typeof resp === "string") {
@@ -117,7 +131,7 @@ router.get("/solicitudes-anulacion", authenticateToken, async (req, res) => {
 router.post("/solicitudes-anulacion", authenticateToken, async (req, res) => {
   try {
     const { guia_id, numero_guia, motivo_anulacion } = req.body;
-    const usuario = (req as any).user;
+    const usuario = (req as AuthedRequest).user;
 
     if (!guia_id || !numero_guia || !motivo_anulacion) {
       return res.status(400).json({
@@ -156,7 +170,7 @@ router.put(
     try {
       const { id } = req.params;
       const { accion, observaciones } = req.body; // "APROBAR" | "RECHAZAR"
-      const usuario = (req as any).user;
+      const usuario = (req as AuthedRequest).user;
 
       if (!validarAccion(accion)) {
         return res.status(400).json({
@@ -346,7 +360,7 @@ router.put(
 router.post("/solicitar-anulacion", authenticateToken, async (req, res) => {
   try {
     const { guia_id, numero_guia, motivo } = req.body;
-    const usuario = (req as any).user;
+    const usuario = (req as AuthedRequest).user;
 
     if (!guia_id || !numero_guia || !motivo) {
       return res.status(400).json({
@@ -384,7 +398,7 @@ router.post(
   async (req, res) => {
     try {
       const { solicitud_id, accion, comentario } = req.body;
-      const usuario = (req as any).user;
+      const usuario = (req as AuthedRequest).user;
 
       if (!solicitud_id || !validarAccion(accion)) {
         return res.status(400).json({
@@ -447,6 +461,7 @@ router.post(
               const movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
                 where: {
                   numero_referencia: solicitudActualizada.numero_guia,
+                  servicio: "SERVIENTREGA",
                   tipo_movimiento: "INGRESO",
                 },
                 select: {

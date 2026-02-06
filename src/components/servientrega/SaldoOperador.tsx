@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axiosInstance from "@/services/axiosInstance";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,7 +54,7 @@ export default function SaldoOperador({
   const [enviandoSolicitud, setEnviandoSolicitud] = useState(false);
 
   // ✅ Obtener saldo disponible
-  const obtenerSaldo = async () => {
+  const obtenerSaldo = useCallback(async () => {
     if (!puntoAtencionId) return;
 
     setLoading(true);
@@ -76,8 +76,6 @@ export default function SaldoOperador({
             ? `Saldo bajo. Se recomienda solicitar más saldo.`
             : undefined,
       });
-
-      console.log("💰 Saldo obtenido:", { disponible, estado });
     } catch (error) {
       console.error("❌ Error al obtener saldo:", error);
       setSaldo({
@@ -91,7 +89,7 @@ export default function SaldoOperador({
     } finally {
       setLoading(false);
     }
-  };
+  }, [puntoAtencionId]);
 
   // ✅ Solicitar saldo al administrador
   const solicitarSaldo = async () => {
@@ -127,7 +125,7 @@ export default function SaldoOperador({
   // ✅ Cargar saldo al montar el componente
   useEffect(() => {
     obtenerSaldo();
-  }, [puntoAtencionId]);
+  }, [obtenerSaldo]);
 
   // ✅ Determinar color y icono según el estado del saldo
   const getSaldoDisplay = () => {

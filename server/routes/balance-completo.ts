@@ -29,16 +29,6 @@ interface ResumenGeneral {
   totalMonedasActivas: number;
 }
 
-interface BalancePorPunto {
-  punto: string;
-  puntoId: string;
-  cambiosDivisas: number;
-  serviciosExternos: number;
-  transferenciasOrigen: number;
-  transferenciasDestino: number;
-  totalMovimientos: number;
-}
-
 /** Helpers numéricos */
 const d0 = () => new Prisma.Decimal(0);
 const toNum = (x: D | null | undefined) => Number((x ?? d0()).toString());

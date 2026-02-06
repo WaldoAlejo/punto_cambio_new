@@ -106,7 +106,7 @@ function App() {
           console.error("Error al cargar punto principal para admin:", error);
         });
     }
-  }, [user, selectedPoint]);
+  }, [user, selectedPoint, setSelectedPoint]);
 
   // Carga los puntos de atención libres si corresponde (para OPERADOR y ADMINISTRATIVO)
   useEffect(() => {

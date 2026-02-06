@@ -36,9 +36,7 @@ export const authenticateTokenDebug: RequestHandler = async (
   });
 
   try {
-    const authHeader =
-      (req.headers["authorization"] as string | undefined) ||
-      (req.headers as any).Authorization;
+    const authHeader = req.get("authorization") ?? req.get("Authorization");
 
     const token = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7).trim()
@@ -97,7 +95,16 @@ export const authenticateTokenDebug: RequestHandler = async (
       return;
     }
 
-    const effectiveUserId = decoded.id || decoded.userId!;
+    const effectiveUserId = decoded.id || decoded.userId;
+    if (!effectiveUserId) {
+      logger.error("DEBUG - No effective user ID found in token (post-verify)");
+      res.status(401).json({
+        error: "Token inválido - no user ID",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
 
     // 2) Cargar usuario desde BD
     let user: AuthenticatedUser | null = null;

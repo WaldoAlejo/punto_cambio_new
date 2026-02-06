@@ -52,7 +52,7 @@ export default function PermissionRequest() {
         setFileName("");
         setFileUrl("");
       }
-    } catch (e) {
+    } catch {
       toast({
         title: "Error",
         description: "No se pudo enviar la solicitud",

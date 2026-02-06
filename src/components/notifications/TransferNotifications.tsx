@@ -93,7 +93,7 @@ const TransferNotifications = ({
 
         setPendingCount(totalCount);
         backoffRef.current = BASE_INTERVAL_MS; // reset en éxito
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (e instanceof ApiError && e.status === 429) {
           backoffRef.current = Math.min(
             backoffRef.current * 2,

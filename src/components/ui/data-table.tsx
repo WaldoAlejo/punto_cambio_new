@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 export interface Column<T> {
   key: keyof T | string;
   header: string;
-  render?: (value: any, item: T, index: number) => React.ReactNode;
+  render?: (value: unknown, item: T, index: number) => React.ReactNode;
   sortable?: boolean;
   className?: string;
 }
@@ -26,7 +26,29 @@ export interface DataTableProps<T> {
   onRowClick?: (item: T, index: number) => void;
 }
 
-export function DataTable<T extends Record<string, any>>({
+type UnknownRecord = Record<string, unknown>;
+const isRecord = (v: unknown): v is UnknownRecord => typeof v === "object" && v !== null;
+
+function compareUnknown(aValue: unknown, bValue: unknown): number {
+  if (typeof aValue === "number" && typeof bValue === "number") {
+    return aValue - bValue;
+  }
+
+  const aStr = aValue === null || aValue === undefined ? "" : String(aValue);
+  const bStr = bValue === null || bValue === undefined ? "" : String(bValue);
+  return aStr.localeCompare(bStr, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function getNestedValue(obj: unknown, path: string[]): unknown {
+  let current: unknown = obj;
+  for (const key of path) {
+    if (!isRecord(current)) return undefined;
+    current = current[key];
+  }
+  return current;
+}
+
+export function DataTable<T extends Record<string, unknown>>({
   data,
   columns,
   loading = false,
@@ -45,6 +67,16 @@ export function DataTable<T extends Record<string, any>>({
     direction: "asc" | "desc";
   } | null>(null);
 
+  const getValue = React.useCallback(
+    (item: T, key: keyof T | string): unknown => {
+      if (typeof key === "string" && key.includes(".")) {
+        return getNestedValue(item, key.split("."));
+      }
+      return item[key as keyof T];
+    },
+    []
+  );
+
   // Filtrar datos por búsqueda
   const filteredData = React.useMemo(() => {
     if (!searchable || !searchTerm) return data;
@@ -61,18 +93,12 @@ export function DataTable<T extends Record<string, any>>({
     if (!sortConfig) return filteredData;
 
     return [...filteredData].sort((a, b) => {
-      const aValue = a[sortConfig.key];
-      const bValue = b[sortConfig.key];
-
-      if (aValue < bValue) {
-        return sortConfig.direction === "asc" ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === "asc" ? 1 : -1;
-      }
-      return 0;
+      const aValue = getValue(a, sortConfig.key);
+      const bValue = getValue(b, sortConfig.key);
+      const cmp = compareUnknown(aValue, bValue);
+      return sortConfig.direction === "asc" ? cmp : -cmp;
     });
-  }, [filteredData, sortConfig]);
+  }, [filteredData, sortConfig, getValue]);
 
   const handleSort = (key: string) => {
     setSortConfig((current) => {
@@ -84,13 +110,6 @@ export function DataTable<T extends Record<string, any>>({
       }
       return { key, direction: "asc" };
     });
-  };
-
-  const getValue = (item: T, key: keyof T | string): any => {
-    if (typeof key === "string" && key.includes(".")) {
-      return key.split(".").reduce((obj, k) => obj?.[k], item);
-    }
-    return item[key as keyof T];
   };
 
   if (loading) {

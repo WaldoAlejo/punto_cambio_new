@@ -164,7 +164,7 @@ router.get("/:pointId/:fecha", authenticateToken, async (req, res) => {
 
     // === Combinar resultados ===
     type NumMap = Record<string, number>;
-    const toNum = (v: any) => (v ? Number(v) : 0);
+    const toNum = (v: unknown) => (v ? Number(v) : 0);
 
     const mapIngresos: NumMap = {};
     for (const r of ingresosBase) {
@@ -562,7 +562,20 @@ router.get(
       });
 
       // Agrupar por servicio externo
-      const saldosServicios = serviciosExternos.reduce((acc, s) => {
+      type SaldoServicioItem = {
+        moneda_codigo: string;
+        moneda_simbolo: string;
+        saldo: unknown;
+      };
+      type SaldoServicioGroup = {
+        servicio_nombre: string;
+        servicio_tipo: string;
+        saldos: SaldoServicioItem[];
+      };
+
+      const saldosServicios = serviciosExternos.reduce<
+        Record<string, SaldoServicioGroup>
+      >((acc, s) => {
         const key = s.servicio;
         if (!acc[key]) {
           acc[key] = {
@@ -577,7 +590,7 @@ router.get(
           saldo: s.cantidad,
         });
         return acc;
-      }, {} as Record<string, any>);
+      }, {});
 
       // 5. Obtener total de transacciones del día
       const totalTransacciones = await prisma.movimientoSaldo.count({
@@ -648,8 +661,17 @@ router.get(
           },
         });
 
-      const toNumber = (v: any) =>
-        typeof v === "number" ? v : v?.toNumber ? v.toNumber() : Number(v);
+      type NumberLike = { toNumber?: () => number };
+      const toNumber = (v: unknown) => {
+        if (typeof v === "number") return v;
+        if (typeof v === "bigint") return Number(v);
+        if (typeof v === "string") return Number(v);
+        if (v && typeof v === "object" && "toNumber" in v) {
+          const toNumberFn = (v as NumberLike).toNumber;
+          if (typeof toNumberFn === "function") return toNumberFn();
+        }
+        return Number(v);
+      };
 
       const upsertBalance = (
         map: Map<
@@ -744,7 +766,14 @@ router.get(
         );
       }
 
-      const sortBalanceRows = (a: any, b: any) => {
+      type BalanceRow = {
+        moneda: { codigo: string };
+        ingresos: number;
+        egresos: number;
+        neto: number;
+      };
+
+      const sortBalanceRows = (a: BalanceRow, b: BalanceRow) => {
         if (a.moneda.codigo === "USD") return -1;
         if (b.moneda.codigo === "USD") return 1;
         return String(a.moneda.codigo).localeCompare(String(b.moneda.codigo));
@@ -871,7 +900,7 @@ router.get(
 router.post(
   "/:pointId/:fecha/cerrar",
   authenticateToken,
-  async (req: any, res) => {
+  async (req: express.Request, res: express.Response) => {
     try {
       const { pointId, fecha } = req.params;
       const { observaciones, diferencias_reportadas, detalles } =
@@ -1097,7 +1126,7 @@ router.post(
 router.post(
   "/:pointId/:fecha/cerrar-completo",
   authenticateToken,
-  async (req: any, res) => {
+  async (req: express.Request, res: express.Response) => {
     try {
       const { pointId, fecha } = req.params;
       const { detalles, observaciones } = req.body || {};
@@ -1331,7 +1360,6 @@ router.post(
 
       // Validar YYYY-MM-DD
       gyeParseDateOnly(fecha);
-      const fechaDate = new Date(`${fecha}T00:00:00.000Z`);
 
       // Buscar cuadre abierto del día
       const cuadreAbierto = await prisma.cuadreCaja.findFirst({

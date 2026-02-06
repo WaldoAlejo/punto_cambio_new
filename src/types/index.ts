@@ -355,7 +355,7 @@ export interface Schedule {
 }
 
 // Tipos de respuesta de la API
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;

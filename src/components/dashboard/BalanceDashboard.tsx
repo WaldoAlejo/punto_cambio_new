@@ -34,6 +34,44 @@ interface BalanceDashboardProps {
   selectedPoint: PuntoAtencion | null;
 }
 
+type BalanceDashboardTab = "saldos" | "contabilidad";
+
+type BalancePorMoneda = {
+  moneda_codigo: string;
+  balance: number;
+  detalles: {
+    cambiosDivisasOrigen: number;
+    cambiosDivisasDestino: number;
+    serviciosExternosIngresos: number;
+    serviciosExternosEgresos: number;
+    transferenciasNetas: number;
+  };
+};
+
+type BalanceCompletoData = {
+  actividad: {
+    cambiosDivisas: number;
+    serviciosExternos: number;
+    transferenciasOrigen: number;
+    transferenciasDestino: number;
+    totalMovimientos: number;
+  };
+  balancesPorMoneda?: BalancePorMoneda[];
+};
+
+const isTab = (v: string): v is BalanceDashboardTab =>
+  v === "saldos" || v === "contabilidad";
+
+const extractErrorMessage = (err: unknown): string => {
+  if (typeof err === "string") return err;
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err) {
+    const msg = (err as { message?: unknown }).message;
+    if (typeof msg === "string") return msg;
+  }
+  return "";
+};
+
 /** =========================
  *  Helpers
  *  ========================= */
@@ -83,12 +121,13 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   // Estado para balance completo
-  const [balanceCompleto, setBalanceCompleto] = useState<any>(null);
+  const [balanceCompleto, setBalanceCompleto] =
+    useState<BalanceCompletoData | null>(null);
   const [loadingBalanceCompleto, setLoadingBalanceCompleto] = useState(false);
 
   // UX: auto-refresh y controles de filtro
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [tab, setTab] = useState<"saldos" | "contabilidad">("saldos");
+  const [tab, setTab] = useState<BalanceDashboardTab>("saldos");
   const isPrivileged = user.rol === "ADMIN" || user.rol === "SUPER_USUARIO";
 
   // En roles no privilegiados, forzar pestaña 'saldos'
@@ -124,11 +163,12 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
       );
       setSaldos(items);
       setLastUpdate(new Date());
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Error",
         description:
-          e?.message || "Error inesperado al cargar los saldos del punto.",
+          extractErrorMessage(e) ||
+          "Error inesperado al cargar los saldos del punto.",
         variant: "destructive",
       });
     } finally {
@@ -149,11 +189,12 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
       } else {
         throw new Error(data.error || "Error al cargar balance completo");
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       toast({
         title: "Error",
         description:
-          e?.message || "Error inesperado al cargar el balance completo.",
+          extractErrorMessage(e) ||
+          "Error inesperado al cargar el balance completo.",
         variant: "destructive",
       });
     } finally {
@@ -167,14 +208,13 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
     loadSaldos();
     loadBalanceCompleto();
 
-    let interval: number | undefined;
     const tick = () => {
       if (autoRefresh && !document.hidden) {
         loadSaldos();
         loadBalanceCompleto();
       }
     };
-    interval = window.setInterval(tick, 30000);
+    const interval = window.setInterval(tick, 30000);
 
     const onVis = () => {
       if (!document.hidden && autoRefresh) {
@@ -185,7 +225,7 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
     document.addEventListener("visibilitychange", onVis);
 
     return () => {
-      if (interval) clearInterval(interval);
+      clearInterval(interval);
       document.removeEventListener("visibilitychange", onVis);
     };
   }, [selectedPoint, autoRefresh, loadSaldos, loadBalanceCompleto]);
@@ -344,7 +384,9 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
       <Tabs
         defaultValue="saldos"
         value={tab}
-        onValueChange={(v) => setTab(v as any)}
+        onValueChange={(v) => {
+          if (isTab(v)) setTab(v);
+        }}
         className="w-full"
       >
         <TabsList
@@ -488,7 +530,7 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                         {balanceCompleto.balancesPorMoneda.map(
-                          (balance: any) => (
+                          (balance) => (
                             <div
                               key={balance.moneda_codigo}
                               className="border rounded-lg p-3"

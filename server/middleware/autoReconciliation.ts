@@ -41,7 +41,9 @@ export const autoReconciliationMiddleware = (options?: {
     // Solo ejecutar si la respuesta fue exitosa
     const originalSend = res.send;
 
-    res.send = function (data: any) {
+    type SendBody = Parameters<Response["send"]>[0];
+
+    res.send = function (this: Response, data: SendBody) {
       // Ejecutar reconciliación solo si la operación fue exitosa
       if (res.statusCode >= 200 && res.statusCode < 300) {
         // Ejecutar reconciliación de forma asíncrona para no bloquear la respuesta
@@ -60,7 +62,7 @@ export const autoReconciliationMiddleware = (options?: {
       }
 
       return originalSend.call(this, data);
-    };
+    } as typeof res.send;
 
     next();
   };
@@ -186,7 +188,9 @@ export const transferAutoReconciliation = (
   // Solo ejecutar si la respuesta fue exitosa
   const originalSend = res.send;
 
-  res.send = function (data: any) {
+  type SendBody = Parameters<Response["send"]>[0];
+
+  res.send = function (this: Response, data: SendBody) {
     // Ejecutar reconciliación solo si la operación fue exitosa
     if (res.statusCode >= 200 && res.statusCode < 300) {
       // Ejecutar reconciliación de forma asíncrona para no bloquear la respuesta
@@ -274,7 +278,7 @@ export const transferAutoReconciliation = (
     }
 
     return originalSend.call(this, data);
-  };
+  } as typeof res.send;
 
   next();
 };

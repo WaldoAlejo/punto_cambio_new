@@ -3,7 +3,7 @@
  * Asegura que los datos cumplan con las reglas de negocio antes de enviarlos al backend
  */
 
-import { LIMITS, USER_ROLES, CURRENCY_CODES } from "@/constants";
+import { LIMITS, USER_ROLES } from "@/constants";
 
 export interface ValidationResult {
   isValid: boolean;
@@ -63,7 +63,7 @@ export class ValidationService {
 
     // Validar teléfono
     if (userData.telefono) {
-      const phoneRegex = /^[\+]?[0-9\-\s\(\)]{7,15}$/;
+      const phoneRegex = /^[+]?[0-9-\s()]{7,15}$/;
       if (!phoneRegex.test(userData.telefono)) {
         errors.push("El formato del teléfono no es válido");
       }
@@ -71,8 +71,8 @@ export class ValidationService {
 
     // Validar rol
     if (userData.rol !== undefined) {
-      const validRoles = Object.values(USER_ROLES);
-      if (!validRoles.includes(userData.rol as any)) {
+      const validRoles = Object.values(USER_ROLES) as string[];
+      if (typeof userData.rol !== "string" || !validRoles.includes(userData.rol)) {
         errors.push("El rol especificado no es válido");
       }
     }
@@ -216,7 +216,7 @@ export class ValidationService {
 
     // Validar teléfono
     if (puntoData.telefono) {
-      const phoneRegex = /^[\+]?[0-9\-\s\(\)]{7,15}$/;
+      const phoneRegex = /^[+]?[0-9-\s()]{7,15}$/;
       if (!phoneRegex.test(puntoData.telefono)) {
         errors.push("El formato del teléfono no es válido");
       }

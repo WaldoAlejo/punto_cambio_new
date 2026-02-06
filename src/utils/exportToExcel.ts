@@ -120,7 +120,6 @@ export const exportToExcel = (
   });
 
   // Write data rows with conversions for dates
-  const firstDataRowIndex = currentRow; // keep to apply number formats later
   for (const item of normalizedData) {
     const row = worksheet.getRow(currentRow++);
     dataKeys.forEach((k, idx) => {
@@ -130,14 +129,14 @@ export const exportToExcel = (
         return;
       }
       if (dateCols.has(idx)) {
-        // Convert strings that look like ISO to Date, else keep as-is
-        const dateVal =
-          v instanceof Date ? v : isIsoDateString(v) ? new Date(v) : v;
-        row.getCell(idx + 1).value = dateVal as any;
+        // Convert strings that look like ISO to Date, else keep as string
+        const cellValue: Date | string =
+          v instanceof Date ? v : isIsoDateString(v) ? new Date(v) : String(v);
+        row.getCell(idx + 1).value = cellValue;
       } else if (typeof v === "number") {
         row.getCell(idx + 1).value = v; // keep numeric for Excel
       } else {
-        row.getCell(idx + 1).value = v as any;
+        row.getCell(idx + 1).value = v;
       }
     });
     row.commit();

@@ -38,6 +38,8 @@ const controller = {
         return;
       }
 
+      const userId = req.user.id;
+
       const {
         origen_id,
         destino_id,
@@ -134,7 +136,7 @@ const controller = {
             moneda_id,
             monto,
             tipo_transferencia,
-            solicitado_por: req.user!.id,
+            solicitado_por: userId,
             descripcion: descripcion || null,
             numero_recibo: numeroRecibo,
             estado: estadoInicial,
@@ -237,7 +239,7 @@ const controller = {
               tipoReferencia: TipoReferencia.TRANSFER,
               referenciaId: transfer.id,
               descripcion: "Transferencia enviada a punto destino - En tránsito",
-              usuarioId: req.user!.id,
+              usuarioId: userId,
             },
             tx
           );

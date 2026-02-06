@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -74,7 +73,12 @@ export default function HistorialMovimientos({
         error: admin.error,
         refresh: admin.refresh,
       }
-    : (normal as any);
+    : {
+        movimientos: normal.movimientos as unknown as Movimiento[],
+        isLoading: normal.isLoading,
+        error: normal.error,
+        refresh: normal.refresh,
+      };
 
   // ===== UI State =====
   const [query, setQuery] = useState("");
@@ -114,8 +118,8 @@ export default function HistorialMovimientos({
   // ===== Opciones de divisa usando currencies si está disponible =====
   const monedaOptions = useMemo(() => {
     const set = new Set<string>();
-    (movimientos ?? []).forEach((m: any) => set.add(m.moneda_codigo));
-    let list = Array.from(set);
+    (movimientos ?? []).forEach((m) => set.add(m.moneda_codigo));
+    const list = Array.from(set);
 
     // Si tenemos currencies, usamos su orden
     if (currencies?.length) {
@@ -138,7 +142,7 @@ export default function HistorialMovimientos({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const arr = (movimientos ?? []) as Movimiento[];
-    let base = arr.filter((m) => {
+    const base = arr.filter((m) => {
       if (tipo !== "ALL" && m.tipo_movimiento !== tipo) return false;
       if (moneda !== "ALL" && m.moneda_codigo !== moneda) return false;
       if (!q) return true;
@@ -278,7 +282,25 @@ export default function HistorialMovimientos({
             </div>
 
             {/* Tipo */}
-            <Select value={tipo} onValueChange={(v: any) => setTipo(v)}>
+            <Select
+              value={tipo}
+              onValueChange={(v) => {
+                const allowed: Array<"ALL" | Movimiento["tipo_movimiento"]> = [
+                  "ALL",
+                  "INGRESO",
+                  "EGRESO",
+                  "TRANSFERENCIA_ENTRANTE",
+                  "TRANSFERENCIA_SALIENTE",
+                ];
+                if (
+                  allowed.includes(
+                    v as "ALL" | Movimiento["tipo_movimiento"]
+                  )
+                ) {
+                  setTipo(v as "ALL" | Movimiento["tipo_movimiento"]);
+                }
+              }}
+            >
               <SelectTrigger className="w-40 h-9">
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
@@ -310,7 +332,12 @@ export default function HistorialMovimientos({
             </Select>
 
             {/* Orden */}
-            <Select value={sortKey} onValueChange={(v: any) => setSortKey(v)}>
+            <Select
+              value={sortKey}
+              onValueChange={(v) => {
+                if (v === "fecha" || v === "monto") setSortKey(v);
+              }}
+            >
               <SelectTrigger className="w-36 h-9">
                 <SelectValue placeholder="Ordenar por" />
               </SelectTrigger>
@@ -410,7 +437,7 @@ export default function HistorialMovimientos({
               size="sm"
               onClick={() => {
                 if (isAdminView) {
-                  admin.refresh();
+                  refresh();
                 } else {
                   normal.cargarMovimientos();
                 }

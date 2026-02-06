@@ -12,6 +12,8 @@ interface DetalleRequest {
   saldo_apertura: number;
   saldo_cierre: number;
   conteo_fisico: number;
+  bancos_teorico?: number;
+  conteo_bancos?: number;
   billetes: number;
   monedas: number; // alias del frontend para monedas físicas
   ingresos_periodo?: number;
@@ -192,9 +194,14 @@ router.post("/", authenticateToken, async (req, res) => {
           const saldo_apertura = asNumber(d.saldo_apertura);
           const saldo_cierre = asNumber(d.saldo_cierre);
           const conteo_fisico = asNumber(d.conteo_fisico);
+          const bancos_teorico = asNumber(d.bancos_teorico);
+          const conteo_bancos = asNumber(d.conteo_bancos);
           const billetes = asNumber(d.billetes);
           const monedas_fisicas = asNumber(d.monedas);
           const diferencia = Number((conteo_fisico - saldo_cierre).toFixed(2));
+          const diferencia_bancos = Number(
+            (conteo_bancos - bancos_teorico).toFixed(2)
+          );
 
           return {
             cuadre_id: cabecera.id,
@@ -202,6 +209,9 @@ router.post("/", authenticateToken, async (req, res) => {
             saldo_apertura,
             saldo_cierre,
             conteo_fisico,
+            bancos_teorico,
+            conteo_bancos,
+            diferencia_bancos,
             billetes,
             monedas_fisicas,
             diferencia,
@@ -221,6 +231,10 @@ router.post("/", authenticateToken, async (req, res) => {
             const conteoFisico = asNumber(detalle.conteo_fisico);
             const billetes = asNumber(detalle.billetes);
             const monedas_fisicas = asNumber(detalle.monedas);
+            const conteoBancos =
+              detalle.conteo_bancos === null || detalle.conteo_bancos === undefined
+                ? null
+                : asNumber(detalle.conteo_bancos);
 
             await tx.saldo.upsert({
               where: {
@@ -233,6 +247,7 @@ router.post("/", authenticateToken, async (req, res) => {
                 cantidad: conteoFisico,
                 billetes: billetes,
                 monedas_fisicas: monedas_fisicas,
+                ...(conteoBancos === null ? {} : { bancos: conteoBancos }),
                 updated_at: new Date(),
               },
               create: {
@@ -241,6 +256,7 @@ router.post("/", authenticateToken, async (req, res) => {
                 cantidad: conteoFisico,
                 billetes: billetes,
                 monedas_fisicas: monedas_fisicas,
+                bancos: conteoBancos === null ? 0 : conteoBancos,
               },
             });
           }

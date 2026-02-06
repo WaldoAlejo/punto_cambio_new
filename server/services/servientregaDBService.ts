@@ -1,4 +1,4 @@
-import { Prisma, ServicioExterno } from "@prisma/client";
+import { Prisma, ServicioExterno, TipoViaTransferencia } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { subDays } from "date-fns";
 import {
@@ -6,6 +6,10 @@ import {
   TipoMovimiento,
   TipoReferencia,
 } from "./movimientoSaldoService.js";
+
+const log = (...args: unknown[]) => {
+  console.warn(...args);
+};
 
 export interface RemitenteData {
   identificacion?: string;
@@ -20,9 +24,8 @@ export interface RemitenteData {
   pais?: string;
 }
 
-export interface DestinatarioData extends RemitenteData {
-  // codpais se mapea a pais en la base de datos (se ignora en sanitización)
-}
+// Nota: codpais se mapea a pais en la base de datos (se ignora en sanitización)
+export type DestinatarioData = RemitenteData;
 
 export interface GuiaData {
   numero_guia: string;
@@ -96,6 +99,48 @@ async function ensureSystemUserId(): Promise<string> {
 }
 
 export class ServientregaDBService {
+  private normalizeDesglosePago(montoTotal: number, billetes?: number, monedas?: number, bancos?: number) {
+    const safe = (n: unknown) => {
+      const num = typeof n === "number" ? n : Number(n);
+      return Number.isFinite(num) ? num : 0;
+    };
+
+    const total = Math.max(0, safe(montoTotal));
+    let bil = Math.max(0, safe(billetes));
+    let mon = Math.max(0, safe(monedas));
+    let ban = Math.max(0, safe(bancos));
+
+    // Si no enviaron desglose, asumir efectivo (billetes)
+    if (bil === 0 && mon === 0 && ban === 0 && total > 0) {
+      bil = total;
+    }
+
+    // Normalizar: el total del desglose no debe exceder montoTotal.
+    // Prioridad: respetar bancos, luego monedas, luego ajustar billetes.
+    if (ban > total) ban = total;
+    const restanteTrasBanco = Math.max(0, total - ban);
+
+    if (mon > restanteTrasBanco) mon = restanteTrasBanco;
+    const restanteTrasMonedas = Math.max(0, restanteTrasBanco - mon);
+
+    if (bil > restanteTrasMonedas) bil = restanteTrasMonedas;
+
+    const efectivo = bil + mon;
+    const suma = efectivo + ban;
+    // Si quedó por debajo (por datos incompletos), completar en billetes.
+    if (suma + 1e-9 < total) {
+      bil += total - suma;
+    }
+
+    return {
+      billetes: bil,
+      monedas: mon,
+      bancos: ban,
+      efectivo,
+      total,
+    };
+  }
+
   // ===== REMITENTES =====
   async buscarRemitentes(cedula: string) {
     return prisma.servientregaRemitente.findMany({
@@ -124,15 +169,15 @@ export class ServientregaDBService {
       where: { 
         cedula_nombre_direccion: { cedula, nombre, direccion }
       },
-      update: sanitizedData as any,
-      create: sanitizedData as any,
+      update: sanitizedData as Prisma.ServientregaRemitenteUncheckedUpdateInput,
+      create: sanitizedData as Prisma.ServientregaRemitenteUncheckedCreateInput,
       select: {
         id: true,
         cedula: true,
         nombre: true,
       },
     });
-    console.log("✅ [guardarRemitente] Resultado con ID:", resultado);
+    log("✅ [guardarRemitente] Resultado con ID:", resultado);
     return resultado;
   }
 
@@ -150,21 +195,17 @@ export class ServientregaDBService {
    */
   private sanitizeRemitenteData(
     data: Partial<RemitenteData>
-  ): Record<string, any> {
-    const allowedFields = [
-      "cedula",
-      "nombre",
-      "direccion",
-      "telefono",
-      "codigo_postal",
-      "email",
-    ];
-    return Object.keys(data)
-      .filter((key) => allowedFields.includes(key))
-      .reduce((obj: Record<string, any>, key) => {
-        obj[key] = data[key as keyof RemitenteData];
-        return obj;
-      }, {});
+  ): Partial<Prisma.ServientregaRemitenteUncheckedCreateInput> {
+    const sanitized: Partial<Prisma.ServientregaRemitenteUncheckedCreateInput> = {};
+
+    if (data.cedula !== undefined) sanitized.cedula = data.cedula;
+    if (data.nombre !== undefined) sanitized.nombre = data.nombre;
+    if (data.direccion !== undefined) sanitized.direccion = data.direccion;
+    if (data.telefono !== undefined) sanitized.telefono = data.telefono;
+    if (data.codigo_postal !== undefined) sanitized.codigo_postal = data.codigo_postal;
+    if (data.email !== undefined) sanitized.email = data.email;
+
+    return sanitized;
   }
 
   // ===== DESTINATARIOS =====
@@ -208,15 +249,15 @@ export class ServientregaDBService {
       where: { 
         cedula_nombre_direccion: { cedula, nombre, direccion }
       },
-      update: sanitizedData as any,
-      create: sanitizedData as any,
+      update: sanitizedData as Prisma.ServientregaDestinatarioUncheckedUpdateInput,
+      create: sanitizedData as Prisma.ServientregaDestinatarioUncheckedCreateInput,
       select: {
         id: true,
         cedula: true,
         nombre: true,
       },
     });
-    console.log("✅ [guardarDestinatario] Resultado con ID:", resultado);
+    log("✅ [guardarDestinatario] Resultado con ID:", resultado);
     return resultado;
   }
 
@@ -245,60 +286,52 @@ export class ServientregaDBService {
    */
   private sanitizeDestinatarioData(
     data: Partial<DestinatarioData>
-  ): Record<string, any> {
-    const allowedFields = [
-      "cedula",
-      "nombre",
-      "direccion",
-      "ciudad",
-      "provincia",
-      "pais",
-      "telefono",
-      "email",
-      "codigo_postal",
-    ];
+  ): Partial<Prisma.ServientregaDestinatarioUncheckedCreateInput> {
+    const sanitized: Partial<Prisma.ServientregaDestinatarioUncheckedCreateInput> = {};
 
-    const sanitized = Object.keys(data)
-      .filter((key) => allowedFields.includes(key))
-      .reduce((obj: Record<string, any>, key) => {
-        obj[key] = data[key as keyof DestinatarioData];
-        return obj;
-      }, {});
+    if (data.cedula !== undefined) sanitized.cedula = data.cedula;
+    if (data.nombre !== undefined) sanitized.nombre = data.nombre;
+    if (data.direccion !== undefined) sanitized.direccion = data.direccion;
+    if (data.ciudad !== undefined) sanitized.ciudad = data.ciudad;
+    if (data.provincia !== undefined) sanitized.provincia = data.provincia;
+    if (data.pais !== undefined) sanitized.pais = data.pais;
+    if (data.telefono !== undefined) sanitized.telefono = data.telefono;
+    if (data.email !== undefined) sanitized.email = data.email;
+    if (data.codigo_postal !== undefined) sanitized.codigo_postal = data.codigo_postal;
 
     return sanitized;
   }
 
   // ===== GUÍAS =====
   async guardarGuia(data: GuiaData) {
-    console.log("🔍 [guardarGuia] Iniciando guardado de guía:", {
+    log("🔍 [guardarGuia] Iniciando guardado de guía:", {
       numero_guia: data.numero_guia,
       costo_envio: data.costo_envio,
       punto_atencion_id: data.punto_atencion_id,
     });
 
-    // Filtrar propiedades undefined/null para evitar conflictos con Prisma types
-    const cleanData = Object.entries(data).reduce((acc, [key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        // Convertir números a Decimal para campos monetarios
-        if (
-          (key === "costo_envio" || key === "valor_declarado") &&
-          typeof value === "number"
-        ) {
-          acc[key] = new Prisma.Decimal(value);
-        } else {
-          acc[key] = value;
-        }
-      }
-      return acc;
-    }, {} as Record<string, any>);
+    const cleanData: Prisma.ServientregaGuiaUncheckedCreateInput = {
+      numero_guia: data.numero_guia,
+      proceso: data.proceso,
+    };
 
-    console.log("🔍 [guardarGuia] Datos limpios antes de crear:", cleanData);
+    if (data.base64_response !== undefined && data.base64_response !== null && data.base64_response !== "") {
+      cleanData.base64_response = data.base64_response;
+    }
+    if (data.remitente_id) cleanData.remitente_id = data.remitente_id;
+    if (data.destinatario_id) cleanData.destinatario_id = data.destinatario_id;
+    if (data.punto_atencion_id) cleanData.punto_atencion_id = data.punto_atencion_id;
+    if (data.usuario_id) cleanData.usuario_id = data.usuario_id;
+    if (typeof data.costo_envio === "number") cleanData.costo_envio = new Prisma.Decimal(data.costo_envio);
+    if (typeof data.valor_declarado === "number") cleanData.valor_declarado = new Prisma.Decimal(data.valor_declarado);
+
+    log("🔍 [guardarGuia] Datos limpios antes de crear:", cleanData);
 
     try {
       const resultado = await prisma.servientregaGuia.create({
-        data: cleanData as any,
+        data: cleanData,
       });
-      console.log("✅ [guardarGuia] Guía guardada exitosamente:", {
+      log("✅ [guardarGuia] Guía guardada exitosamente:", {
         id: resultado.id,
         numero_guia: resultado.numero_guia,
         costo_envio: resultado.costo_envio,
@@ -359,7 +392,7 @@ export class ServientregaDBService {
       hastaDate.setHours(23, 59, 59, 999);
     }
 
-    console.log("📅 [obtenerGuias] CORRECCIÓN DE ZONA HORARIA APLICADA", {
+    log("📅 [obtenerGuias] CORRECCIÓN DE ZONA HORARIA APLICADA", {
       desde_original: desde,
       desde_convertido: desdeDate.toISOString(),
       hasta_original: hasta,
@@ -373,11 +406,11 @@ export class ServientregaDBService {
 
     // 🏢 IMPORTANTE: Filtrar por agencia si está disponible
     // Esto asegura que solo se vean guías de la agencia del punto de atención
-    const WHERE_CLAUSE: any = {};
+    const WHERE_CLAUSE: Prisma.ServientregaGuiaWhereInput = {};
     
     if (agencia_codigo) {
       WHERE_CLAUSE.agencia_codigo = agencia_codigo;
-      console.log("🏢 Filtrando por agencia:", agencia_codigo);
+      log("🏢 Filtrando por agencia:", agencia_codigo);
     } else if (punto_atencion_id && usuario_id) {
       WHERE_CLAUSE.punto_atencion_id = punto_atencion_id;
       WHERE_CLAUSE.usuario_id = usuario_id;
@@ -387,7 +420,7 @@ export class ServientregaDBService {
       WHERE_CLAUSE.usuario_id = usuario_id;
     }
 
-    console.log("🔍 [obtenerGuias] WHERE clause para búsqueda:", {
+    log("🔍 [obtenerGuias] WHERE clause para búsqueda:", {
       ...WHERE_CLAUSE,
       created_at: {
         gte: desdeDate.toISOString(),
@@ -417,7 +450,7 @@ export class ServientregaDBService {
       orderBy: { created_at: "desc" },
     });
 
-    console.log("✅ [obtenerGuias] Resultado final:", {
+    log("✅ [obtenerGuias] Resultado final:", {
       guias_encontradas: guias.length,
       desde: desde,
       hasta: hasta,
@@ -514,6 +547,7 @@ export class ServientregaDBService {
           descripcion: `Asignación de saldo Servientrega por ${
             creado_por || "SYSTEM"
           }`,
+          saldoBucket: "NINGUNO",
           usuarioId: systemUserId,
         },
         tx
@@ -528,19 +562,19 @@ export class ServientregaDBService {
    * Ahora también registra en MovimientoSaldo para trazabilidad completa.
    */
   async descontarSaldo(puntoAtencionId: string, monto: number) {
-    console.log("🔍 [descontarSaldo] Iniciando descuento:", {
+    log("🔍 [descontarSaldo] Iniciando descuento:", {
       puntoAtencionId,
       monto,
     });
 
     try {
       return await prisma.$transaction(async (tx) => {
-        console.log("🔍 [descontarSaldo] Dentro de transacción");
+        log("🔍 [descontarSaldo] Dentro de transacción");
 
         // Obtener IDs necesarios
         const usdId = await ensureUsdMonedaId();
         const systemUserId = await ensureSystemUserId();
-        console.log("🔍 [descontarSaldo] IDs obtenidos:", {
+        log("🔍 [descontarSaldo] IDs obtenidos:", {
           usdId,
           systemUserId,
         });
@@ -549,7 +583,7 @@ export class ServientregaDBService {
           where: { punto_atencion_id: puntoAtencionId },
         });
 
-        console.log("🔍 [descontarSaldo] Saldo encontrado:", saldo);
+        log("🔍 [descontarSaldo] Saldo encontrado:", saldo);
         if (!saldo) {
           console.warn(
             "⚠️ [descontarSaldo] No hay saldo para este punto de atención:",
@@ -563,7 +597,7 @@ export class ServientregaDBService {
         const nuevoUsado = usado.add(new Prisma.Decimal(monto));
         const disponible = total.sub(nuevoUsado);
 
-        console.log("🔍 [descontarSaldo] Cálculos de saldo:", {
+        log("🔍 [descontarSaldo] Cálculos de saldo:", {
           usado: Number(usado),
           total: Number(total),
           nuevoUsado: Number(nuevoUsado),
@@ -578,7 +612,7 @@ export class ServientregaDBService {
         const saldoDisponibleAnterior = Number(total.sub(usado));
         const saldoDisponibleNuevo = Number(disponible);
 
-        console.log("🔍 [descontarSaldo] Actualizando ServientregaSaldo...");
+        log("🔍 [descontarSaldo] Actualizando ServientregaSaldo...");
         // Sumar/restar billetes y monedas si se proveen (opcional: puedes pasar como argumento)
         const saldoActual = await tx.servientregaSaldo.findUnique({ where: { punto_atencion_id: puntoAtencionId } });
         const actualizado = await tx.servientregaSaldo.update({
@@ -591,23 +625,16 @@ export class ServientregaDBService {
           },
         });
 
-        console.log(
-          "✅ [descontarSaldo] ServientregaSaldo actualizado:",
-          actualizado
-        );
+        log("✅ [descontarSaldo] ServientregaSaldo actualizado:", actualizado);
 
         // Registrar movimiento en historial (débito)
-        console.log(
-          "🔍 [descontarSaldo] Buscando nombre del punto de atención..."
-        );
+        log("🔍 [descontarSaldo] Buscando nombre del punto de atención...");
         const puntoAtencion = await tx.puntoAtencion.findUnique({
           where: { id: puntoAtencionId },
           select: { nombre: true },
         });
 
-        console.log(
-          "🔍 [descontarSaldo] Creando registro en ServientregaHistorialSaldo..."
-        );
+        log("🔍 [descontarSaldo] Creando registro en ServientregaHistorialSaldo...");
         await tx.servientregaHistorialSaldo.create({
           data: {
             punto_atencion_id: puntoAtencionId,
@@ -617,10 +644,10 @@ export class ServientregaDBService {
           },
         });
 
-        console.log("✅ [descontarSaldo] Historial creado");
+        log("✅ [descontarSaldo] Historial creado");
 
         // Registrar en MovimientoSaldo para trazabilidad (dentro de la transacción)
-        console.log("🔍 [descontarSaldo] Registrando MovimientoSaldo...");
+        log("🔍 [descontarSaldo] Registrando MovimientoSaldo...");
         await registrarMovimientoSaldo(
           {
             puntoAtencionId: puntoAtencionId,
@@ -631,13 +658,14 @@ export class ServientregaDBService {
             saldoNuevo: saldoDisponibleNuevo,
             tipoReferencia: TipoReferencia.SERVIENTREGA,
             descripcion: "Descuento por generación de guía Servientrega",
+            saldoBucket: "NINGUNO",
             usuarioId: systemUserId,
           },
           tx
         ); // ⚠️ Pasar el cliente de transacción para atomicidad
 
-        console.log("✅ [descontarSaldo] MovimientoSaldo registrado");
-        console.log("✅ [descontarSaldo] Transacción completada exitosamente");
+        log("✅ [descontarSaldo] MovimientoSaldo registrado");
+        log("✅ [descontarSaldo] Transacción completada exitosamente");
 
         return actualizado;
       });
@@ -712,6 +740,7 @@ export class ServientregaDBService {
           saldoNuevo: saldoDisponibleNuevo,
           tipoReferencia: TipoReferencia.SERVIENTREGA,
           descripcion: "Devolución por anulación de guía Servientrega",
+          saldoBucket: "NINGUNO",
           usuarioId: systemUserId,
         },
         tx
@@ -788,7 +817,7 @@ export class ServientregaDBService {
     estado?: string;
     punto_atencion_id?: string;
   }) {
-    const where: any = {};
+    const where: Prisma.ServientregaSolicitudSaldoWhereInput = {};
 
     if (filtros?.estado) {
       where.estado = filtros.estado;
@@ -887,34 +916,32 @@ export class ServientregaDBService {
     punto_atencion_id?: string;
     usuario_id?: string;
   }) {
-    const where: any = {};
+    const where: Prisma.ServientregaGuiaWhereInput = {};
     const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
-    console.log("🔍 [obtenerGuiasConFiltros] Filtros recibidos:", filtros);
+    log("🔍 [obtenerGuiasConFiltros] Filtros recibidos:", filtros);
 
     // Filtro por fechas (CORRECCIÓN: considerar offset Ecuador UTC-5)
     // Se SUMA 5 horas para convertir Ecuador time (UTC-5) a UTC para búsqueda en BD
     if (filtros.desde || filtros.hasta) {
-      where.created_at = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (filtros.desde) {
         const desdeDate = new Date(filtros.desde);
         desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         desdeDate.setHours(0, 0, 0, 0); // Inicio del día
-        where.created_at.gte = desdeDate;
-        console.log(
-          "📅 Desde (inicio del día, con offset Ecuador):",
-          desdeDate.toISOString()
-        );
+        createdAt.gte = desdeDate;
+        log("📅 Desde (inicio del día, con offset Ecuador):", desdeDate.toISOString());
       }
       if (filtros.hasta) {
         const hastaDate = new Date(filtros.hasta);
         hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         hastaDate.setHours(23, 59, 59, 999); // Final del día
-        where.created_at.lte = hastaDate;
-        console.log(
-          "📅 Hasta (final del día, con offset Ecuador):",
-          hastaDate.toISOString()
-        );
+        createdAt.lte = hastaDate;
+        log("📅 Hasta (final del día, con offset Ecuador):", hastaDate.toISOString());
+      }
+
+      if (createdAt.gte || createdAt.lte) {
+        where.created_at = createdAt;
       }
     }
 
@@ -943,10 +970,7 @@ export class ServientregaDBService {
       where.punto_atencion_id = filtros.punto_atencion_id;
     }
 
-    console.log(
-      "🔍 [obtenerGuiasConFiltros] WHERE clause:",
-      JSON.stringify(where, null, 2)
-    );
+    log("🔍 [obtenerGuiasConFiltros] WHERE clause:", JSON.stringify(where, null, 2));
 
     const guias = await prisma.servientregaGuia.findMany({
       where,
@@ -969,31 +993,33 @@ export class ServientregaDBService {
       orderBy: { created_at: "desc" },
     });
 
-    console.log(
-      `✅ [obtenerGuiasConFiltros] Encontradas ${guias.length} guías`
-    );
+    log(`✅ [obtenerGuiasConFiltros] Encontradas ${guias.length} guías`);
     return guias;
   }
 
   async obtenerEstadisticasGuias(filtros: { desde?: string; hasta?: string }) {
-    const where: any = {};
+    const where: Prisma.ServientregaGuiaWhereInput = {};
     const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
     // Filtro por fechas (CORRECCIÓN: considerar offset Ecuador UTC-5)
     // Se SUMA 5 horas para convertir Ecuador time (UTC-5) a UTC para búsqueda en BD
     if (filtros.desde || filtros.hasta) {
-      where.created_at = {};
+      const createdAt: Prisma.DateTimeFilter = {};
       if (filtros.desde) {
         const desdeDate = new Date(filtros.desde);
         desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         desdeDate.setHours(0, 0, 0, 0); // Inicio del día
-        where.created_at.gte = desdeDate;
+        createdAt.gte = desdeDate;
       }
       if (filtros.hasta) {
         const hastaDate = new Date(filtros.hasta);
         hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         hastaDate.setHours(23, 59, 59, 999); // Final del día
-        where.created_at.lte = hastaDate;
+        createdAt.lte = hastaDate;
+      }
+
+      if (createdAt.gte || createdAt.lte) {
+        where.created_at = createdAt;
       }
     }
 
@@ -1078,22 +1104,26 @@ export class ServientregaDBService {
     hasta?: string;
     estado?: string;
   }) {
-    const where: any = {};
+    const where: Prisma.ServientregaSolicitudAnulacionWhereInput = {};
     const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
     if (filtros.desde || filtros.hasta) {
-      where.fecha_solicitud = {};
+      const fechaSolicitud: Prisma.DateTimeFilter = {};
       if (filtros.desde) {
         const desdeDate = new Date(filtros.desde);
         desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         desdeDate.setHours(0, 0, 0, 0); // Inicio del día
-        where.fecha_solicitud.gte = desdeDate;
+        fechaSolicitud.gte = desdeDate;
       }
       if (filtros.hasta) {
         const hastaDate = new Date(filtros.hasta);
         hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
         hastaDate.setHours(23, 59, 59, 999); // Final del día
-        where.fecha_solicitud.lte = hastaDate;
+        fechaSolicitud.lte = hastaDate;
+      }
+
+      if (fechaSolicitud.gte || fechaSolicitud.lte) {
+        where.fecha_solicitud = fechaSolicitud;
       }
     }
 
@@ -1185,7 +1215,7 @@ export class ServientregaDBService {
     bancos?: number
   ) {
     return prisma.$transaction(async (tx) => {
-      console.log("📥 [registrarIngresoServicioExterno] Iniciando:", {
+      log("📥 [registrarIngresoServicioExterno] Iniciando:", {
         puntoAtencionId,
         monto,
         numeroGuia,
@@ -1198,135 +1228,135 @@ export class ServientregaDBService {
       const usdId = await ensureUsdMonedaId();
       const systemUserId = await ensureSystemUserId();
 
+      const desglose = this.normalizeDesglosePago(monto, billetes, monedas, bancos);
+
       // Determinar método de ingreso para el movimiento
-      let metodoIngreso = "EFECTIVO";
-      if (bancos && bancos > 0) {
-        if ((billetes && billetes > 0) || (monedas && monedas > 0)) {
-          metodoIngreso = "MIXTO";
+      let metodoIngreso: TipoViaTransferencia = TipoViaTransferencia.EFECTIVO;
+      if (desglose.bancos > 0) {
+        if (desglose.efectivo > 0) {
+          metodoIngreso = TipoViaTransferencia.MIXTO;
         } else {
-          metodoIngreso = "BANCO";
+          metodoIngreso = TipoViaTransferencia.BANCO;
         }
       }
 
       // 1️⃣ Crear MovimientoServicioExterno (solo para registro/auditoría)
-      console.log("📥 [registrarIngresoServicioExterno] Creando movimiento...");
+      log("📥 [registrarIngresoServicioExterno] Creando movimiento...");
       const movimiento = await tx.servicioExternoMovimiento.create({
         data: {
           punto_atencion_id: puntoAtencionId,
           servicio: ServicioExterno.SERVIENTREGA,
           tipo_movimiento: "INGRESO",
           moneda_id: usdId,
-          monto: new Prisma.Decimal(monto),
+          monto: new Prisma.Decimal(desglose.total),
           numero_referencia: numeroGuia,
           descripcion: `Ingreso por generación de guía Servientrega #${numeroGuia}`,
           usuario_id: systemUserId,
-          billetes: billetes !== undefined ? new Prisma.Decimal(billetes) : undefined,
-          monedas_fisicas: monedas !== undefined ? new Prisma.Decimal(monedas) : undefined,
-          bancos: bancos !== undefined ? new Prisma.Decimal(bancos) : undefined,
-          metodo_ingreso: metodoIngreso as any,
+          billetes: new Prisma.Decimal(desglose.billetes),
+          monedas_fisicas: new Prisma.Decimal(desglose.monedas),
+          bancos: new Prisma.Decimal(desglose.bancos),
+          metodo_ingreso: metodoIngreso,
         },
       });
 
-      console.log(
-        "✅ [registrarIngresoServicioExterno] Movimiento creado:",
-        movimiento.id
-      );
+      log("✅ [registrarIngresoServicioExterno] Movimiento creado:", movimiento.id);
 
       // 2️⃣ NO actualizamos ServicioExternoSaldo para SERVIENTREGA
       // porque usa ServientregaSaldo (descontado previamente en descontarSaldo)
-      console.log(
-        "ℹ️ [registrarIngresoServicioExterno] Saltando actualización de ServicioExternoSaldo (Servientrega usa tabla separada)"
-      );
+      log("ℹ️ [registrarIngresoServicioExterno] Saltando actualización de ServicioExternoSaldo (Servientrega usa tabla separada)");
 
       const saldoServicioAnterior = new Prisma.Decimal(0);
       const saldoServicioNuevo = new Prisma.Decimal(0);
 
-      // 3️⃣ Actualizar Saldo general (USD divisas) - SUMA porque entra efectivo
-      console.log(
-        "📥 [registrarIngresoServicioExterno] Actualizando saldo general USD..."
-      );
-      const saldoGeneral = await tx.saldo.findUnique({
+      // 3️⃣ Actualizar Saldo general USD por bucket (CAJA vs BANCOS) usando el ledger
+      const saldoActual = await tx.saldo.findUnique({
         where: {
           punto_atencion_id_moneda_id: {
             punto_atencion_id: puntoAtencionId,
             moneda_id: usdId,
           },
         },
+        select: {
+          id: true,
+          cantidad: true,
+          bancos: true,
+          billetes: true,
+          monedas_fisicas: true,
+        },
       });
 
-      let saldoGeneralAnterior = new Prisma.Decimal(0);
-      let saldoGeneralNuevo = new Prisma.Decimal(0);
+      const saldoCajaAnterior = saldoActual?.cantidad ?? new Prisma.Decimal(0);
+      const saldoBancosAnterior = saldoActual?.bancos ?? new Prisma.Decimal(0);
 
-      if (saldoGeneral) {
-        saldoGeneralAnterior = saldoGeneral.cantidad ?? new Prisma.Decimal(0);
-        saldoGeneralNuevo = saldoGeneralAnterior.add(new Prisma.Decimal(monto));
+      let saldoCajaNuevo = saldoCajaAnterior;
+      let saldoBancosNuevo = saldoBancosAnterior;
 
-        await tx.saldo.update({
-          where: { id: saldoGeneral.id },
-          data: {
-            cantidad: saldoGeneralNuevo,
-            billetes: billetes !== undefined
-              ? (saldoGeneral.billetes
-                  ? saldoGeneral.billetes.add(new Prisma.Decimal(billetes))
-                  : new Prisma.Decimal(billetes))
-              : saldoGeneral.billetes,
-            monedas_fisicas: monedas !== undefined
-              ? (saldoGeneral.monedas_fisicas
-                  ? saldoGeneral.monedas_fisicas.add(new Prisma.Decimal(monedas))
-                  : new Prisma.Decimal(monedas))
-              : saldoGeneral.monedas_fisicas,
-            bancos: bancos !== undefined
-              ? (saldoGeneral.bancos
-                  ? saldoGeneral.bancos.add(new Prisma.Decimal(bancos))
-                  : new Prisma.Decimal(bancos))
-              : saldoGeneral.bancos,
+      if (desglose.efectivo > 0) {
+        saldoCajaNuevo = saldoCajaAnterior.add(new Prisma.Decimal(desglose.efectivo));
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId,
+            monedaId: usdId,
+            tipoMovimiento: TipoMovimiento.INGRESO,
+            monto: desglose.efectivo,
+            saldoAnterior: saldoCajaAnterior,
+            saldoNuevo: saldoCajaNuevo,
+            tipoReferencia: TipoReferencia.SERVIENTREGA,
+            referenciaId: numeroGuia,
+            descripcion: `Ingreso (CAJA) por guía Servientrega #${numeroGuia}`,
+            saldoBucket: "CAJA",
+            usuarioId: systemUserId,
+          },
+          tx
+        );
+
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: puntoAtencionId,
+              moneda_id: usdId,
+            },
+          },
+          update: {
+            billetes: new Prisma.Decimal((saldoActual?.billetes ?? new Prisma.Decimal(0)).toNumber()).add(
+              new Prisma.Decimal(desglose.billetes)
+            ),
+            monedas_fisicas: new Prisma.Decimal((saldoActual?.monedas_fisicas ?? new Prisma.Decimal(0)).toNumber()).add(
+              new Prisma.Decimal(desglose.monedas)
+            ),
             updated_at: new Date(),
           },
-        });
-      } else {
-        saldoGeneralNuevo = new Prisma.Decimal(monto);
-        await tx.saldo.create({
-          data: {
+          create: {
             punto_atencion_id: puntoAtencionId,
             moneda_id: usdId,
-            cantidad: saldoGeneralNuevo,
-            billetes: billetes !== undefined ? new Prisma.Decimal(billetes) : undefined,
-            monedas_fisicas: monedas !== undefined ? new Prisma.Decimal(monedas) : undefined,
-            bancos: bancos !== undefined ? new Prisma.Decimal(bancos) : undefined,
+            cantidad: saldoCajaNuevo,
+            bancos: saldoBancosAnterior,
+            billetes: new Prisma.Decimal(desglose.billetes),
+            monedas_fisicas: new Prisma.Decimal(desglose.monedas),
           },
         });
       }
 
-      console.log(
-        "✅ [registrarIngresoServicioExterno] Saldo general USD actualizado"
-      );
-
-      // 4️⃣ Registrar en MovimientoSaldo para auditoría
-      console.log(
-        "📥 [registrarIngresoServicioExterno] Registrando MovimientoSaldo..."
-      );
-      await registrarMovimientoSaldo(
-        {
-          puntoAtencionId: puntoAtencionId,
-          monedaId: usdId,
-          tipoMovimiento: TipoMovimiento.INGRESO,
-          monto: monto,
-          saldoAnterior: Number(saldoGeneralAnterior),
-          saldoNuevo: Number(saldoGeneralNuevo),
-          tipoReferencia: TipoReferencia.SERVIENTREGA,
-          referenciaId: numeroGuia,
-          descripcion: `Ingreso por generación de guía Servientrega #${numeroGuia}`,
-          usuarioId: systemUserId,
-        },
-        tx
-      );
-
-      console.log(
-        "✅ [registrarIngresoServicioExterno] MovimientoSaldo registrado"
-      );
-      console.log(
-        "✅ [registrarIngresoServicioExterno] Transacción completada"
-      );
+      if (desglose.bancos > 0) {
+        saldoBancosNuevo = saldoBancosAnterior.add(new Prisma.Decimal(desglose.bancos));
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId,
+            monedaId: usdId,
+            tipoMovimiento: TipoMovimiento.INGRESO,
+            monto: desglose.bancos,
+            saldoAnterior: saldoBancosAnterior,
+            saldoNuevo: saldoBancosNuevo,
+            tipoReferencia: TipoReferencia.SERVIENTREGA,
+            referenciaId: numeroGuia,
+            descripcion: `Ingreso (BANCOS) por guía Servientrega #${numeroGuia}`,
+            saldoBucket: "BANCOS",
+            usuarioId: systemUserId,
+          },
+          tx
+        );
+      }
+      log("✅ [registrarIngresoServicioExterno] Transacción completada");
 
       return {
         movimiento,
@@ -1335,8 +1365,8 @@ export class ServientregaDBService {
           nuevo: Number(saldoServicioNuevo),
         },
         saldoGeneral: {
-          anterior: Number(saldoGeneralAnterior),
-          nuevo: Number(saldoGeneralNuevo),
+          anterior: Number(saldoCajaAnterior),
+          nuevo: Number(saldoCajaNuevo),
         },
       };
     });
@@ -1359,7 +1389,7 @@ export class ServientregaDBService {
     bancos?: number
   ) {
     return prisma.$transaction(async (tx) => {
-      console.log("📤 [revertirIngresoServicioExterno] Iniciando:", {
+      log("📤 [revertirIngresoServicioExterno] Iniciando:", {
         puntoAtencionId,
         monto,
         numeroGuia,
@@ -1372,200 +1402,140 @@ export class ServientregaDBService {
       const usdId = await ensureUsdMonedaId();
       const systemUserId = await ensureSystemUserId();
 
+      const desglose = this.normalizeDesglosePago(monto, billetes, monedas, bancos);
+
       // Determinar método de ingreso para el movimiento de reversión
-      let metodoIngreso = "EFECTIVO";
-      if (bancos && bancos > 0) {
-        if ((billetes && billetes > 0) || (monedas && monedas > 0)) {
-          metodoIngreso = "MIXTO";
+      let metodoIngreso: TipoViaTransferencia = TipoViaTransferencia.EFECTIVO;
+      if (desglose.bancos > 0) {
+        if (desglose.efectivo > 0) {
+          metodoIngreso = TipoViaTransferencia.MIXTO;
         } else {
-          metodoIngreso = "BANCO";
+          metodoIngreso = TipoViaTransferencia.BANCO;
         }
       }
 
       // 1️⃣ Crear MovimientoServicioExterno (EGRESO - reversión)
-      console.log(
-        "📤 [revertirIngresoServicioExterno] Creando movimiento de reversión..."
-      );
+      log("📤 [revertirIngresoServicioExterno] Creando movimiento de reversión...");
       const movimiento = await tx.servicioExternoMovimiento.create({
         data: {
           punto_atencion_id: puntoAtencionId,
           servicio: ServicioExterno.SERVIENTREGA,
           tipo_movimiento: "EGRESO",
           moneda_id: usdId,
-          monto: new Prisma.Decimal(-monto),
+          monto: new Prisma.Decimal(-desglose.total),
           numero_referencia: numeroGuia,
           descripcion: `Reversión por cancelación de guía Servientrega #${numeroGuia}`,
           usuario_id: systemUserId,
-          billetes: billetes !== undefined ? new Prisma.Decimal(-billetes) : undefined,
-          monedas_fisicas: monedas !== undefined ? new Prisma.Decimal(-monedas) : undefined,
-          bancos: bancos !== undefined ? new Prisma.Decimal(-bancos) : undefined,
-          metodo_ingreso: metodoIngreso as any,
+          billetes: new Prisma.Decimal(-desglose.billetes),
+          monedas_fisicas: new Prisma.Decimal(-desglose.monedas),
+          bancos: new Prisma.Decimal(-desglose.bancos),
+          metodo_ingreso: metodoIngreso,
         },
       });
 
-      console.log(
+      log(
         "✅ [revertirIngresoServicioExterno] Movimiento de reversión creado:",
         movimiento.id
       );
 
-      // 2️⃣ Actualizar ServicioExternoSaldo (restar)
-      console.log(
-        "📤 [revertirIngresoServicioExterno] Actualizando saldo de servicio externo..."
-      );
-      const saldoServicio = await tx.servicioExternoSaldo.findUnique({
-        where: {
-          punto_atencion_id_servicio_moneda_id: {
-            punto_atencion_id: puntoAtencionId,
-            servicio: ServicioExterno.SERVIENTREGA,
-            moneda_id: usdId,
-          },
-        },
-      });
+      // 2️⃣ SERVIENTREGA: no tocamos ServicioExternoSaldo (usa ServientregaSaldo separado)
+      const saldoServicioAnterior = new Prisma.Decimal(0);
+      const saldoServicioNuevo = new Prisma.Decimal(0);
 
-      let saldoServicioAnterior = new Prisma.Decimal(0);
-      let saldoServicioNuevo = new Prisma.Decimal(0);
-
-      if (saldoServicio) {
-        saldoServicioAnterior = saldoServicio.cantidad ?? new Prisma.Decimal(0);
-        saldoServicioNuevo = saldoServicioAnterior.sub(new Prisma.Decimal(monto));
-
-        // Asegurar que no sea negativo
-        if (saldoServicioNuevo.lt(0)) {
-          console.warn(
-            "⚠️ [revertirIngresoServicioExterno] Saldo de servicio sería negativo:",
-            saldoServicioNuevo
-          );
-          // Permitir reversiones incluso si van negativas (para auditoría correcta)
-        }
-
-        await tx.servicioExternoSaldo.update({
-          where: { id: saldoServicio.id },
-          data: {
-            cantidad: saldoServicioNuevo,
-            billetes: (typeof billetes === 'number' && !isNaN(billetes)
-              ? (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0) - billetes
-              : (saldoServicio.billetes ? Number(saldoServicio.billetes) : 0)),
-            monedas_fisicas: (typeof monedas === 'number' && !isNaN(monedas)
-              ? (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0) - monedas
-              : (saldoServicio.monedas_fisicas ? Number(saldoServicio.monedas_fisicas) : 0)),
-            bancos: (typeof bancos === 'number' && !isNaN(bancos)
-              ? (saldoServicio.bancos ? Number(saldoServicio.bancos) : 0) - bancos
-              : (saldoServicio.bancos ? Number(saldoServicio.bancos) : 0)),
-            updated_at: new Date(),
-          },
-        });
-      } else {
-        console.warn(
-          "⚠️ [revertirIngresoServicioExterno] No existe saldo de servicio"
-        );
-        saldoServicioNuevo = new Prisma.Decimal(-monto);
-        await tx.servicioExternoSaldo.create({
-          data: {
-            punto_atencion_id: puntoAtencionId,
-            servicio: ServicioExterno.SERVIENTREGA,
-            moneda_id: usdId,
-            cantidad: saldoServicioNuevo,
-            billetes: typeof billetes === 'number' ? -billetes : 0,
-            monedas_fisicas: typeof monedas === 'number' ? -monedas : 0,
-            bancos: typeof bancos === 'number' ? -bancos : 0,
-          },
-        });
-      }
-
-      console.log(
-        "✅ [revertirIngresoServicioExterno] Saldo de servicio actualizado"
-      );
-
-      // 3️⃣ Actualizar Saldo general (USD divisas) - RESTAR
-      console.log(
-        "📤 [revertirIngresoServicioExterno] Actualizando saldo general USD..."
-      );
-      const saldoGeneral = await tx.saldo.findUnique({
+      // 3️⃣ Actualizar Saldo general USD por bucket usando el ledger
+      const saldoActual = await tx.saldo.findUnique({
         where: {
           punto_atencion_id_moneda_id: {
             punto_atencion_id: puntoAtencionId,
             moneda_id: usdId,
           },
         },
+        select: {
+          id: true,
+          cantidad: true,
+          bancos: true,
+          billetes: true,
+          monedas_fisicas: true,
+        },
       });
 
-      let saldoGeneralAnterior = new Prisma.Decimal(0);
-      let saldoGeneralNuevo = new Prisma.Decimal(0);
+      const saldoCajaAnterior = saldoActual?.cantidad ?? new Prisma.Decimal(0);
+      const saldoBancosAnterior = saldoActual?.bancos ?? new Prisma.Decimal(0);
 
-      if (saldoGeneral) {
-        saldoGeneralAnterior = saldoGeneral.cantidad ?? new Prisma.Decimal(0);
-        saldoGeneralNuevo = saldoGeneralAnterior.sub(new Prisma.Decimal(monto));
+      let saldoCajaNuevo = saldoCajaAnterior;
+      let saldoBancosNuevo = saldoBancosAnterior;
 
-        // Asegurar que no sea negativo
-        if (saldoGeneralNuevo.lt(0)) {
-          console.warn(
-            "⚠️ [revertirIngresoServicioExterno] Saldo general sería negativo:",
-            saldoGeneralNuevo
-          );
-          // Permitir reversiones incluso si van negativas (para auditoría correcta)
-        }
+      if (desglose.efectivo > 0) {
+        saldoCajaNuevo = saldoCajaAnterior.sub(new Prisma.Decimal(desglose.efectivo));
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId,
+            monedaId: usdId,
+            tipoMovimiento: TipoMovimiento.EGRESO,
+            monto: desglose.efectivo,
+            saldoAnterior: saldoCajaAnterior,
+            saldoNuevo: saldoCajaNuevo,
+            tipoReferencia: TipoReferencia.SERVIENTREGA,
+            referenciaId: numeroGuia,
+            descripcion: `Reversión (CAJA) guía Servientrega #${numeroGuia}`,
+            saldoBucket: "CAJA",
+            usuarioId: systemUserId,
+          },
+          tx
+        );
 
-        await tx.saldo.update({
-          where: { id: saldoGeneral.id },
-          data: {
-            cantidad: saldoGeneralNuevo,
-            billetes: (typeof billetes === 'number' && !isNaN(billetes)
-              ? Math.max(0, (saldoGeneral.billetes ? Number(saldoGeneral.billetes) : 0) - billetes)
-              : (saldoGeneral.billetes ? Number(saldoGeneral.billetes) : 0)),
-            monedas_fisicas: (typeof monedas === 'number' && !isNaN(monedas)
-              ? Math.max(0, (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) : 0) - monedas)
-              : (saldoGeneral.monedas_fisicas ? Number(saldoGeneral.monedas_fisicas) : 0)),
-            bancos: (typeof bancos === 'number' && !isNaN(bancos)
-              ? Math.max(0, (saldoGeneral.bancos ? Number(saldoGeneral.bancos) : 0) - bancos)
-              : (saldoGeneral.bancos ? Number(saldoGeneral.bancos) : 0)),
+        const billetesAnteriorNum = saldoActual?.billetes
+          ? saldoActual.billetes.toNumber()
+          : 0;
+        const monedasAnteriorNum = saldoActual?.monedas_fisicas
+          ? saldoActual.monedas_fisicas.toNumber()
+          : 0;
+
+        const billetesNuevo = Math.max(0, billetesAnteriorNum - desglose.billetes);
+        const monedasNuevo = Math.max(0, monedasAnteriorNum - desglose.monedas);
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: puntoAtencionId,
+              moneda_id: usdId,
+            },
+          },
+          update: {
+            billetes: new Prisma.Decimal(billetesNuevo),
+            monedas_fisicas: new Prisma.Decimal(monedasNuevo),
             updated_at: new Date(),
           },
-        });
-      } else {
-        console.warn(
-          "⚠️ [revertirIngresoServicioExterno] No existe saldo general"
-        );
-        saldoGeneralNuevo = new Prisma.Decimal(-monto);
-        await tx.saldo.create({
-          data: {
+          create: {
             punto_atencion_id: puntoAtencionId,
             moneda_id: usdId,
-            cantidad: saldoGeneralNuevo,
-            billetes: typeof billetes === 'number' ? -billetes : 0,
-            monedas_fisicas: typeof monedas === 'number' ? -monedas : 0,
-            bancos: typeof bancos === 'number' ? -bancos : 0,
+            cantidad: saldoCajaNuevo,
+            bancos: saldoBancosAnterior,
+            billetes: new Prisma.Decimal(billetesNuevo),
+            monedas_fisicas: new Prisma.Decimal(monedasNuevo),
           },
         });
       }
 
-      console.log(
-        "✅ [revertirIngresoServicioExterno] Saldo general USD actualizado"
-      );
-
-      // 4️⃣ Registrar en MovimientoSaldo para auditoría
-      console.log(
-        "📤 [revertirIngresoServicioExterno] Registrando MovimientoSaldo..."
-      );
-      await registrarMovimientoSaldo(
-        {
-          puntoAtencionId: puntoAtencionId,
-          monedaId: usdId,
-          tipoMovimiento: TipoMovimiento.EGRESO,
-          monto: monto,
-          saldoAnterior: Number(saldoGeneralAnterior),
-          saldoNuevo: Number(saldoGeneralNuevo),
-          tipoReferencia: TipoReferencia.SERVIENTREGA,
-          referenciaId: numeroGuia,
-          descripcion: `Reversión por cancelación de guía Servientrega #${numeroGuia}`,
-          usuarioId: systemUserId,
-        },
-        tx
-      );
-
-      console.log(
-        "✅ [revertirIngresoServicioExterno] MovimientoSaldo registrado"
-      );
-      console.log("✅ [revertirIngresoServicioExterno] Transacción completada");
+      if (desglose.bancos > 0) {
+        saldoBancosNuevo = saldoBancosAnterior.sub(new Prisma.Decimal(desglose.bancos));
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId,
+            monedaId: usdId,
+            tipoMovimiento: TipoMovimiento.EGRESO,
+            monto: desglose.bancos,
+            saldoAnterior: saldoBancosAnterior,
+            saldoNuevo: saldoBancosNuevo,
+            tipoReferencia: TipoReferencia.SERVIENTREGA,
+            referenciaId: numeroGuia,
+            descripcion: `Reversión (BANCOS) guía Servientrega #${numeroGuia}`,
+            saldoBucket: "BANCOS",
+            usuarioId: systemUserId,
+          },
+          tx
+        );
+      }
+      log("✅ [revertirIngresoServicioExterno] Transacción completada");
 
       return {
         movimiento,
@@ -1574,8 +1544,8 @@ export class ServientregaDBService {
           nuevo: Number(saldoServicioNuevo),
         },
         saldoGeneral: {
-          anterior: Number(saldoGeneralAnterior),
-          nuevo: Number(saldoGeneralNuevo),
+          anterior: Number(saldoCajaAnterior),
+          nuevo: Number(saldoCajaNuevo),
         },
       };
     });

@@ -117,7 +117,7 @@ const CompletePaymentForm = ({
         } else if (result?.success) {
           const resumen = (result.saldos_actualizados || [])
             .map(
-              (s: any) =>
+              (s) =>
                 `${s.moneda_id}: ${Number(s.saldo_anterior || 0).toFixed(
                   2
                 )} → ${Number(s.saldo_nuevo || 0).toFixed(2)}`
@@ -157,7 +157,7 @@ const CompletePaymentForm = ({
       window.dispatchEvent(new CustomEvent("saldosUpdated"));
 
       onComplete();
-    } catch (error) {
+    } catch {
       toast.error("Error al completar el cambio");
     } finally {
       setIsProcessing(false);

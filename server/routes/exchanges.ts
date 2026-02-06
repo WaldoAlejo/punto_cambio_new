@@ -2,12 +2,12 @@
 import express from "express";
 import {
   EstadoTransaccion,
+  Prisma,
   TipoOperacion,
   TipoViaTransferencia,
 } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import { ServientregaValidationService } from "../services/servientregaValidationService.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { validarSaldoCambioDivisa } from "../middleware/saldoValidation.js";
@@ -27,6 +27,40 @@ const router = express.Router();
 
 /* ========================= Helpers numéricos / guardas ========================= */
 
+type JsonRecord = Record<string, unknown>;
+
+const isRecord = (v: unknown): v is JsonRecord =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+const getStringFromRecord = (r: JsonRecord, key: string): string | undefined => {
+  const v = r[key];
+  return typeof v === "string" ? v : undefined;
+};
+
+const parseJsonIfString = (v: unknown): unknown => {
+  if (typeof v !== "string") return v;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v;
+  }
+};
+
+const extractDatosClienteFromDatosOperacion = (
+  datosOperacion: unknown
+): JsonRecord | null => {
+  const parsed = parseJsonIfString(datosOperacion);
+  if (!isRecord(parsed)) return null;
+  const dc = parsed["datos_cliente"] ?? parsed["cliente"];
+  return isRecord(dc) ? dc : null;
+};
+
+const getIdFromUnknown = (v: unknown): string | null => {
+  if (!isRecord(v)) return null;
+  const id = v["id"];
+  return typeof id === "string" ? id : null;
+};
+
 const num = (v: unknown, d = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
@@ -42,7 +76,11 @@ const roundN = (x: number, n = 3) => {
   return Math.round((Number(x) + Number.EPSILON) * factor) / factor;
 };
 
-async function getSaldo(tx: any, puntoId: string, monedaId: string) {
+async function getSaldo(
+  tx: Prisma.TransactionClient,
+  puntoId: string,
+  monedaId: string
+) {
   return tx.saldo.findUnique({
     where: {
       punto_atencion_id_moneda_id: {
@@ -53,7 +91,7 @@ async function getSaldo(tx: any, puntoId: string, monedaId: string) {
   });
 }
 async function upsertSaldoEfectivoYBancos(
-  tx: any,
+  tx: Prisma.TransactionClient,
   puntoId: string,
   monedaId: string,
   data: {
@@ -120,7 +158,7 @@ async function upsertSaldoEfectivoYBancos(
 }
 
 async function logMovimientoSaldo(
-  tx: any,
+  tx: Prisma.TransactionClient,
   data: {
     punto_atencion_id: string;
     moneda_id: string;
@@ -137,6 +175,7 @@ async function logMovimientoSaldo(
       | "AJUSTE_MANUAL"
       | "RECIBO";
     descripcion?: string | null;
+    saldo_bucket?: "CAJA" | "BANCOS" | "NINGUNO";
   }
 ) {
   try {
@@ -174,6 +213,7 @@ async function logMovimientoSaldo(
         tipoReferencia: tipoRef,
         referenciaId: data.referencia_id,
         descripcion: data.descripcion || undefined,
+        saldoBucket: data.saldo_bucket,
         usuarioId: data.usuario_id,
       },
       tx
@@ -273,36 +313,22 @@ router.post(
   validarSaldoCambioDivisa, // 🛡️ Validar saldo suficiente antes del cambio
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
-      if (!req.user?.id) {
+      const userId = req.user?.id;
+      if (!userId) {
         res
           .status(401)
           .json({ success: false, error: "Usuario no autenticado" });
         return;
       }
 
-      let {
-        moneda_origen_id,
-        moneda_destino_id,
-        monto_origen,
-        monto_destino,
+      const {
         tasa_cambio_billetes,
         tasa_cambio_monedas,
         tipo_operacion,
         punto_atencion_id,
         datos_cliente,
-        divisas_entregadas_billetes,
-        divisas_entregadas_monedas,
-        divisas_entregadas_total,
-        divisas_recibidas_billetes,
-        divisas_recibidas_monedas,
-        divisas_recibidas_total,
         observacion,
         metodo_entrega,
-        usd_entregado_efectivo,
-        usd_entregado_transfer,
-        metodo_pago_origen,
-        usd_recibido_efectivo,
-        usd_recibido_transfer,
         transferencia_numero,
         transferencia_banco,
         transferencia_imagen_url,
@@ -311,6 +337,27 @@ router.post(
         abono_inicial_recibido_por,
         saldo_pendiente,
         referencia_cambio_principal,
+      } = req.body;
+
+      let {
+        divisas_entregadas_total,
+        divisas_recibidas_total,
+        usd_entregado_efectivo,
+        usd_entregado_transfer,
+        metodo_pago_origen,
+        usd_recibido_efectivo,
+        usd_recibido_transfer,
+      } = req.body;
+
+      let {
+        moneda_origen_id,
+        moneda_destino_id,
+        monto_origen,
+        monto_destino,
+        divisas_entregadas_billetes,
+        divisas_entregadas_monedas,
+        divisas_recibidas_billetes,
+        divisas_recibidas_monedas,
       } = req.body;
 
       // Normalización del par cuando una de las monedas es USD (COMPRA -> USD destino, VENTA -> USD origen)
@@ -490,7 +537,7 @@ router.post(
       const recibidas_total_calc =
         num(divisas_recibidas_billetes) + num(divisas_recibidas_monedas);
 
-      let monto_origen_final =
+      const monto_origen_final =
         num(monto_origen) > 0 ? num(monto_origen) : entregadas_total_calc;
       let monto_destino_final =
         num(monto_destino) > 0 ? num(monto_destino) : recibidas_total_calc;
@@ -575,11 +622,6 @@ router.post(
 
       // Normalización de datos de cliente
       // Validar identificación del cliente (cedula o documento)
-      const idCliente = String(
-        (datos_cliente?.documento && String(datos_cliente.documento).trim()) ||
-        (datos_cliente?.cedula && String(datos_cliente.cedula).trim()) ||
-        ""
-      );
       const datos_cliente_sanitized = {
         ...datos_cliente,
         documento:
@@ -641,6 +683,7 @@ router.post(
 
       // Validar que las tasas son números finitos y no absurdamente grandes.
       // Solo validamos las tasas que corresponden a montos distintos de 0.
+      // Regla: si hay billetes/monedas involucrados, su tasa correspondiente debe ser > 0.
       // Con la columna en Decimal(18,3) la parte entera puede ser muy grande,
       // pero rechazamos valores no finitos o extremos por seguridad.
       const MAX_RATE_ALLOWED = 1e12; // permite tasas muy grandes (ej. COP per USD ~ thousands)
@@ -652,14 +695,14 @@ router.post(
 
       if (requiereTasaBilletes) {
         const tb = Number(tasa_cambio_billetes);
-        if (!Number.isFinite(tb) || tb < 0 || Math.abs(tb) >= MAX_RATE_ALLOWED) {
+        if (!Number.isFinite(tb) || tb <= 0 || Math.abs(tb) >= MAX_RATE_ALLOWED) {
           erroresTasas.push("tasa_cambio_billetes inválida");
         }
       }
 
       if (requiereTasaMonedas) {
         const tm = Number(tasa_cambio_monedas);
-        if (!Number.isFinite(tm) || tm < 0 || Math.abs(tm) >= MAX_RATE_ALLOWED) {
+        if (!Number.isFinite(tm) || tm <= 0 || Math.abs(tm) >= MAX_RATE_ALLOWED) {
           erroresTasas.push("tasa_cambio_monedas inválida");
         }
       }
@@ -690,18 +733,23 @@ router.post(
           ? roundN(num(tasa_cambio_monedas), 3)
           : 0;
         // 1) Crear cambio
-        // DEBUG: mostrar payload que vamos a insertar en DB (evitar datos sensibles)
-        try {
-          console.log("[DEBUG] intento crear CambioDivisa con valores:", JSON.stringify({
-            moneda_origen_id,
-            moneda_destino_id,
-            monto_origen: round2(monto_origen_final),
-            monto_destino: round2(monto_destino_final),
-            tasa_cambio_billetes: num(tasa_cambio_billetes),
-            tasa_cambio_monedas: num(tasa_cambio_monedas),
-          }));
-        } catch (dbgErr) {
-          console.warn("[DEBUG] No se pudo serializar payload de cambio:", dbgErr);
+        // DEBUG opcional: mostrar payload que vamos a insertar en DB (evitar datos sensibles)
+        if (process.env.DEBUG_EXCHANGES === "1") {
+          try {
+            console.log(
+              "[DEBUG] intento crear CambioDivisa con valores:",
+              JSON.stringify({
+                moneda_origen_id,
+                moneda_destino_id,
+                monto_origen: round2(monto_origen_final),
+                monto_destino: round2(monto_destino_final),
+                tasa_cambio_billetes: num(tasa_cambio_billetes),
+                tasa_cambio_monedas: num(tasa_cambio_monedas),
+              })
+            );
+          } catch (dbgErr) {
+            console.warn("[DEBUG] No se pudo serializar payload de cambio:", dbgErr);
+          }
         }
         const cambio = await tx.cambioDivisa.create({
           data: {
@@ -712,7 +760,7 @@ router.post(
             tasa_cambio_billetes: tasaBilletesToStore,
             tasa_cambio_monedas: tasaMonedasToStore,
             tipo_operacion,
-            usuario_id: req.user!.id,
+            usuario_id: userId,
             punto_atencion_id,
             observacion: observacion || null,
             numero_recibo: numeroRecibo,
@@ -826,7 +874,7 @@ router.post(
             numero_recibo: numeroRecibo,
             tipo_operacion: "CAMBIO_DIVISA",
             referencia_id: cambio.id,
-            usuario_id: req.user!.id,
+            usuario_id: userId,
             punto_atencion_id,
             datos_operacion: {
               ...cambio,
@@ -873,7 +921,7 @@ router.post(
         );
         const origenAnteriorEf = num(saldoOrigen?.cantidad);
         let origenAnteriorBil = num(saldoOrigen?.billetes);
-        let origenAnteriorMon = num(saldoOrigen?.monedas_fisicas);
+        const origenAnteriorMon = num(saldoOrigen?.monedas_fisicas);
         // Fallback: si ambos son 0 pero el total físico es positivo, asignar todo a billetes
         if (origenAnteriorBil === 0 && origenAnteriorMon === 0 && origenAnteriorEf > 0) {
           origenAnteriorBil = origenAnteriorEf;
@@ -954,7 +1002,7 @@ router.post(
             monto: ingresoEf,
             saldo_anterior: origenAnteriorEf,
             saldo_nuevo: origenNuevoEf,
-            usuario_id: req.user!.id,
+            usuario_id: userId,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
             descripcion: `Ingreso por cambio (efectivo, origen) ${numeroRecibo}`,
@@ -970,10 +1018,11 @@ router.post(
             monto: ingresoBk,
             saldo_anterior: origenAnteriorBk,
             saldo_nuevo: origenNuevoBk,
-            usuario_id: req.user!.id,
+            usuario_id: userId,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
-            descripcion: `Ingreso por cambio (transferencia bancaria - NO afecta cuadre físico)`,
+            descripcion: `Ingreso por cambio (bancos - transferencia bancaria - NO afecta cuadre físico)`,
+            saldo_bucket: "BANCOS",
           });
         }
 
@@ -985,7 +1034,7 @@ router.post(
         );
         const destinoAnteriorEf = num(saldoDestino?.cantidad);
         let destinoAnteriorBil = num(saldoDestino?.billetes);
-        let destinoAnteriorMon = num(saldoDestino?.monedas_fisicas);
+        const destinoAnteriorMon = num(saldoDestino?.monedas_fisicas);
         // Fallback: si ambos son 0 pero el total físico es positivo, asignar todo a billetes
         if (destinoAnteriorBil === 0 && destinoAnteriorMon === 0 && destinoAnteriorEf > 0) {
           destinoAnteriorBil = destinoAnteriorEf;
@@ -1121,7 +1170,6 @@ router.post(
 
           // Validación final: ¿tenemos suficiente dinero en total?
           const totalFisicoDisponible = billetesDisponibles + monedasDisponibles;
-          const totalFisicoRequerido = billetesEgreso + monedasEgreso;
           
           if (totalFisicoDisponible < egresoEf - 0.01) {
             throw new Error(
@@ -1162,7 +1210,7 @@ router.post(
             monto: egresoEf, // ✅ Positivo - el servicio aplica el signo
             saldo_anterior: destinoAnteriorEf,
             saldo_nuevo: destinoNuevoEf,
-            usuario_id: req.user!.id,
+            usuario_id: userId,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
             descripcion: `Egreso por cambio (efectivo, destino) ${numeroRecibo}`,
@@ -1177,12 +1225,13 @@ router.post(
             monto: egresoBk, // ✅ Positivo - el servicio aplica el signo
             saldo_anterior: destinoAnteriorBk,
             saldo_nuevo: destinoNuevoBk,
-            usuario_id: req.user!.id,
+            usuario_id: userId,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
             descripcion: `Egreso por cambio (bancos, destino) ${
               transferencia_banco || ""
             } ${transferencia_numero || ""}`.trim(),
+            saldo_bucket: "BANCOS",
           });
         }
 
@@ -1223,7 +1272,7 @@ router.post(
               monto: monto_origen_final,
               saldo_anterior: origenAnteriorEf,
               saldo_nuevo: origenNuevoEf,
-              usuario_id: req.user!.id,
+              usuario_id: userId,
               referencia_id: cambio.id,
               tipo_referencia: "CAMBIO_DIVISA",
               descripcion: `Ingreso por cambio ${numeroRecibo} (auto-creado)`,
@@ -1239,7 +1288,7 @@ router.post(
               monto: monto_destino_final,
               saldo_anterior: destinoAnteriorEf,
               saldo_nuevo: destinoNuevoEf,
-              usuario_id: req.user!.id,
+              usuario_id: userId,
               referencia_id: cambio.id,
               tipo_referencia: "CAMBIO_DIVISA",
               descripcion: `Egreso por cambio ${numeroRecibo} (auto-creado)`,
@@ -1472,25 +1521,32 @@ router.get(
       }
 
       // Enriquecer con datos_cliente desde Recibo.datos_operacion (para históricos)
+      const exchangesArr = Array.isArray(exchanges) ? exchanges : [];
+      let exchangesWithDatosCliente: unknown[] = exchangesArr;
       try {
-        const refIds = (exchanges || []).map((e: any) => e.id);
+        const refIds = exchangesArr
+          .map(getIdFromUnknown)
+          .filter((id): id is string => typeof id === "string");
         if (refIds.length > 0) {
           const recibos = await prisma.recibo.findMany({
             where: { referencia_id: { in: Array.from(new Set(refIds)) } },
             select: { referencia_id: true, datos_operacion: true },
           });
-          const datosClienteMap = new Map<string, any>();
+          const datosClienteMap = new Map<string, JsonRecord>();
           for (const r of recibos) {
-            const op = r.datos_operacion as any;
-            const datos = op?.datos_cliente || op?.cliente || null;
+            const datos = extractDatosClienteFromDatosOperacion(r.datos_operacion);
             if (r.referencia_id && datos) {
               datosClienteMap.set(r.referencia_id, datos);
             }
           }
-          exchanges = (exchanges || []).map((e: any) => ({
-            ...e,
-            datos_cliente: (datosClienteMap.get(e.id) as any) || undefined,
-          }));
+          exchangesWithDatosCliente = exchangesArr.map((e) => {
+            const id = getIdFromUnknown(e);
+            if (!id || !isRecord(e)) return e;
+            return {
+              ...e,
+              datos_cliente: datosClienteMap.get(id) ?? undefined,
+            };
+          });
         }
       } catch (e) {
         logger.warn("No se pudo enriquecer exchanges con datos_cliente de recibos", {
@@ -1499,7 +1555,7 @@ router.get(
       }
 
       res.status(200).json({
-        exchanges,
+        exchanges: exchangesWithDatosCliente,
         success: true,
         timestamp: new Date().toISOString(),
       });
@@ -1522,7 +1578,8 @@ router.patch(
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     const { id } = req.params;
     try {
-      if (!req.user?.id) {
+      const userId = req.user?.id;
+      if (!userId) {
         res
           .status(401)
           .json({ error: "Usuario no autenticado", success: false });
@@ -1715,27 +1772,87 @@ router.patch(
             },
           });
 
-          // Registrar movimiento de saldo
-          await registrarMovimientoSaldo(
-            {
-              puntoAtencionId: cambio.punto_atencion_id,
-              monedaId: cambio.moneda_origen_id,
-              tipoMovimiento: TipoMovimiento.INGRESO,
-              monto: round2(ingresoEfRestante + ingresoBkRestante),
-              saldoAnterior: round2(num(saldoOrigen.cantidad) + num(saldoOrigen.bancos)),
-              saldoNuevo: round2(
-                num(saldoOrigen.cantidad) +
-                  num(saldoOrigen.bancos) +
-                  ingresoEfRestante +
-                  ingresoBkRestante
-              ),
-              tipoReferencia: TipoReferencia.EXCHANGE,
-              referenciaId: cambio.id,
-              descripcion: `Cierre de cambio pendiente (ingreso restante) - Recibo: ${cambio.numero_recibo}`,
-              usuarioId: req.user!.id,
-            },
-            tx
-          );
+          // Registrar movimientos de saldo (separando CAJA vs BANCOS)
+          const origenAnteriorEf = num(saldoOrigen.cantidad);
+          const origenAnteriorBk = num(saldoOrigen.bancos);
+          const destinoAnteriorEf = num(saldoDestino.cantidad);
+          const destinoAnteriorBk = num(saldoDestino.bancos);
+
+          if (ingresoEfRestante > 0) {
+            await registrarMovimientoSaldo(
+              {
+                puntoAtencionId: cambio.punto_atencion_id,
+                monedaId: cambio.moneda_origen_id,
+                tipoMovimiento: TipoMovimiento.INGRESO,
+                monto: round2(ingresoEfRestante),
+                saldoAnterior: round2(origenAnteriorEf),
+                saldoNuevo: round2(origenAnteriorEf + ingresoEfRestante),
+                tipoReferencia: TipoReferencia.EXCHANGE,
+                referenciaId: cambio.id,
+                descripcion: `Cierre de cambio pendiente (ingreso restante caja) - Recibo: ${cambio.numero_recibo}`,
+                saldoBucket: "CAJA",
+                usuarioId: userId,
+              },
+              tx
+            );
+          }
+
+          if (ingresoBkRestante > 0) {
+            await registrarMovimientoSaldo(
+              {
+                puntoAtencionId: cambio.punto_atencion_id,
+                monedaId: cambio.moneda_origen_id,
+                tipoMovimiento: TipoMovimiento.INGRESO,
+                monto: round2(ingresoBkRestante),
+                saldoAnterior: round2(origenAnteriorBk),
+                saldoNuevo: round2(origenAnteriorBk + ingresoBkRestante),
+                tipoReferencia: TipoReferencia.EXCHANGE,
+                referenciaId: cambio.id,
+                descripcion: `Cierre de cambio pendiente (ingreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
+                saldoBucket: "BANCOS",
+                usuarioId: userId,
+              },
+              tx
+            );
+          }
+
+          if (egresoEfRestante > 0) {
+            await registrarMovimientoSaldo(
+              {
+                puntoAtencionId: cambio.punto_atencion_id,
+                monedaId: cambio.moneda_destino_id,
+                tipoMovimiento: TipoMovimiento.EGRESO,
+                monto: round2(egresoEfRestante),
+                saldoAnterior: round2(destinoAnteriorEf),
+                saldoNuevo: round2(destinoAnteriorEf - egresoEfRestante),
+                tipoReferencia: TipoReferencia.EXCHANGE,
+                referenciaId: cambio.id,
+                descripcion: `Cierre de cambio pendiente (egreso restante caja) - Recibo: ${cambio.numero_recibo}`,
+                saldoBucket: "CAJA",
+                usuarioId: userId,
+              },
+              tx
+            );
+          }
+
+          if (egresoBkRestante > 0) {
+            await registrarMovimientoSaldo(
+              {
+                puntoAtencionId: cambio.punto_atencion_id,
+                monedaId: cambio.moneda_destino_id,
+                tipoMovimiento: TipoMovimiento.EGRESO,
+                monto: round2(egresoBkRestante),
+                saldoAnterior: round2(destinoAnteriorBk),
+                saldoNuevo: round2(destinoAnteriorBk - egresoBkRestante),
+                tipoReferencia: TipoReferencia.EXCHANGE,
+                referenciaId: cambio.id,
+                descripcion: `Cierre de cambio pendiente (egreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
+                saldoBucket: "BANCOS",
+                usuarioId: userId,
+              },
+              tx
+            );
+          }
         });
       }
 
@@ -1786,7 +1903,7 @@ router.patch(
           numero_recibo: numeroReciboCierre,
           tipo_operacion: "CAMBIO_DIVISA",
           referencia_id: updated.id,
-          usuario_id: req.user.id,
+          usuario_id: userId,
           punto_atencion_id: cambio.punto_atencion_id,
           datos_operacion: updated,
         },
@@ -1825,7 +1942,8 @@ router.patch(
       divisas_recibidas_total,
     } = req.body || {};
     try {
-      if (!req.user?.id) {
+      const userId = req.user?.id;
+      if (!userId) {
         res
           .status(401)
           .json({ error: "Usuario no autenticado", success: false });
@@ -2036,20 +2154,39 @@ router.patch(
             },
           });
 
-          // Registrar movimiento origen
-          if (ingresoEfRestante > 0 || ingresoBkRestante > 0) {
+          // Registrar movimiento origen (separado CAJA/BANCOS)
+          if (ingresoEfRestante > 0) {
             await registrarMovimientoSaldo(
               {
                 puntoAtencionId: cambio.punto_atencion_id,
                 monedaId: cambio.moneda_origen_id,
                 tipoMovimiento: TipoMovimiento.INGRESO,
-                monto: round2(ingresoEfRestante + ingresoBkRestante),
-                saldoAnterior: round2(origenAnteriorEf + origenAnteriorBk),
-                saldoNuevo: round2(origenNuevoEf + origenNuevoBk),
+                monto: round2(ingresoEfRestante),
+                saldoAnterior: round2(origenAnteriorEf),
+                saldoNuevo: round2(origenNuevoEf),
                 tipoReferencia: TipoReferencia.EXCHANGE,
                 referenciaId: cambio.id,
-                descripcion: `Completar cambio pendiente (ingreso restante) - Recibo: ${cambio.numero_recibo}`,
-                usuarioId: req.user!.id,
+                descripcion: `Completar cambio pendiente (ingreso restante caja) - Recibo: ${cambio.numero_recibo}`,
+                saldoBucket: "CAJA",
+                usuarioId: userId,
+              },
+              tx
+            );
+          }
+          if (ingresoBkRestante > 0) {
+            await registrarMovimientoSaldo(
+              {
+                puntoAtencionId: cambio.punto_atencion_id,
+                monedaId: cambio.moneda_origen_id,
+                tipoMovimiento: TipoMovimiento.INGRESO,
+                monto: round2(ingresoBkRestante),
+                saldoAnterior: round2(origenAnteriorBk),
+                saldoNuevo: round2(origenNuevoBk),
+                tipoReferencia: TipoReferencia.EXCHANGE,
+                referenciaId: cambio.id,
+                descripcion: `Completar cambio pendiente (ingreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
+                saldoBucket: "BANCOS",
+                usuarioId: userId,
               },
               tx
             );
@@ -2087,20 +2224,39 @@ router.patch(
             },
           });
 
-          // Registrar movimiento destino
-          if (egresoEfRestante > 0 || egresoBkRestante > 0) {
+          // Registrar movimiento destino (separado CAJA/BANCOS)
+          if (egresoEfRestante > 0) {
             await registrarMovimientoSaldo(
               {
                 puntoAtencionId: cambio.punto_atencion_id,
                 monedaId: cambio.moneda_destino_id,
                 tipoMovimiento: TipoMovimiento.EGRESO,
-                monto: round2(egresoEfRestante + egresoBkRestante),
-                saldoAnterior: round2(destinoAnteriorEf + destinoAnteriorBk),
-                saldoNuevo: round2(destinoNuevoEf + destinoNuevoBk),
+                monto: round2(egresoEfRestante),
+                saldoAnterior: round2(destinoAnteriorEf),
+                saldoNuevo: round2(destinoNuevoEf),
                 tipoReferencia: TipoReferencia.EXCHANGE,
                 referenciaId: cambio.id,
-                descripcion: `Completar cambio pendiente (egreso restante) - Recibo: ${cambio.numero_recibo}`,
-                usuarioId: req.user!.id,
+                descripcion: `Completar cambio pendiente (egreso restante caja) - Recibo: ${cambio.numero_recibo}`,
+                saldoBucket: "CAJA",
+                usuarioId: userId,
+              },
+              tx
+            );
+          }
+          if (egresoBkRestante > 0) {
+            await registrarMovimientoSaldo(
+              {
+                puntoAtencionId: cambio.punto_atencion_id,
+                monedaId: cambio.moneda_destino_id,
+                tipoMovimiento: TipoMovimiento.EGRESO,
+                monto: round2(egresoBkRestante),
+                saldoAnterior: round2(destinoAnteriorBk),
+                saldoNuevo: round2(destinoNuevoBk),
+                tipoReferencia: TipoReferencia.EXCHANGE,
+                referenciaId: cambio.id,
+                descripcion: `Completar cambio pendiente (egreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
+                saldoBucket: "BANCOS",
+                usuarioId: userId,
               },
               tx
             );
@@ -2180,7 +2336,7 @@ router.patch(
           numero_recibo: numeroReciboCompletar,
           tipo_operacion: "CAMBIO_DIVISA",
           referencia_id: updated.id,
-          usuario_id: req.user.id,
+          usuario_id: userId,
           punto_atencion_id: cambio.punto_atencion_id,
           datos_operacion: updated,
         },
@@ -2215,7 +2371,7 @@ router.get(
         return;
       }
 
-      let exchanges = await prisma.cambioDivisa.findMany({
+      const exchanges = await prisma.cambioDivisa.findMany({
         where: {
           punto_atencion_id: String(pointId),
           estado: EstadoTransaccion.PENDIENTE,
@@ -2258,24 +2414,24 @@ router.get(
       });
 
       // Enriquecer con datos_cliente desde Recibo.datos_operacion (para históricos)
+      let exchangesWithDatosCliente = exchanges;
       try {
-        const refIds = (exchanges || []).map((e: any) => e.id);
+        const refIds = exchanges.map((e) => e.id);
         if (refIds.length > 0) {
           const recibos = await prisma.recibo.findMany({
             where: { referencia_id: { in: Array.from(new Set(refIds)) } },
             select: { referencia_id: true, datos_operacion: true },
           });
-          const datosClienteMap = new Map<string, any>();
+          const datosClienteMap = new Map<string, JsonRecord>();
           for (const r of recibos) {
-            const op = r.datos_operacion as any;
-            const datos = op?.datos_cliente || op?.cliente || null;
+            const datos = extractDatosClienteFromDatosOperacion(r.datos_operacion);
             if (r.referencia_id && datos) {
               datosClienteMap.set(r.referencia_id, datos);
             }
           }
-          exchanges = (exchanges || []).map((e: any) => ({
+          exchangesWithDatosCliente = exchanges.map((e) => ({
             ...e,
-            datos_cliente: (datosClienteMap.get(e.id) as any) || undefined,
+            datos_cliente: datosClienteMap.get(e.id) ?? undefined,
           }));
         }
       } catch (e) {
@@ -2284,7 +2440,7 @@ router.get(
         });
       }
 
-      res.json({ success: true, exchanges });
+      res.json({ success: true, exchanges: exchangesWithDatosCliente });
     } catch (error) {
       logger.error("Error fetching pending exchanges", {
         error: error instanceof Error ? error.message : "Unknown",
@@ -2305,7 +2461,7 @@ router.get(
       const isAdmin =
         req.user?.rol === "ADMIN" || req.user?.rol === "SUPER_USUARIO";
 
-      const where: any = {
+      const where: Prisma.CambioDivisaWhereInput = {
         saldo_pendiente: { gt: 0 },
         estado: EstadoTransaccion.PENDIENTE,
       };
@@ -2313,7 +2469,7 @@ router.get(
       else if (isAdmin && pointId && pointId !== "ALL")
         where.punto_atencion_id = String(pointId);
 
-      let exchanges = await prisma.cambioDivisa.findMany({
+      const exchanges = await prisma.cambioDivisa.findMany({
         where,
         select: {
           id: true,
@@ -2356,10 +2512,11 @@ router.get(
       });
 
       // Enriquecer con datos_cliente desde Recibo.datos_operacion (para históricos)
+      let exchangesWithDatosCliente = exchanges;
       try {
         const recibos = await prisma.recibo.findMany({
           where: {
-            referencia_id: { in: (exchanges || []).map((e: any) => e.id) },
+            referencia_id: { in: exchanges.map((e) => e.id) },
             tipo_operacion: "CAMBIO_DIVISA",
           },
           select: {
@@ -2368,24 +2525,15 @@ router.get(
           },
         });
         if (recibos?.length) {
-          const datosClienteMap = new Map<string, any>();
+          const datosClienteMap = new Map<string, JsonRecord>();
           for (const r of recibos) {
-            if (r.datos_operacion && typeof r.datos_operacion === "object") {
-              const datos = (r.datos_operacion as any).datos_cliente;
-              if (datos) datosClienteMap.set(r.referencia_id!, datos);
-            } else if (r.datos_operacion && typeof r.datos_operacion === "string") {
-              try {
-                const parsed = JSON.parse(r.datos_operacion as any);
-                const datos = parsed?.datos_cliente;
-                if (datos) datosClienteMap.set(r.referencia_id!, datos);
-              } catch {
-                // ignore JSON parse errors
-              }
-            }
+            if (!r.referencia_id) continue;
+            const datos = extractDatosClienteFromDatosOperacion(r.datos_operacion);
+            if (datos) datosClienteMap.set(r.referencia_id, datos);
           }
-          exchanges = (exchanges || []).map((e: any) => ({
+          exchangesWithDatosCliente = exchanges.map((e) => ({
             ...e,
-            datos_cliente: (datosClienteMap.get(e.id) as any) || undefined,
+            datos_cliente: datosClienteMap.get(e.id) ?? undefined,
           }));
         }
       } catch (e) {
@@ -2395,7 +2543,7 @@ router.get(
         );
       }
 
-      res.json({ success: true, exchanges });
+      res.json({ success: true, exchanges: exchangesWithDatosCliente });
     } catch (error) {
       logger.error("Error fetching partial exchanges", {
         error: error instanceof Error ? error.message : "Unknown",
@@ -2411,6 +2559,11 @@ router.patch(
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       const { id } = req.params;
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ success: false, error: "Usuario no autenticado" });
+        return;
+      }
       const isAdmin =
         req.user?.rol === "ADMIN" || req.user?.rol === "SUPER_USUARIO";
       if (!isAdmin) {
@@ -2680,42 +2833,60 @@ router.get(
         fecha_ultima_operacion: e.fecha,
         numero_recibo: e.numero_recibo,
       }));
-      const clientesFromRecibos = recibos.map((r) => {
-        const dc: any = (r.datos_operacion as any)?.datos_cliente || {};
+
+      type CustomerRow = {
+        id: string;
+        nombre: string;
+        apellido: string;
+        cedula: string;
+        telefono: string;
+        fuente: "exchange" | "recibo";
+        fecha_ultima_operacion: Date;
+        numero_recibo: string | null;
+      };
+
+      const clientesFromExchangesTyped: CustomerRow[] = clientesFromExchanges.map(
+        (c) => ({
+          ...c,
+          fuente: "exchange" as const,
+          numero_recibo: c.numero_recibo ?? null,
+        })
+      );
+
+      const clientesFromRecibos: CustomerRow[] = recibos.map((r) => {
+        const dc = extractDatosClienteFromDatosOperacion(r.datos_operacion) ?? {};
         return {
           id: r.id,
-          nombre: dc.nombre || "",
-          apellido: dc.apellido || "",
-          cedula: dc.cedula || "",
-          telefono: dc.telefono || "",
+          nombre: getStringFromRecord(dc, "nombre") || "",
+          apellido: getStringFromRecord(dc, "apellido") || "",
+          cedula: getStringFromRecord(dc, "cedula") || "",
+          telefono: getStringFromRecord(dc, "telefono") || "",
           fuente: "recibo",
           fecha_ultima_operacion: r.fecha,
           numero_recibo: r.numero_recibo,
         };
       });
 
-      const all = [...clientesFromExchanges, ...clientesFromRecibos];
-      const map = new Map<string, any>();
+      const all: CustomerRow[] = [...clientesFromExchangesTyped, ...clientesFromRecibos];
+      const map = new Map<string, CustomerRow>();
       for (const c of all) {
         const key = c.cedula || `${c.nombre}_${c.apellido}`;
-        if (
-          !map.has(key) ||
-          new Date(c.fecha_ultima_operacion) >
-            new Date(map.get(key).fecha_ultima_operacion)
-        ) {
+        const existing = map.get(key);
+        if (!existing || c.fecha_ultima_operacion > existing.fecha_ultima_operacion) {
           map.set(key, c);
         }
       }
+
       const resultados = Array.from(map.values())
-        .filter((c: any) => {
+        .filter((c) => {
           const full = `${c.nombre} ${c.apellido}`.toLowerCase();
           const cedula = (c.cedula || "").toLowerCase();
           return full.includes(searchTerm) || cedula.includes(searchTerm);
         })
         .sort(
-          (a: any, b: any) =>
-            new Date(b.fecha_ultima_operacion).getTime() -
-            new Date(a.fecha_ultima_operacion).getTime()
+          (a, b) =>
+            b.fecha_ultima_operacion.getTime() -
+            a.fecha_ultima_operacion.getTime()
         )
         .slice(0, 10);
 
@@ -2912,6 +3083,11 @@ router.delete(
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       const { id } = req.params;
+      const userId = req.user?.id;
+      if (!userId) {
+        res.status(401).json({ success: false, error: "Usuario no autenticado" });
+        return;
+      }
 
       const cambio = await prisma.cambioDivisa.findUnique({
         where: { id },
@@ -2981,7 +3157,7 @@ router.delete(
             monto: -ingresoEf,
             saldo_anterior: anteriorEf,
             saldo_nuevo: nuevoEf,
-            usuario_id: req.user!.id,
+            usuario_id: userId,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
             descripcion: `Reverso eliminación cambio (origen efectivo) #${
@@ -2997,7 +3173,7 @@ router.delete(
             monto: -ingresoBk,
             saldo_anterior: anteriorBk,
             saldo_nuevo: nuevoBk,
-            usuario_id: req.user!.id,
+            usuario_id: userId,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
             descripcion: `Reverso eliminación cambio (origen bancos) #${
@@ -3064,7 +3240,7 @@ router.delete(
           monto: devolverEf,
           saldo_anterior: antEf,
           saldo_nuevo: nuevoEfDest,
-          usuario_id: req.user!.id,
+          usuario_id: userId,
           referencia_id: cambio.id,
           tipo_referencia: "CAMBIO_DIVISA",
           descripcion: `Reverso eliminación cambio (destino efectivo) #${
@@ -3081,7 +3257,7 @@ router.delete(
             monto: egBk,
             saldo_anterior: antBk,
             saldo_nuevo: nuevoBkDest,
-            usuario_id: req.user!.id,
+            usuario_id: userId,
             referencia_id: cambio.id,
             tipo_referencia: "CAMBIO_DIVISA",
             descripcion: `Reverso eliminación cambio (destino bancos) #${
@@ -3091,19 +3267,13 @@ router.delete(
         }
 
         // Borrar recibos vinculados
+        const reciboOr: Prisma.ReciboWhereInput[] = [{ referencia_id: cambio.id }];
+        if (cambio.numero_recibo) reciboOr.push({ numero_recibo: cambio.numero_recibo });
+        if (cambio.numero_recibo_abono) reciboOr.push({ numero_recibo: cambio.numero_recibo_abono });
+        if (cambio.numero_recibo_completar) reciboOr.push({ numero_recibo: cambio.numero_recibo_completar });
         await tx.recibo.deleteMany({
           where: {
-            OR: [
-              { referencia_id: cambio.id },
-              { numero_recibo: cambio.numero_recibo || undefined },
-              {
-                numero_recibo: (cambio as any).numero_recibo_abono || undefined,
-              },
-              {
-                numero_recibo:
-                  (cambio as any).numero_recibo_completar || undefined,
-              },
-            ].filter(Boolean) as any,
+            OR: reciboOr,
           },
         });
 

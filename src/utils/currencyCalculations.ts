@@ -37,14 +37,16 @@ export function calcularMontoDestino(
     comportamiento = monedaDestino.comportamiento_venta;
   }
 
-  console.log(`🧮 Calculando ${tipoOperacion}:`, {
-    monedaOrigen: monedaOrigen.codigo,
-    monedaDestino: monedaDestino.codigo,
-    monedaParaComportamiento: monedaParaComportamiento.codigo,
-    comportamiento,
-    montoOrigen,
-    tasaCambio,
-  });
+  if (import.meta.env.DEV) {
+    console.warn(`🧮 Calculando ${tipoOperacion}:`, {
+      monedaOrigen: monedaOrigen.codigo,
+      monedaDestino: monedaDestino.codigo,
+      monedaParaComportamiento: monedaParaComportamiento.codigo,
+      comportamiento,
+      montoOrigen,
+      tasaCambio,
+    });
+  }
 
   if (comportamiento === "MULTIPLICA") {
     return montoOrigen * tasaCambio;

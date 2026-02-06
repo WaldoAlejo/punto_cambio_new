@@ -87,7 +87,7 @@ router.get("/", authenticateToken, async (req, res) => {
       "Surrogate-Control": "no-store",
     });
 
-    const whereClause: Record<string, unknown> = {};
+    const whereClause: Prisma.JornadaWhereInput = {};
 
     // Restricción por rol: OPERADOR y ADMINISTRATIVO solo ven sus propias jornadas
     if (req.user?.rol === "OPERADOR" || req.user?.rol === "ADMINISTRATIVO") {
@@ -137,7 +137,10 @@ router.get("/", authenticateToken, async (req, res) => {
         .map((s) => s.trim())
         .filter(Boolean);
       if (estados.length > 0) {
-        (whereClause as any).estado = { in: estados };
+        const valid = estados.filter((e): e is EstadoJornada =>
+          Object.values(EstadoJornada).includes(e as EstadoJornada)
+        );
+        if (valid.length > 0) whereClause.estado = { in: valid };
       }
     }
 
@@ -471,7 +474,10 @@ router.post(
             usuario_id,
             punto_atencion_id,
             fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : new Date(),
-            ubicacion_inicio: (ubicacion_inicio as any) || null,
+            ubicacion_inicio:
+              ubicacion_inicio !== undefined && ubicacion_inicio !== null
+                ? (ubicacion_inicio as Prisma.InputJsonValue)
+                : Prisma.DbNull,
             estado: EstadoJornada.ACTIVO,
           },
           include: {
@@ -660,7 +666,7 @@ router.get("/started-today", authenticateToken, async (req, res) => {
         fecha_salida: s.fecha_salida?.toISOString() || null,
       })),
     });
-  } catch (e) {
+  } catch {
     res.status(500).json({ success: false, error: "Error interno" });
   }
 });
@@ -706,7 +712,10 @@ router.get("/user/:id", authenticateToken, async (req, res) => {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      if (list.length) where.estado = { in: list as any };
+      const valid = list.filter((e): e is EstadoJornada =>
+        Object.values(EstadoJornada).includes(e as EstadoJornada)
+      );
+      if (valid.length) where.estado = { in: valid };
     }
 
     const schedules = await prisma.jornada.findMany({
@@ -728,7 +737,7 @@ router.get("/user/:id", authenticateToken, async (req, res) => {
         fecha_salida: s.fecha_salida?.toISOString() || null,
       })),
     });
-  } catch (e) {
+  } catch {
     res.status(500).json({ success: false, error: "Error interno" });
   }
 });
@@ -837,6 +846,14 @@ router.post(
         return;
       }
 
+      if (!finalizar && !newPointId) {
+        res.status(400).json({
+          success: false,
+          error: "Debe indicar destino_punto_atencion_id para reasignar",
+        });
+        return;
+      }
+
       // Transacción: actualizar jornada y usuario + historial
       const updatedSchedule = await prisma.$transaction(async (tx) => {
         // Historial de asignación
@@ -846,7 +863,7 @@ router.post(
             punto_atencion_anterior_id: schedule.punto_atencion_id,
             punto_atencion_nuevo_id: finalizar
               ? schedule.punto_atencion_id
-              : newPointId!,
+              : newPointId,
             motivo_cambio:
               motivo ||
               (finalizar ? "CANCELACION_ADMIN" : "REASIGNACION_ADMIN"),
@@ -869,7 +886,7 @@ router.post(
               }
             : {
                 // Reasignación a otro punto
-                punto_atencion_id: newPointId!,
+                punto_atencion_id: newPointId,
                 motivo_cambio: motivo || "REASIGNACION_ADMIN",
                 usuario_autorizo: adminId,
               },
@@ -884,7 +901,7 @@ router.post(
           where: { id: usuario_id },
           data: finalizar
             ? { punto_atencion_id: null }
-            : { punto_atencion_id: newPointId! },
+            : { punto_atencion_id: newPointId },
         });
 
         return j;

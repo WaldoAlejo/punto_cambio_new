@@ -23,6 +23,7 @@ function todayYYYYMMDD(): string {
 
 export type ConteoEditable = {
   conteo_fisico: number;
+  conteo_bancos: number;
   billetes: number;
   monedas: number; // alias de monedas_fisicas
   observaciones_detalle?: string | null;
@@ -75,7 +76,11 @@ export type UseCuadreCaja = {
     patch: Partial<
       Pick<
         ConteoEditable,
-        "conteo_fisico" | "billetes" | "monedas" | "observaciones_detalle"
+        | "conteo_fisico"
+        | "conteo_bancos"
+        | "billetes"
+        | "monedas"
+        | "observaciones_detalle"
       >
     >
   ) => void;
@@ -100,34 +105,26 @@ export type UseCuadreCaja = {
 
   // acciones
   refresh: () => Promise<void>;
-  guardarParcial: (opts?: {
-    allowMismatch?: boolean;
-  }) => Promise<GuardarCierreResponse | null>;
-  guardarCerrado: (opts?: {
-    allowMismatch?: boolean;
-  }) => Promise<GuardarCierreResponse | null>;
+  guardarParcial: (opts?: { allowMismatch?: boolean }) => Promise<GuardarCierreResponse | null>;
+  guardarCerrado: (opts?: { allowMismatch?: boolean }) => Promise<GuardarCierreResponse | null>;
 };
 
 /**
  * Hook principal para orquestar el flujo de Cuadre de Caja (front).
  */
-export default function useCuadreCaja(
-  options?: UseCuadreCajaOptions
-): UseCuadreCaja {
+export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadreCaja {
   const [fecha, setFecha] = useState<string>(options?.fecha || todayYYYYMMDD());
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [cuadre, setCuadre] = useState<CuadreResponse["data"] | undefined>(
+  const [cuadre, setCuadre] = useState<CuadreResponse["data"] | undefined>(undefined);
+  const [contabilidad, setContabilidad] = useState<ContabilidadDiariaResponse | undefined>(
     undefined
   );
-  const [contabilidad, setContabilidad] = useState<
-    ContabilidadDiariaResponse | undefined
-  >(undefined);
-  const [parciales, setParciales] = useState<
-    ParcialesPendientesResponse["data"] | undefined
-  >(undefined);
+  const [parciales, setParciales] = useState<ParcialesPendientesResponse["data"] | undefined>(
+    undefined
+  );
 
   const [estado, setEstado] = useState<EstadoCuadre>({
     fecha,
@@ -138,26 +135,24 @@ export default function useCuadreCaja(
   const withContabilidad = options?.withContabilidad !== false;
 
   // ---------- Helpers internos ----------
-  const hydrateEditable = useCallback(
-    (det: DetalleCuadreResumen[]): DetalleEditable[] => {
-      return det.map((d) => ({
-        ...d,
-        conteo_fisico: d.saldo_cierre, // default: igual al teórico
-        billetes: 0,
-        monedas: 0,
-        observaciones_detalle: null,
-      }));
-    },
-    []
-  );
+  const hydrateEditable = useCallback((det: DetalleCuadreResumen[]): DetalleEditable[] => {
+    return det.map((d) => ({
+      ...d,
+      conteo_fisico: d.saldo_cierre, // default: igual al teórico
+      conteo_bancos: Number(d.conteo_bancos ?? d.bancos_teorico ?? 0),
+      billetes: 0,
+      monedas: 0,
+      observaciones_detalle: null,
+    }));
+  }, []);
 
   const cargarParciales = useCallback(async () => {
     try {
       const resp = await cuatreCajaService.getParcialesPendientes();
       setParciales(resp.data);
-    } catch (e: any) {
+    } catch (e: unknown) {
       // No detenemos flujo por error de parciales
-      console.warn("getParcialesPendientes error:", e?.message || e);
+      console.warn("getParcialesPendientes error:", e instanceof Error ? e.message : String(e));
     }
   }, []);
 
@@ -179,10 +174,7 @@ export default function useCuadreCaja(
 
       // Contabilidad (cruce)
       if (withContabilidad && options?.pointId) {
-        const cont = await cuatreCajaService.getContabilidadDiaria(
-          options.pointId,
-          fecha
-        );
+        const cont = await cuatreCajaService.getContabilidadDiaria(options.pointId, fecha);
         setContabilidad(cont);
       } else {
         setContabilidad(undefined);
@@ -190,18 +182,12 @@ export default function useCuadreCaja(
 
       // Parciales del día
       cargarParciales();
-    } catch (e: any) {
-      setError(e?.message || "No se pudo cargar el cuadre");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "No se pudo cargar el cuadre");
     } finally {
       setLoading(false);
     }
-  }, [
-    fecha,
-    withContabilidad,
-    options?.pointId,
-    hydrateEditable,
-    cargarParciales,
-  ]);
+  }, [fecha, withContabilidad, options?.pointId, hydrateEditable, cargarParciales]);
 
   useEffect(() => {
     refresh();
@@ -218,37 +204,34 @@ export default function useCuadreCaja(
     setEstado((prev) => ({ ...prev, observaciones: v }));
   }, []);
 
-  const updateConteo: UseCuadreCaja["updateConteo"] = useCallback(
-    (moneda_id, patch) => {
-      setEstado((prev) => ({
-        ...prev,
-        detalles: prev.detalles.map((d) =>
-          d.moneda_id === moneda_id
-            ? {
-                ...d,
-                conteo_fisico:
-                  patch.conteo_fisico !== undefined
-                    ? numberOrZero(patch.conteo_fisico)
-                    : d.conteo_fisico,
-                billetes:
-                  patch.billetes !== undefined
-                    ? numberOrZero(patch.billetes)
-                    : d.billetes,
-                monedas:
-                  patch.monedas !== undefined
-                    ? numberOrZero(patch.monedas)
-                    : d.monedas,
-                observaciones_detalle:
-                  patch.observaciones_detalle !== undefined
-                    ? patch.observaciones_detalle ?? null
-                    : d.observaciones_detalle,
-              }
-            : d
-        ),
-      }));
-    },
-    []
-  );
+  const updateConteo: UseCuadreCaja["updateConteo"] = useCallback((moneda_id, patch) => {
+    setEstado((prev) => ({
+      ...prev,
+      detalles: prev.detalles.map((d) =>
+        d.moneda_id === moneda_id
+          ? {
+              ...d,
+              conteo_fisico:
+                patch.conteo_fisico !== undefined
+                  ? numberOrZero(patch.conteo_fisico)
+                  : d.conteo_fisico,
+              conteo_bancos:
+                patch.conteo_bancos !== undefined
+                  ? numberOrZero(patch.conteo_bancos)
+                  : d.conteo_bancos,
+              billetes:
+                patch.billetes !== undefined ? numberOrZero(patch.billetes) : d.billetes,
+              monedas:
+                patch.monedas !== undefined ? numberOrZero(patch.monedas) : d.monedas,
+              observaciones_detalle:
+                patch.observaciones_detalle !== undefined
+                  ? patch.observaciones_detalle ?? null
+                  : d.observaciones_detalle,
+            }
+          : d
+      ),
+    }));
+  }, []);
 
   const resetConteos = useCallback(() => {
     setEstado((prev) => ({
@@ -256,6 +239,7 @@ export default function useCuadreCaja(
       detalles: prev.detalles.map((d) => ({
         ...d,
         conteo_fisico: d.saldo_cierre,
+        conteo_bancos: Number(d.bancos_teorico ?? 0),
         billetes: 0,
         monedas: 0,
         observaciones_detalle: null,
@@ -265,18 +249,9 @@ export default function useCuadreCaja(
 
   // ---------- Derivados ----------
   const totales = useMemo(() => {
-    const ingresos = estado.detalles.reduce(
-      (s, d) => s + (d.ingresos_periodo || 0),
-      0
-    );
-    const egresos = estado.detalles.reduce(
-      (s, d) => s + (d.egresos_periodo || 0),
-      0
-    );
-    const movimientos = estado.detalles.reduce(
-      (s, d) => s + (d.movimientos_periodo || 0),
-      0
-    );
+    const ingresos = estado.detalles.reduce((s, d) => s + (d.ingresos_periodo || 0), 0);
+    const egresos = estado.detalles.reduce((s, d) => s + (d.egresos_periodo || 0), 0);
+    const movimientos = estado.detalles.reduce((s, d) => s + (d.movimientos_periodo || 0), 0);
     return { ingresos, egresos, movimientos };
   }, [estado.detalles]);
 
@@ -312,6 +287,8 @@ export default function useCuadreCaja(
       saldo_apertura: d.saldo_apertura,
       saldo_cierre: d.saldo_cierre,
       conteo_fisico: d.conteo_fisico,
+      bancos_teorico: Number(d.bancos_teorico ?? 0),
+      conteo_bancos: d.conteo_bancos,
       billetes: d.billetes,
       monedas: d.monedas,
       ingresos_periodo: d.ingresos_periodo,
@@ -338,8 +315,8 @@ export default function useCuadreCaja(
         });
         await refresh();
         return resp;
-      } catch (e: any) {
-        setError(e?.message || "No se pudo guardar el cierre parcial");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "No se pudo guardar el cierre parcial");
         return null;
       } finally {
         setSaving(false);
@@ -361,8 +338,8 @@ export default function useCuadreCaja(
         });
         await refresh();
         return resp;
-      } catch (e: any) {
-        setError(e?.message || "No se pudo guardar el cierre");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "No se pudo guardar el cierre");
         return null;
       } finally {
         setSaving(false);
@@ -397,7 +374,7 @@ export default function useCuadreCaja(
 }
 
 // ===== utilidades internas =====
-function numberOrZero(v: any): number {
+function numberOrZero(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
@@ -415,10 +392,7 @@ function isFueraDeTolerancia(codigo: string, diff: number): boolean {
  * Mezcla estado editable anterior con nuevos detalles (por si cambian monedas).
  * Mantiene conteos ya escritos por el usuario cuando coincide moneda_id.
  */
-function mergeEditable(
-  prev: DetalleEditable[],
-  next: DetalleEditable[]
-): DetalleEditable[] {
+function mergeEditable(prev: DetalleEditable[], next: DetalleEditable[]): DetalleEditable[] {
   const prevById = new Map(prev.map((d) => [d.moneda_id, d]));
   return next.map((n) => {
     const p = prevById.get(n.moneda_id);
@@ -426,6 +400,7 @@ function mergeEditable(
     return {
       ...n,
       conteo_fisico: p.conteo_fisico ?? n.conteo_fisico,
+      conteo_bancos: p.conteo_bancos ?? n.conteo_bancos,
       billetes: p.billetes ?? n.billetes,
       monedas: p.monedas ?? n.monedas,
       observaciones_detalle: p.observaciones_detalle ?? n.observaciones_detalle,

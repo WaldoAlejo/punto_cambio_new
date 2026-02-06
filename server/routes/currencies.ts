@@ -1,4 +1,5 @@
 import express from "express";
+import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
@@ -217,7 +218,7 @@ router.put(
         }
       }
 
-      const updateData: any = {};
+      const updateData: Prisma.MonedaUpdateInput = {};
       if (codigo) updateData.codigo = codigo.toUpperCase();
       if (nombre) updateData.nombre = nombre;
       if (simbolo) updateData.simbolo = simbolo;

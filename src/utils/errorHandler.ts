@@ -1,5 +1,31 @@
 import { toast } from "sonner";
 
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v === "object";
+
+const getServerMessage = (data: unknown): string | undefined => {
+  if (!isRecord(data)) return undefined;
+  const message = data.message;
+  const error = data.error;
+  const details = data.details;
+  if (typeof message === "string" && message.trim()) return message;
+  if (typeof error === "string" && error.trim()) return error;
+  if (typeof details === "string" && details.trim()) return details;
+  return undefined;
+};
+
+const isAxiosLikeError = (
+  err: unknown
+): err is {
+  response?: { status?: number; data?: unknown };
+  message?: string;
+} => {
+  if (!isRecord(err)) return false;
+  if (!("response" in err)) return false;
+  const response = (err as Record<string, unknown>).response;
+  return response === undefined || isRecord(response);
+};
+
 export interface ApiError {
   message: string;
   status?: number;
@@ -11,7 +37,7 @@ export class ErrorHandler {
    * Maneja errores de API de forma consistente
    */
   static handleApiError(error: unknown, context?: string): ApiError {
-    let apiError: ApiError = {
+    const apiError: ApiError = {
       message: "Error desconocido",
       status: 500,
     };
@@ -20,15 +46,14 @@ export class ErrorHandler {
       apiError.message = error.message;
     } else if (typeof error === "string") {
       apiError.message = error;
-    } else if (error && typeof error === "object" && "response" in error) {
-      // Error de Axios
-      const axiosError = error as any;
-      apiError.status = axiosError.response?.status || 500;
+    } else if (isAxiosLikeError(error)) {
+      const status = error.response?.status;
+      apiError.status = typeof status === "number" ? status : 500;
       apiError.message =
-        axiosError.response?.data?.message ||
-        axiosError.response?.data?.error ||
-        axiosError.message ||
-        "Error de conexión";
+        getServerMessage(error.response?.data) ||
+        (typeof error.message === "string" && error.message.trim()
+          ? error.message
+          : "Error de conexión");
     }
 
     // Log del error para debugging

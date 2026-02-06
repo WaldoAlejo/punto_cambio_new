@@ -43,7 +43,7 @@ const Sidebar = ({
   }, []);
 
   const isAdmin = user.rol === "ADMIN" || user.rol === "SUPER_USUARIO";
-  const isConcesion = user.rol === "CONCESION";
+  const _isConcesion = user.rol === "CONCESION";
 
   const menuItems: MenuItem[] = [
     {

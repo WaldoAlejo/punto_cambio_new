@@ -5,11 +5,14 @@
 
 import { Usuario, PuntoAtencion, Moneda } from "@/types";
 
+type UnknownRecord = Record<string, unknown>;
+const isRecord = (v: unknown): v is UnknownRecord => typeof v === "object" && v !== null;
+
 /**
  * Valida y transforma datos de usuario del backend
  */
-export function validateAndTransformUser(data: any): Usuario | null {
-  if (!data || typeof data !== "object") {
+export function validateAndTransformUser(data: unknown): Usuario | null {
+  if (!isRecord(data)) {
     return null;
   }
 
@@ -37,24 +40,31 @@ export function validateAndTransformUser(data: any): Usuario | null {
     "CONCESION",
     "ADMINISTRATIVO",
   ];
-  if (!validRoles.includes(data.rol)) {
-    console.error(`Rol inválido: ${data.rol}`);
+  const rol = data["rol"];
+  if (typeof rol !== "string" || !validRoles.includes(rol)) {
+    console.error(`Rol inválido: ${String(rol)}`);
     return null;
   }
+
+  const correoRaw = data["correo"];
+  const telefonoRaw = data["telefono"];
+  const puntoAtencionIdRaw = data["punto_atencion_id"];
+  const jornadaIdRaw = data["jornada_id"];
 
   return {
     id: String(data.id),
     username: String(data.username),
     nombre: String(data.nombre),
-    correo: data.correo || null,
-    telefono: data.telefono || null,
-    rol: data.rol,
-    activo: Boolean(data.activo),
-    punto_atencion_id: data.punto_atencion_id || null,
+    correo: typeof correoRaw === "string" && correoRaw ? correoRaw : null,
+    telefono: typeof telefonoRaw === "string" && telefonoRaw ? telefonoRaw : null,
+    rol,
+    activo: Boolean(data["activo"]),
+    punto_atencion_id:
+      puntoAtencionIdRaw ? String(puntoAtencionIdRaw) : null,
     created_at: String(data.created_at),
     updated_at: String(data.updated_at),
-    jornada_id: data.jornada_id || null,
-    hasActiveJornada: Boolean(data.hasActiveJornada),
+    jornada_id: jornadaIdRaw ? String(jornadaIdRaw) : null,
+    hasActiveJornada: Boolean(data["hasActiveJornada"]),
   };
 }
 
@@ -62,9 +72,9 @@ export function validateAndTransformUser(data: any): Usuario | null {
  * Valida y transforma datos de punto de atención
  */
 export function validateAndTransformPuntoAtencion(
-  data: any
+  data: unknown
 ): PuntoAtencion | null {
-  if (!data || typeof data !== "object") {
+  if (!isRecord(data)) {
     return null;
   }
 
@@ -84,16 +94,22 @@ export function validateAndTransformPuntoAtencion(
     }
   }
 
+  const codigoPostalRaw = data["codigo_postal"];
+  const telefonoRaw = data["telefono"];
+
   return {
     id: String(data.id),
     nombre: String(data.nombre),
     direccion: String(data.direccion),
     ciudad: String(data.ciudad),
     provincia: String(data.provincia),
-    codigo_postal: data.codigo_postal || null,
-    telefono: data.telefono || null,
-    activo: Boolean(data.activo),
-    es_principal: Boolean(data.es_principal || false),
+    codigo_postal:
+      typeof codigoPostalRaw === "string" && codigoPostalRaw
+        ? codigoPostalRaw
+        : null,
+    telefono: typeof telefonoRaw === "string" && telefonoRaw ? telefonoRaw : null,
+    activo: Boolean(data["activo"]),
+    es_principal: Boolean(data["es_principal"] || false),
     created_at: String(data.created_at),
     updated_at: String(data.updated_at),
   };
@@ -102,8 +118,8 @@ export function validateAndTransformPuntoAtencion(
 /**
  * Valida y transforma datos de moneda
  */
-export function validateAndTransformMoneda(data: any): Moneda | null {
-  if (!data || typeof data !== "object") {
+export function validateAndTransformMoneda(data: unknown): Moneda | null {
+  if (!isRecord(data)) {
     return null;
   }
 
@@ -122,15 +138,27 @@ export function validateAndTransformMoneda(data: any): Moneda | null {
     }
   }
 
+  const comportamientoCompraRaw = data["comportamiento_compra"];
+  const comportamientoVentaRaw = data["comportamiento_venta"];
+
+  const comportamientoCompra =
+    comportamientoCompraRaw === "MULTIPLICA" || comportamientoCompraRaw === "DIVIDE"
+      ? comportamientoCompraRaw
+      : "MULTIPLICA";
+  const comportamientoVenta =
+    comportamientoVentaRaw === "MULTIPLICA" || comportamientoVentaRaw === "DIVIDE"
+      ? comportamientoVentaRaw
+      : "MULTIPLICA";
+
   return {
     id: String(data.id),
     codigo: String(data.codigo),
     nombre: String(data.nombre),
     simbolo: String(data.simbolo),
-    activo: Boolean(data.activo),
-    orden_display: Number(data.orden_display) || 0,
-    comportamiento_compra: data.comportamiento_compra || "MULTIPLICA",
-    comportamiento_venta: data.comportamiento_venta || "MULTIPLICA",
+    activo: Boolean(data["activo"]),
+    orden_display: Number(data["orden_display"]) || 0,
+    comportamiento_compra: comportamientoCompra,
+    comportamiento_venta: comportamientoVenta,
     created_at: String(data.created_at),
     updated_at: String(data.updated_at),
   };
@@ -140,8 +168,8 @@ export function validateAndTransformMoneda(data: any): Moneda | null {
  * Valida array de datos y transforma cada elemento
  */
 export function validateAndTransformArray<T>(
-  data: any[],
-  transformer: (item: any) => T | null
+  data: unknown,
+  transformer: (item: unknown) => T | null
 ): T[] {
   if (!Array.isArray(data)) {
     console.error("Se esperaba un array pero se recibió:", typeof data);
@@ -154,34 +182,35 @@ export function validateAndTransformArray<T>(
 /**
  * Valida estructura de respuesta de API
  */
-export function validateApiResponse(response: any): {
+export function validateApiResponse(response: unknown): {
   isValid: boolean;
-  data: any;
+  data: unknown;
   error?: string;
 } {
   if (!response) {
     return { isValid: false, data: null, error: "Respuesta vacía" };
   }
 
-  if (typeof response !== "object") {
+  if (!isRecord(response)) {
     return { isValid: false, data: null, error: "Respuesta no es un objeto" };
   }
 
   // Verificar si es una respuesta de error
-  if (response.error && !response.success) {
+  if (response["error"] && !response["success"]) {
     return {
       isValid: false,
       data: null,
-      error: response.error || "Error desconocido",
+      error: String(response["error"] || "Error desconocido"),
     };
   }
 
   // Verificar si tiene estructura de éxito
-  if (response.success === false) {
+  if (response["success"] === false) {
     return {
       isValid: false,
       data: null,
-      error: response.error || response.message || "Operación fallida",
+      error:
+        String(response["error"] || response["message"] || "Operación fallida"),
     };
   }
 
@@ -192,9 +221,9 @@ export function validateApiResponse(response: any): {
  * Sanitiza datos para envío al backend
  */
 export function sanitizeForBackend(
-  data: Record<string, any>
-): Record<string, any> {
-  const sanitized: Record<string, any> = {};
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(data)) {
     // Omitir valores undefined

@@ -1,4 +1,5 @@
 import {
+  Prisma,
   TipoMovimiento,
   TipoTransferencia,
   Transferencia,
@@ -6,7 +7,6 @@ import {
 } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import saldoReconciliationService from "./saldoReconciliationService.js";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento as TipoMov,
@@ -27,10 +27,21 @@ export interface TransferData {
   via?: TipoViaTransferencia | null;
 }
 
+type DetalleDivisas = {
+  billetes?: number;
+  monedas?: number;
+};
+
 async function getSaldo(
   pointId: string,
   monedaId: string
-): Promise<{ id: string | null; cantidad: number; bancos: number }> {
+): Promise<{
+  id: string | null;
+  cantidad: number;
+  bancos: number;
+  billetes: number;
+  monedas_fisicas: number;
+}> {
   const s = await prisma.saldo.findUnique({
     where: {
       punto_atencion_id_moneda_id: {
@@ -38,20 +49,22 @@ async function getSaldo(
         moneda_id: monedaId,
       },
     },
-    select: { id: true, cantidad: true, bancos: true },
+    select: { id: true, cantidad: true, bancos: true, billetes: true, monedas_fisicas: true },
   });
   return {
     id: s?.id ?? null,
     cantidad: Number(s?.cantidad ?? 0),
     bancos: Number(s?.bancos ?? 0),
+    billetes: Number(s?.billetes ?? 0),
+    monedas_fisicas: Number(s?.monedas_fisicas ?? 0),
   };
 }
 
-async function upsertSaldoEfectivo(
+async function _upsertSaldoEfectivo(
   pointId: string,
   monedaId: string,
   nuevoEfectivo: number,
-  usuarioId?: string
+  _usuarioId?: string
 ) {
   const { id } = await getSaldo(pointId, monedaId);
   if (id) {
@@ -123,7 +136,7 @@ async function upsertSaldoBanco(
   pointId: string,
   monedaId: string,
   nuevoBanco: number,
-  usuarioId?: string
+  _usuarioId?: string
 ) {
   const { id } = await getSaldo(pointId, monedaId);
   if (id) {
@@ -203,8 +216,9 @@ async function logMovimientoSaldo(
     referencia_id: string;
     tipo_referencia: "TRANSFERENCIA";
     descripcion?: string;
+    saldo_bucket?: "CAJA" | "BANCOS" | "NINGUNO";
   },
-  tx?: any
+  tx?: Prisma.TransactionClient
 ) {
   // Usar servicio centralizado
   const tipoMov =
@@ -217,6 +231,11 @@ async function logMovimientoSaldo(
   // El monto ya viene con el signo correcto desde las llamadas
   // pero el servicio espera monto positivo, así que tomamos el valor absoluto
   const montoAbsoluto = Math.abs(args.monto);
+  const bucketInferido: "CAJA" | "BANCOS" = (args.descripcion || "")
+    .toLowerCase()
+    .includes("banco")
+    ? "BANCOS"
+    : "CAJA";
 
   await registrarMovimientoSaldo(
     {
@@ -229,6 +248,7 @@ async function logMovimientoSaldo(
       tipoReferencia: TipoReferencia.TRANSFER,
       referenciaId: args.referencia_id,
       descripcion: args.descripcion || undefined,
+      saldoBucket: args.saldo_bucket ?? bucketInferido,
       usuarioId: args.usuario_id,
     },
     tx
@@ -271,6 +291,7 @@ export const transferCreationService = {
     monto: number;
     monto_efectivo?: number;
     monto_banco?: number;
+    detalle_divisas?: DetalleDivisas | null;
   }) {
     const {
       destino_id,
@@ -313,9 +334,9 @@ export const transferCreationService = {
       // Obtener desglose físico si está disponible
       let billetes = 0;
       let monedas = 0;
-      if (typeof (args as any).detalle_divisas === "object" && (args as any).detalle_divisas !== null) {
-        billetes = Number((args as any).detalle_divisas.billetes ?? 0);
-        monedas = Number((args as any).detalle_divisas.monedas ?? 0);
+      if (args.detalle_divisas) {
+        billetes = Number(args.detalle_divisas.billetes ?? 0);
+        monedas = Number(args.detalle_divisas.monedas ?? 0);
         // Si el total no cuadra, ajustar todo a billetes
         if ((billetes + monedas).toFixed(2) !== efectivo.toFixed(2)) {
           billetes = efectivo;
@@ -329,8 +350,8 @@ export const transferCreationService = {
       // Leer saldo actual
       const saldoActual = await getSaldo(destino_id, moneda_id);
       const antEf = saldoActual.cantidad || 0;
-      const antBil = (saldoActual as any).billetes ?? 0;
-      const antMon = (saldoActual as any).monedas_fisicas ?? 0;
+      const antBil = saldoActual.billetes || 0;
+      const antMon = saldoActual.monedas_fisicas || 0;
       const nuevoEf = +(antEf + efectivo).toFixed(2);
       const nuevoBil = +(Number(antBil) + billetes).toFixed(2);
       const nuevoMon = +(Number(antMon) + monedas).toFixed(2);
@@ -380,7 +401,8 @@ export const transferCreationService = {
         usuario_id,
         referencia_id: transferencia.id,
         tipo_referencia: "TRANSFERENCIA",
-        descripcion: `Transferencia (BANCO) ${numero_recibo}`,
+        descripcion: `Transferencia (bancos) ${numero_recibo}`,
+        saldo_bucket: "BANCOS",
       });
     }
 
@@ -415,6 +437,7 @@ export const transferCreationService = {
     monto: number;
     monto_efectivo?: number;
     monto_banco?: number;
+    detalle_divisas?: DetalleDivisas | null;
   }) {
     const {
       origen_id,
@@ -457,9 +480,9 @@ export const transferCreationService = {
       // Obtener desglose físico si está disponible
       let billetes = 0;
       let monedas = 0;
-      if (typeof (args as any).detalle_divisas === "object" && (args as any).detalle_divisas !== null) {
-        billetes = Number((args as any).detalle_divisas.billetes ?? 0);
-        monedas = Number((args as any).detalle_divisas.monedas ?? 0);
+      if (args.detalle_divisas) {
+        billetes = Number(args.detalle_divisas.billetes ?? 0);
+        monedas = Number(args.detalle_divisas.monedas ?? 0);
         // Si el total no cuadra, ajustar todo a billetes
         if ((billetes + monedas).toFixed(2) !== efectivo.toFixed(2)) {
           billetes = efectivo;
@@ -473,8 +496,8 @@ export const transferCreationService = {
       // Leer saldo actual
       const saldoActual = await getSaldo(origen_id, moneda_id);
       const antEf = saldoActual.cantidad || 0;
-      const antBil = (saldoActual as any).billetes ?? 0;
-      const antMon = (saldoActual as any).monedas_fisicas ?? 0;
+      const antBil = saldoActual.billetes || 0;
+      const antMon = saldoActual.monedas_fisicas || 0;
       const nuevoEf = +(antEf - efectivo).toFixed(2);
       const nuevoBil = +(Number(antBil) - billetes).toFixed(2);
       const nuevoMon = +(Number(antMon) - monedas).toFixed(2);
@@ -524,7 +547,8 @@ export const transferCreationService = {
         usuario_id,
         referencia_id: transferencia.id,
         tipo_referencia: "TRANSFERENCIA",
-        descripcion: `Transferencia (BANCO) ${numero_recibo} - Salida`,
+        descripcion: `Transferencia (bancos) ${numero_recibo} - Salida`,
+        saldo_bucket: "BANCOS",
       });
     }
 

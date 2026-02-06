@@ -9,10 +9,6 @@ import { authService, AuthUser } from "../services/authService";
 import { scheduleService } from "../services/scheduleService";
 import { pointService } from "../services/pointService";
 import { PuntoAtencion } from "../types";
-import {
-  validateAndTransformUser,
-  validateAndTransformPuntoAtencion,
-} from "../utils/typeValidation";
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -72,7 +68,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (forcePointSelection) {
               try {
                 sessionStorage.removeItem("pc_force_point_select");
-              } catch {}
+              } catch {
+                // noop: sessionStorage may be unavailable
+              }
             }
             // Si es admin, conectar automáticamente al punto principal
             if (
@@ -141,7 +139,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (forcePointSelection) {
           try {
             sessionStorage.removeItem("pc_force_point_select");
-          } catch {}
+          } catch {
+            // noop: sessionStorage may be unavailable
+          }
         }
 
         // Si es admin, conectar automáticamente al punto principal

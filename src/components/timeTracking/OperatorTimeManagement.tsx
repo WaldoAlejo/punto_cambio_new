@@ -7,7 +7,6 @@ import SpontaneousExitForm from "./SpontaneousExitForm";
 import SpontaneousExitHistory from "./SpontaneousExitHistory";
 import {
   spontaneousExitService,
-  SpontaneousExit,
 } from "../../services/spontaneousExitService";
 import { scheduleService, Schedule } from "../../services/scheduleService";
 import { toast } from "@/hooks/use-toast";
@@ -121,7 +120,7 @@ const OperatorTimeManagement = ({
       } else {
         setSchedules(result);
       }
-    } catch (e) {
+    } catch {
       setSchedules([]);
       toast({
         title: "Error",

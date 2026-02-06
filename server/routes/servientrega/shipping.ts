@@ -3,7 +3,10 @@ import {
   ServientregaAPIService,
   ServientregaCredentials,
 } from "../../services/servientregaAPIService.js";
-import { ServientregaDBService } from "../../services/servientregaDBService.js";
+import {
+  GuiaData,
+  ServientregaDBService,
+} from "../../services/servientregaDBService.js";
 import prisma from "../../lib/prisma.js";
 import { ServientregaValidationService } from "../../services/servientregaValidationService.js";
 
@@ -17,7 +20,7 @@ interface AnularGuiaResponse {
     proceso?: string;
     guia?: string;
   };
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface GenerarGuiaResponse {
@@ -27,7 +30,13 @@ interface GenerarGuiaResponse {
     guia_pdf?: string;
     guia_64?: string;
   };
-  [key: string]: any;
+  [key: string]: unknown;
+}
+
+type JsonRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null;
 }
 
 /** ============================
@@ -247,7 +256,7 @@ router.post("/generar-guia", async (req, res) => {
     );
 
     // Construcción robusta del payload si NO viene formateado
-    let payload: Record<string, any>;
+    let payload: Record<string, unknown>;
     if (!yaFormateado) {
             // ...existing code...
       const {
@@ -301,16 +310,25 @@ router.post("/generar-guia", async (req, res) => {
       const ancho = Number(medidas?.ancho ?? 0) || 0;
       const largo = Number(medidas?.largo ?? 0) || 0;
       const peso_fisico = Number(medidas?.peso ?? 0) || 0;
-      const piezas = Number((medidas as any)?.piezas ?? 1) || 1;
+      const piezas =
+        Number((medidas as { piezas?: unknown } | undefined)?.piezas ?? 1) || 1;
 
       // Cálculo de peso volumétrico (si hay dimensiones)
       const peso_volumentrico =
         alto > 0 && ancho > 0 && largo > 0 ? (alto * ancho * largo) / 5000 : 0;
 
       // Obtener punto de atención si está disponible (usar el que se capturó al inicio)
+      type PuntoAtencionServientregaInfo = {
+        nombre: string;
+        servientrega_agencia_codigo: string | null;
+        servientrega_agencia_nombre: string | null;
+        servientrega_alianza: string | null;
+        servientrega_oficina_alianza: string | null;
+      };
+
       let servientregaAlianza = "PUNTO CAMBIO SAS";
       let servientregaOficinaAlianza = "QUITO_PLAZA DEL VALLE_PC";
-      let punto: any = null;
+      let punto: PuntoAtencionServientregaInfo | null = null;
 
       if (punto_atencion_id_captado) {
         try {
@@ -344,7 +362,7 @@ router.post("/generar-guia", async (req, res) => {
             return res.status(403).json({
               error: "Servientrega no habilitado",
               mensaje:
-                `El punto \"${punto.nombre}\" no tiene Servientrega configurado. ` +
+                `El punto "${punto.nombre}" no tiene Servientrega configurado. ` +
                 `Por favor, contacta al administrador para asignar una agencia de Servientrega a este punto.`,
               punto_nombre: punto.nombre,
               punto_id: punto_atencion_id_captado,
@@ -563,7 +581,7 @@ router.post("/generar-guia", async (req, res) => {
 
     // A veces el WS devuelve la tarifa al inicio y luego {"fetch":{...}} concatenado
     // Intento de "split & merge" cuando llega como string crudo
-    let processed: any = response;
+    let processed: unknown = response;
     if (typeof response === "string") {
       const raw = response as string;
       try {
@@ -585,19 +603,35 @@ router.post("/generar-guia", async (req, res) => {
       }
     }
 
+    const processedRoot: JsonRecord = isRecord(processed)
+      ? processed
+      : (Object.assign({}, processed) as JsonRecord);
+
     // Persistencia cuando hay guia/64
     // La respuesta puede venir como {fetch: {...}} o directamente con guia/guia_64
-    const fetchData = processed?.fetch || processed || {};
-    const guia = fetchData?.guia;
-    const base64 = fetchData?.guia_64;
+    const fetchData: JsonRecord = isRecord(processedRoot.fetch)
+      ? (processedRoot.fetch as JsonRecord)
+      : processedRoot;
+
+    const guia =
+      typeof fetchData.guia === "string" || typeof fetchData.guia === "number"
+        ? String(fetchData.guia)
+        : undefined;
+    const base64 = typeof fetchData.guia_64 === "string" ? fetchData.guia_64 : undefined;
+    const proceso =
+      typeof fetchData.proceso === "string"
+        ? fetchData.proceso
+        : typeof processedRoot.proceso === "string"
+          ? processedRoot.proceso
+          : "N/A";
 
     // 📊 LOG: Extracción de guía y base64
     console.log("📊 Extracción de guía y base64:", {
-      guia: guia ? `✓ ${guia}` : "✗ (no encontrada)",
+      guia: guia ? `✓ ${String(guia)}` : "✗ (no encontrada)",
       base64: base64
-        ? `✓ (${(base64 as string).length} caracteres)`
+        ? `✓ (${base64.length} caracteres)`
         : "✗ (no encontrado)",
-      proceso: fetchData?.proceso || processed?.proceso || "N/A",
+      proceso,
     });
 
     // 💰 Calcular valor total de la guía (incluye flete, seguro, empaque, etc.)
@@ -611,9 +645,9 @@ router.post("/generar-guia", async (req, res) => {
       console.log("💰 INICIANDO CÁLCULO DE valorTotalGuia...");
       console.log("💰 Fuentes disponibles:", {
         costoEnvioPrecalculado,
-        processed_total_transacion: processed?.total_transacion,
-        processed_gtotal: processed?.gtotal,
-        processed_flete: processed?.flete,
+        processed_total_transacion: processedRoot.total_transacion,
+        processed_gtotal: processedRoot.gtotal,
+        processed_flete: processedRoot.flete,
         payload_valor_total: payload?.valor_total,
         payload_gtotal: payload?.gtotal,
         payload_total_transacion: payload?.total_transacion,
@@ -632,31 +666,34 @@ router.post("/generar-guia", async (req, res) => {
         );
       }
       // PRIORIDAD 2: Intentar con total_transacion de respuesta de Servientrega
-      else if (processed?.total_transacion && Number(processed.total_transacion) > 0) {
-        valorTotalGuia = Number(processed.total_transacion);
+      else if (
+        processedRoot.total_transacion &&
+        Number(processedRoot.total_transacion as string | number) > 0
+      ) {
+        valorTotalGuia = Number(processedRoot.total_transacion as string | number);
         console.log(
           "✅ PRIORIDAD 2 MATCH: Usando total_transacion de Servientrega:",
           valorTotalGuia
         );
       }
       // PRIORIDAD 3: Usar gtotal de respuesta de Servientrega
-      else if (processed?.gtotal && Number(processed.gtotal) > 0) {
-        valorTotalGuia = Number(processed.gtotal);
+      else if (processedRoot.gtotal && Number(processedRoot.gtotal as string | number) > 0) {
+        valorTotalGuia = Number(processedRoot.gtotal as string | number);
         console.log("✅ PRIORIDAD 3 MATCH: Usando gtotal de Servientrega:", valorTotalGuia);
       }
       // PRIORIDAD 4: Combinar componentes de la respuesta de Servientrega
-      else if (processed?.flete && Number(processed.flete) > 0) {
-        valorTotalGuia = Number(processed.flete) || 0;
-        if (processed?.valor_asegurado) {
-          valorTotalGuia += Number(processed.valor_asegurado) || 0;
+      else if (processedRoot.flete && Number(processedRoot.flete as string | number) > 0) {
+        valorTotalGuia = Number(processedRoot.flete as string | number) || 0;
+        if (processedRoot.valor_asegurado) {
+          valorTotalGuia += Number(processedRoot.valor_asegurado as string | number) || 0;
         }
-        if (processed?.valor_empaque) {
-          valorTotalGuia += Number(processed.valor_empaque) || 0;
+        if (processedRoot.valor_empaque) {
+          valorTotalGuia += Number(processedRoot.valor_empaque as string | number) || 0;
         }
         console.log("✅ PRIORIDAD 4 MATCH: Sumando componentes de Servientrega:", {
-          flete: Number(processed.flete),
-          valor_asegurado: Number(processed.valor_asegurado || 0),
-          valor_empaque: Number(processed.valor_empaque || 0),
+          flete: Number((processedRoot.flete as string | number) || 0),
+          valor_asegurado: Number((processedRoot.valor_asegurado as string | number) || 0),
+          valor_empaque: Number((processedRoot.valor_empaque as string | number) || 0),
           total: valorTotalGuia,
         });
       }
@@ -693,11 +730,17 @@ router.post("/generar-guia", async (req, res) => {
       }
 
       console.log("💰 DESGLOSE FINAL DE COSTOS:", {
-        flete_servientrega: Number(processed?.flete || 0),
-        valor_asegurado_servientrega: Number(processed?.valor_asegurado || 0),
-        valor_empaque_servientrega: Number(processed?.valor_empaque || 0),
-        total_transacion_servientrega: Number(processed?.total_transacion || 0),
-        gtotal_servientrega: Number(processed?.gtotal || 0),
+        flete_servientrega: Number((processedRoot.flete as string | number) || 0),
+        valor_asegurado_servientrega: Number(
+          (processedRoot.valor_asegurado as string | number) || 0
+        ),
+        valor_empaque_servientrega: Number(
+          (processedRoot.valor_empaque as string | number) || 0
+        ),
+        total_transacion_servientrega: Number(
+          (processedRoot.total_transacion as string | number) || 0
+        ),
+        gtotal_servientrega: Number((processedRoot.gtotal as string | number) || 0),
         valorTotalGuia_FINAL: valorTotalGuia,
         valor_declarado: Number(req.body?.valor_declarado || 0), // ⚠️ NO se descuenta
       });
@@ -821,14 +864,19 @@ router.post("/generar-guia", async (req, res) => {
           });
         }
         
-        const guiaData: any = {
+        const rawProceso = (fetchData as Record<string, unknown> | undefined)
+          ?.proceso;
+        const procesoGuia =
+          typeof rawProceso === "string" && rawProceso.trim()
+            ? rawProceso
+            : "Guia Generada";
+
+        const guiaData: GuiaData = {
           numero_guia: guia,
-          proceso: fetchData?.proceso || "Guia Generada",
-          base64_response: base64,
+          proceso: procesoGuia,
+          base64_response: typeof base64 === "string" ? base64 : "",
           punto_atencion_id: punto_atencion_id_captado || undefined,
           usuario_id: req.user?.id || undefined, // 👈 IMPORTANTE: Guardar usuario_id para rastrabilidad
-          agencia_codigo, // 👈 Código de agencia Servientrega
-          agencia_nombre, // 👈 Nombre de agencia Servientrega
           costo_envio: valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
           valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta
         };
@@ -856,7 +904,11 @@ router.post("/generar-guia", async (req, res) => {
           );
         }
 
-        console.log("📋 [shipping] guiaData FINAL antes de guardar:", guiaData);
+        console.log("📋 [shipping] guiaData FINAL antes de guardar:", {
+          ...guiaData,
+          agencia_codigo,
+          agencia_nombre,
+        });
 
         await db.guardarGuia(guiaData);
 
@@ -872,9 +924,9 @@ router.post("/generar-guia", async (req, res) => {
           valorTotalGuia,
           deberia_descontar: punto_atencion_id_captado && valorTotalGuia > 0,
           costoEnvioPrecalculado,
-          processed_total_transacion: processed?.total_transacion,
-          processed_gtotal: processed?.gtotal,
-          processed_flete: processed?.flete,
+          processed_total_transacion: processedRoot.total_transacion,
+          processed_gtotal: processedRoot.gtotal,
+          processed_flete: processedRoot.flete,
         });
 
         if (punto_atencion_id_captado && valorTotalGuia > 0) {
@@ -964,7 +1016,7 @@ router.post("/generar-guia", async (req, res) => {
       console.error("Razón:", {
         guia_presente: !!guia,
         base64_presente: !!base64,
-        proceso: fetchData?.proceso || processed?.proceso,
+        proceso,
         respuesta_completa: JSON.stringify(processed, null, 2),
       });
     }
@@ -972,11 +1024,11 @@ router.post("/generar-guia", async (req, res) => {
     // 🔧 Normalizar respuesta: siempre devolver guia/guia_64 a nivel raíz para que el frontend los encuentre
     // 💾 IMPORTANTE: Incluir valores finales calculados para que el frontend se actualice correctamente
     const normalizedResponse = {
-      ...processed,
-      guia: guia || processed?.guia || fetchData?.guia,
-      guia_64: base64 || processed?.guia_64 || fetchData?.guia_64,
-      guia_pdf: processed?.guia_pdf || fetchData?.guia_pdf,
-      proceso: fetchData?.proceso || processed?.proceso,
+      ...processedRoot,
+      guia: guia || processedRoot.guia || fetchData.guia,
+      guia_64: base64 || processedRoot.guia_64 || fetchData.guia_64,
+      guia_pdf: processedRoot.guia_pdf || fetchData.guia_pdf,
+      proceso: fetchData.proceso || processedRoot.proceso,
       // 💰 Valores finales de costos (IMPORTANTES para que el frontend se actualice)
       valorTotalGuia: valorTotalGuia || 0,
       costo_total: valorTotalGuia || 0,

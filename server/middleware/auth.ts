@@ -52,9 +52,7 @@ export const authenticateToken: RequestHandler = async (
   }
 
   try {
-    const authHeader =
-      (req.headers["authorization"] as string | undefined) ||
-      (req.headers as any).Authorization;
+    const authHeader = req.get("authorization") ?? req.get("Authorization");
 
     const token = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7).trim()
@@ -99,7 +97,15 @@ export const authenticateToken: RequestHandler = async (
       return;
     }
 
-    const effectiveUserId = decoded.id || decoded.userId!;
+    const effectiveUserId = decoded.id || decoded.userId;
+    if (!effectiveUserId) {
+      res.status(401).json({
+        error: "Token inválido",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     // 2) Cargar usuario desde BD
     let user: AuthenticatedUser | null = null;
     try {

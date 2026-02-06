@@ -1,6 +1,22 @@
 // src/services/receiptService.ts
 import { CambioDivisa, Transferencia } from "../types";
 
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v === "object";
+
+const toNum = (v: unknown): number => {
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
+const devWarn = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.warn(...args);
+};
+
 type CurrencyExchangeDetails = {
   tipoOperacion: string;
   montoOrigen: number;
@@ -268,12 +284,27 @@ export class ReceiptService {
   }
 
   static generateServientregaReceipt(
-    guiaData: any,
-    tarifaData: any,
+    guiaData: unknown,
+    tarifaData: unknown,
     puntoNombre: string,
     usuarioNombre: string,
     numeroRecibo?: string
   ): ReceiptData {
+    const guia = isRecord(guiaData) ? guiaData : {};
+    const tarifa = isRecord(tarifaData) ? tarifaData : {};
+
+    const remitente = isRecord(guia["remitente"]) ? guia["remitente"] : {};
+    const destinatario = isRecord(guia["destinatario"]) ? guia["destinatario"] : {};
+    const medidas = isRecord(guia["medidas"]) ? guia["medidas"] : {};
+
+    const tiempoRaw = tarifa["tiempo"];
+    const tiempo =
+      typeof tiempoRaw === "string"
+        ? tiempoRaw.trim()
+        : typeof tiempoRaw === "number"
+          ? String(tiempoRaw)
+          : "";
+
     return {
       numeroRecibo: numeroRecibo || this.generateReceiptNumber("SERVIENTREGA"),
       fecha: new Date().toLocaleString(),
@@ -281,44 +312,53 @@ export class ReceiptService {
       puntoAtencion: puntoNombre,
       usuario: usuarioNombre,
       detalles: {
-        numeroGuia: guiaData?.numero_guia || "N/A",
-        producto: guiaData?.nombre_producto || "PAQUETE",
+        numeroGuia: (typeof guia["numero_guia"] === "string" && guia["numero_guia"].trim())
+          ? guia["numero_guia"].trim()
+          : "N/A",
+        producto:
+          (typeof guia["nombre_producto"] === "string" && guia["nombre_producto"].trim())
+            ? guia["nombre_producto"].trim()
+            : "PAQUETE",
         origen: {
-          nombre: guiaData?.remitente?.nombre || "",
-          direccion: guiaData?.remitente?.direccion || "",
-          ciudad: guiaData?.remitente?.ciudad || "",
-          telefono: guiaData?.remitente?.telefono || "",
+          nombre: typeof remitente["nombre"] === "string" ? remitente["nombre"] : "",
+          direccion: typeof remitente["direccion"] === "string" ? remitente["direccion"] : "",
+          ciudad: typeof remitente["ciudad"] === "string" ? remitente["ciudad"] : "",
+          telefono: typeof remitente["telefono"] === "string" ? remitente["telefono"] : "",
         },
         destino: {
-          nombre: guiaData?.destinatario?.nombre || "",
-          direccion: guiaData?.destinatario?.direccion || "",
-          ciudad: guiaData?.destinatario?.ciudad || "",
-          telefono: guiaData?.destinatario?.telefono || "",
+          nombre: typeof destinatario["nombre"] === "string" ? destinatario["nombre"] : "",
+          direccion: typeof destinatario["direccion"] === "string" ? destinatario["direccion"] : "",
+          ciudad: typeof destinatario["ciudad"] === "string" ? destinatario["ciudad"] : "",
+          telefono: typeof destinatario["telefono"] === "string" ? destinatario["telefono"] : "",
         },
         paquete: {
-          peso: Number(guiaData?.medidas?.peso || 0),
-          largo: Number(guiaData?.medidas?.largo || 0),
-          ancho: Number(guiaData?.medidas?.ancho || 0),
-          alto: Number(guiaData?.medidas?.alto || 0),
-          valorDeclarado: Number(guiaData?.medidas?.valor_declarado || 0),
+          peso: toNum(medidas["peso"]),
+          largo: toNum(medidas["largo"]),
+          ancho: toNum(medidas["ancho"]),
+          alto: toNum(medidas["alto"]),
+          valorDeclarado: toNum(medidas["valor_declarado"]),
         },
         costos: {
-          flete: Number(tarifaData?.flete || 0),
-          empaque: Number(tarifaData?.valor_empaque || 0),
-          empaqueIva: Number(tarifaData?.valor_empaque_iva || 0),
-          totalEmpaque: Number(tarifaData?.total_empaque || 0),
-          prima: Number(tarifaData?.prima || 0),
-          iva: Number(tarifaData?.tiva || 0),
-          descuento: Number(tarifaData?.descuento || 0),
-          total: Number(
-            tarifaData?.total_transacion || tarifaData?.gtotal || 0
-          ),
+          flete: toNum(tarifa["flete"]),
+          empaque: toNum(tarifa["valor_empaque"]),
+          empaqueIva: toNum(tarifa["valor_empaque_iva"]),
+          totalEmpaque: toNum(tarifa["total_empaque"]),
+          prima: toNum(tarifa["prima"]),
+          iva: toNum(tarifa["tiva"]),
+          descuento: toNum(tarifa["descuento"]),
+          total: toNum(tarifa["total_transacion"]) || toNum(tarifa["gtotal"]),
         },
-        tiempoEntrega: tarifaData?.tiempo
-          ? `${tarifaData.tiempo} día${tarifaData.tiempo === "1" ? "" : "s"}`
+        tiempoEntrega: tiempo
+          ? `${tiempo} día${tiempo === "1" ? "" : "s"}`
           : "1-2 días",
-        trayecto: tarifaData?.trayecto || "NACIONAL",
-        observaciones: guiaData?.observaciones || null,
+        trayecto:
+          typeof tarifa["trayecto"] === "string" && tarifa["trayecto"].trim()
+            ? tarifa["trayecto"].trim()
+            : "NACIONAL",
+        observaciones:
+          typeof guia["observaciones"] === "string"
+            ? guia["observaciones"]
+            : undefined,
       },
     };
   }
@@ -540,7 +580,7 @@ ${separator}
   static printReceipt(receiptData: ReceiptData, copies: number = 2): void {
     // En un entorno real, aquí se enviaría a la impresora térmica
     // (dejamos logs para debug)
-    console.log("Imprimiendo recibo:");
+    devWarn("Imprimiendo recibo:");
     const copyTypes: ("cliente" | "operador")[] = ["cliente", "operador"];
 
     for (let i = 0; i < Math.min(copies, 2); i++) {
@@ -550,8 +590,8 @@ ${separator}
         copyType
       );
 
-      console.log(`--- Copia ${i + 1} (${copyType.toUpperCase()}) ---`);
-      console.log(formattedReceipt);
+      devWarn(`--- Copia ${i + 1} (${copyType.toUpperCase()}) ---`);
+      devWarn(formattedReceipt);
 
       if (typeof window !== "undefined" && "print" in window) {
         try {

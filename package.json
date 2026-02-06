@@ -46,7 +46,23 @@
     "script:limpiar-transacciones": "npx tsx server/scripts/limpiar-transacciones.ts",
     "clean:db": "npx tsx scripts/clean-database.ts",
     "clean:db:safe": "npx tsx scripts/clean-database-safe.ts",
-    "audit:saldos": "npx tsx scripts/audit-saldos-inconsistentes.ts"
+    "audit:saldos": "npx tsx scripts/audit-saldos-inconsistentes.ts",
+    "reconcile:all": "tsx scripts/reconcile-all-points.ts",
+    "validate:all": "tsx scripts/validate-all.ts",
+    "validate:saldos": "tsx scripts/validate/validate-saldos.ts",
+    "validate:movimiento-saldo": "tsx scripts/validate/validate-movimiento-saldo.ts",
+    "validate:exchanges": "tsx scripts/validate/validate-exchanges.ts",
+    "validate:transfers": "tsx scripts/validate/validate-transfers.ts",
+    "validate:servicios-externos": "tsx scripts/validate/validate-servicios-externos.ts",
+    "validate:cierres": "tsx scripts/validate/validate-cierres.ts",
+    "fix:movsaldo-signs": "tsx scripts/fix/fix-movimiento-saldo-signs.ts",
+    "fix:normalize-saldos": "tsx scripts/fix/normalize-saldos-breakdown.ts",
+    "fix:servicios-externos-breakdown": "tsx scripts/fix/fix-servicios-externos-movimiento-breakdown.ts",
+    "fix:servicios-externos-ref": "tsx scripts/fix/fill-servicios-externos-numero-referencia.ts",
+    "fix:exchanges-zero-rates": "tsx scripts/fix/fix-exchanges-zero-rates.ts",
+    "fix:link-transfer-movsaldo": "tsx scripts/fix/link-transfer-movimientosaldo.ts",
+    "fix:cancel-ghost-transfer": "tsx scripts/fix/cancel-ghost-completed-transfers.ts",
+    "diagnose:saldo-breakdown": "tsx scripts/diagnose/diagnose-saldo-breakdown.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed-complete.ts"

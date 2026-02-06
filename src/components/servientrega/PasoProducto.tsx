@@ -50,28 +50,41 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
   const [loading, setLoading] = useState(false);
   const [cargandoProductos, setCargandoProductos] = useState(true);
 
-  const parseProductos = (data: any): string[] => {
+  const parseProductos = (data: unknown): string[] => {
+    const pickNombre = (p: unknown): string => {
+      if (typeof p === "string") return normalizarProducto(p);
+      if (p && typeof p === "object") {
+        const rec = p as Record<string, unknown>;
+        const producto = rec["producto"];
+        if (typeof producto === "string") return normalizarProducto(producto);
+
+        const nombreProducto = rec["nombre_producto"];
+        if (typeof nombreProducto === "string")
+          return normalizarProducto(nombreProducto);
+      }
+      return "";
+    };
+
+    const asRecord =
+      data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+
     // Soporta múltiples formatos del backend
     // 1) data.productos -> [{ nombre_producto }]
-    if (Array.isArray(data?.productos)) {
+    if (asRecord && Array.isArray(asRecord["productos"])) {
+      const productos = asRecord["productos"] as unknown[];
       return unique(
-        data.productos
-          .map((p: any) => normalizarProducto(p?.nombre_producto))
+        productos
+          .map((p) => pickNombre(p))
           .filter((x: string) => x === DOC || x === MERC)
       );
     }
 
     // 2) data.fetch -> [{ producto }] / [{ nombre_producto }] / strings
-    if (Array.isArray(data?.fetch)) {
+    if (asRecord && Array.isArray(asRecord["fetch"])) {
+      const fetch = asRecord["fetch"] as unknown[];
       return unique(
-        data.fetch
-          .map((p: any) => {
-            if (typeof p === "string") return normalizarProducto(p);
-            if (p?.producto) return normalizarProducto(p.producto);
-            if (p?.nombre_producto)
-              return normalizarProducto(p.nombre_producto);
-            return "";
-          })
+        fetch
+          .map((p) => pickNombre(p))
           .filter((x: string) => x === DOC || x === MERC)
       );
     }
@@ -80,13 +93,7 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
     if (Array.isArray(data)) {
       return unique(
         data
-          .map((p: any) => {
-            if (typeof p === "string") return normalizarProducto(p);
-            if (p?.producto) return normalizarProducto(p.producto);
-            if (p?.nombre_producto)
-              return normalizarProducto(p.nombre_producto);
-            return "";
-          })
+          .map((p) => pickNombre(p))
           .filter((x: string) => x === DOC || x === MERC)
       );
     }
@@ -113,12 +120,18 @@ export default function PasoProducto({ onNext }: PasoProductoProps) {
       } else {
         toast.success(`${finales.length} producto(s) cargado(s)`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("❌ Error al cargar productos:", err);
+
+      const maybeAxios = err as {
+        response?: { data?: { details?: string; error?: string } };
+        message?: string;
+      };
+
       const errorMessage =
-        err?.response?.data?.details ||
-        err?.response?.data?.error ||
-        err?.message ||
+        maybeAxios?.response?.data?.details ||
+        maybeAxios?.response?.data?.error ||
+        maybeAxios?.message ||
         "Error desconocido";
       toast.error(`Error al cargar productos: ${errorMessage}`);
 

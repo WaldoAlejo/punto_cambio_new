@@ -101,7 +101,9 @@ export const PointSelector: React.FC<PointSelectorProps> = ({
     // Persistir y emitir evento global (sin recargar)
     try {
       localStorage.setItem("pc_selected_point_id", point.id);
-    } catch {}
+    } catch {
+      // noop: storage may be blocked
+    }
     emitPointSelected(point);
     onPointSelected?.(point);
   };

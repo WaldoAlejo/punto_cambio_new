@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
+import { Prisma } from "@prisma/client";
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ router.get("/", authenticateToken, async (req, res) => {
     }
 
     // Construir filtros dinámicamente
-    const where: any = {
+    const where: Prisma.MovimientoSaldoWhereInput = {
       punto_atencion_id: String(puntoId),
     };
 
@@ -30,13 +31,10 @@ router.get("/", authenticateToken, async (req, res) => {
 
     // Filtro por rango de fechas
     if (fechaInicio || fechaFin) {
-      where.fecha = {};
-      if (fechaInicio) {
-        where.fecha.gte = new Date(String(fechaInicio));
-      }
-      if (fechaFin) {
-        where.fecha.lte = new Date(String(fechaFin));
-      }
+      where.fecha = {
+        gte: fechaInicio ? new Date(String(fechaInicio)) : undefined,
+        lte: fechaFin ? new Date(String(fechaFin)) : undefined,
+      };
     }
 
     const movimientos = await prisma.movimientoSaldo.findMany({

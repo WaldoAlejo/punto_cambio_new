@@ -223,26 +223,24 @@ export const validateUUID = (paramName: string) => {
 };
 
 // Extender el tipo Request para incluir los datos validados
-declare global {
-  namespace Express {
-    interface Request {
-      validatedUser?: {
-        id: string;
-        activo: boolean;
-        rol: string;
-        nombre: string;
-      };
-      validatedPunto?: {
-        id: string;
-        activo: boolean;
-        nombre: string;
-      };
-      validatedMoneda?: {
-        id: string;
-        activo: boolean;
-        codigo: string;
-        nombre: string;
-      };
-    }
+declare module "express-serve-static-core" {
+  interface Request {
+    validatedUser?: {
+      id: string;
+      activo: boolean;
+      rol: string;
+      nombre: string;
+    };
+    validatedPunto?: {
+      id: string;
+      activo: boolean;
+      nombre: string;
+    };
+    validatedMoneda?: {
+      id: string;
+      activo: boolean;
+      codigo: string;
+      nombre: string;
+    };
   }
 }

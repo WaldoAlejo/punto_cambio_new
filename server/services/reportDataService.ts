@@ -1,4 +1,4 @@
-import { TipoOperacion } from "@prisma/client";
+import { EstadoTransaccion, EstadoTransferencia, Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import {
   ExchangeData,
@@ -304,9 +304,17 @@ export const reportDataService = {
       metodoEntrega?: "efectivo" | "transferencia";
     }
   ): Promise<ExchangeDetailedData[]> {
-    const where: any = {
+    const estadoCambio =
+      filters?.estado &&
+      Object.values(EstadoTransaccion).includes(
+        filters.estado as EstadoTransaccion
+      )
+        ? (filters.estado as EstadoTransaccion)
+        : undefined;
+
+    const where: Prisma.CambioDivisaWhereInput = {
       fecha: { gte: startDate, lt: endDate },
-      ...(filters?.estado ? { estado: filters.estado } : {}),
+      ...(estadoCambio ? { estado: estadoCambio } : {}),
       ...(filters?.metodoEntrega
         ? { metodo_entrega: filters.metodoEntrega }
         : {}),
@@ -381,7 +389,7 @@ export const reportDataService = {
         fecha: r.fecha.toISOString(),
         punto: r.puntoAtencion?.nombre || "Punto desconocido",
         usuario: r.usuario?.nombre || "Usuario desconocido",
-        tipo_operacion: r.tipo_operacion as any,
+        tipo_operacion: r.tipo_operacion as ExchangeDetailedData["tipo_operacion"],
         moneda_origen: r.monedaOrigen.codigo,
         moneda_destino: r.monedaDestino.codigo,
         monto_origen: origen,
@@ -414,9 +422,17 @@ export const reportDataService = {
       currencyId?: string;
     }
   ): Promise<TransferDetailedData[]> {
-    const where: any = {
+    const estadoTransfer =
+      filters?.estado &&
+      Object.values(EstadoTransferencia).includes(
+        filters.estado as EstadoTransferencia
+      )
+        ? (filters.estado as EstadoTransferencia)
+        : undefined;
+
+    const where: Prisma.TransferenciaWhereInput = {
       fecha: { gte: startDate, lt: endDate },
-      ...(filters?.estado ? { estado: filters.estado } : {}),
+      ...(estadoTransfer ? { estado: estadoTransfer } : {}),
       ...(filters?.currencyId ? { moneda_id: filters.currencyId } : {}),
       ...(filters?.userId ? { solicitado_por: filters.userId } : {}),
       ...(filters?.pointId ? { destino_id: filters.pointId } : {}),
@@ -459,7 +475,7 @@ export const reportDataService = {
       tipoReferencia?: string;
     }
   ): Promise<AccountingMovementData[]> {
-    const where: any = {
+    const where: Prisma.MovimientoSaldoWhereInput = {
       fecha: { gte: startDate, lt: endDate },
       ...(filters?.pointId ? { punto_atencion_id: filters.pointId } : {}),
       ...(filters?.userId ? { usuario_id: filters.userId } : {}),
@@ -522,7 +538,7 @@ export const reportDataService = {
     endDate: Date,
     filters?: { pointId?: string }
   ): Promise<EODBalanceData[]> {
-    const where: any = {
+    const where: Prisma.CuadreCajaWhereInput = {
       fecha: { gte: startDate, lt: endDate },
       ...(filters?.pointId ? { punto_atencion_id: filters.pointId } : {}),
     };
@@ -561,7 +577,7 @@ export const reportDataService = {
     endDate: Date,
     filters?: { userId?: string }
   ): Promise<PointAssignmentData[]> {
-    const where: any = {
+    const where: Prisma.HistorialAsignacionPuntoWhereInput = {
       fecha_asignacion: { gte: startDate, lt: endDate },
       ...(filters?.userId ? { usuario_id: filters.userId } : {}),
     };

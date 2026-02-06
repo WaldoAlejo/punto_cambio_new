@@ -124,7 +124,7 @@ export class HealthCheckService {
    */
   static async checkAuthStatus(): Promise<{
     isAuthenticated: boolean;
-    user: any | null;
+    user: unknown | null;
     error?: string;
   }> {
     const token = localStorage.getItem("authToken");

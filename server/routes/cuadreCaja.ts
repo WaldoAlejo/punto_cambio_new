@@ -54,6 +54,8 @@ interface DetalleCuadreCaja {
   saldo_apertura: number;
   saldo_cierre: number;
   conteo_fisico: number;
+  bancos_teorico?: number;
+  conteo_bancos?: number;
   billetes: number;
   monedas_fisicas: number;
   diferencia: number;
@@ -331,12 +333,15 @@ router.get("/", authenticateToken, async (req, res) => {
             cantidad: true,
             billetes: true,
             monedas_fisicas: true,
+            bancos: true,
           },
         });
 
         const conteoFísico = saldoFísico ? Number(saldoFísico.cantidad) : saldoCierreTeórico;
         const billetes = saldoFísico ? Number(saldoFísico.billetes) : 0;
         const monedasFísicas = saldoFísico ? Number(saldoFísico.monedas_fisicas) : 0;
+        const bancosTeorico = saldoFísico ? Number(saldoFísico.bancos) : 0;
+        const conteoBancos = bancosTeorico;
 
         // Calcular movimientos del período (ingresos y egresos)
         const movimientosPeriodo = await prisma.movimientoSaldo.findMany({
@@ -414,6 +419,10 @@ router.get("/", authenticateToken, async (req, res) => {
           });
         }
 
+        // Adjuntar info de bancos (no se persiste aquí para no pisar conteos de cierre)
+        detalle.bancos_teorico = bancosTeorico;
+        detalle.conteo_bancos = conteoBancos;
+
         detalle.moneda = moneda;
         detalles.push(detalle);
       } catch (monedaError) {
@@ -459,6 +468,8 @@ router.get("/", authenticateToken, async (req, res) => {
           saldo_apertura: Number(detalle.saldo_apertura) || 0,
           saldo_cierre: Number(detalle.saldo_cierre) || 0,
           conteo_fisico: Number(detalle.conteo_fisico) || 0,
+          bancos_teorico: Number(detalle.bancos_teorico) || 0,
+          conteo_bancos: Number(detalle.conteo_bancos) || 0,
           billetes: detalle.billetes || 0,
           monedas: detalle.monedas_fisicas || 0,
           ingresos_periodo: ingresos,

@@ -71,18 +71,11 @@ const ExchangeDetailsForm = ({
   referenciaCambioPrincipal,
   onReferenciaCambioPrincipalChange,
 }: ExchangeDetailsFormProps) => {
-  // Si no hay ninguna moneda, mostrar mensaje claro
-  if (!fromCurrency && !toCurrency) {
-    return (
-      <div className="text-center text-red-500 p-6">
-        No se han encontrado monedas de origen ni destino para este cambio.
-      </div>
-    );
-  }
+  const noCurrencies = !fromCurrency && !toCurrency;
 
   // Totales y helpers numéricos
   const toFixed2 = (v: number) => (Number.isFinite(v) ? v.toFixed(2) : "0.00");
-  const parseSafe = (v?: string | number | null) => {
+  const parseSafe = (v?: unknown) => {
     if (typeof v === "number") return v;
     const n = parseFloat(String(v ?? "0"));
     return Number.isFinite(n) ? n : 0;
@@ -96,9 +89,12 @@ const ExchangeDetailsForm = ({
   const totalDestino = useMemo(() => {
     // `divisasRecibidas.total` debería venir consolidado desde CurrencyDetailForm,
     // pero calculamos a prueba de balas por si viene des-sincronizado.
-    const billetes = parseSafe((divisasRecibidas as any)?.billetes);
-    const monedas = parseSafe((divisasRecibidas as any)?.monedas);
-    const total = parseSafe((divisasRecibidas as any)?.total);
+    const view = divisasRecibidas as unknown as Partial<
+      Record<"billetes" | "monedas" | "total", unknown>
+    >;
+    const billetes = parseSafe(view?.billetes);
+    const monedas = parseSafe(view?.monedas);
+    const total = parseSafe(view?.total);
     const recompute = billetes + monedas;
     // Si total no cuadra, preferimos recomputar
     return Number.isFinite(total) && Math.abs(total - recompute) < 0.005
@@ -171,6 +167,15 @@ const ExchangeDetailsForm = ({
       onTransferenciaImagenChange(null);
     }
   };
+
+  // Si no hay ninguna moneda, mostrar mensaje claro (pero sin romper el orden de hooks)
+  if (noCurrencies) {
+    return (
+      <div className="text-center text-red-500 p-6">
+        No se han encontrado monedas de origen ni destino para este cambio.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

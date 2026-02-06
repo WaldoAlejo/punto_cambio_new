@@ -38,10 +38,13 @@ const clean = (s: string) =>
     .toUpperCase()
     .trim();
 
-const toNum = (v: any, d = 0) => {
+const toNum = (v: unknown, d = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
 };
+
+type UnknownRecord = Record<string, unknown>;
+const isRecord = (v: unknown): v is UnknownRecord => typeof v === "object" && v !== null;
 
 // Normaliza cualquier input a uno de los DOS productos válidos
 export const normalizarProducto = (raw?: string): ProductoServientrega => {
@@ -134,7 +137,7 @@ export const formatearPayloadTarifa = (data: TarifaInput) => {
   const esInternacional =
     clean(data?.destinatario?.pais || "ECUADOR") !== "ECUADOR";
 
-  const basePayload: Record<string, any> = {
+  const basePayload: Record<string, string> = {
     tipo: esInternacional
       ? "obtener_tarifa_internacional"
       : "obtener_tarifa_nacional",
@@ -156,7 +159,7 @@ export const formatearPayloadTarifa = (data: TarifaInput) => {
   // Solo incluir empaque si fue provisto y no está vacío
   const empaque = clean(data?.empaque?.tipo_empaque || "");
   if (empaque) {
-    (basePayload as any).empaque = empaque;
+    basePayload.empaque = empaque;
   }
 
   if (esInternacional) {
@@ -174,34 +177,35 @@ export const formatearPayloadTarifa = (data: TarifaInput) => {
   return basePayload;
 };
 
-export const procesarRespuestaTarifa = (data: any) => {
+export const procesarRespuestaTarifa = (data: unknown) => {
+  const rec = isRecord(data) ? data : ({} as UnknownRecord);
   // Mismos nombres que devuelve el WS; convertimos a número donde aplica
-  const flete = Number(data?.flete || 0);
-  const valorEmpaque = Number(data?.valor_empaque || 0);
-  const valorEmpaqueIva = Number(data?.valor_empaque_iva || 0);
-  const totalEmpaque = Number(data?.total_empaque || 0);
-  const prima = Number(data?.prima || 0);
-  const descuento = Number(data?.descuento || 0);
-  const tarifa0 = Number(data?.tarifa0 || 0);
-  const tarifa12 = Number(data?.tarifa12 || 0);
-  const tiva = Number(data?.tiva || 0);
-  const gtotal = Number(data?.gtotal || 0);
-  const totalTransacion = Number(data?.total_transacion || 0);
-  const pesoCobrar = Number(data?.peso_cobrar || 0);
-  const volumen = Number(data?.volumen || 0);
+  const flete = Number(rec["flete"] || 0);
+  const valorEmpaque = Number(rec["valor_empaque"] || 0);
+  const valorEmpaqueIva = Number(rec["valor_empaque_iva"] || 0);
+  const totalEmpaque = Number(rec["total_empaque"] || 0);
+  const prima = Number(rec["prima"] || 0);
+  const descuento = Number(rec["descuento"] || 0);
+  const tarifa0 = Number(rec["tarifa0"] || 0);
+  const tarifa12 = Number(rec["tarifa12"] || 0);
+  const tiva = Number(rec["tiva"] || 0);
+  const gtotal = Number(rec["gtotal"] || 0);
+  const totalTransacion = Number(rec["total_transacion"] || 0);
+  const pesoCobrar = Number(rec["peso_cobrar"] || 0);
+  const volumen = Number(rec["volumen"] || 0);
 
   return {
     flete,
-    valor_declarado: Number(data?.valor_declarado || 0),
+    valor_declarado: Number(rec["valor_declarado"] || 0),
     valor_empaque: valorEmpaque,
     valor_empaque_iva: valorEmpaqueIva,
     total_empaque: totalEmpaque,
     seguro: prima, // "prima" = seguro
-    tiempo: data?.tiempo
-      ? `${data.tiempo} día(s) hábil(es)`
+    tiempo: rec["tiempo"]
+      ? `${String(rec["tiempo"])} día(s) hábil(es)`
       : "1-2 días hábiles",
     peso_vol: volumen,
-    trayecto: data?.trayecto || "",
+    trayecto: String(rec["trayecto"] || ""),
     descuento,
     tarifa0,
     tarifa12,
@@ -292,10 +296,10 @@ export const formatearPayloadGuia = (data: GuiaInput) => {
   };
 };
 
-export const procesarRespuestaGuia = (data: any) => {
+export const procesarRespuestaGuia = (data: unknown) => {
   // La respuesta puede venir como string (dos JSON pegados) o como objeto
-  let tarifaData: any = {};
-  let fetchData: any = {};
+  let tarifaData: unknown = {};
+  let fetchData: unknown = {};
 
   if (typeof data === "string") {
     try {
@@ -304,45 +308,54 @@ export const procesarRespuestaGuia = (data: any) => {
         const tarifaPart = data.substring(0, firstBracketEnd + 2);
         const fetchPart = data.substring(firstBracketEnd + 2);
 
-        tarifaData = JSON.parse(tarifaPart)[0] || {};
+        const parsedTarifa = JSON.parse(tarifaPart);
+        tarifaData = Array.isArray(parsedTarifa) ? parsedTarifa[0] : parsedTarifa;
         fetchData = JSON.parse(fetchPart) || {};
       }
     } catch (error) {
       console.error("Error al parsear respuesta de guía:", error);
     }
-  } else if (data && typeof data === "object") {
+  } else if (isRecord(data) || Array.isArray(data)) {
     tarifaData = Array.isArray(data) ? data[0] : data;
-    fetchData = data.fetch || {};
+    fetchData = isRecord(data) ? (data["fetch"] ?? {}) : {};
   }
+
+  const tarifaRec = isRecord(tarifaData) ? tarifaData : ({} as UnknownRecord);
+  const fetchRec = isRecord(fetchData) ? fetchData : ({} as UnknownRecord);
+  const trayectoRaw = tarifaRec["trayecto"];
+  const trayectoNum = Number(trayectoRaw);
+  const trayecto = Number.isFinite(trayectoNum)
+    ? trayectoNum
+    : typeof trayectoRaw === "string"
+      ? trayectoRaw
+      : "";
 
   return {
     // Datos de tarifa
-    flete: Number(tarifaData?.flete || 0),
-    valor_declarado: Number(tarifaData?.valor_declarado || 0),
-    tiempo: tarifaData?.tiempo || "1-2 días",
-    valor_empaque: Number(tarifaData?.valor_empaque || 0),
-    valor_empaque_iva: Number(tarifaData?.valor_empaque_iva || 0),
-    total_empaque: Number(tarifaData?.total_empaque || 0),
-    trayecto: Number.isFinite(Number(tarifaData?.trayecto))
-      ? Number(tarifaData?.trayecto)
-      : tarifaData?.trayecto || "",
-    prima: Number(tarifaData?.prima || 0),
-    peso: Number(tarifaData?.peso || 0),
-    volumen: Number(tarifaData?.volumen || 0),
-    peso_cobrar: Number(tarifaData?.peso_cobrar || 0),
-    descuento: Number(tarifaData?.descuento || 0),
-    tarifa0: Number(tarifaData?.tarifa0 || 0),
-    tarifa12: Number(tarifaData?.tarifa12 || 0),
-    tiva: Number(tarifaData?.tiva || 0),
-    gtotal: Number(tarifaData?.gtotal || 0),
+    flete: Number(tarifaRec["flete"] || 0),
+    valor_declarado: Number(tarifaRec["valor_declarado"] || 0),
+    tiempo: String(tarifaRec["tiempo"] || "1-2 días"),
+    valor_empaque: Number(tarifaRec["valor_empaque"] || 0),
+    valor_empaque_iva: Number(tarifaRec["valor_empaque_iva"] || 0),
+    total_empaque: Number(tarifaRec["total_empaque"] || 0),
+    trayecto,
+    prima: Number(tarifaRec["prima"] || 0),
+    peso: Number(tarifaRec["peso"] || 0),
+    volumen: Number(tarifaRec["volumen"] || 0),
+    peso_cobrar: Number(tarifaRec["peso_cobrar"] || 0),
+    descuento: Number(tarifaRec["descuento"] || 0),
+    tarifa0: Number(tarifaRec["tarifa0"] || 0),
+    tarifa12: Number(tarifaRec["tarifa12"] || 0),
+    tiva: Number(tarifaRec["tiva"] || 0),
+    gtotal: Number(tarifaRec["gtotal"] || 0),
     total_transacion: Number(
-      tarifaData?.total_transacion || tarifaData?.gtotal || 0
+      (tarifaRec["total_transacion"] as unknown) || tarifaRec["gtotal"] || 0
     ),
 
     // Guía
-    proceso: fetchData?.proceso || "",
-    guia: fetchData?.guia || "",
-    guia_pdf: fetchData?.guia_pdf || "",
-    guia_64: fetchData?.guia_64 || "",
+    proceso: String(fetchRec["proceso"] || ""),
+    guia: String(fetchRec["guia"] || ""),
+    guia_pdf: String(fetchRec["guia_pdf"] || ""),
+    guia_64: String(fetchRec["guia_64"] || ""),
   };
 };

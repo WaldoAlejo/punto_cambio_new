@@ -8,34 +8,61 @@ function extractServerMessage(data: unknown): string {
   if (!data) return "Sin detalle";
   if (typeof data === "string") return data;
 
+  const isRecord = (v: unknown): v is Record<string, unknown> =>
+    typeof v === "object" && v !== null;
+
   // Intentos comunes
-  const maybe = data as any;
-  if (typeof maybe.message === "string") return maybe.message;
-  if (typeof maybe.error === "string") return maybe.error;
-  if (Array.isArray(maybe.errors)) {
+  if (isRecord(data)) {
+    const message = data["message"];
+    if (typeof message === "string") return message;
+    const error = data["error"];
+    if (typeof error === "string") return error;
+  }
+
+  if (isRecord(data) && Array.isArray(data["errors"])) {
     // e.g. [{ message: '...' }, '...']
-    const parts = maybe.errors
-      .map((e: any) =>
-        typeof e === "string"
-          ? e
-          : typeof e?.message === "string"
-          ? e.message
-          : JSON.stringify(e)
-      )
+    const errors = data["errors"] as unknown[];
+    const parts = errors
+      .map((e: unknown) => {
+        if (typeof e === "string") return e;
+        if (isRecord(e)) {
+          const msg = e["message"];
+          if (typeof msg === "string") return msg;
+        }
+        try {
+          return JSON.stringify(e);
+        } catch {
+          return String(e);
+        }
+      })
       .filter(Boolean);
     if (parts.length) return parts.join(" | ");
   }
-  if (Array.isArray(maybe.details)) {
-    const parts = maybe.details
-      .map((d: any) => d?.message || d?.detail || JSON.stringify(d))
+
+  if (isRecord(data) && Array.isArray(data["details"])) {
+    const details = data["details"] as unknown[];
+    const parts = details
+      .map((d: unknown) => {
+        if (isRecord(d)) {
+          const msg = d["message"];
+          if (typeof msg === "string") return msg;
+          const detail = d["detail"];
+          if (typeof detail === "string") return detail;
+        }
+        try {
+          return JSON.stringify(d);
+        } catch {
+          return String(d);
+        }
+      })
       .filter(Boolean);
     if (parts.length) return parts.join(" | ");
   }
 
   try {
-    return JSON.stringify(maybe);
+    return JSON.stringify(data);
   } catch {
-    return String(maybe);
+    return String(data);
   }
 }
 
@@ -51,14 +78,21 @@ axiosInstance.interceptors.request.use(
     const token = getToken();
     if (token) {
       // Solo usar Authorization; no forzar Content-Type salvo que haya body
-      (config.headers as any).Authorization = `Bearer ${token}`;
+      const headers =
+        config.headers && typeof config.headers === "object"
+          ? (config.headers as Record<string, unknown>)
+          : ({} as Record<string, unknown>);
+      headers["Authorization"] = `Bearer ${token}`;
+      config.headers = headers;
     }
 
     // Evitar enviar Content-Type si no hay body (GET/DELETE)
     const hasBody = !!config.data;
     if (!hasBody) {
       if (config.headers) {
-        delete (config.headers as any)["Content-Type"];
+        const headers = config.headers as Record<string, unknown>;
+        delete headers["Content-Type"];
+        delete headers["content-type"];
       }
     }
 
@@ -67,7 +101,7 @@ axiosInstance.interceptors.request.use(
 
     // Log de requests en desarrollo
     if (env.IS_DEVELOPMENT) {
-      console.log(
+      console.warn(
         `🚀 ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`,
         {
           params: config.params,
@@ -89,7 +123,7 @@ axiosInstance.interceptors.response.use(
   (response: AxiosResponse) => {
     // Log de responses exitosas en desarrollo
     if (env.IS_DEVELOPMENT) {
-      console.log(
+      console.warn(
         `✅ ${response.config.method?.toUpperCase()} ${
           response.config.baseURL
         }${response.config.url}`,
@@ -102,6 +136,11 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   (error: AxiosError) => {
+    type AxiosErrorWithFriendlyMessage = AxiosError & {
+      friendlyMessage?: string;
+    };
+
+    const err = error as AxiosErrorWithFriendlyMessage;
     const status = error.response?.status;
     const payload = error.response?.data;
     const serverMsg = extractServerMessage(payload);
@@ -115,7 +154,7 @@ axiosInstance.interceptors.response.use(
           message: serverMsg,
           data: payload,
         });
-      } else if ((error as any).code === "ECONNABORTED") {
+      } else if (error.code === "ECONNABORTED") {
         console.error(`⏱️ Timeout ${method} ${url}`, {
           message: error.message,
         });
@@ -129,7 +168,7 @@ axiosInstance.interceptors.response.use(
     }
 
     // Normalizar mensaje amigable en el propio error para usar en UI (toasts, etc.)
-    (error as any).friendlyMessage =
+    err.friendlyMessage =
       status === 0 || !status
         ? "No hay conexión con el servidor. Verifica tu red."
         : serverMsg || error.message;
@@ -181,7 +220,7 @@ axiosInstance.interceptors.response.use(
       default:
         if (!status) {
           // Timeout o red caida
-          if ((error as any).code === "ECONNABORTED") {
+          if (error.code === "ECONNABORTED") {
             console.error("La petición excedió el tiempo de espera.");
           } else {
             console.error("Error de red o sin respuesta del servidor.");

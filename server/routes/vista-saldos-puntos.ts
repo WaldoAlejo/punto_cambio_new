@@ -1,24 +1,27 @@
 import express, { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 import { authenticateToken } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
 
 const router = express.Router();
 
+const log = (...args: unknown[]) => {
+  console.warn(...args);
+};
+
 // GET /api/vista-saldos-puntos — Vista consolidada de saldos por punto
 router.get("/", authenticateToken, async (req: Request, res: Response) => {
   try {
-    console.log("🔍 Vista saldos: Iniciando consulta...");
-    console.log("👤 Usuario solicitante:", {
+    log("🔍 Vista saldos: Iniciando consulta...");
+    log("👤 Usuario solicitante:", {
       id: req.user?.id,
       rol: req.user?.rol,
     });
 
     const rol = (req.user?.rol || "").toString().toUpperCase();
     const esAdmin = rol === "ADMIN" || rol === "SUPER_USUARIO";
-    const userPointId = (req.user as any)?.punto_atencion_id as
-      | string
-      | undefined;
+    const userPointId = req.user?.punto_atencion_id ?? undefined;
 
     const queryPointId = (req.query.pointId as string | undefined) || undefined;
     const reconciliarStr = String(req.query.reconciliar ?? "").toLowerCase();
@@ -114,9 +117,9 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       {
         punto_atencion_id: string;
         moneda_id: string;
-        cantidad: any;
-        billetes: any;
-        monedas_fisicas: any;
+        cantidad: Prisma.Decimal;
+        billetes: Prisma.Decimal | null;
+        monedas_fisicas: Prisma.Decimal | null;
         updated_at: Date;
       }
     >();
@@ -129,7 +132,7 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       {
         punto_atencion_id: string;
         moneda_id: string;
-        cantidad_inicial: any;
+        cantidad_inicial: Prisma.Decimal;
         fecha_asignacion: Date;
       }
     >();
@@ -260,7 +263,7 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       ({ __punto_sort, __moneda_sort_1, __moneda_sort_2, ...rest }) => rest
     );
 
-    console.log(`💰 Saldos encontrados: ${vista.length} registros`);
+    log(`💰 Saldos encontrados: ${vista.length} registros`);
 
     // Resumen por punto (solo para logs)
     const puntosSummary = vista.reduce<
@@ -276,8 +279,8 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       acc[row.punto_atencion_id].monedas++;
       return acc;
     }, {});
-    console.log("📍 Resumen por puntos:", puntosSummary);
-    console.log("💰 Primeros 5 registros:", vista.slice(0, 5));
+    log("📍 Resumen por puntos:", puntosSummary);
+    log("💰 Primeros 5 registros:", vista.slice(0, 5));
 
     res.json({ success: true, saldos: vista });
   } catch (error) {

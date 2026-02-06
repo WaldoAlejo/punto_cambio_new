@@ -3,19 +3,18 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 
 // Conditional import for lovable-tagger (only available in Lovable environment)
-function getComponentTagger() {
+async function getComponentTagger() {
   try {
-    // @ts-ignore - require may not be typed in ESM, but it's wrapped in try/catch
-    const { componentTagger } = require("lovable-tagger");
-    return componentTagger;
+    const mod = await import("lovable-tagger");
+    return mod.componentTagger ?? null;
   } catch {
     return null;
   }
 }
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
-  const componentTagger = getComponentTagger();
+export default defineConfig(async ({ mode }) => {
+  const componentTagger = await getComponentTagger();
 
   return {
     // IMPORTANTE: usar "/" también en producción para que los assets vivan en /assets
@@ -65,8 +64,8 @@ export default defineConfig(({ mode }) => {
 
     plugins: [
       react(),
-      mode === "development" && componentTagger && componentTagger(),
-    ].filter(Boolean),
+      ...(mode === "development" && componentTagger ? [componentTagger()] : []),
+    ],
 
     resolve: {
       alias: {

@@ -48,7 +48,7 @@ export const useContabilidadDivisas = ({
       if (saldosData) {
         setSaldos(saldosData);
       }
-    } catch (err) {
+    } catch {
       const errorMessage = "Error inesperado al cargar saldos";
       setError(errorMessage);
       toast.error(errorMessage);
@@ -83,7 +83,7 @@ export const useContabilidadDivisas = ({
         if (movimientosData) {
           setMovimientos(movimientosData);
         }
-      } catch (err) {
+      } catch {
         toast.error("Error inesperado al cargar movimientos");
       }
     },
@@ -113,7 +113,7 @@ export const useContabilidadDivisas = ({
           );
 
         return { valido, saldo_actual, mensaje: error || undefined };
-      } catch (err) {
+      } catch {
         return {
           valido: false,
           saldo_actual: 0,
@@ -169,7 +169,7 @@ export const useContabilidadDivisas = ({
         }
 
         return { success: false };
-      } catch (err) {
+      } catch {
         toast.error("Error inesperado al procesar movimientos contables");
         return { success: false };
       }

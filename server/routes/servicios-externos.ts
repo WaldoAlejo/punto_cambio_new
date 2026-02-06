@@ -1,8 +1,13 @@
 import express, { Request, Response, NextFunction } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
-import saldoValidation from "../middleware/saldoValidation.js";
 import prisma from "../lib/prisma.js";
-import { Prisma } from "@prisma/client";
+import {
+  Prisma,
+  ServicioExterno,
+  TipoMovimiento as PrismaTipoMovimiento,
+  TipoViaTransferencia,
+  TipoAsignacionServicio,
+} from "@prisma/client";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento as TipoMov,
@@ -32,40 +37,64 @@ type AuthedRequest = Request & { user: AuthenticatedUser };
 function isOperador(
   req: Request
 ): req is AuthedRequest & { user: AuthenticatedUser & { rol: "OPERADOR" } } {
-  return !!(req as any).user && (req as any).user.rol === "OPERADOR";
+  const user = (req as Partial<AuthedRequest>).user;
+  return !!user && user.rol === "OPERADOR";
+}
+
+function isServicioExterno(v: unknown): v is ServicioExterno {
+  return (
+    typeof v === "string" &&
+    Object.values(ServicioExterno).includes(v as ServicioExterno)
+  );
+}
+
+function isTipoMovimientoInOut(
+  v: unknown
+): v is Extract<PrismaTipoMovimiento, "INGRESO" | "EGRESO"> {
+  return v === PrismaTipoMovimiento.INGRESO || v === PrismaTipoMovimiento.EGRESO;
+}
+
+function parseMetodoIngreso(v: unknown): TipoViaTransferencia {
+  const raw = typeof v === "string" ? v.trim().toUpperCase() : "";
+  if (raw === "BANCO") return TipoViaTransferencia.BANCO;
+  if (raw === "MIXTO") return TipoViaTransferencia.MIXTO;
+  return TipoViaTransferencia.EFECTIVO;
 }
 
 /** Catálogos válidos (coinciden con Prisma enums) */
-const SERVICIOS_VALIDOS = [
-  "YAGANASTE",
-  "BANCO_GUAYAQUIL",
-  "WESTERN",
-  "PRODUBANCO",
-  "BANCO_PACIFICO",
-  "SERVIENTREGA",
-  "INSUMOS_OFICINA",
-  "INSUMOS_LIMPIEZA",
-  "OTROS",
+const SERVICIOS_VALIDOS: ServicioExterno[] = [
+  ServicioExterno.YAGANASTE,
+  ServicioExterno.BANCO_GUAYAQUIL,
+  ServicioExterno.WESTERN,
+  ServicioExterno.PRODUBANCO,
+  ServicioExterno.BANCO_PACIFICO,
+  ServicioExterno.SERVIENTREGA,
+  ServicioExterno.INSUMOS_OFICINA,
+  ServicioExterno.INSUMOS_LIMPIEZA,
+  ServicioExterno.OTROS,
 ];
 
 // Servicios que tienen asignación de saldo propio (crédito digital)
-const SERVICIOS_CON_ASIGNACION = [
-  "YAGANASTE",
-  "BANCO_GUAYAQUIL",
-  "WESTERN",
-  "PRODUBANCO",
-  "BANCO_PACIFICO",
-  "SERVIENTREGA",
+const SERVICIOS_CON_ASIGNACION: ServicioExterno[] = [
+  ServicioExterno.YAGANASTE,
+  ServicioExterno.BANCO_GUAYAQUIL,
+  ServicioExterno.WESTERN,
+  ServicioExterno.PRODUBANCO,
+  ServicioExterno.BANCO_PACIFICO,
+  ServicioExterno.SERVIENTREGA,
 ];
 
 // Servicios que usan saldo general/efectivo (no tienen asignación)
-const SERVICIOS_SALDO_GENERAL = [
-  "INSUMOS_OFICINA",
-  "INSUMOS_LIMPIEZA",
-  "OTROS",
+const SERVICIOS_SALDO_GENERAL: ServicioExterno[] = [
+  ServicioExterno.INSUMOS_OFICINA,
+  ServicioExterno.INSUMOS_LIMPIEZA,
+  ServicioExterno.OTROS,
 ];
 
-const TIPOS_VALIDOS = ["INGRESO", "EGRESO"];
+const TIPOS_VALIDOS: Array<Extract<PrismaTipoMovimiento, "INGRESO" | "EGRESO">> = [
+  PrismaTipoMovimiento.INGRESO,
+  PrismaTipoMovimiento.EGRESO,
+];
 
 /** Utils fecha GYE */
 async function gyeTodayWindow() {
@@ -106,22 +135,110 @@ async function validarSaldoServicioExterno(
   res: Response,
   next: NextFunction
 ) {
-  const { servicio, tipo_movimiento } = req.body;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const servicio = body.servicio;
+  const tipo_movimiento = body.tipo_movimiento;
+  const monto = body.monto;
+  const billetes = body.billetes;
+  const monedas_fisicas = body.monedas_fisicas;
+  const metodo_ingreso = body.metodo_ingreso;
   
   // Servicios con asignación: INGRESO necesita validar su propio saldo
-  if (SERVICIOS_CON_ASIGNACION.includes(servicio) && tipo_movimiento === "INGRESO") {
+  if (
+    isServicioExterno(servicio) &&
+    SERVICIOS_CON_ASIGNACION.includes(servicio) &&
+    tipo_movimiento === PrismaTipoMovimiento.INGRESO
+  ) {
     // La validación del saldo asignado se hace en la transacción principal
     return next();
   }
   
   // Servicios de saldo general: INGRESO no requiere validación (cliente trae dinero)
-  if (SERVICIOS_SALDO_GENERAL.includes(servicio) && tipo_movimiento === "INGRESO") {
+  if (
+    isServicioExterno(servicio) &&
+    SERVICIOS_SALDO_GENERAL.includes(servicio) &&
+    tipo_movimiento === PrismaTipoMovimiento.INGRESO
+  ) {
     return next();
   }
   
   // EGRESO siempre necesita validar saldo general (sale dinero del punto)
-  if (tipo_movimiento === "EGRESO") {
-    return saldoValidation.validarSaldoSuficiente(req, res, next);
+  // Pero debe validarse por bucket (CAJA vs BANCOS) según metodo_ingreso.
+  if (tipo_movimiento === PrismaTipoMovimiento.EGRESO) {
+    try {
+      const montoNum = typeof monto === "string" ? parseFloat(monto) : Number(monto);
+      if (!isFinite(montoNum) || montoNum <= 0) {
+        res.status(400).json({ success: false, message: "monto debe ser un número > 0" });
+        return;
+      }
+
+      const metodoIngreso = parseMetodoIngreso(metodo_ingreso);
+      const billetesMonto =
+        typeof billetes === "number" && !isNaN(billetes) ? billetes : 0;
+      const monedasMonto =
+        typeof monedas_fisicas === "number" && !isNaN(monedas_fisicas)
+          ? monedas_fisicas
+          : 0;
+
+      let montoCaja = 0;
+      let montoBancos = 0;
+      if (metodoIngreso === TipoViaTransferencia.EFECTIVO) {
+        montoCaja = montoNum;
+      } else if (metodoIngreso === TipoViaTransferencia.BANCO) {
+        montoBancos = montoNum;
+      } else if (metodoIngreso === TipoViaTransferencia.MIXTO) {
+        montoCaja = Math.min(montoNum, Math.max(0, billetesMonto + monedasMonto));
+        montoBancos = Math.max(0, montoNum - montoCaja);
+      }
+
+      const usdId = await ensureUsdMonedaId();
+      const puntoId = (req as Partial<AuthedRequest>).user?.punto_atencion_id;
+      if (!puntoId) {
+        res.status(400).json({
+          success: false,
+          message:
+            "Debes iniciar una jornada y tener un punto de atención asignado para registrar movimientos.",
+        });
+        return;
+      }
+
+      const saldo = await prisma.saldo.findUnique({
+        where: {
+          punto_atencion_id_moneda_id: {
+            punto_atencion_id: puntoId,
+            moneda_id: usdId,
+          },
+        },
+        select: { cantidad: true, bancos: true },
+      });
+
+      const saldoCaja = Number(saldo?.cantidad || 0);
+      const saldoBancos = Number(saldo?.bancos || 0);
+
+      if (saldoCaja + 0.01 < montoCaja) {
+        res.status(400).json({
+          success: false,
+          message: `Saldo insuficiente en CAJA. Saldo: $${saldoCaja.toFixed(
+            2
+          )}, requerido: $${montoCaja.toFixed(2)}`,
+        });
+        return;
+      }
+      if (saldoBancos + 0.01 < montoBancos) {
+        res.status(400).json({
+          success: false,
+          message: `Saldo insuficiente en BANCOS. Saldo: $${saldoBancos.toFixed(
+            2
+          )}, requerido: $${montoBancos.toFixed(2)}`,
+        });
+        return;
+      }
+
+      return next();
+    } catch {
+      res.status(500).json({ success: false, message: "Error validando saldo" });
+      return;
+    }
   }
   
   return next();
@@ -144,32 +261,18 @@ router.post(
         return;
       }
 
-      const {
-        servicio,
-        tipo_movimiento,
-        monto,
-        descripcion,
-        numero_referencia,
-        comprobante_url,
-        billetes,
-        monedas_fisicas,
-        metodo_ingreso,
-      } = req.body as {
-        servicio?: string;
-        tipo_movimiento?: string;
-        monto?: number | string;
-        descripcion?: string;
-        numero_referencia?: string;
-        comprobante_url?: string;
-        billetes?: number;
-        monedas_fisicas?: number;
-        metodo_ingreso?: string;
-      };
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const servicio = body.servicio;
+      const tipo_movimiento = body.tipo_movimiento;
+      const monto = body.monto;
+      const descripcion = body.descripcion;
+      const numero_referencia = body.numero_referencia;
+      const comprobante_url = body.comprobante_url;
+      const billetes = body.billetes;
+      const monedas_fisicas = body.monedas_fisicas;
+      const metodo_ingreso = body.metodo_ingreso;
 
-      const puntoId = (req as any).user?.punto_atencion_id as
-        | string
-        | null
-        | undefined;
+      const puntoId = req.user.punto_atencion_id;
 
       if (!puntoId) {
         res.status(400).json({
@@ -179,11 +282,11 @@ router.post(
         });
         return;
       }
-      if (!servicio || !SERVICIOS_VALIDOS.includes(servicio)) {
+      if (!isServicioExterno(servicio) || !SERVICIOS_VALIDOS.includes(servicio)) {
         res.status(400).json({ success: false, message: "servicio inválido" });
         return;
       }
-      if (!tipo_movimiento || !TIPOS_VALIDOS.includes(tipo_movimiento)) {
+      if (!isTipoMovimientoInOut(tipo_movimiento) || !TIPOS_VALIDOS.includes(tipo_movimiento)) {
         res
           .status(400)
           .json({ success: false, message: "tipo_movimiento inválido" });
@@ -191,18 +294,9 @@ router.post(
       }
 
       // Validar metodo_ingreso (EFECTIVO, BANCO, MIXTO)
-      const metodoIngreso = metodo_ingreso?.toUpperCase() || "EFECTIVO";
-      const METODOS_VALIDOS = ["EFECTIVO", "BANCO", "MIXTO"];
-      if (!METODOS_VALIDOS.includes(metodoIngreso)) {
-        res.status(400).json({
-          success: false,
-          message: "metodo_ingreso inválido. Debe ser EFECTIVO, BANCO o MIXTO",
-        });
-        return;
-      }
+      const metodoIngreso = parseMetodoIngreso(metodo_ingreso);
 
-      const montoNum =
-        typeof monto === "string" ? parseFloat(monto) : Number(monto);
+      const montoNum = typeof monto === "string" ? parseFloat(monto) : Number(monto);
       if (!isFinite(montoNum) || montoNum <= 0) {
         res
           .status(400)
@@ -213,6 +307,51 @@ router.post(
       const usdId = await ensureUsdMonedaId();
 
       const movimiento = await prisma.$transaction(async (tx) => {
+        const round2 = (n: number) => Math.round(n * 100) / 100;
+        const clamp0 = (n: number) => (n < 0 ? 0 : n);
+
+        const normalizeBreakdownToTotal = (input: {
+          total: number;
+          billetes: number;
+          monedas: number;
+          bancos: number;
+        }) => {
+          let total = round2(input.total);
+          let billetesN = round2(clamp0(input.billetes));
+          let monedasN = round2(clamp0(input.monedas));
+          let bancosN = round2(clamp0(input.bancos));
+
+          if (total < 0) total = 0;
+          if (bancosN > total) bancosN = total;
+
+          const rest = total - monedasN - bancosN;
+          billetesN = round2(clamp0(rest));
+
+          const sum = round2(billetesN + monedasN + bancosN);
+          const diff = round2(total - sum);
+          if (Math.abs(diff) > 0.01) {
+            billetesN = round2(clamp0(billetesN + diff));
+          }
+          return { total, billetes: billetesN, monedas: monedasN, bancos: bancosN };
+        };
+
+        const consumeFrom = (
+          current: { billetes: number; monedas: number; bancos: number },
+          amount: number,
+          prefer: Array<"bancos" | "billetes" | "monedas">
+        ) => {
+          let remaining = round2(amount);
+          const out = { ...current };
+          for (const key of prefer) {
+            if (remaining <= 0.0001) break;
+            const available = out[key];
+            const take = Math.min(available, remaining);
+            out[key] = round2(out[key] - take);
+            remaining = round2(remaining - take);
+          }
+          return { next: out, remaining };
+        };
+
         // Separar servicios con asignación vs saldo general
         let saldoServicioAnterior: number | null = null;
         let saldoServicioNuevo: number | null = null;
@@ -225,7 +364,7 @@ router.post(
             where: {
               punto_atencion_id_servicio_moneda_id: {
                 punto_atencion_id: puntoId,
-                servicio: servicio as any,
+                  servicio,
                 moneda_id: usdId,
               },
             },
@@ -236,11 +375,15 @@ router.post(
           // NUEVA LÓGICA CORRECTA:
           // INGRESO (Cliente paga servicio) -> RESTA del saldo asignado (se usa el crédito)
           // EGRESO (Operador repone dinero) -> SUMA al saldo asignado (se repone el crédito)
-          const deltaDigital = tipo_movimiento === "INGRESO" ? -montoNum : montoNum;
+          const deltaDigital =
+            tipo_movimiento === PrismaTipoMovimiento.INGRESO ? -montoNum : montoNum;
           saldoServicioNuevo = saldoServicioAnterior + deltaDigital;
 
           // Validar saldo suficiente del SERVICIO para INGRESOS (usa crédito)
-          if (tipo_movimiento === "INGRESO" && saldoServicioNuevo < 0) {
+          if (
+            tipo_movimiento === PrismaTipoMovimiento.INGRESO &&
+            saldoServicioNuevo < 0
+          ) {
             throw new Error(
               `Saldo insuficiente en el servicio ${servicio}. Saldo actual: $${saldoServicioAnterior.toFixed(
                 2
@@ -248,29 +391,113 @@ router.post(
             );
           }
 
-          const billetesMonto = typeof billetes === 'number' && !isNaN(billetes) ? billetes : 0;
-          const monedasMonto = typeof monedas_fisicas === 'number' && !isNaN(monedas_fisicas) ? monedas_fisicas : 0;
+          const billetesMonto =
+            typeof billetes === "number" && !isNaN(billetes) ? billetes : 0;
+          const monedasMonto =
+            typeof monedas_fisicas === "number" && !isNaN(monedas_fisicas)
+              ? monedas_fisicas
+              : 0;
           
           let bancosMonto = 0;
-          if (metodoIngreso === "BANCO") {
+          if (metodoIngreso === TipoViaTransferencia.BANCO) {
             bancosMonto = montoNum;
-          } else if (metodoIngreso === "MIXTO") {
+          } else if (metodoIngreso === TipoViaTransferencia.MIXTO) {
             bancosMonto = Math.max(0, montoNum - (billetesMonto + monedasMonto));
           }
 
-          // INGRESO resta (usa crédito), EGRESO suma (repone crédito)
-          const dBil = tipo_movimiento === "INGRESO" ? -billetesMonto : billetesMonto;
-          const dMon = tipo_movimiento === "INGRESO" ? -monedasMonto : monedasMonto;
-          const dBk = tipo_movimiento === "INGRESO" ? -bancosMonto : bancosMonto;
+          // Aplicar actualización robusta: mantener `cantidad` (TOTAL) y evitar componentes negativos.
+          const currentTotal = saldoServicio ? Number(saldoServicio.cantidad) : 0;
+          const currentBilletesRaw = saldoServicio ? Number(saldoServicio.billetes) : 0;
+          const currentMonedasRaw = saldoServicio ? Number(saldoServicio.monedas_fisicas) : 0;
+          const currentBancosRaw = saldoServicio ? Number(saldoServicio.bancos) : 0;
+
+          const normalizedCurrent = normalizeBreakdownToTotal({
+            total: currentTotal,
+            billetes: currentBilletesRaw,
+            monedas: currentMonedasRaw,
+            bancos: currentBancosRaw,
+          });
+
+          const nextTotal = round2(normalizedCurrent.total + deltaDigital);
+          if (nextTotal < -0.01) {
+            throw new Error(
+              `Saldo insuficiente en el servicio ${servicio}. Saldo actual: $${normalizedCurrent.total.toFixed(
+                2
+              )}, Monto requerido: $${montoNum.toFixed(2)}`
+            );
+          }
+
+          let nextBreakdown = { ...normalizedCurrent, total: clamp0(nextTotal) };
+
+          if (deltaDigital > 0) {
+            // Recarga
+            if (metodoIngreso === TipoViaTransferencia.BANCO) {
+              nextBreakdown.bancos = round2(nextBreakdown.bancos + deltaDigital);
+            } else if (metodoIngreso === TipoViaTransferencia.EFECTIVO) {
+              const addBil = billetesMonto > 0 || monedasMonto > 0 ? billetesMonto : deltaDigital;
+              const addMon = billetesMonto > 0 || monedasMonto > 0 ? monedasMonto : 0;
+              nextBreakdown.billetes = round2(nextBreakdown.billetes + addBil);
+              nextBreakdown.monedas = round2(nextBreakdown.monedas + addMon);
+            } else {
+              const efectivo = Math.min(deltaDigital, Math.max(0, billetesMonto + monedasMonto));
+              const banco = round2(deltaDigital - efectivo);
+              const addBil = billetesMonto > 0 || monedasMonto > 0 ? Math.min(efectivo, billetesMonto) : efectivo;
+              const addMon = billetesMonto > 0 || monedasMonto > 0 ? Math.min(efectivo - addBil, monedasMonto) : 0;
+              nextBreakdown.billetes = round2(nextBreakdown.billetes + addBil);
+              nextBreakdown.monedas = round2(nextBreakdown.monedas + addMon);
+              nextBreakdown.bancos = round2(nextBreakdown.bancos + banco);
+            }
+          } else if (deltaDigital < 0) {
+            // Consumo
+            const consume = round2(-deltaDigital);
+            const prefer: Array<"bancos" | "billetes" | "monedas"> =
+              metodoIngreso === TipoViaTransferencia.BANCO
+                ? ["bancos", "billetes", "monedas"]
+                : metodoIngreso === TipoViaTransferencia.EFECTIVO
+                  ? ["billetes", "monedas", "bancos"]
+                  : ["bancos", "billetes", "monedas"];
+
+            const consumed = consumeFrom(
+              {
+                billetes: nextBreakdown.billetes,
+                monedas: nextBreakdown.monedas,
+                bancos: nextBreakdown.bancos,
+              },
+              consume,
+              prefer
+            );
+
+            if (consumed.remaining > 0.01) {
+              throw new Error(
+                `Saldo insuficiente en el servicio ${servicio} para descontar. Restante: $${consumed.remaining.toFixed(
+                  2
+                )}`
+              );
+            }
+
+            nextBreakdown = {
+              ...nextBreakdown,
+              billetes: consumed.next.billetes,
+              monedas: consumed.next.monedas,
+              bancos: consumed.next.bancos,
+            };
+          }
+
+          const finalNormalized = normalizeBreakdownToTotal({
+            total: nextBreakdown.total,
+            billetes: nextBreakdown.billetes,
+            monedas: nextBreakdown.monedas,
+            bancos: nextBreakdown.bancos,
+          });
 
           if (saldoServicio) {
             await tx.servicioExternoSaldo.update({
               where: { id: saldoServicio.id },
               data: {
-                cantidad: { increment: deltaDigital },
-                billetes: { increment: dBil },
-                monedas_fisicas: { increment: dMon },
-                bancos: { increment: dBk },
+                cantidad: finalNormalized.total,
+                billetes: finalNormalized.billetes,
+                monedas_fisicas: finalNormalized.monedas,
+                bancos: finalNormalized.bancos,
                 updated_at: new Date(),
               },
             });
@@ -278,12 +505,12 @@ router.post(
             await tx.servicioExternoSaldo.create({
               data: {
                 punto_atencion_id: puntoId,
-                servicio: servicio as any,
+                servicio,
                 moneda_id: usdId,
-                cantidad: deltaDigital,
-                billetes: dBil,
-                monedas_fisicas: dMon,
-                bancos: dBk,
+                cantidad: finalNormalized.total,
+                billetes: finalNormalized.billetes,
+                monedas_fisicas: finalNormalized.monedas,
+                bancos: finalNormalized.bancos,
                 updated_at: new Date(),
               },
             });
@@ -301,19 +528,84 @@ router.post(
         });
 
         const saldoGeneralAnterior = Number(saldoGeneral?.cantidad || 0);
-        // INGRESO (cliente paga servicio) → SUMA al efectivo (entra dinero)
-        // EGRESO (operador paga servicio) → RESTA del efectivo (sale dinero)
-        const deltaGeneral = tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
-        const nuevoSaldoGeneralTotal = saldoGeneralAnterior + deltaGeneral;
+        const saldoBancosAnterior = Number(saldoGeneral?.bancos || 0);
+        let billetesMonto =
+          typeof billetes === "number" && !isNaN(billetes) ? billetes : 0;
+        let monedasMonto =
+          typeof monedas_fisicas === "number" && !isNaN(monedas_fisicas)
+            ? monedas_fisicas
+            : 0;
 
-        const billetesMonto = typeof billetes === 'number' && !isNaN(billetes) ? billetes : 0;
-        const monedasMonto = typeof monedas_fisicas === 'number' && !isNaN(monedas_fisicas) ? monedas_fisicas : 0;
-        
+        const breakdownProvided =
+          (typeof billetes === "number" && billetes > 0) ||
+          (typeof monedas_fisicas === "number" && monedas_fisicas > 0);
+
+        // Si es EFECTIVO y no viene desglose, asumir todo en billetes para
+        // mantener consistencia (evita que `Saldo.cantidad` cambie pero el desglose quede en 0).
+        if (metodoIngreso === TipoViaTransferencia.EFECTIVO && !breakdownProvided) {
+          billetesMonto = montoNum;
+          monedasMonto = 0;
+        }
+
+        // Si es BANCO, no debe venir desglose en efectivo.
+        if (metodoIngreso === TipoViaTransferencia.BANCO) {
+          billetesMonto = 0;
+          monedasMonto = 0;
+        }
+
+        // Separar el movimiento físico en CAJA vs BANCOS (no mezclar en `Saldo.cantidad`)
+        let montoCaja = 0;
         let bancosMonto = 0;
-        if (metodoIngreso === "BANCO") {
+        if (metodoIngreso === TipoViaTransferencia.EFECTIVO) {
+          montoCaja = montoNum;
+        } else if (metodoIngreso === TipoViaTransferencia.BANCO) {
           bancosMonto = montoNum;
-        } else if (metodoIngreso === "MIXTO") {
-          bancosMonto = Math.max(0, montoNum - (billetesMonto + monedasMonto));
+        } else if (metodoIngreso === TipoViaTransferencia.MIXTO) {
+          montoCaja = Math.min(montoNum, Math.max(0, billetesMonto + monedasMonto));
+          bancosMonto = Math.max(0, montoNum - montoCaja);
+        }
+
+        // Validaciones básicas de coherencia
+        if (metodoIngreso === TipoViaTransferencia.EFECTIVO) {
+          const efectivoDetallado = billetesMonto + monedasMonto;
+          if (Math.abs(efectivoDetallado - montoNum) > 0.01) {
+            throw new Error(
+              `Detalle de efectivo inconsistente: billetes+monedas ($${efectivoDetallado.toFixed(
+                2
+              )}) debe igualar monto ($${montoNum.toFixed(2)}) en EFECTIVO.`
+            );
+          }
+        }
+        if (metodoIngreso === TipoViaTransferencia.MIXTO) {
+          const efectivoDetallado = billetesMonto + monedasMonto;
+          if (efectivoDetallado - montoNum > 0.01) {
+            throw new Error(
+              `Detalle MIXTO inconsistente: billetes+monedas ($${efectivoDetallado.toFixed(
+                2
+              )}) no puede exceder monto ($${montoNum.toFixed(2)}).`
+            );
+          }
+        }
+
+        const sign = tipo_movimiento === PrismaTipoMovimiento.INGRESO ? 1 : -1;
+        const deltaCaja = sign * montoCaja;
+        const deltaBancos = sign * bancosMonto;
+        const nuevoSaldoCaja = saldoGeneralAnterior + deltaCaja;
+        const nuevoSaldoBancos = saldoBancosAnterior + deltaBancos;
+
+        if (nuevoSaldoCaja < -0.01) {
+          throw new Error(
+            `Saldo insuficiente en CAJA. Saldo actual: $${saldoGeneralAnterior.toFixed(
+              2
+            )}, requerido: $${Math.abs(deltaCaja).toFixed(2)}`
+          );
+        }
+        if (nuevoSaldoBancos < -0.01) {
+          throw new Error(
+            `Saldo insuficiente en BANCOS. Saldo actual: $${saldoBancosAnterior.toFixed(
+              2
+            )}, requerido: $${Math.abs(deltaBancos).toFixed(2)}`
+          );
         }
 
         if (saldoGeneral) {
@@ -322,21 +614,37 @@ router.post(
           let dBk = 0;
 
           if (metodoIngreso === "EFECTIVO") {
-            dBil = tipo_movimiento === "INGRESO" ? billetesMonto : -billetesMonto;
-            dMon = tipo_movimiento === "INGRESO" ? monedasMonto : -monedasMonto;
+            dBil =
+              tipo_movimiento === PrismaTipoMovimiento.INGRESO
+                ? billetesMonto
+                : -billetesMonto;
+            dMon =
+              tipo_movimiento === PrismaTipoMovimiento.INGRESO
+                ? monedasMonto
+                : -monedasMonto;
           } else if (metodoIngreso === "BANCO") {
-            dBk = tipo_movimiento === "INGRESO" ? montoNum : -montoNum;
+            dBk =
+              tipo_movimiento === PrismaTipoMovimiento.INGRESO
+                ? montoNum
+                : -montoNum;
           } else if (metodoIngreso === "MIXTO") {
-            dBil = tipo_movimiento === "INGRESO" ? billetesMonto : -billetesMonto;
-            dMon = tipo_movimiento === "INGRESO" ? monedasMonto : -monedasMonto;
+            dBil =
+              tipo_movimiento === PrismaTipoMovimiento.INGRESO
+                ? billetesMonto
+                : -billetesMonto;
+            dMon =
+              tipo_movimiento === PrismaTipoMovimiento.INGRESO
+                ? monedasMonto
+                : -monedasMonto;
             const bM = Math.max(0, montoNum - (billetesMonto + monedasMonto));
-            dBk = tipo_movimiento === "INGRESO" ? bM : -bM;
+            dBk =
+              tipo_movimiento === PrismaTipoMovimiento.INGRESO ? bM : -bM;
           }
 
           await tx.saldo.update({
             where: { id: saldoGeneral.id },
             data: {
-              cantidad: nuevoSaldoGeneralTotal,
+              cantidad: nuevoSaldoCaja,
               billetes: { increment: dBil },
               monedas_fisicas: { increment: dMon },
               bancos: { increment: dBk },
@@ -344,16 +652,17 @@ router.post(
             },
           });
         } else {
-          // Crear saldo general si no existe
-          const initialBil = tipo_movimiento === "INGRESO" ? billetesMonto : -billetesMonto;
-          const initialMon = tipo_movimiento === "INGRESO" ? monedasMonto : -monedasMonto;
-          const initialBk = tipo_movimiento === "INGRESO" ? bancosMonto : -bancosMonto;
+          // Crear saldo general si no existe (respetando CAJA vs BANCOS)
+          const initialCaja = sign * montoCaja;
+          const initialBil = sign * billetesMonto;
+          const initialMon = sign * monedasMonto;
+          const initialBk = sign * bancosMonto;
 
           await tx.saldo.create({
             data: {
               punto_atencion_id: puntoId,
               moneda_id: usdId,
-              cantidad: initialBil + initialMon + initialBk,
+              cantidad: initialCaja,
               billetes: initialBil,
               monedas_fisicas: initialMon,
               bancos: initialBk,
@@ -366,38 +675,67 @@ router.post(
         const svcMov = await tx.servicioExternoMovimiento.create({
           data: {
             punto_atencion_id: puntoId,
-            servicio: servicio as any,
-            tipo_movimiento: tipo_movimiento as any,
+            servicio,
+            tipo_movimiento,
             moneda_id: usdId,
             monto: montoNum,
-            usuario_id: (req as any).user.id,
+            usuario_id: req.user.id,
             fecha: new Date(),
-            descripcion: descripcion || null,
-            numero_referencia: numero_referencia || null,
-            comprobante_url: comprobante_url || null,
-            billetes: billetes !== undefined ? Number(billetes) : undefined,
-            monedas_fisicas: monedas_fisicas !== undefined ? Number(monedas_fisicas) : undefined,
+            descripcion: typeof descripcion === "string" ? descripcion : null,
+            numero_referencia:
+              typeof numero_referencia === "string" ? numero_referencia : null,
+            comprobante_url:
+              typeof comprobante_url === "string" ? comprobante_url : null,
+            billetes: billetesMonto,
+            monedas_fisicas: monedasMonto,
             bancos: bancosMonto,
-            metodo_ingreso: metodoIngreso as any,
+            metodo_ingreso: metodoIngreso,
           },
         });
 
-        // Trazabilidad en MovimientoSaldo
-        await registrarMovimientoSaldo(
-          {
-            puntoAtencionId: puntoId,
-            monedaId: usdId,
-            tipoMovimiento: tipo_movimiento === "INGRESO" ? TipoMov.INGRESO : TipoMov.EGRESO,
-            monto: montoNum,
-            saldoAnterior: saldoGeneralAnterior,
-            saldoNuevo: nuevoSaldoGeneralTotal,
-            tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
-            referenciaId: svcMov.id,
-            descripcion: `${servicio} - ${descripcion || tipo_movimiento}`,
-            usuarioId: (req as any).user.id,
-          },
-          tx
-        );
+        // Trazabilidad en MovimientoSaldo (separando CAJA vs BANCOS)
+        const tipoMovSaldo =
+          tipo_movimiento === PrismaTipoMovimiento.INGRESO
+            ? TipoMov.INGRESO
+            : TipoMov.EGRESO;
+
+        if (montoCaja > 0) {
+          await registrarMovimientoSaldo(
+            {
+              puntoAtencionId: puntoId,
+              monedaId: usdId,
+              tipoMovimiento: tipoMovSaldo,
+              monto: montoCaja,
+              saldoAnterior: saldoGeneralAnterior,
+              saldoNuevo: nuevoSaldoCaja,
+              tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
+              referenciaId: svcMov.id,
+              saldoBucket: "CAJA",
+              descripcion: `${servicio} - ${descripcion || tipo_movimiento} (CAJA)` ,
+              usuarioId: req.user.id,
+            },
+            tx
+          );
+        }
+
+        if (bancosMonto > 0) {
+          await registrarMovimientoSaldo(
+            {
+              puntoAtencionId: puntoId,
+              monedaId: usdId,
+              tipoMovimiento: tipoMovSaldo,
+              monto: bancosMonto,
+              saldoAnterior: saldoBancosAnterior,
+              saldoNuevo: nuevoSaldoBancos,
+              tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
+              referenciaId: svcMov.id,
+              saldoBucket: "BANCOS",
+              descripcion: `${servicio} - ${descripcion || tipo_movimiento} (BANCOS)` ,
+              usuarioId: req.user.id,
+            },
+            tx
+          );
+        }
 
         return {
           ...svcMov,
@@ -436,7 +774,7 @@ router.get(
         return;
       }
 
-      const puntoAsignado = (req as any).user?.punto_atencion_id;
+      const puntoAsignado = req.user.punto_atencion_id;
       const { pointId } = req.params;
       if (pointId !== puntoAsignado) {
         res.status(403).json({
@@ -446,12 +784,22 @@ router.get(
         return;
       }
 
-      const { servicio, tipo_movimiento, desde, hasta, limit } = req.query as any;
+      const { servicio, tipo_movimiento, desde, hasta, limit } = req.query as {
+        servicio?: string;
+        tipo_movimiento?: string;
+        desde?: string;
+        hasta?: string;
+        limit?: string;
+      };
       const take = Math.min(Math.max(parseInt(limit || "100", 10), 1), 500);
 
-      const where: any = { punto_atencion_id: pointId };
-      if (servicio && SERVICIOS_VALIDOS.includes(servicio)) where.servicio = servicio;
-      if (tipo_movimiento && TIPOS_VALIDOS.includes(tipo_movimiento)) where.tipo_movimiento = tipo_movimiento;
+      const where: Prisma.ServicioExternoMovimientoWhereInput = {
+        punto_atencion_id: pointId,
+      };
+      if (isServicioExterno(servicio) && SERVICIOS_VALIDOS.includes(servicio))
+        where.servicio = servicio;
+      if (isTipoMovimientoInOut(tipo_movimiento) && TIPOS_VALIDOS.includes(tipo_movimiento))
+        where.tipo_movimiento = tipo_movimiento;
       if (desde || hasta) {
         where.fecha = {
           gte: desde ? new Date(`${desde}T00:00:00.000Z`) : undefined,
@@ -471,7 +819,7 @@ router.get(
       });
 
       res.json({ success: true, movimientos: rows });
-    } catch (error) {
+    } catch {
       res.status(500).json({ success: false, message: "Error listando movimientos" });
     }
   }
@@ -488,6 +836,12 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+
+      const userId = (req as Partial<AuthedRequest>).user?.id;
+      if (!userId) {
+        res.status(401).json({ success: false, error: "No autorizado" });
+        return;
+      }
 
       await prisma.$transaction(async (tx) => {
         const mov = await tx.servicioExternoMovimiento.findUnique({
@@ -555,51 +909,76 @@ router.delete(
           const billetes = Number(mov.billetes || 0);
           const monedas = Number(mov.monedas_fisicas || 0);
           
+          const bancosMov = Number(mov.bancos || 0);
+          const montoCaja = Math.max(0, montoNum - bancosMov);
+          const montoBancos = Math.max(0, bancosMov);
+
           // Si fue INGRESO (sumó físico), ahora restamos
           // Si fue EGRESO (restó físico), ahora sumamos
           const mult = mov.tipo_movimiento === "INGRESO" ? -1 : 1;
-          
-          let dBil = 0, dMon = 0, dBk = 0;
-          if (mov.metodo_ingreso === "EFECTIVO") {
+          const deltaCaja = montoCaja * mult;
+          const deltaBancos = montoBancos * mult;
+
+          let dBil = 0,
+            dMon = 0;
+          if (mov.metodo_ingreso === "EFECTIVO" || mov.metodo_ingreso === "MIXTO") {
             dBil = billetes * mult;
             dMon = monedas * mult;
-          } else if (mov.metodo_ingreso === "BANCO") {
-            dBk = montoNum * mult;
-          } else if (mov.metodo_ingreso === "MIXTO") {
-            dBil = billetes * mult;
-            dMon = monedas * mult;
-            dBk = Math.max(0, montoNum - (billetes + monedas)) * mult;
           }
 
-          const saldoAnterior = Number(sGen.cantidad);
-          const nuevoTotal = saldoAnterior + (montoNum * mult);
-          const delta = nuevoTotal - saldoAnterior;
+          const saldoCajaAnterior = Number(sGen.cantidad);
+          const saldoBancosAnterior = Number(sGen.bancos || 0);
+          const nuevoCaja = saldoCajaAnterior + deltaCaja;
+          const nuevoBancos = saldoBancosAnterior + deltaBancos;
 
           await tx.saldo.update({
             where: { id: sGen.id },
             data: {
-              cantidad: nuevoTotal,
+              cantidad: nuevoCaja,
               billetes: { increment: dBil },
               monedas_fisicas: { increment: dMon },
-              bancos: { increment: dBk },
+              bancos: { increment: deltaBancos },
               updated_at: new Date(),
             },
           });
 
-          // Trazabilidad del ajuste
-          // Para AJUSTE, el monto debe incluir el signo (positivo o negativo)
-          await registrarMovimientoSaldo({
-            puntoAtencionId: mov.punto_atencion_id,
-            monedaId: mov.moneda_id,
-            tipoMovimiento: TipoMov.AJUSTE,
-            monto: delta,
-            saldoAnterior: saldoAnterior,
-            saldoNuevo: nuevoTotal,
-            tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
-            referenciaId: mov.id,
-            descripcion: `Reverso eliminación ${mov.servicio} ${mov.tipo_movimiento}`,
-            usuarioId: (req as any).user.id,
-          }, tx);
+          // Trazabilidad del ajuste (separando CAJA vs BANCOS)
+          if (Math.abs(deltaCaja) > 0.0001) {
+            await registrarMovimientoSaldo(
+              {
+                puntoAtencionId: mov.punto_atencion_id,
+                monedaId: mov.moneda_id,
+                tipoMovimiento: TipoMov.AJUSTE,
+                monto: deltaCaja,
+                saldoAnterior: saldoCajaAnterior,
+                saldoNuevo: nuevoCaja,
+                tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
+                referenciaId: mov.id,
+                saldoBucket: "CAJA",
+                descripcion: `Reverso eliminación ${mov.servicio} ${mov.tipo_movimiento} (CAJA)`,
+                usuarioId: userId,
+              },
+              tx
+            );
+          }
+          if (Math.abs(deltaBancos) > 0.0001) {
+            await registrarMovimientoSaldo(
+              {
+                puntoAtencionId: mov.punto_atencion_id,
+                monedaId: mov.moneda_id,
+                tipoMovimiento: TipoMov.AJUSTE,
+                monto: deltaBancos,
+                saldoAnterior: saldoBancosAnterior,
+                saldoNuevo: nuevoBancos,
+                tipoReferencia: TipoReferencia.SERVICIO_EXTERNO,
+                referenciaId: mov.id,
+                saldoBucket: "BANCOS",
+                descripcion: `Reverso eliminación ${mov.servicio} ${mov.tipo_movimiento} (BANCOS)`,
+                usuarioId: userId,
+              },
+              tx
+            );
+          }
         }
 
         await tx.servicioExternoMovimiento.delete({ where: { id: mov.id } });
@@ -613,12 +992,12 @@ router.delete(
 );
 
 /* Otros endpoints administrativos (Cierres, etc.) mantienen su lógica de fecha GYE */
-router.get("/admin/movimientos", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req, res) => {
+router.get("/admin/movimientos", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (_req, _res) => {
   // ... similar a la anterior pero para admin
 });
 
 // Cierres
-router.post("/cierre/abrir", authenticateToken, async (req, res) => {
+router.post("/cierre/abrir", authenticateToken, async (_req, _res) => {
   // ... lógica de apertura
 });
 
@@ -634,9 +1013,24 @@ router.post(
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
-      const { punto_atencion_id, servicio, monto_asignado, tipo_asignacion, creado_por } = req.body as any;
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const punto_atencion_id = body.punto_atencion_id;
+      const servicio = body.servicio;
+      const monto_asignado = body.monto_asignado;
+      const tipo_asignacion = body.tipo_asignacion;
+      const creado_por = body.creado_por;
 
-      if (!punto_atencion_id || !servicio || !monto_asignado) {
+      const userId = (req as Partial<AuthedRequest>).user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: "No autorizado" });
+      }
+
+      if (
+        typeof punto_atencion_id !== "string" ||
+        !isServicioExterno(servicio) ||
+        monto_asignado === undefined ||
+        monto_asignado === null
+      ) {
         return res.status(400).json({ success: false, message: "Datos incompletos" });
       }
 
@@ -649,7 +1043,10 @@ router.post(
         return res.status(400).json({ success: false, message: "monto_asignado debe ser > 0" });
       }
 
-      const tipo = tipo_asignacion === "INICIAL" ? "INICIAL" : "RECARGA";
+      const tipo =
+        tipo_asignacion === "INICIAL"
+          ? TipoAsignacionServicio.INICIAL
+          : TipoAsignacionServicio.RECARGA;
 
       const usdId = await ensureUsdMonedaId();
 
@@ -658,12 +1055,15 @@ router.post(
         const asign = await tx.servicioExternoAsignacion.create({
           data: {
             punto_atencion_id,
-            servicio: servicio as any,
+            servicio,
             moneda_id: usdId,
             monto: new Prisma.Decimal(montoNum),
-            tipo: tipo as any,
-            observaciones: creado_por ? `Asignado por ${creado_por}` : undefined,
-            asignado_por: (req as any).user.id,
+            tipo,
+            observaciones:
+              typeof creado_por === "string" && creado_por
+                ? `Asignado por ${creado_por}`
+                : undefined,
+            asignado_por: userId,
           },
         });
 
@@ -672,7 +1072,7 @@ router.post(
           where: {
             punto_atencion_id_servicio_moneda_id: {
               punto_atencion_id,
-              servicio: servicio as any,
+              servicio,
               moneda_id: usdId,
             },
           },
@@ -688,7 +1088,7 @@ router.post(
           const creado = await tx.servicioExternoSaldo.create({
             data: {
               punto_atencion_id,
-              servicio: servicio as any,
+              servicio,
               moneda_id: usdId,
               cantidad: new Prisma.Decimal(montoNum),
               billetes: new Prisma.Decimal(0),
@@ -728,9 +1128,16 @@ router.get(
 
       const result = await Promise.all(
         Object.keys(agg).map(async (servicioKey) => {
-          const servicio = servicioKey as any;
+          if (!isServicioExterno(servicioKey)) {
+            return {
+              servicio: servicioKey,
+              saldo_actual: Number(agg[servicioKey]),
+              ultimo_movimiento: null,
+            };
+          }
+          const servicio = servicioKey;
           const ultimo = await prisma.servicioExternoMovimiento.findFirst({
-            where: { servicio: servicio as any },
+            where: { servicio },
             orderBy: { fecha: "desc" },
             select: { fecha: true },
           });
@@ -792,9 +1199,9 @@ router.get(
           puntoAtencion: { select: { id: true, nombre: true } },
           usuarioAsignador: { select: { id: true, nombre: true } },
         },
-      })) as any[];
+      }));
 
-      const mapped = rows.map((r: any) => ({
+      const mapped = rows.map((r) => ({
         id: r.id,
         punto_atencion_id: r.punto_atencion_id,
         punto_atencion_nombre: r.puntoAtencion?.nombre || null,
@@ -819,13 +1226,22 @@ router.get(
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
-      const { pointId, servicio, tipo_movimiento, desde, hasta, limit } = req.query as any;
+      const { pointId, servicio, tipo_movimiento, desde, hasta, limit } = req.query as {
+        pointId?: string;
+        servicio?: string;
+        tipo_movimiento?: string;
+        desde?: string;
+        hasta?: string;
+        limit?: string;
+      };
       const take = Math.min(Math.max(parseInt(limit || "100", 10), 1), 1000);
 
-      const where: any = {};
+      const where: Prisma.ServicioExternoMovimientoWhereInput = {};
       if (pointId && pointId !== "ALL") where.punto_atencion_id = pointId;
-      if (servicio && SERVICIOS_VALIDOS.includes(servicio)) where.servicio = servicio;
-      if (tipo_movimiento && TIPOS_VALIDOS.includes(tipo_movimiento)) where.tipo_movimiento = tipo_movimiento;
+      if (isServicioExterno(servicio) && SERVICIOS_VALIDOS.includes(servicio))
+        where.servicio = servicio;
+      if (isTipoMovimientoInOut(tipo_movimiento) && TIPOS_VALIDOS.includes(tipo_movimiento))
+        where.tipo_movimiento = tipo_movimiento;
       if (desde || hasta) {
         where.fecha = {
           gte: desde ? new Date(`${desde}T00:00:00.000Z`) : undefined,
@@ -866,7 +1282,7 @@ router.get(
         return;
       }
 
-      const pointId = (req as any).user?.punto_atencion_id;
+      const pointId = req.user.punto_atencion_id;
       if (!pointId) {
         res.status(400).json({
           success: false,
@@ -900,7 +1316,7 @@ router.get(
       const saldosAsignados = await Promise.all(
         SERVICIOS_CON_ASIGNACION.map(async (servicio) => {
           const ultimaAsignacion = await prisma.servicioExternoAsignacion.findFirst({
-            where: { punto_atencion_id: pointId, servicio: servicio as any },
+            where: { punto_atencion_id: pointId, servicio },
             orderBy: { fecha: "desc" },
             select: { monto: true, fecha: true },
           });

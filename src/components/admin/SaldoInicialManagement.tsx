@@ -41,18 +41,14 @@ const SaldoInicialManagement = () => {
   const loadInitialData = async () => {
     try {
       setLoadingData(true);
-      console.log("🔍 SaldoInicialManagement: Iniciando carga de datos...");
 
       const [pointsResponse, vistaSaldosResponse] = await Promise.all([
         pointService.getPointsForBalanceManagement(),
         saldoInicialService.getVistaSaldosPorPunto(),
       ]);
 
-      console.log("📍 Puntos (raw):", pointsResponse);
-      console.log("💰 Saldos (raw):", vistaSaldosResponse);
-
-      if ((pointsResponse as any)?.error) {
-        const msg = (pointsResponse as any).error || "Error al cargar puntos";
+      if (pointsResponse.error) {
+        const msg = pointsResponse.error || "Error al cargar puntos";
         console.error("❌ Error en respuesta de puntos:", msg);
         toast.error(`Error al cargar puntos: ${msg}`);
         setPoints([]);
@@ -60,9 +56,8 @@ const SaldoInicialManagement = () => {
         setPoints(pointsResponse.points || []);
       }
 
-      if ((vistaSaldosResponse as any)?.error) {
-        const msg =
-          (vistaSaldosResponse as any).error || "Error al cargar saldos";
+      if (vistaSaldosResponse.error) {
+        const msg = vistaSaldosResponse.error || "Error al cargar saldos";
         console.error("❌ Error en respuesta de saldos:", msg);
         toast.error(`Error al cargar saldos: ${msg}`);
         setVistaSaldos([]);
@@ -73,13 +68,8 @@ const SaldoInicialManagement = () => {
       const puntosObtenidos = pointsResponse.points || [];
       if (puntosObtenidos.length > 0 && !selectedPointId) {
         const primerPunto = puntosObtenidos[0];
-        console.log(
-          `🎯 Auto-seleccionando primer punto: ${primerPunto.nombre} (${primerPunto.id})`
-        );
         setSelectedPointId(primerPunto.id);
       }
-
-      console.log("✅ Carga de datos completada");
     } catch (error) {
       console.error("❌ Error crítico al cargar datos:", error);
       toast.error(
@@ -98,13 +88,6 @@ const SaldoInicialManagement = () => {
   // Obtiene TODAS las monedas disponibles para el punto seleccionado
   const getMonedasPorPunto = (puntoId: string) => {
     const monedas = vistaSaldos.filter((s) => s.punto_atencion_id === puntoId);
-    console.log(
-      `💱 Monedas disponibles para punto ${puntoId}:`,
-      monedas.length,
-      monedas.map(
-        (m) => `${m.moneda_codigo} (${m.moneda_simbolo}${m.saldo_actual})`
-      )
-    );
     return monedas;
   };
 
@@ -133,22 +116,10 @@ const SaldoInicialManagement = () => {
 
   // Maneja el cambio de punto seleccionado
   const handlePointChange = (pointId: string) => {
-    console.log(`🎯 Cambiando a punto: ${pointId}`);
     setSelectedPointId(pointId);
     setSelectedCurrency("");
     setBilletes("");
     setMonedas("");
-
-    const punto = points.find((p) => p.id === pointId);
-    if (punto) {
-      console.log(
-        `📍 Punto seleccionado: ${punto.nombre} - ${punto.ciudad}, ${punto.provincia}`
-      );
-      const monedas = getMonedasPorPunto(pointId);
-      console.log(
-        `💱 Monedas disponibles para ${punto.nombre}: ${monedas.length}`
-      );
-    }
   };
 
   // Asignar saldo inicial (incremento)
@@ -205,15 +176,11 @@ const SaldoInicialManagement = () => {
         };
 
         try {
-          console.log("📦 Payload POST /saldos-iniciales:", payload);
-
           // Llamada al servicio
-          const res: any = await saldoInicialService.asignarSaldoInicial(
-            payload
-          );
+          const res = await saldoInicialService.asignarSaldoInicial(payload);
 
           // Soporta ambos estilos: retorno con error o lanzar throw
-          if (res?.error) {
+          if (res.error) {
             console.error(
               "❌ Error al asignar saldo (respuesta controlada):",
               res.error
@@ -221,8 +188,6 @@ const SaldoInicialManagement = () => {
             toast.error(res.error);
             return;
           }
-
-          console.log("✅ Saldo asignado correctamente:", res?.saldo ?? res);
           toast.success(
             `✅ Saldo de ${
               monedaInfo.moneda_simbolo
@@ -236,9 +201,12 @@ const SaldoInicialManagement = () => {
           setMonedas("");
           setSelectedCurrency("");
           await loadInitialData();
-        } catch (e: any) {
+        } catch (e: unknown) {
           // Aquí llegan los errores lanzados por apiService con el message del backend
-          const msg = e?.message || "Error inesperado al asignar saldo";
+          const msg =
+            e instanceof Error
+              ? e.message
+              : "Error inesperado al asignar saldo";
           console.error("❌ Error al asignar saldo (throw):", e);
           toast.error(msg);
         } finally {

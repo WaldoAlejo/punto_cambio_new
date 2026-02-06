@@ -1,6 +1,10 @@
 import { apiService } from "./apiService";
 import { Agencia, ApiResponse } from "../types";
 
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.warn(...args);
+};
+
 type RawAgencia = Partial<{
   agencia: string;
   nombre: string;
@@ -89,7 +93,7 @@ export const servientregaService = {
         return { agencias: [], error: "Respuesta vacía del servidor" };
       }
 
-      console.log("📨 getAgencias: Raw response:", response);
+      devLog("📨 getAgencias: Raw response:", response);
 
       if (response.success === false) {
         console.error(
@@ -106,25 +110,25 @@ export const servientregaService = {
 
       if (Array.isArray(response as unknown as unknown[])) {
         raw = response as unknown as RawAgencia[];
-        console.log(
+        devLog(
           "✅ getAgencias: Detected direct array, length:",
           raw.length
         );
       } else if (Array.isArray(response.data)) {
         raw = response.data;
-        console.log(
+        devLog(
           "✅ getAgencias: Found in response.data, length:",
           raw.length
         );
       } else if (Array.isArray(response.fetch)) {
         raw = response.fetch;
-        console.log(
+        devLog(
           "✅ getAgencias: Found in response.fetch, length:",
           raw.length
         );
       } else if (Array.isArray(response.agencias)) {
         raw = response.agencias;
-        console.log(
+        devLog(
           "✅ getAgencias: Found in response.agencias, length:",
           raw.length
         );
@@ -134,14 +138,14 @@ export const servientregaService = {
         );
         if (candidate) {
           raw = candidate as RawAgencia[];
-          console.log(
+          devLog(
             "✅ getAgencias: Found in dynamic key, length:",
             raw.length
           );
         }
       }
 
-      console.log("📊 getAgencias: Raw items before mapping:", raw.slice(0, 2));
+      devLog("📊 getAgencias: Raw items before mapping:", raw.slice(0, 2));
 
       if (!raw.length) {
         console.warn("⚠️ getAgencias: No agencias found after extraction");
@@ -149,13 +153,13 @@ export const servientregaService = {
       }
 
       const mapped = raw.map(toAgencia);
-      console.log(
+      devLog(
         "📊 getAgencias: Mapped items before dedup:",
         mapped.slice(0, 2)
       );
 
       const agencias = dedupeAndSort(mapped);
-      console.log(
+      devLog(
         "✅ getAgencias: Final agencias after dedup and sort:",
         agencias.length
       );

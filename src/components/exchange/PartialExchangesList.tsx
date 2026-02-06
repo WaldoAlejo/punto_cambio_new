@@ -12,7 +12,7 @@ import {
 import { toast } from "sonner";
 import { useConfirmationDialog } from "../../hooks/useConfirmationDialog";
 
-interface PartialExchange {
+export interface PartialExchange {
   id: string;
   fecha: string; // ISO
   tipo_operacion: "COMPRA" | "VENTA";
@@ -140,10 +140,18 @@ Esta acción marcará el cambio como COMPLETADO y actualizará la contabilidad.`
           // Actualiza saldos en tiempo real (si tienes un listener)
           try {
             window.dispatchEvent(new CustomEvent("saldosUpdated"));
-          } catch {}
-        } catch (err: any) {
+          } catch {
+            // noop: CustomEvent may be unavailable in some runtimes
+          }
+        } catch (err: unknown) {
           console.error("Error completing partial exchange:", err);
-          toast.error(err?.message || "Error al completar el cambio parcial");
+          const msg =
+            err instanceof Error
+              ? err.message
+              : typeof err === "string"
+              ? err
+              : "Error al completar el cambio parcial";
+          toast.error(msg);
         } finally {
           setCompletingId(null);
         }

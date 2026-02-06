@@ -96,10 +96,32 @@ export async function validarSaldoSuficiente(
 /**
  * Determina si una operación es un egreso que requiere validación
  */
-function esOperacionEgreso(body: any): boolean {
+type RequestBodyRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is RequestBodyRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getIdFromBody(body: RequestBodyRecord, key: string): string | undefined {
+  const value = body[key];
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return undefined;
+}
+
+function getStringFromBody(
+  body: RequestBodyRecord,
+  key: string
+): string | undefined {
+  const value = body[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function esOperacionEgreso(body: unknown): boolean {
+  if (!isRecord(body)) return false;
   // Casos de egreso directo
   if (
-    body.tipo_movimiento &&
+    typeof body.tipo_movimiento === "string" &&
     ["EGRESO", "RETIRO", "PAGO", "TRANSFERENCIA_SALIDA"].includes(
       body.tipo_movimiento
     )
@@ -107,22 +129,28 @@ function esOperacionEgreso(body: any): boolean {
     return true;
   }
 
-  if (body.tipo && ["EGRESO", "RETIRO", "PAGO"].includes(body.tipo)) {
+  if (typeof body.tipo === "string" && ["EGRESO", "RETIRO", "PAGO"].includes(body.tipo)) {
     return true;
   }
 
   // Para transferencias (el punto origen hace egreso)
-  if (body.punto_origen_id && body.monto && body.monto > 0) {
+  const monto = body.monto;
+  if (getIdFromBody(body, "punto_origen_id") && monto && Number(monto) > 0) {
     return true;
   }
 
   // Para cambios de divisa (validar moneda origen)
-  if (body.moneda_origen_id && body.monto_origen && body.monto_origen > 0) {
+  const montoOrigen = body.monto_origen;
+  if (
+    getIdFromBody(body, "moneda_origen_id") &&
+    montoOrigen &&
+    Number(montoOrigen) > 0
+  ) {
     return true;
   }
 
   // Casos específicos por endpoint
-  const url = body._url || "";
+  const url = getStringFromBody(body, "_url") || "";
   if (
     url.includes("/transfers") ||
     url.includes("/exchanges") ||
@@ -137,7 +165,7 @@ function esOperacionEgreso(body: any): boolean {
 /**
  * Obtiene las validaciones requeridas según el tipo de operación
  */
-async function obtenerValidacionesRequeridas(body: any): Promise<
+async function obtenerValidacionesRequeridas(body: unknown): Promise<
   Array<{
     puntoAtencionId: string;
     monedaId: string;
@@ -146,57 +174,70 @@ async function obtenerValidacionesRequeridas(body: any): Promise<
     monedaCodigo: string;
   }>
 > {
-  const validaciones = [];
+  if (!isRecord(body)) return [];
+  const validaciones: Array<{
+    puntoAtencionId: string;
+    monedaId: string;
+    montoRequerido: number;
+    puntoNombre: string;
+    monedaCodigo: string;
+  }> = [];
 
   // Egreso directo
-  if (body.punto_atencion_id && body.moneda_id && body.monto) {
+  const puntoAtencionId = getIdFromBody(body, "punto_atencion_id");
+  const monedaId = getIdFromBody(body, "moneda_id");
+  const monto = body.monto;
+  if (puntoAtencionId && monedaId && monto) {
     const punto = await prisma.puntoAtencion.findUnique({
-      where: { id: body.punto_atencion_id },
+      where: { id: puntoAtencionId },
     });
     const moneda = await prisma.moneda.findUnique({
-      where: { id: body.moneda_id },
+      where: { id: monedaId },
     });
 
     validaciones.push({
-      puntoAtencionId: body.punto_atencion_id,
-      monedaId: body.moneda_id,
-      montoRequerido: Math.abs(Number(body.monto)),
+      puntoAtencionId,
+      monedaId,
+      montoRequerido: Math.abs(Number(monto)),
       puntoNombre: punto?.nombre || "Desconocido",
       monedaCodigo: moneda?.codigo || "Desconocido",
     });
   }
 
   // Transferencia (validar punto origen)
-  if (body.punto_origen_id && body.moneda_id && body.monto) {
+  const puntoOrigenId = getIdFromBody(body, "punto_origen_id");
+  if (puntoOrigenId && monedaId && monto) {
     const punto = await prisma.puntoAtencion.findUnique({
-      where: { id: body.punto_origen_id },
+      where: { id: puntoOrigenId },
     });
     const moneda = await prisma.moneda.findUnique({
-      where: { id: body.moneda_id },
+      where: { id: monedaId },
     });
 
     validaciones.push({
-      puntoAtencionId: body.punto_origen_id,
-      monedaId: body.moneda_id,
-      montoRequerido: Number(body.monto),
+      puntoAtencionId: puntoOrigenId,
+      monedaId,
+      montoRequerido: Number(monto),
       puntoNombre: punto?.nombre || "Desconocido",
       monedaCodigo: moneda?.codigo || "Desconocido",
     });
   }
 
   // Cambio de divisa (validar moneda origen)
-  if (body.punto_atencion_id && body.moneda_origen_id && body.monto_origen) {
+  const monedaOrigenId = getIdFromBody(body, "moneda_origen_id");
+  const montoOrigen = body.monto_origen;
+  if (puntoAtencionId && monedaOrigenId && montoOrigen) {
     const punto = await prisma.puntoAtencion.findUnique({
-      where: { id: body.punto_atencion_id },
+      where: { id: puntoAtencionId },
     });
     const moneda = await prisma.moneda.findUnique({
-      where: { id: body.moneda_origen_id },
+      where: { id: monedaOrigenId },
     });
 
     validaciones.push({
-      puntoAtencionId: body.punto_atencion_id,
-      monedaId: body.moneda_origen_id,
-      montoRequerido: Number(body.monto_origen),
+      puntoAtencionId,
+      monedaId: monedaOrigenId,
+      montoRequerido: Number(montoOrigen),
       puntoNombre: punto?.nombre || "Desconocido",
       monedaCodigo: moneda?.codigo || "Desconocido",
     });
@@ -238,7 +279,7 @@ export async function validarSaldoTransferencia(
   next: NextFunction
 ) {
   try {
-    const { origen_id, moneda_id, monto, tipo_transferencia } = req.body;
+    const { origen_id, moneda_id, monto } = req.body;
 
     // Para transferencias sin origen (DEPOSITO_GERENCIA, DEPOSITO_MATRIZ), no validar saldo
     if (!origen_id) {
@@ -300,15 +341,13 @@ export async function validarSaldoCambioDivisa(
   res: Response,
   next: NextFunction
 ) {
-  let {
+  const {
     punto_atencion_id,
     moneda_origen_id,
     moneda_destino_id,
     monto_origen,
     monto_destino,
     tipo_operacion,
-    divisas_recibidas_billetes,
-    divisas_recibidas_monedas,
     metodo_entrega,
     usd_entregado_efectivo,
     usd_entregado_transfer,
@@ -383,8 +422,8 @@ export async function validarSaldoCambioDivisa(
     // VENTA -> El cliente trae USD y el punto ENTREGA DIVISAS -> Validar DESTINO (divisas que salen)
     
     // Por defecto: Validamos DESTINO (lo que el punto entrega al cliente)
-    let monedaValidar = moneda_destino_id;
-    let montoValidar = Number(monto_destino);
+    const monedaValidar = moneda_destino_id;
+    const montoValidar = Number(monto_destino);
 
     logger.info("[VALIDACION_CAMBIO_DIVISA] Determinando moneda a validar", {
       tipo_operacion,
@@ -455,7 +494,7 @@ export async function validarSaldoCambioDivisa(
     });
 
     let saldoBilletes = Number(saldo?.billetes || 0);
-    let saldoMonedas = Number(saldo?.monedas_fisicas || 0);
+    const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
     const saldoBancos = Number(saldo?.bancos || 0);
     
     // Calcular saldo total incluyendo billetes, monedas y bancos

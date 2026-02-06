@@ -259,11 +259,19 @@ const TimeTracker = ({
         fecha_salida: ahora,
       });
       toast.success(`✅ Jornada finalizada a las ${formatearHora(ahora)}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" && error !== null
+          ? typeof (error as Record<string, unknown>).message === "string"
+            ? String((error as Record<string, unknown>).message)
+            : ""
+          : "";
       // Si el backend requiere cierre, redirigir al cierre diario
       if (
-        error?.message?.includes("cierre de caja diario") ||
-        error?.message?.includes("cierre diario")
+        message.includes("cierre de caja diario") ||
+        message.includes("cierre diario")
       ) {
         showConfirmation(
           "Cierre requerido",

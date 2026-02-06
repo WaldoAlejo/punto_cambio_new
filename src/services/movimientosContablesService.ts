@@ -3,9 +3,42 @@ import {
   MovimientoSaldo,
   CambioDivisa,
   MovimientoContableData,
-  SaldoActualizado,
   ResultadoMovimientoContable,
 } from "../types";
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v === "object";
+
+const isAxiosLikeError = (
+  err: unknown
+): err is {
+  response?: { data?: unknown };
+  message?: string;
+} => {
+  if (!isRecord(err)) return false;
+  if (!("response" in err)) return false;
+  const response = (err as Record<string, unknown>).response;
+  return response === undefined || isRecord(response);
+};
+
+const getMessageFromResponseData = (data: unknown): string | undefined => {
+  if (!isRecord(data)) return undefined;
+  const message = data.message;
+  const error = data.error;
+  if (typeof message === "string" && message.trim()) return message;
+  if (typeof error === "string" && error.trim()) return error;
+  return undefined;
+};
+
+const extractErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) return error.message;
+  if (isAxiosLikeError(error)) {
+    const msg = getMessageFromResponseData(error.response?.data);
+    if (msg) return msg;
+    if (typeof error.message === "string" && error.message.trim()) return error.message;
+  }
+  return fallback;
+};
 
 export const movimientosContablesService = {
   /**
@@ -60,13 +93,14 @@ export const movimientosContablesService = {
       );
 
       return { result: response.data, error: null };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al procesar movimientos contables:", error);
       return {
         result: null,
-        error:
-          error.response?.data?.message ||
-          "Error al procesar movimientos contables",
+        error: extractErrorMessage(
+          error,
+          "Error al procesar movimientos contables"
+        ),
       };
     }
   },
@@ -84,11 +118,11 @@ export const movimientosContablesService = {
       );
 
       return { saldo: response.data.saldo, error: null };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al obtener saldo actual:", error);
       return {
         saldo: null,
-        error: error.response?.data?.message || "Error al obtener saldo actual",
+        error: extractErrorMessage(error, "Error al obtener saldo actual"),
       };
     }
   },
@@ -131,12 +165,11 @@ export const movimientosContablesService = {
       }));
 
       return { saldos, error: null };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al obtener saldos actuales:", error);
       return {
         saldos: null,
-        error:
-          error.response?.data?.message || "Error al obtener saldos actuales",
+        error: extractErrorMessage(error, "Error al obtener saldos actuales"),
       };
     }
   },
@@ -165,12 +198,12 @@ export const movimientosContablesService = {
         saldo_actual: response.data.saldo_actual,
         error: response.data.valido ? null : response.data.mensaje,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al validar saldo:", error);
       return {
         valido: false,
         saldo_actual: 0,
-        error: error.response?.data?.message || "Error al validar saldo",
+        error: extractErrorMessage(error, "Error al validar saldo"),
       };
     }
   },
@@ -201,11 +234,11 @@ export const movimientosContablesService = {
       }>(`/movimientos-contables/${punto_atencion_id}?${params}`);
 
       return { movimientos: response.data.movimientos, error: null };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error al obtener historial de movimientos:", error);
       return {
         movimientos: null,
-        error: error.response?.data?.message || "Error al obtener historial",
+        error: extractErrorMessage(error, "Error al obtener historial"),
       };
     }
   },

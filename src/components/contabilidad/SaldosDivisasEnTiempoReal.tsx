@@ -9,7 +9,7 @@ import {
   DollarSign,
   AlertTriangle,
 } from "lucide-react";
-import { User, PuntoAtencion, SaldoConsolidado } from "@/types";
+import { User, PuntoAtencion } from "@/types";
 import { useContabilidadDivisas } from "@/hooks/useContabilidadDivisas";
 import { useContabilidadAdmin } from "@/hooks/useContabilidadAdmin";
 import { Loading } from "@/components/ui/loading";
@@ -69,8 +69,10 @@ export const SaldosDivisasEnTiempoReal = ({
   const pointOptions = useMemo(() => {
     if (!isAdminView) return [] as { id: string; nombre: string }[];
     const map = new Map<string, string>();
-    (saldos as SaldoConsolidado[]).forEach((s: any) => {
-      if (s.punto_id && s.punto_nombre) map.set(s.punto_id, s.punto_nombre);
+    (saldos as AnySaldo[]).forEach((s) => {
+      if (typeof s.punto_id === "string" && typeof s.punto_nombre === "string") {
+        map.set(s.punto_id, s.punto_nombre);
+      }
     });
     return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }));
   }, [saldos, isAdminView]);

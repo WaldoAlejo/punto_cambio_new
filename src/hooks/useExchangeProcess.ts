@@ -246,7 +246,7 @@ export const useExchangeProcess = ({
       }
 
       // Adjuntos de transferencia: no subimos aquí (mantener flujo actual)
-      let transferenciaImagenUrl: string | null = null;
+      const transferenciaImagenUrl: string | null = null;
       if (data.metodoEntrega === "transferencia" && data.transferenciaImagen) {
         // Mantener mensaje actual (sin crear feature nuevo)
         toast.info(
@@ -368,7 +368,9 @@ export const useExchangeProcess = ({
       // Notificar de inmediato para refrescar saldos y listas, incluso si queda pendiente
       try {
         window.dispatchEvent(new CustomEvent("saldosUpdated"));
-      } catch {}
+      } catch {
+        // noop: CustomEvent may be unavailable in some runtimes
+      }
 
       // 🎯 Verificar el estado del cambio creado
       // El backend ya crea el cambio como COMPLETADO si:

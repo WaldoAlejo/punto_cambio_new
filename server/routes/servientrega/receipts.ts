@@ -28,7 +28,8 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
       numero_copias?: number;
     };
 
-    const usuario_id = (req as any).user?.id as string | undefined;
+    type AuthedRequest = Request & { user?: { id?: string } };
+    const usuario_id = (req as AuthedRequest).user?.id;
     if (!usuario_id) {
       return res.status(401).json({ error: "Usuario no autenticado" });
     }
@@ -232,7 +233,7 @@ router.patch(
         numero_copias?: number;
       };
 
-      const updateData: any = { impreso: Boolean(impreso) };
+      const updateData: Prisma.ReciboUpdateInput = { impreso: Boolean(impreso) };
       if (numero_copias !== undefined) {
         updateData.numero_copias =
           Number.parseInt(String(numero_copias), 10) || 0;
@@ -280,15 +281,18 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       offset = "0",
     } = req.query as Record<string, string | undefined>;
 
-    const whereClause: any = { tipo_operacion: RECIBO_TIPO_SERVIENTREGA };
+    const whereClause: Prisma.ReciboWhereInput = {
+      tipo_operacion: RECIBO_TIPO_SERVIENTREGA,
+    };
 
     if (punto_atencion_id)
       whereClause.punto_atencion_id = String(punto_atencion_id);
 
     if (fecha_desde || fecha_hasta) {
-      whereClause.fecha = {};
-      if (fecha_desde) whereClause.fecha.gte = new Date(String(fecha_desde));
-      if (fecha_hasta) whereClause.fecha.lte = new Date(String(fecha_hasta));
+      const fechaFilter: Prisma.DateTimeFilter = {};
+      if (fecha_desde) fechaFilter.gte = new Date(String(fecha_desde));
+      if (fecha_hasta) fechaFilter.lte = new Date(String(fecha_hasta));
+      whereClause.fecha = fechaFilter;
     }
 
     if (impreso !== undefined) whereClause.impreso = String(impreso) === "true";

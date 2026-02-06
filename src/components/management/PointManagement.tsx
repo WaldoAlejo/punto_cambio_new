@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
-import { PuntoAtencion, Agencia } from "../../types";
+import { PuntoAtencion } from "../../types";
 import { pointService } from "../../services/pointService";
 import EditPointDialog from "@/components/admin/EditPointDialog";
 import { AgenciaSelector } from "@/components/ui/AgenciaSelector";

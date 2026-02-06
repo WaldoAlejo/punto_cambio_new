@@ -88,6 +88,14 @@ export class ServientregaValidationService {
     "MERCANCIA PREMIER",
   ] as const;
 
+  private static isProductoValido(
+    value: string
+  ): value is (typeof ServientregaValidationService.PRODUCTOS_VALIDOS)[number] {
+    return ServientregaValidationService.PRODUCTOS_VALIDOS.includes(
+      value as (typeof ServientregaValidationService.PRODUCTOS_VALIDOS)[number]
+    );
+  }
+
   private static readonly PESO_MINIMO = 0.5;
 
   /**
@@ -185,18 +193,16 @@ export class ServientregaValidationService {
     }
 
     // Producto (si viene) debe ser uno de los válidos
-    if (
-      request.nombre_producto &&
-      !this.PRODUCTOS_VALIDOS.includes(
-        request.nombre_producto.toUpperCase() as any
-      )
-    ) {
+    if (request.nombre_producto) {
+      const producto = request.nombre_producto.toUpperCase().trim();
+      if (!this.isProductoValido(producto)) {
       errors.push({
         field: "nombre_producto",
         message: `nombre_producto inválido. Válidos: ${this.PRODUCTOS_VALIDOS.join(
           ", "
         )}`,
       });
+      }
     }
 
     return errors;
@@ -219,7 +225,7 @@ export class ServientregaValidationService {
     const productoNormalizado = (
       request.nombre_producto || "MERCANCIA PREMIER"
     ).toUpperCase();
-    const producto = this.PRODUCTOS_VALIDOS.includes(productoNormalizado as any)
+    const producto = this.isProductoValido(productoNormalizado)
       ? productoNormalizado
       : "MERCANCIA PREMIER";
 
@@ -264,7 +270,7 @@ export class ServientregaValidationService {
   /**
    * Extrae mensajes de error que algunos endpoints devuelven en strings con {"proceso":"..."}.
    */
-  static parseServientregaErrors(response: any): string[] {
+  static parseServientregaErrors(response: unknown): string[] {
     if (typeof response !== "string" || !response.includes(`"proceso"`)) {
       return [];
     }
@@ -280,15 +286,17 @@ export class ServientregaValidationService {
   /**
    * Utilidad opcional: quitar claves vacías antes de enviar al WS.
    */
-  static stripEmpty<T extends Record<string, any>>(obj: T): Partial<T> {
+  static stripEmpty<T extends Record<string, unknown>>(obj: T): Partial<T> {
     const out: Partial<T> = {};
-    for (const [k, v] of Object.entries(obj)) {
+    for (const key in obj) {
+      if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+      const value = obj[key];
       if (
-        v !== undefined &&
-        v !== null &&
-        !(typeof v === "string" && v.trim() === "")
+        value !== undefined &&
+        value !== null &&
+        !(typeof value === "string" && value.trim() === "")
       ) {
-        (out as any)[k] = v;
+        out[key] = value;
       }
     }
     return out;

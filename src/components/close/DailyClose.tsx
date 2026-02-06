@@ -36,10 +36,94 @@ import { User, PuntoAtencion, CuadreCaja } from "../../types";
 import { contabilidadDiariaService } from "../../services/contabilidadDiariaService";
 import cuatreCajaService from "@/services/cuatreCajaService";
 
-function getCantidad(val: any): number {
+type JsonRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getCantidad(val: unknown): number {
   if (typeof val === "number") return val;
-  if (val && typeof val.cantidad === "number") return val.cantidad;
+  if (isRecord(val) && typeof val.cantidad === "number") return val.cantidad;
   return 0;
+}
+
+interface ResumenUsuarioRef {
+  nombre?: string;
+  username?: string;
+}
+
+interface ResumenMonedaRef {
+  codigo?: string;
+  nombre?: string;
+}
+
+interface ResumenSaldoPrincipal {
+  moneda_codigo: string;
+  moneda_nombre: string;
+  moneda_simbolo: string;
+  tuvo_movimientos: boolean;
+  saldo_final: number;
+}
+
+interface ResumenServicioExternoSaldo {
+  moneda_codigo: string;
+  moneda_simbolo: string;
+  saldo: number;
+}
+
+interface ResumenServicioExterno {
+  servicio_nombre: string;
+  servicio_tipo: string;
+  saldos: ResumenServicioExternoSaldo[];
+}
+
+interface ResumenCambioDivisaTx {
+  id: string;
+  fecha: string;
+  numero_recibo?: string;
+  tipo_operacion?: string;
+  usuario?: ResumenUsuarioRef;
+  moneda_origen?: ResumenMonedaRef;
+  moneda_destino?: ResumenMonedaRef;
+  monto_origen?: number;
+  monto_destino?: number;
+  tasa_cambio_billetes?: number;
+  tasa_cambio_monedas?: number;
+}
+
+interface ResumenServicioExternoTx {
+  id: string;
+  fecha: string;
+  servicio?: string;
+  tipo_movimiento?: string;
+  usuario?: ResumenUsuarioRef;
+  moneda?: string;
+  monto?: number;
+  numero_referencia?: string;
+}
+
+interface ResumenBalancePorMonedaRow {
+  moneda?: ResumenMonedaRef;
+  ingresos?: number;
+  egresos?: number;
+  neto?: number;
+}
+
+interface ResumenCierre {
+  fecha?: string;
+  punto_atencion_id?: string;
+  total_transacciones: number;
+  saldos_principales: ResumenSaldoPrincipal[];
+  servicios_externos: ResumenServicioExterno[];
+  transacciones?: {
+    cambios_divisas?: ResumenCambioDivisaTx[];
+    servicios_externos?: ResumenServicioExternoTx[];
+  };
+  balance?: {
+    cambios_divisas?: { por_moneda?: ResumenBalancePorMonedaRow[] };
+    servicios_externos?: { por_moneda?: ResumenBalancePorMonedaRow[] };
+  };
 }
 
 interface DailyCloseProps {
@@ -54,6 +138,8 @@ interface CuadreDetalle {
   simbolo: string;
   saldo_apertura: number;
   saldo_cierre: number;
+  bancos_teorico?: number;
+  conteo_bancos?: number;
   conteo_fisico: number;
   billetes: number;
   monedas: number;
@@ -78,7 +164,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     };
   } | null>(null);
   const [userAdjustments, setUserAdjustments] = useState<{
-    [key: string]: { bills: string; coins: string; note?: string };
+    [key: string]: { bills: string; coins: string; banks: string; note?: string };
   }>({});
   const [todayClose, setTodayClose] = useState<CuadreCaja | null>(null);
   const [hasActiveJornada, setHasActiveJornada] = useState<boolean | null>(
@@ -88,9 +174,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const [loading, setLoading] = useState(false); // carga de cuadre
   const [closing, setClosing] = useState(false); // estado de cierre en progreso
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
+  const { ConfirmationDialog } = useConfirmationDialog();
   const [showResumenModal, setShowResumenModal] = useState(false);
-  const [resumenCierre, setResumenCierre] = useState<any>(null);
+  const [resumenCierre, setResumenCierre] = useState<ResumenCierre | null>(null);
   const [loadingResumen, setLoadingResumen] = useState(false);
   const [validacionCierres, setValidacionCierres] = useState<
     | {
@@ -118,25 +204,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     const checkActiveJornada = async (): Promise<void> => {
       try {
         const token = localStorage.getItem("authToken");
-        console.log(
-          "🔍 DailyClose - localStorage keys:",
-          Object.keys(localStorage)
-        );
-        console.log("🔍 DailyClose - token check:", {
-          tokenExists: !!token,
-          tokenPreview: token ? token.substring(0, 30) + "..." : "No token",
-          userInfo: { id: user.id, rol: user.rol, nombre: user.nombre },
-        });
 
         if (!token) {
-          console.log("❌ No token found for jornada check");
           setHasActiveJornada(false);
           return;
         }
 
-        console.log("🔍 Checking active jornada for user:", user.rol);
         const response = await fetch(
-          `${(import.meta as any).env.VITE_API_URL || "http://35.238.95.118/api"}/schedules/active`,
+          `${import.meta.env.VITE_API_URL || "http://35.238.95.118/api"}/schedules/active`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -145,11 +220,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           }
         );
 
-        console.log("🕒 Active jornada response status:", response.status);
-
         if (response.ok) {
           const data = await response.json();
-          console.log("🕒 Active jornada response data:", data);
 
           // Verificar que tenga schedule y que esté ACTIVO
           const hasJornada =
@@ -157,10 +229,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             data.schedule &&
             (data.schedule.estado === "ACTIVO" ||
               data.schedule.estado === "ALMUERZO");
-          console.log("🕒 Has active jornada:", hasJornada);
           setHasActiveJornada(hasJornada);
         } else {
-              console.log("❌ No active jornada or error:", response.status);
           setHasActiveJornada(false);
         }
       } catch (error) {
@@ -185,8 +255,6 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     const fetchCuadreData = async () => {
       try {
         setLoading(true);
-        console.log("🔄 Fetching automated cuadre data...");
-        console.log("📍 Selected point:", selectedPoint?.id, selectedPoint?.nombre);
         const token = localStorage.getItem("authToken");
         if (!token) {
           console.error("❌ No token found in localStorage");
@@ -200,7 +268,6 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
         const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
         const endpoint = `${apiUrl}/cuadre-caja`;
-        console.log("🌐 Calling endpoint:", endpoint);
 
         const response = await fetch(endpoint, {
           headers: {
@@ -209,29 +276,15 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           },
         });
 
-        console.log("📡 Response status:", response.status);
-        console.log("📡 Response headers:", {
-          contentType: response.headers.get("content-type"),
-          contentLength: response.headers.get("content-length"),
-        });
-
         if (response.ok) {
           const data = await response.json();
-          console.log("📊 Cuadre data received:", data);
 
           if (data.success && data.data) {
-            console.log("✅ Cuadre data details:", {
-              detallesCount: data.data.detalles?.length || 0,
-              detalles: data.data.detalles,
-              mensaje: data.data.mensaje,
-              periodoInicio: data.data.periodo_inicio,
-            });
-
             setCuadreData(data.data);
 
             // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
             const initialAdjustments: {
-              [key: string]: { bills: string; coins: string; note?: string };
+              [key: string]: { bills: string; coins: string; banks: string; note?: string };
             } = {};
             if (data.data.detalles && data.data.detalles.length > 0) {
               data.data.detalles.forEach((detalle: CuadreDetalle) => {
@@ -240,15 +293,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 initialAdjustments[detalle.moneda_id] = {
                   bills: detalle.saldo_cierre.toFixed(2),
                   coins: "0.00",
+                  banks: Number(detalle.bancos_teorico ?? 0).toFixed(2),
                   note: "",
                 };
               });
-              console.log("💰 Initial adjustments set for", Object.keys(initialAdjustments).length, "currencies");
             }
             setUserAdjustments(initialAdjustments);
           } else if (data.data?.mensaje) {
             // No hay movimientos hoy
-            console.log("⚠️ No hay movimientos:", data.data.mensaje);
             setCuadreData({ detalles: [], observaciones: "" });
             setUserAdjustments({});
           }
@@ -275,17 +327,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     };
 
     if (selectedPoint) {
-      console.log("🔄 useEffect triggered: selectedPoint changed", selectedPoint?.id);
       fetchCuadreData();
       setTodayClose(null);
-    } else {
-      console.log("⚠️ selectedPoint is null, skipping fetchCuadreData");
     }
   }, [selectedPoint]);
 
   const handleUserAdjustment = (
     monedaId: string,
-    type: "bills" | "coins" | "note",
+    type: "bills" | "coins" | "banks" | "note",
     value: string
   ) => {
     if (type === "note") {
@@ -318,6 +367,11 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     return bills + coins;
   };
 
+  const calculateUserBanks = (monedaId: string) => {
+    const banks = parseFloat(userAdjustments[monedaId]?.banks || "0");
+    return banks;
+  };
+
   // Permitir hasta ±1.00 USD de ajuste; otras divisas deben cuadrar (±0.01)
   const getTolerance = (detalle: CuadreDetalle) =>
     detalle.codigo === "USD" ? 1.0 : 0.01;
@@ -325,11 +379,18 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const validateBalance = (detalle: CuadreDetalle, userTotal: number) => {
     const difference = Math.abs(userTotal - detalle.saldo_cierre);
     const tolerance = getTolerance(detalle);
-    return difference <= tolerance;
+    const okFisico = difference <= tolerance;
+
+    const esperadoBancos = Number(detalle.bancos_teorico ?? 0);
+    const userBancos = calculateUserBanks(detalle.moneda_id);
+    const diffBancos = Math.abs(userBancos - esperadoBancos);
+    const okBancos = diffBancos <= tolerance;
+
+    return okFisico && okBancos;
   };
 
   // Validar cierres requeridos
-  const validarCierresRequeridos = async () => {
+  const validarCierresRequeridos = useCallback(async () => {
     if (!selectedPoint) return;
 
     try {
@@ -348,22 +409,20 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     } catch (error) {
       console.error("Error validando cierres:", error);
     }
-  };
+  }, [selectedPoint]);
 
   // Cargar validación de cierres cuando cambie el punto seleccionado
   useEffect(() => {
     if (selectedPoint) {
       validarCierresRequeridos();
     }
-  }, [selectedPoint]);
+  }, [selectedPoint, validarCierresRequeridos]);
 
   // Obtener datos de cuadre automático (reusable + retry)
   const fetchCuadreData = useCallback(async () => {
     try {
       setLoading(true);
       setFetchError(null);
-      console.log("🔄 Fetching automated cuadre data...");
-      console.log("📍 Selected point:", selectedPoint?.id, selectedPoint?.nombre);
 
       const token = localStorage.getItem("authToken");
       if (!token) {
@@ -380,7 +439,6 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
       const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
       const endpoint = `${apiUrl}/cuadre-caja`;
-      console.log("🌐 Calling endpoint:", endpoint);
 
       const response = await fetch(endpoint, {
         headers: {
@@ -389,45 +447,30 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         },
       });
 
-      console.log("📡 Response status:", response.status);
-      console.log("📡 Response headers:", {
-        contentType: response.headers.get("content-type"),
-        contentLength: response.headers.get("content-length"),
-      });
-
       if (response.ok) {
         const data = await response.json();
-        console.log("📊 Cuadre data received:", data);
 
         if (data.success && data.data) {
-          console.log("✅ Cuadre data details:", {
-            detallesCount: data.data.detalles?.length || 0,
-            detalles: data.data.detalles,
-            mensaje: data.data.mensaje,
-            periodoInicio: data.data.periodo_inicio,
-          });
-
           setCuadreData(data.data);
 
           // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
           const initialAdjustments: {
-            [key: string]: { bills: string; coins: string; note?: string };
+            [key: string]: { bills: string; coins: string; banks: string; note?: string };
           } = {};
           if (data.data.detalles && data.data.detalles.length > 0) {
             data.data.detalles.forEach((detalle: CuadreDetalle) => {
               initialAdjustments[detalle.moneda_id] = {
                 bills: detalle.saldo_cierre.toFixed(2),
                 coins: "0.00",
+                banks: Number(detalle.bancos_teorico ?? 0).toFixed(2),
                 note: "",
               };
             });
-            console.log("💰 Initial adjustments set for", Object.keys(initialAdjustments).length, "currencies");
           }
           setUserAdjustments(initialAdjustments);
           setFetchError(null);
         } else if (data.data?.mensaje) {
           // No hay movimientos hoy
-          console.log("⚠️ No hay movimientos:", data.data.mensaje);
           setCuadreData({ detalles: [], observaciones: "" });
           setUserAdjustments({});
           setFetchError(null);
@@ -481,11 +524,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
   useEffect(() => {
     if (selectedPoint) {
-      console.log("🔄 useEffect triggered: selectedPoint changed", selectedPoint?.id);
       fetchCuadreData();
       setTodayClose(null);
-    } else {
-      console.log("⚠️ selectedPoint is null, skipping fetchCuadreData");
     }
   }, [selectedPoint, fetchCuadreData]);
 
@@ -495,18 +535,22 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       const fechaHoy = new Date().toISOString().split("T")[0];
       const resp = await cuatreCajaService.getCuadre({ fecha: fechaHoy });
       if (resp?.success && resp.data) {
-        const tot = resp.data.totales || {};
+        const tot = isRecord(resp.data.totales) ? resp.data.totales : {};
+        const observaciones =
+          typeof resp.data.observaciones === "string" ? resp.data.observaciones : null;
         const cierre: CuadreCaja = {
           id: resp.data.cuadre_id || "cuadre-hoy",
           usuario_id: user.id,
           punto_atencion_id: selectedPoint?.id || "",
           fecha: fechaHoy,
           estado: "CERRADO",
-          total_cambios: (tot as any).cambios ?? 0,
-          total_transferencias_entrada: (tot as any).transferencias_entrada ?? 0,
-          total_transferencias_salida: (tot as any).transferencias_salida ?? 0,
+          total_cambios: (tot.cambios as CuadreCaja["total_cambios"]) ?? 0,
+          total_transferencias_entrada:
+            (tot.transferencias_entrada as CuadreCaja["total_transferencias_entrada"]) ?? 0,
+          total_transferencias_salida:
+            (tot.transferencias_salida as CuadreCaja["total_transferencias_salida"]) ?? 0,
           fecha_cierre: new Date().toISOString(),
-          observaciones: (resp.data as any).observaciones ?? null,
+          observaciones,
         };
         setTodayClose(cierre);
       } else {
@@ -544,14 +588,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   }, [selectedPoint, fetchTodayClose]);
 
   const performDailyClose = async () => {
-    console.log("🔄 performDailyClose START");
     setClosing(true);
-    console.log("📋 State check:", {
-      selectedPoint: selectedPoint?.id,
-      cuadreData: !!cuadreData,
-      detalles: cuadreData?.detalles?.length || 0,
-      userAdjustments: Object.keys(userAdjustments || {}).length,
-    });
 
     if (!selectedPoint) {
       console.error("❌ Missing selectedPoint for closing");
@@ -564,13 +601,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       // 1. Validar saldos solo si hay detalles de divisas
       const tieneDetalles = (cuadreData?.detalles?.length ?? 0) > 0;
       if (tieneDetalles) {
-        console.log("🔍 Validating balances for", cuadreData.detalles.length, "currencies");
         const incompleteBalances = cuadreData.detalles.some(
           (detalle) =>
             userAdjustments[detalle.moneda_id]?.bills === undefined ||
             userAdjustments[detalle.moneda_id]?.bills === "" ||
             userAdjustments[detalle.moneda_id]?.coins === undefined ||
-            userAdjustments[detalle.moneda_id]?.coins === ""
+            userAdjustments[detalle.moneda_id]?.coins === "" ||
+            userAdjustments[detalle.moneda_id]?.banks === undefined ||
+            userAdjustments[detalle.moneda_id]?.banks === ""
         );
         if (incompleteBalances) {
           console.error("❌ Incomplete balances found");
@@ -590,7 +628,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           const total = bills + coins;
           const diff = Math.abs(total - detalle.saldo_cierre);
           const tol = detalle.codigo === "USD" ? 1.0 : 0.01;
-          return diff > tol;
+          const banks = parseFloat(userAdjustments[detalle.moneda_id]?.banks || "0");
+          const banksExpected = Number(detalle.bancos_teorico ?? 0);
+          const diffBanks = Math.abs(banks - banksExpected);
+          return diff > tol || diffBanks > tol;
         });
         if (invalidBalances.length > 0) {
           const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
@@ -598,8 +639,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               const bills = parseFloat(userAdjustments[d.moneda_id]?.bills || "0");
               const coins = parseFloat(userAdjustments[d.moneda_id]?.coins || "0");
               const total = bills + coins;
+              const banks = parseFloat(userAdjustments[d.moneda_id]?.banks || "0");
+              const banksExpected = Number(d.bancos_teorico ?? 0);
               const tolerance = (d.codigo === "USD" ? 1.0 : 0.01).toFixed(2);
-              return `${d.codigo}: Esperado ${d.saldo_cierre.toFixed(2)}, Ingresado ${total.toFixed(2)} (tolerancia ±${tolerance})`;
+              return `${d.codigo}: Físico esperado ${d.saldo_cierre.toFixed(2)}, físico ingresado ${total.toFixed(2)}; Bancos esperado ${banksExpected.toFixed(2)}, bancos ingresado ${banks.toFixed(2)} (tolerancia ±${tolerance})`;
             })
             .join("\n")}\n\n⚠️ Revise el Resumen de Cierre para ver el listado de transacciones del día (cambios y servicios externos) y validar qué ocurrió.`;
           toast({ title: "No cuadra", description: msg, variant: "destructive" });
@@ -612,12 +655,15 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       const detalles = (cuadreData?.detalles || []).map((detalle) => {
         const bills = parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0");
         const coins = parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0");
+        const banks = parseFloat(userAdjustments[detalle.moneda_id]?.banks || "0");
         const conteo = bills + coins;
         return {
           moneda_id: detalle.moneda_id,
           saldo_apertura: detalle.saldo_apertura,
           saldo_cierre: detalle.saldo_cierre,
           conteo_fisico: conteo,
+          bancos_teorico: Number(detalle.bancos_teorico ?? 0),
+          conteo_bancos: banks,
           billetes: bills,
           monedas: coins,
           ingresos_periodo: detalle.ingresos_periodo || 0,
@@ -635,7 +681,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
-      let resultado: any;
+      let resultado: unknown;
       try {
         const response = await fetch(endpoint, {
           method: "POST",
@@ -648,25 +694,27 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         });
         clearTimeout(timeoutId);
         resultado = await response.json();
-        if (!response.ok || !resultado?.success) {
-          throw new Error(resultado?.error || "Error al realizar el cierre diario");
+        const resultRecord = isRecord(resultado) ? resultado : {};
+        if (!response.ok || resultRecord.success !== true) {
+          const errorText =
+            typeof resultRecord.error === "string"
+              ? resultRecord.error
+              : "Error al realizar el cierre diario";
+          throw new Error(errorText);
         }
       } catch (err) {
         clearTimeout(timeoutId);
         throw err;
       }
 
-      console.log("✅ Cierre completado exitosamente", {
-        cierre_id: (resultado as any)?.cierre_id || (resultado as any)?.cierre?.id,
-        cuadre_id: (resultado as any)?.cuadre_id,
-        jornada_finalizada: (resultado as any)?.jornada_finalizada,
-      });
-      const mensaje = (resultado as any)?.jornada_finalizada
+      const resultRecord = isRecord(resultado) ? resultado : {};
+      const jornadaFinalizadaResp = resultRecord.jornada_finalizada === true;
+      const mensaje = jornadaFinalizadaResp
         ? "✅ El cierre diario se ha completado correctamente y su jornada fue finalizada automáticamente."
         : "✅ El cierre diario se ha completado correctamente.";
       toast({ title: "Cierre realizado", description: mensaje });
       // Marcar flags locales
-      if ((resultado as any)?.jornada_finalizada) {
+      if (jornadaFinalizadaResp) {
         setJornadaFinalizada(true);
         setHasActiveJornada(false);
       }
@@ -697,7 +745,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       );
 
       if (resultado.success && resultado.resumen) {
-        setResumenCierre(resultado.resumen);
+        setResumenCierre(resultado.resumen as ResumenCierre);
         setShowResumenModal(true);
       } else {
         toast({
@@ -724,22 +772,22 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     performDailyClose();
   };
 
-  const fmt2 = (n: any) => Number(n || 0).toFixed(2);
+  const fmt2 = (n: unknown) => Number(n ?? 0).toFixed(2);
 
   const printBalance = () => {
     if (!resumenCierre) return;
 
     const cambios = resumenCierre?.transacciones?.cambios_divisas || [];
     const servicios = resumenCierre?.transacciones?.servicios_externos || [];
-    const balanceCambios = (resumenCierre as any)?.balance?.cambios_divisas?.por_moneda || [];
-    const balanceServicios = (resumenCierre as any)?.balance?.servicios_externos?.por_moneda || [];
+    const balanceCambios = resumenCierre.balance?.cambios_divisas?.por_moneda || [];
+    const balanceServicios = resumenCierre.balance?.servicios_externos?.por_moneda || [];
 
-    const fmt = (n: any) => Number(n || 0).toFixed(2);
-    const fmtRate = (n: any) => Number(n || 0).toFixed(3);
-    const safe = (s: any) => (s == null ? "" : String(s));
+    const fmt = (n: unknown) => Number(n ?? 0).toFixed(2);
+    const fmtRate = (n: unknown) => Number(n ?? 0).toFixed(3);
+    const safe = (s: unknown) => (s == null ? "" : String(s));
 
     const rowsCambios = cambios
-      .map((c: any) => {
+      .map((c) => {
         const fecha = new Date(c.fecha);
         const hora = isNaN(fecha.getTime()) ? safe(c.fecha) : fecha.toLocaleTimeString();
         const mo = c.moneda_origen;
@@ -770,7 +818,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       .join("");
 
     const rowsServicios = servicios
-      .map((m: any) => {
+      .map((m) => {
         const fecha = new Date(m.fecha);
         const hora = isNaN(fecha.getTime()) ? safe(m.fecha) : fecha.toLocaleTimeString();
         return `
@@ -786,8 +834,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       })
       .join("");
 
-    const rowsBalanceCambios = (balanceCambios as any[])
-      .map((r: any) => {
+    const rowsBalanceCambios = balanceCambios
+      .map((r) => {
         return `
           <tr>
             <td>${safe(r.moneda?.codigo) || "—"}</td>
@@ -799,8 +847,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       })
       .join("");
 
-    const rowsBalanceServicios = (balanceServicios as any[])
-      .map((r: any) => {
+    const rowsBalanceServicios = balanceServicios
+      .map((r) => {
         return `
           <tr>
             <td>${safe(r.moneda?.codigo) || "—"}</td>
@@ -947,7 +995,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     win.document.close();
     try {
       win.focus();
-    } catch {}
+    } catch {
+      // noop: some browsers disallow focus
+    }
   };
 
   const generateCloseReport = () => {
@@ -970,7 +1020,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     // Forzar selección de punto en el próximo login (solo efecto inmediato)
     try {
       sessionStorage.setItem("pc_force_point_select", "1");
-    } catch {}
+    } catch {
+      // noop: sessionStorage may be unavailable
+    }
     
     toast({
       title: "Sesión cerrada",
@@ -980,7 +1032,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     // Redirigir al login
     try {
       logout();
-    } catch {}
+    } catch {
+      // noop: logout errors are non-fatal here
+    }
     navigate("/login", { replace: true });
   };
 
@@ -1169,6 +1223,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               <div className="grid gap-6">
                 {(cuadreData?.detalles ?? []).map((detalle) => {
                   const userTotal = calculateUserTotal(detalle.moneda_id);
+                  const userBanks = calculateUserBanks(detalle.moneda_id);
                   const isValid = validateBalance(detalle, userTotal);
 
                   return (
@@ -1420,6 +1475,91 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                             </div>
                           </CardContent>
                         </Card>
+
+                        {/* Conteo bancos */}
+                        <Card className="border-gray-300">
+                          <CardHeader className="pb-3">
+                            <CardTitle className="text-lg">🏦 Bancos</CardTitle>
+                            <CardDescription>
+                              Registre el saldo bancario (transferencias) por moneda
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium">
+                                  🏦 Saldo Bancos Esperado
+                                </Label>
+                                <div className="h-10 px-3 py-2 border rounded-md flex items-center font-bold text-lg bg-purple-50 border-purple-200 text-purple-800">
+                                  {detalle.simbolo}
+                                  {Number(detalle.bancos_teorico ?? 0).toFixed(2)}
+                                </div>
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium flex items-center gap-1">
+                                  🏦 Bancos (Ingresado)
+                                  <span className="text-xs text-gray-500">
+                                    ({detalle.simbolo})
+                                  </span>
+                                </Label>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={
+                                    userAdjustments[detalle.moneda_id]?.banks ||
+                                    ""
+                                  }
+                                  onChange={(e) =>
+                                    handleUserAdjustment(
+                                      detalle.moneda_id,
+                                      "banks",
+                                      e.target.value
+                                    )
+                                  }
+                                  placeholder="0.00"
+                                  className={!isValid ? "border-red-300" : ""}
+                                />
+                              </div>
+
+                              <div className="space-y-2">
+                                <Label className="text-sm font-medium">
+                                  📊 Diff Bancos
+                                </Label>
+                                <div className="flex items-center gap-2">
+                                  <div className="h-10 px-3 py-2 border rounded-md flex items-center font-bold text-lg bg-gray-50 border-gray-200 text-gray-800">
+                                    {detalle.simbolo}
+                                    {userBanks.toFixed(2)}
+                                  </div>
+                                  {(() => {
+                                    const esperado = Number(detalle.bancos_teorico ?? 0);
+                                    const diff = parseFloat((userBanks - esperado).toFixed(2));
+                                    const abs = Math.abs(diff);
+                                    const tol = getTolerance(detalle);
+                                    const within = abs <= tol;
+                                    const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
+                                    const color = within
+                                      ? diff === 0
+                                        ? "bg-gray-200 text-gray-800 border-gray-300"
+                                        : "bg-green-100 text-green-800 border-green-300"
+                                      : "bg-red-100 text-red-800 border-red-300";
+                                    const label = `${sign}${abs.toFixed(2)}`;
+                                    return (
+                                      <Badge
+                                        className={`border ${color} whitespace-nowrap`}
+                                        variant={within ? "secondary" : "destructive"}
+                                        title={`Diferencia bancos vs esperado (tolerancia ±${tol.toFixed(2)})`}
+                                      >
+                                        Diff: {label}
+                                      </Badge>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
                       </CardContent>
                     </Card>
                   );
@@ -1662,7 +1802,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                   💰 Saldos Principales
                 </h3>
                 <div className="grid gap-3">
-                  {resumenCierre.saldos_principales.map((saldo: any) => (
+                  {resumenCierre.saldos_principales.map((saldo) => (
                     <div
                       key={saldo.moneda_codigo}
                       className={`p-4 rounded-lg border-2 ${
@@ -1711,7 +1851,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                     🏦 Saldos en Servicios Externos
                   </h3>
                   <div className="grid gap-3">
-                    {resumenCierre.servicios_externos.map((servicio: any, idx: number) => (
+                      {resumenCierre.servicios_externos.map((servicio, idx: number) => (
                       <div
                         key={idx}
                         className="p-4 rounded-lg border-2 bg-purple-50 border-purple-300"
@@ -1724,7 +1864,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                             </Badge>
                           </div>
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                            {servicio.saldos.map((saldo: any, sidx: number) => (
+                            {servicio.saldos.map((saldo, sidx: number) => (
                               <div
                                 key={sidx}
                                 className="bg-white p-2 rounded border"
@@ -1769,14 +1909,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                         </div>
                         <Badge variant="secondary">Cambios</Badge>
                       </div>
-                      {(resumenCierre as any)?.balance?.cambios_divisas?.por_moneda?.length > 0 && (
+                      {(resumenCierre.balance?.cambios_divisas?.por_moneda?.length ?? 0) > 0 && (
                         <div className="mt-3">
                           <div className="text-xs font-medium text-gray-700 mb-1">
                             Ingresos/Egresos por moneda
                           </div>
                           <div className="grid grid-cols-1 gap-1">
-                            {((resumenCierre as any).balance.cambios_divisas.por_moneda as any[]).map(
-                              (r: any) => (
+                            {(resumenCierre.balance?.cambios_divisas?.por_moneda || []).map(
+                              (r) => (
                                 <div
                                   key={r.moneda?.codigo}
                                   className="flex items-center justify-between text-xs bg-white border rounded px-2 py-1"
@@ -1808,14 +1948,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                         </div>
                         <Badge variant="secondary">Servicios</Badge>
                       </div>
-                      {(resumenCierre as any)?.balance?.servicios_externos?.por_moneda?.length > 0 && (
+                      {(resumenCierre.balance?.servicios_externos?.por_moneda?.length ?? 0) > 0 && (
                         <div className="mt-3">
                           <div className="text-xs font-medium text-gray-700 mb-1">
                             Ingresos/Egresos por moneda
                           </div>
                           <div className="grid grid-cols-1 gap-1">
-                            {((resumenCierre as any).balance.servicios_externos.por_moneda as any[]).map(
-                              (r: any) => (
+                            {(resumenCierre.balance?.servicios_externos?.por_moneda || []).map(
+                              (r) => (
                                 <div
                                   key={r.moneda?.codigo}
                                   className="flex items-center justify-between text-xs bg-white border rounded px-2 py-1"
@@ -1864,7 +2004,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {(resumenCierre.transacciones?.cambios_divisas || []).map((c: any) => {
+                            {(resumenCierre.transacciones?.cambios_divisas || []).map((c) => {
                               const d = new Date(c.fecha);
                               const hora = isNaN(d.getTime())
                                 ? String(c.fecha)
@@ -1927,7 +2067,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {(resumenCierre.transacciones?.servicios_externos || []).map((m: any) => {
+                            {(resumenCierre.transacciones?.servicios_externos || []).map((m) => {
                               const d = new Date(m.fecha);
                               const hora = isNaN(d.getTime())
                                 ? String(m.fecha)

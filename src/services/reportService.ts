@@ -1,5 +1,9 @@
 import { apiService } from "./apiService";
 
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.warn(...args);
+};
+
 export interface ReportItem {
   point: string;
   user?: string;
@@ -33,7 +37,7 @@ export const reportService = {
     }
   ): Promise<FullReportResponse> {
     try {
-      console.log("Generando reporte avanzado", { reportType, filters });
+      devLog("Generando reporte avanzado", { reportType, filters });
 
       const response = await apiService.post<{ data: FullReportResponse }>(
         "/reports",

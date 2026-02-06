@@ -84,7 +84,7 @@ export default function CierreDialog(props: CierreDialogProps) {
   const Box = (p: {
     style?: React.CSSProperties;
     children?: React.ReactNode;
-    onClick?: any;
+    onClick?: React.MouseEventHandler<HTMLDivElement>;
     role?: string;
     "aria-modal"?: boolean;
   }) =>
@@ -206,7 +206,8 @@ export default function CierreDialog(props: CierreDialogProps) {
           h(Textarea, {
             id: "obs",
             value: observaciones,
-            onChange: (e: any) => setObservaciones(e.target.value),
+            onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) =>
+              setObservaciones(e.target.value),
             autoFocus: autoFocusTextarea,
             placeholder: "Notas del cierre, incidencias, soportes…",
             style: { minHeight: 100, padding: "8px 10px", resize: "vertical" },
@@ -219,7 +220,8 @@ export default function CierreDialog(props: CierreDialogProps) {
             id: "allowMismatch",
             type: "checkbox",
             checked: allowMismatch,
-            onChange: (e: any) => setAllowMismatch(!!e.target.checked),
+            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+              setAllowMismatch(!!e.target.checked),
           }),
           h(
             Label,

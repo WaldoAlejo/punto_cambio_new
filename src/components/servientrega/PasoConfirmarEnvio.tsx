@@ -52,16 +52,25 @@ export default function PasoConfirmarEnvio({
     return "MERCANCIA PREMIER";
   };
 
+  const devWarn = (...args: unknown[]) => {
+    if (import.meta.env.DEV) console.warn(...args);
+  };
+
+  type FormDataGuiaExtra = FormDataGuia & {
+    observaciones?: string;
+    punto_atencion_nombre?: string;
+  };
+  const formDataExtra = formData as FormDataGuiaExtra;
+
   // Observaciones y nombre de punto (campos opcionales que NO están en el tipo)
-  const observaciones: string =
-    ((formData as any)?.observaciones as string) || "";
+  const observaciones: string = formDataExtra.observaciones || "";
   const puntoAtencionNombre: string =
-    ((formData as any)?.punto_atencion_nombre as string) ||
+    formDataExtra.punto_atencion_nombre ||
     formData.punto_atencion_id ||
     "Punto de Atención";
 
   // Total estimado desde resumen_costos (evita usar 'tarifa' inexistente)
-  const resumenCostos = (formData as any)?.resumen_costos || {};
+  const resumenCostos = formData.resumen_costos || {};
   const totalEstimado = Number(
     resumenCostos?.total ??
       resumenCostos?.gtotal ??
@@ -70,7 +79,7 @@ export default function PasoConfirmarEnvio({
   );
 
   // DEBUG: Log para verificar qué se está calculando
-  console.log("💰 [PasoConfirmarEnvio] Cálculo de totalEstimado:", {
+  devWarn("💰 [PasoConfirmarEnvio] Cálculo de totalEstimado:", {
     resumen_costos: resumenCostos,
     total: resumenCostos?.total,
     gtotal: resumenCostos?.gtotal,
@@ -133,9 +142,17 @@ export default function PasoConfirmarEnvio({
     setLoading(true);
     setError(null);
     try {
-      const r = formData.remitente!;
-      const d = formData.destinatario!;
-      const m = formData.medidas!;
+      const r = formData.remitente;
+      const d = formData.destinatario;
+      const m = formData.medidas;
+
+      if (!r || !d || !m) {
+        const msgError = "Datos incompletos: remitente/destinatario/medidas";
+        setError(msgError);
+        toast.error(msgError);
+        setLoading(false);
+        return;
+      }
 
       // Peso volumétrico si no llega
       const alto = Number(m?.alto || 0);
@@ -192,10 +209,10 @@ export default function PasoConfirmarEnvio({
         codigo_postal_destinatario: d.codigo_postal?.trim() || "",
         contenido: ((m?.contenido || "").trim() || "DOCUMENTO").toUpperCase(),
         retiro_oficina: "NO",
-        pedido: (formData as any).pedido?.trim() || "",
-        factura: (formData as any).factura?.trim() || "",
+        pedido: formData.pedido?.trim() || "",
+        factura: formData.factura?.trim() || "",
         valor_declarado: Number(m?.valor_declarado || 0),
-        valor_asegurado: Number((m as any)?.valor_seguro || 0),
+        valor_asegurado: Number(m?.valor_seguro || 0),
         peso_fisico: Number(m?.peso || 0),
         peso_volumentrico: Number(pesoVol || 0),
         piezas: Number(m?.piezas || 1),
@@ -222,19 +239,19 @@ export default function PasoConfirmarEnvio({
         valor_total: totalEstimado || 0,
       } as const;
 
-      console.log("📤 Payload GeneracionGuia (Production):", payload);
+      devWarn("📤 Payload GeneracionGuia (Production):", payload);
 
       const res = await axiosInstance.post(
         "/servientrega/generar-guia",
         payload
       );
-      let data = res.data;
+      const data = res.data;
 
       // Normaliza respuesta para extraer guía y PDF Base64
       let guiaStr: string | undefined;
       let guia64: string | undefined;
 
-      console.log("📥 Respuesta del servidor:", data);
+      devWarn("📥 Respuesta del servidor:", data);
 
       if (typeof data === "string") {
         try {
@@ -255,9 +272,13 @@ export default function PasoConfirmarEnvio({
                 guiaStr = j.guia;
                 guia64 = j.guia_64;
               }
-            } catch {}
+            } catch {
+              // noop: fragmento no es JSON válido
+            }
           }
-        } catch {}
+        } catch {
+          // noop: respuesta puede venir en formatos no JSON
+        }
       } else if (Array.isArray(data)) {
         // solo tarifa
       } else if (data?.fetch?.guia) {
@@ -269,7 +290,7 @@ export default function PasoConfirmarEnvio({
         guia64 = data.guia_64;
       }
 
-      console.log("🎯 Extracción final:", { guiaStr, guia64 });
+      devWarn("🎯 Extracción final:", { guiaStr, guia64 });
 
       if (guiaStr && guia64) {
         // 🧹 Limpiar base64: remover espacios en blanco, saltos de línea, caracteres especiales
@@ -278,9 +299,9 @@ export default function PasoConfirmarEnvio({
           .replace(/[^\w+/=]/g, "") // Remover caracteres inválidos en base64
           .trim();
 
-        console.log("🧹 Base64 original length:", guia64.length);
-        console.log("🧹 Base64 limpio length:", base64Limpio.length);
-        console.log(
+        devWarn("🧹 Base64 original length:", guia64.length);
+        devWarn("🧹 Base64 limpio length:", base64Limpio.length);
+        devWarn(
           "🧹 Base64 limpio preview:",
           base64Limpio.substring(0, 100)
         );
@@ -291,7 +312,7 @@ export default function PasoConfirmarEnvio({
         // 💰 Mostrar valores finales del backend
         const valorFinal = data?.valorTotalGuia || data?.costo_total || 0;
         if (valorFinal > 0) {
-          console.log("💰 Valores finales del backend:", {
+          devWarn("💰 Valores finales del backend:", {
             valorTotalGuia: valorFinal,
             costo_envio: data?.costo_envio,
           });
@@ -311,10 +332,15 @@ export default function PasoConfirmarEnvio({
         );
         console.error("❌ Error: Respuesta incompleta", { data });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError("Ocurrió un error al generar la guía.");
+
+      const maybeAxios = err as {
+        response?: { data?: { error?: string } };
+      };
+
       toast.error(
-        err?.response?.data?.error ||
+        maybeAxios?.response?.data?.error ||
           "Error al generar la guía. Intenta nuevamente."
       );
     } finally {
@@ -364,7 +390,7 @@ export default function PasoConfirmarEnvio({
           const blob = new Blob([bytes], { type: "application/pdf" });
           url = URL.createObjectURL(blob);
 
-          console.log("📄 PDF creado desde Blob:", {
+          devWarn("📄 PDF creado desde Blob:", {
             base64Length: base64.length,
             blobSize: blob.size,
             blobUrl: url.substring(0, 50),
@@ -380,7 +406,7 @@ export default function PasoConfirmarEnvio({
         url = base64;
       }
 
-      console.log("📄 Intentando abrir PDF:", {
+      devWarn("📄 Intentando abrir PDF:", {
         isBase64,
         base64Length: base64.length,
         urlPreview: url.substring(0, 100),
@@ -389,7 +415,7 @@ export default function PasoConfirmarEnvio({
       // 🎯 Intentar abrir en ventana nueva
       const newWindow = window.open(url, "_blank");
       if (newWindow) {
-        console.log("✅ PDF abierto en ventana nueva");
+        devWarn("✅ PDF abierto en ventana nueva");
       } else {
         // Si window.open falla, intentar descargar el archivo
         console.warn("⚠️ No se pudo abrir ventana, intentando descargar...");
@@ -442,7 +468,7 @@ export default function PasoConfirmarEnvio({
   // 🧾 Generar y guardar recibo
   // ==========================
   const generarRecibo = async () => {
-    if (!guia || !(formData as any).resumen_costos) {
+    if (!guia || !formData.resumen_costos) {
       toast.error("No hay datos suficientes para generar el recibo");
       return;
     }
@@ -457,7 +483,7 @@ export default function PasoConfirmarEnvio({
           medidas: formData.medidas,
           observaciones, // <- seguro
         },
-        (formData as any).resumen_costos,
+        formData.resumen_costos,
         puntoAtencionNombre,
         "Usuario Actual" // TODO: obtener del contexto real
       );
@@ -475,7 +501,7 @@ export default function PasoConfirmarEnvio({
             medidas: formData.medidas,
             observaciones,
           },
-          tarifa: (formData as any).resumen_costos,
+          tarifa: formData.resumen_costos,
           fecha_generacion: new Date().toISOString(),
         },
       });
@@ -493,7 +519,7 @@ export default function PasoConfirmarEnvio({
   // 🧾 Imprimir recibo
   // ==========================
   const imprimirRecibo = async () => {
-    if (!guia || !(formData as any).resumen_costos) {
+    if (!guia || !formData.resumen_costos) {
       toast.error("No hay datos suficientes para imprimir el recibo");
       return;
     }
@@ -508,7 +534,7 @@ export default function PasoConfirmarEnvio({
           medidas: formData.medidas,
           observaciones,
         },
-        (formData as any).resumen_costos,
+        formData.resumen_costos,
         puntoAtencionNombre,
         "Usuario Actual"
       );
@@ -548,9 +574,7 @@ export default function PasoConfirmarEnvio({
               </p>
               <p>
                 <strong>Flete estimado:</strong> $
-                {Number((formData as any)?.resumen_costos?.flete || 0).toFixed(
-                  2
-                )}
+                {Number(formData.resumen_costos?.flete || 0).toFixed(2)}
               </p>
               <p>
                 <strong>Total estimado:</strong>{" "}
@@ -705,7 +729,7 @@ export default function PasoConfirmarEnvio({
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   onClick={generarRecibo}
-                  disabled={!guia || !(formData as any).resumen_costos}
+                  disabled={!guia || !formData.resumen_costos}
                   className="bg-green-600 text-white hover:bg-green-700"
                   size="sm"
                 >
@@ -713,7 +737,7 @@ export default function PasoConfirmarEnvio({
                 </Button>
                 <Button
                   onClick={imprimirRecibo}
-                  disabled={!guia || !(formData as any).resumen_costos}
+                  disabled={!guia || !formData.resumen_costos}
                   className="bg-purple-600 text-white hover:bg-purple-700"
                   size="sm"
                 >

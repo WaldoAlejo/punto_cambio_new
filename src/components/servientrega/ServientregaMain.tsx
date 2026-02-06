@@ -43,6 +43,15 @@ type Paso =
   | "confirmar"
   | "listado";
 
+type TarifaData = {
+  flete?: unknown;
+  valor_empaque?: unknown;
+  seguro?: unknown;
+  tiva?: unknown;
+  total_transacion?: unknown;
+  gtotal?: unknown;
+};
+
 export default function ServientregaMain({
   user: _user,
   selectedPoint,
@@ -122,18 +131,18 @@ export default function ServientregaMain({
   };
 
   // PasoResumen → “Confirmar y continuar”
-  const handleResumenConfirm = (tarifaData: any) => {
+  const handleResumenConfirm = (tarifaData: TarifaData) => {
     // Guardar los costos de tarifa en formData
     setFormData((prev) => ({
       ...prev,
       resumen_costos: {
-        flete: tarifaData.flete || 0,
-        valor_empaque: tarifaData.valor_empaque || 0,
-        seguro: tarifaData.seguro || 0,
-        tiva: tarifaData.tiva || 0,
-        total: tarifaData.total_transacion || tarifaData.gtotal || 0,
-        gtotal: tarifaData.gtotal || 0,
-        total_transaccion: tarifaData.total_transacion || 0,
+        flete: Number(tarifaData.flete || 0),
+        valor_empaque: Number(tarifaData.valor_empaque || 0),
+        seguro: Number(tarifaData.seguro || 0),
+        tiva: Number(tarifaData.tiva || 0),
+        total: Number(tarifaData.total_transacion || tarifaData.gtotal || 0),
+        gtotal: Number(tarifaData.gtotal || 0),
+        total_transaccion: Number(tarifaData.total_transacion || 0),
       },
     }));
     setPasoActual("confirmar");
@@ -190,12 +199,26 @@ export default function ServientregaMain({
         return <PasoProducto onNext={handleProductoNext} />;
 
       case "remitente":
-        return (
+        return selectedPoint ? (
           <PasoRemitente
             user={_user}
-            selectedPoint={selectedPoint!}
+            selectedPoint={selectedPoint}
             onNext={handleRemitenteNext}
           />
+        ) : (
+          <Card className="w-full max-w-md mx-auto">
+            <CardHeader>
+              <CardTitle>Punto de atención requerido</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-gray-600">
+                Selecciona un punto de atención para continuar con Servientrega.
+              </p>
+              <Button onClick={() => setPasoActual("menu")} className="w-full">
+                Volver al menú
+              </Button>
+            </CardContent>
+          </Card>
         );
 
       case "destinatario":

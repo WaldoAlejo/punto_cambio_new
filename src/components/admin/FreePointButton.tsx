@@ -49,7 +49,7 @@ const FreePointButton: React.FC<Props> = ({
         );
         onDone?.();
       }
-    } catch (e) {
+    } catch {
       toast.error("Error al liberar punto");
     } finally {
       setLoading(false);

@@ -63,7 +63,7 @@ const CustomerSearch = ({
           setCustomers(clientes);
           setIsOpen(clientes.length > 0);
         }
-      } catch (err) {
+      } catch {
         setError("Error al buscar clientes");
         setCustomers([]);
       } finally {

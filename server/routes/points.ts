@@ -1,5 +1,5 @@
 import express from "express";
-import { PrismaClient, type PuntoAtencion } from "@prisma/client";
+import { Prisma, type PuntoAtencion } from "@prisma/client";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
@@ -61,7 +61,7 @@ router.get(
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
-      const user = (req as any).user;
+      const user = req.user;
       const rol: string | undefined = user?.rol;
       const esPrivilegiado =
         rol === "ADMINISTRATIVO" || rol === "ADMIN" || rol === "SUPER_USUARIO";
@@ -99,7 +99,7 @@ router.get(
         }
         const ocupados = Array.from(ocupadosSet);
 
-        const whereClause: any = {
+        const whereClause: Prisma.PuntoAtencionWhereInput = {
           activo: true,
           id: { notIn: ocupados },
         };
@@ -136,7 +136,7 @@ router.get(
       logger.error("Error en GET /points", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: (req as any).user?.id,
+        requestedBy: req.user?.id,
       });
 
       res.status(500).json({
@@ -166,8 +166,8 @@ router.get(
 
       logger.info("GET /points/all", {
         count: formatted.length,
-        requestedBy: (req as any).user?.id,
-        userRole: (req as any).user?.rol,
+        requestedBy: req.user?.id,
+        userRole: req.user?.rol,
       });
 
       res.status(200).json({
@@ -179,7 +179,7 @@ router.get(
       logger.error("Error al obtener todos los puntos", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: (req as any).user?.id,
+        requestedBy: req.user?.id,
       });
 
       res.status(500).json({
@@ -220,7 +220,7 @@ router.post(
         return;
       }
 
-      const createData: any = {
+      const createData: Prisma.PuntoAtencionCreateInput = {
         nombre,
         direccion,
         ciudad,
@@ -248,7 +248,7 @@ router.post(
       logger.info("Punto creado", {
         pointId: newPoint.id,
         nombre: newPoint.nombre,
-        createdBy: (req as any).user?.id,
+        createdBy: req.user?.id,
       });
 
       res.status(201).json({
@@ -260,7 +260,7 @@ router.post(
       logger.error("Error al crear punto", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: (req as any).user?.id,
+        requestedBy: req.user?.id,
       });
       res.status(500).json({
         error: "Error al crear punto de atención",
@@ -315,7 +315,7 @@ router.put(
         return;
       }
 
-      const updateData: any = {
+      const updateData: Prisma.PuntoAtencionUpdateInput = {
         nombre,
         direccion,
         ciudad,
@@ -344,7 +344,7 @@ router.put(
 
       logger.info("Punto de atención actualizado", {
         pointId: updatedPoint.id,
-        updatedBy: (req as any).user?.id,
+        updatedBy: req.user?.id,
       });
 
       res.status(200).json({
@@ -356,7 +356,7 @@ router.put(
       logger.error("Error al actualizar punto de atención", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: (req as any).user?.id,
+        requestedBy: req.user?.id,
       });
       res.status(500).json({
         error: "Error al actualizar el punto de atención",
@@ -393,7 +393,7 @@ router.delete(
 
       logger.info("Punto de atención eliminado", {
         pointId,
-        deletedBy: (req as any).user?.id,
+        deletedBy: req.user?.id,
       });
 
       res.status(200).json({
@@ -405,7 +405,7 @@ router.delete(
       logger.error("Error al eliminar punto de atención", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: (req as any).user?.id,
+        requestedBy: req.user?.id,
       });
       res.status(500).json({
         error: "Error al eliminar el punto de atención",
@@ -445,7 +445,7 @@ router.patch(
       logger.info("Estado de punto cambiado", {
         pointId: updatedPoint.id,
         newStatus: updatedPoint.activo,
-        requestedBy: (req as any).user?.id,
+        requestedBy: req.user?.id,
       });
 
       res.status(200).json({
@@ -457,7 +457,7 @@ router.patch(
       logger.error("Error al cambiar el estado del punto", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: (req as any).user?.id,
+        requestedBy: req.user?.id,
       });
       res.status(500).json({
         error: "Error al cambiar el estado del punto de atención",
@@ -485,7 +485,7 @@ router.get(
 
       logger.info("Puntos activos para transferencias obtenidos", {
         count: formatted.length,
-        requestedBy: (req as any).user?.id,
+        requestedBy: req.user?.id,
       });
 
       res.status(200).json({
@@ -497,7 +497,7 @@ router.get(
       logger.error("Error al obtener puntos activos", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: (req as any).user?.id,
+        requestedBy: req.user?.id,
       });
 
       res.status(500).json({
@@ -527,8 +527,8 @@ router.get(
 
       logger.info("Puntos para gestión de saldos obtenidos", {
         count: formatted.length,
-        requestedBy: (req as any).user?.id,
-        userRole: (req as any).user?.rol,
+        requestedBy: req.user?.id,
+        userRole: req.user?.rol,
       });
 
       res.status(200).json({
@@ -540,7 +540,7 @@ router.get(
       logger.error("Error al obtener puntos para gestión de saldos", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
-        requestedBy: (req as any).user?.id,
+        requestedBy: req.user?.id,
       });
 
       res.status(500).json({

@@ -62,7 +62,7 @@ const Login = () => {
           variant: "destructive",
         });
       }
-    } catch (error) {
+    } catch {
       setGlobalError("Error de conexión con el servidor");
       toast({
         title: "Error de conexión",

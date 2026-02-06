@@ -6,6 +6,12 @@ import {
 
 const router = express.Router();
 
+type JsonRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is JsonRecord {
+  return typeof value === "object" && value !== null;
+}
+
 // =============================
 // Helpers de credenciales y URL
 // =============================
@@ -44,7 +50,7 @@ router.get("/debug-config", (_req, res) => {
 // =============================
 // Normalización de productos
 // =============================
-const clean = (s: any) =>
+const clean = (s: unknown) =>
   String(s ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -54,7 +60,7 @@ const clean = (s: any) =>
 const DOC = "DOCUMENTOS";
 const MERC = "MERCANCIA PREMIER";
 
-function normalizarProducto(raw?: string): "" | typeof DOC | typeof MERC {
+function normalizarProducto(raw?: unknown): "" | typeof DOC | typeof MERC {
   const c = clean(raw);
   if (!c) return "";
   // Cualquier variante que contenga "DOC" → DOCUMENTOS
@@ -87,24 +93,26 @@ router.post("/productos", async (_req, res) => {
     apiService.apiUrl = getApiUrl();
 
     // Tu servicio ya debería enviar { tipo: "obtener_producto", ...credenciales }
-    const result: any = await apiService.obtenerProductos();
+    const result: unknown = await apiService.obtenerProductos();
 
     // La doc de ejemplo devuelve:
     // {"fetch":[{"producto":"DOCUMENTO UNITARIO "},{"producto":"DOCUMENTO UNITARIO - 10AM "},{"producto":"INTERNACIONAL "},{"producto":"MERCANCIA INDUSTRIAL "},{"producto":"MERCANCIA PREMIER "}]}
-    const rawList: any[] =
-      (Array.isArray(result?.fetch) && result.fetch) ||
-      (Array.isArray(result?.productos) && result.productos) ||
+    const fetchValue = isRecord(result) ? result.fetch : undefined;
+    const productosValue = isRecord(result) ? result.productos : undefined;
+    const rawList: unknown[] =
+      (Array.isArray(fetchValue) && fetchValue) ||
+      (Array.isArray(productosValue) && productosValue) ||
       (Array.isArray(result) && result) ||
       [];
 
     const normalizados = uniquePreserveOrder(
       rawList
-        .map((item: any) =>
-          normalizarProducto(
-            // soporta distintas formas:
-            item?.producto ?? item?.nombre_producto ?? item
-          )
-        )
+        .map((item: unknown) => {
+          if (isRecord(item)) {
+            return normalizarProducto(item.producto ?? item.nombre_producto ?? "");
+          }
+          return normalizarProducto(item);
+        })
         .filter((x) => x === DOC || x === MERC)
     );
 
@@ -172,26 +180,30 @@ router.post("/agencias", async (_req, res) => {
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();
 
-    const result: any = await apiService.obtenerAgencias();
+    const result: unknown = await apiService.obtenerAgencias();
     console.log(
       "📍 Servientrega API: Respuesta completa de agencias:",
       JSON.stringify(result, null, 2)
     );
 
     // Log detallado del array
-    let agenciasArray: any[] = [];
-    if (Array.isArray(result?.fetch)) {
-      agenciasArray = result.fetch;
+    const resultFetch = isRecord(result) ? result.fetch : undefined;
+    const resultData = isRecord(result) ? result.data : undefined;
+    const resultAgencias = isRecord(result) ? result.agencias : undefined;
+
+    let agenciasArray: unknown[] = [];
+    if (Array.isArray(resultFetch)) {
+      agenciasArray = resultFetch;
       console.log(
         `✅ Found agencias in result.fetch: ${agenciasArray.length} items`
       );
-    } else if (Array.isArray(result?.data)) {
-      agenciasArray = result.data;
+    } else if (Array.isArray(resultData)) {
+      agenciasArray = resultData;
       console.log(
         `✅ Found agencias in result.data: ${agenciasArray.length} items`
       );
-    } else if (Array.isArray(result?.agencias)) {
-      agenciasArray = result.agencias;
+    } else if (Array.isArray(resultAgencias)) {
+      agenciasArray = resultAgencias;
       console.log(
         `✅ Found agencias in result.agencias: ${agenciasArray.length} items`
       );
@@ -216,21 +228,24 @@ router.post("/agencias", async (_req, res) => {
     }
 
     // Intentar descubrir el array de agencias en la respuesta
-    let agencias: any[] = [];
+    let agencias: unknown[] = [];
     if (Array.isArray(result)) {
       agencias = result;
-    } else if (Array.isArray(result?.fetch)) {
+    } else if (Array.isArray(resultFetch)) {
       // ✅ Buscar explícitamente en 'fetch' (donde Servientrega devuelve agencias)
-      agencias = result.fetch;
-    } else if (Array.isArray(result?.data)) {
-      agencias = result.data;
-    } else if (Array.isArray(result?.agencias)) {
-      agencias = result.agencias;
+      agencias = resultFetch;
+    } else if (Array.isArray(resultData)) {
+      agencias = resultData;
+    } else if (Array.isArray(resultAgencias)) {
+      agencias = resultAgencias;
     } else {
-      for (const key of Object.keys(result)) {
-        if (Array.isArray((result as any)[key])) {
-          agencias = (result as any)[key];
-          break;
+      if (isRecord(result)) {
+        for (const key of Object.keys(result)) {
+          const value = result[key];
+          if (Array.isArray(value)) {
+            agencias = value;
+            break;
+          }
         }
       }
     }

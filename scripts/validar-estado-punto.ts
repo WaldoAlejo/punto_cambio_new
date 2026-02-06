@@ -155,12 +155,17 @@ async function validarEstadoPunto(puntoId: string) {
       console.log(`   Usuario: ${ultimaJornada.usuario.username}`);
       console.log(`   Inicio: ${ultimaJornada.fecha_inicio}`);
       console.log(`   Salida: ${ultimaJornada.fecha_salida}`);
-      const duracion =
-        new Date(ultimaJornada.fecha_salida!).getTime() -
-        new Date(ultimaJornada.fecha_inicio).getTime();
-      const horas = Math.floor(duracion / (1000 * 60 * 60));
-      const minutos = Math.floor((duracion % (1000 * 60 * 60)) / (1000 * 60));
-      console.log(`   Duración: ${horas}h ${minutos}m`);
+      const fechaSalida = ultimaJornada.fecha_salida;
+      if (fechaSalida) {
+        const duracion =
+          new Date(fechaSalida).getTime() -
+          new Date(ultimaJornada.fecha_inicio).getTime();
+        const horas = Math.floor(duracion / (1000 * 60 * 60));
+        const minutos = Math.floor(
+          (duracion % (1000 * 60 * 60)) / (1000 * 60)
+        );
+        console.log(`   Duración: ${horas}h ${minutos}m`);
+      }
     } else {
       console.log("   ℹ️  No hay jornadas cerradas registradas");
     }

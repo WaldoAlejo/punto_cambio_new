@@ -11,6 +11,10 @@ const router = express.Router();
 /* ============================
    Helpers
 ============================ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function sendError(
   res: express.Response,
   status: number,
@@ -207,7 +211,10 @@ router.put(
 /* ============================
    📍 Puntos de Atención (desde BD)
 ============================ */
-router.get("/remitente/puntos", authenticateToken, async (req: any, res) => {
+router.get(
+  "/remitente/puntos",
+  authenticateToken,
+  async (_req: express.Request, res: express.Response) => {
   try {
     const dbService = new ServientregaDBService();
     const puntos = await dbService.obtenerPuntosAtencion();
@@ -215,7 +222,8 @@ router.get("/remitente/puntos", authenticateToken, async (req: any, res) => {
   } catch (error) {
     return sendError(res, 500, "Error al obtener puntos de atención", error);
   }
-});
+  }
+);
 
 /* ============================
    🌎 Países y Ciudades (Servientrega WS con credenciales .env)
@@ -269,16 +277,22 @@ router.post("/ciudades", authenticateToken, async (req, res) => {
     let fetch: Array<{ city: string }> = [];
     if (Array.isArray(result?.fetch)) {
       fetch = result.fetch
-        .map((it: any) => {
-          if (typeof it?.city === "string") return { city: it.city };
-          if (it?.ciudad && it?.provincia)
+        .map((it: unknown) => {
+          if (!isRecord(it)) return { city: "" };
+
+          const city = it.city;
+          if (typeof city === "string") return { city };
+
+          const ciudad = it.ciudad;
+          const provincia = it.provincia;
+          if (ciudad && provincia)
             return {
-              city: `${String(it.ciudad).toUpperCase()}-${String(
-                it.provincia
+              city: `${String(ciudad).toUpperCase()}-${String(
+                provincia
               ).toUpperCase()}`,
             };
-          if (typeof it?.ciudad === "string")
-            return { city: String(it.ciudad).toUpperCase() };
+
+          if (typeof ciudad === "string") return { city: ciudad.toUpperCase() };
           return { city: "" };
         })
         .filter((x) => x.city);

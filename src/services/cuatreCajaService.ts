@@ -20,6 +20,8 @@ export interface DetalleCuadreResumen {
   simbolo: string;
   saldo_apertura: number;
   saldo_cierre: number; // saldo teórico
+  bancos_teorico?: number;
+  conteo_bancos?: number;
   ingresos_periodo: number;
   egresos_periodo: number;
   movimientos_periodo?: number;
@@ -54,6 +56,8 @@ export interface GuardarDetalleRequest {
   saldo_apertura: number;
   saldo_cierre: number; // saldo teórico
   conteo_fisico: number; // físico ingresado por el cajero
+  bancos_teorico?: number;
+  conteo_bancos?: number;
   billetes: number;
   monedas: number; // alias frontend para "monedas_fisicas"
   ingresos_periodo?: number;
@@ -135,14 +139,35 @@ export interface ApiError extends Error {
   data?: unknown;
 }
 
-function normalizeError(e: any): ApiError {
-  const err: ApiError = new Error(
-    e?.response?.data?.error ||
-      e?.message ||
-      "Error de red o del servidor desconocido"
-  );
-  err.status = e?.response?.status;
-  err.data = e?.response?.data;
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  v !== null && typeof v === "object";
+
+const isAxiosLikeError = (
+  e: unknown
+): e is { response?: { status?: number; data?: unknown }; message?: string } => {
+  if (!isRecord(e)) return false;
+  if (!("response" in e)) return false;
+  const response = (e as Record<string, unknown>).response;
+  return response === undefined || isRecord(response);
+};
+
+function normalizeError(e: unknown): ApiError {
+  const serverMsg =
+    isAxiosLikeError(e) && isRecord(e.response?.data)
+      ? (typeof e.response?.data.error === "string" ? e.response.data.error : undefined)
+      : undefined;
+  const message =
+    serverMsg ||
+    (e instanceof Error ? e.message : undefined) ||
+    (isAxiosLikeError(e) && typeof e.message === "string" ? e.message : undefined) ||
+    "Error de red o del servidor desconocido";
+
+  const err: ApiError = new Error(message);
+  if (isAxiosLikeError(e)) {
+    const status = e.response?.status;
+    err.status = typeof status === "number" ? status : undefined;
+    err.data = e.response?.data;
+  }
   return err;
 }
 

@@ -77,14 +77,9 @@ export default function SaldoServientregaAdmin() {
   // ✅ Obtener puntos y saldos
   const obtenerPuntosYSaldo = async () => {
     try {
-      console.log(
-        "🔍 SaldoServientregaAdmin: Iniciando carga de puntos y saldos..."
-      );
-
       const { data } = await axiosInstance.get<PuntosResponse>(
         "/servientrega/remitente/puntos"
       );
-      console.log("📍 Respuesta completa de puntos Servientrega:", data);
 
       if (!data.success) {
         console.error("❌ Error en respuesta de puntos:", data);
@@ -93,14 +88,6 @@ export default function SaldoServientregaAdmin() {
       }
 
       const puntosActivos = data.puntos || [];
-      console.log(
-        `📍 Puntos Servientrega encontrados: ${puntosActivos.length}`,
-        puntosActivos.map((p) => ({
-          id: p.id,
-          nombre: p.nombre,
-          ciudad: p.ciudad,
-        }))
-      );
 
       setPuntos(puntosActivos);
 
@@ -110,20 +97,15 @@ export default function SaldoServientregaAdmin() {
         return;
       }
 
-      console.log("💰 Obteniendo saldos para cada punto...");
       const saldosTemp: Record<string, number> = {};
 
       const saldoPromises = puntosActivos.map(async (p) => {
         try {
-          console.log(`💰 Consultando saldo para: ${p.nombre} (ID: ${p.id})`);
           const res = await axiosInstance.get<SaldoResponse>(
             `/servientrega/saldo/${p.id}`
           );
           const saldoDisponible = res.data?.disponible ?? 0;
           saldosTemp[p.id] = saldoDisponible;
-          console.log(
-            `✅ Saldo para ${p.nombre}: $${saldoDisponible.toFixed(2)}`
-          );
           return { punto: p.nombre, saldo: saldoDisponible };
         } catch (error) {
           console.error(`❌ Error obteniendo saldo para ${p.nombre}:`, error);
@@ -132,14 +114,9 @@ export default function SaldoServientregaAdmin() {
         }
       });
 
-      const resultadosSaldos = await Promise.all(saldoPromises);
-      console.log("💰 Resumen de saldos obtenidos:", resultadosSaldos);
+      await Promise.all(saldoPromises);
 
       setSaldos(saldosTemp);
-      console.log(
-        "✅ Proceso de carga completado. Saldos finales:",
-        saldosTemp
-      );
     } catch (error) {
       console.error("❌ Error crítico al obtener puntos o saldos:", error);
       toast.error("Error al cargar información de puntos y saldos");
@@ -152,30 +129,13 @@ export default function SaldoServientregaAdmin() {
   const obtenerHistorial = async () => {
     try {
       const response = await axiosInstance.get("/servientrega/saldo/historial");
-      console.log("📊 Respuesta completa del historial:", response);
-      console.log("📊 Datos del historial recibidos:", response.data);
 
       if (Array.isArray(response.data)) {
         setHistorial(response.data);
-        console.log(
-          "📊 Historial establecido:",
-          response.data.length,
-          "registros"
-        );
       } else {
-        console.log(
-          "❌ Los datos del historial no son un array:",
-          response.data
-        );
-        console.log("❌ Tipo de datos recibidos:", typeof response.data);
         // Intentar extraer datos si están anidados
         if (response.data && Array.isArray(response.data.data)) {
           setHistorial(response.data.data);
-          console.log(
-            "📊 Historial establecido desde data.data:",
-            response.data.data.length,
-            "registros"
-          );
         } else {
           setHistorial([]);
         }
@@ -192,28 +152,13 @@ export default function SaldoServientregaAdmin() {
       const { data } = await axiosInstance.get(
         "/servientrega/solicitar-saldo/listar"
       );
-      console.log("📋 Respuesta completa de solicitudes:", data);
 
       // Verificar si la respuesta tiene la estructura esperada
       if (data && Array.isArray(data.solicitudes)) {
         setSolicitudes(data.solicitudes);
-        console.log(
-          "📋 Solicitudes establecidas:",
-          data.solicitudes.length,
-          "registros"
-        );
       } else if (Array.isArray(data)) {
         setSolicitudes(data);
-        console.log(
-          "📋 Solicitudes establecidas (array directo):",
-          data.length,
-          "registros"
-        );
       } else {
-        console.log(
-          "❌ Los datos de solicitudes no tienen el formato esperado:",
-          data
-        );
         setSolicitudes([]);
       }
     } catch (error) {
@@ -240,21 +185,12 @@ export default function SaldoServientregaAdmin() {
 
     showConfirmation(`Confirmar ${accion} solicitud`, mensaje, async () => {
       try {
-        console.log(
-          `📋 ${
-            estado === "APROBADA" ? "Aprobando" : "Rechazando"
-          } solicitud ${id} para ${nombrePunto}`
-        );
-
         await axiosInstance.put(`/servientrega/solicitar-saldo/${id}/estado`, {
           estado,
           aprobado_por: user?.nombre || "admin",
         });
 
         if (estado === "APROBADA") {
-          console.log(
-            `💰 Asignando saldo automáticamente: $${monto} al punto ${punto_id}`
-          );
           // Actualiza el saldo automáticamente
           await axiosInstance.post("/servientrega/saldo", {
             monto_total: monto,
@@ -314,22 +250,13 @@ export default function SaldoServientregaAdmin() {
     return coincidePunto && coincideFecha;
   });
 
-  // Debug logging
-  console.log("🔍 Estado del historial:", {
-    historialTotal: historial.length,
-    historialFiltrado: historialFiltrado.length,
-    filtroFecha,
-    filtroPunto,
-    esAdmin,
-  });
-
   // ✅ Función de debug para verificar datos
   const debugHistorial = async () => {
     try {
       const { data } = await axiosInstance.get("/servientrega/saldo/historial");
-      console.log("🔧 Debug del historial:", data);
+      const total = Array.isArray(data) ? data.length : 0;
       toast.success(
-        `Debug completado. Ver consola. Total registros: ${data.length}`
+        `Debug completado. Total registros: ${total}`
       );
     } catch (error) {
       console.error("❌ Error en debug:", error);
@@ -340,9 +267,8 @@ export default function SaldoServientregaAdmin() {
   // ✅ Función para probar conexión a la base de datos
   const testDB = async () => {
     try {
-      const { data } = await axiosInstance.get("/servientrega/saldo/historial");
-      console.log("🔧 Test de DB:", data);
-      toast.success("Test de DB completado. Ver consola.");
+      await axiosInstance.get("/servientrega/saldo/historial");
+      toast.success("Test de DB completado.");
     } catch (error) {
       console.error("❌ Error en test de DB:", error);
       toast.error("Error al probar conexión a DB");
@@ -423,22 +349,13 @@ export default function SaldoServientregaAdmin() {
                 async () => {
                   setLoadingPuntos((prev) => ({ ...prev, [punto.id]: true }));
                   try {
-                    console.log(
-                      `💰 Asignando saldo Servientrega: $${monto} al punto ${punto.nombre} (${punto.id})`
-                    );
-
-                    const response = await axiosInstance.post(
+                    await axiosInstance.post(
                       "/servientrega/saldo",
                       {
                         monto_total: monto,
                         creado_por: user?.nombre ?? "admin",
                         punto_atencion_id: punto.id,
                       }
-                    );
-
-                    console.log(
-                      "✅ Respuesta de asignación de saldo:",
-                      response.data
                     );
 
                     toast.success(

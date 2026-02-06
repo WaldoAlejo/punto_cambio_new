@@ -28,7 +28,7 @@ export const PointSelector = ({
 
   useEffect(() => {
     loadAvailablePoints();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const loadAvailablePoints = async () => {

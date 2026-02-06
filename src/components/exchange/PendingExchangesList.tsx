@@ -76,7 +76,7 @@ const PendingExchangesList = ({
     if ((currencies?.length || 0) === 0) {
       loadCurrencies();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [currencies?.length]);
 
   const loadCurrencies = async () => {

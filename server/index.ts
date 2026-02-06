@@ -101,8 +101,11 @@ const keyGenerator: RateLimitOptions["keyGenerator"] = (
   req: Request
 ): string => {
   // Si tu middleware de auth adjunta user en req (p.ej. req.user.id), úsalo:
-  // @ts-ignore
-  const userId = req.user?.id || (req as any).userId;
+  const reqWithAuth = req as Request & {
+    user?: { id?: string };
+    userId?: string;
+  };
+  const userId = reqWithAuth.user?.id ?? reqWithAuth.userId;
   if (userId) return `user:${userId}`;
 
   // Usa el token para diferenciar (sin guardar PII)

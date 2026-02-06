@@ -141,7 +141,7 @@ export default function PasoResumen({
 
   /** Estado UI */
   const [tarifa, setTarifa] = useState<TarifaResponseUI | null>(null);
-  const [tarifaCruda, setTarifaCruda] = useState<any>(null); // para el modal
+  const [tarifaCruda, setTarifaCruda] = useState<unknown>(null); // para el modal
   const [loadingTarifa, setLoadingTarifa] = useState(false);
 
   const [saldo, setSaldo] = useState<{
@@ -229,7 +229,7 @@ export default function PasoResumen({
       const nombre_producto = mapProducto(formData?.nombre_producto);
 
       // Tipo según doc: usamos "obtener_tarifa_nacional" incluso cuando haya país destino distinto
-      const payload: any = {
+      const payload: Record<string, string> = {
         tipo: "obtener_tarifa_nacional",
         // Origen
         ciu_ori: (remitente?.ciudad || "").toUpperCase(),
@@ -262,7 +262,6 @@ export default function PasoResumen({
           destinatario?.codigo_postal || DEFAULT_CP_DES;
       }
 
-      console.log("📤 Payload tarifa (PasoResumen):", payload);
       const res = await axiosInstance.post("/servientrega/tarifa", payload);
       const raw = Array.isArray(res.data) ? res.data[0] : res.data;
       setTarifaCruda(raw);
@@ -320,8 +319,6 @@ export default function PasoResumen({
       const { data } = await axiosInstance.get(
         `/servientrega/saldo/validar/${punto_atencion_id}?monto=${montoTotal}`
       );
-
-      console.log("🔍 Validación de saldo:", data);
 
       if (data?.estado === "OK") {
         if (tarifa) {

@@ -120,7 +120,7 @@ export default function MonedaRow({
         value: Number.isFinite(detalle.conteo_fisico)
           ? detalle.conteo_fisico
           : 0,
-        onChange: (e: any) => {
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
           const val = parseFloat(e.target.value);
           onChange(detalle.moneda_id, {
             conteo_fisico: Number.isFinite(val) ? val : 0,
@@ -136,7 +136,7 @@ export default function MonedaRow({
       h(Input, {
         inputMode: "numeric",
         value: Number.isFinite(detalle.billetes) ? detalle.billetes : 0,
-        onChange: (e: any) => {
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
           const val = parseFloat(e.target.value);
           onChange(detalle.moneda_id, {
             billetes: Number.isFinite(val) ? val : 0,
@@ -152,7 +152,7 @@ export default function MonedaRow({
       h(Input, {
         inputMode: "numeric",
         value: Number.isFinite(detalle.monedas) ? detalle.monedas : 0,
-        onChange: (e: any) => {
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
           const val = parseFloat(e.target.value);
           onChange(detalle.moneda_id, {
             monedas: Number.isFinite(val) ? val : 0,

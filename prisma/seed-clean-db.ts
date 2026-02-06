@@ -85,7 +85,7 @@ async function deleteAll(verbose: boolean) {
       // @ts-expect-error dynamic delegate access
       const res = await tx[key].deleteMany()
       if (verbose) {
-        // eslint-disable-next-line no-console
+         
         console.log(`[deleted] ${key}: ${res.count}`)
       }
     }

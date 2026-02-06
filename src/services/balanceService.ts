@@ -2,10 +2,14 @@
 import { apiService } from './apiService';
 import { Saldo } from '../types';
 
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.warn(...args);
+};
+
 export const balanceService = {
   async getBalancesByPoint(pointId: string): Promise<{ balances: Saldo[]; error: string | null }> {
     try {
-      console.log('Fetching balances for point:', pointId);
+      devLog('Fetching balances for point:', pointId);
       const response = await apiService.get<{ balances: Saldo[]; success: boolean }>(`/balances/${pointId}`);
       
       if (response.success) {
@@ -21,7 +25,7 @@ export const balanceService = {
 
   async updateBalance(pointId: string, currencyId: string, data: { cantidad: number; billetes: number; monedas_fisicas: number }): Promise<{ balance: Saldo | null; error: string | null }> {
     try {
-      console.log('Updating balance:', { pointId, currencyId, data });
+      devLog('Updating balance:', { pointId, currencyId, data });
       const response = await apiService.patch<{ balance: Saldo; success: boolean }>(`/balances/${pointId}/${currencyId}`, data);
       
       if (response.success) {

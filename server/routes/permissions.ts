@@ -1,6 +1,6 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
-import type { Permiso as PrismaPermiso } from "@prisma/client";
+import { EstadoPermiso, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
@@ -28,7 +28,7 @@ router.get(
   authenticateToken,
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
-      const where: any = {};
+      const where: Prisma.PermisoWhereInput = {};
 
       // Operador y Administrativo solo ven los suyos
       if (req.user?.rol === "OPERADOR" || req.user?.rol === "ADMINISTRATIVO") {
@@ -39,7 +39,12 @@ router.get(
       if (["ADMIN", "SUPER_USUARIO"].includes(req.user?.rol || "")) {
         if (req.query.usuario_id)
           where.usuario_id = String(req.query.usuario_id);
-        if (req.query.estado) where.estado = String(req.query.estado);
+        if (req.query.estado) {
+          const raw = String(req.query.estado);
+          if (Object.values(EstadoPermiso).includes(raw as EstadoPermiso)) {
+            where.estado = raw as EstadoPermiso;
+          }
+        }
       }
 
       const permisos = await prisma.permiso.findMany({
@@ -60,12 +65,11 @@ router.get(
         permisos,
         timestamp: new Date().toISOString(),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error : undefined;
       logger.error("Error listando permisos", {
-        message: error?.message,
-        code: error?.code,
-        meta: error?.meta,
-        stack: error?.stack,
+        message: err?.message,
+        stack: err?.stack,
       });
       res
         .status(500)

@@ -28,7 +28,7 @@ interface ExternalServicesCloseProps {
 }
 
 export default function ExternalServicesClose({
-  user,
+  user: _user,
   selectedPoint,
 }: ExternalServicesCloseProps) {
   const [loading, setLoading] = useState(false);

@@ -111,10 +111,12 @@ router.patch(
   requireRole(["ADMIN", "SUPER_USUARIO"]),
   validate(approvalSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
-    try {      if (!req.user) {
+    try {
+      if (!req.user) {
         res.status(401).json({ error: "Usuario no autenticado", success: false });
         return;
       }
+      const userId = req.user.id;
       const { transferId } = req.params;
       const { observaciones } = req.body;
 
@@ -147,7 +149,7 @@ router.patch(
           where: { id: transferId },
           data: {
             estado: "APROBADO",
-            aprobado_por: req.user?.id,
+            aprobado_por: userId,
             fecha_aprobacion: new Date(),
             observaciones_aprobacion: observaciones,
           },
@@ -225,7 +227,6 @@ router.patch(
           
           if (totalFisico > 0) {
             const proporcionBilletes = billetesAnterior / totalFisico;
-            const proporcionMonedas = monedasAnterior / totalFisico;
             
             billetesEgreso = Math.min(
               billetesAnterior,
@@ -282,7 +283,7 @@ router.patch(
               descripcion: `Transferencia de salida a ${
                 transferAprobada.destino?.nombre || "Externa"
               } - ${transfer.monto}`,
-              usuarioId: req.user!.id,
+              usuarioId: userId,
             },
             tx
           ); // ⚠️ Pasar el cliente de transacción para atomicidad
@@ -292,7 +293,7 @@ router.patch(
             data: {
               punto_atencion_id: transfer.origen_id,
               moneda_id: transfer.moneda_id,
-              usuario_id: req.user!.id,
+              usuario_id: userId,
               cantidad_anterior: saldoAnteriorOrigen,
               cantidad_incrementada: -Number(transfer.monto),
               cantidad_nueva: saldoNuevoOrigen,
@@ -375,7 +376,7 @@ router.patch(
               descripcion: `Transferencia de entrada desde ${
                 transferAprobada.origen?.nombre || "Externa"
               } - ${transfer.monto}`,
-              usuarioId: req.user!.id,
+              usuarioId: userId,
             },
             tx
           ); // ⚠️ Pasar el cliente de transacción para atomicidad
@@ -385,7 +386,7 @@ router.patch(
             data: {
               punto_atencion_id: transfer.destino_id,
               moneda_id: transfer.moneda_id,
-              usuario_id: req.user!.id,
+              usuario_id: userId,
               cantidad_anterior: saldoAnteriorDestino,
               cantidad_incrementada: Number(transfer.monto),
               cantidad_nueva: saldoNuevoDestino,
@@ -454,7 +455,7 @@ router.patch(
               descripcion: `Transferencia de entrada desde ${
                 transferAprobada.origen?.nombre || "Externa"
               } - ${transfer.monto}`,
-              usuarioId: req.user!.id,
+              usuarioId: userId,
             },
             tx
           ); // ⚠️ Pasar el cliente de transacción para atomicidad
@@ -464,7 +465,7 @@ router.patch(
             data: {
               punto_atencion_id: transfer.destino_id,
               moneda_id: transfer.moneda_id,
-              usuario_id: req.user!.id,
+              usuario_id: userId,
               cantidad_anterior: saldoAnteriorDestino,
               cantidad_incrementada: Number(transfer.monto),
               cantidad_nueva: saldoNuevoDestino,
@@ -482,7 +483,7 @@ router.patch(
 
       logger.info("Transferencia aprobada", {
         transferId,
-        approvedBy: req.user?.id,
+        approvedBy: userId,
         amount: transfer.monto.toString(),
       });
 
@@ -639,6 +640,15 @@ router.post(
       const transferId = req.params.id;
       const { observaciones } = req.body;
 
+      if (!req.user) {
+        res
+          .status(401)
+          .json({ error: "Usuario no autenticado", success: false });
+        return;
+      }
+
+      const userId = req.user.id;
+
       // Obtener la transferencia
       const transfer = await prisma.transferencia.findUnique({
         where: { id: transferId },
@@ -652,7 +662,7 @@ router.post(
       if (!transfer) {
         logger.warn("Transferencia no encontrada para aceptar", {
           transferId,
-          requestedBy: req.user!.id,
+          requestedBy: userId,
         });
         res.status(404).json({
           error: "Transferencia no encontrada",
@@ -664,14 +674,14 @@ router.post(
 
       // Validar que el usuario pertenece al punto destino (a menos que sea admin/super)
       if (
-        req.user!.rol !== "ADMIN" &&
-        req.user!.rol !== "SUPER_USUARIO" &&
-        req.user!.punto_atencion_id !== transfer.destino_id
+        req.user.rol !== "ADMIN" &&
+        req.user.rol !== "SUPER_USUARIO" &&
+        req.user.punto_atencion_id !== transfer.destino_id
       ) {
         logger.warn("Usuario no autorizado para aceptar esta transferencia", {
           transferId,
-          userId: req.user!.id,
-          userPuntoId: req.user!.punto_atencion_id,
+          userId: userId,
+          userPuntoId: req.user.punto_atencion_id,
           destinoId: transfer.destino_id,
         });
         res.status(403).json({
@@ -687,7 +697,7 @@ router.post(
         logger.warn("Intento de aceptar transferencia que no está en tránsito", {
           transferId,
           estadoActual: transfer.estado,
-          requestedBy: req.user!.id,
+          requestedBy: userId,
         });
         res.status(400).json({
           error: `La transferencia no está en tránsito (estado actual: ${transfer.estado})`,
@@ -708,7 +718,7 @@ router.post(
           where: { id: transferId },
           data: {
             estado: "COMPLETADO",
-            aceptado_por: req.user!.id,
+            aceptado_por: userId,
             fecha_aceptacion: new Date(),
             observaciones_aceptacion: observaciones,
           },
@@ -738,7 +748,7 @@ router.post(
 
         // 3. Calcular el ingreso según la vía de transferencia
         let billetesIngreso = 0;
-        let monedasIngreso = 0;
+        const monedasIngreso = 0;
 
         // Para transferencias EFECTIVO, todo va a billetes
         // Para BANCO y MIXTO, asumimos que todo es efectivo por ahora
@@ -776,29 +786,30 @@ router.post(
           },
         });
 
-        // 5. Registrar movimiento de entrada
-        await tx.movimientoSaldo.create({
-          data: {
-            punto_atencion_id: destinoId,
-            moneda_id: monedaId,
-            tipo_movimiento: "TRANSFERENCIA_ENTRANTE",
+        // 5. Registrar movimiento de entrada (ledger)
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId: destinoId,
+            monedaId: monedaId,
+            tipoMovimiento: TipoMovimiento.TRANSFERENCIA_ENTRANTE,
             monto: monto,
-            saldo_anterior: saldoAnterior,
-            saldo_nuevo: saldoNuevoDestino,
-            usuario_id: req.user!.id,
-            referencia_id: String(transferId),
-            tipo_referencia: "TRANSFERENCIA",
+            saldoAnterior: saldoAnterior,
+            saldoNuevo: saldoNuevoDestino,
+            tipoReferencia: TipoReferencia.TRANSFER,
+            referenciaId: String(transferId),
+            saldoBucket: "NINGUNO",
             descripcion: `Transferencia aceptada desde punto origen`,
-            fecha: new Date(),
+            usuarioId: userId,
           },
-        });
+          tx
+        );
 
         return updated;
       });
 
       logger.info("Transferencia aceptada exitosamente", {
         transferId,
-        acceptedBy: req.user!.id,
+        acceptedBy: userId,
         amount: transfer.monto.toString(),
         destinoId: transfer.destino_id,
       });
@@ -851,6 +862,8 @@ router.post(
         return;
       }
 
+      const userId = req.user.id;
+
       const transfer = await prisma.transferencia.findUnique({
         where: { id: transferId },
         include: {
@@ -863,7 +876,7 @@ router.post(
       if (!transfer) {
         logger.warn("Transferencia no encontrada para rechazar", {
           transferId,
-          requestedBy: req.user.id,
+          requestedBy: userId,
         });
         res.status(404).json({
           error: "Transferencia no encontrada",
@@ -881,7 +894,7 @@ router.post(
       ) {
         logger.warn("Usuario no autorizado para rechazar esta transferencia", {
           transferId,
-          userId: req.user.id,
+          userId: userId,
           userPuntoId: req.user.punto_atencion_id,
           destinoId: transfer.destino_id,
         });
@@ -898,7 +911,7 @@ router.post(
         logger.warn("Intento de rechazar transferencia que no está en tránsito", {
           transferId,
           estadoActual: transfer.estado,
-          requestedBy: req.user.id,
+          requestedBy: userId,
         });
         res.status(400).json({
           error: `La transferencia no puede ser rechazada (estado actual: ${transfer.estado})`,
@@ -913,6 +926,12 @@ router.post(
         const monto = Number(transfer.monto);
         const monedaId = transfer.moneda_id;
         const origenId = transfer.origen_id;
+
+        if (!origenId) {
+          throw new Error(
+            "Transferencia sin punto origen; no se puede devolver el saldo."
+          );
+        }
 
         // 1. Actualizar el estado de la transferencia a CANCELADO
         const updated = await tx.transferencia.update({
@@ -934,7 +953,7 @@ router.post(
         const saldoOrigen = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
-              punto_atencion_id: origenId!,
+              punto_atencion_id: origenId,
               moneda_id: monedaId,
             },
           },
@@ -952,7 +971,7 @@ router.post(
 
         // 3. Devolver el dinero al punto origen
         let billetesDevolucion = 0;
-        let monedasDevolucion = 0;
+        const monedasDevolucion = 0;
 
         // Para transferencias EFECTIVO, devolvemos a billetes
         if (transfer.via === "EFECTIVO" || transfer.via === "MIXTO") {
@@ -967,7 +986,7 @@ router.post(
         await tx.saldo.update({
           where: {
             punto_atencion_id_moneda_id: {
-              punto_atencion_id: origenId!,
+              punto_atencion_id: origenId,
               moneda_id: monedaId,
             },
           },
@@ -979,29 +998,32 @@ router.post(
           },
         });
 
-        // 5. Registrar movimiento de devolución (ingreso al origen)
-        await tx.movimientoSaldo.create({
-          data: {
-            punto_atencion_id: origenId!,
-            moneda_id: monedaId,
-            tipo_movimiento: "TRANSFERENCIA_DEVOLUCION",
+        // 5. Registrar movimiento de devolución (ledger)
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId: origenId,
+            monedaId: monedaId,
+            tipoMovimiento: TipoMovimiento.TRANSFERENCIA_DEVOLUCION,
             monto: monto,
-            saldo_anterior: saldoAnteriorOrigen,
-            saldo_nuevo: saldoNuevoOrigen,
-            usuario_id: req.user!.id,
-            referencia_id: String(transferId),
-            tipo_referencia: "TRANSFERENCIA",
-            descripcion: `Devolución por transferencia rechazada - ${observaciones || "Sin observaciones"}`,
-            fecha: new Date(),
+            saldoAnterior: saldoAnteriorOrigen,
+            saldoNuevo: saldoNuevoOrigen,
+            tipoReferencia: TipoReferencia.TRANSFER,
+            referenciaId: String(transferId),
+            saldoBucket: "NINGUNO",
+            descripcion: `Devolución por transferencia rechazada - ${
+              observaciones || "Sin observaciones"
+            }`,
+            usuarioId: userId,
           },
-        });
+          tx
+        );
 
         return updated;
       });
 
       logger.info("Transferencia rechazada exitosamente", {
         transferId,
-        rejectedBy: req.user.id,
+        rejectedBy: userId,
         amount: transfer.monto.toString(),
         origenId: transfer.origen_id,
         observaciones,
