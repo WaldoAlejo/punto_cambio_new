@@ -9,6 +9,7 @@ import {
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
+import { idempotency } from "../middleware/idempotency.js";
 import { validate } from "../middleware/validation.js";
 import { validarSaldoCambioDivisa } from "../middleware/saldoValidation.js";
 import { z } from "zod";
@@ -309,6 +310,7 @@ interface AuthenticatedRequest extends express.Request {
 router.post(
   "/",
   authenticateToken,
+  idempotency({ route: "/api/exchanges" }),
   validate(exchangeSchema),
   validarSaldoCambioDivisa, // 🛡️ Validar saldo suficiente antes del cambio
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {

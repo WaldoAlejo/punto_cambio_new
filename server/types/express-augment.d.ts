@@ -13,6 +13,10 @@ declare global {
     // Agregamos "user" al Request (lo setea tu middleware authenticateToken)
     interface Request {
       user?: UserPayload;
+
+      // Contexto de request para logs / métricas
+      requestId?: string;
+      requestStartAt?: number;
     }
   }
 }

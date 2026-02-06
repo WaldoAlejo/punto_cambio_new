@@ -1,0 +1,56 @@
+name: Validate DB
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Max rows per validator"
+        required: false
+        default: "100000"
+      pointId:
+        description: "Optional punto_atencion_id"
+        required: false
+        default: ""
+  schedule:
+    # Every day at 03:30 UTC (~22:30 GYE)
+    - cron: "30 3 * * *"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Prisma generate
+        run: npx prisma generate
+
+      - name: Run validators
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "${DATABASE_URL}" ]; then
+            echo "DATABASE_URL secret is not set; skipping.";
+            exit 0;
+          fi
+
+          LIMIT="${{ inputs.limit }}"
+          if [ -z "${LIMIT}" ]; then LIMIT="100000"; fi
+
+          POINT_ID="${{ inputs.pointId }}"
+          if [ -n "${POINT_ID}" ]; then
+            npx --yes tsx scripts/validate-all.ts --pointId "${POINT_ID}" "${LIMIT}"
+          else
+            npx --yes tsx scripts/validate-all.ts "${LIMIT}"
+          fi

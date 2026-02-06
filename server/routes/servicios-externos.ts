@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
+import { idempotency } from "../middleware/idempotency.js";
 import prisma from "../lib/prisma.js";
 import {
   Prisma,
@@ -250,6 +251,7 @@ async function validarSaldoServicioExterno(
 router.post(
   "/movimientos",
   authenticateToken,
+  idempotency({ route: "/api/servicios-externos/movimientos" }),
   validarSaldoServicioExterno,
   async (req: Request, res: Response) => {
     try {

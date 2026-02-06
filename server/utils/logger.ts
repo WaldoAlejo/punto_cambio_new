@@ -32,9 +32,11 @@ class Logger {
         console.warn(output);
         break;
       case "info":
+        console.warn(output); // Usamos warn para evitar error de ESLint
+        break;
       case "debug":
         if (process.env.NODE_ENV !== "production") {
-          console.warn(output); // Usamos warn para evitar error de ESLint
+          console.warn(output);
         }
         break;
       default:

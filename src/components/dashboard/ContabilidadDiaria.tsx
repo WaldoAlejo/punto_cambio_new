@@ -24,6 +24,7 @@ import {
 import { contabilidadDiariaService } from "../../services/contabilidadDiariaService";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { todayGyeDateOnly } from "@/utils/timezone";
 
 /* =========================
    Props
@@ -99,7 +100,7 @@ const ContabilidadDiaria: React.FC<ContabilidadDiariaProps> = ({
   const [cierreDiario, setCierreDiario] = useState<CierreDiario | null>(null);
   const [loading, setLoading] = useState(false);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(
-    format(new Date(), "yyyy-MM-dd")
+    todayGyeDateOnly()
   );
   const [mostrarMovimientos, setMostrarMovimientos] = useState<string | null>(
     null
@@ -374,7 +375,7 @@ const ContabilidadDiaria: React.FC<ContabilidadDiariaProps> = ({
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">Detalle por moneda</h3>
           {!cierreDiario &&
-            fechaSeleccionada === format(new Date(), "yyyy-MM-dd") && (
+            fechaSeleccionada === todayGyeDateOnly() && (
               <Button
                 onClick={realizarCierre}
                 className="bg-blue-600 hover:bg-blue-700"

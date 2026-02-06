@@ -1,5 +1,6 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
+import { idempotency } from "../middleware/idempotency.js";
 import { validate } from "../middleware/validation.js";
 import { validarSaldoTransferencia } from "../middleware/saldoValidation.js";
 import { z } from "zod";
@@ -75,6 +76,7 @@ const createTransferSchema = z.object({
 router.post(
   "/",
   authenticateToken,
+  idempotency({ route: "/api/transfers" }),
   validate(createTransferSchema),
   validarSaldoTransferencia, // 🛡️ Validar saldo suficiente antes de transferir
   // transferAutoReconciliation, // ❌ DESHABILITADO: Causaba doble actualización de saldos

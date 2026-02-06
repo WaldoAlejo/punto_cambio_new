@@ -46,6 +46,7 @@ model Usuario {
   transferenciasRechazadas                Transferencia[]               @relation("UsuarioRechazador")
   transferenciasSolicitadas               Transferencia[]               @relation("UsuarioSolicitante")
   guiasServientrega                       ServientregaGuia[]
+  idempotencyKeys                         IdempotencyKey[]
   puntoAtencion                           PuntoAtencion?                @relation(fields: [punto_atencion_id], references: [id])
 
   @@index([username])
@@ -738,6 +739,26 @@ model Permiso {
   @@index([usuario_id])
   @@index([estado])
   @@index([fecha_inicio])
+}
+
+model IdempotencyKey {
+  id              String   @id @default(uuid())
+  key             String
+  route           String
+  method          String
+  user_id         String
+  request_hash    String
+  status          String   @default("IN_PROGRESS")
+  response_status Int?
+  response_body   Json?
+  created_at      DateTime @default(now())
+  expires_at      DateTime
+
+  usuario Usuario @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([key, route, method, user_id])
+  @@index([expires_at])
+  @@index([created_at])
 }
 
 enum TipoAsignacionServicio {

@@ -12,11 +12,24 @@ function getArgValue(name: string) {
   return process.argv[idx + 1];
 }
 
+function getRepeatedArgValues(name: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < process.argv.length; i++) {
+    if (process.argv[i] === name) {
+      const v = process.argv[i + 1];
+      if (v && !v.startsWith("--")) out.push(v);
+    }
+  }
+  return out;
+}
+
 function printHelp() {
   console.log("\nReconciliar saldos (efectivo) en TODOS los puntos\n");
   console.log("Uso:");
   console.log("  CONFIRM=1 npm run reconcile:all");
   console.log("\nOpciones:");
+  console.log("  --currency <CODE>       Moneda a reconciliar (repeatable). Default: USD");
+  console.log("  --all-currencies        Reconciliar todas las monedas (no recomendado)");
   console.log("  --include-inactive      Incluye puntos inactivos");
   console.log("  --pointId <uuid>        Reconciliar solo un punto");
   console.log("  --limit <n>             Limitar cantidad de puntos (debug)");
@@ -49,6 +62,9 @@ async function main() {
   const pointId = getArgValue("--pointId");
   const limitRaw = getArgValue("--limit");
   const limit = limitRaw ? Math.max(0, Number(limitRaw)) : undefined;
+  const allCurrencies = hasFlag("--all-currencies");
+  const currencyCodes = getRepeatedArgValues("--currency");
+  const currencies = currencyCodes.length ? currencyCodes : ["USD"];
 
   const prisma = new PrismaClient();
 
@@ -79,13 +95,35 @@ async function main() {
   let totalCorregidos = 0;
   let totalErrores = 0;
 
+  const monedaIds = allCurrencies
+    ? []
+    : (
+        await prisma.moneda.findMany({
+          where: { codigo: { in: currencies } },
+          select: { id: true, codigo: true },
+        })
+      ).map((m) => ({ id: m.id, codigo: m.codigo }));
+
+  if (!allCurrencies) {
+    const foundCodes = new Set(monedaIds.map((m) => m.codigo));
+    const missing = currencies.filter((c) => !foundCodes.has(c));
+    if (missing.length) {
+      console.error(`Moneda(s) no encontrada(s): ${missing.join(", ")}`);
+      await prisma.$disconnect();
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   for (let i = 0; i < puntos.length; i++) {
     const p = puntos[i];
     const prefix = `[${i + 1}/${puntos.length}] ${p.nombre} (${p.id})`;
     try {
-      const resultados = await saldoReconciliationService.reconciliarTodosPuntoAtencion(
-        p.id
-      );
+      const resultados = allCurrencies
+        ? await saldoReconciliationService.reconciliarTodosPuntoAtencion(p.id)
+        : await Promise.all(
+            monedaIds.map((m) => saldoReconciliationService.reconciliarSaldo(p.id, m.id))
+          );
       const isRecord = (v: unknown): v is Record<string, unknown> =>
         typeof v === "object" && v !== null && !Array.isArray(v);
 

@@ -52,6 +52,9 @@ import rateLimit, {
 import path from "path";
 import { fileURLToPath } from "url";
 import logger from "./utils/logger.js";
+import { requestContext } from "./middleware/requestContext.js";
+import prisma from "./lib/prisma.js";
+import { observeHttpRequest, register as metricsRegister } from "./utils/metrics.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -228,12 +231,35 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// Request context (requestId + start time)
+app.use(requestContext);
+
 // Logging middleware
 app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`, {
-    ip: req.ip,
-    userAgent: req.get("User-Agent"),
-    timestamp: new Date().toISOString(),
+  const start = Date.now();
+  res.on("finish", () => {
+    const durationMs = Date.now() - start;
+
+    // Metrics (best-effort)
+    try {
+      observeHttpRequest({
+        method: req.method,
+        route: req.path,
+        status: res.statusCode,
+        durationMs,
+      });
+    } catch {
+      // ignore
+    }
+
+    logger.info(`${req.method} ${req.path}`, {
+      requestId: req.requestId,
+      statusCode: res.statusCode,
+      durationMs,
+      ip: req.ip,
+      userAgent: req.get("User-Agent"),
+      timestamp: new Date().toISOString(),
+    });
   });
   next();
 });
@@ -245,6 +271,41 @@ app.get("/health", (_req, res) => {
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
   });
+});
+
+// Readiness check (DB reachable)
+app.get("/ready", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.status(200).json({
+      status: "READY",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    logger.error("Readiness check failed", {
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    res.status(503).json({
+      status: "NOT_READY",
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// Prometheus metrics endpoint
+app.get("/metrics", async (req, res) => {
+  const isProd = process.env.NODE_ENV === "production";
+  const token = process.env.METRICS_TOKEN;
+
+  if (isProd && token) {
+    const auth = req.get("authorization") || "";
+    if (auth !== `Bearer ${token}`) {
+      return res.status(401).send("Unauthorized");
+    }
+  }
+
+  res.setHeader("Content-Type", metricsRegister.contentType);
+  return res.status(200).send(await metricsRegister.metrics());
 });
 
 // Rate limit status endpoint

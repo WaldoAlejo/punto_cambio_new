@@ -2,8 +2,14 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
 import { authenticateToken } from "../middleware/auth.js";
+import { idempotency } from "../middleware/idempotency.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import {
+  registrarMovimientoSaldo,
+  TipoMovimiento as MovimientoTipoMovimiento,
+  TipoReferencia as MovimientoTipoReferencia,
+} from "../services/movimientoSaldoService.js";
 
 const router = express.Router();
 
@@ -27,7 +33,11 @@ function asNumber(x: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-router.post("/", authenticateToken, async (req, res) => {
+router.post(
+  "/",
+  authenticateToken,
+  idempotency({ route: "/api/guardar-cierre" }),
+  async (req, res) => {
   try {
     const {
       detalles = [],
@@ -259,6 +269,47 @@ router.post("/", authenticateToken, async (req, res) => {
                 bancos: conteoBancos === null ? 0 : conteoBancos,
               },
             });
+
+            // Ajuste contable para que la reconciliación por movimientos refleje el conteo físico.
+            const saldoCierre = asNumber(detalle.saldo_cierre, NaN);
+            const diff = Number((conteoFisico - saldoCierre).toFixed(2));
+            if (Number.isFinite(saldoCierre) && Math.abs(diff) >= 0.01) {
+              const already = await tx.movimientoSaldo.findFirst({
+                where: {
+                  punto_atencion_id: String(puntoAtencionId),
+                  moneda_id: String(detalle.moneda_id),
+                  tipo_referencia: MovimientoTipoReferencia.CIERRE_DIARIO,
+                  referencia_id: String(cabecera.id),
+                  descripcion: {
+                    contains: "AJUSTE CIERRE",
+                    mode: "insensitive",
+                  },
+                },
+                select: { id: true },
+              });
+
+              if (!already) {
+                await registrarMovimientoSaldo(
+                  {
+                    puntoAtencionId: puntoAtencionId,
+                    monedaId: detalle.moneda_id,
+                    tipoMovimiento:
+                      diff > 0
+                        ? MovimientoTipoMovimiento.INGRESO
+                        : MovimientoTipoMovimiento.EGRESO,
+                    monto: Math.abs(diff),
+                    saldoAnterior: saldoCierre,
+                    saldoNuevo: conteoFisico,
+                    tipoReferencia: MovimientoTipoReferencia.CIERRE_DIARIO,
+                    referenciaId: cabecera.id,
+                    descripcion: `AJUSTE CIERRE ${new Date().toISOString().slice(0, 10)}`,
+                    usuarioId: usuario.id,
+                    saldoBucket: "CAJA",
+                  },
+                  tx
+                );
+              }
+            }
           }
         }
 
@@ -312,6 +363,7 @@ router.post("/", authenticateToken, async (req, res) => {
       error: "Error interno del servidor",
     });
   }
-});
+  }
+);
 
 export default router;

@@ -294,6 +294,30 @@ export const saldoReconciliationService = {
       let corregido = false;
 
       if (requiereCorreccion) {
+        if (saldoCalculado < -0.01) {
+          logger.error(
+            "❌ Saldo calculado negativo; se omite autocorrección para evitar saldos inválidos",
+            {
+              puntoAtencionId,
+              monedaId,
+              saldoRegistrado,
+              saldoCalculado,
+              diferencia,
+              movimientosCount,
+            }
+          );
+
+          return {
+            success: false,
+            saldoAnterior: saldoRegistrado,
+            saldoCalculado,
+            diferencia,
+            corregido: false,
+            movimientosCount,
+            error: "SALDO_CALCULADO_NEGATIVO",
+          };
+        }
+
         logger.warn("⚠️ Inconsistencia detectada en saldo", {
           puntoAtencionId,
           monedaId,
@@ -313,13 +337,14 @@ export const saldoReconciliationService = {
           },
           update: {
             cantidad: saldoCalculado,
-            updated_at: new Date(),
+            billetes: saldoCalculado,
+            monedas_fisicas: 0,
           },
           create: {
             punto_atencion_id: puntoAtencionId,
             moneda_id: monedaId,
             cantidad: saldoCalculado,
-            billetes: 0,
+            billetes: saldoCalculado,
             monedas_fisicas: 0,
             bancos: 0,
           },

@@ -6,6 +6,11 @@
 
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
+import {
+  registrarMovimientoSaldo,
+  TipoMovimiento as MovimientoTipoMovimiento,
+  TipoReferencia as MovimientoTipoReferencia,
+} from "./movimientoSaldoService.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 import saldoReconciliationService from "./saldoReconciliationService.js";
 
@@ -706,6 +711,48 @@ class CierreService {
                     : conteoBancos,
               },
             });
+
+            // Registrar un movimiento de ajuste para que la reconciliación (vista-saldos-puntos?reconciliar=true)
+            // refleje el conteo físico cuadrado tras el cierre.
+            const saldoCierre = Number((detalle as { saldo_cierre?: unknown }).saldo_cierre);
+            const diff = Number((conteoFisico - saldoCierre).toFixed(2));
+            if (Number.isFinite(saldoCierre) && Math.abs(diff) >= 0.01) {
+              const already = await tx.movimientoSaldo.findFirst({
+                where: {
+                  punto_atencion_id: String(punto_atencion_id),
+                  moneda_id: String(detalle.moneda_id),
+                  tipo_referencia: MovimientoTipoReferencia.CIERRE_DIARIO,
+                  referencia_id: String(cierreDiario.id),
+                  descripcion: {
+                    contains: "AJUSTE CIERRE",
+                    mode: "insensitive",
+                  },
+                },
+                select: { id: true },
+              });
+
+              if (!already) {
+                await registrarMovimientoSaldo(
+                  {
+                    puntoAtencionId: punto_atencion_id,
+                    monedaId: detalle.moneda_id,
+                    tipoMovimiento:
+                      diff > 0
+                        ? MovimientoTipoMovimiento.INGRESO
+                        : MovimientoTipoMovimiento.EGRESO,
+                    monto: Math.abs(diff),
+                    saldoAnterior: saldoCierre,
+                    saldoNuevo: conteoFisico,
+                    tipoReferencia: MovimientoTipoReferencia.CIERRE_DIARIO,
+                    referenciaId: cierreDiario.id,
+                    descripcion: `AJUSTE CIERRE ${fecha.toISOString().slice(0, 10)}`,
+                    usuarioId: usuario_id,
+                    saldoBucket: "CAJA",
+                  },
+                  tx
+                );
+              }
+            }
 
             logger.info("✅ Saldo actualizado para siguiente día", {
               punto_atencion_id,

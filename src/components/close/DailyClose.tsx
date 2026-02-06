@@ -35,6 +35,7 @@ import { User, PuntoAtencion, CuadreCaja } from "../../types";
 // import ExternalServicesClose from "./ExternalServicesClose"; // Ya no se requiere cierre separado
 import { contabilidadDiariaService } from "../../services/contabilidadDiariaService";
 import cuatreCajaService from "@/services/cuatreCajaService";
+import { todayGyeDateOnly } from "@/utils/timezone";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -394,7 +395,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     if (!selectedPoint) return;
 
     try {
-      const fechaHoy = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+      const fechaHoy = todayGyeDateOnly(); // YYYY-MM-DD (GYE)
       const validacion =
         await contabilidadDiariaService.validarCierresRequeridos(
           selectedPoint.id,
@@ -493,7 +494,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       // Fallback: si el backend de cuadre falla, intentar detectar "sin movimientos"
       try {
         if (selectedPoint) {
-          const fechaHoy = new Date().toISOString().split("T")[0];
+          const fechaHoy = todayGyeDateOnly();
           const valid = await contabilidadDiariaService.validarCierresRequeridos(
             selectedPoint.id,
             fechaHoy
@@ -532,7 +533,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   // Construir y mostrar tarjeta de "Cierre Completado" a partir del cuadre/totales
   const fetchTodayClose = useCallback(async () => {
     try {
-      const fechaHoy = new Date().toISOString().split("T")[0];
+      const fechaHoy = todayGyeDateOnly();
       const resp = await cuatreCajaService.getCuadre({ fecha: fechaHoy });
       if (resp?.success && resp.data) {
         const tot = isRecord(resp.data.totales) ? resp.data.totales : {};
@@ -567,7 +568,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     const checkTodayClose = async () => {
       if (!selectedPoint) return;
       try {
-        const fechaHoy = new Date().toISOString().split("T")[0];
+        const fechaHoy = todayGyeDateOnly();
         const res = await contabilidadDiariaService.getCierreDiario(
           selectedPoint.id,
           fechaHoy
@@ -675,7 +676,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
       // 3. Ejecutar cierre
       const token = localStorage.getItem("authToken");
-      const fechaHoy = new Date().toISOString().split("T")[0];
+      const fechaHoy = todayGyeDateOnly();
       const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
       const endpoint = `${apiUrl}/contabilidad-diaria/${selectedPoint.id}/${fechaHoy}/cerrar`;
 
@@ -738,7 +739,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
     setLoadingResumen(true);
     try {
-      const fechaHoy = new Date().toISOString().split("T")[0];
+      const fechaHoy = todayGyeDateOnly();
       const resultado = await contabilidadDiariaService.getResumenCierre(
         selectedPoint.id,
         fechaHoy
