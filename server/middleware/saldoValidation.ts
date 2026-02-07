@@ -493,29 +493,34 @@ export async function validarSaldoCambioDivisa(
       },
     });
 
+    // En este sistema, `Saldo.cantidad` es el saldo EFECTIVO total (billetes + monedas).
+    // `Saldo.bancos` se usa solo para trazabilidad y/o entregas por transferencia.
+    // No podemos inferir efectivo desde breakdowns, porque pueden estar en 0 aunque `cantidad` esté correcto.
+    const saldoEfectivo = Number(saldo?.cantidad || 0);
     let saldoBilletes = Number(saldo?.billetes || 0);
     const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
     const saldoBancos = Number(saldo?.bancos || 0);
-    
-    // Calcular saldo total incluyendo billetes, monedas y bancos
-    const saldoTotal = saldoBilletes + saldoMonedas + saldoBancos;
 
-    // Fallback: si ambos físicos son 0 pero el total es mayor a 0, usar el total como billetes
-    if (saldoBilletes === 0 && saldoMonedas === 0 && saldoTotal > 0) {
-      saldoBilletes = saldoTotal;
+    // Fallback: si no hay breakdown físico pero sí hay efectivo total, asignar todo a billetes.
+    if (saldoBilletes === 0 && saldoMonedas === 0 && saldoEfectivo > 0) {
+      saldoBilletes = saldoEfectivo;
     }
 
+    // Para logs/diagnóstico: total disponible (efectivo + bancos)
+    const saldoTotal = saldoEfectivo + saldoBancos;
 
-    // Calcular cuánto efectivo se necesita (excluyendo transferencias)
+
+    // Calcular cuánto EFECTIVO se necesita (si el pago/entrega es por transferencia, no exigir efectivo).
     let efectivoRequerido = montoValidar;
 
-    // Si es USD y hay transferencia, restar del requerimiento de efectivo
-    if (moneda.codigo === "USD" && metodo_entrega) {
-      if (metodo_entrega === "transferencia") {
-        efectivoRequerido = 0; // Todo por transferencia
-      } else if (metodo_entrega === "mixto") {
-        efectivoRequerido = Number(usd_entregado_efectivo || 0);
-      }
+    // Si la entrega es por transferencia, no se requiere efectivo físico (el route de exchanges tampoco lo valida).
+    if (metodo_entrega === "transferencia") {
+      efectivoRequerido = 0;
+    }
+
+    // Si es USD y entrega es mixta, el efectivo requerido es solo la parte en efectivo.
+    if (moneda.codigo === "USD" && metodo_entrega === "mixto") {
+      efectivoRequerido = Number(usd_entregado_efectivo || 0);
     }
 
     // LOG DETALLADO PARA DEPURACIÓN DE SALDO FÍSICO
@@ -523,8 +528,10 @@ export async function validarSaldoCambioDivisa(
       punto_atencion_id,
       monedaValidar,
       saldoTotal,
+      saldoEfectivo,
       saldoBilletes,
       saldoMonedas,
+      saldoBancos,
       efectivoRequerido,
       metodo_entrega,
       usd_entregado_efectivo,
@@ -537,8 +544,8 @@ export async function validarSaldoCambioDivisa(
       monto_destino,
     });
 
-    // Validar saldo total de efectivo
-    if (saldoTotal < efectivoRequerido) {
+    // Validar saldo EFECTIVO (solo cuando se requiere efectivo)
+    if (saldoEfectivo < efectivoRequerido) {
       const punto = await prisma.puntoAtencion.findUnique({
         where: { id: punto_atencion_id },
       });
@@ -546,9 +553,9 @@ export async function validarSaldoCambioDivisa(
       logger.warn("[VALIDACION_CAMBIO_DIVISA] Saldo total insuficiente", {
         punto: punto?.nombre,
         moneda: moneda?.codigo,
-        saldoActual: saldoTotal,
+        saldoActual: saldoEfectivo,
         montoRequerido: efectivoRequerido,
-        deficit: efectivoRequerido - saldoTotal,
+        deficit: efectivoRequerido - saldoEfectivo,
       });
 
       return res.status(400).json({
@@ -557,9 +564,9 @@ export async function validarSaldoCambioDivisa(
         details: {
           punto: punto?.nombre,
           moneda: moneda?.codigo,
-          saldoActual: saldoTotal,
+          saldoActual: saldoEfectivo,
           montoRequerido: efectivoRequerido,
-          deficit: efectivoRequerido - saldoTotal,
+          deficit: efectivoRequerido - saldoEfectivo,
         },
       });
     }

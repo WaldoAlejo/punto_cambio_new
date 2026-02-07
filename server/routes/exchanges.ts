@@ -690,8 +690,12 @@ router.post(
       // pero rechazamos valores no finitos o extremos por seguridad.
       const MAX_RATE_ALLOWED = 1e12; // permite tasas muy grandes (ej. COP per USD ~ thousands)
 
-      const requiereTasaBilletes = Number(divisas_entregadas_billetes) > 0 || Number(divisas_recibidas_billetes) > 0;
-      const requiereTasaMonedas = Number(divisas_entregadas_monedas) > 0 || Number(divisas_recibidas_monedas) > 0;
+      // Las tasas se usan para convertir la MONEDA ORIGEN (lo que entrega el cliente).
+      // No deben depender del desglose de la MONEDA DESTINO (lo que recibe el cliente),
+      // porque ese desglose es solo para registrar la entrega (billetes/monedas) y puede
+      // ser distinto al canal de ingreso del cliente.
+      const requiereTasaBilletes = Number(divisas_entregadas_billetes) > 0;
+      const requiereTasaMonedas = Number(divisas_entregadas_monedas) > 0;
 
       const erroresTasas: string[] = [];
 
