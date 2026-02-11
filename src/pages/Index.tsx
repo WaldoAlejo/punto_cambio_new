@@ -5,6 +5,7 @@ import PointSelection from "../components/auth/PointSelection";
 import { PuntoAtencion } from "../types";
 import { pointService } from "../services/pointService";
 import { useToast } from "@/hooks/use-toast";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 const Index = () => {
   const { user, logout, selectedPoint, setSelectedPoint } = useAuth();
@@ -152,11 +153,13 @@ const Index = () => {
   }
 
   return (
-    <Dashboard
-      user={user}
-      selectedPoint={selectedPoint}
-      onLogout={handleLogout}
-    />
+    <ErrorBoundary title="Error en el Dashboard">
+      <Dashboard
+        user={user}
+        selectedPoint={selectedPoint}
+        onLogout={handleLogout}
+      />
+    </ErrorBoundary>
   );
 };
 
