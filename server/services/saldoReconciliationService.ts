@@ -123,7 +123,7 @@ export const saldoReconciliationService = {
    * 1. Los EGRESOS se guardan con monto NEGATIVO en la BD
    * 2. Los INGRESOS se guardan con monto POSITIVO en la BD
    * 3. Los AJUSTES mantienen su signo original
-   * 4. Se excluyen movimientos con descripción que contenga "bancos"
+   * 4. Se excluyen movimientos marcados explícitamente como BANCOS (no caja)
    */
   async calcularSaldoReal(
     puntoAtencionId: string,
@@ -177,11 +177,20 @@ export const saldoReconciliationService = {
         },
       });
 
-      // 3. Filtrar movimientos bancarios (igual que en los scripts)
+      // 3. Filtrar movimientos bancarios.
+      // Regla práctica:
+      // - Si el movimiento está marcado como "(CAJA)", SIEMPRE afecta caja.
+      // - Si contiene la etiqueta "bancos" (p.ej. "Transferencia (bancos) ..."), NO afecta caja.
+      // Esto evita falsos positivos con nombres de bancos como "Produbanco" en descripciones de caja.
       const movimientos = todosMovimientos.filter((mov) => {
-        const desc = mov.descripcion?.toLowerCase() || "";
-        // Movimientos etiquetados como banco/bancos NO afectan caja
-        return !desc.includes("bancos") && !desc.includes("banco");
+        const desc = (mov.descripcion ?? "").toString().toLowerCase();
+        if (desc.includes("(caja)")) return true;
+
+        // Excluir cuando 'banco'/'bancos' aparece como palabra completa.
+        // Ej: "transferencia (bancos)", "depósito banco pichincha" => bancos
+        // No excluye: "produbanco" (no hay límite de palabra antes de 'banco').
+        const hasBancoWord = /\bbancos?\b/i.test(desc);
+        return !hasBancoWord;
       });
 
       // 4. Calcular saldo basado en movimientos
