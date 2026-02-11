@@ -49,6 +49,96 @@ function getCantidad(val: unknown): number {
   return 0;
 }
 
+function toNumber(val: unknown, fallback = 0): number {
+  if (typeof val === "number" && Number.isFinite(val)) return val;
+  if (typeof val === "string" && val.trim() !== "") {
+    const parsed = Number(val);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function toStringSafe(val: unknown, fallback = ""): string {
+  return typeof val === "string" ? val : fallback;
+}
+
+function normalizeResumenCierre(raw: unknown): ResumenCierre | null {
+  if (!isRecord(raw)) return null;
+
+  const saldos_principales: ResumenSaldoPrincipal[] = Array.isArray(raw.saldos_principales)
+    ? raw.saldos_principales
+        .filter(isRecord)
+        .map((s) => ({
+          moneda_codigo: toStringSafe(s.moneda_codigo, ""),
+          moneda_nombre: toStringSafe(s.moneda_nombre, ""),
+          moneda_simbolo: toStringSafe(s.moneda_simbolo, ""),
+          tuvo_movimientos: typeof s.tuvo_movimientos === "boolean" ? s.tuvo_movimientos : false,
+          saldo_final: toNumber(s.saldo_final, 0),
+        }))
+    : [];
+
+  const servicios_externos: ResumenServicioExterno[] = Array.isArray(raw.servicios_externos)
+    ? raw.servicios_externos
+        .filter(isRecord)
+        .map((se) => ({
+          servicio_nombre: toStringSafe(se.servicio_nombre, ""),
+          servicio_tipo: toStringSafe(se.servicio_tipo, ""),
+          saldos: Array.isArray(se.saldos)
+            ? se.saldos
+                .filter(isRecord)
+                .map((ss) => ({
+                  moneda_codigo: toStringSafe(ss.moneda_codigo, ""),
+                  moneda_simbolo: toStringSafe(ss.moneda_simbolo, ""),
+                  saldo: toNumber(ss.saldo, 0),
+                }))
+            : [],
+        }))
+    : [];
+
+  const transaccionesRaw = isRecord(raw.transacciones) ? raw.transacciones : null;
+  const transacciones: ResumenCierre["transacciones"] = transaccionesRaw
+    ? {
+        cambios_divisas: Array.isArray(transaccionesRaw.cambios_divisas)
+          ? (transaccionesRaw.cambios_divisas as ResumenCambioDivisaTx[])
+          : [],
+        servicios_externos: Array.isArray(transaccionesRaw.servicios_externos)
+          ? (transaccionesRaw.servicios_externos as ResumenServicioExternoTx[])
+          : [],
+      }
+    : undefined;
+
+  const balanceRaw = isRecord(raw.balance) ? raw.balance : null;
+  const balanceCambiosRaw = balanceRaw && isRecord(balanceRaw.cambios_divisas) ? balanceRaw.cambios_divisas : null;
+  const balanceServiciosRaw = balanceRaw && isRecord(balanceRaw.servicios_externos) ? balanceRaw.servicios_externos : null;
+
+  const balance: ResumenCierre["balance"] =
+    balanceRaw
+      ? {
+          cambios_divisas: {
+            por_moneda: Array.isArray(balanceCambiosRaw?.por_moneda)
+              ? (balanceCambiosRaw?.por_moneda as ResumenBalancePorMonedaRow[])
+              : [],
+          },
+          servicios_externos: {
+            por_moneda: Array.isArray(balanceServiciosRaw?.por_moneda)
+              ? (balanceServiciosRaw?.por_moneda as ResumenBalancePorMonedaRow[])
+              : [],
+          },
+        }
+      : undefined;
+
+  return {
+    fecha: typeof raw.fecha === "string" ? raw.fecha : undefined,
+    punto_atencion_id:
+      typeof raw.punto_atencion_id === "string" ? raw.punto_atencion_id : undefined,
+    total_transacciones: toNumber(raw.total_transacciones, 0),
+    saldos_principales,
+    servicios_externos,
+    transacciones,
+    balance,
+  };
+}
+
 interface ResumenUsuarioRef {
   nombre?: string;
   username?: string;
@@ -252,86 +342,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   }, [user]);
 
   // Obtener datos de cuadre automático
-  useEffect(() => {
-    const fetchCuadreData = async () => {
-      try {
-        setLoading(true);
-        const token = localStorage.getItem("authToken");
-        if (!token) {
-          console.error("❌ No token found in localStorage");
-          toast({
-            title: "Sesión Expirada",
-            description: "Por favor, inicie sesión nuevamente.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
-        const endpoint = `${apiUrl}/cuadre-caja`;
-
-        const response = await fetch(endpoint, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-
-          if (data.success && data.data) {
-            setCuadreData(data.data);
-
-            // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
-            const initialAdjustments: {
-              [key: string]: { bills: string; coins: string; banks: string; note?: string };
-            } = {};
-            if (data.data.detalles && data.data.detalles.length > 0) {
-              data.data.detalles.forEach((detalle: CuadreDetalle) => {
-                // Inicializar con el saldo esperado dividido entre billetes y monedas
-                // Por defecto asumimos todo en billetes, pero el usuario puede ajustar
-                initialAdjustments[detalle.moneda_id] = {
-                  bills: detalle.saldo_cierre.toFixed(2),
-                  coins: "0.00",
-                  banks: Number(detalle.bancos_teorico ?? 0).toFixed(2),
-                  note: "",
-                };
-              });
-            }
-            setUserAdjustments(initialAdjustments);
-          } else if (data.data?.mensaje) {
-            // No hay movimientos hoy
-            setCuadreData({ detalles: [], observaciones: "" });
-            setUserAdjustments({});
-          }
-        } else {
-          const errorText = await response.text();
-          console.error(
-            "❌ Error response from cuadre API:",
-            response.status,
-            response.statusText,
-            errorText
-          );
-          throw new Error(`Error al obtener datos de cuadre: ${response.status}`);
-        }
-      } catch (error) {
-        console.error("❌ Error al obtener datos de cuadre:", error);
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : "No se pudo cargar los datos de cuadre automático.",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (selectedPoint) {
-      fetchCuadreData();
-      setTodayClose(null);
-    }
-  }, [selectedPoint]);
+  // Nota: el fetch de cuadre se maneja por `fetchCuadreData` (useCallback) para soportar retry y fallback.
 
   const handleUserAdjustment = (
     monedaId: string,
@@ -746,7 +757,17 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       );
 
       if (resultado.success && resultado.resumen) {
-        setResumenCierre(resultado.resumen as ResumenCierre);
+        const normalized = normalizeResumenCierre(resultado.resumen);
+        if (!normalized) {
+          toast({
+            title: "Error",
+            description:
+              "El servidor devolvió un resumen de cierre inválido. Intente nuevamente.",
+            variant: "destructive",
+          });
+          return;
+        }
+        setResumenCierre(normalized);
         setShowResumenModal(true);
       } else {
         toast({
@@ -1095,7 +1116,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         <h1 className="text-2xl font-bold text-gray-800">Cierre Diario</h1>
         <div className="flex items-center gap-3">
           <div className="text-sm text-gray-500">
-            Punto: {selectedPoint.nombre} - {new Date().toLocaleDateString()}
+            Punto: {selectedPoint?.nombre ?? "—"} - {new Date().toLocaleDateString()}
           </div>
           <Button
             variant="outline"
