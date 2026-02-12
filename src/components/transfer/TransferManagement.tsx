@@ -4,6 +4,7 @@ import { toast } from "@/hooks/use-toast";
 import { apiService } from "../../services/apiService";
 import { transferService } from "../../services/transferService";
 import { useAuth } from "@/hooks/useAuth";
+import { pointService } from "../../services/pointService";
 import TransferForm from "./TransferForm";
 import TransferList from "./TransferList";
 
@@ -52,7 +53,7 @@ const TransferManagement = ({ user }: TransferManagementProps) => {
           await Promise.all([
             transferService.getAllTransfers(),
             apiService.get<ApiResponse>("/currencies"),
-            apiService.get<ApiResponse>("/points"),
+            pointService.getActivePointsForTransfers(),
           ]);
 
         setTransfers(transfersResponse.transfers || []);

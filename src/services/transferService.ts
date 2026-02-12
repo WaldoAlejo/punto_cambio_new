@@ -105,14 +105,16 @@ export const transferService = {
     }
   },
 
-  async getPendingAcceptanceTransfers(): Promise<{
+  async getPendingAcceptanceTransfers(pointId?: string): Promise<{
     transfers: Transferencia[];
     error: string | null;
   }> {
     try {
-      const response = await apiService.get<TransfersResponse>(
-        "/transfers/pending-acceptance"
-      );
+      const endpoint = pointId
+        ? `/transfers/pending-acceptance?point_id=${encodeURIComponent(pointId)}`
+        : "/transfers/pending-acceptance";
+
+      const response = await apiService.get<TransfersResponse>(endpoint);
       if (response && response.success) {
         return { transfers: response.transfers, error: null };
       } else {
@@ -121,7 +123,14 @@ export const transferService = {
           error: "Error al obtener las transferencias pendientes de aceptación",
         };
       }
-    } catch {
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "response" in error) {
+        const err = error as { response?: { data?: { error?: string; message?: string } } };
+        const msg = err.response?.data?.error || err.response?.data?.message;
+        if (msg) {
+          return { transfers: [], error: msg };
+        }
+      }
       return {
         transfers: [],
         error: "Error de conexión al obtener transferencias pendientes de aceptación",

@@ -4,13 +4,37 @@ import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
+import { EstadoJornada } from "@prisma/client";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento,
   TipoReferencia,
 } from "../services/movimientoSaldoService.js";
+import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
 const router = express.Router();
+
+async function resolveOperationalPointId(user: {
+  id: string;
+  rol: string;
+  punto_atencion_id?: string | null;
+}): Promise<string | null> {
+  if (user.punto_atencion_id) return user.punto_atencion_id;
+
+  // Para OPERADOR/CONCESION, el punto actual se obtiene de la jornada activa de hoy.
+  if (user.rol !== "OPERADOR" && user.rol !== "CONCESION") return null;
+
+  const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
+  const activeSchedule = await prisma.jornada.findFirst({
+    where: {
+      usuario_id: user.id,
+      fecha_inicio: { gte: hoy, lt: manana },
+      OR: [{ estado: EstadoJornada.ACTIVO }, { estado: EstadoJornada.ALMUERZO }],
+    },
+    select: { punto_atencion_id: true },
+  });
+  return activeSchedule?.punto_atencion_id || null;
+}
 
 // Schema para aprobar/rechazar transferencia
 const approvalSchema = z.object({
@@ -676,12 +700,13 @@ router.post(
       if (
         req.user.rol !== "ADMIN" &&
         req.user.rol !== "SUPER_USUARIO" &&
-        req.user.punto_atencion_id !== transfer.destino_id
+        (await resolveOperationalPointId(req.user)) !== transfer.destino_id
       ) {
+        const effectivePointId = await resolveOperationalPointId(req.user);
         logger.warn("Usuario no autorizado para aceptar esta transferencia", {
           transferId,
           userId: userId,
-          userPuntoId: req.user.punto_atencion_id,
+          userPuntoId: effectivePointId,
           destinoId: transfer.destino_id,
         });
         res.status(403).json({
@@ -890,12 +915,13 @@ router.post(
       if (
         req.user.rol !== "ADMIN" &&
         req.user.rol !== "SUPER_USUARIO" &&
-        req.user.punto_atencion_id !== transfer.destino_id
+        (await resolveOperationalPointId(req.user)) !== transfer.destino_id
       ) {
+        const effectivePointId = await resolveOperationalPointId(req.user);
         logger.warn("Usuario no autorizado para rechazar esta transferencia", {
           transferId,
           userId: userId,
-          userPuntoId: req.user.punto_atencion_id,
+          userPuntoId: effectivePointId,
           destinoId: transfer.destino_id,
         });
         res.status(403).json({

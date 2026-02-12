@@ -15,9 +15,11 @@ import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { transferService } from "../../services/transferService";
 import { Transferencia } from "../../types";
 import { CheckCircle2, Loader2, Package, XCircle } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 
 const TransferAcceptance = () => {
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
+  const { selectedPoint } = useAuth();
   const [pendingTransfers, setPendingTransfers] = useState<Transferencia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
@@ -38,7 +40,7 @@ const TransferAcceptance = () => {
     try {
       setIsLoading(true);
       const { transfers, error } =
-        await transferService.getPendingAcceptanceTransfers();
+        await transferService.getPendingAcceptanceTransfers(selectedPoint?.id);
 
       if (error) {
         toast.error(`Error al cargar transferencias: ${error}`);

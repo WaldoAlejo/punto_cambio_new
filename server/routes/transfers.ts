@@ -1,4 +1,5 @@
 import express from "express";
+import { EstadoJornada } from "@prisma/client";
 import { authenticateToken } from "../middleware/auth.js";
 import { idempotency } from "../middleware/idempotency.js";
 import { validate } from "../middleware/validation.js";
@@ -7,6 +8,7 @@ import { z } from "zod";
 import transferController from "../controllers/transferController.js";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
+import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -97,11 +99,55 @@ router.get("/pending-acceptance", authenticateToken, async (req, res) => {
       });
     }
 
-    const puntoAtencionId = req.user.punto_atencion_id;
+    const queryPointIdRaw =
+      (req.query.point_id as string | undefined) ||
+      (req.query.pointId as string | undefined) ||
+      (req.query.point as string | undefined);
+
+    const queryPointId = queryPointIdRaw
+      ? z.string().uuid().safeParse(queryPointIdRaw).success
+        ? queryPointIdRaw
+        : undefined
+      : undefined;
+
+    const isPrivileged =
+      req.user.rol === "ADMIN" ||
+      req.user.rol === "SUPER_USUARIO" ||
+      req.user.rol === "ADMINISTRATIVO";
+
+    let puntoAtencionId: string | null | undefined = req.user.punto_atencion_id;
+
+    // Para OPERADOR/CONCESION, el punto actual normalmente viene de la jornada activa.
+    if (!puntoAtencionId && (req.user.rol === "OPERADOR" || req.user.rol === "CONCESION")) {
+      const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
+      const activeSchedule = await prisma.jornada.findFirst({
+        where: {
+          usuario_id: req.user.id,
+          fecha_inicio: { gte: hoy, lt: manana },
+          OR: [{ estado: EstadoJornada.ACTIVO }, { estado: EstadoJornada.ALMUERZO }],
+        },
+        select: { punto_atencion_id: true },
+      });
+      puntoAtencionId = activeSchedule?.punto_atencion_id || null;
+    }
+
+    // Si es usuario privilegiado, permitir consultar por point_id explícito
+    if (isPrivileged && queryPointId) {
+      puntoAtencionId = queryPointId;
+    }
+
+    // Si no es privilegiado y mandó point_id, debe coincidir con su punto operativo actual
+    if (!isPrivileged && queryPointId && puntoAtencionId && queryPointId !== puntoAtencionId) {
+      return res.status(403).json({
+        error: "No tienes permiso para consultar transferencias de otro punto",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     if (!puntoAtencionId) {
       return res.status(400).json({
-        error: "Usuario no tiene punto de atención asignado",
+        error: "No se pudo determinar el punto de atención actual (perfil/jornada)",
         success: false,
         timestamp: new Date().toISOString(),
       });
