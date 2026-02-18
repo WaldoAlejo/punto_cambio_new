@@ -653,7 +653,7 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
                           </div>
                           <div className="rounded-md border bg-green-50/60 p-2">
                             <p className="text-[11px] text-green-700">
-                              Saldo Actual
+                              Saldo Actual (Reconciliado)
                             </p>
                             <p className="text-lg font-bold text-green-900">
                               {formatMoney(
