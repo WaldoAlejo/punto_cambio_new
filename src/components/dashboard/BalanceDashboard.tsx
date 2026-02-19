@@ -652,10 +652,10 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
                             </p>
                           </div>
                           <div className="rounded-md border bg-green-50/60 p-2">
-                            <p className="text-[11px] text-green-700">
-                              Saldo Actual (Reconciliado)
+                            <p className="text-[11px] text-green-700 font-bold">
+                              Saldo Actual
                             </p>
-                            <p className="text-lg font-bold text-green-900">
+                            <p className="text-2xl font-extrabold text-green-900">
                               {formatMoney(
                                 Number(s.saldo_actual || 0),
                                 s.moneda_simbolo

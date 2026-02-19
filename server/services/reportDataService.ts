@@ -113,33 +113,38 @@ export const reportDataService = {
   },
 
   async getBalancesData(): Promise<BalanceData[]> {
-    const balances = await prisma.saldo.findMany({
+    // Get all saldos grouped by point and currency
+    const saldos = await prisma.saldo.findMany({
       include: {
-        puntoAtencion: {
-          select: { nombre: true },
-        },
-        moneda: {
-          select: { codigo: true, simbolo: true },
-        },
+        puntoAtencion: { select: { nombre: true, id: true } },
+        moneda: { select: { codigo: true, simbolo: true, id: true } },
       },
     });
 
-    const balancesByPoint = balances.reduce(
-      (acc: Record<string, BalanceData>, balance) => {
-        const pointName = balance.puntoAtencion?.nombre || "Punto desconocido";
-        if (!acc[pointName]) {
-          acc[pointName] = {
-            point: pointName,
-            balance: 0,
-          };
-        }
-        acc[pointName].balance += parseFloat(balance.cantidad.toString());
-        return acc;
-      },
-      {}
-    );
+    // Import reconciliation service
+    const { saldoReconciliationService } = await import("./saldoReconciliationService.js");
 
-    return Object.values(balancesByPoint);
+    // For each saldo, calculate reconciled balance
+    const reconciledBalances: BalanceData[] = [];
+    for (const saldo of saldos) {
+      const pointName = saldo.puntoAtencion?.nombre || "Punto desconocido";
+      const pointId = saldo.puntoAtencion?.id;
+      const monedaId = saldo.moneda?.id;
+      const monedaCodigo = saldo.moneda?.codigo;
+      const monedaSimbolo = saldo.moneda?.simbolo;
+
+      // Calculate reconciled balance
+      const reconciled = await saldoReconciliationService.calcularSaldoReal(pointId, monedaId);
+
+      reconciledBalances.push({
+        point: pointName,
+        currency: monedaCodigo,
+        symbol: monedaSimbolo,
+        balance: reconciled,
+      });
+    }
+
+    return reconciledBalances;
   },
 
   async getUserActivityData(
