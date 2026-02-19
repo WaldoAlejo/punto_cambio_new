@@ -25,6 +25,8 @@ export interface TransferData {
 export interface BalanceData {
   point: string;
   balance: number;
+  currency: string;
+  symbol?: string;
 }
 
 export interface UserActivityData {
