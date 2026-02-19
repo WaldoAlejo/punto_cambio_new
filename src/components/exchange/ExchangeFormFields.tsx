@@ -272,7 +272,7 @@ const ExchangeFormFields = ({
             <Input
               type="number"
               inputMode="decimal"
-              step="0.01"
+              step="0.001"
               min="0"
               value={amountBilletes}
               onChange={(e) => onAmountBilletesChange(e.target.value)}
@@ -285,7 +285,7 @@ const ExchangeFormFields = ({
             <Input
               type="number"
               inputMode="decimal"
-              step="0.01"
+              step="0.001"
               min="0"
               value={amountMonedas}
               onChange={(e) => onAmountMonedasChange(e.target.value)}

@@ -1381,7 +1381,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                                 </Label>
                                 <Input
                                   type="number"
-                                  step="0.01"
+                                  step="0.001"
                                   min="0"
                                   value={
                                     userAdjustments[detalle.moneda_id]?.bills ||
@@ -1408,7 +1408,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                                 </Label>
                                 <Input
                                   type="number"
-                                  step="0.01"
+                                  step="0.001"
                                   min="0"
                                   value={
                                     userAdjustments[detalle.moneda_id]?.coins ||
@@ -1528,7 +1528,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                                 </Label>
                                 <Input
                                   type="number"
-                                  step="0.01"
+                                  step="0.001"
                                   min="0"
                                   value={
                                     userAdjustments[detalle.moneda_id]?.banks ||

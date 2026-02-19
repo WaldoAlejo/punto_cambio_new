@@ -362,7 +362,7 @@ const ExchangeDetailsForm = ({
                       : abonoInicialMonto
                   }
                   min={0}
-                  step="0.01"
+                  step="0.001"
                   placeholder="Ingrese abono inicial"
                   onChange={(e) =>
                     onAbonoInicialMontoChange(
@@ -415,7 +415,7 @@ const ExchangeDetailsForm = ({
                       : saldoPendiente
                   }
                   min={0}
-                  step="0.01"
+                  step="0.001"
                   readOnly
                   className="bg-gray-100"
                 />
