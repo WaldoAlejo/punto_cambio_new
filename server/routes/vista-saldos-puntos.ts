@@ -183,7 +183,13 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
         reconciledMap.set(k, Number((current + delta).toFixed(2)));
       }
 
-      // Movimientos de servicios externos
+      // Movimientos de servicios externos SOLO desde la fecha del saldo inicial activo
+      // Creamos un mapa para saber la fecha de inicio por punto/moneda
+      const fechaInicioMap = new Map();
+      for (const [k, si] of inicialMap.entries()) {
+        fechaInicioMap.set(k, si.fecha_asignacion);
+      }
+
       const serviciosExternos = await prisma.servicioExternoMovimiento.findMany({
         where: {
           punto_atencion_id: { in: puntos.map((p) => p.id) },
@@ -195,12 +201,16 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
           monto: true,
           tipo_movimiento: true,
           descripcion: true,
+          fecha: true,
         },
         orderBy: { fecha: "asc" },
       });
 
       for (const mov of serviciosExternos) {
         const k = key(mov.punto_atencion_id, mov.moneda_id);
+        const fechaInicio = fechaInicioMap.get(k);
+        if (!fechaInicio) continue; // No hay saldo inicial activo
+        if (new Date(mov.fecha) < new Date(fechaInicio)) continue; // Solo sumar desde saldo inicial activo
         const current = reconciledMap.get(k) ?? 0;
         let delta = 0;
         if (mov.tipo_movimiento === "EGRESO") delta = -Math.abs(Number(mov.monto));
