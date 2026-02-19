@@ -153,6 +153,7 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
         }
       }
 
+      // Movimientos internos
       const movimientos = await prisma.movimientoSaldo.findMany({
         where: {
           punto_atencion_id: { in: puntos.map((p) => p.id) },
@@ -179,7 +180,32 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
           Number(mov.monto),
           mov.descripcion
         );
+        reconciledMap.set(k, Number((current + delta).toFixed(2)));
+      }
 
+      // Movimientos de servicios externos
+      const serviciosExternos = await prisma.servicioExternoMovimiento.findMany({
+        where: {
+          punto_atencion_id: { in: puntos.map((p) => p.id) },
+          moneda_id: { in: monedas.map((m) => m.id) },
+        },
+        select: {
+          punto_atencion_id: true,
+          moneda_id: true,
+          monto: true,
+          tipo_movimiento: true,
+          descripcion: true,
+        },
+        orderBy: { fecha: "asc" },
+      });
+
+      for (const mov of serviciosExternos) {
+        const k = key(mov.punto_atencion_id, mov.moneda_id);
+        const current = reconciledMap.get(k) ?? 0;
+        let delta = 0;
+        if (mov.tipo_movimiento === "EGRESO") delta = -Math.abs(Number(mov.monto));
+        else if (mov.tipo_movimiento === "INGRESO") delta = Math.abs(Number(mov.monto));
+        else delta = Number(mov.monto); // fallback
         reconciledMap.set(k, Number((current + delta).toFixed(2)));
       }
     }
