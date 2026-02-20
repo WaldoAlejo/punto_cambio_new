@@ -48,8 +48,8 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       pointIdsFiltro = [userPointId];
     }
 
-    // Para evitar cargas masivas, si reconciliar=true en admin, exigimos pointId.
-    if (reconciliar && esAdmin && !queryPointId) {
+    // Para evitar cargas masivas, si reconciliar=true, exigimos pointId (para todos los roles)
+    if (reconciliar && !queryPointId) {
       return res.status(400).json({
         success: false,
         error: "Para reconciliar, envía ?pointId=...",
