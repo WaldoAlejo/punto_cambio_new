@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import axiosInstance from "@/services/axiosInstance";
+import { movimientosContablesService } from "@/services/movimientosContablesService";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,23 +54,32 @@ export default function SaldoOperador({
   const [observaciones, setObservaciones] = useState<string>("");
   const [enviandoSolicitud, setEnviandoSolicitud] = useState(false);
 
-  // ✅ Obtener saldo disponible
+  // ✅ Obtener saldo disponible (usando saldo reconciliado)
   const obtenerSaldo = useCallback(async () => {
     if (!puntoAtencionId) return;
 
     setLoading(true);
     try {
-      const { data } = await axiosInstance.get(
-        `/servientrega/saldo/${puntoAtencionId}`
-      );
-
-      const disponible = Number(data.disponible || 0);
+      const { saldos, error } = await movimientosContablesService.getSaldosActualesPorPunto(puntoAtencionId);
+      if (error || !saldos) {
+        setSaldo({
+          disponible: 0,
+          billetes: 0,
+          monedas_fisicas: 0,
+          estado: "ERROR",
+          mensaje: "Error al consultar el saldo",
+        });
+        toast.error("Error al consultar el saldo");
+        return;
+      }
+      // Buscar USD por defecto, si hay varias monedas puedes adaptar esto
+      const saldoUSD = saldos.find((s) => s.moneda_codigo === "USD");
+      const disponible = Number(saldoUSD?.saldo ?? 0);
       const estado = disponible < UMBRAL_SALDO_BAJO ? "SALDO_BAJO" : "OK";
-
       setSaldo({
         disponible,
-        billetes: Number(data.billetes ?? 0),
-        monedas_fisicas: Number(data.monedas_fisicas ?? 0),
+        billetes: Number(saldoUSD?.billetes ?? 0),
+        monedas_fisicas: Number(saldoUSD?.monedas_fisicas ?? 0),
         estado,
         mensaje:
           estado === "SALDO_BAJO"
