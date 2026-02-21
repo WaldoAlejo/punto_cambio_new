@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { pointService } from "../../services/pointService";
 import TransferForm from "./TransferForm";
 import TransferList from "./TransferList";
+import { Loader2 } from "lucide-react";
 
 interface TransferManagementProps {
   user: User;
@@ -25,6 +26,7 @@ const TransferManagement = ({ user }: TransferManagementProps) => {
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Para encontrar el punto seleccionado, usar el contexto de autenticación
   const { selectedPoint } = useAuth();
@@ -113,6 +115,41 @@ const TransferManagement = ({ user }: TransferManagementProps) => {
     }
   };
 
+  const handleTransferCancelled = async (transferId: string) => {
+    try {
+      setIsCancelling(true);
+      const { error } = await transferService.cancelTransfer(
+        transferId,
+        "Anulada por el solicitante"
+      );
+      if (error) {
+        toast({
+          title: "Error",
+          description: error,
+          variant: "destructive",
+        });
+        return;
+      }
+      await fetchTransfers();
+
+      toast({
+        title: "✅ Transferencia anulada",
+        description: "La transferencia ha sido anulada exitosamente. El monto ha sido devuelto al punto de origen.",
+      });
+
+      // Disparar evento para actualizar saldos
+      window.dispatchEvent(new CustomEvent("transferCancelled"));
+    } catch {
+      toast({
+        title: "Error",
+        description: "Error al anular la transferencia",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -151,6 +188,7 @@ const TransferManagement = ({ user }: TransferManagementProps) => {
           currencies={currencies}
           points={points}
           onTransferApproved={handleTransferApproved}
+          onTransferCancelled={handleTransferCancelled}
         />
       </div>
     </div>

@@ -237,4 +237,35 @@ export const transferService = {
       };
     }
   },
+
+  async cancelTransfer(
+    transferId: string,
+    observaciones_rechazo?: string
+  ): Promise<{ success: boolean; error: string | null }> {
+    try {
+      const response = await apiService.post<{
+        success: boolean;
+        message: string;
+      }>(
+        `/transfers/${transferId}/cancel`,
+        { observaciones_rechazo }
+      );
+      if (response && response.success) {
+        return { success: true, error: null };
+      } else {
+        return { success: false, error: response?.message || "Error al cancelar la transferencia" };
+      }
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "response" in error) {
+        const err = error as { response?: { data?: { error?: string } } };
+        if (err.response?.data?.error) {
+          return { success: false, error: err.response.data.error };
+        }
+      }
+      return {
+        success: false,
+        error: "Error de conexión al cancelar transferencia",
+      };
+    }
+  },
 };

@@ -412,6 +412,223 @@ const controller = {
       });
     }
   },
+
+  async cancelTransfer(
+    req: AuthenticatedRequest,
+    res: express.Response
+  ): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({
+          error: "Usuario no autenticado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const { transferId } = req.params;
+      const { observaciones_rechazo = "Anulada por el solicitante" } = req.body;
+
+      const transfer = await prisma.transferencia.findUnique({
+        where: { id: transferId },
+        select: {
+          id: true,
+          numero_recibo: true,
+          origen_id: true,
+          destino_id: true,
+          monto: true,
+          moneda_id: true,
+          via: true,
+          solicitado_por: true,
+          estado: true,
+        },
+      });
+
+      if (!transfer) {
+        res.status(404).json({
+          error: "Transferencia no encontrada",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      if (transfer.estado !== "EN_TRANSITO") {
+        res.status(400).json({
+          error: `No se puede cancelar una transferencia en estado ${transfer.estado}. Solo las transferencias EN_TRANSITO pueden ser anuladas.`,
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      if (transfer.solicitado_por !== req.user.id && req.user.rol !== "ADMIN" && req.user.rol !== "SUPER_USUARIO") {
+        res.status(403).json({
+          error: "No tienes permiso para cancelar esta transferencia. Solo el solicitante o administrador puede hacerlo.",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const monto = Number(transfer.monto);
+      const usuarioId = req.user.id;
+
+      await prisma.$transaction(async (tx) => {
+        await tx.transferencia.update({
+          where: { id: transfer.id },
+          data: {
+            estado: "CANCELADO",
+            fecha_rechazo: new Date(),
+            observaciones_rechazo,
+            rechazado_por: usuarioId,
+          },
+        });
+
+        if (!transfer.origen_id) return;
+
+        const saldo = await tx.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: transfer.origen_id,
+              moneda_id: transfer.moneda_id,
+            },
+          },
+        });
+
+        const saldoAnterior = saldo ? Number(saldo.cantidad) : 0;
+        const billetesAnterior = saldo ? Number(saldo.billetes) : 0;
+        const monedasFisicasAnterior = saldo ? Number(saldo.monedas_fisicas) : 0;
+
+        let billetesDevolucion = 0;
+        let monedasDevolucion = 0;
+
+        if (transfer.via === "EFECTIVO" || transfer.via === "MIXTO") {
+          const movimientoOriginal = await tx.movimientoSaldo.findFirst({
+            where: {
+              referencia_id: transfer.id,
+              tipo_referencia: "TRANSFERENCIA",
+              tipo_movimiento: "TRANSFERENCIA_SALIENTE",
+            },
+            orderBy: { fecha: "asc" },
+          });
+
+          if (movimientoOriginal) {
+            const origenBilletes = await tx.saldo.findUnique({
+              where: {
+                punto_atencion_id_moneda_id: {
+                  punto_atencion_id: transfer.origen_id,
+                  moneda_id: transfer.moneda_id,
+                },
+              },
+            });
+
+            const saldoEnMomento = Number(movimientoOriginal.saldo_anterior);
+            const montoMovimiento = Number(movimientoOriginal.monto);
+
+            if (saldoEnMomento > 0 && montoMovimiento > 0) {
+              const proporcionSacada = montoMovimiento / saldoEnMomento;
+              
+              if (billetesAnterior > 0 || monedasFisicasAnterior > 0) {
+                const totalFisico = billetesAnterior + monedasFisicasAnterior;
+                billetesDevolucion = (billetesAnterior / totalFisico) * monto;
+                monedasDevolucion = (monedasFisicasAnterior / totalFisico) * monto;
+              } else {
+                billetesDevolucion = monto;
+              }
+            } else {
+              const totalFisico = billetesAnterior + monedasFisicasAnterior;
+              if (totalFisico > 0) {
+                const proporcionBilletes = billetesAnterior / totalFisico;
+                billetesDevolucion = monto * proporcionBilletes;
+                monedasDevolucion = monto - billetesDevolucion;
+              } else {
+                billetesDevolucion = monto;
+              }
+            }
+          } else {
+            const totalFisico = billetesAnterior + monedasFisicasAnterior;
+            if (totalFisico > 0) {
+              const proporcionBilletes = billetesAnterior / totalFisico;
+              billetesDevolucion = monto * proporcionBilletes;
+              monedasDevolucion = monto - billetesDevolucion;
+            } else {
+              billetesDevolucion = monto;
+            }
+          }
+        }
+
+        const saldoNuevo = saldoAnterior + monto;
+        const billetesNuevo = billetesAnterior + billetesDevolucion;
+        const monedasNueva = monedasFisicasAnterior + monedasDevolucion;
+
+        await tx.saldo.upsert({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: transfer.origen_id,
+              moneda_id: transfer.moneda_id,
+            },
+          },
+          update: {
+            cantidad: saldoNuevo,
+            billetes: billetesNuevo,
+            monedas_fisicas: monedasNueva,
+            updated_at: new Date(),
+          },
+          create: {
+            punto_atencion_id: transfer.origen_id,
+            moneda_id: transfer.moneda_id,
+            cantidad: saldoNuevo,
+            billetes: billetesNuevo,
+            monedas_fisicas: monedasNueva,
+          },
+        });
+
+        await registrarMovimientoSaldo(
+          {
+            puntoAtencionId: transfer.origen_id,
+            monedaId: transfer.moneda_id,
+            tipoMovimiento: TipoMovimiento.TRANSFERENCIA_DEVOLUCION,
+            monto,
+            saldoAnterior,
+            saldoNuevo,
+            tipoReferencia: TipoReferencia.TRANSFER,
+            referenciaId: transfer.id,
+            descripcion: `Devolución por cancelación de transferencia EN_TRANSITO - ${observaciones_rechazo}`,
+            usuarioId,
+          },
+          tx
+        );
+      });
+
+      logger.info("Transferencia cancelada", {
+        transferId: transfer.id,
+        cancelledBy: req.user.id,
+        amount: monto,
+        origenId: transfer.origen_id,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Transferencia ${transfer.numero_recibo || transfer.id} cancelada exitosamente. Monto devuelto al punto de origen.`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error al cancelar transferencia", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        requestedBy: req.user?.id,
+        transferId: req.params?.transferId,
+      });
+
+      res.status(500).json({
+        error: "Error interno del servidor al cancelar transferencia",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  },
 };
 
 export default controller;

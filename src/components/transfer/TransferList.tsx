@@ -17,6 +17,7 @@ interface TransferListProps {
   currencies: Moneda[];
   points: PuntoAtencion[];
   onTransferApproved: (transferId: string) => void;
+  onTransferCancelled?: (transferId: string) => void;
 }
 
 const TransferList = ({
@@ -26,6 +27,7 @@ const TransferList = ({
   currencies,
   points,
   onTransferApproved,
+  onTransferCancelled,
 }: TransferListProps) => {
   const getCurrencyName = (currencyId: string) => {
     const currency = currencies.find((c) => c.id === currencyId);
@@ -119,6 +121,17 @@ const TransferList = ({
       return;
     }
     onTransferApproved(transferId);
+  };
+
+  const cancelTransfer = (transfer: Transferencia) => {
+    const confirmCancel = window.confirm(
+      `¿Estás seguro de que deseas anular la transferencia ${transfer.numero_recibo || transfer.id}? El monto será devuelto al punto de origen.`
+    );
+    if (!confirmCancel) return;
+
+    if (onTransferCancelled) {
+      onTransferCancelled(transfer.id);
+    }
   };
 
   // ----- FILTRO CORRECTO -----
@@ -235,7 +248,7 @@ const TransferList = ({
                   </div>
                 </div>
 
-                {/* Botones de acción para administradores */}
+                {/* Botones de acción para administradores - Transferencias PENDIENTE */}
                 {transfer.estado === "PENDIENTE" &&
                   (user.rol === "ADMIN" || user.rol === "SUPER_USUARIO") && (
                     <div className="flex gap-2 pt-2 border-t">
@@ -259,6 +272,23 @@ const TransferList = ({
                         className="h-7 text-xs"
                       >
                         Rechazar
+                      </Button>
+                    </div>
+                  )}
+
+                {/* Botón de anulación para transferencias EN_TRANSITO */}
+                {transfer.estado === "EN_TRANSITO" &&
+                  (transfer.solicitado_por === user.id ||
+                    user.rol === "ADMIN" ||
+                    user.rol === "SUPER_USUARIO") && (
+                    <div className="flex gap-2 pt-2 border-t">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => cancelTransfer(transfer)}
+                        className="h-7 text-xs"
+                      >
+                        Anular Transferencia
                       </Button>
                     </div>
                   )}

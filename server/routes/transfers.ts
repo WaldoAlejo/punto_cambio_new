@@ -198,4 +198,12 @@ router.get("/pending-acceptance", authenticateToken, async (req, res) => {
   }
 });
 
+router.post(
+  "/:transferId/cancel",
+  authenticateToken,
+  async (req, res) => {
+    await transferController.cancelTransfer(req as any, res);
+  }
+);
+
 export default router;
