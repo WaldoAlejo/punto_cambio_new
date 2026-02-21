@@ -248,13 +248,13 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
         const si = inicialMap.get(k);
 
         const saldo_inicial = si ? Number(si.cantidad_inicial) : 0;
-        const saldo_actual = reconciliar
-          ? Number(reconciledMap.get(k) ?? 0)
-          : s
-            ? Number(s.cantidad)
-            : 0;
         const billetes = s ? Number(s.billetes) : 0;
         const monedas_fisicas = s ? Number(s.monedas_fisicas) : 0;
+        
+        const saldo_actual = reconciliar
+          ? Number(reconciledMap.get(k) ?? 0)
+          : (billetes + monedas_fisicas);
+        
         const diferencia = Number((saldo_actual - saldo_inicial).toFixed(2));
 
         rows.push({
