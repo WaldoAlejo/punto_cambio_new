@@ -10,6 +10,11 @@ import {
   gyeDayRangeUtcFromYMD,
   gyeParseDateOnly,
 } from "../utils/timezone.js";
+import {
+  timeTrackingService,
+  calcularTiemposJornada,
+  ValidacionJornada,
+} from "../services/timeTrackingService.js";
 
 const router = express.Router();
 
@@ -175,16 +180,27 @@ router.get("/", authenticateToken, async (req, res) => {
       take,
     });
 
-    const formattedSchedules = schedules.map((s) => ({
-      ...s,
-      fecha_inicio: s.fecha_inicio.toISOString(),
-      fecha_almuerzo: s.fecha_almuerzo?.toISOString() || null,
-      fecha_regreso: s.fecha_regreso?.toISOString() || null,
-      fecha_salida: s.fecha_salida?.toISOString() || null,
-    }));
+    // Calcular tiempos para cada jornada
+    const schedulesConTiempos = schedules.map((s) => {
+      const tiempos = calcularTiemposJornada(
+        s.fecha_inicio,
+        s.fecha_almuerzo,
+        s.fecha_regreso,
+        s.fecha_salida,
+        [] // Las salidas espontáneas se cargarán por separado si se necesitan
+      );
+      return {
+        ...s,
+        fecha_inicio: s.fecha_inicio.toISOString(),
+        fecha_almuerzo: s.fecha_almuerzo?.toISOString() || null,
+        fecha_regreso: s.fecha_regreso?.toISOString() || null,
+        fecha_salida: s.fecha_salida?.toISOString() || null,
+        tiempos_calculados: tiempos,
+      };
+    });
 
     logger.info("Horarios obtenidos", {
-      count: formattedSchedules.length,
+      count: schedulesConTiempos.length,
       requestedBy: req.user?.id,
       filters: { fecha, from, to, estados: req.query.estados },
     });
@@ -203,8 +219,11 @@ router.get("/", authenticateToken, async (req, res) => {
         "fecha_almuerzo",
         "fecha_regreso",
         "fecha_salida",
+        "minutos_trabajados",
+        "minutos_almuerzo",
+        "minutos_netos",
       ];
-      const rows = formattedSchedules.map((s) => [
+      const rows = schedulesConTiempos.map((s) => [
         s.id,
         s.usuario_id,
         s.usuario?.nombre || "",
@@ -216,6 +235,9 @@ router.get("/", authenticateToken, async (req, res) => {
         s.fecha_almuerzo || "",
         s.fecha_regreso || "",
         s.fecha_salida || "",
+        s.tiempos_calculados.minutosTrabajados,
+        s.tiempos_calculados.minutosAlmuerzo,
+        s.tiempos_calculados.minutosNetos,
       ]);
       const csv = [header, ...rows]
         .map((cols) =>
@@ -240,7 +262,7 @@ router.get("/", authenticateToken, async (req, res) => {
     }
 
     res.status(200).json({
-      schedules: formattedSchedules,
+      schedules: schedulesConTiempos,
       success: true,
       timestamp: new Date().toISOString(),
     });
@@ -260,7 +282,7 @@ router.get("/", authenticateToken, async (req, res) => {
 });
 
 // ==============================
-// POST /schedules (crear o actualizar jornada)
+// POST /schedules (crear o actualizar jornada) - CON VALIDACIONES
 // ==============================
 router.post(
   "/",
@@ -378,12 +400,81 @@ router.post(
         }
       }
 
-      // === Crear o actualizar jornada del usuario ===
+      // ═══════════════════════════════════════════════════════════════════
+      // VALIDACIONES DE NEGOCIO CON timeTrackingService
+      // ═══════════════════════════════════════════════════════════════════
+
+      let validacion: ValidacionJornada = { valido: true, errores: [], advertencias: [] };
+
+      // Validar inicio de jornada
+      if (fecha_inicio && !existingSchedule) {
+        validacion = await timeTrackingService.validarInicioJornada(
+          usuario_id,
+          punto_atencion_id,
+          new Date(fecha_inicio),
+          ubicacion_inicio
+        );
+
+        if (!validacion.valido && !override) {
+          res.status(400).json({
+            success: false,
+            error: "Validación fallida",
+            detalles: validacion,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
+      // Validar almuerzo
+      if ((fecha_almuerzo || fecha_regreso) && existingSchedule) {
+        const tipo = fecha_almuerzo ? "INICIO" : "REGRESO";
+        validacion = await timeTrackingService.validarAlmuerzo(
+          existingSchedule.id,
+          tipo,
+          new Date(fecha_almuerzo || fecha_regreso!)
+        );
+
+        if (!validacion.valido && !override) {
+          res.status(400).json({
+            success: false,
+            error: "Validación fallida",
+            detalles: validacion,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
+      // Validar fin de jornada
+      if (fecha_salida && existingSchedule) {
+        validacion = await timeTrackingService.validarFinJornada(
+          existingSchedule.id,
+          new Date(fecha_salida)
+        );
+
+        if (!validacion.valido && !override) {
+          res.status(400).json({
+            success: false,
+            error: "Validación fallida",
+            detalles: validacion,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // CREAR O ACTUALIZAR JORNADA
+      // ═══════════════════════════════════════════════════════════════════
       let schedule;
+      const usuarioAuthId = req.user?.id;
 
       if (existingSchedule) {
         // UPDATE estado/fechas de la jornada ya existente del mismo usuario
-        const updateData: Prisma.JornadaUpdateInput = {};
+        const updateData: Prisma.JornadaUpdateInput = {
+          updated_by: usuarioAuthId,
+        };
 
         if (fecha_almuerzo) {
           updateData.fecha_almuerzo = new Date(fecha_almuerzo);
@@ -467,6 +558,9 @@ router.post(
             },
           },
         });
+
+        // Actualizar cálculos de tiempos
+        await timeTrackingService.actualizarTiemposJornada(schedule.id);
       } else {
         // CREATE nueva jornada
         schedule = await prisma.jornada.create({
@@ -479,6 +573,7 @@ router.post(
                 ? (ubicacion_inicio as Prisma.InputJsonValue)
                 : Prisma.DbNull,
             estado: EstadoJornada.ACTIVO,
+            created_by: usuarioAuthId,
           },
           include: {
             usuario: { select: { id: true, nombre: true, username: true } },
@@ -507,6 +602,14 @@ router.post(
         });
       }
 
+      // Recalcular tiempos para la respuesta
+      const tiempos = calcularTiemposJornada(
+        schedule.fecha_inicio,
+        schedule.fecha_almuerzo,
+        schedule.fecha_regreso,
+        schedule.fecha_salida
+      );
+
       logger.info("Jornada procesada", {
         scheduleId: schedule.id,
         userId: usuario_id,
@@ -515,6 +618,7 @@ router.post(
         role: rol,
         overrideUsed: !!override && esPrivilegiado,
         exentoCaja: esExentoDeCaja(rol),
+        tiempos,
       });
 
       res.status(existingSchedule ? 200 : 201).json({
@@ -524,7 +628,9 @@ router.post(
           fecha_almuerzo: schedule.fecha_almuerzo?.toISOString() || null,
           fecha_regreso: schedule.fecha_regreso?.toISOString() || null,
           fecha_salida: schedule.fecha_salida?.toISOString() || null,
+          tiempos_calculados: tiempos,
         },
+        validacion: validacion.advertencias.length > 0 ? validacion : undefined,
         success: true,
         timestamp: new Date().toISOString(),
       });
@@ -600,6 +706,14 @@ router.get("/active", authenticateToken, async (req, res) => {
       return;
     }
 
+    // Calcular tiempos actualizados
+    const tiempos = calcularTiemposJornada(
+      activeSchedule.fecha_inicio,
+      activeSchedule.fecha_almuerzo,
+      activeSchedule.fecha_regreso,
+      activeSchedule.fecha_salida
+    );
+
     res.status(200).json({
       schedule: {
         ...activeSchedule,
@@ -607,6 +721,7 @@ router.get("/active", authenticateToken, async (req, res) => {
         fecha_almuerzo: activeSchedule.fecha_almuerzo?.toISOString() || null,
         fecha_regreso: activeSchedule.fecha_regreso?.toISOString() || null,
         fecha_salida: activeSchedule.fecha_salida?.toISOString() || null,
+        tiempos_calculados: tiempos,
       },
       success: true,
       timestamp: new Date().toISOString(),
@@ -656,15 +771,27 @@ router.get("/started-today", authenticateToken, async (req, res) => {
       orderBy: { fecha_inicio: "desc" },
     });
 
-    res.json({
-      success: true,
-      schedules: schedules.map((s) => ({
+    // Calcular tiempos para cada jornada
+    const schedulesConTiempos = schedules.map((s) => {
+      const tiempos = calcularTiemposJornada(
+        s.fecha_inicio,
+        s.fecha_almuerzo,
+        s.fecha_regreso,
+        s.fecha_salida
+      );
+      return {
         ...s,
         fecha_inicio: s.fecha_inicio.toISOString(),
         fecha_almuerzo: s.fecha_almuerzo?.toISOString() || null,
         fecha_regreso: s.fecha_regreso?.toISOString() || null,
         fecha_salida: s.fecha_salida?.toISOString() || null,
-      })),
+        tiempos_calculados: tiempos,
+      };
+    });
+
+    res.json({
+      success: true,
+      schedules: schedulesConTiempos,
     });
   } catch {
     res.status(500).json({ success: false, error: "Error interno" });
@@ -727,17 +854,126 @@ router.get("/user/:id", authenticateToken, async (req, res) => {
       orderBy: { fecha_inicio: "desc" },
     });
 
-    res.json({
-      success: true,
-      schedules: schedules.map((s) => ({
+    // Calcular tiempos para cada jornada
+    const schedulesConTiempos = schedules.map((s) => {
+      const tiempos = calcularTiemposJornada(
+        s.fecha_inicio,
+        s.fecha_almuerzo,
+        s.fecha_regreso,
+        s.fecha_salida
+      );
+      return {
         ...s,
         fecha_inicio: s.fecha_inicio.toISOString(),
         fecha_almuerzo: s.fecha_almuerzo?.toISOString() || null,
         fecha_regreso: s.fecha_regreso?.toISOString() || null,
         fecha_salida: s.fecha_salida?.toISOString() || null,
-      })),
+        tiempos_calculados: tiempos,
+      };
+    });
+
+    res.json({
+      success: true,
+      schedules: schedulesConTiempos,
     });
   } catch {
+    res.status(500).json({ success: false, error: "Error interno" });
+  }
+});
+
+// ==============================
+// GET /schedules/stats/me - Estadísticas del usuario autenticado
+// ==============================
+router.get("/stats/me", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ success: false, error: "No autenticado" });
+      return;
+    }
+
+    // Período por defecto: últimos 30 días
+    const hasta = new Date();
+    const desde = new Date();
+    desde.setDate(desde.getDate() - 30);
+
+    // Permitir override de fechas
+    if (req.query.from) {
+      desde.setTime(new Date(req.query.from as string).getTime());
+    }
+    if (req.query.to) {
+      hasta.setTime(new Date(req.query.to as string).getTime());
+    }
+
+    const stats = await timeTrackingService.obtenerEstadisticasUsuario(
+      userId,
+      desde,
+      hasta
+    );
+
+    // Obtener resumen de hoy
+    const resumenHoy = await timeTrackingService.obtenerResumenJornadasHoy();
+
+    res.json({
+      success: true,
+      data: {
+        periodo: {
+          desde: desde.toISOString(),
+          hasta: hasta.toISOString(),
+        },
+        estadisticas: stats,
+        resumen_hoy: resumenHoy,
+      },
+    });
+  } catch (error) {
+    logger.error("Error obteniendo estadísticas", { error });
+    res.status(500).json({ success: false, error: "Error interno" });
+  }
+});
+
+// ==============================
+// GET /schedules/stats/:userId - Estadísticas de un usuario específico (admin)
+// ==============================
+router.get("/stats/:userId", authenticateToken, async (req, res) => {
+  try {
+    if (!["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"].includes(req.user?.rol || "")) {
+      res.status(403).json({ success: false, error: "Permisos insuficientes" });
+      return;
+    }
+
+    const userId = req.params.userId;
+
+    // Período por defecto: últimos 30 días
+    const hasta = new Date();
+    const desde = new Date();
+    desde.setDate(desde.getDate() - 30);
+
+    if (req.query.from) {
+      desde.setTime(new Date(req.query.from as string).getTime());
+    }
+    if (req.query.to) {
+      hasta.setTime(new Date(req.query.to as string).getTime());
+    }
+
+    const stats = await timeTrackingService.obtenerEstadisticasUsuario(
+      userId,
+      desde,
+      hasta
+    );
+
+    res.json({
+      success: true,
+      data: {
+        usuario_id: userId,
+        periodo: {
+          desde: desde.toISOString(),
+          hasta: hasta.toISOString(),
+        },
+        estadisticas: stats,
+      },
+    });
+  } catch (error) {
+    logger.error("Error obteniendo estadísticas", { error });
     res.status(500).json({ success: false, error: "Error interno" });
   }
 });
@@ -865,8 +1101,7 @@ router.post(
               ? schedule.punto_atencion_id
               : newPointId,
             motivo_cambio:
-              motivo ||
-              (finalizar ? "CANCELACION_ADMIN" : "REASIGNACION_ADMIN"),
+              motivo || (finalizar ? "CANCELACION_ADMIN" : "REASIGNACION_ADMIN"),
             autorizado_por: adminId,
             tipo_asignacion: "MANUAL",
             observaciones: observaciones || null,
@@ -883,12 +1118,14 @@ router.post(
                 estado: EstadoJornada.CANCELADO,
                 motivo_cambio: motivo || "CANCELACION_ADMIN",
                 usuario_autorizo: adminId,
+                updated_by: adminId,
               }
             : {
                 // Reasignación a otro punto
                 punto_atencion_id: newPointId,
                 motivo_cambio: motivo || "REASIGNACION_ADMIN",
                 usuario_autorizo: adminId,
+                updated_by: adminId,
               },
           include: {
             usuario: { select: { id: true, nombre: true, username: true } },
@@ -915,6 +1152,14 @@ router.post(
         autorizadoPor: adminId,
       });
 
+      // Calcular tiempos actualizados
+      const tiempos = calcularTiemposJornada(
+        updatedSchedule.fecha_inicio,
+        updatedSchedule.fecha_almuerzo,
+        updatedSchedule.fecha_regreso,
+        updatedSchedule.fecha_salida
+      );
+
       res.status(200).json({
         success: true,
         schedule: {
@@ -923,6 +1168,7 @@ router.post(
           fecha_almuerzo: updatedSchedule.fecha_almuerzo?.toISOString() || null,
           fecha_regreso: updatedSchedule.fecha_regreso?.toISOString() || null,
           fecha_salida: updatedSchedule.fecha_salida?.toISOString() || null,
+          tiempos_calculados: tiempos,
         },
         timestamp: new Date().toISOString(),
       });

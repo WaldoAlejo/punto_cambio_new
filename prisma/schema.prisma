@@ -375,12 +375,26 @@ model Jornada {
   motivo_cambio     String?
   usuario_autorizo  String?
   observaciones     String?
+  
+  // Campos de auditoría (nullable para compatibilidad con datos existentes)
+  created_at        DateTime?     @default(now())
+  updated_at        DateTime?     @updatedAt
+  created_by        String?
+  updated_by        String?
+  
+  // Campos calculados (se actualizan vía trigger o servicio)
+  minutos_trabajados   Int?
+  minutos_almuerzo     Int?
+  minutos_salidas      Int?  // Tiempo total en salidas espontáneas
+  
   puntoAtencion     PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
   usuario           Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
 
   @@index([usuario_id])
   @@index([fecha_inicio])
   @@index([punto_atencion_id])
+  @@index([estado])
+  @@index([usuario_id, fecha_inicio])
 }
 
 model SalidaEspontanea {
@@ -406,6 +420,45 @@ model SalidaEspontanea {
   @@index([punto_atencion_id])
   @@index([fecha_salida])
   @@index([estado])
+}
+
+// Configuración de horarios y reglas de validación para jornadas
+model ConfiguracionHorario {
+  id                    String   @id @default(uuid())
+  nombre                String   // Ej: "Horario Estándar", "Horario Flexible"
+  descripcion           String?
+  
+  // Horarios límite
+  hora_entrada_minima   String   // "06:00" - hora más temprana permitida
+  hora_entrada_maxima   String   // "10:00" - hora más tarde permitida para entrada
+  hora_salida_minima    String   // "16:00" - hora más temprana permitida para salida
+  hora_salida_maxima    String   // "20:00" - hora más tarde permitida
+  
+  // Duraciones
+  min_almuerzo_maximo   Int      @default(60)  // minutos máximos de almuerzo
+  min_jornada_minima    Int      @default(480) // 8 horas mínimo
+  min_jornada_maxima    Int      @default(600) // 10 horas máximo
+  
+  // Tolerancias
+  min_tolerancia_llegada Int     @default(10)  // minutos de gracia para llegar
+  min_tolerancia_salida  Int     @default(10)  // minutos de gracia para salir
+  
+  // Geolocalización
+  requiere_ubicacion    Boolean  @default(false)
+  radio_permitido_metros Int     @default(500) // radio máximo del punto de atención
+  
+  // Configuración
+  activo                Boolean  @default(true)
+  es_default            Boolean  @default(false) // Si es la configuración por defecto
+  punto_atencion_id     String?  // Si es null, aplica a todos los puntos
+  
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  created_by            String?
+  
+  @@index([activo])
+  @@index([es_default])
+  @@index([punto_atencion_id])
 }
 
 model CuadreCaja {
@@ -880,4 +933,14 @@ enum EstadoPermiso {
   PENDIENTE
   APROBADO
   RECHAZADO
+}
+
+enum DiaSemana {
+  LUNES
+  MARTES
+  MIERCOLES
+  JUEVES
+  VIERNES
+  SABADO
+  DOMINGO
 }
