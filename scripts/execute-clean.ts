@@ -8,6 +8,21 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+async function deleteIfExists(modelName: string, deleteFn: () => Promise<any>) {
+  try {
+    await deleteFn();
+    console.log(`   ✓ Eliminando ${modelName}...`);
+    return true;
+  } catch (error: any) {
+    // Ignorar errores de tabla no existe
+    if (error.code === 'P2021' || error.meta?.table?.includes(modelName)) {
+      console.log(`   ℹ️  Tabla ${modelName} no existe, ignorando...`);
+      return true;
+    }
+    throw error;
+  }
+}
+
 async function main() {
   console.log("🧹 INICIANDO LIMPIEZA COMPLETA DE BASE DE DATOS");
   console.log("================================================\n");
@@ -56,53 +71,33 @@ async function main() {
 
   try {
     // Eliminar en orden correcto (hojas primero, respetando FKs)
-    console.log("   Eliminando MovimientoContable...");
-    await prisma.movimientoContable.deleteMany({});
-    
-    console.log("   Eliminando MovimientoSaldo...");
-    await prisma.movimientoSaldo.deleteMany({});
-    
-    console.log("   Eliminando HistorialSaldo...");
-    await prisma.historialSaldo.deleteMany({});
-    
-    console.log("   Eliminando CuadreCajaDetalle...");
-    await prisma.cuadreCajaDetalle.deleteMany({});
-    
-    console.log("   Eliminando CuadreCaja...");
-    await prisma.cuadreCaja.deleteMany({});
-    
-    console.log("   Eliminando SaldoInicial...");
-    await prisma.saldoInicial.deleteMany({});
-    
-    console.log("   Eliminando Recibo...");
-    await prisma.recibo.deleteMany({});
-    
-    console.log("   Eliminando ServientregaGuia...");
-    await prisma.servientregaGuia.deleteMany({});
-    
-    console.log("   Eliminando ServientregaDestinatario...");
-    await prisma.servientregaDestinatario.deleteMany({});
-    
-    console.log("   Eliminando ServientregaRemitente...");
-    await prisma.servientregaRemitente.deleteMany({});
-    
-    console.log("   Eliminando ServicioExternoMovimiento...");
-    await prisma.servicioExternoMovimiento.deleteMany({});
-    
-    console.log("   Eliminando ServicioExternoSaldo...");
-    await prisma.servicioExternoSaldo.deleteMany({});
-    
-    console.log("   Eliminando CambioDivisa...");
-    await prisma.cambioDivisa.deleteMany({});
-    
-    console.log("   Eliminando Transferencia...");
-    await prisma.transferencia.deleteMany({});
-    
-    console.log("   Eliminando Saldo...");
-    await prisma.saldo.deleteMany({});
-    
-    console.log("   Eliminando PermissionRequest...");
-    await prisma.permissionRequest.deleteMany({});
+    await deleteIfExists("Movimiento", () => prisma.movimiento.deleteMany({}));
+    await deleteIfExists("MovimientoSaldo", () => prisma.movimientoSaldo.deleteMany({}));
+    await deleteIfExists("HistorialSaldo", () => prisma.historialSaldo.deleteMany({}));
+    await deleteIfExists("DetalleCuadreCaja", () => prisma.detalleCuadreCaja.deleteMany({}));
+    await deleteIfExists("CuadreCaja", () => prisma.cuadreCaja.deleteMany({}));
+    await deleteIfExists("SaldoInicial", () => prisma.saldoInicial.deleteMany({}));
+    await deleteIfExists("Recibo", () => prisma.recibo.deleteMany({}));
+    await deleteIfExists("ServientregaGuia", () => prisma.servientregaGuia.deleteMany({}));
+    await deleteIfExists("ServientregaDestinatario", () => prisma.servientregaDestinatario.deleteMany({}));
+    await deleteIfExists("ServientregaRemitente", () => prisma.servientregaRemitente.deleteMany({}));
+    await deleteIfExists("ServientregaHistorialSaldo", () => prisma.servientregaHistorialSaldo.deleteMany({}));
+    await deleteIfExists("ServientregaSolicitudSaldo", () => prisma.servientregaSolicitudSaldo.deleteMany({}));
+    await deleteIfExists("ServientregaSolicitudAnulacion", () => prisma.servientregaSolicitudAnulacion.deleteMany({}));
+    await deleteIfExists("ServientregaSaldo", () => prisma.servientregaSaldo.deleteMany({}));
+    await deleteIfExists("ServicioExternoMovimiento", () => prisma.servicioExternoMovimiento.deleteMany({}));
+    await deleteIfExists("ServicioExternoSaldo", () => prisma.servicioExternoSaldo.deleteMany({}));
+    await deleteIfExists("ServicioExternoDetalleCierre", () => prisma.servicioExternoDetalleCierre.deleteMany({}));
+    await deleteIfExists("ServicioExternoCierreDiario", () => prisma.servicioExternoCierreDiario.deleteMany({}));
+    await deleteIfExists("ServicioExternoAsignacion", () => prisma.servicioExternoAsignacion.deleteMany({}));
+    await deleteIfExists("CierreDiario", () => prisma.cierreDiario.deleteMany({}));
+    await deleteIfExists("SolicitudSaldo", () => prisma.solicitudSaldo.deleteMany({}));
+    await deleteIfExists("SalidaEspontanea", () => prisma.salidaEspontanea.deleteMany({}));
+    await deleteIfExists("HistorialAsignacionPunto", () => prisma.historialAsignacionPunto.deleteMany({}));
+    await deleteIfExists("Permiso", () => prisma.permiso.deleteMany({}));
+    await deleteIfExists("CambioDivisa", () => prisma.cambioDivisa.deleteMany({}));
+    await deleteIfExists("Transferencia", () => prisma.transferencia.deleteMany({}));
+    await deleteIfExists("Saldo", () => prisma.saldo.deleteMany({}));
 
     console.log("\n   ✅ Limpieza completada exitosamente!\n");
 
