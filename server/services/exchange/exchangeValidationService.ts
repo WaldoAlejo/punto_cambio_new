@@ -7,7 +7,8 @@
  */
 
 import { PrismaClient, Prisma } from "@prisma/client";
-import { round2, MAX_RATE_ALLOWED } from "./exchangeCalculationService.js";
+import { round2 } from "./exchangeCalculationService.js";
+import { MAX_RATE_ALLOWED } from "../../types/index.js";
 
 const prisma = new PrismaClient();
 

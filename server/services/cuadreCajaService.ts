@@ -80,6 +80,8 @@ export async function calcularSaldoApertura(
 ): Promise<number> {
   try {
     // Buscar el último cierre CERRADO antes de la fecha de inicio
+    // NOTA: CierreDiario no tiene tabla de detalles, los detalles se calculan
+    // dinámicamente o se almacenan en el JSON diferencias_reportadas
     const ultimoCierre = await prisma.cierreDiario.findFirst({
       where: {
         punto_atencion_id: puntoAtencionId,
@@ -91,25 +93,27 @@ export async function calcularSaldoApertura(
       orderBy: {
         fecha: "desc",
       },
-      include: {
-        detalles: {
-          where: {
-            moneda_id: monedaId,
-          },
-        },
-      },
     });
 
-    if (ultimoCierre?.detalles?.[0]) {
-      const apertura = Number(ultimoCierre.detalles[0].conteo_fisico);
-      logger.info("Saldo de apertura obtenido del último cierre", {
-        puntoAtencionId,
-        monedaId,
-        fecha: fechaInicio.toISOString(),
-        apertura,
-        cierreId: ultimoCierre.id,
-      });
-      return apertura;
+    // Si hay un cierre anterior con diferencias reportadas, intentar extraer el saldo
+    if (ultimoCierre?.diferencias_reportadas) {
+      const diferencias = ultimoCierre.diferencias_reportadas as Array<{
+        moneda_id?: string;
+        conteo_fisico?: number;
+        saldo_cierre_teorico?: number;
+      }>;
+      const detalleMoneda = diferencias.find((d) => d.moneda_id === monedaId);
+      if (detalleMoneda?.conteo_fisico !== undefined) {
+        const apertura = Number(detalleMoneda.conteo_fisico);
+        logger.info("Saldo de apertura obtenido del último cierre", {
+          puntoAtencionId,
+          monedaId,
+          fecha: fechaInicio.toISOString(),
+          apertura,
+          cierreId: ultimoCierre.id,
+        });
+        return apertura;
+      }
     }
 
     // Si no hay cierre anterior, buscar saldo inicial asignado
@@ -159,7 +163,7 @@ export async function obtenerMovimientosPeriodo(
   fechaFin: Date
 ): Promise<Array<{
   id: string;
-  monto: number;
+  monto: number | Prisma.Decimal;
   tipo_movimiento: string;
   descripcion: string | null;
   fecha: Date;

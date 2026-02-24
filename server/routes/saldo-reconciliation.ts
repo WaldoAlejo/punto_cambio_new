@@ -3,7 +3,7 @@ import { authenticateToken } from "../middleware/auth.js";
 import saldoReconciliationService from "../services/saldoReconciliationService.js";
 import logger from "../utils/logger.js";
 import { z } from "zod";
-import { prisma } from "../lib/prisma.js";
+import { default as prisma } from "../lib/prisma.js";
 
 interface AuthenticatedUser {
   id: string;
@@ -389,7 +389,7 @@ router.get(
 
       const saldoCalculado = await saldoReconciliationService.calcularSaldoReal(
         puntoAtencionId,
-        targetMonedaId
+        targetMonedaId!
       );
 
       // Obtener información del saldo inicial usado
@@ -398,8 +398,8 @@ router.get(
           punto_atencion_id: puntoAtencionId,
           moneda_id: targetMonedaId,
         },
-        orderBy: { fecha_hora: "desc" },
-        select: { id: true, fecha_hora: true },
+        orderBy: { fecha_asignacion: "desc" },
+        select: { id: true, fecha_asignacion: true },
       });
 
       // Contar movimientos desde el saldo inicial
@@ -407,8 +407,8 @@ router.get(
         where: {
           punto_atencion_id: puntoAtencionId,
           moneda_id: targetMonedaId,
-          fecha_hora: {
-            gte: saldoInicial?.fecha_hora ?? new Date("2000-01-01"),
+          fecha: {
+            gte: saldoInicial?.fecha_asignacion ?? new Date("2000-01-01"),
           },
         },
       });
@@ -421,7 +421,7 @@ router.get(
           saldo_calculado: saldoCalculado,
           basado_en: {
             saldo_inicial_id: saldoInicial?.id,
-            fecha_saldo_inicial: saldoInicial?.fecha_hora,
+            fecha_saldo_inicial: saldoInicial?.fecha_asignacion,
             movimientos_contados: movimientosCount,
           },
         },
@@ -492,7 +492,7 @@ router.post(
 
       const resultado = await saldoReconciliationService.reconciliarSaldo(
         puntoAtencionId,
-        targetMonedaId,
+        targetMonedaId!,
         usuarioId
       );
 

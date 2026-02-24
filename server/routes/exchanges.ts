@@ -3319,7 +3319,7 @@ router.get(
         ? new Date(String(desde)) 
         : new Date(fechaHasta.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-      // Buscar cambios del período
+      // Buscar cambios del período con sus monedas
       const cambios = await prisma.cambioDivisa.findMany({
         where: {
           fecha: {
@@ -3327,26 +3327,28 @@ router.get(
             lte: fechaHasta,
           },
         },
-        select: {
-          id: true,
-          fecha: true,
-          numero_recibo: true,
-          monto_origen: true,
-          monto_destino: true,
+        include: {
           monedaOrigen: { select: { codigo: true } },
           monedaDestino: { select: { codigo: true } },
-          _count: {
-            select: {
-              movimientos: true,
-            },
-          },
         },
         orderBy: { fecha: "desc" },
       });
 
-      // Filtrar los que tienen menos de 2 movimientos
-      const cambiosConProblemas = cambios
-        .filter(c => c._count.movimientos < 2)
+      // Contar movimientos para cada cambio y filtrar los que tienen menos de 2
+      const cambiosConMovimientos = await Promise.all(
+        cambios.map(async (c) => {
+          const movimientosCount = await prisma.movimientoSaldo.count({
+            where: {
+              referencia_id: c.id,
+              tipo_referencia: "CAMBIO_DIVISA",
+            },
+          });
+          return { ...c, movimientosCount };
+        })
+      );
+
+      const cambiosConProblemas = cambiosConMovimientos
+        .filter(c => c.movimientosCount < 2)
         .map(c => ({
           id: c.id,
           fecha: c.fecha,
@@ -3355,7 +3357,7 @@ router.get(
           monto_destino: Number(c.monto_destino),
           moneda_origen_codigo: c.monedaOrigen?.codigo || "USD",
           moneda_destino_codigo: c.monedaDestino?.codigo || "USD",
-          movimientos_count: c._count.movimientos,
+          movimientos_count: c.movimientosCount,
         }));
 
       res.status(200).json({

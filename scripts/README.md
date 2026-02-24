@@ -6,8 +6,8 @@ Este directorio contiene scripts de mantenimiento, validación y reparación par
 
 ## 🧹 LIMPIEZA Y MANTENIMIENTO
 
-### `limpieza_completa_preservar_estructura.sql`
-**Descripción:** Script SQL para limpiar completamente la base de datos manteniendo la estructura base.
+### `execute-clean.ts`
+**Descripción:** Script TypeScript para limpiar completamente la base de datos manteniendo la estructura base. Usa Prisma Client para eliminar registros respetando las foreign keys.
 
 **Preserva:**
 - Usuarios (tabla `Usuario`)
@@ -15,24 +15,27 @@ Este directorio contiene scripts de mantenimiento, validación y reparación par
 - Jornadas de trabajo (tabla `Jornada`)
 - Monedas (tabla `Moneda`)
 
-**Elimina:**
-- Cambios de Divisas
-- Transferencias
-- Movimientos de Saldo
-- Saldos actuales
+**Elimina (en orden seguro):**
+- Cambios de Divisas (`CambioDivisa`)
+- Transferencias (`Transferencia`)
+- Movimientos de Saldo (`MovimientoSaldo`)
+- Saldos actuales (`Saldo`)
 - Servicios Externos (movimientos y saldos)
-- Guías de Servientrega
-- Recibos
-- Cierres de Caja
-- Historial de Saldos
+- Guías de Servientrega (`ServientregaGuia`)
+- Recibos (`Recibo`)
+- Cierres de Caja (`CuadreCaja`, `DetalleCuadreCaja`)
+- Historial de Saldos (`HistorialSaldo`)
+- Permisos (`Permiso`)
+- Y más...
 
 **Uso:**
 ```bash
-# Ejecutar en PostgreSQL
-psql -h <host> -U postgres -d punto_cambio -f scripts/limpieza_completa_preservar_estructura.sql
+npx tsx scripts/execute-clean.ts
 ```
 
 ⚠️ **ADVERTENCIA:** Este script es IRREVERSIBLE. Haz un backup antes de ejecutar.
+
+
 
 ---
 
@@ -162,8 +165,8 @@ npx tsx scripts/reconcile-all-points.ts
 
 ### Limpieza de datos de prueba:
 ```bash
-# Ejecutar script SQL de limpieza
-psql -h <host> -U postgres -d punto_cambio -f scripts/limpieza_completa_preservar_estructura.sql
+# Ejecutar limpieza completa
+npx tsx scripts/execute-clean.ts
 ```
 
 ### Mantenimiento mensual:
