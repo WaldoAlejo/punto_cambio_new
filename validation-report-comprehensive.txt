@@ -1,0 +1,1781 @@
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ REPORTE DE VALIDACIÓN DE SALDOS                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+✅ OK OFICINA PRINCIPAL | AUD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | BSD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | JOD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | IDR
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | HKD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | DOP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | PYG
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | PLN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | SRD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | ARS
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | BOB
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | BRL
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | CAD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | CHF
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | CLP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | COP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | EUR
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | GBP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | MXN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | PEN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | USD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | VES
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA PRINCIPAL | TRY
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | AUD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | BSD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | JOD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | IDR
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | HKD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | DOP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | PYG
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | PLN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | SRD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | ARS
+   Inicial: $35000.00 | BD: $35000.00 | Físico: $35000.00 | Calculado: $35000.00
+   Desglose físico: 35000.00 billetes + 0.00 monedas = 35000.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 35000.00
+   ✅ BD cantidad = Calculado: 35000.00
+   ✅ Físico = Calculado: 35000.00
+
+✅ OK PLAZA DEL VALLE | BOB
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | BRL
+   Inicial: $57.00 | BD: $14.00 | Físico: $14.00 | Calculado: $14.00
+   Desglose físico: 14.00 billetes + 0.00 monedas = 14.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 14.00
+   ✅ BD cantidad = Calculado: 14.00
+   ✅ Físico = Calculado: 14.00
+
+✅ OK PLAZA DEL VALLE | CAD
+   Inicial: $2.00 | BD: $32.00 | Físico: $32.00 | Calculado: $32.00
+   Desglose físico: 30.00 billetes + 2.00 monedas = 32.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 32.00
+   ✅ BD cantidad = Calculado: 32.00
+   ✅ Físico = Calculado: 32.00
+
+✅ OK PLAZA DEL VALLE | CHF
+   Inicial: $27.00 | BD: $27.00 | Físico: $27.00 | Calculado: $27.00
+   Desglose físico: 0.00 billetes + 27.00 monedas = 27.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 27.00
+   ✅ BD cantidad = Calculado: 27.00
+   ✅ Físico = Calculado: 27.00
+
+✅ OK PLAZA DEL VALLE | CLP
+   Inicial: $10000.00 | BD: $30000.00 | Físico: $30000.00 | Calculado: $30000.00
+   Desglose físico: 30000.00 billetes + 0.00 monedas = 30000.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 30000.00
+   ✅ BD cantidad = Calculado: 30000.00
+   ✅ Físico = Calculado: 30000.00
+
+✅ OK PLAZA DEL VALLE | COP
+   Inicial: $519900.00 | BD: $416900.00 | Físico: $416900.00 | Calculado: $416900.00
+   Desglose físico: 402000.00 billetes + 14900.00 monedas = 416900.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 416900.00
+   ✅ BD cantidad = Calculado: 416900.00
+   ✅ Físico = Calculado: 416900.00
+
+✅ OK PLAZA DEL VALLE | EUR
+   Inicial: $1456.99 | BD: $1228.75 | Físico: $1228.75 | Calculado: $1228.75
+   Desglose físico: 1135.01 billetes + 93.74 monedas = 1228.75
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 1228.75
+   ✅ BD cantidad = Calculado: 1228.75
+   ✅ Físico = Calculado: 1228.75
+
+✅ OK PLAZA DEL VALLE | GBP
+   Inicial: $105.00 | BD: $170.00 | Físico: $170.00 | Calculado: $170.00
+   Desglose físico: 170.00 billetes + 0.00 monedas = 170.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 170.00
+   ✅ BD cantidad = Calculado: 170.00
+   ✅ Físico = Calculado: 170.00
+
+✅ OK PLAZA DEL VALLE | MXN
+   Inicial: $5800.00 | BD: $5800.00 | Físico: $5800.00 | Calculado: $5800.00
+   Desglose físico: 5800.00 billetes + 0.00 monedas = 5800.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 5800.00
+   ✅ BD cantidad = Calculado: 5800.00
+   ✅ Físico = Calculado: 5800.00
+
+✅ OK PLAZA DEL VALLE | PEN
+   Inicial: $1083.10 | BD: $1083.10 | Físico: $1083.10 | Calculado: $1083.10
+   Desglose físico: 1080.00 billetes + 3.10 monedas = 1083.10
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 1083.10
+   ✅ BD cantidad = Calculado: 1083.10
+   ✅ Físico = Calculado: 1083.10
+
+✅ OK PLAZA DEL VALLE | USD
+   Inicial: $1193.39 | BD: $1400.77 | Físico: $1400.76 | Calculado: $1400.77
+   Desglose físico: 1360.23 billetes + 40.53 monedas = 1400.76
+   Diferencias:
+     • BD vs Físico: +0.01
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: -0.01
+   ✅ BD cantidad = Físico: 1400.77
+   ✅ BD cantidad = Calculado: 1400.77
+   ✅ Físico = Calculado: 1400.76
+
+✅ OK PLAZA DEL VALLE | VES
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK PLAZA DEL VALLE | TRY
+   Inicial: $305.00 | BD: $305.00 | Físico: $305.00 | Calculado: $305.00
+   Desglose físico: 305.00 billetes + 0.00 monedas = 305.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 305.00
+   ✅ BD cantidad = Calculado: 305.00
+   ✅ Físico = Calculado: 305.00
+
+✅ OK AMAZONAS | AUD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | BSD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | JOD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | IDR
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | HKD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | DOP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | PYG
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | PLN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | SRD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | ARS
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | BOB
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | BRL
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | CAD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | CHF
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | CLP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | COP
+   Inicial: $12400.00 | BD: $2400.00 | Físico: $2400.00 | Calculado: $2400.00
+   Desglose físico: 2400.00 billetes + 0.00 monedas = 2400.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 2400.00
+   ✅ BD cantidad = Calculado: 2400.00
+   ✅ Físico = Calculado: 2400.00
+
+✅ OK AMAZONAS | EUR
+   Inicial: $3342.59 | BD: $46.98 | Físico: $46.98 | Calculado: $46.98
+   Desglose físico: 46.74 billetes + 0.24 monedas = 46.98
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 46.98
+   ✅ BD cantidad = Calculado: 46.98
+   ✅ Físico = Calculado: 46.98
+
+✅ OK AMAZONAS | GBP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | MXN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | PEN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | USD
+   Inicial: $129.58 | BD: $26.54 | Físico: $26.54 | Calculado: $26.54
+   Desglose físico: 25.98 billetes + 0.56 monedas = 26.54
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 26.54
+   ✅ BD cantidad = Calculado: 26.54
+   ✅ Físico = Calculado: 26.54
+
+✅ OK AMAZONAS | VES
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK AMAZONAS | TRY
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | AUD
+   Inicial: $0.50 | BD: $0.50 | Físico: $0.50 | Calculado: $0.50
+   Desglose físico: 0.00 billetes + 0.50 monedas = 0.50
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.50
+   ✅ BD cantidad = Calculado: 0.50
+   ✅ Físico = Calculado: 0.50
+
+✅ OK EL BOSQUE | BSD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | JOD
+   Inicial: $1.40 | BD: $1.40 | Físico: $1.40 | Calculado: $1.40
+   Desglose físico: 0.00 billetes + 1.40 monedas = 1.40
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 1.40
+   ✅ BD cantidad = Calculado: 1.40
+   ✅ Físico = Calculado: 1.40
+
+✅ OK EL BOSQUE | IDR
+   Inicial: $2000.00 | BD: $2000.00 | Físico: $2000.00 | Calculado: $2000.00
+   Desglose físico: 2000.00 billetes + 0.00 monedas = 2000.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 2000.00
+   ✅ BD cantidad = Calculado: 2000.00
+   ✅ Físico = Calculado: 2000.00
+
+✅ OK EL BOSQUE | HKD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | DOP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | PYG
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | PLN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | SRD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | ARS
+   Inicial: $422000.00 | BD: $422000.00 | Físico: $422000.00 | Calculado: $422000.00
+   Desglose físico: 422000.00 billetes + 0.00 monedas = 422000.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 422000.00
+   ✅ BD cantidad = Calculado: 422000.00
+   ✅ Físico = Calculado: 422000.00
+
+✅ OK EL BOSQUE | BOB
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | BRL
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | CAD
+   Inicial: $650.00 | BD: $850.00 | Físico: $850.00 | Calculado: $850.00
+   Desglose físico: 850.00 billetes + 0.00 monedas = 850.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 850.00
+   ✅ BD cantidad = Calculado: 850.00
+   ✅ Físico = Calculado: 850.00
+
+✅ OK EL BOSQUE | CHF
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | CLP
+   Inicial: $123000.00 | BD: $173000.00 | Físico: $173000.00 | Calculado: $173000.00
+   Desglose físico: 173000.00 billetes + 0.00 monedas = 173000.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 173000.00
+   ✅ BD cantidad = Calculado: 173000.00
+   ✅ Físico = Calculado: 173000.00
+
+✅ OK EL BOSQUE | COP
+   Inicial: $105350.00 | BD: $354350.01 | Físico: $354350.01 | Calculado: $354350.01
+   Desglose físico: 349000.01 billetes + 5350.00 monedas = 354350.01
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 354350.01
+   ✅ BD cantidad = Calculado: 354350.01
+   ✅ Físico = Calculado: 354350.01
+
+✅ OK EL BOSQUE | EUR
+   Inicial: $3026.41 | BD: $1221.09 | Físico: $1221.09 | Calculado: $1221.09
+   Desglose físico: 1202.79 billetes + 18.30 monedas = 1221.09
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 1221.09
+   ✅ BD cantidad = Calculado: 1221.09
+   ✅ Físico = Calculado: 1221.09
+
+✅ OK EL BOSQUE | GBP
+   Inicial: $125.00 | BD: $120.00 | Físico: $120.00 | Calculado: $120.00
+   Desglose físico: 120.00 billetes + 0.00 monedas = 120.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 120.00
+   ✅ BD cantidad = Calculado: 120.00
+   ✅ Físico = Calculado: 120.00
+
+✅ OK EL BOSQUE | MXN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | PEN
+   Inicial: $20.10 | BD: $40.10 | Físico: $40.10 | Calculado: $40.10
+   Desglose físico: 40.00 billetes + 0.10 monedas = 40.10
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 40.10
+   ✅ BD cantidad = Calculado: 40.10
+   ✅ Físico = Calculado: 40.10
+
+✅ OK EL BOSQUE | USD
+   Inicial: $4917.20 | BD: $11.33 | Físico: $11.32 | Calculado: $11.33
+   Desglose físico: -20.00 billetes + 31.32 monedas = 11.32
+   Diferencias:
+     • BD vs Físico: +0.01
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: -0.01
+   ✅ BD cantidad = Físico: 11.33
+   ✅ BD cantidad = Calculado: 11.33
+   ✅ Físico = Calculado: 11.32
+
+✅ OK EL BOSQUE | VES
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK EL BOSQUE | TRY
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | AUD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | BSD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | JOD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | IDR
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | HKD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | DOP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | PYG
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | PLN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | SRD
+   Inicial: $0.00 | BD: $205.00 | Físico: $205.00 | Calculado: $205.00
+   Desglose físico: 205.00 billetes + 0.00 monedas = 205.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 205.00
+   ✅ BD cantidad = Calculado: 205.00
+   ✅ Físico = Calculado: 205.00
+
+✅ OK SCALA | ARS
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | BOB
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | BRL
+   Inicial: $50.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | CAD
+   Inicial: $2.05 | BD: $2.05 | Físico: $2.05 | Calculado: $2.05
+   Desglose físico: 2.05 billetes + 0.00 monedas = 2.05
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 2.05
+   ✅ BD cantidad = Calculado: 2.05
+   ✅ Físico = Calculado: 2.05
+
+✅ OK SCALA | CHF
+   Inicial: $21.00 | BD: $1.00 | Físico: $1.00 | Calculado: $1.00
+   Desglose físico: 1.00 billetes + 0.00 monedas = 1.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 1.00
+   ✅ BD cantidad = Calculado: 1.00
+   ✅ Físico = Calculado: 1.00
+
+✅ OK SCALA | CLP
+   Inicial: $0.00 | BD: $3000.00 | Físico: $3000.00 | Calculado: $3000.00
+   Desglose físico: 0.00 billetes + 3000.00 monedas = 3000.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 3000.00
+   ✅ BD cantidad = Calculado: 3000.00
+   ✅ Físico = Calculado: 3000.00
+
+✅ OK SCALA | COP
+   Inicial: $1082800.00 | BD: $453800.00 | Físico: $453800.00 | Calculado: $453800.00
+   Desglose físico: 439000.00 billetes + 14800.00 monedas = 453800.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 453800.00
+   ✅ BD cantidad = Calculado: 453800.00
+   ✅ Físico = Calculado: 453800.00
+
+✅ OK SCALA | EUR
+   Inicial: $1001.13 | BD: $1622.84 | Físico: $1622.84 | Calculado: $1622.84
+   Desglose físico: 1621.05 billetes + 1.79 monedas = 1622.84
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 1622.84
+   ✅ BD cantidad = Calculado: 1622.84
+   ✅ Físico = Calculado: 1622.84
+
+✅ OK SCALA | GBP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | MXN
+   Inicial: $1079.00 | BD: $159.00 | Físico: $159.00 | Calculado: $159.00
+   Desglose físico: 155.55 billetes + 3.45 monedas = 159.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 159.00
+   ✅ BD cantidad = Calculado: 159.00
+   ✅ Físico = Calculado: 159.00
+
+✅ OK SCALA | PEN
+   Inicial: $19.41 | BD: $10.91 | Físico: $10.91 | Calculado: $10.91
+   Desglose físico: 7.20 billetes + 3.71 monedas = 10.91
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 10.91
+   ✅ BD cantidad = Calculado: 10.91
+   ✅ Físico = Calculado: 10.91
+
+✅ OK SCALA | USD
+   Inicial: $6492.17 | BD: $2.16 | Físico: $2.17 | Calculado: $2.16
+   Desglose físico: 0.25 billetes + 1.92 monedas = 2.17
+   Diferencias:
+     • BD vs Físico: -0.01
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: +0.01
+   ✅ BD cantidad = Físico: 2.16
+   ✅ BD cantidad = Calculado: 2.16
+   ✅ Físico = Calculado: 2.17
+
+✅ OK SCALA | VES
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK SCALA | TRY
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA ROYAL PACIFIC | AUD
+   Inicial: $968.10 | BD: $968.10 | Físico: $968.10 | Calculado: $968.10
+   Desglose físico: 920.00 billetes + 48.10 monedas = 968.10
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 968.10
+   ✅ BD cantidad = Calculado: 968.10
+   ✅ Físico = Calculado: 968.10
+
+✅ OK OFICINA ROYAL PACIFIC | BSD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA ROYAL PACIFIC | JOD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA ROYAL PACIFIC | IDR
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA ROYAL PACIFIC | HKD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA ROYAL PACIFIC | DOP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA ROYAL PACIFIC | PYG
+   Inicial: $2658150.00 | BD: $2658150.00 | Físico: $2658150.00 | Calculado: $2658150.00
+   Desglose físico: 2657000.00 billetes + 1150.00 monedas = 2658150.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 2658150.00
+   ✅ BD cantidad = Calculado: 2658150.00
+   ✅ Físico = Calculado: 2658150.00
+
+✅ OK OFICINA ROYAL PACIFIC | PLN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA ROYAL PACIFIC | SRD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA ROYAL PACIFIC | ARS
+   Inicial: $305068.75 | BD: $257068.75 | Físico: $257068.75 | Calculado: $257068.75
+   Desglose físico: 257060.00 billetes + 8.75 monedas = 257068.75
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 257068.75
+   ✅ BD cantidad = Calculado: 257068.75
+   ✅ Físico = Calculado: 257068.75
+
+✅ OK OFICINA ROYAL PACIFIC | BOB
+   Inicial: $4700.00 | BD: $4200.00 | Físico: $4200.00 | Calculado: $4200.00
+   Desglose físico: 4200.00 billetes + 0.00 monedas = 4200.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 4200.00
+   ✅ BD cantidad = Calculado: 4200.00
+   ✅ Físico = Calculado: 4200.00
+
+✅ OK OFICINA ROYAL PACIFIC | BRL
+   Inicial: $27.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA ROYAL PACIFIC | CAD
+   Inicial: $1051.32 | BD: $2511.32 | Físico: $2511.32 | Calculado: $2511.32
+   Desglose físico: 2340.00 billetes + 171.32 monedas = 2511.32
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 2511.32
+   ✅ BD cantidad = Calculado: 2511.32
+   ✅ Físico = Calculado: 2511.32
+
+✅ OK OFICINA ROYAL PACIFIC | CHF
+   Inicial: $49.06 | BD: $69.06 | Físico: $69.06 | Calculado: $69.06
+   Desglose físico: 30.00 billetes + 39.06 monedas = 69.06
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 69.06
+   ✅ BD cantidad = Calculado: 69.06
+   ✅ Físico = Calculado: 69.06
+
+✅ OK OFICINA ROYAL PACIFIC | CLP
+   Inicial: $535830.00 | BD: $535830.00 | Físico: $535830.00 | Calculado: $535830.00
+   Desglose físico: 509000.00 billetes + 26830.00 monedas = 535830.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 535830.00
+   ✅ BD cantidad = Calculado: 535830.00
+   ✅ Físico = Calculado: 535830.00
+
+✅ OK OFICINA ROYAL PACIFIC | COP
+   Inicial: $6957540.10 | BD: $588765.10 | Físico: $588765.10 | Calculado: $588765.10
+   Desglose físico: 587290.26 billetes + 1474.84 monedas = 588765.10
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 588765.10
+   ✅ BD cantidad = Calculado: 588765.10
+   ✅ Físico = Calculado: 588765.10
+
+✅ OK OFICINA ROYAL PACIFIC | EUR
+   Inicial: $8386.55 | BD: $3763.60 | Físico: $3763.60 | Calculado: $3763.60
+   Desglose físico: 3763.60 billetes + 0.00 monedas = 3763.60
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 3763.60
+   ✅ BD cantidad = Calculado: 3763.60
+   ✅ Físico = Calculado: 3763.60
+
+✅ OK OFICINA ROYAL PACIFIC | GBP
+   Inicial: $672.24 | BD: $752.24 | Físico: $752.24 | Calculado: $752.24
+   Desglose físico: 735.00 billetes + 17.24 monedas = 752.24
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 752.24
+   ✅ BD cantidad = Calculado: 752.24
+   ✅ Físico = Calculado: 752.24
+
+✅ OK OFICINA ROYAL PACIFIC | MXN
+   Inicial: $7050.70 | BD: $0.70 | Físico: $0.70 | Calculado: $0.70
+   Desglose físico: 0.00 billetes + 0.70 monedas = 0.70
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.70
+   ✅ BD cantidad = Calculado: 0.70
+   ✅ Físico = Calculado: 0.70
+
+✅ OK OFICINA ROYAL PACIFIC | PEN
+   Inicial: $4173.13 | BD: $4583.63 | Físico: $4583.63 | Calculado: $4583.63
+   Desglose físico: 4470.00 billetes + 113.63 monedas = 4583.63
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 4583.63
+   ✅ BD cantidad = Calculado: 4583.63
+   ✅ Físico = Calculado: 4583.63
+
+✅ OK OFICINA ROYAL PACIFIC | USD
+   Inicial: $9277.01 | BD: $1026.63 | Físico: $1026.63 | Calculado: $1026.63
+   Desglose físico: 1022.66 billetes + 3.97 monedas = 1026.63
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 1026.63
+   ✅ BD cantidad = Calculado: 1026.63
+   ✅ Físico = Calculado: 1026.63
+
+✅ OK OFICINA ROYAL PACIFIC | VES
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK OFICINA ROYAL PACIFIC | TRY
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | AUD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | BSD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | JOD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | IDR
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | HKD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | DOP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | PYG
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | PLN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | SRD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | ARS
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | BOB
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | BRL
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | CAD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | CHF
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | CLP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | COP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | EUR
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | GBP
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | MXN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | PEN
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | USD
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | VES
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+✅ OK LUIS AVILES | TRY
+   Inicial: $0.00 | BD: $0.00 | Físico: $0.00 | Calculado: $0.00
+   Desglose físico: 0.00 billetes + 0.00 monedas = 0.00
+   Diferencias:
+     • BD vs Físico: 0.00
+     • BD vs Calculado: 0.00
+     • Físico vs Calculado: 0.00
+   ✅ BD cantidad = Físico: 0.00
+   ✅ BD cantidad = Calculado: 0.00
+   ✅ Físico = Calculado: 0.00
+
+
+=== RESUMEN ===
+✅ OK: 161
+⚠️ ADVERTENCIAS: 0
+❌ ERRORES: 0
+TOTAL: 161

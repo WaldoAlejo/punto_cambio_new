@@ -212,7 +212,8 @@ router.post("/generar-guia", async (req, res) => {
 
     // ✅ IMPORTANTE: Capturar punto_atencion_id y valor_total ANTES de procesar payloads
     // Esto asegura que se preserven independientemente del formato del request
-    const punto_atencion_id_captado = req.body?.punto_atencion_id || undefined;
+    // Si no viene en el body, usar el del usuario autenticado (fallback de seguridad)
+    const punto_atencion_id_captado = req.body?.punto_atencion_id || req.user?.punto_atencion_id || undefined;
     const costoEnvioPrecalculado = Number(req.body?.valor_total ?? 0) || 0;
 
     // Capturar desglose de pago (Efectivo/Banco/Mixto)
@@ -521,12 +522,23 @@ router.post("/generar-guia", async (req, res) => {
           const puntoInfo = await prisma.puntoAtencion.findUnique({
             where: { id: punto_atencion_id_captado },
             select: {
+              nombre: true,
               servientrega_agencia_codigo: true,
               servientrega_agencia_nombre: true,
+              servientrega_alianza: true,
               servientrega_oficina_alianza: true,
             },
           });
           if (puntoInfo) {
+            // ✅ CORRECCIÓN CRÍTICA: Actualizar alianza y alianza_oficina con valores del punto
+            // Estos campos determinan qué información aparece en el PDF de la guía
+            if (puntoInfo.servientrega_alianza && puntoInfo.servientrega_alianza.trim() !== "") {
+              payload.alianza = puntoInfo.servientrega_alianza;
+            }
+            if (puntoInfo.servientrega_oficina_alianza && puntoInfo.servientrega_oficina_alianza.trim() !== "") {
+              payload.alianza_oficina = puntoInfo.servientrega_oficina_alianza;
+            }
+            
             if (puntoInfo.servientrega_agencia_nombre && puntoInfo.servientrega_agencia_nombre.trim() !== "") {
               payload = { ...payload, nombre_agencia: puntoInfo.servientrega_agencia_nombre };
             } else if (puntoInfo.servientrega_oficina_alianza) {
@@ -537,8 +549,13 @@ router.post("/generar-guia", async (req, res) => {
             }
             console.log("🔧 [shipping] Se ajustó payload formateado con agencia del punto:", {
               punto_atencion_id_captado,
+              punto_nombre: puntoInfo.nombre,
+              servientrega_alianza: puntoInfo.servientrega_alianza,
+              servientrega_oficina_alianza: puntoInfo.servientrega_oficina_alianza,
               servientrega_agencia_nombre: puntoInfo.servientrega_agencia_nombre,
               servientrega_agencia_codigo: puntoInfo.servientrega_agencia_codigo,
+              payload_alianza: payload.alianza,
+              payload_alianza_oficina: payload.alianza_oficina,
             });
           }
         } catch (e) {

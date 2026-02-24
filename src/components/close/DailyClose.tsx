@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Table,
   TableBody,
@@ -33,6 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, CuadreCaja } from "../../types";
+import { AlertCircle, CheckCircle } from "lucide-react";
 // import ExternalServicesClose from "./ExternalServicesClose"; // Ya no se requiere cierre separado
 import { contabilidadDiariaService } from "../../services/contabilidadDiariaService";
 import cuatreCajaService from "@/services/cuatreCajaService";
@@ -383,6 +385,41 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const calculateUserBanks = (monedaId: string) => {
     const banks = parseFloat(userAdjustments[monedaId]?.banks || "0");
     return banks;
+  };
+
+  // ✅ NUEVA FUNCIÓN: Validar que el desglose cuadre con el conteo total
+  const validateBreakdown = (monedaId: string): { valid: boolean; breakdownTotal: number; difference: number } => {
+    const bills = parseFloat(userAdjustments[monedaId]?.bills || "0");
+    const coins = parseFloat(userAdjustments[monedaId]?.coins || "0");
+    const breakdownTotal = bills + coins;
+    
+    // El conteo físico es lo que el operador declara tener
+    // Se compara contra el saldo_cierre teórico
+    const detalle = cuadreData?.detalles?.find(d => d.moneda_id === monedaId);
+    if (!detalle) return { valid: true, breakdownTotal, difference: 0 };
+    
+    // Permitir pequeña diferencia por redondeo
+    const difference = Math.abs(breakdownTotal - detalle.saldo_cierre);
+    const tolerance = detalle.codigo === "USD" ? 1.0 : 0.01;
+    
+    return { 
+      valid: difference <= tolerance, 
+      breakdownTotal, 
+      difference 
+    };
+  };
+
+  // ✅ NUEVA FUNCIÓN: Verificar si el desglose interno es consistente
+  const isBreakdownConsistent = (monedaId: string): boolean => {
+    const bills = parseFloat(userAdjustments[monedaId]?.bills || "0");
+    const coins = parseFloat(userAdjustments[monedaId]?.coins || "0");
+    const total = bills + coins;
+    
+    // Si no hay valores, es consistente
+    if (bills === 0 && coins === 0) return true;
+    
+    // El desglose es consistente si ambos valores son >= 0
+    return bills >= 0 && coins >= 0 && total >= 0;
   };
 
   // Permitir hasta ±1.00 USD de ajuste; otras divisas deben cuadrar (±0.01)
@@ -1348,17 +1385,64 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                                 </h4>
                                 <p className="text-sm text-yellow-700">
                                   Cuente físicamente el dinero que tiene en caja
-                                  y registre los valores. Debe tener exactamente{" "}
+                                  y registre los valores. La suma de billetes + monedas 
+                                  debe ser exactamente{" "}
                                   <strong>
                                     {detalle.simbolo}
                                     {detalle.saldo_cierre.toFixed(2)}
-                                  </strong>{" "}
-                                  en total.
+                                  </strong>.
                                 </p>
                               </div>
                             </div>
                           </CardContent>
                         </Card>
+
+                        {/* ✅ Alerta de validación de desglose */}
+                        {(() => {
+                          const breakdown = validateBreakdown(detalle.moneda_id);
+                          const consistent = isBreakdownConsistent(detalle.moneda_id);
+                          
+                          if (!consistent) {
+                            return (
+                              <Alert variant="destructive" className="bg-red-50 border-red-300">
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertTitle className="text-red-800">Valores inválidos</AlertTitle>
+                                <AlertDescription className="text-red-700">
+                                  Los valores de billetes y monedas deben ser números positivos.
+                                </AlertDescription>
+                              </Alert>
+                            );
+                          }
+                          
+                          if (!breakdown.valid && breakdown.difference > 0.01) {
+                            return (
+                              <Alert className="bg-amber-50 border-amber-300">
+                                <AlertCircle className="h-4 w-4 text-amber-600" />
+                                <AlertTitle className="text-amber-800">Desglose inconsistente</AlertTitle>
+                                <AlertDescription className="text-amber-700">
+                                  Billetes + Monedas = {detalle.simbolo}{breakdown.breakdownTotal.toFixed(2)}, 
+                                  pero el saldo esperado es {detalle.simbolo}{detalle.saldo_cierre.toFixed(2)}. 
+                                  Diferencia: {detalle.simbolo}{breakdown.difference.toFixed(2)}.
+                                  Ajuste los valores para que cuadren.
+                                </AlertDescription>
+                              </Alert>
+                            );
+                          }
+                          
+                          if (breakdown.valid && breakdown.breakdownTotal > 0) {
+                            return (
+                              <Alert className="bg-green-50 border-green-300">
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <AlertTitle className="text-green-800">Desglose correcto</AlertTitle>
+                                <AlertDescription className="text-green-700">
+                                  Billetes + Monedas = {detalle.simbolo}{breakdown.breakdownTotal.toFixed(2)} ✓
+                                </AlertDescription>
+                              </Alert>
+                            );
+                          }
+                          
+                          return null;
+                        })()}
 
                         {/* Conteo físico del usuario */}
                         <Card className="border-gray-300">

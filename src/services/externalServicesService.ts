@@ -101,6 +101,43 @@ export async function crearMovimientoServicioExterno(
   return data;
 }
 
+export interface ValidarMovimientoInput {
+  servicio: ServicioExterno;
+  tipo_movimiento: TipoMovimiento;
+  monto: number;
+}
+
+export interface ValidarMovimientoResponse {
+  success: boolean;
+  validacion?: {
+    servicio: ServicioExterno;
+    tipo_movimiento: TipoMovimiento;
+    monto: number;
+    mensajeAyuda: string;
+    descripcionAccion: string;
+    saldo?: {
+      saldoSuficiente: boolean;
+      saldoCaja: number;
+      saldoBancos: number;
+      saldoTotal: number;
+      montoRequerido: number;
+      deficit: number;
+    };
+  };
+  message?: string;
+  error?: string;
+}
+
+export async function validarMovimientoServicioExterno(
+  payload: ValidarMovimientoInput
+): Promise<ValidarMovimientoResponse> {
+  const { data } = await axiosInstance.post(
+    "/servicios-externos/validar",
+    payload
+  );
+  return data;
+}
+
 export interface ListarMovimientosQuery {
   servicio?: ServicioExterno;
   tipo_movimiento?: TipoMovimiento;

@@ -1,0 +1,62 @@
+
+╔════════════════════════════════════════════════════════════╗
+║         VALIDACIÓN DE SALDOS - REPORTE COMPLETO          ║
+╚════════════════════════════════════════════════════════════╝
+
+Puntos encontrados: 7
+Monedas encontradas: 23
+
+✅ AMAZONAS             | COP | $2400.00 OK
+✅ AMAZONAS             | EUR | $46.98 OK
+✅ AMAZONAS             | USD | $26.54 OK
+✅ EL BOSQUE            | ARS | $422000.00 OK
+✅ EL BOSQUE            | AUD | $0.50 OK
+✅ EL BOSQUE            | CAD | $850.00 OK
+✅ EL BOSQUE            | CLP | $173000.00 OK
+✅ EL BOSQUE            | COP | $354350.01 OK
+✅ EL BOSQUE            | EUR | $1221.09 OK
+✅ EL BOSQUE            | GBP | $120.00 OK
+✅ EL BOSQUE            | IDR | $2000.00 OK
+✅ EL BOSQUE            | JOD | $1.40 OK
+✅ EL BOSQUE            | PEN | $40.10 OK
+✅ EL BOSQUE            | USD | $11.33 OK
+✅ OFICINA ROYAL PACIFIC | ARS | $257068.75 OK
+✅ OFICINA ROYAL PACIFIC | AUD | $968.10 OK
+✅ OFICINA ROYAL PACIFIC | BOB | $4200.00 OK
+✅ OFICINA ROYAL PACIFIC | CAD | $2511.32 OK
+✅ OFICINA ROYAL PACIFIC | CHF | $69.06 OK
+✅ OFICINA ROYAL PACIFIC | CLP | $535830.00 OK
+✅ OFICINA ROYAL PACIFIC | COP | $588765.10 OK
+✅ OFICINA ROYAL PACIFIC | EUR | $3763.60 OK
+✅ OFICINA ROYAL PACIFIC | GBP | $752.24 OK
+✅ OFICINA ROYAL PACIFIC | MXN | $0.70 OK
+✅ OFICINA ROYAL PACIFIC | PEN | $4583.63 OK
+✅ OFICINA ROYAL PACIFIC | PYG | $2658150.00 OK
+✅ OFICINA ROYAL PACIFIC | USD | $1026.63 OK
+✅ PLAZA DEL VALLE      | ARS | $35000.00 OK
+✅ PLAZA DEL VALLE      | BRL | $14.00 OK
+✅ PLAZA DEL VALLE      | CAD | $32.00 OK
+✅ PLAZA DEL VALLE      | CHF | $27.00 OK
+✅ PLAZA DEL VALLE      | CLP | $30000.00 OK
+✅ PLAZA DEL VALLE      | COP | $416900.00 OK
+✅ PLAZA DEL VALLE      | EUR | $1228.75 OK
+✅ PLAZA DEL VALLE      | GBP | $170.00 OK
+✅ PLAZA DEL VALLE      | MXN | $5800.00 OK
+✅ PLAZA DEL VALLE      | PEN | $1083.10 OK
+✅ PLAZA DEL VALLE      | TRY | $305.00 OK
+✅ PLAZA DEL VALLE      | USD | $1400.77 OK
+✅ SCALA                | CAD | $2.05 OK
+✅ SCALA                | CHF | $1.00 OK
+✅ SCALA                | CLP | $3000.00 OK
+✅ SCALA                | COP | $453800.00 OK
+✅ SCALA                | EUR | $1622.84 OK
+✅ SCALA                | MXN | $159.00 OK
+✅ SCALA                | PEN | $10.91 OK
+✅ SCALA                | SRD | $205.00 OK
+✅ SCALA                | USD | $2.16 OK
+
+════════════════════════════════════════════════════════════
+RESUMEN: 48 OK | 0 ERRORES
+════════════════════════════════════════════════════════════
+
+✅ TODOS LOS SALDOS SON CONSISTENTES

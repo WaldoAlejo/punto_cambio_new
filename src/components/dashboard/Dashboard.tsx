@@ -97,6 +97,9 @@ const CierresDiariosResumen = React.lazy(
 const ContabilidadPorPunto = React.lazy(
   () => import("../admin/ContabilidadPorPunto")
 );
+const SystemHealthDashboard = React.lazy(
+  () => import("../admin/SystemHealthDashboard")
+);
 
 /** Utils */
 const STORAGE_KEY_VIEW = "pc_active_view";
@@ -129,6 +132,7 @@ const VALID_VIEWS = new Set<string>([
   "servicios-externos",
   "servicios-externos-admin",
   "cierres-diarios",
+  "system-health",
 ]);
 
 function getInitialView(
@@ -425,6 +429,11 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isAdmin)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
         return <CierresDiariosResumen />;
+
+      case "system-health":
+        if (!isAdmin)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <SystemHealthDashboard />;
 
       default:
         if (isOperador) {

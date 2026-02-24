@@ -3303,4 +3303,85 @@ router.delete(
   }
 );
 
+/* ========================= Auditoría: Cambios sin movimientos completos ========================= */
+
+router.get(
+  "/audit/missing-movements",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+    try {
+      const { desde, hasta } = req.query;
+      
+      // Fechas default: últimos 7 días
+      const fechaHasta = hasta ? new Date(String(hasta)) : new Date();
+      const fechaDesde = desde 
+        ? new Date(String(desde)) 
+        : new Date(fechaHasta.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      // Buscar cambios del período
+      const cambios = await prisma.cambioDivisa.findMany({
+        where: {
+          fecha: {
+            gte: fechaDesde,
+            lte: fechaHasta,
+          },
+        },
+        select: {
+          id: true,
+          fecha: true,
+          numero_recibo: true,
+          monto_origen: true,
+          monto_destino: true,
+          monedaOrigen: { select: { codigo: true } },
+          monedaDestino: { select: { codigo: true } },
+          _count: {
+            select: {
+              movimientos: true,
+            },
+          },
+        },
+        orderBy: { fecha: "desc" },
+      });
+
+      // Filtrar los que tienen menos de 2 movimientos
+      const cambiosConProblemas = cambios
+        .filter(c => c._count.movimientos < 2)
+        .map(c => ({
+          id: c.id,
+          fecha: c.fecha,
+          numero_recibo: c.numero_recibo,
+          monto_origen: Number(c.monto_origen),
+          monto_destino: Number(c.monto_destino),
+          moneda_origen_codigo: c.monedaOrigen?.codigo || "USD",
+          moneda_destino_codigo: c.monedaDestino?.codigo || "USD",
+          movimientos_count: c._count.movimientos,
+        }));
+
+      res.status(200).json({
+        success: true,
+        data: {
+          periodo: {
+            desde: fechaDesde.toISOString(),
+            hasta: fechaHasta.toISOString(),
+          },
+          total_cambios: cambios.length,
+          cambios_con_problemas: cambiosConProblemas.length,
+          cambios: cambiosConProblemas,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error en auditoría de cambios", {
+        error: error instanceof Error ? error.message : "Unknown",
+      });
+      res.status(500).json({
+        success: false,
+        error: "Error interno al realizar auditoría",
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
 export default router;

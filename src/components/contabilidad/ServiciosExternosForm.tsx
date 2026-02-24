@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,6 +14,16 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import {
   crearMovimientoServicioExterno,
@@ -26,19 +36,59 @@ const SERVICIOS: {
   value: ServicioExterno;
   label: string;
   isInsumo?: boolean;
+  requiereConfirmacion?: boolean;
 }[] = [
-  { value: "YAGANASTE", label: "YaGanaste" },
-  { value: "BANCO_GUAYAQUIL", label: "Banco Guayaquil" },
-  { value: "WESTERN", label: "Western Union" },
-  { value: "PRODUBANCO", label: "Produbanco" },
-  { value: "BANCO_PACIFICO", label: "Banco del Pacífico" },
-  { value: "SERVIENTREGA", label: "Servientrega" },
+  { value: "YAGANASTE", label: "YaGanaste", requiereConfirmacion: true },
+  { value: "BANCO_GUAYAQUIL", label: "Banco Guayaquil", requiereConfirmacion: true },
+  { value: "WESTERN", label: "Western Union", requiereConfirmacion: true },
+  { value: "PRODUBANCO", label: "Produbanco", requiereConfirmacion: true },
+  { value: "BANCO_PACIFICO", label: "Banco del Pacífico", requiereConfirmacion: true },
+  { value: "SERVIENTREGA", label: "Servientrega", requiereConfirmacion: true },
   // Insumos (EGRESO)
   { value: "INSUMOS_OFICINA", label: "Insumos de oficina", isInsumo: true },
   { value: "INSUMOS_LIMPIEZA", label: "Insumos de limpieza", isInsumo: true },
   // OTROS ahora NO es Insumo (permite INGRESO/EGRESO)
   { value: "OTROS", label: "Otros" },
 ];
+
+const MENSAJES_AYUDA: Record<ServicioExterno, { INGRESO: string; EGRESO: string }> = {
+  WESTERN: {
+    INGRESO: "El cliente ENVÍA dinero por Western Union (paga comisión). El dinero ENTRA al punto de cambio.",
+    EGRESO: "El cliente RECIBE/RETIRA dinero de Western Union. El dinero SALE del punto de cambio.",
+  },
+  YAGANASTE: {
+    INGRESO: "El cliente realiza un depósito o pago a través de YaGanaste. El dinero ENTRA al punto de cambio.",
+    EGRESO: "El cliente realiza un retiro de YaGanaste. El dinero SALE del punto de cambio.",
+  },
+  BANCO_GUAYAQUIL: {
+    INGRESO: "Transacción de ingreso vía Banco Guayaquil. El dinero ENTRA al punto de cambio.",
+    EGRESO: "Transacción de egreso vía Banco Guayaquil. El dinero SALE del punto de cambio.",
+  },
+  PRODUBANCO: {
+    INGRESO: "Transacción de ingreso vía Produbanco. El dinero ENTRA al punto de cambio.",
+    EGRESO: "Transacción de egreso vía Produbanco. El dinero SALE del punto de cambio.",
+  },
+  BANCO_PACIFICO: {
+    INGRESO: "Transacción de ingreso vía Banco del Pacífico. El dinero ENTRA al punto de cambio.",
+    EGRESO: "Transacción de egreso vía Banco del Pacífico. El dinero SALE del punto de cambio.",
+  },
+  SERVIENTREGA: {
+    INGRESO: "El cliente realiza un envío de dinero por Servientrega. El dinero ENTRA al punto de cambio.",
+    EGRESO: "El cliente cobra/reclama un envío de dinero por Servientrega. El dinero SALE del punto de cambio.",
+  },
+  INSUMOS_OFICINA: {
+    INGRESO: "Compra de insumos de oficina. El dinero SALE del punto de cambio.",
+    EGRESO: "Compra de insumos de oficina. El dinero SALE del punto de cambio.",
+  },
+  INSUMOS_LIMPIEZA: {
+    INGRESO: "Compra de insumos de limpieza. El dinigo SALE del punto de cambio.",
+    EGRESO: "Compra de insumos de limpieza. El dinero SALE del punto de cambio.",
+  },
+  OTROS: {
+    INGRESO: "Movimiento de entrada. El dinero ENTRA al punto de cambio.",
+    EGRESO: "Movimiento de salida. El dinero SALE del punto de cambio.",
+  },
+};
 
 const schema = z.object({
   servicio: z.enum(
@@ -80,13 +130,19 @@ type FormValues = z.infer<typeof schema>;
 
 interface ServiciosExternosFormProps {
   onMovimientoCreado?: () => void;
+  saldoActual?: number;
 }
 
 export default function ServiciosExternosForm({
   onMovimientoCreado,
+  saldoActual,
 }: ServiciosExternosFormProps) {
   const { user } = useAuth();
   const puntoAtencionId = user?.punto_atencion_id || null;
+
+  // Estado para el diálogo de confirmación
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [formDataToSubmit, setFormDataToSubmit] = useState<FormValues | null>(null);
 
   const {
     register,
@@ -115,9 +171,20 @@ export default function ServiciosExternosForm({
   const servicioActual = watch("servicio");
   const tipoActual = watch("tipo_movimiento");
   const metodoIngresoActual = watch("metodo_ingreso");
+  const montoActual = watch("monto");
 
   const esInsumo = useMemo(
     () => !!SERVICIOS.find((s) => s.value === servicioActual && s.isInsumo),
+    [servicioActual]
+  );
+
+  const requiereConfirmacion = useMemo(
+    () => !!SERVICIOS.find((s) => s.value === servicioActual && s.requiereConfirmacion),
+    [servicioActual]
+  );
+
+  const servicioInfo = useMemo(
+    () => SERVICIOS.find((s) => s.value === servicioActual),
     [servicioActual]
   );
 
@@ -128,7 +195,8 @@ export default function ServiciosExternosForm({
     }
   }, [esInsumo, tipoActual, setValue]);
 
-  const onSubmit = async (values: FormValues) => {
+  // Función para validar antes de enviar
+  const onSubmitPreValidation = (values: FormValues) => {
     if (!puntoAtencionId) {
       toast({
         title: "Punto no asignado",
@@ -137,9 +205,22 @@ export default function ServiciosExternosForm({
       });
       return;
     }
+
+    // Si requiere confirmación, mostrar el diálogo
+    if (requiereConfirmacion) {
+      setFormDataToSubmit(values);
+      setShowConfirmDialog(true);
+      return;
+    }
+
+    // Si no requiere confirmación, enviar directamente
+    onSubmit(values);
+  };
+
+  const onSubmit = async (values: FormValues) => {
     try {
       const payload = {
-        punto_atencion_id: puntoAtencionId,
+        punto_atencion_id: puntoAtencionId!,
         servicio: values.servicio,
         tipo_movimiento: values.tipo_movimiento,
         metodo_ingreso: values.metodo_ingreso,
@@ -176,6 +257,10 @@ export default function ServiciosExternosForm({
         numero_referencia: "",
         descripcion: "",
       });
+
+      // Cerrar diálogo si estaba abierto
+      setShowConfirmDialog(false);
+      setFormDataToSubmit(null);
     } catch (e: unknown) {
       toast({
         title: "Error",
@@ -184,6 +269,17 @@ export default function ServiciosExternosForm({
         variant: "destructive",
       });
     }
+  };
+
+  const handleConfirm = () => {
+    if (formDataToSubmit) {
+      onSubmit(formDataToSubmit);
+    }
+  };
+
+  const handleCancel = () => {
+    setShowConfirmDialog(false);
+    setFormDataToSubmit(null);
   };
 
   // Formatear monto a 2 decimales al salir del input (sin romper el valor numérico)
@@ -198,203 +294,327 @@ export default function ServiciosExternosForm({
     }
   };
 
+  // Obtener mensaje de ayuda según servicio y tipo seleccionados
+  const mensajeAyuda = useMemo(() => {
+    if (!servicioActual || !tipoActual) return null;
+    return MENSAJES_AYUDA[servicioActual]?.[tipoActual] || null;
+  }, [servicioActual, tipoActual]);
+
+  // Calcular si hay saldo suficiente para egreso
+  const tieneSaldoSuficiente = useMemo(() => {
+    if (tipoActual !== "EGRESO" || !saldoActual || !montoActual) return true;
+    return saldoActual >= montoActual;
+  }, [tipoActual, saldoActual, montoActual]);
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-      {/* Servicio / Categoría */}
-      <div>
-        <div className="flex items-center gap-2">
-          <Label>Servicio / Categoría</Label>
-          {esInsumo && (
-            <Badge variant="secondary" className="text-xs">
-              Insumo • EGRESO forzado
-            </Badge>
-          )}
-        </div>
-        <Controller
-          name="servicio"
-          control={control}
-          render={({ field }) => (
-            <Select
-              value={field.value}
-              onValueChange={(v) => field.onChange(v as ServicioExterno)}
-            >
-              <SelectTrigger className="mt-1" aria-invalid={!!errors.servicio}>
-                <SelectValue placeholder="Selecciona" />
-              </SelectTrigger>
-              <SelectContent>
-                {SERVICIOS.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        />
-        {errors.servicio && (
-          <p className="text-sm text-red-500 mt-1">{errors.servicio.message}</p>
-        )}
-      </div>
-
-      {/* Tipo */}
-      <div>
-        <Label>Tipo</Label>
-        <Controller
-          name="tipo_movimiento"
-          control={control}
-          render={({ field }) => (
-            <Select
-              value={field.value}
-              onValueChange={(v) => field.onChange(v as TipoMovimiento)}
-              disabled={esInsumo}
-            >
-              <SelectTrigger
-                className="mt-1"
-                aria-invalid={!!errors.tipo_movimiento}
-              >
-                <SelectValue placeholder="Selecciona" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="INGRESO">
-                  Ingreso (Cliente paga servicio)
-                </SelectItem>
-                <SelectItem value="EGRESO">
-                  Egreso (Punto paga/repone servicio)
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        />
-        {esInsumo && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Esta categoría es de Insumos, el movimiento se registra como{" "}
-            <b>EGRESO</b>.
-          </p>
-        )}
-        {!esInsumo && tipoActual && (
-          <p className="text-xs text-muted-foreground mt-1">
-            {tipoActual === "INGRESO" ? (
-              <>📥 <b>INGRESO</b>: Cliente paga el servicio. Reduce saldo asignado, aumenta efectivo.</>
-            ) : (
-              <>📤 <b>EGRESO</b>: El punto paga o repone el servicio. Aumenta saldo asignado, reduce efectivo.</>
+    <>
+      <form onSubmit={handleSubmit(onSubmitPreValidation)} className="space-y-4" noValidate>
+        {/* Servicio / Categoría */}
+        <div>
+          <div className="flex items-center gap-2">
+            <Label>Servicio / Categoría</Label>
+            {esInsumo && (
+              <Badge variant="secondary" className="text-xs">
+                Insumo • EGRESO forzado
+              </Badge>
             )}
-          </p>
-        )}
-        {errors.tipo_movimiento && (
-          <p className="text-sm text-red-500 mt-1">
-            {errors.tipo_movimiento.message}
-          </p>
-        )}
-      </div>
+            {requiereConfirmacion && (
+              <Badge variant="outline" className="text-xs text-amber-600 border-amber-600">
+                Requiere confirmación
+              </Badge>
+            )}
+          </div>
+          <Controller
+            name="servicio"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value}
+                onValueChange={(v) => field.onChange(v as ServicioExterno)}
+              >
+                <SelectTrigger className="mt-1" aria-invalid={!!errors.servicio}>
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SERVICIOS.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+          {errors.servicio && (
+            <p className="text-sm text-red-500 mt-1">{errors.servicio.message}</p>
+          )}
+        </div>
 
-      {/* Monto */}
-      <div>
-        <Label>Monto (USD)</Label>
-        <Input
-          type="number"
-          step="0.01"
-          min="0.01"
-          inputMode="decimal"
-          placeholder="0.00"
-          aria-invalid={!!errors.monto}
-          {...register("monto")}
-          onBlur={onMontoBlur}
-        />
-        {errors.monto && (
-          <p className="text-sm text-red-500 mt-1">{errors.monto.message}</p>
-        )}
-      </div>
+        {/* Tipo */}
+        <div>
+          <Label>Tipo de Movimiento</Label>
+          <Controller
+            name="tipo_movimiento"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value}
+                onValueChange={(v) => field.onChange(v as TipoMovimiento)}
+                disabled={esInsumo}
+              >
+                <SelectTrigger
+                  className="mt-1"
+                  aria-invalid={!!errors.tipo_movimiento}
+                >
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="INGRESO">
+                    INGRESO (Entra dinero al punto)
+                  </SelectItem>
+                  <SelectItem value="EGRESO">
+                    EGRESO (Sale dinero del punto)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+          {esInsumo && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Esta categoría es de Insumos, el movimiento se registra como{" "}
+              <b>EGRESO</b>.
+            </p>
+          )}
+          {errors.tipo_movimiento && (
+            <p className="text-sm text-red-500 mt-1">
+              {errors.tipo_movimiento.message}
+            </p>
+          )}
+        </div>
 
-      {/* Método de Ingreso */}
-      <div>
-        <Label>¿Cómo entra el dinero?</Label>
-        <Controller
-          name="metodo_ingreso"
-          control={control}
-          render={({ field }) => (
-            <Select
-              value={field.value}
-              onValueChange={(v) => field.onChange(v)}
+        {/* Alert contextual con mensaje de ayuda */}
+        {mensajeAyuda && (
+          <Alert className={tipoActual === "EGRESO" ? "border-amber-500 bg-amber-50" : "border-blue-500 bg-blue-50"}>
+            <Info className="h-4 w-4" />
+            <AlertTitle className="text-sm font-semibold">
+              {tipoActual === "INGRESO" ? "📥 Movimiento de Entrada" : "📤 Movimiento de Salida"}
+            </AlertTitle>
+            <AlertDescription className="text-sm mt-1">
+              {mensajeAyuda}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Monto */}
+        <div>
+          <Label>Monto (USD)</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0.01"
+            inputMode="decimal"
+            placeholder="0.00"
+            aria-invalid={!!errors.monto}
+            {...register("monto")}
+            onBlur={onMontoBlur}
+          />
+          {errors.monto && (
+            <p className="text-sm text-red-500 mt-1">{errors.monto.message}</p>
+          )}
+        </div>
+
+        {/* Método de Ingreso */}
+        <div>
+          <Label>¿Cómo entra el dinero?</Label>
+          <Controller
+            name="metodo_ingreso"
+            control={control}
+            render={({ field }) => (
+              <Select
+                value={field.value}
+                onValueChange={(v) => field.onChange(v)}
+              >
+                <SelectTrigger className="mt-1" aria-invalid={!!errors.metodo_ingreso}>
+                  <SelectValue placeholder="Selecciona" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EFECTIVO">Efectivo (Billetes y Monedas)</SelectItem>
+                  <SelectItem value="BANCO">Depósito Bancario</SelectItem>
+                  <SelectItem value="MIXTO">Mixto (Efectivo + Banco)</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+          {errors.metodo_ingreso && (
+            <p className="text-sm text-red-500 mt-1">{errors.metodo_ingreso.message}</p>
+          )}
+        </div>
+
+        {/* Billetes (mostrar si es EFECTIVO o MIXTO) */}
+        {(metodoIngresoActual === "EFECTIVO" || metodoIngresoActual === "MIXTO") && (
+          <div>
+            <Label>Billetes (USD)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              placeholder="0.00"
+              aria-invalid={!!errors.billetes}
+              {...register("billetes")}
+            />
+            {errors.billetes && (
+              <p className="text-sm text-red-500 mt-1">{errors.billetes.message}</p>
+            )}
+          </div>
+        )}
+
+        {/* Monedas Físicas (mostrar si es EFECTIVO o MIXTO) */}
+        {(metodoIngresoActual === "EFECTIVO" || metodoIngresoActual === "MIXTO") && (
+          <div>
+            <Label>Monedas (USD)</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              inputMode="decimal"
+              placeholder="0.00"
+              aria-invalid={!!errors.monedas_fisicas}
+              {...register("monedas_fisicas")}
+            />
+            {errors.monedas_fisicas && (
+              <p className="text-sm text-red-500 mt-1">{errors.monedas_fisicas.message}</p>
+            )}
+          </div>
+        )}
+
+        {/* Referencia */}
+        <div>
+          <Label>N° referencia (opcional)</Label>
+          <Input
+            placeholder="Referencia / Comprobante"
+            {...register("numero_referencia")}
+          />
+        </div>
+
+        {/* Descripción */}
+        <div className="md:max-w-[720px]">
+          <Label>Descripción (opcional)</Label>
+          <Textarea
+            placeholder="Detalle del movimiento"
+            rows={3}
+            {...register("descripcion")}
+          />
+        </div>
+
+        {/* Submit */}
+        <div className="pt-2">
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Guardando..." : "Guardar movimiento"}
+          </Button>
+        </div>
+      </form>
+
+      {/* Diálogo de Confirmación */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Confirmar Movimiento
+            </DialogTitle>
+            <DialogDescription>
+              Por favor verifica que la información sea correcta antes de continuar.
+            </DialogDescription>
+          </DialogHeader>
+
+          {formDataToSubmit && servicioActual && (
+            <div className="space-y-4 py-4">
+              {/* Resumen del movimiento */}
+              <div className="bg-muted p-4 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Servicio:</span>
+                  <span className="font-medium">{servicioInfo?.label}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Tipo:</span>
+                  <Badge variant={formDataToSubmit.tipo_movimiento === "INGRESO" ? "default" : "destructive"}>
+                    {formDataToSubmit.tipo_movimiento === "INGRESO" ? "INGRESO" : "EGRESO"}
+                  </Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Monto:</span>
+                  <span className="font-bold text-lg">
+                    ${formDataToSubmit.monto.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Explicación de qué va a pasar */}
+              <Alert className={formDataToSubmit.tipo_movimiento === "EGRESO" ? "border-amber-500 bg-amber-50" : "border-green-500 bg-green-50"}>
+                {formDataToSubmit.tipo_movimiento === "INGRESO" ? (
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                )}
+                <AlertTitle className="text-sm font-semibold">
+                  {formDataToSubmit.tipo_movimiento === "INGRESO" 
+                    ? "El dinero ENTRARÁ al punto de cambio" 
+                    : "El dinero SALDRÁ del punto de cambio"}
+                </AlertTitle>
+                <AlertDescription className="text-sm mt-1">
+                  {MENSAJES_AYUDA[servicioActual]?.[formDataToSubmit.tipo_movimiento]}
+                </AlertDescription>
+              </Alert>
+
+              {/* Validación de saldo para EGRESO */}
+              {formDataToSubmit.tipo_movimiento === "EGRESO" && saldoActual !== undefined && (
+                <Alert variant={tieneSaldoSuficiente ? "default" : "destructive"}>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle className="text-sm font-semibold">
+                    Validación de Saldo
+                  </AlertTitle>
+                  <AlertDescription className="text-sm mt-1">
+                    <div className="flex justify-between mb-1">
+                      <span>Saldo disponible:</span>
+                      <span className={tieneSaldoSuficiente ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                        ${saldoActual.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between mb-1">
+                      <span>Monto a descontar:</span>
+                      <span className="font-medium">${formDataToSubmit.monto.toFixed(2)}</span>
+                    </div>
+                    <div className="border-t pt-1 mt-1 flex justify-between">
+                      <span>Saldo después:</span>
+                      <span className={tieneSaldoSuficiente ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
+                        ${(saldoActual - formDataToSubmit.monto).toFixed(2)}
+                      </span>
+                    </div>
+                    {!tieneSaldoSuficiente && (
+                      <p className="text-red-600 font-medium mt-2">
+                        ⚠️ Saldo insuficiente para realizar este egreso
+                      </p>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="flex gap-2 sm:gap-0">
+            <Button variant="outline" onClick={handleCancel} disabled={isSubmitting}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleConfirm} 
+              disabled={isSubmitting || (formDataToSubmit?.tipo_movimiento === "EGRESO" && !tieneSaldoSuficiente)}
             >
-              <SelectTrigger className="mt-1" aria-invalid={!!errors.metodo_ingreso}>
-                <SelectValue placeholder="Selecciona" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="EFECTIVO">Efectivo (Billetes y Monedas)</SelectItem>
-                <SelectItem value="BANCO">Depósito Bancario</SelectItem>
-                <SelectItem value="MIXTO">Mixto (Efectivo + Banco)</SelectItem>
-              </SelectContent>
-            </Select>
-          )}
-        />
-        {errors.metodo_ingreso && (
-          <p className="text-sm text-red-500 mt-1">{errors.metodo_ingreso.message}</p>
-        )}
-      </div>
-
-      {/* Billetes (mostrar si es EFECTIVO o MIXTO) */}
-      {(metodoIngresoActual === "EFECTIVO" || metodoIngresoActual === "MIXTO") && (
-        <div>
-          <Label>Billetes (USD)</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            inputMode="decimal"
-            placeholder="0.00"
-            aria-invalid={!!errors.billetes}
-            {...register("billetes")}
-          />
-          {errors.billetes && (
-            <p className="text-sm text-red-500 mt-1">{errors.billetes.message}</p>
-          )}
-        </div>
-      )}
-
-      {/* Monedas Físicas (mostrar si es EFECTIVO o MIXTO) */}
-      {(metodoIngresoActual === "EFECTIVO" || metodoIngresoActual === "MIXTO") && (
-        <div>
-          <Label>Monedas (USD)</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            inputMode="decimal"
-            placeholder="0.00"
-            aria-invalid={!!errors.monedas_fisicas}
-            {...register("monedas_fisicas")}
-          />
-          {errors.monedas_fisicas && (
-            <p className="text-sm text-red-500 mt-1">{errors.monedas_fisicas.message}</p>
-          )}
-        </div>
-      )}
-
-      {/* Referencia */}
-      <div>
-        <Label>N° referencia (opcional)</Label>
-        <Input
-          placeholder="Referencia / Comprobante"
-          {...register("numero_referencia")}
-        />
-      </div>
-
-      {/* Descripción */}
-      <div className="md:max-w-[720px]">
-        <Label>Descripción (opcional)</Label>
-        <Textarea
-          placeholder="Detalle del movimiento"
-          rows={3}
-          {...register("descripcion")}
-        />
-      </div>
-
-      {/* Submit */}
-      <div className="pt-2">
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? "Guardando..." : "Guardar movimiento"}
-        </Button>
-      </div>
-    </form>
+              {isSubmitting ? "Guardando..." : "Confirmar y Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

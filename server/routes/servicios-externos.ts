@@ -75,6 +75,46 @@ const SERVICIOS_VALIDOS: ServicioExterno[] = [
   ServicioExterno.OTROS,
 ];
 
+/** Mensajes de ayuda para evitar confusiones INGRESO/EGRESO */
+const MENSAJES_AYUDA_SERVICIOS: Record<ServicioExterno, { INGRESO: string; EGRESO: string }> = {
+  [ServicioExterno.YAGANASTE]: {
+    INGRESO: "Cliente PAGA por servicio YaGanaste → Entra dinero al punto",
+    EGRESO: "Operador REPONE saldo YaGanaste → Sale dinero del punto",
+  },
+  [ServicioExterno.BANCO_GUAYAQUIL]: {
+    INGRESO: "Cliente PAGA por servicio Banco Guayaquil → Entra dinero",
+    EGRESO: "Operador REPONE saldo Banco Guayaquil → Sale dinero",
+  },
+  [ServicioExterno.WESTERN]: {
+    INGRESO: "Cliente PAGA envío Western Union → Entra dinero al punto",
+    EGRESO: "Cliente RECIBE envío Western Union → Sale dinero del punto",
+  },
+  [ServicioExterno.PRODUBANCO]: {
+    INGRESO: "Cliente PAGA por servicio Produbanco → Entra dinero",
+    EGRESO: "Operador REPONE saldo Produbanco → Sale dinero",
+  },
+  [ServicioExterno.BANCO_PACIFICO]: {
+    INGRESO: "Cliente PAGA por servicio Banco Pacífico → Entra dinero",
+    EGRESO: "Operador REPONE saldo Banco Pacífico → Sale dinero",
+  },
+  [ServicioExterno.SERVIENTREGA]: {
+    INGRESO: "Cliente PAGA envío Servientrega → Entra dinero",
+    EGRESO: "Operador paga/pierde envío Servientrega → Sale dinero",
+  },
+  [ServicioExterno.INSUMOS_OFICINA]: {
+    INGRESO: "Venta de insumos de oficina → Entra dinero",
+    EGRESO: "Compra de insumos de oficina → Sale dinero",
+  },
+  [ServicioExterno.INSUMOS_LIMPIEZA]: {
+    INGRESO: "Venta de insumos de limpieza → Entra dinero",
+    EGRESO: "Compra de insumos de limpieza → Sale dinero",
+  },
+  [ServicioExterno.OTROS]: {
+    INGRESO: "Otro tipo de ingreso → Entra dinero al punto",
+    EGRESO: "Otro tipo de egreso → Sale dinero del punto",
+  },
+};
+
 // Servicios que tienen asignación de saldo propio (crédito digital)
 const SERVICIOS_CON_ASIGNACION: ServicioExterno[] = [
   ServicioExterno.YAGANASTE,
@@ -989,6 +1029,119 @@ router.delete(
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ success: false, error: (error as Error).message });
+    }
+  }
+);
+
+/* ==============================
+ * GET /ayuda - Obtener mensajes de ayuda para servicios
+ * ============================== */
+router.get("/ayuda", authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    res.json({
+      success: true,
+      mensajes: MENSAJES_AYUDA_SERVICIOS,
+      nota: "INGRESO = Entra dinero al punto (cliente paga) | EGRESO = Sale dinero del punto (pago/salida)",
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Error obteniendo ayuda" });
+  }
+});
+
+/* ==============================
+ * POST /validar - Validar movimiento antes de crear
+ * ============================== */
+router.post(
+  "/validar",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      if (!isOperador(req)) {
+        res.status(403).json({
+          success: false,
+          message: "Permisos insuficientes",
+        });
+        return;
+      }
+
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const servicio = body.servicio;
+      const tipo_movimiento = body.tipo_movimiento;
+      const monto = body.monto;
+
+      const puntoId = req.user.punto_atencion_id;
+      if (!puntoId) {
+        res.status(400).json({
+          success: false,
+          message: "No tiene punto de atención asignado",
+        });
+        return;
+      }
+
+      if (!isServicioExterno(servicio) || !SERVICIOS_VALIDOS.includes(servicio)) {
+        res.status(400).json({ success: false, message: "Servicio inválido" });
+        return;
+      }
+
+      if (!isTipoMovimientoInOut(tipo_movimiento)) {
+        res.status(400).json({ success: false, message: "Tipo de movimiento inválido" });
+        return;
+      }
+
+      const montoNum = typeof monto === "string" ? parseFloat(monto) : Number(monto);
+      if (!isFinite(montoNum) || montoNum <= 0) {
+        res.status(400).json({ success: false, message: "Monto debe ser > 0" });
+        return;
+      }
+
+      // Obtener mensaje de ayuda específico
+      const mensajeAyuda = MENSAJES_AYUDA_SERVICIOS[servicio][tipo_movimiento];
+      
+      // Validar saldo si es EGRESO
+      let validacionSaldo = null;
+      if (tipo_movimiento === "EGRESO") {
+        const usdId = await ensureUsdMonedaId();
+        const saldo = await prisma.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: puntoId,
+              moneda_id: usdId,
+            },
+          },
+        });
+        
+        const saldoCaja = Number(saldo?.cantidad || 0);
+        const saldoBancos = Number(saldo?.bancos || 0);
+        const saldoTotal = saldoCaja + saldoBancos;
+        
+        validacionSaldo = {
+          saldoSuficiente: saldoTotal >= montoNum,
+          saldoCaja,
+          saldoBancos,
+          saldoTotal,
+          montoRequerido: montoNum,
+          deficit: saldoTotal < montoNum ? montoNum - saldoTotal : 0,
+        };
+      }
+
+      res.json({
+        success: true,
+        validacion: {
+          servicio,
+          tipo_movimiento,
+          monto: montoNum,
+          mensajeAyuda,
+          descripcionAccion: tipo_movimiento === "INGRESO" 
+            ? "El dinero ENTRARÁ al punto" 
+            : "El dinero SALDRÁ del punto",
+          saldo: validacionSaldo,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : "Error de validación",
+      });
     }
   }
 );

@@ -196,6 +196,11 @@ const Sidebar = ({
       label: "Resumen Cierres Diarios",
       color: "text-orange-600",
     },
+    {
+      id: "system-health",
+      label: "Salud del Sistema",
+      color: "text-red-600",
+    },
     // Separador visual
     {
       id: "separator-3",

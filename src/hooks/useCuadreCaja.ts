@@ -9,6 +9,7 @@ import cuatreCajaService, {
   ParcialesPendientesResponse,
   ContabilidadDiariaResponse,
 } from "@/services/cuatreCajaService";
+import saldoService from "@/services/saldoService";
 
 /**
  * Utilidad: formatea hoy como YYYY-MM-DD en local (sin libs externas).
@@ -54,10 +55,20 @@ export type UseCuadreCajaOptions = {
   withContabilidad?: boolean;
 };
 
+export type ReconciliacionResult = {
+  punto_atencion_id: string;
+  moneda_id: string;
+  saldo_registrado: number;
+  saldo_calculado: number;
+  diferencia: number;
+  ajustado: boolean;
+};
+
 export type UseCuadreCaja = {
   // estado
   loading: boolean;
   saving: boolean;
+  reconciliando: boolean;
   error?: string | null;
 
   // datos del cuadre
@@ -107,6 +118,10 @@ export type UseCuadreCaja = {
   refresh: () => Promise<void>;
   guardarParcial: (opts?: { allowMismatch?: boolean }) => Promise<GuardarCierreResponse | null>;
   guardarCerrado: (opts?: { allowMismatch?: boolean }) => Promise<GuardarCierreResponse | null>;
+  
+  // reconciliación
+  reconciliarSaldo: (monedaId?: string) => Promise<ReconciliacionResult | null>;
+  calcularSaldoReal: (monedaId?: string) => Promise<number | null>;
 };
 
 /**
@@ -116,6 +131,7 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
   const [fecha, setFecha] = useState<string>(options?.fecha || todayYYYYMMDD());
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
+  const [reconciliando, setReconciliando] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const [cuadre, setCuadre] = useState<CuadreResponse["data"] | undefined>(undefined);
@@ -348,9 +364,48 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
     [buildGuardarBody, refresh]
   );
 
+  // ---------- Reconciliación ----------
+  const reconciliarSaldo = useCallback(async (monedaId?: string): Promise<ReconciliacionResult | null> => {
+    if (!options?.pointId) {
+      setError("Se requiere un punto de atención para reconciliar");
+      return null;
+    }
+    setReconciliando(true);
+    setError(null);
+    try {
+      const result = await saldoService.reconciliarSaldo(options.pointId, monedaId);
+      await refresh();
+      return result;
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Error al reconciliar saldo");
+      return null;
+    } finally {
+      setReconciliando(false);
+    }
+  }, [options?.pointId, refresh]);
+
+  const calcularSaldoReal = useCallback(async (monedaId?: string): Promise<number | null> => {
+    if (!options?.pointId) {
+      setError("Se requiere un punto de atención para calcular el saldo real");
+      return null;
+    }
+    setReconciliando(true);
+    setError(null);
+    try {
+      const result = await saldoService.calcularSaldoReal(options.pointId, monedaId);
+      return result;
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Error al calcular saldo real");
+      return null;
+    } finally {
+      setReconciliando(false);
+    }
+  }, [options?.pointId]);
+
   return {
     loading,
     saving,
+    reconciliando,
     error,
     cuadre,
     contabilidad,
@@ -370,6 +425,8 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
     refresh,
     guardarParcial,
     guardarCerrado,
+    reconciliarSaldo,
+    calcularSaldoReal,
   };
 }
 

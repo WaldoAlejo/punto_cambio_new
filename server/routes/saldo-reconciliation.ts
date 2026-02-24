@@ -3,6 +3,7 @@ import { authenticateToken } from "../middleware/auth.js";
 import saldoReconciliationService from "../services/saldoReconciliationService.js";
 import logger from "../utils/logger.js";
 import { z } from "zod";
+import { prisma } from "../lib/prisma.js";
 
 interface AuthenticatedUser {
   id: string;
@@ -333,6 +334,235 @@ router.post(
 
       res.status(500).json({
         error: "Error interno en corrección masiva",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
+// Schema para validar query params de calcular-real
+const calcularRealQuerySchema = z.object({
+  puntoAtencionId: z.string().uuid("ID de punto de atención inválido"),
+  monedaId: z.string().uuid("ID de moneda inválido").optional(),
+});
+
+/**
+ * GET /saldo-reconciliation/calcular-real
+ * Calcula el saldo real basado en movimientos históricos desde el último saldo inicial
+ * Endpoint compatible con /api/saldos/calcular-real
+ */
+router.get(
+  "/calcular-real",
+  authenticateToken,
+  async (req: AuthedRequest, res: Response): Promise<void> => {
+    try {
+      const parsed = calcularRealQuerySchema.safeParse(req.query);
+      if (!parsed.success) {
+        res.status(400).json({
+          error: parsed.error.issues[0]?.message ?? "Parámetros inválidos",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const { puntoAtencionId, monedaId } = parsed.data;
+
+      // Si no se especifica moneda, calcular para la primera disponible
+      let targetMonedaId = monedaId;
+      if (!targetMonedaId) {
+        const saldo = await prisma.saldo.findFirst({
+          where: { punto_atencion_id: puntoAtencionId },
+          select: { moneda_id: true },
+        });
+        if (!saldo) {
+          res.status(404).json({
+            error: "No se encontraron saldos para el punto de atención",
+            success: false,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+        targetMonedaId = saldo.moneda_id;
+      }
+
+      const saldoCalculado = await saldoReconciliationService.calcularSaldoReal(
+        puntoAtencionId,
+        targetMonedaId
+      );
+
+      // Obtener información del saldo inicial usado
+      const saldoInicial = await prisma.saldoInicial.findFirst({
+        where: {
+          punto_atencion_id: puntoAtencionId,
+          moneda_id: targetMonedaId,
+        },
+        orderBy: { fecha_hora: "desc" },
+        select: { id: true, fecha_hora: true },
+      });
+
+      // Contar movimientos desde el saldo inicial
+      const movimientosCount = await prisma.movimientoSaldo.count({
+        where: {
+          punto_atencion_id: puntoAtencionId,
+          moneda_id: targetMonedaId,
+          fecha_hora: {
+            gte: saldoInicial?.fecha_hora ?? new Date("2000-01-01"),
+          },
+        },
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          punto_atencion_id: puntoAtencionId,
+          moneda_id: targetMonedaId,
+          saldo_calculado: saldoCalculado,
+          basado_en: {
+            saldo_inicial_id: saldoInicial?.id,
+            fecha_saldo_inicial: saldoInicial?.fecha_hora,
+            movimientos_contados: movimientosCount,
+          },
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error calculando saldo real", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        puntoAtencionId: req.query.puntoAtencionId,
+        monedaId: req.query.monedaId,
+      });
+
+      res.status(500).json({
+        error: "Error interno al calcular saldo real",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
+// Schema para validar body de reconciliar
+const reconciliarBodySchema = z.object({
+  puntoAtencionId: z.string().uuid("ID de punto de atención inválido"),
+  monedaId: z.string().uuid("ID de moneda inválido").optional(),
+});
+
+/**
+ * POST /saldo-reconciliation/reconciliar
+ * Reconcilia el saldo registrado con el calculado
+ * Endpoint compatible con /api/saldos/reconciliar
+ */
+router.post(
+  "/reconciliar",
+  authenticateToken,
+  async (req: AuthedRequest, res: Response): Promise<void> => {
+    try {
+      const parsed = reconciliarBodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          error: parsed.error.issues[0]?.message ?? "Parámetros inválidos",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
+      const { puntoAtencionId, monedaId } = parsed.data;
+      const usuarioId = req.user?.id;
+
+      // Si no se especifica moneda, reconciliar la primera disponible
+      let targetMonedaId = monedaId;
+      if (!targetMonedaId) {
+        const saldo = await prisma.saldo.findFirst({
+          where: { punto_atencion_id: puntoAtencionId },
+          select: { moneda_id: true },
+        });
+        if (!saldo) {
+          res.status(404).json({
+            error: "No se encontraron saldos para el punto de atención",
+            success: false,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+        targetMonedaId = saldo.moneda_id;
+      }
+
+      const resultado = await saldoReconciliationService.reconciliarSaldo(
+        puntoAtencionId,
+        targetMonedaId,
+        usuarioId
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          punto_atencion_id: puntoAtencionId,
+          moneda_id: targetMonedaId,
+          saldo_registrado: resultado.saldoAnterior,
+          saldo_calculado: resultado.saldoCalculado,
+          diferencia: resultado.diferencia,
+          ajustado: resultado.corregido,
+        },
+        message: resultado.corregido
+          ? `Saldo ajustado de ${resultado.saldoAnterior} a ${resultado.saldoCalculado}`
+          : "El saldo ya estaba correcto",
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error reconciliando saldo", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        puntoAtencionId: req.body.puntoAtencionId,
+        monedaId: req.body.monedaId,
+      });
+
+      res.status(500).json({
+        error: "Error interno al reconciliar saldo",
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+);
+
+/**
+ * GET /saldo-reconciliation/validar-consistencia
+ * Valida la consistencia de todos los saldos
+ * Endpoint compatible con /api/saldos/validar-consistencia
+ */
+router.get(
+  "/validar-consistencia",
+  authenticateToken,
+  async (req: AuthedRequest, res: Response): Promise<void> => {
+    try {
+      const inconsistencias =
+        await saldoReconciliationService.generarReporteInconsistencias();
+
+      res.status(200).json({
+        success: true,
+        data: {
+          valido: inconsistencias.length === 0,
+          inconsistencias: inconsistencias.map((inc) => ({
+            punto_atencion_id: inc.puntoAtencionId,
+            punto_nombre: inc.puntoNombre,
+            moneda_id: inc.monedaId,
+            moneda_codigo: inc.monedaCodigo,
+            saldo_registrado: inc.saldoRegistrado,
+            saldo_calculado: inc.saldoCalculado,
+            diferencia: inc.diferencia,
+          })),
+        },
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.error("Error validando consistencia de saldos", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+
+      res.status(500).json({
+        error: "Error interno al validar consistencia",
         success: false,
         timestamp: new Date().toISOString(),
       });
