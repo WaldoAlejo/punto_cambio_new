@@ -105,11 +105,11 @@ const getStatusBadge = (status: string) => {
 
 const diffIcon = (d: number) =>
   d > 0 ? (
-    <TrendingUp className="h-4 w-4 text-green-600" />
+    <TrendingUp className="h-4 w-4 text-[hsl(145,55%,42%)]" />
   ) : d < 0 ? (
-    <TrendingDown className="h-4 w-4 text-red-600" />
+    <TrendingDown className="h-4 w-4 text-[hsl(0,72%,51%)]" />
   ) : (
-    <DollarSign className="h-4 w-4 text-gray-600" />
+    <DollarSign className="h-4 w-4 text-muted-foreground" />
   );
 
 /** =========================
@@ -283,9 +283,18 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
   if (!selectedPoint) {
     return (
       <div className="p-6">
-        <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">
-            Debe seleccionar un punto de atención para ver los saldos.
+        <div className="card-modern p-8 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+            <svg className="w-8 h-8 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </div>
+          <p className="text-lg font-medium text-foreground mb-2">
+            Debe seleccionar un punto de atención
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Para ver los saldos disponibles, primero seleccione un punto de atención
           </p>
         </div>
       </div>
@@ -294,19 +303,19 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
 
   /** ===== UI ===== */
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">
+          <h2 className="text-2xl font-bold text-foreground">
             Dashboard Operativo
           </h2>
-          <div className="flex items-center gap-2 text-gray-600">
+          <div className="flex items-center gap-2 text-muted-foreground">
             <span>
               {selectedPoint.nombre} • {selectedPoint.ciudad}
             </span>
             {lastUpdate && (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-muted-foreground">
                 • Actualizado: {lastUpdate.toLocaleTimeString()}
               </span>
             )}
@@ -413,27 +422,27 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
         <TabsContent value="saldos" className="space-y-6">
           {/* Resumen: basado en lo que se ve (moneda seleccionada y filtro) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card>
+            <Card hover className="border-[hsl(217,80%,90%)] bg-[hsl(217,100%,97%)]">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-[hsl(217,80%,35%)]">
                   Moneda seleccionada
                 </CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                <DollarSign className="h-4 w-4 text-[hsl(217,70%,45%)]" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold text-[hsl(217,80%,25%)]">
                   {selectedCurrency}{" "}
                   {selectedCurrency === "USD" ? "• Principal" : ""}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-[hsl(217,80%,40%)]">
                   Cambia la divisa desde el selector
                 </p>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card hover className={totalDiff >= 0 ? "border-[hsl(145,50%,85%)] bg-[hsl(145,60%,96%)]" : "border-[hsl(0,75%,89%)] bg-[hsl(0,85%,97%)]"}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className={`text-sm font-medium ${totalDiff >= 0 ? "text-[hsl(145,55%,32%)]" : "text-[hsl(0,72%,45%)]"}`}>
                   Balance General ({selectedCurrency})
                 </CardTitle>
                 {diffIcon(totalDiff)}
@@ -441,27 +450,27 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
               <CardContent>
                 <div
                   className={`text-2xl font-bold ${
-                    totalDiff >= 0 ? "text-green-700" : "text-red-700"
+                    totalDiff >= 0 ? "text-[hsl(145,55%,32%)]" : "text-[hsl(0,72%,45%)]"
                   }`}
                 >
                   {totalDiff >= 0 ? "+" : ""}
                   {formatMoney(Math.abs(totalDiff))}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className={`text-xs ${totalDiff >= 0 ? "text-[hsl(145,55%,40%)]" : "text-[hsl(0,72%,50%)]"}`}>
                   Diferencia total vs inicial (filtrados)
                 </p>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card hover>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
                   Última Actualización
                 </CardTitle>
                 <RefreshCw className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-bold text-foreground">
                   {lastUpdate ? lastUpdate.toLocaleTimeString() : "--:--"}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -478,45 +487,45 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Calculator className="h-5 w-5" />
+                  <Calculator className="h-5 w-5 text-primary" />
                   Balance Completo - {selectedPoint.nombre}
                   {loadingBalanceCompleto && (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
                   )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-sm text-blue-600 font-medium">
+                  <div className="bg-[hsl(217,100%,97%)] border border-[hsl(217,80%,90%)] p-4 rounded-xl">
+                    <p className="text-sm text-[hsl(217,80%,40%)] font-medium">
                       Cambios de Divisas
                     </p>
-                    <p className="text-2xl font-bold text-blue-800">
+                    <p className="text-2xl font-bold text-[hsl(217,80%,25%)]">
                       {balanceCompleto.actividad.cambiosDivisas}
                     </p>
                   </div>
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <p className="text-sm text-green-600 font-medium">
+                  <div className="bg-[hsl(145,60%,96%)] border border-[hsl(145,50%,85%)] p-4 rounded-xl">
+                    <p className="text-sm text-[hsl(145,55%,35%)] font-medium">
                       Servicios Externos
                     </p>
-                    <p className="text-2xl font-bold text-green-800">
+                    <p className="text-2xl font-bold text-[hsl(145,55%,25%)]">
                       {balanceCompleto.actividad.serviciosExternos}
                     </p>
                   </div>
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <p className="text-sm text-purple-600 font-medium">
+                  <div className="bg-[hsl(280,60%,96%)] border border-[hsl(280,50%,85%)] p-4 rounded-xl">
+                    <p className="text-sm text-[hsl(280,55%,40%)] font-medium">
                       Transferencias
                     </p>
-                    <p className="text-2xl font-bold text-purple-800">
+                    <p className="text-2xl font-bold text-[hsl(280,55%,30%)]">
                       {balanceCompleto.actividad.transferenciasOrigen +
                         balanceCompleto.actividad.transferenciasDestino}
                     </p>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-sm text-gray-600 font-medium">
+                  <div className="bg-muted/50 border border-border p-4 rounded-xl">
+                    <p className="text-sm text-muted-foreground font-medium">
                       Total Movimientos
                     </p>
-                    <p className="text-2xl font-bold text-gray-800">
+                    <p className="text-2xl font-bold text-foreground">
                       {balanceCompleto.actividad.totalMovimientos}
                     </p>
                   </div>
@@ -525,7 +534,7 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
                 {balanceCompleto.balancesPorMoneda &&
                   balanceCompleto.balancesPorMoneda.length > 0 && (
                     <div>
-                      <h4 className="text-lg font-semibold mb-3">
+                      <h4 className="text-lg font-semibold mb-3 text-foreground">
                         Balance por Moneda
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -533,24 +542,24 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
                           (balance) => (
                             <div
                               key={balance.moneda_codigo}
-                              className="border rounded-lg p-3"
+                              className="card-modern p-4 border-l-4 border-l-primary"
                             >
                               <div className="flex items-center justify-between mb-2">
-                                <span className="font-medium">
+                                <span className="font-medium text-foreground">
                                   {balance.moneda_codigo}
                                 </span>
                                 <span
                                   className={`font-bold ${
                                     balance.balance >= 0
-                                      ? "text-green-600"
-                                      : "text-red-600"
+                                      ? "text-[hsl(145,55%,42%)]"
+                                      : "text-[hsl(0,72%,51%)]"
                                   }`}
                                 >
                                   {balance.balance >= 0 ? "+" : ""}
                                   {formatMoney(balance.balance)}
                                 </span>
                               </div>
-                              <div className="text-xs text-gray-600 space-y-1">
+                              <div className="text-xs text-muted-foreground space-y-1">
                                 <div>
                                   Cambios: -
                                   {formatMoney(
@@ -593,7 +602,7 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
             <Card>
               <CardContent className="flex items-center justify-center py-16">
                 <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4" />
                   <p className="text-gray-600">Cargando saldos…</p>
                 </div>
               </CardContent>
@@ -602,7 +611,7 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
             <Card>
               <CardContent className="flex items-center justify-center py-12">
                 <div className="text-center">
-                  <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-3" />
+                  <AlertTriangle className="h-12 w-12 text-[hsl(32,95%,55%)] mx-auto mb-3" />
                   <p className="text-gray-600 text-base">
                     No hay saldos que coincidan con los filtros.
                   </p>

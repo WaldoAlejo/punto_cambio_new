@@ -460,46 +460,128 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (isConcesion)
           return <ServientregaMain user={user} selectedPoint={selectedPoint} />;
 
-        // Bienvenida
+        // Admin Dashboard
+        if (isAdmin) {
+          return <AdminDashboard />;
+        }
+
+        // Bienvenida para otros roles
         return (
-          <div className="w-full h-full flex justify-center items-start">
-            <div className="bg-white rounded-lg shadow p-3 sm:p-4 md:p-6 mx-2 sm:mx-4 lg:mx-auto max-w-7xl w-full">
-              <h2 className="text-xl sm:text-2xl font-bold text-blue-800 mb-3 sm:mb-4 text-center">
-                Bienvenido al Sistema Punto Cambio
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6 w-full">
-                <div className="bg-blue-50 p-3 sm:p-4 rounded-lg text-center">
-                  <h3 className="font-semibold text-blue-700 mb-2">
-                    Usuario Activo
-                  </h3>
-                  <p className="text-blue-600">{user.nombre}</p>
-                  <p className="text-sm text-gray-600 capitalize">
-                    {user.rol
-                      ? user.rol.replace("_", " ").toLowerCase()
-                      : "Sin rol"}
-                  </p>
+          <div className="w-full h-full animate-fade-in">
+            <div className="max-w-7xl mx-auto space-y-6">
+              {/* Header de bienvenida */}
+              <div className="text-center space-y-2">
+                <h2 className="text-2xl sm:text-3xl font-bold text-foreground">
+                  Bienvenido al Sistema Punto Cambio
+                </h2>
+                <p className="text-muted-foreground max-w-2xl mx-auto">
+                  Sistema integral para la gestión de cambio de divisas, transferencias y servicios externos
+                </p>
+              </div>
+
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Usuario */}
+                <div className="card-modern p-6 text-center hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[hsl(217,100%,97%)] flex items-center justify-center">
+                    <svg className="w-6 h-6 text-[hsl(217,70%,45%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                  <h3 className="font-semibold text-foreground mb-1">Usuario Activo</h3>
+                  <p className="text-lg font-medium text-[hsl(217,70%,45%)]">{user.nombre}</p>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[hsl(217,100%,97%)] text-[hsl(217,80%,35%)] mt-2">
+                    {user.rol ? user.rol.replace("_", " ").toLowerCase() : "Sin rol"}
+                  </span>
                 </div>
-                {selectedPoint && (
-                  <div className="bg-green-50 p-4 rounded-lg text-center">
-                    <h3 className="font-semibold text-green-700 mb-2">
-                      Punto de Atención
-                    </h3>
-                    <p className="text-green-600">{selectedPoint.nombre}</p>
-                    <p className="text-sm text-gray-600">
-                      {selectedPoint.direccion}
-                    </p>
+
+                {/* Punto de Atención */}
+                {selectedPoint ? (
+                  <div className="card-modern p-6 text-center hover:shadow-md transition-shadow">
+                    <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[hsl(145,60%,96%)] flex items-center justify-center">
+                      <svg className="w-6 h-6 text-[hsl(145,55%,42%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
+                    <h3 className="font-semibold text-foreground mb-1">Punto de Atención</h3>
+                    <p className="text-lg font-medium text-[hsl(145,55%,42%)]">{selectedPoint.nombre}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{selectedPoint.direccion}</p>
+                  </div>
+                ) : (
+                  <div className="card-modern p-6 text-center border-dashed border-2">
+                    <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
+                      <svg className="w-6 h-6 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="font-semibold text-muted-foreground mb-1">Sin Punto Asignado</h3>
+                    <p className="text-sm text-muted-foreground">Seleccione un punto de atención para comenzar</p>
                   </div>
                 )}
-                <div className="bg-yellow-50 p-4 rounded-lg text-center">
-                  <h3 className="font-semibold text-yellow-700 mb-2">
-                    Estado del Sistema
-                  </h3>
-                  <p className="text-yellow-600">Operativo</p>
-                  <p className="text-sm text-gray-600">
-                    Última actualización: Hoy
+
+                {/* Estado del Sistema */}
+                <div className="card-modern p-6 text-center hover:shadow-md transition-shadow">
+                  <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[hsl(32,100%,96%)] flex items-center justify-center">
+                    <svg className="w-6 h-6 text-[hsl(32,95%,55%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="font-semibold text-foreground mb-1">Estado del Sistema</h3>
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[hsl(145,55%,42%)] animate-pulse" />
+                    <p className="text-lg font-medium text-[hsl(145,55%,42%)]">Operativo</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                   </p>
                 </div>
               </div>
+
+              {/* Accesos Rápidos (solo para operadores) */}
+              {(isOperador || isAdmin) && (
+                <div className="card-modern p-6">
+                  <h3 className="font-semibold text-foreground mb-4">Accesos Rápidos</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <button 
+                      onClick={() => setActiveView('exchanges')}
+                      className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[hsl(217,100%,97%)] hover:bg-[hsl(217,100%,94%)] transition-colors text-center"
+                    >
+                      <svg className="w-6 h-6 text-[hsl(217,70%,45%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm font-medium text-[hsl(217,80%,35%)]">Cambio de Divisas</span>
+                    </button>
+                    <button 
+                      onClick={() => setActiveView('transfers')}
+                      className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[hsl(145,60%,96%)] hover:bg-[hsl(145,60%,92%)] transition-colors text-center"
+                    >
+                      <svg className="w-6 h-6 text-[hsl(145,55%,42%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                      </svg>
+                      <span className="text-sm font-medium text-[hsl(145,55%,32%)]">Transferencias</span>
+                    </button>
+                    <button 
+                      onClick={() => setActiveView('daily-close')}
+                      className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[hsl(32,100%,96%)] hover:bg-[hsl(32,100%,92%)] transition-colors text-center"
+                    >
+                      <svg className="w-6 h-6 text-[hsl(32,95%,55%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                      </svg>
+                      <span className="text-sm font-medium text-[hsl(32,80%,35%)]">Cierre de Caja</span>
+                    </button>
+                    <button 
+                      onClick={() => setActiveView('contabilidad-divisas')}
+                      className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[hsl(200,85%,97%)] hover:bg-[hsl(200,85%,93%)] transition-colors text-center"
+                    >
+                      <svg className="w-6 h-6 text-[hsl(200,80%,50%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      <span className="text-sm font-medium text-[hsl(200,80%,40%)]">Contabilidad</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
