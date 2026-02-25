@@ -124,28 +124,27 @@ const ExchangeManagement = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5">
-      <div className="w-full p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6 md:space-y-8">
-        {/* Encabezado */}
-        <div className="bg-card rounded-xl shadow-lg p-4 sm:p-6 border border-border/50">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+      <div className="w-full p-2 sm:p-3 md:p-4 lg:p-6 space-y-3 sm:space-y-4 md:space-y-6">
+        {/* Encabezado Responsive */}
+        <div className="bg-card rounded-xl shadow-lg p-3 sm:p-4 md:p-6 border border-border/50">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary mb-1 sm:mb-2">
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-bold text-primary mb-0.5 sm:mb-1">
                 💱 Cambio de Divisas
               </h1>
-              <p className="text-muted-foreground text-xs sm:text-sm lg:text-base">
-                Gestiona las operaciones donde el cliente entrega una divisa y
-                recibe otra.
+              <p className="text-muted-foreground text-xs sm:text-sm">
+                Gestiona operaciones de cambio de divisa.
               </p>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-muted-foreground">Punto de Atención</p>
-              <p className="text-lg font-semibold text-primary truncate max-w-[260px]">
+            <div className="text-left sm:text-right w-full sm:w-auto">
+              <p className="text-xs text-muted-foreground">Punto</p>
+              <p className="text-sm sm:text-base font-semibold text-primary truncate max-w-[200px] sm:max-w-[260px]">
                 {selectedPoint?.nombre}
               </p>
               {onReturnToDashboard && (
-                <div className="mt-3">
-                  <Button variant="outline" onClick={onReturnToDashboard}>
-                    Volver al panel
+                <div className="mt-2">
+                  <Button variant="outline" size="sm" onClick={onReturnToDashboard}>
+                    Volver
                   </Button>
                 </div>
               )}
@@ -156,9 +155,9 @@ const ExchangeManagement = ({
         {/* Formulario principal */}
         <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
           {isProcessing ? (
-            <div className="text-center py-16 px-6">
-              <div className="animate-spin rounded-full h-20 w-20 border-4 border-primary/20 border-t-primary mx-auto" />
-              <p className="mt-6 text-lg text-muted-foreground">
+            <div className="text-center py-8 sm:py-16 px-4 sm:px-6">
+              <div className="animate-spin rounded-full h-12 w-12 sm:h-20 sm:w-20 border-4 border-primary/20 border-t-primary mx-auto" />
+              <p className="mt-4 sm:mt-6 text-base sm:text-lg text-muted-foreground">
                 Procesando cambio...
               </p>
             </div>
@@ -179,8 +178,8 @@ const ExchangeManagement = ({
           className="bg-card rounded-xl shadow-lg border border-border/50"
         />
 
-        {/* Listas */}
-        <div className="grid lg:grid-cols-2 gap-8">
+        {/* Listas - Responsive: apiladas en móvil, lado a lado en desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
           <div className="bg-card rounded-xl shadow-lg border border-border/50 overflow-hidden">
             <ExchangeList
               exchanges={exchanges || []}

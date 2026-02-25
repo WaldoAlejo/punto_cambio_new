@@ -162,15 +162,14 @@ const TransferForm = ({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Nueva Transferencia</CardTitle>
-        <CardDescription>
-          Solicita una transferencia entre puntos. Todos los campos son
-          obligatorios.
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base sm:text-lg">Nueva Transferencia</CardTitle>
+        <CardDescription className="text-xs sm:text-sm">
+          Solicita transferencia entre puntos.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Origen */}
             <div className="space-y-1">
@@ -214,7 +213,7 @@ const TransferForm = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Moneda */}
             <div className="space-y-1">
-              <Label htmlFor="currency" className="text-sm font-medium">
+              <Label htmlFor="currency" className="text-xs sm:text-sm font-medium">
                 Moneda *
               </Label>
               <Select
@@ -242,16 +241,16 @@ const TransferForm = ({
 
             {/* Monto */}
             <div className="space-y-1">
-              <Label htmlFor="amount" className="text-sm font-medium">
+              <Label htmlFor="amount" className="text-xs sm:text-sm font-medium">
                 Monto *
               </Label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-sm">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground text-xs sm:text-sm">
                   {selectedCurrency?.simbolo || "$"}
                 </span>
                 <Input
                   id="amount"
-                  className="pl-8 h-9"
+                  className="pl-7 sm:pl-8 h-9 text-sm"
                   type="number"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
@@ -272,16 +271,16 @@ const TransferForm = ({
 
           {/* Descripción */}
           <div className="space-y-1">
-            <Label htmlFor="description" className="text-sm font-medium">
-              Descripción / Motivo *
+            <Label htmlFor="description" className="text-xs sm:text-sm font-medium">
+              Descripción *
             </Label>
             <Textarea
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ej: Transferencia de fondos para cambio de turno"
+              placeholder="Ej: Transferencia de fondos"
               rows={2}
-              className="resize-none"
+              className="resize-none text-sm"
             />
             {errors.description && (
               <span className="text-xs text-destructive">
@@ -295,8 +294,8 @@ const TransferForm = ({
             currencyId &&
             amount &&
             parseFloat(amount) > 0 && (
-              <div className="p-3 bg-muted/50 rounded-lg border">
-                <h4 className="font-medium mb-2 text-sm">Resumen</h4>
+              <div className="p-2.5 sm:p-3 bg-muted/50 rounded-lg border">
+                <h4 className="font-medium mb-2 text-xs sm:text-sm">Resumen</h4>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>
                     <span className="text-muted-foreground">Desde:</span>{" "}
@@ -312,20 +311,20 @@ const TransferForm = ({
                     {amount} {selectedCurrency?.codigo}
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Solicitante:</span>{" "}
+                    <span className="text-muted-foreground">Solicita:</span>{" "}
                     {user.nombre}
                   </div>
                 </div>
               </div>
             )}
 
-          <div className="flex gap-2 pt-2">
+          <div className="flex flex-col sm:flex-row gap-2 pt-2">
             <Button
               type="submit"
               disabled={isLoading || Object.values(errors).some(Boolean)}
-              className="h-9"
+              className="h-9 text-sm"
             >
-              {isLoading ? "Creando..." : "Crear Transferencia"}
+              {isLoading ? "Creando..." : "Crear"}
             </Button>
             {formHasData && (
               <Button
@@ -333,7 +332,7 @@ const TransferForm = ({
                 variant="outline"
                 onClick={onCancel}
                 disabled={isLoading}
-                className="h-9"
+                className="h-9 text-sm"
               >
                 Cancelar
               </Button>

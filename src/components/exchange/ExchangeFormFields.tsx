@@ -139,17 +139,17 @@ const ExchangeFormFields = ({
     !!amountMonedas && (parseFloat(amountMonedas) || 0) > 0;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       {/* Tipo de operación compacto */}
-      <div className="space-y-2">
-        <Label className="text-sm font-medium">Tipo de Operación</Label>
+      <div className="space-y-1.5 sm:space-y-2">
+        <Label className="text-xs sm:text-sm font-medium">Tipo de Operación</Label>
         <Select
           value={operationType}
           onValueChange={(value) =>
             setOperationType(value as "COMPRA" | "VENTA")
           }
         >
-          <SelectTrigger className="h-10">
+          <SelectTrigger className="h-9 sm:h-10 text-sm">
             <SelectValue placeholder="Seleccionar tipo" />
           </SelectTrigger>
           <SelectContent>
@@ -159,46 +159,41 @@ const ExchangeFormFields = ({
         </Select>
       </div>
 
-      {/* Monedas en una sola fila */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
+      {/* Monedas - Responsive: apiladas en móvil */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+        <div className="space-y-1.5 sm:space-y-2">
           <CurrencySearchSelect
             currencies={fromOptions}
             value={fromCurrency}
             onValueChange={handleSelectFrom}
-            placeholder="Seleccionar moneda que entrega el cliente"
-            label="💰 Moneda que ENTREGA el Cliente"
+            placeholder="Moneda que entrega"
+            label="💰 Entrega el Cliente"
           />
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1.5 sm:space-y-2">
           <CurrencySearchSelect
             currencies={toOptions}
             value={toCurrency}
             onValueChange={handleSelectTo}
-            placeholder="Seleccionar moneda que recibe el cliente"
-            label="💵 Moneda que RECIBE el Cliente"
+            placeholder="Moneda que recibe"
+            label="💵 Recibe el Cliente"
           />
         </div>
       </div>
 
-      {/* Aviso y corrección si USD está invertido con respecto al tipo */}
+      {/* Aviso y corrección si USD está invertido */}
       {usdInversion && (
-        <div className="p-3 border border-yellow-300 bg-yellow-50 rounded-md text-sm flex items-start justify-between gap-3">
-          <div>
+        <div className="p-2.5 sm:p-3 border border-yellow-300 bg-yellow-50 rounded-md text-xs sm:text-sm flex flex-col sm:flex-row items-start justify-between gap-2 sm:gap-3">
+          <div className="flex-1">
             <p className="font-medium text-yellow-800">
-              Detección de inversión USD para {operationType}.
+              USD invertido para {operationType}
             </p>
-            <p className="text-yellow-800/90">
-              Para {operationType === "COMPRA" ? "COMPRA" : "VENTA"}, USD debe
-              ser{" "}
-              {operationType === "COMPRA"
-                ? "moneda de DESTINO"
-                : "moneda de ORIGEN"}
-              .
+            <p className="text-yellow-800/90 text-xs">
+              USD debe ser {operationType === "COMPRA" ? "DESTINO" : "ORIGEN"}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={fixUSDInversion}>
+          <Button variant="outline" size="sm" className="text-xs h-8" onClick={fixUSDInversion}>
             Corregir
           </Button>
         </div>
@@ -213,11 +208,11 @@ const ExchangeFormFields = ({
         />
       )}
 
-      {/* Tasas diferenciadas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Tasas diferenciadas - Responsive */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div className="space-y-1">
-          <Label className="text-sm font-medium">
-            💴 Tasa de Cambio para Billetes
+          <Label className="text-xs sm:text-sm font-medium">
+            💴 Tasa Billetes
           </Label>
           <Input
             type="number"
@@ -225,20 +220,18 @@ const ExchangeFormFields = ({
             min="0"
             value={rateBilletes}
             onChange={(e) => setRateBilletes(e.target.value)}
-            placeholder={
-              billetesActivos ? "0.0000" : "Se habilita con billetes"
-            }
-            className="h-10"
+            placeholder={billetesActivos ? "0.0000" : "Con billetes"}
+            className="h-9 sm:h-10 text-sm"
             disabled={!billetesActivos}
           />
-          <p className="text-xs text-muted-foreground">
-            Solo requerida si ingresa monto en <b>billetes</b>.
+          <p className="text-[10px] sm:text-xs text-muted-foreground">
+            Solo con billetes
           </p>
         </div>
 
         <div className="space-y-1">
-          <Label className="text-sm font-medium">
-            🪙 Tasa de Cambio para Monedas
+          <Label className="text-xs sm:text-sm font-medium">
+            🪙 Tasa Monedas
           </Label>
           <Input
             type="number"
@@ -246,29 +239,29 @@ const ExchangeFormFields = ({
             min="0"
             value={rateMonedas}
             onChange={(e) => setRateMonedas(e.target.value)}
-            placeholder={monedasActivas ? "0.0000" : "Se habilita con monedas"}
-            className="h-10"
+            placeholder={monedasActivas ? "0.0000" : "Con monedas"}
+            className="h-9 sm:h-10 text-sm"
             disabled={!monedasActivas}
           />
-          <p className="text-xs text-muted-foreground">
-            Solo requerida si ingresa monto en <b>monedas</b>.
+          <p className="text-[10px] sm:text-xs text-muted-foreground">
+            Solo con monedas
           </p>
         </div>
       </div>
 
-      {/* Montos que entrega el cliente */}
-      <div className="border rounded-lg p-4 bg-blue-50">
-        <Label className="text-sm font-medium mb-3 block">
-          💰 Montos que Entrega el Cliente
+      {/* Montos que entrega el cliente - Responsive */}
+      <div className="border rounded-lg p-3 sm:p-4 bg-blue-50">
+        <Label className="text-xs sm:text-sm font-medium mb-2 sm:mb-3 block">
+          💰 Entrega el Cliente
           {fromCurrency && (
             <span className="text-muted-foreground ml-1">
               ({getCurrencyName(fromCurrency)})
             </span>
           )}
         </Label>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="space-y-2">
-            <Label className="text-xs">💴 Billetes</Label>
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <div className="space-y-1 sm:space-y-2">
+            <Label className="text-[10px] sm:text-xs">💴 Billetes</Label>
             <Input
               type="number"
               inputMode="decimal"
@@ -277,11 +270,11 @@ const ExchangeFormFields = ({
               value={amountBilletes}
               onChange={(e) => onAmountBilletesChange(e.target.value)}
               placeholder="0.00"
-              className="h-9"
+              className="h-8 sm:h-9 text-sm"
             />
           </div>
-          <div className="space-y-2">
-            <Label className="text-xs">🪙 Monedas</Label>
+          <div className="space-y-1 sm:space-y-2">
+            <Label className="text-[10px] sm:text-xs">🪙 Monedas</Label>
             <Input
               type="number"
               inputMode="decimal"
@@ -290,12 +283,12 @@ const ExchangeFormFields = ({
               value={amountMonedas}
               onChange={(e) => onAmountMonedasChange(e.target.value)}
               placeholder="0.00"
-              className="h-9"
+              className="h-8 sm:h-9 text-sm"
             />
           </div>
-          <div className="space-y-2">
-            <Label className="text-xs">💰 Total Entregado</Label>
-            <div className="h-9 px-3 py-2 border rounded-md bg-white flex items-center font-bold text-blue-700">
+          <div className="space-y-1 sm:space-y-2">
+            <Label className="text-[10px] sm:text-xs">💰 Total</Label>
+            <div className="h-8 sm:h-9 px-2 sm:px-3 py-1.5 sm:py-2 border rounded-md bg-white flex items-center font-bold text-blue-700 text-sm">
               {isNaN(totalAmountEntregado)
                 ? "0.00"
                 : totalAmountEntregado.toFixed(2)}
@@ -304,18 +297,18 @@ const ExchangeFormFields = ({
         </div>
       </div>
 
-      {/* Monto total que recibe el cliente */}
-      <div className="border rounded-lg p-4 bg-green-50">
-        <Label className="text-sm font-medium mb-3 block">
-          💵 Monto Total que Recibe el Cliente
+      {/* Monto total que recibe el cliente - Responsive */}
+      <div className="border rounded-lg p-3 sm:p-4 bg-green-50">
+        <Label className="text-xs sm:text-sm font-medium mb-2 sm:mb-3 block">
+          💵 Recibe el Cliente
           {toCurrency && (
             <span className="text-muted-foreground ml-1">
               ({getCurrencyName(toCurrency)})
             </span>
           )}
         </Label>
-        <div className="h-12 px-4 py-3 border rounded-md bg-white flex items-center">
-          <span className="text-xl font-bold text-green-700">
+        <div className="h-10 sm:h-12 px-3 sm:px-4 py-2 sm:py-3 border rounded-md bg-white flex items-center">
+          <span className="text-lg sm:text-xl font-bold text-green-700">
             {isNaN(totalAmountRecibido)
               ? "0.00"
               : totalAmountRecibido.toFixed(2)}
@@ -323,14 +316,14 @@ const ExchangeFormFields = ({
         </div>
       </div>
 
-      {/* Observaciones más compactas */}
-      <div className="space-y-2">
-        <Label className="text-sm font-medium">Observaciones (Opcional)</Label>
+      {/* Observaciones */}
+      <div className="space-y-1.5 sm:space-y-2">
+        <Label className="text-xs sm:text-sm font-medium">Observaciones</Label>
         <Input
           value={observation}
           onChange={(e) => setObservation(e.target.value)}
-          placeholder="Observaciones adicionales..."
-          className="h-10"
+          placeholder="Observaciones..."
+          className="h-9 sm:h-10 text-sm"
         />
       </div>
     </div>

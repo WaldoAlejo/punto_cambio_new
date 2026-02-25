@@ -149,20 +149,20 @@ export const PointManagement = () => {
   // --- UI ---
   if (isLoading) {
     return (
-      <div className="p-6 text-center py-12">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Cargando puntos de atención...</p>
+      <div className="p-3 sm:p-6 text-center py-8 sm:py-12">
+        <div className="animate-spin rounded-full h-16 w-16 sm:h-32 sm:w-32 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-3 sm:mt-4 text-sm sm:text-base text-gray-600">Cargando puntos...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6 text-center py-12">
-        <p className="text-red-500 text-lg">
-          Error al cargar puntos de atención
+      <div className="p-3 sm:p-6 text-center py-8 sm:py-12">
+        <p className="text-red-500 text-base sm:text-lg">
+          Error al cargar puntos
         </p>
-        <p className="text-gray-500 mt-2">{error}</p>
+        <p className="text-gray-500 mt-2 text-sm">{error}</p>
         <Button onClick={loadPoints} className="mt-4" variant="outline">
           Reintentar
         </Button>
@@ -171,15 +171,15 @@ export const PointManagement = () => {
   }
 
   return (
-    <div className="h-full flex flex-col gap-4">
-      {/* Header - Siempre visible */}
-      <div className="flex-shrink-0 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-800">
-          Gestión de Puntos de Atención
+    <div className="h-full flex flex-col gap-3 sm:gap-4">
+      {/* Header - Responsive */}
+      <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h1 className="text-base sm:text-lg font-bold text-gray-800">
+          Gestión de Puntos
         </h1>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-blue-600 hover:bg-blue-700 text-sm h-9"
         >
           {showForm ? "Cancelar" : "Nuevo Punto"}
         </Button>
@@ -189,18 +189,18 @@ export const PointManagement = () => {
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
         {showForm && (
           <Card>
-            <CardHeader>
-              <CardTitle>Crear Nuevo Punto de Atención</CardTitle>
-              <CardDescription>
-                Complete la información del nuevo punto de atención
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base sm:text-lg">Crear Nuevo Punto</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Complete la información del punto
               </CardDescription>
             </CardHeader>
-            <CardContent className="max-h-[70vh] overflow-y-auto">
-              <form onSubmit={handleSubmit} className="space-y-6">
+            <CardContent className="max-h-[70vh] overflow-y-auto p-3 sm:p-6">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                 {/* Información básica */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Nombre *</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label className="text-xs sm:text-sm">Nombre *</Label>
                     <Input
                       value={formData.nombre}
                       onChange={(e) =>

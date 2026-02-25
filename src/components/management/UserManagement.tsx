@@ -251,10 +251,10 @@ export const UserManagement = () => {
 
   if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando usuarios...</p>
+      <div className="p-3 sm:p-6">
+        <div className="text-center py-8 sm:py-12">
+          <div className="animate-spin rounded-full h-16 w-16 sm:h-32 sm:w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-3 sm:mt-4 text-sm sm:text-base text-gray-600">Cargando usuarios...</p>
         </div>
       </div>
     );
@@ -262,10 +262,10 @@ export const UserManagement = () => {
 
   if (error) {
     return (
-      <div className="p-6">
-        <div className="text-center py-12">
-          <p className="text-red-500 text-lg">Error al cargar usuarios</p>
-          <p className="text-gray-500 mt-2">{error}</p>
+      <div className="p-3 sm:p-6">
+        <div className="text-center py-8 sm:py-12">
+          <p className="text-red-500 text-base sm:text-lg">Error al cargar usuarios</p>
+          <p className="text-gray-500 mt-2 text-sm">{error}</p>
           <Button onClick={loadData} className="mt-4" variant="outline">
             Reintentar
           </Button>
@@ -275,13 +275,13 @@ export const UserManagement = () => {
   }
 
   return (
-    <>
-      {/* Header - Siempre visible */}
-      <div className="flex-shrink-0 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-800">Gestión de Usuarios</h1>
+    <div className="h-full flex flex-col gap-3 sm:gap-4">
+      {/* Header - Responsive */}
+      <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h1 className="text-base sm:text-lg font-bold text-gray-800">Gestión de Usuarios</h1>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-blue-600 hover:bg-blue-700 text-sm h-9"
         >
           {showForm ? "Cancelar" : "Nuevo Usuario"}
         </Button>
@@ -343,9 +343,9 @@ export const UserManagement = () => {
                       </Select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Usuario</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label className="text-xs sm:text-sm">Usuario</Label>
                       <Input
                         value={formData.username}
                         onChange={(e) =>
@@ -357,8 +357,8 @@ export const UserManagement = () => {
                         placeholder="Nombre de usuario"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label>Email</Label>
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label className="text-xs sm:text-sm">Email</Label>
                       <Input
                         type="email"
                         value={formData.correo}
@@ -372,8 +372,8 @@ export const UserManagement = () => {
                       />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Contraseña Temporal</Label>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label className="text-xs sm:text-sm">Contraseña Temporal</Label>
                     <Input
                       type="password"
                       value={formData.password}
@@ -398,10 +398,10 @@ export const UserManagement = () => {
                       </ul>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Button
                       type="submit"
-                      className="bg-blue-600 hover:bg-blue-700"
+                      className="bg-blue-600 hover:bg-blue-700 text-sm h-9"
                     >
                       Crear Usuario
                     </Button>
@@ -409,6 +409,7 @@ export const UserManagement = () => {
                       type="button"
                       variant="outline"
                       onClick={() => setShowForm(false)}
+                      className="text-sm h-9"
                     >
                       Cancelar
                     </Button>
@@ -419,24 +420,25 @@ export const UserManagement = () => {
           </>
         )}
         <Card>
-          <CardHeader>
-            <CardTitle>Usuarios del Sistema</CardTitle>
-            <CardDescription>
-              Lista de todos los usuarios registrados
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base sm:text-lg">Usuarios del Sistema</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              Lista de usuarios registrados
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-2 sm:p-6">
             {users.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500 text-lg">
+              <div className="text-center py-8 sm:py-12">
+                <p className="text-gray-500 text-base sm:text-lg">
                   No hay usuarios registrados
                 </p>
-                <p className="text-gray-400 mt-2">
+                <p className="text-gray-400 mt-2 text-sm">
                   Cree el primer usuario haciendo clic en "Nuevo Usuario"
                 </p>
               </div>
             ) : (
-              <Table>
+              <div className="overflow-x-auto -mx-2 px-2">
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre</TableHead>
@@ -539,7 +541,7 @@ export const UserManagement = () => {
         )}
         <ConfirmationDialog />
       </div>
-    </>
+    </div>
   );
 }
 

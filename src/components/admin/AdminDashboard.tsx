@@ -168,39 +168,39 @@ const AdminDashboard: React.FC = () => {
           }}
         />
 
-        {/* Stats Grid */}
-        <StatsGroup columns={4} className="mb-8">
+        {/* Stats Grid - Responsive: 1 col móvil, 2 col tablet, 4 col desktop */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6 lg:mb-8">
           <StatsCard
             title="Total Usuarios"
             value={stats.totalUsuarios}
-            description="Usuarios activos en el sistema"
+            description="Usuarios activos"
             icon={Users}
-            trend={{ value: 12, direction: "up", label: "vs mes anterior" }}
+            trend={{ value: 12, direction: "up", label: "vs mes" }}
             loading={loading}
           />
           <StatsCard
-            title="Puntos de Atención"
+            title="Puntos"
             value={stats.totalPuntos}
-            description="Ubicaciones operativas"
+            description="Ubicaciones"
             icon={Building2}
             loading={loading}
           />
           <StatsCard
-            title="Monedas Configuradas"
+            title="Monedas"
             value={stats.totalMonedas}
-            description="Divisas disponibles"
+            description="Divisas"
             icon={Coins}
             loading={loading}
           />
           <StatsCard
-            title="Transacciones Hoy"
+            title="Transacciones"
             value={stats.transaccionesHoy}
-            description="Operaciones realizadas"
+            description="Hoy"
             icon={ArrowRightLeft}
             trend={{ value: 8, direction: "up", label: "vs ayer" }}
             loading={loading}
           />
-        </StatsGroup>
+        </div>
 
         {/* Alertas y Estado */}
         {stats.diferenciasHoy > 0 && (
@@ -218,10 +218,10 @@ const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Grid Principal */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Grid Principal - Responsive */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
           {/* Columna Izquierda - Actividad */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="xl:col-span-2 space-y-4 sm:space-y-6">
             {/* Gráfico de Actividad */}
             <Card hover>
               <CardHeader>
@@ -384,14 +384,14 @@ const AdminDashboard: React.FC = () => {
           </div>
 
           {/* Columna Derecha - Accesos Rápidos y Estado */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Accesos Rápidos */}
-            <Card hover>
-              <CardHeader>
-                <CardTitle className="text-lg">Accesos Rápidos</CardTitle>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base sm:text-lg">Accesos Rápidos</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-2 gap-2 sm:gap-3">
                   <QuickAccessButton
                     icon={Users}
                     label="Usuarios"
@@ -512,10 +512,10 @@ const QuickAccessButton: React.FC<QuickAccessButtonProps> = ({
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col items-center gap-2 p-4 rounded-xl transition-all duration-200 ${colorClasses[color]}`}
+      className={`flex flex-col items-center gap-1.5 sm:gap-2 p-3 sm:p-4 rounded-xl transition-all duration-200 ${colorClasses[color]}`}
     >
-      <Icon className="w-6 h-6" />
-      <span className="text-sm font-medium">{label}</span>
+      <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
+      <span className="text-xs sm:text-sm font-medium text-center">{label}</span>
     </button>
   );
 };

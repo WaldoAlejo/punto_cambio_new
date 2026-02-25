@@ -152,29 +152,31 @@ const TransferManagement = ({ user }: TransferManagementProps) => {
 
   if (isLoading) {
     return (
-      <div className="p-6">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando transferencias...</p>
+      <div className="p-3 sm:p-6">
+        <div className="text-center py-8 sm:py-12">
+          <div className="animate-spin rounded-full h-16 w-16 sm:h-32 sm:w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-3 sm:mt-4 text-sm sm:text-base text-gray-600">Cargando...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">
-          Gestión de Transferencias
+    <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
+      {/* Header Responsive */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800">
+          Transferencias
         </h1>
-        <div className="text-sm text-gray-500">
+        <div className="text-xs sm:text-sm text-gray-500">
           {selectedPoint
             ? `Punto: ${selectedPoint.nombre}`
-            : "Panel Administrativo"}
+            : "Panel Admin"}
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
+      {/* Grid Responsive */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <TransferForm
           user={user}
           selectedPoint={selectedPoint}
