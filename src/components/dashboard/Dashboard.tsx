@@ -100,6 +100,9 @@ const ContabilidadPorPunto = React.lazy(
 const SystemHealthDashboard = React.lazy(
   () => import("../admin/SystemHealthDashboard")
 );
+const AdminDashboard = React.lazy(
+  () => import("../admin/AdminDashboard")
+);
 
 /** Utils */
 const STORAGE_KEY_VIEW = "pc_active_view";
