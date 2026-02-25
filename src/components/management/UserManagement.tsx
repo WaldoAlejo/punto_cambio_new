@@ -515,6 +515,7 @@ export const UserManagement = () => {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>
