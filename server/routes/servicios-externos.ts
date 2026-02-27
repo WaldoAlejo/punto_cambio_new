@@ -14,6 +14,7 @@ import {
   TipoMovimiento as TipoMov,
   TipoReferencia,
 } from "../services/movimientoSaldoService.js";
+import { nowEcuador } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -722,7 +723,7 @@ router.post(
             moneda_id: usdId,
             monto: montoNum,
             usuario_id: req.user.id,
-            fecha: new Date(),
+            fecha: nowEcuador(),
             descripcion: typeof descripcion === "string" ? descripcion : null,
             numero_referencia:
               typeof numero_referencia === "string" ? numero_referencia : null,

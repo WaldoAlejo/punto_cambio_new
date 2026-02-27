@@ -5,6 +5,7 @@ import { z } from "zod";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import logger from "../utils/logger.js";
+import { nowEcuador } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -163,7 +164,7 @@ router.patch(
         data: {
           estado: "APROBADO",
           aprobado_por: req.user.id,
-          fecha_aprobacion: new Date(),
+          fecha_aprobacion: nowEcuador(),
         },
       });
 
@@ -205,7 +206,7 @@ router.patch(
         data: {
           estado: "RECHAZADO",
           aprobado_por: req.user.id,
-          fecha_aprobacion: new Date(),
+          fecha_aprobacion: nowEcuador(),
         },
       });
 

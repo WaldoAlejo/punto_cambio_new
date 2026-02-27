@@ -7,6 +7,7 @@ import { authenticateToken } from "../middleware/auth.js";
 import {
   gyeDayRangeUtcFromDateOnly,
   gyeParseDateOnly,
+  nowEcuador,
 } from "../utils/timezone.js";
 import cierreService from "../services/cierreService.js";
 import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
@@ -1018,7 +1019,7 @@ router.post(
               usuario_id: usuario.id,
               observaciones: observaciones ?? null,
               estado: "CERRADO",
-              fecha_cierre: new Date(),
+              fecha_cierre: nowEcuador(),
               cerrado_por: usuario.id,
               diferencias_reportadas: diferencias_reportadas ?? null,
             },
@@ -1034,7 +1035,7 @@ router.post(
             },
             data: {
               estado: "CERRADO",
-              fecha_cierre: new Date(),
+              fecha_cierre: nowEcuador(),
               cerrado_por: usuario.id,
               observaciones: observaciones ?? existing.observaciones,
               diferencias_reportadas:
@@ -1071,7 +1072,7 @@ router.post(
           jornadaFinalizada = await tx.jornada.update({
             where: { id: jornadaActiva.id },
             data: {
-              fecha_salida: new Date(),
+              fecha_salida: nowEcuador(),
               estado: "COMPLETADO",
               observaciones:
                 "Jornada finalizada automáticamente tras completar cierre diario",

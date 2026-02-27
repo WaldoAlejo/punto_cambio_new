@@ -4,7 +4,7 @@ import prisma from "../lib/prisma.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { idempotency } from "../middleware/idempotency.js";
 import logger from "../utils/logger.js";
-import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento as MovimientoTipoMovimiento,
@@ -171,10 +171,10 @@ router.post(
           data: {
             usuario_id: usuario.id,
             punto_atencion_id: puntoAtencionId,
-            fecha: new Date(), // fecha cabecera (hoy UTC)
+            fecha: nowEcuador(), // fecha cabecera (hoy Ecuador)
             estado: tipo_cierre, // puede ser PARCIAL o CERRADO
             observaciones: observaciones || "",
-            fecha_cierre: new Date(),
+            fecha_cierre: nowEcuador(),
             total_cambios: totalMovimientos,
             total_ingresos: totalIngresos,
             total_egresos: totalEgresos,
@@ -186,7 +186,7 @@ router.post(
           data: {
             estado: tipo_cierre,
             observaciones: observaciones ?? cabecera.observaciones ?? "",
-            fecha_cierre: new Date(),
+            fecha_cierre: nowEcuador(),
             total_cambios: totalMovimientos,
             total_ingresos: totalIngresos,
             total_egresos: totalEgresos,
@@ -328,7 +328,7 @@ router.post(
           await tx.jornada.update({
             where: { id: jornadaActiva.id },
             data: {
-              fecha_salida: new Date(),
+              fecha_salida: nowEcuador(),
               estado: "COMPLETADO",
               observaciones: "Jornada finalizada automáticamente al completar cierre de caja",
             },

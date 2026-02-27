@@ -16,7 +16,7 @@ import prisma from "../lib/prisma.js";
 import { pool } from "../lib/database.js";
 import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
-import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
 
@@ -241,7 +241,7 @@ router.get("/movimientos-auditoria", authenticateToken, async (req, res) => {
   
   try {
     const fechaParam = (req.query.fecha as string | undefined)?.trim();
-    const fechaBase = fechaParam ? new Date(`${fechaParam}T00:00:00`) : new Date();
+    const fechaBase = fechaParam ? new Date(`${fechaParam}T00:00:00`) : nowEcuador();
     const { gte, lt } = gyeDayRangeUtcFromDate(fechaBase);
     const puntoAtencionId = req.query.punto_atencion_id as string || usuario.punto_atencion_id;
 

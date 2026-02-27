@@ -1,5 +1,6 @@
 import express from "express";
 import logger from "../utils/logger.js";
+import { nowEcuador } from "../utils/timezone.js";
 import { transferValidationService } from "../services/transferValidationService.js";
 import transferCreationService from "../services/transferCreationService.js";
 import prisma from "../lib/prisma.js";
@@ -140,8 +141,8 @@ const controller = {
             descripcion: descripcion || null,
             numero_recibo: numeroRecibo,
             estado: estadoInicial,
-            fecha: new Date(),
-            fecha_envio: new Date(), // 👈 Registrar fecha de envío
+            fecha: nowEcuador(),
+            fecha_envio: nowEcuador(), // 👈 Registrar fecha de envío
             via: via as TipoViaTransferencia,
           },
         });
@@ -480,7 +481,7 @@ const controller = {
           where: { id: transfer.id },
           data: {
             estado: "CANCELADO",
-            fecha_rechazo: new Date(),
+            fecha_rechazo: nowEcuador(),
             observaciones_rechazo,
             rechazado_por: usuarioId,
           },

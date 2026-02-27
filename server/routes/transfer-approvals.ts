@@ -10,7 +10,7 @@ import {
   TipoMovimiento,
   TipoReferencia,
 } from "../services/movimientoSaldoService.js";
-import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -174,7 +174,7 @@ router.patch(
           data: {
             estado: "APROBADO",
             aprobado_por: userId,
-            fecha_aprobacion: new Date(),
+            fecha_aprobacion: nowEcuador(),
             observaciones_aprobacion: observaciones,
           },
           include: {
@@ -577,7 +577,7 @@ router.patch(
         data: {
           estado: "RECHAZADO",
           rechazado_por: req.user?.id,
-          fecha_rechazo: new Date(),
+          fecha_rechazo: nowEcuador(),
           observaciones_aprobacion: observaciones,
         },
         include: {
@@ -744,7 +744,7 @@ router.post(
           data: {
             estado: "COMPLETADO",
             aceptado_por: userId,
-            fecha_aceptacion: new Date(),
+            fecha_aceptacion: nowEcuador(),
             observaciones_aceptacion: observaciones,
           },
           include: {
@@ -964,7 +964,7 @@ router.post(
           where: { id: transferId },
           data: {
             estado: "CANCELADO",
-            fecha_rechazo: new Date(),
+            fecha_rechazo: nowEcuador(),
             observaciones_rechazo: observaciones || "Rechazada por el punto destino",
           },
           include: {

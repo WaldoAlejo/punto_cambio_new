@@ -3,6 +3,7 @@ import { authenticateToken } from "../../middleware/auth.js";
 import { ServientregaDBService } from "../../services/servientregaDBService.js";
 import { ServientregaAPIService } from "../../services/servientregaAPIService.js";
 import prisma from "../../lib/prisma.js";
+import { nowEcuador } from "../../utils/timezone.js";
 
 const router = express.Router();
 const dbService = new ServientregaDBService();
@@ -242,7 +243,7 @@ router.put(
               respondido_por: usuario?.id || "SYSTEM",
               respondido_por_nombre: usuario?.nombre || "Sistema",
               observaciones_respuesta: observaciones || "",
-              fecha_respuesta: new Date(),
+              fecha_respuesta: nowEcuador(),
             });
 
           // 3. Revertir los balances (restar del Saldo USD general, sumar al ServientregaSaldo)
@@ -338,7 +339,7 @@ router.put(
             respondido_por: usuario?.id || "SYSTEM",
             respondido_por_nombre: usuario?.nombre || "Sistema",
             observaciones_respuesta: observaciones || "",
-            fecha_respuesta: new Date(),
+            fecha_respuesta: nowEcuador(),
           });
 
         return res.json({
@@ -419,7 +420,7 @@ router.post(
           respondido_por: usuario?.id || "SYSTEM",
           respondido_por_nombre: usuario?.nombre || "Sistema",
           observaciones_respuesta: comentario || "",
-          fecha_respuesta: new Date(),
+          fecha_respuesta: nowEcuador(),
         }
       );
 

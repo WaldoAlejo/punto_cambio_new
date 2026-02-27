@@ -9,6 +9,7 @@
 
 import { PrismaClient, Prisma } from "@prisma/client";
 import logger from "../utils/logger.js";
+import { nowEcuador } from "../utils/timezone.js";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento,
@@ -213,10 +214,10 @@ export async function ejecutarCierre(
         data: {
           usuario_id: usuarioId,
           punto_atencion_id: puntoAtencionId,
-          fecha: new Date(),
+          fecha: nowEcuador(),
           estado: tipoCierre,
           observaciones: observaciones || "",
-          fecha_cierre: tipoCierre === "CERRADO" ? new Date() : null,
+          fecha_cierre: tipoCierre === "CERRADO" ? nowEcuador() : null,
           total_ingresos: detalles.reduce(
             (sum, d) => sum + (d.ingresos_periodo || 0),
             0
@@ -237,7 +238,7 @@ export async function ejecutarCierre(
         data: {
           estado: tipoCierre,
           observaciones: observaciones || cabecera.observaciones,
-          fecha_cierre: tipoCierre === "CERRADO" ? new Date() : null,
+          fecha_cierre: tipoCierre === "CERRADO" ? nowEcuador() : null,
           total_ingresos: detalles.reduce(
             (sum, d) => sum + (d.ingresos_periodo || 0),
             0
@@ -374,7 +375,7 @@ export async function ejecutarCierre(
         await ejecutor.jornada.update({
           where: { id: jornadaActiva.id },
           data: {
-            fecha_salida: new Date(),
+            fecha_salida: nowEcuador(),
             estado: "COMPLETADO",
             observaciones:
               "Jornada finalizada automáticamente al cerrar caja",

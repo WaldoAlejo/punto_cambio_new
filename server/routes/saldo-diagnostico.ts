@@ -11,6 +11,7 @@ import prisma from "../lib/prisma.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import cuadreCajaService from "../services/cuadreCajaService.js";
+import { nowEcuador } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.get(
       const { puntoId, monedaId } = req.params;
       const { fecha } = req.query;
 
-      const fechaConsulta = fecha ? new Date(String(fecha)) : new Date();
+      const fechaConsulta = fecha ? new Date(String(fecha)) : nowEcuador();
       const inicioDia = new Date(fechaConsulta);
       inicioDia.setHours(0, 0, 0, 0);
       const finDia = new Date(fechaConsulta);
@@ -202,7 +203,7 @@ router.get(
       const { puntoId } = req.params;
       const { fecha } = req.query;
 
-      const fechaConsulta = fecha ? new Date(String(fecha)) : new Date();
+      const fechaConsulta = fecha ? new Date(String(fecha)) : nowEcuador();
       const inicioDia = new Date(fechaConsulta);
       inicioDia.setHours(0, 0, 0, 0);
       const finDia = new Date(fechaConsulta);
@@ -380,7 +381,7 @@ router.post(
         data: {
           billetes: nuevoBilletes,
           monedas_fisicas: nuevoMonedas,
-          updated_at: new Date(),
+          updated_at: nowEcuador(),
         },
       });
 

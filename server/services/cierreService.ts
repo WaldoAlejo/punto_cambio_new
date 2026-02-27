@@ -11,7 +11,7 @@ import {
   TipoMovimiento as MovimientoTipoMovimiento,
   TipoReferencia as MovimientoTipoReferencia,
 } from "./movimientoSaldoService.js";
-import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 import saldoReconciliationService from "./saldoReconciliationService.js";
 
 interface DetalleMoneda {
@@ -466,7 +466,7 @@ class CierreService {
             where: { id: cuadreExistente.id },
             data: {
               estado: "CERRADO",
-              fecha_cierre: new Date(),
+              fecha_cierre: nowEcuador(),
               observaciones: observaciones || null,
               total_ingresos: totalIngresos,
               total_egresos: totalEgresos,
@@ -486,7 +486,7 @@ class CierreService {
               usuario_id,
               fecha: new Date(fechaInicio),
               estado: "CERRADO",
-              fecha_cierre: new Date(),
+              fecha_cierre: nowEcuador(),
               observaciones: observaciones || null,
               total_ingresos: totalIngresos,
               total_egresos: totalEgresos,
@@ -571,7 +571,7 @@ class CierreService {
             where: { id: cierreExistente.id },
             data: {
               estado: "CERRADO",
-              fecha_cierre: new Date(),
+              fecha_cierre: nowEcuador(),
               cerrado_por: usuario_id,
               observaciones: observaciones || cierreExistente.observaciones,
               diferencias_reportadas:
@@ -588,7 +588,7 @@ class CierreService {
               punto_atencion_id,
               usuario_id,
               estado: "CERRADO",
-              fecha_cierre: new Date(),
+              fecha_cierre: nowEcuador(),
               cerrado_por: usuario_id,
               observaciones: observaciones || null,
               diferencias_reportadas:
@@ -618,7 +618,7 @@ class CierreService {
           await tx.jornada.update({
             where: { id: jornadaActiva.id },
             data: {
-              fecha_salida: new Date(),
+              fecha_salida: nowEcuador(),
               estado: "COMPLETADO",
               observaciones:
                 "Jornada finalizada automáticamente al completar cierre diario",

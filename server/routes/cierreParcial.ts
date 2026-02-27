@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
-import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -149,7 +149,7 @@ router.post("/parcial", authenticateToken, async (req, res) => {
         data: {
           estado: "PARCIAL",
           observaciones: observaciones || "Cierre parcial realizado",
-          fecha_cierre: new Date(),
+          fecha_cierre: nowEcuador(),
           total_cambios: totalMovimientos,
           total_ingresos: totalIngresos,
           total_egresos: totalEgresos,

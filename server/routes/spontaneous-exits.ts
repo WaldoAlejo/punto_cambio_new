@@ -1,6 +1,7 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
+import { nowEcuador } from "../utils/timezone.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
@@ -251,7 +252,7 @@ router.patch(
         return;
       }
 
-      const fechaRegreso = new Date();
+      const fechaRegreso = nowEcuador();
       const duracionMinutos = Math.round(
         (fechaRegreso.getTime() - exit.fecha_salida.getTime()) / (1000 * 60)
       );

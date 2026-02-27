@@ -17,6 +17,7 @@ import axios from "axios";
 import {
   todayGyeDateOnly,
   gyeDayRangeUtcFromDateOnly,
+  nowEcuador,
 } from "../utils/timezone.js";
 import {
   registrarMovimientoSaldo,
@@ -1870,7 +1871,7 @@ router.patch(
         data: {
           estado: EstadoTransaccion.COMPLETADO,
           numero_recibo_completar: numeroReciboCierre,
-          fecha_completado: new Date(),
+          fecha_completado: nowEcuador(),
           saldo_pendiente: 0,
         },
         select: {
@@ -2303,7 +2304,7 @@ router.patch(
               ? round2(divisas_recibidas_total)
               : cambio.divisas_recibidas_total,
           numero_recibo_completar: numeroReciboCompletar,
-          fecha_completado: new Date(),
+          fecha_completado: nowEcuador(),
           saldo_pendiente: 0,
         },
         select: {
@@ -2604,7 +2605,7 @@ router.patch(
         where: { id },
         data: {
           saldo_pendiente: 0,
-          fecha_completado: new Date(),
+          fecha_completado: nowEcuador(),
           estado: EstadoTransaccion.COMPLETADO,
         },
         select: {

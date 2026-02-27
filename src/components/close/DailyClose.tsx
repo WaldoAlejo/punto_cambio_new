@@ -473,10 +473,11 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     try {
       setLoading(true);
       setFetchError(null);
+      console.log("[DailyClose] Iniciando fetchCuadreData...");
 
       const token = localStorage.getItem("authToken");
       if (!token) {
-        console.error("❌ No token found in localStorage");
+        console.error("[DailyClose] ❌ No token found in localStorage");
         const msg = "Por favor, inicie sesión nuevamente.";
         toast({
           title: "Sesión Expirada",
@@ -489,6 +490,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
       const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
       const endpoint = `${apiUrl}/cuadre-caja`;
+      console.log(`[DailyClose] Llamando endpoint: ${endpoint}`);
 
       const response = await fetch(endpoint, {
         headers: {
@@ -497,10 +499,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         },
       });
 
+      console.log(`[DailyClose] Respuesta cuadre-caja status: ${response.status}`);
+
       if (response.ok) {
         const data = await response.json();
+        console.log("[DailyClose] Respuesta cuadre-caja data:", data);
 
         if (data.success && data.data) {
+          console.log(`[DailyClose] Cuadre recibido con ${data.data.detalles?.length || 0} detalles`);
           setCuadreData(data.data);
 
           // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
@@ -521,14 +527,17 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           setFetchError(null);
         } else if (data.data?.mensaje) {
           // No hay movimientos hoy
+          console.log("[DailyClose] No hay movimientos:", data.data.mensaje);
           setCuadreData({ detalles: [], observaciones: "" });
           setUserAdjustments({});
           setFetchError(null);
+        } else {
+          console.warn("[DailyClose] Respuesta inesperada:", data);
         }
       } else {
         const errorText = await response.text();
         console.error(
-          "❌ Error response from cuadre API:",
+          "[DailyClose] ❌ Error response from cuadre API:",
           response.status,
           response.statusText,
           errorText
@@ -536,7 +545,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         throw new Error(`Error al obtener datos de cuadre: ${response.status}`);
       }
     } catch (error) {
-      console.error("❌ Error al obtener datos de cuadre:", error);
+      console.error("[DailyClose] ❌ Error al obtener datos de cuadre:", error);
       const msg = error instanceof Error ? error.message : "No se pudo cargar los datos de cuadre automático.";
       setFetchError(msg);
 
@@ -565,9 +574,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           }
         }
       } catch (fbErr) {
-        console.warn("Fallback sin movimientos no disponible:", fbErr);
+        console.warn("[DailyClose] Fallback sin movimientos no disponible:", fbErr);
       }
     } finally {
+      console.log("[DailyClose] fetchCuadreData finalizado");
       setLoading(false);
     }
   }, [selectedPoint]);
@@ -615,21 +625,28 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   // Si ya existe un cierre para hoy, mostrar tarjeta de "Cierre Completado"
   useEffect(() => {
     const checkTodayClose = async () => {
-      if (!selectedPoint) return;
+      if (!selectedPoint) {
+        console.log("[DailyClose] No hay punto seleccionado");
+        return;
+      }
       try {
         const fechaHoy = todayGyeDateOnly();
+        console.log(`[DailyClose] Verificando cierre existente para punto ${selectedPoint.id}, fecha ${fechaHoy}`);
         const res = await contabilidadDiariaService.getCierreDiario(
           selectedPoint.id,
           fechaHoy
         );
+        console.log("[DailyClose] Respuesta getCierreDiario:", res);
         if (res.success && res.cierre) {
+          console.log("[DailyClose] Cierre existente encontrado:", res.cierre);
           await fetchTodayClose();
         } else {
+          console.log("[DailyClose] No hay cierre existente para hoy");
           setTodayClose(null);
         }
       } catch (e) {
         // Si falla, no bloquear la vista principal
-        console.warn("Error verificando cierre del día:", e);
+        console.warn("[DailyClose] Error verificando cierre del día:", e);
         setTodayClose(null);
       }
     };
@@ -1166,6 +1183,13 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             Actualizar
           </Button>
         </div>
+      </div>
+
+      {/* Diagnóstico visible para debugging */}
+      <div className="bg-gray-100 p-3 rounded text-xs font-mono space-y-1">
+        <div><strong>Estado:</strong> loading={loading.toString()} | hasActiveJornada={hasActiveJornada?.toString()}</div>
+        <div><strong>Cuadre:</strong> detalles={cuadreData?.detalles?.length ?? 0} | error={fetchError || "ninguno"}</div>
+        <div><strong>Cierre:</strong> todayClose={todayClose ? "EXISTE" : "null"}</div>
       </div>
 
       {/* NOTA: El cierre de servicios externos ya NO es necesario como paso separado.
@@ -1824,6 +1848,29 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Panel de Diagnóstico - Solo visible si hay inconsistencias */}
+            {cuadreData && cuadreData.detalles && cuadreData.detalles.length > 0 && (
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <h4 className="font-semibold text-yellow-800 mb-2">
+                  ⚠️ Atención: Hay datos de cuadre pendientes
+                </h4>
+                <p className="text-sm text-yellow-700 mb-3">
+                  Se detectó que existen {cuadreData.detalles.length} moneda(s) con movimientos 
+                  que requieren cuadre, pero el sistema muestra el cierre como completado.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    console.log("[DailyClose] Forzando reset de todayClose");
+                    setTodayClose(null);
+                    fetchCuadreData();
+                  }}
+                >
+                  🔄 Recargar Formulario de Cuadre
+                </Button>
+              </div>
+            )}
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-blue-50 p-4 rounded-lg">

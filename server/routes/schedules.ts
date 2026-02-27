@@ -9,6 +9,7 @@ import {
   gyeDayRangeUtcFromDate,
   gyeDayRangeUtcFromYMD,
   gyeParseDateOnly,
+  nowEcuador,
 } from "../utils/timezone.js";
 import {
   timeTrackingService,
@@ -567,7 +568,7 @@ router.post(
           data: {
             usuario_id,
             punto_atencion_id,
-            fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : new Date(),
+            fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : nowEcuador(),
             ubicacion_inicio:
               ubicacion_inicio !== undefined && ubicacion_inicio !== null
                 ? (ubicacion_inicio as Prisma.InputJsonValue)
@@ -1114,7 +1115,7 @@ router.post(
           data: finalizar
             ? {
                 // Cancelar/cerrar la jornada equivocada y dejar libre el punto (usuario sin punto)
-                fecha_salida: new Date(),
+                fecha_salida: nowEcuador(),
                 estado: EstadoJornada.CANCELADO,
                 motivo_cambio: motivo || "CANCELACION_ADMIN",
                 usuario_autorizo: adminId,
