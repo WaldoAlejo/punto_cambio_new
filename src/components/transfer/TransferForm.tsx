@@ -17,11 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { User, PuntoAtencion, Moneda } from "../../types";
-import { transferService } from "../../services/transferService";
-import { currencyService } from "../../services/currencyService";
-import { pointService } from "../../services/pointService";
+import { User, PuntoAtencion, Moneda } from "@/types";
+import { transferService } from "@/services/transferService";
+import { currencyService } from "@/services/currencyService";
+import { pointService } from "@/services/pointService";
 import { toast } from "sonner";
+import { Search, AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface TransferFormProps {
   user: User;
@@ -53,33 +55,78 @@ const TransferForm = ({
   const [availablePoints, setAvailablePoints] = useState<PuntoAtencion[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
   const [errors, setErrors] = useState(initialErrorState);
+  const [currencySearch, setCurrencySearch] = useState("");
+  const [isLoadingCurrencies, setIsLoadingCurrencies] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
+      setIsLoadingCurrencies(true);
+      setLoadError(null);
       try {
         const { points } = await pointService.getActivePointsForTransfers();
         setAvailablePoints(
           points.filter((point) => point.id !== selectedPoint?.id)
         );
 
-        const { currencies: fetchedCurrencies } =
+        const { currencies: fetchedCurrencies, error: currenciesError } =
           await currencyService.getAllCurrencies();
-        // Permitir USD aunque estuviera inactiva y mostrar todas para transferencias
-        setCurrencies(
-          [...fetchedCurrencies].sort((a, b) => {
-            // Prioriza USD arriba y luego orden alfabético por código
-            if (a.codigo === "USD" && b.codigo !== "USD") return -1;
-            if (b.codigo === "USD" && a.codigo !== "USD") return 1;
-            return a.codigo.localeCompare(b.codigo);
-          })
-        );
-      } catch {
+        
+        if (currenciesError) {
+          console.error("Error cargando monedas:", currenciesError);
+          setLoadError(currenciesError);
+          toast.error("Error al cargar monedas: " + currenciesError);
+          setIsLoadingCurrencies(false);
+          return;
+        }
+
+        // Verificar que USD esté presente
+        const usdCurrency = fetchedCurrencies?.find(c => c.codigo === "USD");
+        if (!usdCurrency) {
+          console.warn("⚠️ USD no encontrado en la lista de monedas cargadas");
+          toast.warning("No se encontró el dólar (USD) en la lista de monedas. Contacte al administrador.");
+        } else {
+          console.log("✅ USD encontrado:", usdCurrency);
+        }
+
+        // Ordenar: USD primero, luego activas, luego inactivas, todo alfabético
+        const sortedCurrencies = [...(fetchedCurrencies || [])].sort((a, b) => {
+          // USD siempre primero
+          if (a.codigo === "USD" && b.codigo !== "USD") return -1;
+          if (b.codigo === "USD" && a.codigo !== "USD") return 1;
+          
+          // Luego activas antes que inactivas
+          if (a.activo && !b.activo) return -1;
+          if (!a.activo && b.activo) return 1;
+          
+          // Finalmente orden alfabético
+          return a.codigo.localeCompare(b.codigo);
+        });
+
+        console.log(`✅ ${sortedCurrencies.length} monedas cargadas`);
+        setCurrencies(sortedCurrencies);
+      } catch (error) {
+        console.error("Error cargando datos:", error);
+        setLoadError("Error al cargar datos necesarios");
         toast.error("Error al cargar datos necesarios");
+      } finally {
+        setIsLoadingCurrencies(false);
       }
     };
 
     loadData();
   }, [selectedPoint]);
+
+  // Filtrar monedas según búsqueda
+  const filteredCurrencies = currencySearch.trim() 
+    ? currencies.filter(c => 
+        c.codigo.toLowerCase().includes(currencySearch.toLowerCase()) ||
+        c.nombre.toLowerCase().includes(currencySearch.toLowerCase())
+      )
+    : currencies;
+
+  // Monedas activas para transferencias (incluye USD aunque esté inactivo)
+  const activeCurrencies = currencies.filter(c => c.activo || c.codigo === "USD");
 
   // Validación en tiempo real
   useEffect(() => {
@@ -147,6 +194,7 @@ const TransferForm = ({
       setCurrencyId("");
       setAmount("");
       setDescription("");
+      setCurrencySearch("");
       onTransferCreated();
     } catch {
       toast.error("Error al crear la transferencia");
@@ -159,6 +207,29 @@ const TransferForm = ({
   const selectedDestinationPoint = availablePoints.find(
     (p) => p.id === destinationPointId
   );
+
+  // Encontrar USD para mostrarlo destacado si no está seleccionado
+  const usdCurrency = currencies.find(c => c.codigo === "USD");
+
+  if (loadError) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertCircle className="h-5 w-5" />
+            <p>{loadError}</p>
+          </div>
+          <Button 
+            onClick={() => window.location.reload()} 
+            className="mt-4"
+            variant="outline"
+          >
+            Reintentar
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -216,22 +287,80 @@ const TransferForm = ({
               <Label htmlFor="currency" className="text-xs sm:text-sm font-medium">
                 Moneda *
               </Label>
+              
+              {/* Input de búsqueda para monedas */}
+              <div className="relative mb-2">
+                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar moneda..."
+                  value={currencySearch}
+                  onChange={(e) => setCurrencySearch(e.target.value)}
+                  className="pl-8 h-8 text-sm"
+                />
+              </div>
+
               <Select
                 value={currencyId}
                 onValueChange={setCurrencyId}
                 name="currency"
               >
                 <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Seleccionar moneda" />
+                  <SelectValue placeholder={isLoadingCurrencies ? "Cargando..." : "Seleccionar moneda"} />
                 </SelectTrigger>
-                <SelectContent>
-                  {currencies.map((currency) => (
-                    <SelectItem key={currency.id} value={currency.id}>
-                      {currency.codigo} - {currency.nombre}
+                <SelectContent className="max-h-[300px]">
+                  {/* Mostrar USD primero si existe y no está filtrado */}
+                  {usdCurrency && !currencySearch.trim() && (
+                    <SelectItem 
+                      key={usdCurrency.id} 
+                      value={usdCurrency.id}
+                      className="bg-primary/5 font-medium"
+                    >
+                      {usdCurrency.codigo} - {usdCurrency.nombre} ⭐
+                    </SelectItem>
+                  )}
+                  
+                  {/* Separador si hay USD y no hay búsqueda */}
+                  {usdCurrency && !currencySearch.trim() && filteredCurrencies.length > 1 && (
+                    <div className="px-2 py-1 text-xs text-muted-foreground border-t my-1">
+                      Otras monedas ({filteredCurrencies.length - 1})
+                    </div>
+                  )}
+                  
+                  {filteredCurrencies
+                    .filter(c => !usdCurrency || c.id !== usdCurrency.id || currencySearch.trim())
+                    .map((currency) => (
+                    <SelectItem 
+                      key={currency.id} 
+                      value={currency.id}
+                      className={!currency.activo ? "text-muted-foreground" : ""}
+                    >
+                      <span className="flex items-center gap-2">
+                        {currency.codigo} - {currency.nombre}
+                        {!currency.activo && (
+                          <Badge variant="secondary" className="text-[10px]">inactiva</Badge>
+                        )}
+                      </span>
                     </SelectItem>
                   ))}
+                  
+                  {filteredCurrencies.length === 0 && (
+                    <div className="px-2 py-2 text-sm text-muted-foreground text-center">
+                      No se encontraron monedas
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
+              
+              {/* Info de monedas disponibles */}
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>{activeCurrencies.length} monedas disponibles</span>
+                {usdCurrency && (
+                  <span className="text-primary">
+                    USD: {usdCurrency.activo ? "Activo" : "Inactivo pero usable"}
+                  </span>
+                )}
+              </div>
+              
               {errors.currencyId && (
                 <span className="text-xs text-destructive">
                   {errors.currencyId}
