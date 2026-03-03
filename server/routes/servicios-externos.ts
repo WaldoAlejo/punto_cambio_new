@@ -1509,4 +1509,178 @@ router.get(
   }
 );
 
+// ==============================
+// GET /saldo-inicial-diario
+// Obtiene el saldo inicial del día actual para cada servicio externo
+// El saldo inicial = saldo final del día anterior (si existe cierre)
+// o saldo actual - movimientos del día (si no hay cierre)
+// ==============================
+router.get(
+  "/saldo-inicial-diario",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const user = (req as Partial<AuthedRequest>).user;
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "No autorizado",
+        });
+      }
+
+      const pointId = user.punto_atencion_id;
+      if (!pointId) {
+        return res.status(400).json({
+          success: false,
+          message: "Usuario no tiene punto de atención asignado",
+        });
+      }
+
+      const usdId = await ensureUsdMonedaId();
+      const { gte: hoyInicio, lt: hoyFin } = gyeTodayWindow();
+
+      // Calcular el rango del día anterior
+      const ayer = new Date(hoyInicio);
+      ayer.setDate(ayer.getDate() - 1);
+      const ayerInicio = new Date(ayer);
+      const ayerFin = new Date(hoyInicio);
+
+      // Obtener saldos actuales por servicio
+      const saldosActuales = await prisma.servicioExternoSaldo.findMany({
+        where: { punto_atencion_id: pointId, moneda_id: usdId },
+        select: { 
+          servicio: true, 
+          cantidad: true, 
+          billetes: true, 
+          monedas_fisicas: true,
+          bancos: true,
+          updated_at: true,
+        },
+      });
+
+      // Obtener movimientos del día actual para calcular saldo inicial si no hay cierre anterior
+      const movimientosHoy = await prisma.servicioExternoMovimiento.groupBy({
+        by: ['servicio'],
+        where: {
+          punto_atencion_id: pointId,
+          fecha: { gte: hoyInicio, lt: hoyFin },
+        },
+        _sum: {
+          monto: true,
+        },
+      });
+
+      // Buscar cierres del día anterior para obtener saldo final (que es el inicial de hoy)
+      const cierresAyer = await prisma.servicioExternoCierreDiario.findMany({
+        where: {
+          punto_atencion_id: pointId,
+          fecha: { gte: ayerInicio, lt: ayerFin },
+          estado: "CERRADO",
+        },
+        include: {
+          detalles: {
+            where: { moneda_id: usdId },
+            select: {
+              servicio: true,
+              monto_validado: true,
+            },
+          },
+        },
+      });
+
+      // Obtener último cierre por servicio (para determinar si el día anterior fue cerrado)
+      const ultimosCierres = await prisma.servicioExternoCierreDiario.findMany({
+        where: {
+          punto_atencion_id: pointId,
+          estado: "CERRADO",
+        },
+        orderBy: { fecha: 'desc' },
+        take: 1,
+        include: {
+          detalles: {
+            where: { moneda_id: usdId },
+            select: {
+              servicio: true,
+              monto_validado: true,
+            },
+          },
+        },
+      });
+
+      // Construir respuesta con saldo inicial para cada servicio
+      const saldosIniciales = await Promise.all(
+        SERVICIOS_VALIDOS.map(async (servicio) => {
+          const saldoActual = saldosActuales.find(s => s.servicio === servicio);
+          const movimientosHoyServicio = movimientosHoy.find(m => m.servicio === servicio);
+          
+          // Buscar si hay cierre del día anterior con este servicio
+          const cierreAyerServicio = cierresAyer
+            .flatMap(c => c.detalles)
+            .find(d => d.servicio === servicio);
+
+          const saldoActualNum = Number(saldoActual?.cantidad || 0);
+          const movimientosHoyNum = Number(movimientosHoyServicio?._sum?.monto || 0);
+          
+          // Calcular saldo inicial
+          let saldoInicial: number;
+          let metodoCalculo: string;
+
+          if (cierreAyerServicio) {
+            // Si hay cierre del día anterior, usar el monto validado como saldo inicial
+            saldoInicial = Number(cierreAyerServicio.monto_validado);
+            metodoCalculo = "CIERRE_ANTERIOR";
+          } else {
+            // Si no hay cierre, calcular: saldo actual - movimientos del día
+            // Los ingresos restan del saldo (son pagos de clientes), los egresos suman (son reposiciones)
+            saldoInicial = saldoActualNum - movimientosHoyNum;
+            metodoCalculo = "CALCULADO";
+          }
+
+          // Obtener la última asignación para este servicio (para referencia)
+          const ultimaAsignacion = await prisma.servicioExternoAsignacion.findFirst({
+            where: { punto_atencion_id: pointId, servicio },
+            orderBy: { fecha: 'desc' },
+            select: { monto: true, fecha: true, tipo: true },
+          });
+
+          return {
+            servicio,
+            saldo_inicial: Math.max(0, saldoInicial),
+            saldo_actual: saldoActualNum,
+            movimientos_hoy: movimientosHoyNum,
+            diferencia_dia: saldoActualNum - saldoInicial,
+            metodo_calculo: metodoCalculo,
+            tiene_cierre_anterior: !!cierreAyerServicio,
+            ultima_asignacion: ultimaAsignacion ? {
+              monto: Number(ultimaAsignacion.monto),
+              fecha: ultimaAsignacion.fecha.toISOString(),
+              tipo: ultimaAsignacion.tipo,
+            } : null,
+            detalles: {
+              billetes: Number(saldoActual?.billetes || 0),
+              monedas: Number(saldoActual?.monedas_fisicas || 0),
+              bancos: Number(saldoActual?.bancos || 0),
+            },
+          };
+        })
+      );
+
+      res.json({
+        success: true,
+        fecha: hoyInicio.toISOString().split('T')[0],
+        punto_atencion_id: pointId,
+        saldos_iniciales: saldosIniciales,
+        nota: "Saldo inicial = Saldo final del día anterior (si hay cierre) o Saldo actual - Movimientos de hoy",
+      });
+    } catch (error) {
+      console.error("Error obteniendo saldo inicial diario:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error obteniendo saldo inicial del día",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+);
+
 export default router;

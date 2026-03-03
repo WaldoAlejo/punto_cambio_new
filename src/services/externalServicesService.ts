@@ -267,3 +267,42 @@ export async function obtenerSaldosAsignados(params?: {
   );
   return data;
 }
+
+// =============== SALDO INICIAL DEL DÍA ===============
+export interface SaldoInicialServicio {
+  servicio: ServicioExterno;
+  saldo_inicial: number;
+  saldo_actual: number;
+  movimientos_hoy: number;
+  diferencia_dia: number;
+  metodo_calculo: "CIERRE_ANTERIOR" | "CALCULADO";
+  tiene_cierre_anterior: boolean;
+  ultima_asignacion: {
+    monto: number;
+    fecha: string;
+    tipo: "INICIAL" | "RECARGA";
+  } | null;
+  detalles: {
+    billetes: number;
+    monedas: number;
+    bancos: number;
+  };
+}
+
+export interface SaldoInicialDiarioResponse {
+  success: boolean;
+  fecha: string;
+  punto_atencion_id: string;
+  saldos_iniciales: SaldoInicialServicio[];
+  nota: string;
+}
+
+export async function obtenerSaldoInicialDiario(params?: {
+  pointId?: string;
+}): Promise<SaldoInicialDiarioResponse> {
+  const { data } = await axiosInstance.get(
+    `/servicios-externos/saldo-inicial-diario`,
+    { params }
+  );
+  return data;
+}
