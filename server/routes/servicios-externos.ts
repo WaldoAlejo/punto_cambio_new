@@ -1537,7 +1537,7 @@ router.get(
       }
 
       const usdId = await ensureUsdMonedaId();
-      const { gte: hoyInicio, lt: hoyFin } = gyeTodayWindow();
+      const { gte: hoyInicio, lt: hoyFin } = await gyeTodayWindow();
 
       // Calcular el rango del día anterior
       const ayer = new Date(hoyInicio);
