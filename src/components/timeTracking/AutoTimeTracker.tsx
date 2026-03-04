@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { User, PuntoAtencion } from "../../types";
 import axiosInstance from "@/services/axiosInstance";
+import { toGyeClock } from "@/utils/timezone";
 
 interface AutoTimeTrackerProps {
   user: User;
@@ -83,10 +84,12 @@ const AutoTimeTracker = ({
   };
 
   const startedAt = schedule?.fecha_inicio
-    ? new Date(schedule.fecha_inicio).toLocaleTimeString("es-EC", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+    ? (() => {
+        const d = toGyeClock(new Date(schedule.fecha_inicio));
+        const h = d.getUTCHours().toString().padStart(2, "0");
+        const m = d.getUTCMinutes().toString().padStart(2, "0");
+        return `${h}:${m}`;
+      })()
     : "-";
 
   return (

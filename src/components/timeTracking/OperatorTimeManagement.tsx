@@ -10,6 +10,7 @@ import {
 } from "../../services/spontaneousExitService";
 import { scheduleService, Schedule } from "../../services/scheduleService";
 import { toast } from "@/hooks/use-toast";
+import { toGyeClock } from "@/utils/timezone";
 
 interface OperatorTimeManagementProps {
   user: User;
@@ -210,13 +211,13 @@ const OperatorTimeManagement = ({
     }
   };
 
-  const toTime = (v?: string | null) =>
-    v
-      ? new Date(v).toLocaleTimeString("es-EC", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      : "-";
+  const toTime = (v?: string | null) => {
+    if (!v) return "-";
+    const d = toGyeClock(new Date(v));
+    const h = d.getUTCHours().toString().padStart(2, "0");
+    const m = d.getUTCMinutes().toString().padStart(2, "0");
+    return `${h}:${m}`;
+  };
 
   return (
     <div className="p-6">

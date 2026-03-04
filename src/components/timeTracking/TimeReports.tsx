@@ -29,6 +29,7 @@ import { User, PuntoAtencion, Usuario } from "../../types";
 import { useToast } from "@/hooks/use-toast";
 import { userService } from "@/services/userService";
 import { pointService } from "@/services/pointService";
+import { toGyeClock } from "@/utils/timezone";
 
 interface TimeReportsProps {
   _user: User;
@@ -165,35 +166,24 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
         "Tiempo Efectivo (min)",
         "Estado",
       ];
+      // Helper para formatear hora Ecuador en CSV
+      const fmtTimeCSV = (iso?: string) => {
+        if (!iso) return "";
+        const d = toGyeClock(new Date(iso));
+        const h = d.getUTCHours().toString().padStart(2, "0");
+        const m = d.getUTCMinutes().toString().padStart(2, "0");
+        return `${h}:${m}`;
+      };
+      
       const rows = reportData.map((r) => [
         r.date,
         r.point,
         r.user,
         r.username ? `@${r.username}` : "",
-        r.entrada
-          ? new Date(r.entrada).toLocaleTimeString("es-EC", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "",
-        r.almuerzo
-          ? new Date(r.almuerzo).toLocaleTimeString("es-EC", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "",
-        r.regreso
-          ? new Date(r.regreso).toLocaleTimeString("es-EC", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "",
-        r.salida
-          ? new Date(r.salida).toLocaleTimeString("es-EC", {
-              hour: "2-digit",
-              minute: "2-digit",
-            })
-          : "",
+        fmtTimeCSV(r.entrada),
+        fmtTimeCSV(r.almuerzo),
+        fmtTimeCSV(r.regreso),
+        fmtTimeCSV(r.salida),
         r.lunchMinutes,
         r.spontaneousMinutes,
         r.effectiveMinutes,
@@ -401,13 +391,14 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
                     const m = Math.abs((mins || 0) % 60);
                     return `${h}h ${m}m`;
                   };
-                  const fmtTime = (iso?: string) =>
-                    iso
-                      ? new Date(iso).toLocaleTimeString("es-EC", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : "";
+                  // Formatear hora en zona horaria de Ecuador (GMT-5)
+                  const fmtTime = (iso?: string) => {
+                    if (!iso) return "";
+                    const d = toGyeClock(new Date(iso));
+                    const h = d.getUTCHours().toString().padStart(2, "0");
+                    const m = d.getUTCMinutes().toString().padStart(2, "0");
+                    return `${h}:${m}`;
+                  };
                   return (
                     <TableRow key={index}>
                       <TableCell>{row.date}</TableCell>
