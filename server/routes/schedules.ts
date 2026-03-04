@@ -490,6 +490,8 @@ router.post(
           console.log(
             `🚀 FINALIZACION_JORNADA_INICIADA - Usuario: ${req.user?.rol}, Punto: ${punto_atencion_id}`
           );
+          // Usar hora de Ecuador para la salida (consistente con la entrada)
+          updateData.fecha_salida = nowEcuador();
           if (!esExentoDeCaja(req.user?.rol)) {
             // Para roles que sí manejan caja, verificar Cierre de Caja (divisas)
             const { gte } = gyeDayRangeUtcFromDate(new Date());
@@ -526,7 +528,7 @@ router.post(
             // a través del endpoint /cuadre-caja que consolida todos los movimientos.
           }
           // Finalizar jornada (para exentos y para quienes ya cerraron cierres requeridos)
-          updateData.fecha_salida = new Date(fecha_salida);
+          // NOTA: fecha_salida ya fue asignada arriba con nowEcuador()
           updateData.estado = EstadoJornada.COMPLETADO;
           // Al cerrar jornada, limpiar punto del usuario
           await prisma.usuario.update({
