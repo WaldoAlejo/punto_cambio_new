@@ -214,10 +214,10 @@ export async function ejecutarCierre(
         data: {
           usuario_id: usuarioId,
           punto_atencion_id: puntoAtencionId,
-          fecha: nowEcuador(),
+          fecha: new Date(), // UTC - la UI muestra en zona horaria local
           estado: tipoCierre,
           observaciones: observaciones || "",
-          fecha_cierre: tipoCierre === "CERRADO" ? nowEcuador() : null,
+          fecha_cierre: tipoCierre === "CERRADO" ? new Date() : null, // UTC - la UI muestra en zona horaria local
           total_ingresos: detalles.reduce(
             (sum, d) => sum + (d.ingresos_periodo || 0),
             0
@@ -238,7 +238,7 @@ export async function ejecutarCierre(
         data: {
           estado: tipoCierre,
           observaciones: observaciones || cabecera.observaciones,
-          fecha_cierre: tipoCierre === "CERRADO" ? nowEcuador() : null,
+          fecha_cierre: tipoCierre === "CERRADO" ? new Date() : null, // UTC - la UI muestra en zona horaria local
           total_ingresos: detalles.reduce(
             (sum, d) => sum + (d.ingresos_periodo || 0),
             0
@@ -375,7 +375,7 @@ export async function ejecutarCierre(
         await ejecutor.jornada.update({
           where: { id: jornadaActiva.id },
           data: {
-            fecha_salida: nowEcuador(),
+            fecha_salida: new Date(), // UTC - la UI muestra en zona horaria local
             estado: "COMPLETADO",
             observaciones:
               "Jornada finalizada automáticamente al cerrar caja",

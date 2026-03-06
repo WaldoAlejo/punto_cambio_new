@@ -141,8 +141,8 @@ const controller = {
             descripcion: descripcion || null,
             numero_recibo: numeroRecibo,
             estado: estadoInicial,
-            fecha: nowEcuador(),
-            fecha_envio: nowEcuador(), // 👈 Registrar fecha de envío
+            fecha: new Date(), // UTC - la UI muestra en zona horaria local
+            fecha_envio: new Date(), // UTC - la UI muestra en zona horaria local
             via: via as TipoViaTransferencia,
           },
         });
@@ -481,7 +481,7 @@ const controller = {
           where: { id: transfer.id },
           data: {
             estado: "CANCELADO",
-            fecha_rechazo: nowEcuador(),
+            fecha_rechazo: new Date(), // UTC - la UI muestra en zona horaria local
             observaciones_rechazo,
             rechazado_por: usuarioId,
           },

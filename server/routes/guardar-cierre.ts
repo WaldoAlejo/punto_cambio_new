@@ -171,10 +171,10 @@ router.post(
           data: {
             usuario_id: usuario.id,
             punto_atencion_id: puntoAtencionId,
-            fecha: nowEcuador(), // fecha cabecera (hoy Ecuador)
+            fecha: new Date(), // UTC - la UI muestra en zona horaria local
             estado: tipo_cierre, // puede ser PARCIAL o CERRADO
             observaciones: observaciones || "",
-            fecha_cierre: nowEcuador(),
+            fecha_cierre: new Date(), // UTC - la UI muestra en zona horaria local
             total_cambios: totalMovimientos,
             total_ingresos: totalIngresos,
             total_egresos: totalEgresos,
@@ -186,7 +186,7 @@ router.post(
           data: {
             estado: tipo_cierre,
             observaciones: observaciones ?? cabecera.observaciones ?? "",
-            fecha_cierre: nowEcuador(),
+            fecha_cierre: new Date(), // UTC - la UI muestra en zona horaria local
             total_cambios: totalMovimientos,
             total_ingresos: totalIngresos,
             total_egresos: totalEgresos,
@@ -328,7 +328,7 @@ router.post(
           await tx.jornada.update({
             where: { id: jornadaActiva.id },
             data: {
-              fecha_salida: nowEcuador(),
+              fecha_salida: new Date(), // UTC - la UI muestra en zona horaria local
               estado: "COMPLETADO",
               observaciones: "Jornada finalizada automáticamente al completar cierre de caja",
             },

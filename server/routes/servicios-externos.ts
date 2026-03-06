@@ -804,7 +804,7 @@ router.post(
             moneda_id: usdId,
             monto: montoNum,
             usuario_id: req.user.id,
-            fecha: nowEcuador(),
+            fecha: new Date(), // UTC - la UI se encarga de mostrar en zona horaria local
             descripcion: typeof descripcion === "string" ? descripcion : null,
             numero_referencia:
               typeof numero_referencia === "string" ? numero_referencia : null,

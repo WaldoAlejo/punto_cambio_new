@@ -174,7 +174,7 @@ router.patch(
           data: {
             estado: "APROBADO",
             aprobado_por: userId,
-            fecha_aprobacion: nowEcuador(),
+            fecha_aprobacion: new Date(), // UTC - la UI muestra en zona horaria local
             observaciones_aprobacion: observaciones,
           },
           include: {
@@ -577,7 +577,7 @@ router.patch(
         data: {
           estado: "RECHAZADO",
           rechazado_por: req.user?.id,
-          fecha_rechazo: nowEcuador(),
+          fecha_rechazo: new Date(), // UTC - la UI muestra en zona horaria local
           observaciones_aprobacion: observaciones,
         },
         include: {
@@ -744,7 +744,7 @@ router.post(
           data: {
             estado: "COMPLETADO",
             aceptado_por: userId,
-            fecha_aceptacion: nowEcuador(),
+            fecha_aceptacion: new Date(), // UTC - la UI muestra en zona horaria local
             observaciones_aceptacion: observaciones,
           },
           include: {
@@ -964,7 +964,7 @@ router.post(
           where: { id: transferId },
           data: {
             estado: "CANCELADO",
-            fecha_rechazo: nowEcuador(),
+            fecha_rechazo: new Date(), // UTC - la UI muestra en zona horaria local
             observaciones_rechazo: observaciones || "Rechazada por el punto destino",
           },
           include: {

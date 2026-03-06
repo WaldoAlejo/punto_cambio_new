@@ -149,7 +149,7 @@ router.post("/parcial", authenticateToken, async (req, res) => {
         data: {
           estado: "PARCIAL",
           observaciones: observaciones || "Cierre parcial realizado",
-          fecha_cierre: nowEcuador(),
+          fecha_cierre: new Date(), // UTC - la UI muestra en zona horaria local
           total_cambios: totalMovimientos,
           total_ingresos: totalIngresos,
           total_egresos: totalEgresos,

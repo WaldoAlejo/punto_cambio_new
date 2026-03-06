@@ -491,7 +491,7 @@ router.post(
             `🚀 FINALIZACION_JORNADA_INICIADA - Usuario: ${req.user?.rol}, Punto: ${punto_atencion_id}`
           );
           // Usar hora de Ecuador para la salida (consistente con la entrada)
-          updateData.fecha_salida = nowEcuador();
+          updateData.fecha_salida = new Date(); // UTC - la UI muestra en zona horaria local
           if (!esExentoDeCaja(req.user?.rol)) {
             // Para roles que sí manejan caja, verificar Cierre de Caja (divisas)
             const { gte } = gyeDayRangeUtcFromDate(new Date());
@@ -570,7 +570,7 @@ router.post(
           data: {
             usuario_id,
             punto_atencion_id,
-            fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : nowEcuador(),
+            fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : new Date(), // UTC - la UI muestra en zona horaria local
             ubicacion_inicio:
               ubicacion_inicio !== undefined && ubicacion_inicio !== null
                 ? (ubicacion_inicio as Prisma.InputJsonValue)

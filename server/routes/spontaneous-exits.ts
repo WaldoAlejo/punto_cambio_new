@@ -260,7 +260,7 @@ router.patch(
       const updatedExit = await prisma.salidaEspontanea.update({
         where: { id: exitId },
         data: {
-          fecha_regreso: fechaRegreso,
+          fecha_regreso: new Date(), // UTC - la UI muestra en zona horaria local
           ubicacion_regreso: ubicacion_regreso || null,
           duracion_minutos: duracionMinutos,
           estado: "COMPLETADO",

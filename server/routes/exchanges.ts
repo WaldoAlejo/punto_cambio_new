@@ -1871,7 +1871,7 @@ router.patch(
         data: {
           estado: EstadoTransaccion.COMPLETADO,
           numero_recibo_completar: numeroReciboCierre,
-          fecha_completado: nowEcuador(),
+          fecha_completado: new Date(), // UTC - la UI muestra en zona horaria local
           saldo_pendiente: 0,
         },
         select: {
@@ -2304,7 +2304,7 @@ router.patch(
               ? round2(divisas_recibidas_total)
               : cambio.divisas_recibidas_total,
           numero_recibo_completar: numeroReciboCompletar,
-          fecha_completado: nowEcuador(),
+          fecha_completado: new Date(), // UTC - la UI muestra en zona horaria local
           saldo_pendiente: 0,
         },
         select: {
@@ -2605,7 +2605,7 @@ router.patch(
         where: { id },
         data: {
           saldo_pendiente: 0,
-          fecha_completado: nowEcuador(),
+          fecha_completado: new Date(), // UTC - la UI muestra en zona horaria local
           estado: EstadoTransaccion.COMPLETADO,
         },
         select: {

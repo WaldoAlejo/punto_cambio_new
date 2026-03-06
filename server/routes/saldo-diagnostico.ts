@@ -28,7 +28,7 @@ router.get(
       const { puntoId, monedaId } = req.params;
       const { fecha } = req.query;
 
-      const fechaConsulta = fecha ? new Date(String(fecha)) : nowEcuador();
+      const fechaConsulta = fecha ? new Date(String(fecha)) : new Date(); // UTC - la UI muestra en zona horaria local
       const inicioDia = new Date(fechaConsulta);
       inicioDia.setHours(0, 0, 0, 0);
       const finDia = new Date(fechaConsulta);
@@ -203,7 +203,7 @@ router.get(
       const { puntoId } = req.params;
       const { fecha } = req.query;
 
-      const fechaConsulta = fecha ? new Date(String(fecha)) : nowEcuador();
+      const fechaConsulta = fecha ? new Date(String(fecha)) : new Date(); // UTC - la UI muestra en zona horaria local
       const inicioDia = new Date(fechaConsulta);
       inicioDia.setHours(0, 0, 0, 0);
       const finDia = new Date(fechaConsulta);
@@ -381,7 +381,7 @@ router.post(
         data: {
           billetes: nuevoBilletes,
           monedas_fisicas: nuevoMonedas,
-          updated_at: nowEcuador(),
+          updated_at: new Date(), // UTC - la UI muestra en zona horaria local
         },
       });
 

@@ -1019,7 +1019,7 @@ router.post(
               usuario_id: usuario.id,
               observaciones: observaciones ?? null,
               estado: "CERRADO",
-              fecha_cierre: nowEcuador(),
+              fecha_cierre: new Date(), // UTC - la UI muestra en zona horaria local
               cerrado_por: usuario.id,
               diferencias_reportadas: diferencias_reportadas ?? null,
             },
@@ -1035,7 +1035,7 @@ router.post(
             },
             data: {
               estado: "CERRADO",
-              fecha_cierre: nowEcuador(),
+              fecha_cierre: new Date(), // UTC - la UI muestra en zona horaria local
               cerrado_por: usuario.id,
               observaciones: observaciones ?? existing.observaciones,
               diferencias_reportadas:
@@ -1072,7 +1072,7 @@ router.post(
           jornadaFinalizada = await tx.jornada.update({
             where: { id: jornadaActiva.id },
             data: {
-              fecha_salida: nowEcuador(),
+              fecha_salida: new Date(), // UTC - la UI muestra en zona horaria local
               estado: "COMPLETADO",
               observaciones:
                 "Jornada finalizada automáticamente tras completar cierre diario",

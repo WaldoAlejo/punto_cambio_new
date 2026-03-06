@@ -243,7 +243,7 @@ router.put(
               respondido_por: usuario?.id || "SYSTEM",
               respondido_por_nombre: usuario?.nombre || "Sistema",
               observaciones_respuesta: observaciones || "",
-              fecha_respuesta: nowEcuador(),
+              fecha_respuesta: new Date(), // UTC - la UI muestra en zona horaria local
             });
 
           // 3. Revertir los balances (restar del Saldo USD general, sumar al ServientregaSaldo)
@@ -339,7 +339,7 @@ router.put(
             respondido_por: usuario?.id || "SYSTEM",
             respondido_por_nombre: usuario?.nombre || "Sistema",
             observaciones_respuesta: observaciones || "",
-            fecha_respuesta: nowEcuador(),
+            fecha_respuesta: new Date(), // UTC - la UI muestra en zona horaria local
           });
 
         return res.json({
@@ -420,7 +420,7 @@ router.post(
           respondido_por: usuario?.id || "SYSTEM",
           respondido_por_nombre: usuario?.nombre || "Sistema",
           observaciones_respuesta: comentario || "",
-          fecha_respuesta: nowEcuador(),
+          fecha_respuesta: new Date(), // UTC - la UI muestra en zona horaria local
         }
       );
 

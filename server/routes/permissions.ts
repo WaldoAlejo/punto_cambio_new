@@ -164,7 +164,7 @@ router.patch(
         data: {
           estado: "APROBADO",
           aprobado_por: req.user.id,
-          fecha_aprobacion: nowEcuador(),
+          fecha_aprobacion: new Date(), // UTC - la UI muestra en zona horaria local
         },
       });
 
@@ -206,7 +206,7 @@ router.patch(
         data: {
           estado: "RECHAZADO",
           aprobado_por: req.user.id,
-          fecha_aprobacion: nowEcuador(),
+          fecha_aprobacion: new Date(), // UTC - la UI muestra en zona horaria local
         },
       });
 
