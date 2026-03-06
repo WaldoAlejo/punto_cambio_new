@@ -1108,7 +1108,7 @@ router.post(
           jornadaFinalizada = await tx.jornada.update({
             where: { id: jornadaActiva.id },
             data: {
-              fecha_salida: new Date(), // UTC - la UI muestra en zona horaria local
+              fecha_salida: nowEcuador(), // Ecuador time (server already in GMT-5)
               estado: "COMPLETADO",
               observaciones:
                 "Jornada finalizada automáticamente tras completar cierre diario",

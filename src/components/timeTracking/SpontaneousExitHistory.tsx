@@ -183,7 +183,7 @@ const SpontaneousExitHistory = ({
                   <p className="font-medium text-gray-700">Salida:</p>
                   <div className="flex items-center gap-1 text-gray-600">
                     <Clock className="h-3 w-3" />
-                    {new Date(exit.fecha_salida).toLocaleTimeString("es-ES")}
+                    {new Date(exit.fecha_salida).toLocaleTimeString("es-ES", { timeZone: "America/Guayaquil" })}
                   </div>
                   {exit.ubicacion_salida && (
                     <div className="flex items-center gap-1 text-gray-600">
@@ -198,7 +198,7 @@ const SpontaneousExitHistory = ({
                     <p className="font-medium text-gray-700">Regreso:</p>
                     <div className="flex items-center gap-1 text-gray-600">
                       <ArrowLeft className="h-3 w-3" />
-                      {new Date(exit.fecha_regreso).toLocaleTimeString("es-ES")}
+                      {new Date(exit.fecha_regreso).toLocaleTimeString("es-ES", { timeZone: "America/Guayaquil" })}
                     </div>
                     {exit.ubicacion_regreso && (
                       <div className="flex items-center gap-1 text-gray-600">

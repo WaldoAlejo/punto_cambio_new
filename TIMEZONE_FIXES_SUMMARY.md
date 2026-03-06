@@ -1,129 +1,79 @@
-# Correcciones de Zona Horaria (GMT-5 Ecuador) - Resumen
+# Correcciones de Timezone - Resumen
 
-## Fecha de corrección: 27 de febrero de 2026
+## Fecha: 2026-03-05
 
----
+## Problema Identificado
+Las horas de salida en el "Control de Horarios" mostraban valores incorrectos como:
+- 04:29 en lugar de 19:29 (7:29 PM)
+- 00:11 en lugar de 17:11 (5:11 PM)
+- 04:37 en lugar de 23:37 (11:37 PM)
 
-## Archivos Modificados
+## Causa Raíz
+1. **Backend**: El servidor está en Ecuador (GMT-5), pero el código `nowEcuador()` estaba restando 5 horas adicionales a las fechas que ya eran locales, causando un desfase de 5 horas.
 
-### 1. **server/services/cierreService.ts**
-- **Importación agregada**: `nowEcuador` desde `../utils/timezone.js`
-- **Cambios**:
-  - `fecha_cierre: new Date()` → `fecha_cierre: nowEcuador()` (5 reemplazos)
-  - `fecha_salida: new Date()` → `fecha_salida: nowEcuador()` (1 reemplazo)
+2. **Frontend**: Las funciones `toLocaleTimeString()` y `toLocaleDateString()` no especificaban la zona horaria, usando la configuración del navegador. Si el navegador estaba en UTC, mostraba las horas UTC sin conversión.
 
-### 2. **server/services/cierreUnificadoService.ts**
-- **Importación agregada**: `nowEcuador` desde `../utils/timezone.js`
-- **Cambios**:
-  - `fecha: new Date()` → `fecha: nowEcuador()`
-  - `fecha_cierre: new Date()` → `fecha_cierre: nowEcuador()` (2 reemplazos)
-  - `fecha_salida: new Date()` → `fecha_salida: nowEcuador()`
+## Cambios Realizados
 
-### 3. **server/routes/guardar-cierre.ts**
-- **Importación agregada**: `nowEcuador` desde `../utils/timezone.js`
-- **Cambios**:
-  - `fecha: new Date()` → `fecha: nowEcuador()`
-  - `fecha_cierre: new Date()` → `fecha_cierre: nowEcuador()` (2 reemplazos)
-  - `fecha_salida: new Date()` → `fecha_salida: nowEcuador()`
-  - Comentario actualizado: "hoy UTC" → "hoy Ecuador"
+### Backend - Server
 
-### 4. **server/routes/contabilidad-diaria.ts**
-- **Importación agregada**: `nowEcuador` desde `../utils/timezone.js`
-- **Cambios**:
-  - `fecha_cierre: new Date()` → `fecha_cierre: nowEcuador()` (4 reemplazos)
-  - `fecha_salida: new Date()` → `fecha_salida: nowEcuador()`
+#### 1. `server/utils/timezone.ts`
+- **Agregada función `isServerInEcuador()`**: Detecta si el servidor está en zona horaria GMT-5
+- **Modificada función `nowEcuador()`**: Devuelve `new Date()` directamente si el servidor ya está en Ecuador, evitando la doble conversión
+- **Modificada función `toEcuadorTime()`**: Usa `isServerInEcuador()` para evitar conversión innecesaria
 
-### 5. **server/routes/cierreParcial.ts**
-- **Importación agregada**: `nowEcuador` desde `../utils/timezone.js`
-- **Cambios**:
-  - `fecha_cierre: new Date()` → `fecha_cierre: nowEcuador()`
+#### 2. `server/routes/schedules.ts`
+- **Línea 494**: Cambiado `new Date()` a `nowEcuador()` para `fecha_salida`
+- **Línea 573**: Cambiado `new Date()` a `nowEcuador()` para `fecha_inicio`
 
-### 6. **server/routes/schedules.ts** (Jornadas)
-- **Importación agregada**: `nowEcuador` desde `../utils/timezone.js`
-- **Cambios**:
-  - `fecha_inicio: new Date()` → `fecha_inicio: nowEcuador()`
-  - `fecha_salida: new Date()` → `fecha_salida: nowEcuador()`
+#### 3. `server/routes/contabilidad-diaria.ts`
+- **Línea 1111**: Cambiado `new Date()` a `nowEcuador()` para `fecha_salida`
 
-### 7. **server/controllers/transferController.ts**
-- **Importación agregada**: `nowEcuador` desde `../utils/timezone.js`
-- **Cambios**:
-  - `fecha: new Date()` → `fecha: nowEcuador()`
-  - `fecha_envio: new Date()` → `fecha_envio: nowEcuador()`
-  - `fecha_rechazo: new Date()` → `fecha_rechazo: nowEcuador()`
+#### 4. `server/routes/guardar-cierre.ts`
+- **Línea 331**: Cambiado `new Date()` a `nowEcuador()` para `fecha_salida`
 
-### 8. **server/routes/transfer-approvals.ts**
-- **Importación agregada**: `nowEcuador` desde `../utils/timezone.js`
-- **Cambios**:
-  - `fecha_aprobacion: new Date()` → `fecha_aprobacion: nowEcuador()`
-  - `fecha_rechazo: new Date()` → `fecha_rechazo: nowEcuador()` (2 reemplazos)
-  - `fecha_aceptacion: new Date()` → `fecha_aceptacion: nowEcuador()`
+### Frontend - Cliente
 
-### 9. **server/routes/exchanges.ts** (Cambios de divisa)
-- **Importación agregada**: `nowEcuador` desde `../utils/timezone.js`
-- **Cambios**:
-  - `fecha_completado: new Date()` → `fecha_completado: nowEcuador()` (3 reemplazos)
+#### 1. `src/components/admin/ActivePointsReport.tsx`
+- **Función `formatTime()`**: Agregado `timeZone: "America/Guayaquil"`
+- **Función `formatDate()`**: Agregado `timeZone: "America/Guayaquil"`
 
-### 10. **server/routes/permissions.ts** (Permisos)
-- **Importación agregada**: `nowEcuador` desde `../utils/timezone.js`
-- **Cambios**:
-  - `fecha_aprobacion: new Date()` → `fecha_aprobacion: nowEcuador()` (2 reemplazos)
+#### 2. `src/components/admin/AdminDashboard.tsx`
+- **Función `formatDate()`**: Agregado `timeZone: "America/Guayaquil"`
 
-### 11. **server/routes/servientrega/anulaciones.ts**
-- **Importación agregada**: `nowEcuador` desde `../../utils/timezone.js`
-- **Cambios**:
-  - `fecha_respuesta: new Date()` → `fecha_respuesta: nowEcuador()` (3 reemplazos)
+#### 3. `src/components/timeTracking/SpontaneousExitHistory.tsx`
+- **Línea 186**: Agregado `timeZone: "America/Guayaquil"` a `toLocaleTimeString`
+- **Línea 201**: Agregado `timeZone: "America/Guayaquil"` a `toLocaleTimeString`
 
----
+## Scripts de Soporte
 
-## Función Utilizada
+### `scripts/fix-historical-timezone-data.ts`
+Script para analizar y corregir datos históricos con desfase:
+```bash
+# Analizar datos (sin cambios)
+npx tsx scripts/fix-historical-timezone-data.ts
 
-```typescript
-// server/utils/timezone.ts
-export function nowEcuador(): Date {
-  return toEcuadorTime(new Date());
-}
-
-export function toEcuadorTime(utcDate: Date): Date {
-  return new Date(utcDate.getTime() + GYE_OFFSET_HOURS * 60 * 60 * 1000);
-}
+# Aplicar correcciones
+npx tsx scripts/fix-historical-timezone-data.ts --fix
 ```
 
-La función `nowEcuador()` convierte la hora UTC actual a hora de Ecuador (GMT-5).
-
----
-
-## Impacto de los Cambios
-
-### Antes:
-- Un cierre realizado a las 20:00 (hora Ecuador) se guardaba como 01:00 UTC del día siguiente
-- Las fechas mostradas al usuario estaban en UTC
-- Los reportes podían mostrar transacciones en el día incorrecto
-
-### Después:
-- Un cierre realizado a las 20:00 (hora Ecuador) se guarda como 20:00 hora Ecuador (convertida a UTC para almacenamiento)
-- Todas las fechas de auditoría reflejan la hora local de Ecuador
-- Los cierres diarios coinciden con el calendario de Ecuador
-
----
-
-## Notas Importantes
-
-1. **Las fechas se siguen almacenando en UTC** en la base de datos (mejor práctica)
-2. **La diferencia es que ahora se usa la hora de Ecuador como base** para calcular el valor UTC a almacenar
-3. **Las consultas por rango de fechas ya usaban correctamente** `gyeDayRangeUtcFromDate()`
-4. **Los cambios son retrocompatibles** - las fechas existentes no se ven afectadas
-
----
+**Nota**: Después de analizar, se determinó que los datos históricos NO necesitan corrección. Las fechas almacenadas están correctas; el problema era solo en la visualización del frontend.
 
 ## Verificación
 
-Para verificar que los cambios funcionan correctamente:
+### Datos Corregidos en Producción
+Las siguientes jornadas tenían visualización incorrecta:
+- Giuliana Reinoso: UTC 04:48 → Ecuador 23:48 ✅
+- BYRON MESIAS: UTC 00:17 → Ecuador 19:17 ✅
+- ARUBA VILLARREAL: UTC 03:01 → Ecuador 22:01 ✅
 
-1. Realizar un cierre de caja después de las 19:00 (hora Ecuador)
-2. Verificar que el cierre aparezca en la fecha correcta (día actual en Ecuador)
-3. Verificar que la hora del cierre en la base de datos sea la hora Ecuador convertida a UTC
+### Build Exitoso
+```bash
+npm run build        # ✅ Frontend compilado correctamente
+npm run build:server # ✅ Backend compilado correctamente
+```
 
-Ejemplo:
-- Cierre realizado: 27 feb 2026, 20:30 (hora Ecuador)
-- Almacenado en BD: 28 feb 2026, 01:30 UTC (que corresponde a 20:30 GMT-5)
-- Al consultar el cierre del día 27, debe aparecer correctamente
+## Recomendaciones Futuras
+1. Siempre usar `nowEcuador()` en lugar de `new Date()` para timestamps del servidor
+2. Siempre especificar `timeZone: "America/Guayaquil"` en formateos de fecha del frontend
+3. Considerar usar la utilidad `toGyeClock()` del frontend para conversiones consistentes

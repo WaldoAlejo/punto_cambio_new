@@ -149,6 +149,7 @@ const AdminDashboard: React.FC = () => {
     return new Date(dateString).toLocaleTimeString("es-ES", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "America/Guayaquil",
     });
   };
 
