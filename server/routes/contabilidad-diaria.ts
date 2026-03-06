@@ -664,14 +664,30 @@ router.get(
 
       type NumberLike = { toNumber?: () => number };
       const toNumber = (v: unknown) => {
+        if (v == null) return 0;
         if (typeof v === "number") return v;
         if (typeof v === "bigint") return Number(v);
-        if (typeof v === "string") return Number(v);
-        if (v && typeof v === "object" && "toNumber" in v) {
-          const toNumberFn = (v as NumberLike).toNumber;
-          if (typeof toNumberFn === "function") return toNumberFn();
+        if (typeof v === "string") {
+          const parsed = Number(v);
+          return isNaN(parsed) ? 0 : parsed;
         }
-        return Number(v);
+        // Manejar objetos Decimal de Prisma
+        if (v && typeof v === "object") {
+          // Intentar usar método toNumber() si existe (Prisma Decimal)
+          if ("toNumber" in v && typeof (v as NumberLike).toNumber === "function") {
+            return (v as NumberLike).toNumber!();
+          }
+          // Intentar usar propiedad valueOf() si existe
+          if ("valueOf" in v && typeof (v as { valueOf(): number }).valueOf === "function") {
+            const val = (v as { valueOf(): number }).valueOf();
+            if (typeof val === "number") return val;
+          }
+          // Intentar convertir a string y luego a número
+          const str = String(v);
+          const parsed = Number(str);
+          if (!isNaN(parsed)) return parsed;
+        }
+        return 0;
       };
 
       const upsertBalance = (
@@ -721,20 +737,40 @@ router.get(
         }
       >();
 
+      // Log de diagnóstico para verificar valores
+      logger.info("[resumen-cierre] Procesando cambios de divisas", {
+        cantidad: cambiosDivisas.length,
+        primerCambio: cambiosDivisas.length > 0 ? {
+          monto_origen: cambiosDivisas[0].monto_origen,
+          monto_destino: cambiosDivisas[0].monto_destino,
+          tipoOrigen: typeof cambiosDivisas[0].monto_origen,
+          monedaOrigen: cambiosDivisas[0].monedaOrigen?.codigo,
+          monedaDestino: cambiosDivisas[0].monedaDestino?.codigo,
+        } : null
+      });
+
       for (const c of cambiosDivisas) {
+        const montoOrigen = toNumber(c.monto_origen);
+        const montoDestino = toNumber(c.monto_destino);
+        
         upsertBalance(
           balanceCambiosMap,
           c.monedaOrigen,
-          toNumber(c.monto_origen || 0),
+          montoOrigen,
           0
         );
         upsertBalance(
           balanceCambiosMap,
           c.monedaDestino,
           0,
-          toNumber(c.monto_destino || 0)
+          montoDestino
         );
       }
+      
+      logger.info("[resumen-cierre] Balance cambios calculado", {
+        monedas: Array.from(balanceCambiosMap.keys()),
+        valores: Array.from(balanceCambiosMap.entries()).map(([k, v]) => ({ moneda: k, ingresos: v.ingresos, egresos: v.egresos }))
+      });
 
       const balanceServiciosMap = new Map<
         string,

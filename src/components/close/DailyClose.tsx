@@ -98,14 +98,61 @@ function normalizeResumenCierre(raw: unknown): ResumenCierre | null {
         }))
     : [];
 
+  // Helper para normalizar montos que pueden venir como string (Decimal) o number
+  const normalizeMonto = (val: unknown): number => {
+    if (typeof val === "number") return val;
+    if (typeof val === "string") {
+      const parsed = parseFloat(val);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    if (val == null) return 0;
+    const parsed = Number(val);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   const transaccionesRaw = isRecord(raw.transacciones) ? raw.transacciones : null;
   const transacciones: ResumenCierre["transacciones"] = transaccionesRaw
     ? {
         cambios_divisas: Array.isArray(transaccionesRaw.cambios_divisas)
-          ? (transaccionesRaw.cambios_divisas as ResumenCambioDivisaTx[])
+          ? transaccionesRaw.cambios_divisas.filter(isRecord).map((c) => ({
+              id: String(c.id || ""),
+              fecha: String(c.fecha || ""),
+              numero_recibo: c.numero_recibo ? String(c.numero_recibo) : undefined,
+              tipo_operacion: c.tipo_operacion ? String(c.tipo_operacion) : undefined,
+              usuario: isRecord(c.usuario) ? {
+                nombre: c.usuario.nombre ? String(c.usuario.nombre) : undefined,
+                username: c.usuario.username ? String(c.usuario.username) : undefined,
+              } : undefined,
+              moneda_origen: isRecord(c.moneda_origen) ? {
+                codigo: c.moneda_origen.codigo ? String(c.moneda_origen.codigo) : undefined,
+                nombre: c.moneda_origen.nombre ? String(c.moneda_origen.nombre) : undefined,
+                simbolo: c.moneda_origen.simbolo ? String(c.moneda_origen.simbolo) : undefined,
+              } : undefined,
+              moneda_destino: isRecord(c.moneda_destino) ? {
+                codigo: c.moneda_destino.codigo ? String(c.moneda_destino.codigo) : undefined,
+                nombre: c.moneda_destino.nombre ? String(c.moneda_destino.nombre) : undefined,
+                simbolo: c.moneda_destino.simbolo ? String(c.moneda_destino.simbolo) : undefined,
+              } : undefined,
+              monto_origen: normalizeMonto(c.monto_origen),
+              monto_destino: normalizeMonto(c.monto_destino),
+              tasa_cambio_billetes: normalizeMonto(c.tasa_cambio_billetes),
+              tasa_cambio_monedas: normalizeMonto(c.tasa_cambio_monedas),
+            }))
           : [],
         servicios_externos: Array.isArray(transaccionesRaw.servicios_externos)
-          ? (transaccionesRaw.servicios_externos as ResumenServicioExternoTx[])
+          ? transaccionesRaw.servicios_externos.filter(isRecord).map((s) => ({
+              id: String(s.id || ""),
+              fecha: String(s.fecha || ""),
+              servicio: s.servicio ? String(s.servicio) : undefined,
+              tipo_movimiento: s.tipo_movimiento ? String(s.tipo_movimiento) : undefined,
+              usuario: isRecord(s.usuario) ? {
+                nombre: s.usuario.nombre ? String(s.usuario.nombre) : undefined,
+                username: s.usuario.username ? String(s.usuario.username) : undefined,
+              } : undefined,
+              moneda: s.moneda ? String(s.moneda) : undefined,
+              monto: normalizeMonto(s.monto),
+              numero_referencia: s.numero_referencia ? String(s.numero_referencia) : undefined,
+            }))
           : [],
       }
     : undefined;
@@ -114,17 +161,31 @@ function normalizeResumenCierre(raw: unknown): ResumenCierre | null {
   const balanceCambiosRaw = balanceRaw && isRecord(balanceRaw.cambios_divisas) ? balanceRaw.cambios_divisas : null;
   const balanceServiciosRaw = balanceRaw && isRecord(balanceRaw.servicios_externos) ? balanceRaw.servicios_externos : null;
 
+  const normalizeBalanceRow = (r: unknown): ResumenBalancePorMonedaRow | null => {
+    if (!isRecord(r)) return null;
+    return {
+      moneda: isRecord(r.moneda) ? {
+        codigo: r.moneda.codigo ? String(r.moneda.codigo) : undefined,
+        nombre: r.moneda.nombre ? String(r.moneda.nombre) : undefined,
+        simbolo: r.moneda.simbolo ? String(r.moneda.simbolo) : undefined,
+      } : undefined,
+      ingresos: normalizeMonto(r.ingresos),
+      egresos: normalizeMonto(r.egresos),
+      neto: normalizeMonto(r.neto),
+    };
+  };
+
   const balance: ResumenCierre["balance"] =
     balanceRaw
       ? {
           cambios_divisas: {
             por_moneda: Array.isArray(balanceCambiosRaw?.por_moneda)
-              ? (balanceCambiosRaw?.por_moneda as ResumenBalancePorMonedaRow[])
+              ? balanceCambiosRaw.por_moneda.map(normalizeBalanceRow).filter((r): r is ResumenBalancePorMonedaRow => r !== null)
               : [],
           },
           servicios_externos: {
             por_moneda: Array.isArray(balanceServiciosRaw?.por_moneda)
-              ? (balanceServiciosRaw?.por_moneda as ResumenBalancePorMonedaRow[])
+              ? balanceServiciosRaw.por_moneda.map(normalizeBalanceRow).filter((r): r is ResumenBalancePorMonedaRow => r !== null)
               : [],
           },
         }
@@ -812,6 +873,11 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       );
 
       if (resultado.success && resultado.resumen) {
+        // Log de diagnóstico para verificar datos recibidos
+        console.log("[DailyClose] Resumen recibido:", resultado.resumen);
+        console.log("[DailyClose] Primer cambio:", resultado.resumen.transacciones?.cambios_divisas?.[0]);
+        console.log("[DailyClose] Balance cambios:", resultado.resumen.balance?.cambios_divisas?.por_moneda);
+        
         const normalized = normalizeResumenCierre(resultado.resumen);
         if (!normalized) {
           toast({

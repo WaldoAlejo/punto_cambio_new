@@ -401,9 +401,145 @@ router.get("/movimientos-auditoria", authenticateToken, async (req, res) => {
       total: todosMovimientos.length,
     };
 
+    // Calcular totales por moneda (ingresos y egresos)
+    const totalesPorMoneda: Record<string, { 
+      codigo: string; 
+      nombre: string; 
+      ingresos: number; 
+      egresos: number;
+      saldo_neto: number;
+    }> = {};
+
+    // Procesar CAMBIOS DE DIVISA (tienen moneda_origen/destino y monto_origen/destino)
+    for (const mov of cambiosFormateados) {
+      const monedaOrigen = mov.moneda_origen || 'USD';
+      const monedaDestino = mov.moneda_destino || 'USD';
+      const montoOrigen = Math.abs(Number(mov.monto_origen) || 0);
+      const montoDestino = Math.abs(Number(mov.monto_destino) || 0);
+      
+      // Moneda origen: ingreso (cliente entrega al punto)
+      if (!totalesPorMoneda[monedaOrigen]) {
+        totalesPorMoneda[monedaOrigen] = {
+          codigo: monedaOrigen,
+          nombre: monedaOrigen,
+          ingresos: 0,
+          egresos: 0,
+          saldo_neto: 0,
+        };
+      }
+      totalesPorMoneda[monedaOrigen].ingresos += montoOrigen;
+      totalesPorMoneda[monedaOrigen].saldo_neto += montoOrigen;
+
+      // Moneda destino: egreso (punto entrega al cliente)
+      if (!totalesPorMoneda[monedaDestino]) {
+        totalesPorMoneda[monedaDestino] = {
+          codigo: monedaDestino,
+          nombre: monedaDestino,
+          ingresos: 0,
+          egresos: 0,
+          saldo_neto: 0,
+        };
+      }
+      totalesPorMoneda[monedaDestino].egresos += montoDestino;
+      totalesPorMoneda[monedaDestino].saldo_neto -= montoDestino;
+    }
+
+    // Procesar SERVICIOS EXTERNOS
+    for (const mov of serviciosFormateados) {
+      const moneda = mov.moneda || 'USD';
+      const monto = Math.abs(Number(mov.monto) || 0);
+      
+      if (!totalesPorMoneda[moneda]) {
+        totalesPorMoneda[moneda] = {
+          codigo: moneda,
+          nombre: moneda,
+          ingresos: 0,
+          egresos: 0,
+          saldo_neto: 0,
+        };
+      }
+
+      if (mov.tipo_movimiento === 'INGRESO') {
+        totalesPorMoneda[moneda].ingresos += monto;
+        totalesPorMoneda[moneda].saldo_neto += monto;
+      } else if (mov.tipo_movimiento === 'EGRESO') {
+        totalesPorMoneda[moneda].egresos += monto;
+        totalesPorMoneda[moneda].saldo_neto -= monto;
+      }
+    }
+
+    // Procesar TRANSFERENCIAS
+    for (const mov of transferenciasFormateadas) {
+      const moneda = mov.moneda || 'USD';
+      const monto = Math.abs(Number(mov.monto) || 0);
+      
+      if (!totalesPorMoneda[moneda]) {
+        totalesPorMoneda[moneda] = {
+          codigo: moneda,
+          nombre: moneda,
+          ingresos: 0,
+          egresos: 0,
+          saldo_neto: 0,
+        };
+      }
+
+      if (mov.direccion === 'ENTRADA') {
+        totalesPorMoneda[moneda].ingresos += monto;
+        totalesPorMoneda[moneda].saldo_neto += monto;
+      } else if (mov.direccion === 'SALIDA') {
+        totalesPorMoneda[moneda].egresos += monto;
+        totalesPorMoneda[moneda].saldo_neto -= monto;
+      }
+    }
+
+    // Procesar GUÍAS SERVIENTREGA (siempre son ingresos en USD)
+    for (const mov of guiasFormateadas) {
+      const moneda = mov.moneda || 'USD';
+      const monto = Math.abs(Number(mov.monto) || 0);
+      
+      if (!totalesPorMoneda[moneda]) {
+        totalesPorMoneda[moneda] = {
+          codigo: moneda,
+          nombre: moneda,
+          ingresos: 0,
+          egresos: 0,
+          saldo_neto: 0,
+        };
+      }
+      // Las guías son ingresos
+      totalesPorMoneda[moneda].ingresos += monto;
+      totalesPorMoneda[moneda].saldo_neto += monto;
+    }
+
+    // Procesar MOVIMIENTOS DE SALDO
+    for (const mov of movimientosFormateados) {
+      const moneda = mov.moneda || 'USD';
+      const monto = Math.abs(Number(mov.monto) || 0);
+      
+      if (!totalesPorMoneda[moneda]) {
+        totalesPorMoneda[moneda] = {
+          codigo: moneda,
+          nombre: moneda,
+          ingresos: 0,
+          egresos: 0,
+          saldo_neto: 0,
+        };
+      }
+
+      const tipo = String(mov.tipo_movimiento).toUpperCase();
+      if (tipo === 'INGRESO' || tipo === 'TRANSFERENCIA_ENTRANTE') {
+        totalesPorMoneda[moneda].ingresos += monto;
+        totalesPorMoneda[moneda].saldo_neto += monto;
+      } else if (tipo === 'EGRESO' || tipo === 'TRANSFERENCIA_SALIENTE') {
+        totalesPorMoneda[moneda].egresos += monto;
+        totalesPorMoneda[moneda].saldo_neto -= monto;
+      }
+    }
+
     logger.info("✅ Movimientos obtenidos", {
       total: todosMovimientos.length,
       por_tipo: totalesPorTipo,
+      por_moneda: Object.keys(totalesPorMoneda),
     });
 
     res.json({
@@ -415,6 +551,7 @@ router.get("/movimientos-auditoria", authenticateToken, async (req, res) => {
         },
         punto_atencion_id: puntoAtencionId,
         totales: totalesPorTipo,
+        totales_por_moneda: Object.values(totalesPorMoneda),
         movimientos: todosMovimientos,
       },
     });
