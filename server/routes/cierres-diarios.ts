@@ -266,17 +266,29 @@ router.get("/resumen-por-fecha", authenticateToken, async (req, res) => {
       });
     }
 
-    // Parsear la fecha
-    const fechaConsulta = new Date(fecha);
-    if (isNaN(fechaConsulta.getTime())) {
+    // Validar formato YYYY-MM-DD
+    try {
+      gyeParseDateOnly(fecha);
+    } catch {
       return res.status(400).json({
         success: false,
-        error: "Formato de fecha inválido",
+        error: "Formato de fecha inválido. Use YYYY-MM-DD",
       });
     }
 
+    // Parsear la fecha como YYYY-MM-DD en Ecuador (sin timezone issues)
+    const [year, month, day] = fecha.split('-').map(Number);
+    const fechaConsulta = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+
     const { gte: fechaGte, lt: fechaLt } =
       gyeDayRangeUtcFromDate(fechaConsulta);
+
+    logger.info("[resumen-por-fecha] Consultando cierres", {
+      fechaRecibida: fecha,
+      fechaParseada: fechaConsulta.toISOString(),
+      rangoGte: fechaGte,
+      rangoLt: fechaLt,
+    });
 
     // Obtener todos los puntos activos
     const puntosActivos = await prisma.puntoAtencion.findMany({

@@ -26,8 +26,10 @@ import {
   Calendar,
   TrendingUp,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, subDays, addDays, isToday, isYesterday, isAfter } from "date-fns";
 import { es } from "date-fns/locale";
 import axiosInstance from "@/services/axiosInstance";
 
@@ -78,13 +80,18 @@ const CierresDiariosResumen = () => {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ResumenResponse["data"] | null>(null);
   const [selectedMoneda, setSelectedMoneda] = useState<string>("TODAS");
+  // Por defecto mostramos el DÍA ANTERIOR (así el admin ve los cierres del día que ya pasó)
+  const [selectedDate, setSelectedDate] = useState<Date>(subDays(new Date(), 1));
 
-  const fetchResumen = async () => {
+  const fetchResumen = async (date?: Date) => {
     setLoading(true);
     setError(null);
     try {
+      const fechaConsulta = date || selectedDate;
+      const fechaStr = format(fechaConsulta, "yyyy-MM-dd");
+      
       const { data: result } = await axiosInstance.get<ResumenResponse>(
-        "/cierres-diarios/resumen-dia-anterior"
+        `/cierres-diarios/resumen-por-fecha?fecha=${fechaStr}`
       );
 
       if (result.success && result.data) {
@@ -105,7 +112,7 @@ const CierresDiariosResumen = () => {
 
   useEffect(() => {
     fetchResumen();
-  }, []);
+  }, [selectedDate]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("es-EC", {
@@ -116,7 +123,10 @@ const CierresDiariosResumen = () => {
 
   const formatFecha = (fecha: string) => {
     try {
-      return format(new Date(fecha), "dd 'de' MMMM 'de' yyyy", { locale: es });
+      // Parsear la fecha como YYYY-MM-DD y crear fecha en UTC para evitar problemas de timezone
+      const [year, month, day] = fecha.split('-').map(Number);
+      const dateObj = new Date(Date.UTC(year, month - 1, day));
+      return format(dateObj, "dd 'de' MMMM 'de' yyyy", { locale: es });
     } catch {
       return fecha;
     }
@@ -179,12 +189,56 @@ const CierresDiariosResumen = () => {
           <p className="text-gray-600 mt-1 flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             {formatFecha(data.fecha_consultada)}
+            {isToday(new Date(data.fecha_consultada)) && (
+              <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 border-blue-200">
+                Hoy
+              </Badge>
+            )}
+            {isYesterday(new Date(data.fecha_consultada)) && (
+              <Badge variant="outline" className="ml-2 bg-gray-50 text-gray-700 border-gray-200">
+                Ayer
+              </Badge>
+            )}
           </p>
         </div>
-        <Button onClick={fetchResumen} variant="outline">
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Actualizar
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Navegación de fechas */}
+          <div className="flex items-center bg-gray-100 rounded-lg p-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+              className="h-8 w-8 p-0"
+              title="Día anterior"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedDate(subDays(new Date(), 1))}
+              className="px-3 text-sm font-medium"
+              disabled={isYesterday(selectedDate)}
+              title="Ver cierres de ayer (por defecto)"
+            >
+              Ayer
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+              className="h-8 w-8 p-0"
+              title="Día siguiente"
+              disabled={isToday(selectedDate) || isAfter(selectedDate, subDays(new Date(), 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+          <Button onClick={() => fetchResumen()} variant="outline">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Actualizar
+          </Button>
+        </div>
       </div>
 
       {/* Estadísticas */}
