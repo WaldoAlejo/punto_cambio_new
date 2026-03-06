@@ -918,228 +918,353 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const fmt2 = (n: unknown) => Number(n ?? 0).toFixed(2);
 
   const printBalance = () => {
-    if (!resumenCierre) return;
+    if (!resumenCierre) {
+      toast({
+        title: "No hay datos",
+        description: "No hay datos de resumen para imprimir.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    const cambios = resumenCierre?.transacciones?.cambios_divisas || [];
-    const servicios = resumenCierre?.transacciones?.servicios_externos || [];
-    const balanceCambios = resumenCierre.balance?.cambios_divisas?.por_moneda || [];
-    const balanceServicios = resumenCierre.balance?.servicios_externos?.por_moneda || [];
+    try {
+      const cambios = resumenCierre?.transacciones?.cambios_divisas || [];
+      const servicios = resumenCierre?.transacciones?.servicios_externos || [];
+      const balanceCambios = resumenCierre.balance?.cambios_divisas?.por_moneda || [];
+      const balanceServicios = resumenCierre.balance?.servicios_externos?.por_moneda || [];
 
-    const fmt = (n: unknown) => Number(n ?? 0).toFixed(2);
-    const fmtRate = (n: unknown) => Number(n ?? 0).toFixed(3);
-    const safe = (s: unknown) => (s == null ? "" : String(s));
+      const fmt = (n: unknown) => Number(n ?? 0).toFixed(2);
+      const fmtRate = (n: unknown) => Number(n ?? 0).toFixed(3);
+      const safe = (s: unknown) => {
+        if (s == null) return "";
+        const str = String(s);
+        // Escapar caracteres HTML para prevenir XSS y problemas de renderizado
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      };
 
-    const rowsCambios = cambios
-      .map((c) => {
-        const fecha = new Date(c.fecha);
-        const hora = isNaN(fecha.getTime()) ? safe(c.fecha) : fecha.toLocaleTimeString();
-        const mo = c.moneda_origen;
-        const md = c.moneda_destino;
-        const tasa =
-          (Number(c.tasa_cambio_billetes || 0) > 0
-            ? `B ${fmtRate(c.tasa_cambio_billetes)}`
-            : "") +
-          (Number(c.tasa_cambio_monedas || 0) > 0
-            ? `${Number(c.tasa_cambio_billetes || 0) > 0 ? " | " : ""}M ${fmtRate(
-                c.tasa_cambio_monedas
-              )}`
-            : "");
+      const rowsCambios = cambios
+        .map((c) => {
+          let hora = "";
+          try {
+            const fecha = new Date(c.fecha);
+            hora = isNaN(fecha.getTime()) ? safe(c.fecha) : fecha.toLocaleTimeString();
+          } catch {
+            hora = safe(c.fecha);
+          }
+          const mo = c.moneda_origen;
+          const md = c.moneda_destino;
+          const tasaB = Number(c.tasa_cambio_billetes || 0) > 0 ? `B ${fmtRate(c.tasa_cambio_billetes)}` : "";
+          const tasaM = Number(c.tasa_cambio_monedas || 0) > 0 ? `M ${fmtRate(c.tasa_cambio_monedas)}` : "";
+          const tasa = [tasaB, tasaM].filter(Boolean).join(" | ");
 
-        return `
-          <tr>
+          return `<tr>
             <td>${hora}</td>
             <td>${safe(c.numero_recibo) || "—"}</td>
             <td>${safe(c.tipo_operacion)}</td>
             <td>${safe(c.usuario?.nombre || c.usuario?.username) || "—"}</td>
             <td>${safe(mo?.codigo) || "—"} ${safe(mo?.nombre) ? `(${safe(mo?.nombre)})` : ""}</td>
-            <td>${fmt(c.monto_origen)}</td>
+            <td style="text-align:right">${fmt(c.monto_origen)}</td>
             <td>${safe(md?.codigo) || "—"} ${safe(md?.nombre) ? `(${safe(md?.nombre)})` : ""}</td>
-            <td>${fmt(c.monto_destino)}</td>
+            <td style="text-align:right">${fmt(c.monto_destino)}</td>
             <td>${tasa || "—"}</td>
           </tr>`;
-      })
-      .join("");
+        })
+        .join("");
 
-    const rowsServicios = servicios
-      .map((m) => {
-        const fecha = new Date(m.fecha);
-        const hora = isNaN(fecha.getTime()) ? safe(m.fecha) : fecha.toLocaleTimeString();
-        return `
-          <tr>
+      const rowsServicios = servicios
+        .map((m) => {
+          let hora = "";
+          try {
+            const fecha = new Date(m.fecha);
+            hora = isNaN(fecha.getTime()) ? safe(m.fecha) : fecha.toLocaleTimeString();
+          } catch {
+            hora = safe(m.fecha);
+          }
+          return `<tr>
             <td>${hora}</td>
             <td>${safe(m.servicio)}</td>
             <td>${safe(m.tipo_movimiento)}</td>
             <td>${safe(m.usuario?.nombre || m.usuario?.username) || "—"}</td>
             <td>${safe(m.moneda) || "—"}</td>
-            <td>${fmt(m.monto)}</td>
+            <td style="text-align:right">${fmt(m.monto)}</td>
             <td>${safe(m.numero_referencia) || "—"}</td>
           </tr>`;
-      })
-      .join("");
+        })
+        .join("");
 
-    const rowsBalanceCambios = balanceCambios
-      .map((r) => {
-        return `
-          <tr>
+      const rowsBalanceCambios = balanceCambios
+        .map((r) => {
+          return `<tr>
             <td>${safe(r.moneda?.codigo) || "—"}</td>
             <td>${safe(r.moneda?.nombre) || ""}</td>
-            <td>${fmt(r.ingresos)}</td>
-            <td>${fmt(r.egresos)}</td>
-            <td>${fmt(r.neto)}</td>
+            <td style="text-align:right">${fmt(r.ingresos)}</td>
+            <td style="text-align:right">${fmt(r.egresos)}</td>
+            <td style="text-align:right;font-weight:bold">${fmt(r.neto)}</td>
           </tr>`;
-      })
-      .join("");
+        })
+        .join("");
 
-    const rowsBalanceServicios = balanceServicios
-      .map((r) => {
-        return `
-          <tr>
+      const rowsBalanceServicios = balanceServicios
+        .map((r) => {
+          return `<tr>
             <td>${safe(r.moneda?.codigo) || "—"}</td>
             <td>${safe(r.moneda?.nombre) || ""}</td>
-            <td>${fmt(r.ingresos)}</td>
-            <td>${fmt(r.egresos)}</td>
-            <td>${fmt(r.neto)}</td>
+            <td style="text-align:right">${fmt(r.ingresos)}</td>
+            <td style="text-align:right">${fmt(r.egresos)}</td>
+            <td style="text-align:right;font-weight:bold">${fmt(r.neto)}</td>
           </tr>`;
-      })
-      .join("");
+        })
+        .join("");
 
-    const html = `
-      <html>
-        <head>
-          <title>Balance diario</title>
-          <style>
-            body{font-family: Arial, sans-serif; padding: 24px; color:#111}
-            h1,h2{margin:0 0 8px 0}
-            .muted{color:#555; font-size:12px}
-            .grid{display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px}
-            .card{border:1px solid #ddd; border-radius:8px; padding:12px}
-            table{width:100%; border-collapse:collapse; margin-top:8px}
-            th,td{border:1px solid #ddd; padding:6px; font-size:12px; text-align:left}
-            th{background:#f5f5f5}
-            .section{margin-top:18px}
-            @media print{ .no-print{display:none} }
-          </style>
-        </head>
-        <body>
-          <div class="no-print" style="margin-bottom:12px">
-            <button onclick="window.print()">Imprimir</button>
-          </div>
+      const fechaStr = safe(resumenCierre.fecha);
+      const puntoStr = safe(resumenCierre.punto_atencion_id);
 
-          <h1>Balance diario</h1>
-          <div class="muted">Fecha: ${safe(resumenCierre.fecha)} | Punto: ${safe(resumenCierre.punto_atencion_id)}</div>
+      const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Balance diario - ${fechaStr}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; padding: 24px; color: #111; margin: 0; }
+    h1, h2 { margin: 0 0 8px 0; }
+    h1 { font-size: 24px; }
+    h2 { font-size: 18px; }
+    .muted { color: #555; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: #fafafa; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { border: 1px solid #ddd; padding: 6px; font-size: 12px; text-align: left; }
+    th { background: #f5f5f5; font-weight: bold; }
+    .section { margin-top: 18px; }
+    .text-right { text-align: right; }
+    .no-print { 
+      margin-bottom: 12px; 
+      padding: 12px; 
+      background: #f0f0f0; 
+      border-radius: 4px;
+    }
+    .btn-print {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .btn-print:hover { background: #1d4ed8; }
+    .btn-close {
+      background: #6b7280;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-left: 8px;
+    }
+    @media print { 
+      .no-print { display: none !important; } 
+      body { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <button class="btn-print" onclick="window.print(); setTimeout(()=>window.close(),500)">🖨️ Imimir / Guardar PDF</button>
+    <button class="btn-close" onclick="window.close()">✕ Cerrar</button>
+    <span style="margin-left: 12px; color: #666; font-size: 12px;">
+      Si no se abre el diálogo de impresión, use Ctrl+P
+    </span>
+  </div>
 
-          <div class="grid">
-            <div class="card">
-              <h2>Cambios de divisas</h2>
-              <div class="muted">Cantidad: ${cambios.length}</div>
-            </div>
-            <div class="card">
-              <h2>Servicios externos</h2>
-              <div class="muted">Cantidad: ${servicios.length}</div>
-            </div>
-          </div>
+  <h1>Balance diario</h1>
+  <div class="muted">Fecha: ${fechaStr} | Punto: ${puntoStr}</div>
 
-          <div class="section">
-            <h2>Balance por moneda (Cambios)</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Moneda</th>
-                  <th>Nombre</th>
-                  <th>Ingresos</th>
-                  <th>Egresos</th>
-                  <th>Neto</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rowsBalanceCambios || "<tr><td colspan='5'>Sin datos</td></tr>"}
-              </tbody>
-            </table>
-          </div>
+  <div class="grid">
+    <div class="card">
+      <h2>Cambios de divisas</h2>
+      <div class="muted">Cantidad: ${cambios.length}</div>
+    </div>
+    <div class="card">
+      <h2>Servicios externos</h2>
+      <div class="muted">Cantidad: ${servicios.length}</div>
+    </div>
+  </div>
 
-          <div class="section">
-            <h2>Balance por moneda (Servicios externos)</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Moneda</th>
-                  <th>Nombre</th>
-                  <th>Ingresos</th>
-                  <th>Egresos</th>
-                  <th>Neto</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rowsBalanceServicios || "<tr><td colspan='5'>Sin datos</td></tr>"}
-              </tbody>
-            </table>
-          </div>
+  <div class="section">
+    <h2>Balance por moneda (Cambios)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Moneda</th>
+          <th>Nombre</th>
+          <th style="text-align:right">Ingresos</th>
+          <th style="text-align:right">Egresos</th>
+          <th style="text-align:right">Neto</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsBalanceCambios || "<tr><td colspan='5' style='text-align:center;color:#666'>Sin datos</td></tr>"}
+      </tbody>
+    </table>
+  </div>
 
-          <div class="section">
-            <h2>Cambios (cliente entrega / cliente recibe)</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Hora</th>
-                  <th>Recibo</th>
-                  <th>Operación</th>
-                  <th>Operador</th>
-                  <th>Moneda entrega</th>
-                  <th>Monto entrega</th>
-                  <th>Moneda recibe</th>
-                  <th>Monto recibe</th>
-                  <th>Tasa</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rowsCambios || "<tr><td colspan='9'>Sin cambios</td></tr>"}
-              </tbody>
-            </table>
-          </div>
+  <div class="section">
+    <h2>Balance por moneda (Servicios externos)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Moneda</th>
+          <th>Nombre</th>
+          <th style="text-align:right">Ingresos</th>
+          <th style="text-align:right">Egresos</th>
+          <th style="text-align:right">Neto</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsBalanceServicios || "<tr><td colspan='5' style='text-align:center;color:#666'>Sin datos</td></tr>"}
+      </tbody>
+    </table>
+  </div>
 
-          <div class="section">
-            <h2>Servicios externos</h2>
-            <table>
-              <thead>
-                <tr>
-                  <th>Hora</th>
-                  <th>Servicio</th>
-                  <th>Tipo</th>
-                  <th>Operador</th>
-                  <th>Moneda</th>
-                  <th>Monto</th>
-                  <th>Ref</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rowsServicios || "<tr><td colspan='7'>Sin movimientos</td></tr>"}
-              </tbody>
-            </table>
-          </div>
+  <div class="section">
+    <h2>Cambios (cliente entrega / cliente recibe)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Hora</th>
+          <th>Recibo</th>
+          <th>Operación</th>
+          <th>Operador</th>
+          <th>Moneda entrega</th>
+          <th style="text-align:right">Monto</th>
+          <th>Moneda recibe</th>
+          <th style="text-align:right">Monto</th>
+          <th>Tasa</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsCambios || "<tr><td colspan='9' style='text-align:center;color:#666'>Sin cambios</td></tr>"}
+      </tbody>
+    </table>
+  </div>
 
-          <div class="section muted">
-            Generado desde el módulo de cierre diario.
-          </div>
-        </body>
-      </html>
-    `;
+  <div class="section">
+    <h2>Servicios externos</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Hora</th>
+          <th>Servicio</th>
+          <th>Tipo</th>
+          <th>Operador</th>
+          <th>Moneda</th>
+          <th style="text-align:right">Monto</th>
+          <th>Ref</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsServicios || "<tr><td colspan='7' style='text-align:center;color:#666'>Sin movimientos</td></tr>"}
+      </tbody>
+    </table>
+  </div>
 
-    const win = window.open("", "_blank", "noopener,noreferrer");
-    if (!win) {
+  <div class="section muted" style="margin-top: 24px; padding-top: 12px; border-top: 1px solid #ddd;">
+    Generado desde el módulo de cierre diario | ${new Date().toLocaleString()}
+  </div>
+
+  <script>
+    // Auto-focus para permitir Ctrl+P inmediatamente
+    window.onload = function() {
+      document.body.focus();
+    };
+    // Cerrar con Escape
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') window.close();
+    });
+  </script>
+</body>
+</html>`;
+
+      // Método 1: Intentar abrir ventana emergente
+      const win = window.open("about:blank", "print_balance", "width=1024,height=768,scrollbars=yes,resizable=yes");
+      
+      if (!win || win.closed || typeof win.closed === 'undefined') {
+        // El popup fue bloqueado, usar método alternativo (iframe)
+        console.log("[printBalance] Ventana bloqueada, usando iframe");
+        
+        // Crear iframe oculto para imprimir
+        let iframe = document.getElementById("print-iframe") as HTMLIFrameElement | null;
+        if (!iframe) {
+          iframe = document.createElement("iframe");
+          iframe.id = "print-iframe";
+          iframe.style.position = "fixed";
+          iframe.style.right = "0";
+          iframe.style.bottom = "0";
+          iframe.style.width = "0";
+          iframe.style.height = "0";
+          iframe.style.border = "0";
+          iframe.style.visibility = "hidden";
+          document.body.appendChild(iframe);
+        }
+        
+        const iframeDoc = iframe.contentWindow?.document;
+        if (iframeDoc) {
+          iframeDoc.open();
+          iframeDoc.write(html);
+          iframeDoc.close();
+          
+          // Esperar a que cargue y luego imprimir
+          setTimeout(() => {
+            try {
+              iframe?.contentWindow?.print();
+            } catch (e) {
+              console.error("Error al imprimir desde iframe:", e);
+              toast({
+                title: "Error al imprimir",
+                description: "No se pudo abrir el diálogo de impresión. Intente nuevamente.",
+                variant: "destructive",
+              });
+            }
+          }, 500);
+          
+          toast({
+            title: "Abriendo impresión",
+            description: "Si no se abre el diálogo, presione Ctrl+P",
+          });
+        }
+        return;
+      }
+
+      // Método 2: Usar ventana emergente (funcionó)
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      
+      // Esperar un momento para que el contenido se renderice
+      setTimeout(() => {
+        try {
+          win.focus();
+        } catch (e) {
+          console.log("No se pudo hacer focus en la ventana:", e);
+        }
+      }, 100);
+
+    } catch (error) {
+      console.error("[printBalance] Error:", error);
       toast({
-        title: "No se pudo abrir impresión",
-        description: "Verifique si el navegador bloqueó la ventana emergente.",
+        title: "Error al generar impresión",
+        description: error instanceof Error ? error.message : "Error inesperado",
         variant: "destructive",
       });
-      return;
-    }
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    try {
-      win.focus();
-    } catch {
-      // noop: some browsers disallow focus
     }
   };
 
