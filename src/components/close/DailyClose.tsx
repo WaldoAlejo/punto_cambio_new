@@ -1928,7 +1928,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
       {/* Modal de Resumen de Cierre */}
       <Dialog open={showResumenModal} onOpenChange={setShowResumenModal}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] overflow-y-auto p-6">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">
               📊 Resumen de Saldos - Cierre Diario
