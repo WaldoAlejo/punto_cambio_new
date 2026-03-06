@@ -14,6 +14,7 @@ import {
   TipoMovimiento as TipoMov,
   TipoReferencia,
 } from "../services/movimientoSaldoService.js";
+import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
 import { nowEcuador } from "../utils/timezone.js";
 
 const router = express.Router();
@@ -144,6 +145,80 @@ async function gyeTodayWindow() {
   return gyeDayRangeUtcFromDate(new Date()); // { gte, lt }
 }
 
+/**
+ * Calcula el saldo de CAJA desde movimientos (igual que la UI).
+ * Acepta un cliente de Prisma (global o transacción) para flexibilidad.
+ */
+async function calcularSaldoCajaDesdeMovimientos(
+  puntoAtencionId: string,
+  monedaId: string,
+  tx: Prisma.TransactionClient | typeof prisma = prisma
+): Promise<number> {
+  // 1. Obtener saldo inicial más reciente
+  const saldoInicial = await tx.saldoInicial.findFirst({
+    where: {
+      punto_atencion_id: puntoAtencionId,
+      moneda_id: monedaId,
+      activo: true,
+    },
+    orderBy: { fecha_asignacion: "desc" },
+  });
+
+  let saldoCalculado = saldoInicial ? Number(saldoInicial.cantidad_inicial) : 0;
+  const fechaCorte = saldoInicial?.fecha_asignacion ?? null;
+
+  // 2. Obtener movimientos (excluyendo bancarios)
+  const movimientos = await tx.movimientoSaldo.findMany({
+    where: {
+      punto_atencion_id: puntoAtencionId,
+      moneda_id: monedaId,
+      ...(fechaCorte ? { fecha: { gte: fechaCorte } } : {}),
+    },
+    select: { monto: true, tipo_movimiento: true, descripcion: true },
+    orderBy: { fecha: "asc" },
+  });
+
+  // 3. Filtrar movimientos bancarios y calcular saldo
+  for (const mov of movimientos) {
+    const desc = (mov.descripcion ?? "").toLowerCase();
+    
+    // Si el movimiento está marcado como "(CAJA)", SIEMPRE afecta caja
+    if (desc.includes("(caja)")) {
+      const monto = Number(mov.monto);
+      if (!isNaN(monto) && isFinite(monto)) {
+        saldoCalculado += monto;
+      }
+      continue;
+    }
+    
+    // Excluir cuando 'banco'/'bancos' aparece como palabra completa
+    const hasBancoWord = /\bbancos?\b/i.test(desc);
+    if (hasBancoWord) continue;
+
+    // Aplicar monto según tipo
+    const tipo = (mov.tipo_movimiento || "").toUpperCase();
+    const monto = Number(mov.monto);
+    
+    if (isNaN(monto) || !isFinite(monto)) continue;
+    
+    if (tipo === "SALDO_INICIAL") continue; // Ya está incluido
+    
+    // Normalizar signo para tipos conocidos
+    if (tipo === "EGRESO" || tipo === "TRANSFERENCIA_SALIENTE" || tipo === "TRANSFERENCIA_SALIDA") {
+      saldoCalculado -= Math.abs(monto);
+    } else if (tipo === "INGRESO" || tipo === "TRANSFERENCIA_ENTRANTE" || tipo === "TRANSFERENCIA_ENTRADA" || tipo === "TRANSFERENCIA_DEVOLUCION") {
+      saldoCalculado += Math.abs(monto);
+    } else if (tipo === "AJUSTE") {
+      saldoCalculado += monto; // AJUSTE mantiene su signo
+    } else {
+      // Para otros tipos, usar el signo del monto como está
+      saldoCalculado += monto;
+    }
+  }
+
+  return Number(saldoCalculado.toFixed(2));
+}
+
 /** Asegura que exista USD y devuelve su id (usa unique por codigo) */
 async function ensureUsdMonedaId(): Promise<string> {
   const existing = await prisma.moneda.findUnique({
@@ -244,6 +319,10 @@ async function validarSaldoServicioExterno(
         return;
       }
 
+      // Obtener saldo calculado desde movimientos (igual que la UI) para consistencia
+      const saldoCaja = await calcularSaldoCajaDesdeMovimientos(puntoId, usdId);
+
+      // Obtener saldo de BANCOS desde la tabla (no hay tabla de movimientos para bancos aún)
       const saldo = await prisma.saldo.findUnique({
         where: {
           punto_atencion_id_moneda_id: {
@@ -251,10 +330,9 @@ async function validarSaldoServicioExterno(
             moneda_id: usdId,
           },
         },
-        select: { cantidad: true, bancos: true },
+        select: { bancos: true },
       });
 
-      const saldoCaja = Number(saldo?.cantidad || 0);
       const saldoBancos = Number(saldo?.bancos || 0);
 
       if (saldoCaja + 0.01 < montoCaja) {
@@ -561,6 +639,10 @@ router.post(
         }
 
         // SALDO FÍSICO GENERAL DEL PUNTO (efectivo de cambio de divisas)
+        // Usar saldo calculado desde movimientos (igual que la UI) para consistencia
+        const saldoGeneralAnterior = await calcularSaldoCajaDesdeMovimientos(puntoId, usdId, tx);
+        
+        // Obtener saldo de BANCOS desde la tabla (no hay tabla de movimientos para bancos aún)
         const saldoGeneral = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -569,8 +651,7 @@ router.post(
             },
           },
         });
-
-        const saldoGeneralAnterior = Number(saldoGeneral?.cantidad || 0);
+        
         const saldoBancosAnterior = Number(saldoGeneral?.bancos || 0);
         let billetesMonto =
           typeof billetes === "number" && !isNaN(billetes) ? billetes : 0;
@@ -1102,6 +1183,11 @@ router.post(
       let validacionSaldo = null;
       if (tipo_movimiento === "EGRESO") {
         const usdId = await ensureUsdMonedaId();
+        
+        // Usar saldo calculado desde movimientos (igual que la UI) para consistencia
+        const saldoCaja = await calcularSaldoCajaDesdeMovimientos(puntoId, usdId);
+        
+        // Obtener saldo de BANCOS desde la tabla
         const saldo = await prisma.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -1109,9 +1195,9 @@ router.post(
               moneda_id: usdId,
             },
           },
+          select: { bancos: true },
         });
         
-        const saldoCaja = Number(saldo?.cantidad || 0);
         const saldoBancos = Number(saldo?.bancos || 0);
         const saldoTotal = saldoCaja + saldoBancos;
         
