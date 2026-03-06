@@ -12,9 +12,9 @@ import FreePointButton from "./FreePointButton";
 interface ActiveSchedule {
   id: string;
   fecha_inicio: string;
-  fecha_almuerzo?: string;
-  fecha_regreso?: string;
-  fecha_salida?: string;
+  fecha_almuerzo?: string | null;
+  fecha_regreso?: string | null;
+  fecha_salida?: string | null;
   ubicacion_inicio?: {
     lat: number;
     lng: number;

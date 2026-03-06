@@ -156,7 +156,6 @@ const TransferAcceptance = () => {
           });
         }
       },
-      "Rechazar",
       "destructive"
     );
   };

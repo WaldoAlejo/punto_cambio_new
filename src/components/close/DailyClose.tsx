@@ -451,8 +451,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           fechaHoy
         );
 
-      if (validacion.success) {
-        setValidacionCierres(validacion);
+      if (validacion.success && validacion.cierres_requeridos && validacion.estado_cierres) {
+        setValidacionCierres(validacion as NonNullable<typeof validacionCierres>);
       } else {
         console.error("Error validando cierres:", validacion.error);
       }
@@ -668,7 +668,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       // 1. Validar saldos solo si hay detalles de divisas
       const tieneDetalles = (cuadreData?.detalles?.length ?? 0) > 0;
       if (tieneDetalles) {
-        const incompleteBalances = cuadreData.detalles.some(
+        const incompleteBalances = cuadreData?.detalles?.some(
           (detalle) =>
             userAdjustments[detalle.moneda_id]?.bills === undefined ||
             userAdjustments[detalle.moneda_id]?.bills === "" ||
@@ -689,7 +689,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         }
 
         // Validación estricta con tolerancia
-        const invalidBalances = cuadreData.detalles.filter((detalle) => {
+        const invalidBalances = cuadreData?.detalles?.filter((detalle) => {
           const bills = parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0");
           const coins = parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0");
           const total = bills + coins;
@@ -885,9 +885,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             <td>${safe(c.numero_recibo) || "—"}</td>
             <td>${safe(c.tipo_operacion)}</td>
             <td>${safe(c.usuario?.nombre || c.usuario?.username) || "—"}</td>
-            <td>${safe(mo?.codigo) || "—"} ${safe(mo?.nombre) ? `(${safe(mo.nombre)})` : ""}</td>
+            <td>${safe(mo?.codigo) || "—"} ${safe(mo?.nombre) ? `(${safe(mo?.nombre)})` : ""}</td>
             <td>${fmt(c.monto_origen)}</td>
-            <td>${safe(md?.codigo) || "—"} ${safe(md?.nombre) ? `(${safe(md.nombre)})` : ""}</td>
+            <td>${safe(md?.codigo) || "—"} ${safe(md?.nombre) ? `(${safe(md?.nombre)})` : ""}</td>
             <td>${fmt(c.monto_destino)}</td>
             <td>${tasa || "—"}</td>
           </tr>`;
@@ -2044,8 +2044,8 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               )}
 
               {/* Listado de transacciones del día */}
-              {(resumenCierre.transacciones?.cambios_divisas?.length > 0 ||
-                resumenCierre.transacciones?.servicios_externos?.length > 0) && (
+              {((resumenCierre.transacciones?.cambios_divisas?.length ?? 0) > 0 ||
+                (resumenCierre.transacciones?.servicios_externos?.length ?? 0) > 0) && (
                 <div className="space-y-3">
                   <h3 className="font-semibold text-gray-800 text-lg flex items-center gap-2">
                     📋 Transacciones del Día (auditoría)

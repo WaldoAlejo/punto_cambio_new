@@ -135,8 +135,7 @@ export const ContabilidadDashboard = ({
         .filter(
           (mov) =>
             mov.tipo_movimiento === "INGRESO" ||
-            mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE" ||
-            mov.tipo_movimiento === "TRANSFERENCIA_ENTRADA"
+            mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE"
         )
         .forEach((mov) => {
           const codigo = mov.moneda_codigo || "USD";
@@ -152,8 +151,7 @@ export const ContabilidadDashboard = ({
         .filter(
           (mov) =>
             mov.tipo_movimiento === "EGRESO" ||
-            mov.tipo_movimiento === "TRANSFERENCIA_SALIENTE" ||
-            mov.tipo_movimiento === "TRANSFERENCIA_SALIDA"
+            mov.tipo_movimiento === "TRANSFERENCIA_SALIENTE"
         )
         .forEach((mov) => {
           const codigo = mov.moneda_codigo || "USD";

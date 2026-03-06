@@ -440,24 +440,19 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
               </CardContent>
             </Card>
 
-            <Card hover className={totalDiff >= 0 ? "border-[hsl(145,50%,85%)] bg-[hsl(145,60%,96%)]" : "border-[hsl(0,75%,89%)] bg-[hsl(0,85%,97%)]"}>
+            <Card hover className="border-[hsl(217,80%,90%)] bg-[hsl(217,100%,97%)]">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className={`text-sm font-medium ${totalDiff >= 0 ? "text-[hsl(145,55%,32%)]" : "text-[hsl(0,72%,45%)]"}`}>
-                  Balance General ({selectedCurrency})
+                <CardTitle className="text-sm font-medium text-[hsl(217,80%,35%)]">
+                  Saldo Actual ({selectedCurrency})
                 </CardTitle>
-                {diffIcon(totalDiff)}
+                <DollarSign className="h-4 w-4 text-[hsl(217,70%,45%)]" />
               </CardHeader>
               <CardContent>
-                <div
-                  className={`text-2xl font-bold ${
-                    totalDiff >= 0 ? "text-[hsl(145,55%,32%)]" : "text-[hsl(0,72%,45%)]"
-                  }`}
-                >
-                  {totalDiff >= 0 ? "+" : ""}
-                  {formatMoney(Math.abs(totalDiff))}
+                <div className="text-2xl font-bold text-[hsl(217,80%,25%)]">
+                  {formatMoney(filteredSaldos.reduce((acc, s) => acc + Number(s.saldo_actual || 0), 0))}
                 </div>
-                <p className={`text-xs ${totalDiff >= 0 ? "text-[hsl(145,55%,40%)]" : "text-[hsl(0,72%,50%)]"}`}>
-                  Diferencia total vs inicial (filtrados)
+                <p className="text-xs text-[hsl(217,80%,40%)]">
+                  Saldo disponible en caja
                 </p>
               </CardContent>
             </Card>
@@ -671,31 +666,6 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
                               )}
                             </p>
                           </div>
-                        </div>
-
-                        <div
-                          className={`rounded-md border p-2 flex items-center justify-between ${
-                            diff >= 0 ? "bg-green-50/70" : "bg-red-50/70"
-                          }`}
-                        >
-                          <div>
-                            <p
-                              className={`text-[11px] font-medium ${
-                                diff >= 0 ? "text-green-700" : "text-red-700"
-                              }`}
-                            >
-                              Diferencia
-                            </p>
-                            <p
-                              className={`text-base font-bold ${
-                                diff >= 0 ? "text-green-800" : "text-red-800"
-                              }`}
-                            >
-                              {diff >= 0 ? "+" : ""}
-                              {formatMoney(Math.abs(diff), s.moneda_simbolo)}
-                            </p>
-                          </div>
-                          {diffIcon(diff)}
                         </div>
 
                         <div className="rounded-md bg-gray-50 p-2 text-xs text-gray-600">

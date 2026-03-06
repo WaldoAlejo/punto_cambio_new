@@ -223,7 +223,7 @@ export default function SaldoServientregaAdmin() {
     if (esAdmin) obtenerSolicitudes();
 
     // Auto-actualizar solicitudes cada 30 segundos para el admin
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     if (esAdmin) {
       interval = setInterval(() => {
         obtenerSolicitudes();
