@@ -208,6 +208,9 @@ router.get("/", authenticateToken, async (req, res) => {
 /* ============================================================================
    GET /api/balance-completo/punto/:pointId
    Resumen de actividad por punto (conteos) + balance por moneda
+   
+   NOTA: El balance se calcula desde MovimientoSaldo (igual que el resto del sistema)
+   para mantener consistencia con la Contabilidad de Divisas.
 ============================================================================ */
 router.get("/punto/:pointId", authenticateToken, async (req, res) => {
   try {
@@ -225,7 +228,7 @@ router.get("/punto/:pointId", authenticateToken, async (req, res) => {
       });
     }
 
-    // Conteos de actividad
+    // Conteos de actividad (solo para estadísticas)
     const [
       cambiosDivisas,
       serviciosExternos,
@@ -246,110 +249,116 @@ router.get("/punto/:pointId", authenticateToken, async (req, res) => {
       }),
     ]);
 
-    // Balance por moneda para este punto
-    const saldos = await prisma.saldo.findMany({
-      where: { punto_atencion_id: pointId },
-      include: {
-        moneda: {
-          select: { id: true, codigo: true, nombre: true },
-        },
-      },
+    // Obtener saldo inicial activo por moneda
+    const saldosIniciales = await prisma.saldoInicial.findMany({
+      where: { punto_atencion_id: pointId, activo: true },
+      select: { moneda_id: true, cantidad_inicial: true },
+    });
+    const saldoInicialMap = new Map(
+      saldosIniciales.map((s) => [s.moneda_id, Number(s.cantidad_inicial)])
+    );
+
+    // Obtener todas las monedas que tienen saldo en este punto
+    const monedas = await prisma.moneda.findMany({
+      where: { activo: true },
+      select: { id: true, codigo: true, nombre: true },
     });
 
+    // Calcular balance desde MovimientoSaldo (fuente única de verdad)
     const balancesPorMoneda = await Promise.all(
-      saldos.map(async (saldo) => {
-        const monedaId = saldo.moneda_id;
+      monedas.map(async (moneda) => {
+        const monedaId = moneda.id;
 
-        // Cambios de divisa (origen = salida, destino = entrada)
-        const [cambiosOrigen, cambiosDestino] = await Promise.all([
-          prisma.cambioDivisa.aggregate({
-            where: {
-              punto_atencion_id: pointId,
-              moneda_origen_id: monedaId,
-              estado: "COMPLETADO",
-            },
-            _sum: { monto_origen: true },
-          }),
-          prisma.cambioDivisa.aggregate({
-            where: {
-              punto_atencion_id: pointId,
-              moneda_destino_id: monedaId,
-              estado: "COMPLETADO",
-            },
-            _sum: { monto_destino: true },
-          }),
-        ]);
+        // Obtener saldo inicial
+        const saldoInicial = saldoInicialMap.get(monedaId) || 0;
 
-        // Servicios externos (ingresos y egresos)
-        const [serviciosIngresos, serviciosEgresos] = await Promise.all([
-          prisma.servicioExternoMovimiento.aggregate({
-            where: {
-              punto_atencion_id: pointId,
-              moneda_id: monedaId,
-              tipo_movimiento: "INGRESO",
-            },
-            _sum: { monto: true },
-          }),
-          prisma.servicioExternoMovimiento.aggregate({
-            where: {
-              punto_atencion_id: pointId,
-              moneda_id: monedaId,
-              tipo_movimiento: "EGRESO",
-            },
-            _sum: { monto: true },
-          }),
-        ]);
+        // Calcular desde MovimientoSaldo (igual que Contabilidad de Divisas)
+        const movimientos = await prisma.movimientoSaldo.findMany({
+          where: {
+            punto_atencion_id: pointId,
+            moneda_id: monedaId,
+          },
+          select: {
+            tipo_movimiento: true,
+            monto: true,
+            descripcion: true,
+          },
+        });
 
-        // Transferencias (entrada y salida)
-        const [transferenciasEntrada, transferenciasSalida] = await Promise.all(
-          [
-            prisma.transferencia.aggregate({
-              where: {
-                destino_id: pointId,
-                moneda_id: monedaId,
-                estado: "APROBADO",
-              },
-              _sum: { monto: true },
-            }),
-            prisma.transferencia.aggregate({
-              where: {
-                origen_id: pointId,
-                moneda_id: monedaId,
-                estado: "APROBADO",
-              },
-              _sum: { monto: true },
-            }),
-          ]
-        );
+        let balance = saldoInicial;
+        let cambiosDivisasOrigen = 0;
+        let cambiosDivisasDestino = 0;
+        let serviciosExternosIngresos = 0;
+        let serviciosExternosEgresos = 0;
+        let transferenciasEntrada = 0;
+        let transferenciasSalida = 0;
 
-        const cambiosDivisasOrigen = toNum(cambiosOrigen._sum.monto_origen);
-        const cambiosDivisasDestino = toNum(cambiosDestino._sum.monto_destino);
-        const serviciosExternosIngresos = toNum(serviciosIngresos._sum.monto);
-        const serviciosExternosEgresos = toNum(serviciosEgresos._sum.monto);
-        const transferenciasNetas =
-          toNum(transferenciasEntrada._sum.monto) -
-          toNum(transferenciasSalida._sum.monto);
+        for (const mov of movimientos) {
+          const desc = (mov.descripcion || "").toLowerCase();
+          const tipo = mov.tipo_movimiento;
+          const monto = Number(mov.monto);
 
-        const balance =
-          -cambiosDivisasOrigen +
-          cambiosDivisasDestino +
-          serviciosExternosIngresos -
-          serviciosExternosEgresos +
-          transferenciasNetas;
+          // Ignorar movimientos bancarios
+          if (/\bbancos?\b/i.test(desc) && !desc.includes("(caja)")) continue;
+
+          // Calcular balance
+          if (tipo === "SALDO_INICIAL") {
+            // Ya está incluido en saldoInicial
+          } else if (tipo === "EGRESO" || tipo === "TRANSFERENCIA_SALIENTE") {
+            balance -= Math.abs(monto);
+          } else if (tipo === "INGRESO" || tipo === "TRANSFERENCIA_ENTRANTE") {
+            balance += Math.abs(monto);
+          } else if (tipo === "AJUSTE") {
+            balance += monto;
+          } else {
+            balance += monto;
+          }
+
+          // Clasificar para el desglose visual
+          if (desc.includes("cambio") && desc.includes("origen")) {
+            cambiosDivisasOrigen += Math.abs(monto);
+          } else if (desc.includes("cambio") && desc.includes("destino")) {
+            cambiosDivisasDestino += Math.abs(monto);
+          } else if (desc.includes("servicio externo")) {
+            if (tipo === "INGRESO") serviciosExternosIngresos += Math.abs(monto);
+            else serviciosExternosEgresos += Math.abs(monto);
+          } else if (tipo === "TRANSFERENCIA_ENTRANTE") {
+            transferenciasEntrada += Math.abs(monto);
+          } else if (tipo === "TRANSFERENCIA_SALIENTE") {
+            transferenciasSalida += Math.abs(monto);
+          } else if (!desc.includes("cambio")) {
+            // Otros movimientos (servicios externos sin etiqueta específica)
+            if (tipo === "INGRESO") serviciosExternosIngresos += Math.abs(monto);
+            else if (tipo === "EGRESO") serviciosExternosEgresos += Math.abs(monto);
+          }
+        }
+
+        const transferenciasNetas = transferenciasEntrada - transferenciasSalida;
 
         return {
-          moneda_codigo: saldo.moneda.codigo,
-          moneda_nombre: saldo.moneda.nombre,
-          balance,
+          moneda_codigo: moneda.codigo,
+          moneda_nombre: moneda.nombre,
+          balance: Number(balance.toFixed(2)),
           detalles: {
-            cambiosDivisasOrigen,
+            cambiosDivisasOrigen: -cambiosDivisasOrigen, // negativo para mostrar
             cambiosDivisasDestino,
             serviciosExternosIngresos,
-            serviciosExternosEgresos,
+            serviciosExternosEgresos: -serviciosExternosEgresos, // negativo para mostrar
             transferenciasNetas,
           },
         };
       })
+    );
+
+    // Filtrar solo monedas con movimiento
+    const balancesConMovimiento = balancesPorMoneda.filter(
+      (b) => 
+        Math.abs(b.balance) > 0.01 ||
+        Math.abs(b.detalles.cambiosDivisasOrigen) > 0.01 ||
+        Math.abs(b.detalles.cambiosDivisasDestino) > 0.01 ||
+        Math.abs(b.detalles.serviciosExternosIngresos) > 0.01 ||
+        Math.abs(b.detalles.serviciosExternosEgresos) > 0.01 ||
+        Math.abs(b.detalles.transferenciasNetas) > 0.01
     );
 
     console.log(
@@ -358,7 +367,7 @@ router.get("/punto/:pointId", authenticateToken, async (req, res) => {
         serviciosExternos +
         transferenciasOrigen +
         transferenciasDestino
-      } movimientos totales`
+      } movimientos totales, ${balancesConMovimiento.length} monedas con saldo`
     );
 
     res.json({
@@ -375,7 +384,7 @@ router.get("/punto/:pointId", authenticateToken, async (req, res) => {
             transferenciasOrigen +
             transferenciasDestino,
         },
-        balancesPorMoneda,
+        balancesPorMoneda: balancesConMovimiento,
         timestamp: new Date().toISOString(),
       },
     });
