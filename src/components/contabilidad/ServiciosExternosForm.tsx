@@ -195,6 +195,19 @@ export default function ServiciosExternosForm({
     }
   }, [esInsumo, tipoActual, setValue]);
 
+  // Auto-completar billetes cuando es EFECTIVO y cambia el monto (si no hay desglose manual)
+  useEffect(() => {
+    if (metodoIngresoActual === "EFECTIVO" && montoActual && montoActual > 0) {
+      const billetesActual = watch("billetes") || 0;
+      const monedasActual = watch("monedas_fisicas") || 0;
+      
+      // Solo auto-completar si no hay desglose manual ingresado
+      if (billetesActual === 0 && monedasActual === 0) {
+        setValue("billetes", montoActual, { shouldValidate: false });
+      }
+    }
+  }, [metodoIngresoActual, montoActual, setValue, watch]);
+
   // Función para validar antes de enviar
   const onSubmitPreValidation = (values: FormValues) => {
     if (!puntoAtencionId) {
@@ -219,14 +232,43 @@ export default function ServiciosExternosForm({
 
   const onSubmit = async (values: FormValues) => {
     try {
+      // Calcular billetes y monedas según el método de ingreso
+      let billetes = values.billetes ?? 0;
+      let monedas = values.monedas_fisicas ?? 0;
+
+      // Si es EFECTIVO y no viene desglose, asumir todo en billetes
+      if (values.metodo_ingreso === "EFECTIVO") {
+        if (billetes === 0 && monedas === 0) {
+          billetes = values.monto;
+          monedas = 0;
+        } else {
+          // Validar que billetes + monedas = monto
+          const sumaEfectivo = billetes + monedas;
+          if (Math.abs(sumaEfectivo - values.monto) > 0.01) {
+            toast({
+              title: "Error de validación",
+              description: `El desglose de efectivo (billetes: $${billetes.toFixed(2)} + monedas: $${monedas.toFixed(2)} = $${sumaEfectivo.toFixed(2)}) debe ser igual al monto ($${values.monto.toFixed(2)})`,
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+      }
+
+      // Si es BANCO, forzar billetes y monedas a 0
+      if (values.metodo_ingreso === "BANCO") {
+        billetes = 0;
+        monedas = 0;
+      }
+
       const payload = {
         punto_atencion_id: puntoAtencionId!,
         servicio: values.servicio,
         tipo_movimiento: values.tipo_movimiento,
         metodo_ingreso: values.metodo_ingreso,
         monto: values.monto,
-        billetes: values.billetes || undefined,
-        monedas_fisicas: values.monedas_fisicas || undefined,
+        billetes: billetes > 0 ? billetes : undefined,
+        monedas_fisicas: monedas > 0 ? monedas : undefined,
         descripcion: values.descripcion || undefined,
         numero_referencia: values.numero_referencia || undefined,
       };
