@@ -208,6 +208,40 @@ export default function ServiciosExternosForm({
     }
   }, [metodoIngresoActual, montoActual, setValue, watch]);
 
+  // Función para corregir/validar el desglose de efectivo
+  const corregirDesgloseEfectivo = (values: FormValues): 
+    | { success: true; billetes: number; monedas: number }
+    | { success: false; error: string } => {
+    let billetes = values.billetes ?? 0;
+    let monedas = values.monedas_fisicas ?? 0;
+
+    // Si es EFECTIVO, validar/corregir el desglose
+    if (values.metodo_ingreso === "EFECTIVO") {
+      // Si no viene desglose, asumir todo en billetes
+      if (billetes === 0 && monedas === 0) {
+        billetes = values.monto;
+        monedas = 0;
+      } else {
+        // Validar que billetes + monedas = monto
+        const sumaEfectivo = billetes + monedas;
+        if (Math.abs(sumaEfectivo - values.monto) > 0.01) {
+          return {
+            success: false,
+            error: `El desglose de efectivo (billetes: $${billetes.toFixed(2)} + monedas: $${monedas.toFixed(2)} = $${sumaEfectivo.toFixed(2)}) debe ser igual al monto ($${values.monto.toFixed(2)})`,
+          };
+        }
+      }
+    }
+
+    // Si es BANCO, forzar billetes y monedas a 0
+    if (values.metodo_ingreso === "BANCO") {
+      billetes = 0;
+      monedas = 0;
+    }
+
+    return { success: true, billetes, monedas };
+  };
+
   // Función para validar antes de enviar
   const onSubmitPreValidation = (values: FormValues) => {
     if (!puntoAtencionId) {
@@ -219,47 +253,49 @@ export default function ServiciosExternosForm({
       return;
     }
 
-    // Si requiere confirmación, mostrar el diálogo
+    // Validar/corregir desglose antes de guardar en el diálogo
+    const resultado = corregirDesgloseEfectivo(values);
+    if (!resultado.success) {
+      toast({
+        title: "Error de validación",
+        description: resultado.error,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Crear valores corregidos para el diálogo/envío
+    const valoresCorregidos = {
+      ...values,
+      billetes: resultado.billetes,
+      monedas_fisicas: resultado.monedas,
+    };
+
+    // Si requiere confirmación, mostrar el diálogo con valores corregidos
     if (requiereConfirmacion) {
-      setFormDataToSubmit(values);
+      setFormDataToSubmit(valoresCorregidos);
       setShowConfirmDialog(true);
       return;
     }
 
     // Si no requiere confirmación, enviar directamente
-    onSubmit(values);
+    onSubmit(valoresCorregidos);
   };
 
   const onSubmit = async (values: FormValues) => {
     try {
       // Calcular billetes y monedas según el método de ingreso
-      let billetes = values.billetes ?? 0;
-      let monedas = values.monedas_fisicas ?? 0;
-
-      // Si es EFECTIVO y no viene desglose, asumir todo en billetes
-      if (values.metodo_ingreso === "EFECTIVO") {
-        if (billetes === 0 && monedas === 0) {
-          billetes = values.monto;
-          monedas = 0;
-        } else {
-          // Validar que billetes + monedas = monto
-          const sumaEfectivo = billetes + monedas;
-          if (Math.abs(sumaEfectivo - values.monto) > 0.01) {
-            toast({
-              title: "Error de validación",
-              description: `El desglose de efectivo (billetes: $${billetes.toFixed(2)} + monedas: $${monedas.toFixed(2)} = $${sumaEfectivo.toFixed(2)}) debe ser igual al monto ($${values.monto.toFixed(2)})`,
-              variant: "destructive",
-            });
-            return;
-          }
-        }
+      const resultado = corregirDesgloseEfectivo(values);
+      if (!resultado.success) {
+        toast({
+          title: "Error de validación",
+          description: resultado.error,
+          variant: "destructive",
+        });
+        return;
       }
 
-      // Si es BANCO, forzar billetes y monedas a 0
-      if (values.metodo_ingreso === "BANCO") {
-        billetes = 0;
-        monedas = 0;
-      }
+      const { billetes, monedas } = resultado;
 
       const payload = {
         punto_atencion_id: puntoAtencionId!,
@@ -591,6 +627,32 @@ export default function ServiciosExternosForm({
                   </span>
                 </div>
               </div>
+
+              {/* Desglose de efectivo (si aplica) */}
+              {(formDataToSubmit.metodo_ingreso === "EFECTIVO" || formDataToSubmit.metodo_ingreso === "MIXTO") && (
+                <Alert className="border-blue-500 bg-blue-50">
+                  <Info className="h-4 w-4 text-blue-600" />
+                  <AlertTitle className="text-sm font-semibold">
+                    Desglose de Efectivo
+                  </AlertTitle>
+                  <AlertDescription className="text-sm mt-1">
+                    <div className="flex justify-between mb-1">
+                      <span>Billetes:</span>
+                      <span className="font-medium">${(formDataToSubmit.billetes || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between mb-1">
+                      <span>Monedas:</span>
+                      <span className="font-medium">${(formDataToSubmit.monedas_fisicas || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="border-t pt-1 mt-1 flex justify-between">
+                      <span>Total efectivo:</span>
+                      <span className="font-bold">
+                        ${((formDataToSubmit.billetes || 0) + (formDataToSubmit.monedas_fisicas || 0)).toFixed(2)}
+                      </span>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Explicación de qué va a pasar */}
               <Alert className={formDataToSubmit.tipo_movimiento === "EGRESO" ? "border-amber-500 bg-amber-50" : "border-green-500 bg-green-50"}>
