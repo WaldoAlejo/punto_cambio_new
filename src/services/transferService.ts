@@ -13,6 +13,7 @@ export interface CreateTransferData {
     | "DEPOSITO_GERENCIA";
   descripcion: string;
   solicitado_por: string;
+  via?: "EFECTIVO" | "BANCO" | "MIXTO";
   detalle_divisas?: {
     billetes: number;
     monedas: number;
@@ -37,9 +38,27 @@ export const transferService = {
     data: CreateTransferData
   ): Promise<{ transfer: Transferencia | null; error: string | null }> {
     try {
+      // Validar datos antes de enviar
+      if (!data.destino_id || !data.moneda_id || !data.monto || data.monto <= 0) {
+        return { 
+          transfer: null, 
+          error: "Datos incompletos: destino, moneda y monto son requeridos" 
+        };
+      }
+
+      // Asegurar que el monto sea número
+      const payload = {
+        ...data,
+        monto: Number(data.monto),
+        // Agregar campo via por defecto si no viene
+        via: (data as unknown as Record<string, string>).via || "EFECTIVO",
+      };
+
+      console.log("[TransferService] Enviando datos:", payload);
+
       const response = await apiService.post<TransferResponse>(
         "/transfers",
-        data
+        payload
       );
 
       if (response && response.success && response.transfer) {
@@ -49,15 +68,22 @@ export const transferService = {
         return { transfer: null, error: errorMsg };
       }
     } catch (error) {
-      if (typeof error === "object" && error !== null && "response" in error) {
-        const err = error as { response?: { data?: { error?: string } } };
-        if (err.response?.data?.error) {
-          return { transfer: null, error: err.response.data.error };
+      console.error("[TransferService] Error completo:", error);
+      
+      // Manejar ApiError
+      if (error instanceof Error) {
+        // Si es ApiError, tiene status y payload
+        const apiError = error as { status?: number; payload?: { error?: string; message?: string; details?: unknown } };
+        if (apiError.payload) {
+          const errorMsg = apiError.payload.error || apiError.payload.message || JSON.stringify(apiError.payload);
+          return { transfer: null, error: errorMsg };
         }
+        return { transfer: null, error: error.message };
       }
+      
       return {
         transfer: null,
-        error: "Error de conexión al crear la transferencia",
+        error: "Error de conexión al crear la transferencia. Verifique su conexión e intente nuevamente.",
       };
     }
   },

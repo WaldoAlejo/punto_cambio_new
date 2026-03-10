@@ -175,6 +175,7 @@ const TransferForm = ({
         descripcion: description.trim(),
         tipo_transferencia: TIPO_TRANSFERENCIA_ENTRE_PUNTOS,
         solicitado_por: user.id,
+        via: "EFECTIVO" as const, // Por defecto, las transferencias son en efectivo
       };
 
       const { transfer, error } = await transferService.createTransfer(
