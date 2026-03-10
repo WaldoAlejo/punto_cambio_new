@@ -221,7 +221,7 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
         
         const saldo_actual = reconciliar
           ? Number(reconciledMap.get(k) ?? 0)
-          : (billetes + monedas_fisicas);
+          : (s ? Number(s.cantidad) : 0);
         
         const diferencia = Number((saldo_actual - saldo_inicial).toFixed(2));
 

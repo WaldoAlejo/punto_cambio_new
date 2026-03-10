@@ -248,7 +248,9 @@ async function obtenerValidacionesRequeridas(body: unknown): Promise<
 
 /**
  * Obtiene el saldo actual de un punto para una moneda específica
- * Incluye billetes, monedas físicas Y bancos (depósitos)
+ * ⚠️ IMPORTANTE: Usa 'cantidad' (efectivo total) y 'bancos'
+ * No se debe usar el desglose físico (billetes/monedas) para validación
+ * ya que no siempre se mantiene sincronizado en todas las operaciones.
  */
 async function obtenerSaldoActual(
   puntoAtencionId: string,
@@ -263,11 +265,13 @@ async function obtenerSaldoActual(
     },
   });
 
-  // Retornar la suma de billetes, monedas físicas Y bancos
-  const saldoBilletes = Number(saldo?.billetes || 0);
-  const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
-  const saldoBancos = Number(saldo?.bancos || 0);
-  return saldoBilletes + saldoMonedas + saldoBancos;
+  if (!saldo) return 0;
+
+  // Retornar la suma de cantidad (efectivo total) Y bancos
+  const saldoEfectivo = Number(saldo.cantidad || 0);
+  const saldoBancos = Number(saldo.bancos || 0);
+  
+  return saldoEfectivo + saldoBancos;
 }
 
 /**
@@ -495,17 +499,25 @@ export async function validarSaldoCambioDivisa(
 
     // En este sistema, `Saldo.cantidad` es el saldo EFECTIVO total (billetes + monedas).
     // `Saldo.bancos` se usa solo para trazabilidad y/o entregas por transferencia.
-    // No podemos inferir efectivo desde breakdowns, porque pueden estar en 0 aunque `cantidad` esté correcto.
+    // IMPORTANTE: El desglose físico (billetes/monedas) NO se mantiene sincronizado en todas las operaciones.
+    // Por lo tanto, el saldo físico total debe ser siempre `cantidad`.
     const saldoEfectivo = Number(saldo?.cantidad || 0);
-    let saldoBilletes = Number(saldo?.billetes || 0);
-    const saldoMonedas = Number(saldo?.monedas_fisicas || 0);
     const saldoBancos = Number(saldo?.bancos || 0);
+    
+    // Para logs/diagnóstico, mostramos el desglose si existe, pero no lo usamos para el cálculo del total físico
+    let saldoBilletes = Number(saldo?.billetes || 0);
+    let saldoMonedas = Number(saldo?.monedas_fisicas || 0);
 
-    // Fallback: si no hay breakdown físico pero sí hay efectivo total, asignar todo a billetes.
-    if (saldoBilletes === 0 && saldoMonedas === 0 && saldoEfectivo > 0) {
+    // Si el desglose no coincide con el total de efectivo (muy común), 
+    // priorizamos el total de efectivo asignándolo a billetes para la validación.
+    if (Math.abs(saldoBilletes + saldoMonedas - saldoEfectivo) > 0.01) {
       saldoBilletes = saldoEfectivo;
+      saldoMonedas = 0;
     }
 
+    // El saldo físico total es exactamente el saldo en caja (cantidad)
+    const saldoFisicoTotal = saldoEfectivo;
+    
     // Para logs/diagnóstico: total disponible (efectivo + bancos)
     const saldoTotal = saldoEfectivo + saldoBancos;
 
@@ -577,8 +589,6 @@ export async function validarSaldoCambioDivisa(
     // Simplemente validamos que hay SUFICIENTE dinero físico en total
     
     if (efectivoRequerido > 0) {
-      const saldoFisicoTotal = saldoBilletes + saldoMonedas;
-
       logger.info("[VALIDACION_CAMBIO_DIVISA] Validando saldo físico total", {
         saldoFisicoTotal,
         saldoBilletes,
