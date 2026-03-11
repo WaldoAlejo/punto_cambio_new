@@ -490,8 +490,10 @@ router.post(
           console.log(
             `🚀 FINALIZACION_JORNADA_INICIADA - Usuario: ${req.user?.rol}, Punto: ${punto_atencion_id}`
           );
-          // Usar hora de Ecuador para la salida (consistente con la entrada)
-          updateData.fecha_salida = nowEcuador();
+          // Usar hora actual del servidor convertida a UTC
+          // Si el servidor está en Ecuador, new Date() es hora local y Prisma la guarda como UTC
+          // Por eso usamos toISOString() para asegurar formato UTC correcto
+          updateData.fecha_salida = new Date();
           if (!esExentoDeCaja(req.user?.rol)) {
             // Para roles que sí manejan caja, verificar Cierre de Caja (divisas)
             const { gte } = gyeDayRangeUtcFromDate(new Date());
@@ -528,7 +530,7 @@ router.post(
             // a través del endpoint /cuadre-caja que consolida todos los movimientos.
           }
           // Finalizar jornada (para exentos y para quienes ya cerraron cierres requeridos)
-          // NOTA: fecha_salida ya fue asignada arriba con nowEcuador()
+          // NOTA: fecha_salida ya fue asignada arriba con new Date() (UTC)
           updateData.estado = EstadoJornada.COMPLETADO;
           // Al cerrar jornada, limpiar punto del usuario
           await prisma.usuario.update({
@@ -570,7 +572,7 @@ router.post(
           data: {
             usuario_id,
             punto_atencion_id,
-            fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : nowEcuador(),
+            fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : new Date(),
             ubicacion_inicio:
               ubicacion_inicio !== undefined && ubicacion_inicio !== null
                 ? (ubicacion_inicio as Prisma.InputJsonValue)
@@ -1117,7 +1119,7 @@ router.post(
           data: finalizar
             ? {
                 // Cancelar/cerrar la jornada equivocada y dejar libre el punto (usuario sin punto)
-                fecha_salida: nowEcuador(),
+                fecha_salida: new Date(),
                 estado: EstadoJornada.CANCELADO,
                 motivo_cambio: motivo || "CANCELACION_ADMIN",
                 usuario_autorizo: adminId,
