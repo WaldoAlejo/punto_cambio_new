@@ -67,6 +67,9 @@
 
     "smoke:db": "tsx scripts/smoke/check-db.ts",
     "fix:movsaldo-signs": "tsx scripts/fix/fix-movimiento-saldo-signs.ts",
+    "fix:jornada:dry": "node scripts/fix-jornada-dates.cjs --dry-run",
+    "fix:jornada:fix": "node scripts/fix-jornada-dates.cjs --fix",
+    "fix:jornada:check": "node scripts/fix-jornada-timezone.cjs",
     "fix:normalize-saldos": "tsx scripts/fix/normalize-saldos-breakdown.ts",
     "fix:servicios-externos-breakdown": "tsx scripts/fix/fix-servicios-externos-movimiento-breakdown.ts",
     "fix:servicios-externos-ref": "tsx scripts/fix/fill-servicios-externos-numero-referencia.ts",
