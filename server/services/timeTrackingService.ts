@@ -10,6 +10,11 @@
 
 import { PrismaClient, EstadoJornada, Prisma } from "@prisma/client";
 import logger from "../utils/logger.js";
+import {
+  gyeDayRangeUtcFromDate,
+  todayGyeDateOnly,
+  gyeDayRangeUtcFromDateOnly,
+} from "../utils/timezone.js";
 
 const prisma = new PrismaClient();
 
@@ -189,11 +194,9 @@ export async function validarInicioJornada(
   const config = await obtenerConfigHorario(puntoAtencionId);
   
   // 1. Verificar que no existe una jornada activa para hoy
-  const inicioDia = new Date(fechaInicio);
-  inicioDia.setHours(0, 0, 0, 0);
-  const finDia = new Date(inicioDia);
-  finDia.setDate(finDia.getDate() + 1);
-  
+  // Usar rango de día basado en zona horaria de Ecuador (Guayaquil, UTC-5)
+  const { gte: inicioDia, lt: finDia } = gyeDayRangeUtcFromDate(fechaInicio);
+
   const jornadaExistente = await prisma.jornada.findFirst({
     where: {
       usuario_id: usuarioId,
@@ -403,10 +406,8 @@ export async function actualizarTiemposJornada(jornadaId: string): Promise<void>
     if (!jornada) return;
     
     // Filtrar salidas espontáneas del día de la jornada
-    const inicioDia = new Date(jornada.fecha_inicio);
-    inicioDia.setHours(0, 0, 0, 0);
-    const finDia = new Date(inicioDia);
-    finDia.setDate(finDia.getDate() + 1);
+    // Usar rango de día basado en zona horaria de Ecuador (Guayaquil, UTC-5)
+    const { gte: inicioDia, lt: finDia } = gyeDayRangeUtcFromDate(jornada.fecha_inicio);
     
     const salidasDelDia = jornada.usuario.salidasEspontaneas.filter(
       (s) => s.fecha_salida >= inicioDia && s.fecha_salida < finDia
@@ -535,10 +536,9 @@ export async function obtenerResumenJornadasHoy(): Promise<{
   totalCompletadas: number;
   promedioMinutosTrabajados: number;
 }> {
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const manana = new Date(hoy);
-  manana.setDate(manana.getDate() + 1);
+  // Usar fecha actual en Ecuador (Guayaquil, UTC-5)
+  const hoyStr = todayGyeDateOnly();
+  const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDateOnly(hoyStr);
   
   const [activas, almuerzo, completadas] = await Promise.all([
     prisma.jornada.count({
