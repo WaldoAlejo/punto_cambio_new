@@ -2,7 +2,7 @@ import express, { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { authenticateToken } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
-import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
+
 
 const router = express.Router();
 
@@ -141,51 +141,21 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
     }
 
     // 4) (Opcional) Reconciliar saldo_actual (efectivo) desde movimientos.
-    // Optimizamos cargando movimientos una sola vez.
+    // Usamos el saldo de la tabla Saldo como fuente de verdad (ya se actualiza atómicamente)
+    // El modo reconciliar=true ya no es necesario porque la tabla Saldo siempre está correcta
+    // tras la corrección del servicio movimientoSaldoService
     const reconciledMap = new Map<string, number>();
     if (reconciliar) {
-      // Inicializar por saldoInicial activo
+      // ⚠️ DEPRECATED: El modo reconciliar ya no recalcula desde movimientos
+      // porque es propenso a errores de doble conteo y condiciones de carrera.
+      // En su lugar, usamos el valor de la tabla Saldo directamente.
       for (const p of puntos) {
         for (const m of monedas) {
           const k = key(p.id, m.id);
-          const si = inicialMap.get(k);
-          reconciledMap.set(k, si ? Number(si.cantidad_inicial) : 0);
+          const s = saldoMap.get(k);
+          reconciledMap.set(k, s ? Number(s.cantidad) : 0);
         }
       }
-
-      // Movimientos internos
-      const movimientos = await prisma.movimientoSaldo.findMany({
-        where: {
-          punto_atencion_id: { in: puntos.map((p) => p.id) },
-          moneda_id: { in: monedas.map((m) => m.id) },
-        },
-        select: {
-          punto_atencion_id: true,
-          moneda_id: true,
-          monto: true,
-          tipo_movimiento: true,
-          descripcion: true,
-        },
-        orderBy: { fecha: "asc" },
-      });
-
-      for (const mov of movimientos) {
-        const desc = mov.descripcion?.toLowerCase() || "";
-        if (desc.includes("bancos")) continue; // efectivo excluye bancos
-
-        const k = key(mov.punto_atencion_id, mov.moneda_id);
-        const current = reconciledMap.get(k) ?? 0;
-        const delta = saldoReconciliationService._normalizarMonto(
-          mov.tipo_movimiento,
-          Number(mov.monto),
-          mov.descripcion
-        );
-        reconciledMap.set(k, Number((current + delta).toFixed(2)));
-      }
-
-      // NOTA: Los movimientos de servicios externos YA están incluidos en MovimientoSaldo
-      // (a través de registrarMovimientoSaldo en servicios-externos.ts)
-      // NO volver a sumarlos aquí para evitar doble contabilización
     }
 
     // 5) Armar la “vista” (equivalente a CROSS JOIN en memoria) y calcular campos
