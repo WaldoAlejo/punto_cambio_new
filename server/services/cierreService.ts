@@ -12,7 +12,7 @@ import {
   TipoReferencia as MovimientoTipoReferencia,
 } from "./movimientoSaldoService.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
-import saldoReconciliationService from "./saldoReconciliationService.js";
+import { saldoReconciliationService } from "./saldoReconciliationService.js";
 
 interface DetalleMoneda {
   moneda_id: string;

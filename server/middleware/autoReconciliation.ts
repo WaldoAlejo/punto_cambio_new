@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import saldoReconciliationService from "../services/saldoReconciliationService.js";
+import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
 import logger from "../utils/logger.js";
 
 interface AuthenticatedUser {

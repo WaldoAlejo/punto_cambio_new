@@ -5,7 +5,7 @@ import { pool } from "../lib/database.js";
 import { authenticateToken } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
-import saldoReconciliationService from "../services/saldoReconciliationService.js";
+import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
 
 async function actualizarSaldoFisicoYLogico(
   puntoAtencionId: string,
