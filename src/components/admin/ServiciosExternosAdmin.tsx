@@ -76,6 +76,31 @@ interface HistorialAsignacion {
   creado_en: string;
 }
 
+interface InvestigacionDia {
+  fecha: string;
+  saldo_inicial: number;
+  asignaciones: number;
+  ingresos: number;
+  egresos: number;
+  saldo_final: number;
+  num_movimientos: number;
+  detalles_movimientos: {
+    id: string;
+    tipo: string;
+    monto: number;
+    descripcion: string;
+    usuario: string;
+    hora: string;
+  }[];
+  detalles_asignaciones: {
+    id: string;
+    monto: number;
+    tipo: string;
+    observaciones: string;
+    hora: string;
+  }[];
+}
+
 const SERVICIOS_EXTERNOS = [
   "YAGANASTE",
   "BANCO_GUAYAQUIL",
@@ -110,9 +135,22 @@ export default function ServiciosExternosAdmin() {
   >([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [vistaActual, setVistaActual] = useState<"asignacion" | "movimientos">(
-    "asignacion"
-  );
+  const [vistaActual, setVistaActual] = useState<
+    "asignacion" | "movimientos" | "investigacion"
+  >("asignacion");
+
+  // Estados para investigación de saldos
+  const [investigacionDias, setInvestigacionDias] = useState<
+    InvestigacionDia[]
+  >([]);
+  const [investigacionFiltros, setInvestigacionFiltros] = useState({
+    punto_id: "",
+    servicio: "" as ServicioExterno | "",
+    fecha_desde: "",
+    fecha_hasta: "",
+  });
+  const [buscandoInvestigacion, setBuscandoInvestigacion] = useState(false);
+  const [diaExpandido, setDiaExpandido] = useState<string | null>(null);
 
   // Estados para asignación de saldos
   const [montosAsignacion, setMontosAsignacion] = useState<
@@ -213,6 +251,39 @@ export default function ServiciosExternosAdmin() {
       console.error("Error al obtener historial:", error);
       toast.error("Error al cargar historial de asignaciones");
       setHistorialAsignaciones([]);
+    }
+  };
+
+  const realizarInvestigacion = async () => {
+    if (!investigacionFiltros.punto_id || !investigacionFiltros.servicio) {
+      toast.error("Seleccione un punto y un servicio");
+      return;
+    }
+
+    try {
+      setBuscandoInvestigacion(true);
+      const params = new URLSearchParams();
+      params.append("punto_id", investigacionFiltros.punto_id);
+      params.append("servicio", investigacionFiltros.servicio);
+      if (investigacionFiltros.fecha_desde)
+        params.append("fecha_desde", investigacionFiltros.fecha_desde);
+      if (investigacionFiltros.fecha_hasta)
+        params.append("fecha_hasta", investigacionFiltros.fecha_hasta);
+
+      const { data } = await axiosInstance.get(
+        `/servicios-externos/investigacion-saldos?${params}`
+      );
+      setInvestigacionDias(data.dias || []);
+      if (data.dias?.length === 0) {
+        toast.info(
+          data.message || "No se encontraron datos para los filtros seleccionados"
+        );
+      }
+    } catch (error) {
+      console.error("Error en investigación:", error);
+      toast.error("Error al realizar la investigación");
+    } finally {
+      setBuscandoInvestigacion(false);
     }
   };
 
@@ -399,6 +470,13 @@ export default function ServiciosExternosAdmin() {
             >
               📋 Movimientos
             </Button>
+            <Button
+              variant={vistaActual === "investigacion" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setVistaActual("investigacion")}
+            >
+              🔍 Investigación
+            </Button>
           </div>
           <Button
             variant="outline"
@@ -423,7 +501,7 @@ export default function ServiciosExternosAdmin() {
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
         {vistaActual === "asignacion" ? (
           <>
-            {/* Resumen de Saldos Totales */}
+            {/* ... Asignación ... */}
             <Card className="flex-shrink-0">
               <CardHeader className="p-3">
                 <CardTitle className="text-sm">
@@ -690,7 +768,7 @@ export default function ServiciosExternosAdmin() {
               </CardContent>
             </Card>
           </>
-        ) : (
+        ) : vistaActual === "movimientos" ? (
           <>
             {/* Vista de Movimientos */}
             {/* Formulario para Nuevo Movimiento */}
@@ -967,6 +1045,196 @@ export default function ServiciosExternosAdmin() {
                 )}
               </CardContent>
             </Card>
+          </>
+        ) : (
+          <>
+            {/* Vista de Investigación */}
+            <Card className="flex-shrink-0">
+              <CardHeader className="p-3">
+                <CardTitle className="text-sm">
+                  🔍 Investigación Diaria de Saldos
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                  <div>
+                    <Label>Punto de Atención</Label>
+                    <Select
+                      value={investigacionFiltros.punto_id}
+                      onValueChange={(value) =>
+                        setInvestigacionFiltros((prev) => ({
+                          ...prev,
+                          punto_id: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar punto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {puntos.map((punto) => (
+                          <SelectItem key={punto.id} value={punto.id}>
+                            {punto.nombre}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Servicio</Label>
+                    <Select
+                      value={investigacionFiltros.servicio}
+                      onValueChange={(value) =>
+                        setInvestigacionFiltros((prev) => ({
+                          ...prev,
+                          servicio: value as ServicioExterno,
+                        }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar servicio" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SERVICIOS_EXTERNOS.map((servicio) => (
+                          <SelectItem key={servicio} value={servicio}>
+                            {servicio}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label>Fecha Desde</Label>
+                    <Input
+                      type="date"
+                      value={investigacionFiltros.fecha_desde}
+                      onChange={(e) =>
+                        setInvestigacionFiltros((prev) => ({
+                          ...prev,
+                          fecha_desde: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div>
+                    <Label>Fecha Hasta</Label>
+                    <Input
+                      type="date"
+                      value={investigacionFiltros.fecha_hasta}
+                      onChange={(e) =>
+                        setInvestigacionFiltros((prev) => ({
+                          ...prev,
+                          fecha_hasta: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  onClick={realizarInvestigacion}
+                  disabled={buscandoInvestigacion}
+                  className="w-full md:w-auto"
+                >
+                  {buscandoInvestigacion ? "Buscando..." : "🚀 Iniciar Investigación"}
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Resultados de Investigación */}
+            {investigacionDias.length > 0 && (
+              <div className="space-y-4">
+                <div className="overflow-x-auto bg-white rounded-lg shadow border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100 border-b">
+                      <tr>
+                        <th className="p-3 text-left">Fecha</th>
+                        <th className="p-3 text-right">Saldo Inicial</th>
+                        <th className="p-3 text-right">Asignaciones (+)</th>
+                        <th className="p-3 text-right">Egresos (+)</th>
+                        <th className="p-3 text-right">Ingresos (-)</th>
+                        <th className="p-3 text-right">Saldo Final</th>
+                        <th className="p-3 text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {investigacionDias.map((dia) => (
+                        <React.Fragment key={dia.fecha}>
+                          <tr className="border-b hover:bg-gray-50">
+                            <td className="p-3 font-medium">{dia.fecha}</td>
+                            <td className="p-3 text-right font-mono">${dia.saldo_inicial.toFixed(2)}</td>
+                            <td className="p-3 text-right text-blue-600 font-mono">
+                              {dia.asignaciones > 0 ? `+$${dia.asignaciones.toFixed(2)}` : "-"}
+                            </td>
+                            <td className="p-3 text-right text-green-600 font-mono">
+                              {dia.egresos > 0 ? `+$${dia.egresos.toFixed(2)}` : "-"}
+                            </td>
+                            <td className="p-3 text-right text-red-600 font-mono">
+                              {dia.ingresos > 0 ? `-$${dia.ingresos.toFixed(2)}` : "-"}
+                            </td>
+                            <td className="p-3 text-right font-bold font-mono">${dia.saldo_final.toFixed(2)}</td>
+                            <td className="p-3 text-center">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setDiaExpandido(diaExpandido === dia.fecha ? null : dia.fecha)}
+                              >
+                                {diaExpandido === dia.fecha ? "🔼 Ocultar" : `🔽 Ver (${dia.num_movimientos})`}
+                              </Button>
+                            </td>
+                          </tr>
+                          {diaExpandido === dia.fecha && (
+                            <tr>
+                              <td colSpan={7} className="p-4 bg-gray-50 border-b">
+                                <div className="space-y-4">
+                                  {dia.detalles_asignaciones.length > 0 && (
+                                    <div>
+                                      <h4 className="font-bold text-xs uppercase text-gray-500 mb-2">Asignaciones / Recargas</h4>
+                                      <div className="space-y-1">
+                                        {dia.detalles_asignaciones.map(a => (
+                                          <div key={a.id} className="flex justify-between text-xs bg-blue-50 p-2 rounded border border-blue-100">
+                                            <span><strong>{a.hora}</strong> - {a.tipo}: {a.observaciones || "Sin observaciones"}</span>
+                                            <span className="font-bold text-blue-700">+${a.monto.toFixed(2)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div>
+                                    <h4 className="font-bold text-xs uppercase text-gray-500 mb-2">Movimientos del Día</h4>
+                                    {dia.detalles_movimientos.length === 0 ? (
+                                      <p className="text-xs text-gray-400 italic">No hubo movimientos operativos este día</p>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {dia.detalles_movimientos.map(m => (
+                                          <div key={m.id} className={`flex justify-between text-xs p-2 rounded border ${m.tipo === "INGRESO" ? "bg-red-50 border-red-100" : "bg-green-50 border-green-100"}`}>
+                                            <span>
+                                              <strong>{m.hora}</strong> - 
+                                              <span className={`mx-1 font-bold ${m.tipo === "INGRESO" ? "text-red-700" : "text-green-700"}`}>{m.tipo}</span>: 
+                                              {m.descripcion || "Sin descripción"} ({m.usuario})
+                                            </span>
+                                            <span className={`font-bold ${m.tipo === "INGRESO" ? "text-red-700" : "text-green-700"}`}>
+                                              {m.tipo === "INGRESO" ? "-" : "+"}${m.monto.toFixed(2)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </>
         )}
 

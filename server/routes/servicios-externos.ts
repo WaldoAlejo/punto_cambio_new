@@ -15,7 +15,13 @@ import {
   TipoReferencia,
 } from "../services/movimientoSaldoService.js";
 import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
-import { nowEcuador } from "../utils/timezone.js";
+import {
+  nowEcuador,
+  todayGyeDateOnly,
+  gyeDayRangeUtcFromDateOnly,
+  gyeDayRangeUtcFromDate,
+  formatEcuadorTime,
+} from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -1763,6 +1769,195 @@ router.get(
       res.status(500).json({
         success: false,
         message: "Error obteniendo saldo inicial del día",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+);
+
+// ============ Admin: investigación de saldos día a día ============
+router.get(
+  "/investigacion-saldos",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    try {
+      const { punto_id, servicio, fecha_desde, fecha_hasta } = req.query as {
+        punto_id: string;
+        servicio: string;
+        fecha_desde?: string;
+        fecha_hasta?: string;
+      };
+
+      if (!punto_id || !servicio) {
+        return res
+          .status(400)
+          .json({ success: false, message: "punto_id y servicio son requeridos" });
+      }
+
+      if (!isServicioExterno(servicio)) {
+        return res
+          .status(400)
+          .json({ success: false, message: "servicio inválido" });
+      }
+
+      // 1. Encontrar la primera asignación para este punto y servicio
+      const primeraAsignacion = await prisma.servicioExternoAsignacion.findFirst({
+        where: {
+          punto_atencion_id: punto_id,
+          servicio: servicio as ServicioExterno,
+        },
+        orderBy: { fecha: "asc" },
+      });
+
+      if (!primeraAsignacion) {
+        return res.json({
+          success: true,
+          dias: [],
+          message:
+            "No se encontraron asignaciones para este servicio en este punto",
+        });
+      }
+
+      // 2. Determinar rango de fechas
+      const fechaInicio = fecha_desde
+        ? new Date(fecha_desde)
+        : primeraAsignacion.fecha;
+      const fechaFin = fecha_hasta ? new Date(fecha_hasta) : nowEcuador();
+
+      // Ajustar a medianoche GYE para iterar
+      const startStr = todayGyeDateOnly(fechaInicio);
+      const endStr = todayGyeDateOnly(fechaFin);
+
+      const currentDay = new Date(gyeDayRangeUtcFromDateOnly(startStr).gte);
+      const lastDay = new Date(gyeDayRangeUtcFromDateOnly(endStr).gte);
+
+      const resultados = [];
+      let saldoAcumulado = 0;
+
+      // Calcular el saldo acumulado hasta el día anterior al inicio
+      const asigAnteriores = await prisma.servicioExternoAsignacion.aggregate({
+        where: {
+          punto_atencion_id: punto_id,
+          servicio: servicio as ServicioExterno,
+          fecha: { lt: currentDay },
+        },
+        _sum: { monto: true },
+      });
+
+      const movAnteriores = await prisma.servicioExternoMovimiento.groupBy({
+        by: ["tipo_movimiento"],
+        where: {
+          punto_atencion_id: punto_id,
+          servicio: servicio as ServicioExterno,
+          fecha: { lt: currentDay },
+        },
+        _sum: { monto: true },
+      });
+
+      saldoAcumulado = Number(asigAnteriores._sum.monto || 0);
+      for (const m of movAnteriores) {
+        if (m.tipo_movimiento === "INGRESO")
+          saldoAcumulado -= Number(m._sum.monto || 0);
+        else if (m.tipo_movimiento === "EGRESO")
+          saldoAcumulado += Number(m._sum.monto || 0);
+      }
+
+      // Iterar día a día
+      const dayIter = new Date(currentDay);
+      // Límite de 90 días para evitar saturación
+      let daysProcessed = 0;
+      while (dayIter <= lastDay && daysProcessed < 90) {
+        const { gte, lt } = gyeDayRangeUtcFromDate(dayIter);
+        const dayStr = todayGyeDateOnly(dayIter);
+
+        // Asignaciones del día
+        const asigs = await prisma.servicioExternoAsignacion.findMany({
+          where: {
+            punto_atencion_id: punto_id,
+            servicio: servicio as ServicioExterno,
+            fecha: { gte, lt },
+          },
+        });
+        const totalAsig = asigs.reduce(
+          (acc, curr) => acc + Number(curr.monto),
+          0
+        );
+
+        // Movimientos del día
+        const movs = await prisma.servicioExternoMovimiento.findMany({
+          where: {
+            punto_atencion_id: punto_id,
+            servicio: servicio as ServicioExterno,
+            fecha: { gte, lt },
+          },
+          include: {
+            usuario: { select: { nombre: true } },
+          },
+        });
+
+        const ingresos = movs
+          .filter((m) => m.tipo_movimiento === "INGRESO")
+          .reduce((acc, curr) => acc + Number(curr.monto), 0);
+        const egresos = movs
+          .filter((m) => m.tipo_movimiento === "EGRESO")
+          .reduce((acc, curr) => acc + Number(curr.monto), 0);
+
+        const saldoInicial = saldoAcumulado;
+        saldoAcumulado = saldoAcumulado + totalAsig + egresos - ingresos;
+        const saldoFinal = saldoAcumulado;
+
+        // Solo agregar si hubo actividad o es el primer/último día solicitado
+        if (
+          totalAsig !== 0 ||
+          ingresos !== 0 ||
+          egresos !== 0 ||
+          dayStr === startStr ||
+          dayStr === endStr
+        ) {
+          resultados.push({
+            fecha: dayStr,
+            saldo_inicial: Number(saldoInicial.toFixed(2)),
+            asignaciones: Number(totalAsig.toFixed(2)),
+            ingresos: Number(ingresos.toFixed(2)),
+            egresos: Number(egresos.toFixed(2)),
+            saldo_final: Number(saldoFinal.toFixed(2)),
+            num_movimientos: movs.length,
+            detalles_movimientos: movs.map((m) => ({
+              id: m.id,
+              tipo: m.tipo_movimiento,
+              monto: Number(m.monto),
+              descripcion: m.descripcion,
+              usuario: m.usuario?.nombre,
+              hora: formatEcuadorTime(m.fecha),
+            })),
+            detalles_asignaciones: asigs.map((a) => ({
+              id: a.id,
+              monto: Number(a.monto),
+              tipo: a.tipo,
+              observaciones: a.observaciones,
+              hora: formatEcuadorTime(a.fecha),
+            })),
+          });
+        }
+
+        dayIter.setDate(dayIter.getDate() + 1);
+        daysProcessed++;
+      }
+
+      res.json({
+        success: true,
+        punto_id,
+        servicio,
+        fecha_inicio: startStr,
+        fecha_fin: endStr,
+        dias: resultados,
+      });
+    } catch (error) {
+      console.error("Error en investigacion-saldos:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error en la investigación de saldos",
         error: error instanceof Error ? error.message : String(error),
       });
     }
