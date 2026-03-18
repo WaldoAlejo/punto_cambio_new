@@ -205,4 +205,34 @@ export const saldoInicialService = {
       return { movimientos: [], error: msg };
     }
   },
+
+  // Investigar saldos día a día
+  async getInvestigacionSaldos(params: {
+    punto_id: string;
+    moneda_id: string;
+    fecha_desde?: string;
+    fecha_hasta?: string;
+  }): Promise<{ dias: any[]; error: string | null }> {
+    try {
+      const qs = new URLSearchParams(params as any).toString();
+      const response = await apiService.get<ApiOk<{ dias: any[] }> | ApiFail>(
+        `/saldos-iniciales/investigacion/auditoria?${qs}`
+      );
+
+      if (response.success) {
+        return { dias: response.dias ?? [], error: null };
+      } else {
+        const r = response as ApiFail;
+        return {
+          dias: [],
+          error: r.error || r.message || "Error en investigación",
+        };
+      }
+    } catch (e) {
+      return {
+        dias: [],
+        error: extractErrorMessage(e, "Error de conexión"),
+      };
+    }
+  },
 };

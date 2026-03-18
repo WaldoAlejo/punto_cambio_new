@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, Fragment } from "react";
 import axios from "axios";
 import axiosInstance from "@/services/axiosInstance";
 import { useAuth } from "@/hooks/useAuth";
@@ -351,14 +351,20 @@ export default function ServiciosExternosAdmin() {
     tipoAsignacion: "INICIAL" | "RECARGA"
   ) => {
     const punto = puntos.find((p) => p.id === puntoId);
-    const tipoTexto = tipoAsignacion === "INICIAL" ? "establecer" : "recargar";
-    const mensaje = `¿Está seguro de ${tipoTexto} $${monto.toFixed(
+    
+    // Obtener saldo actual para mostrar en la confirmación
+    const saldoPunto = saldosPorPunto.find(
+      (s) => s.punto_atencion_id === puntoId && s.servicio === servicio
+    );
+    const saldoActual = saldoPunto?.saldo_actual || 0;
+    const nuevoSaldo = saldoActual + monto;
+
+    const mensaje = `¿Está seguro de asignar $${monto.toFixed(
       2
-    )} de ${servicio} al punto "${punto?.nombre}"?${
-      tipoAsignacion === "INICIAL"
-        ? " (Esto REEMPLAZARÁ el saldo actual)"
-        : " (Esto se SUMARÁ al saldo actual)"
-    }`;
+    )} de ${servicio} al punto "${punto?.nombre}"? 
+    \nSaldo actual: $${saldoActual.toFixed(2)}
+    \nNuevo saldo final: $${nuevoSaldo.toFixed(2)}
+    \n(Esta operación se sumará al saldo existente para mantener la trazabilidad)`;
 
     showConfirmation("Confirmar asignación de saldo", mensaje, async () => {
       const key = `${puntoId}-${servicio}`;
@@ -1162,7 +1168,7 @@ export default function ServiciosExternosAdmin() {
                     </thead>
                     <tbody>
                       {investigacionDias.map((dia) => (
-                        <React.Fragment key={dia.fecha}>
+                        <Fragment key={dia.fecha}>
                           <tr className="border-b hover:bg-gray-50">
                             <td className="p-3 font-medium">{dia.fecha}</td>
                             <td className="p-3 text-right font-mono">${dia.saldo_inicial.toFixed(2)}</td>
@@ -1228,7 +1234,7 @@ export default function ServiciosExternosAdmin() {
                               </td>
                             </tr>
                           )}
-                        </React.Fragment>
+                        </Fragment>
                       ))}
                     </tbody>
                   </table>

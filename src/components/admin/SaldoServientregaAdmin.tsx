@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axiosInstance from "@/services/axiosInstance";
 import { useAuth } from "@/hooks/useAuth";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 const UMBRAL_SALDO_BAJO = 5;
 
@@ -73,6 +74,17 @@ export default function SaldoServientregaAdmin() {
   const [loadingPuntos, setLoadingPuntos] = useState<Record<string, boolean>>(
     {}
   );
+
+  // Estados para investigación
+  const [investigacionDias, setInvestigacionDias] = useState<any[]>([]);
+  const [buscandoInvestigacion, setBuscandoInvestigacion] = useState(false);
+  const [invFiltros, setInvFiltros] = useState({
+    punto_id: "",
+    fecha_desde: "",
+    fecha_hasta: "",
+  });
+  const [diaExpandido, setDiaExpandido] = useState<string | null>(null);
+  const [vistaActual, setVistaActual] = useState("gestion");
 
   // ✅ Obtener puntos y saldos
   const obtenerPuntosYSaldo = async () => {
@@ -275,6 +287,41 @@ export default function SaldoServientregaAdmin() {
     }
   };
 
+  const handleInvestigar = async () => {
+    if (!invFiltros.punto_id) {
+      toast.error("Seleccione un punto de atención");
+      return;
+    }
+
+    setBuscandoInvestigacion(true);
+    try {
+      const { data } = await axiosInstance.get(
+        `/servientrega/investigacion/auditoria`,
+        {
+          params: {
+            punto_id: invFiltros.punto_id,
+            fecha_desde: invFiltros.fecha_desde,
+            fecha_hasta: invFiltros.fecha_hasta,
+          },
+        }
+      );
+
+      if (data.success) {
+        setInvestigacionDias(data.dias || []);
+        if (data.dias?.length === 0) {
+          toast.info("No se encontraron registros para este rango");
+        }
+      } else {
+        toast.error(data.message || "Error en investigación");
+      }
+    } catch (error) {
+      console.error("Error en investigación:", error);
+      toast.error("Error al realizar la investigación");
+    } finally {
+      setBuscandoInvestigacion(false);
+    }
+  };
+
   return (
     <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
       <div className="flex justify-between items-center mb-4">
@@ -308,549 +355,443 @@ export default function SaldoServientregaAdmin() {
         </div>
       </div>
 
-      {/* Grid de puntos de atención */}
-      {puntos.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-gray-400 text-6xl mb-4">📍</div>
-          <h3 className="text-lg font-semibold text-gray-600 mb-2">
-            No se encontraron puntos de atención
-          </h3>
-          <p className="text-gray-500 mb-4">
-            Verifica que existan puntos de atención activos en el sistema
-          </p>
-          <Button
-            variant="outline"
-            onClick={obtenerPuntosYSaldo}
-            className="mx-auto"
-          >
-            🔄 Recargar puntos
-          </Button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-          {(puntos || []).map((punto) => {
-            const saldoActualPunto = Number(saldos[punto.id] ?? 0);
-            const saldoBajoPunto = saldoActualPunto < UMBRAL_SALDO_BAJO;
-            const montoInput = montosInput[punto.id] || "";
-            const loadingPunto = loadingPuntos[punto.id] || false;
+      <Tabs value={vistaActual} onValueChange={setVistaActual} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsTrigger value="gestion">💰 Gestión de Saldos</TabsTrigger>
+          <TabsTrigger value="investigacion">🔍 Investigación Diaria</TabsTrigger>
+        </TabsList>
 
-            const handleAsignarSaldoPunto = async () => {
-              const monto = parseFloat(montoInput);
-              if (isNaN(monto) || monto <= 0) {
-                toast.error("Ingrese un monto válido mayor a 0");
-                return;
-              }
+        <TabsContent value="gestion">
+          {/* Grid de puntos de atención */}
+          {puntos.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <p>No se encontraron puntos de atención activos</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+              {(puntos || []).map((punto) => {
+                const saldoActualPunto = Number(saldos[punto.id] ?? 0);
+                const saldoBajoPunto = saldoActualPunto < UMBRAL_SALDO_BAJO;
+                const montoInput = montosInput[punto.id] || "";
+                const loadingPunto = loadingPuntos[punto.id] || false;
 
-              showConfirmation(
-                "Confirmar asignación de saldo Servientrega",
-                `¿Está seguro de asignar $${monto.toLocaleString()} al punto "${
-                  punto.nombre
-                }" para servicios de Servientrega?`,
-                async () => {
-                  setLoadingPuntos((prev) => ({ ...prev, [punto.id]: true }));
-                  try {
-                    await axiosInstance.post(
-                      "/servientrega/saldo",
-                      {
-                        monto_total: monto,
-                        creado_por: user?.nombre ?? "admin",
-                        punto_atencion_id: punto.id,
-                      }
-                    );
-
-                    toast.success(
-                      `✅ Saldo de $${monto.toLocaleString()} asignado correctamente a ${
-                        punto.nombre
-                      }`
-                    );
-                    setMontosInput((prev) => ({ ...prev, [punto.id]: "" }));
-
-                    // Actualizar datos
-                    await Promise.all([
-                      obtenerPuntosYSaldo(),
-                      obtenerHistorial(),
-                    ]);
-                  } catch (error) {
-                    console.error(
-                      "❌ Error al asignar saldo Servientrega:",
-                      error
-                    );
-                    toast.error("Error al asignar saldo");
-                  } finally {
-                    setLoadingPuntos((prev) => ({
-                      ...prev,
-                      [punto.id]: false,
-                    }));
+                const handleAsignarSaldoPunto = async () => {
+                  const monto = parseFloat(montoInput);
+                  if (isNaN(monto) || monto <= 0) {
+                    toast.error("Ingrese un monto válido mayor a 0");
+                    return;
                   }
-                }
-              );
-            };
 
-            return (
-              <div
-                key={punto.id}
-                className="border rounded-lg p-6 bg-white shadow-sm space-y-4"
-              >
-                <div className="mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-lg">
-                      {punto.nombre}
-                    </span>
-                    <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full">
-                      📦 Servientrega
-                    </span>
-                  </div>
-                  <div className="text-sm text-gray-600 space-y-1">
-                    <div>
-                      📍 {punto.ciudad}, {punto.provincia}
-                    </div>
-                    {punto.servientrega_agencia_codigo && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-cyan-600 font-medium">
-                          🏢{" "}
-                          {punto.servientrega_agencia_nombre ||
-                            "Agencia Servientrega"}
-                        </span>
-                        <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                          {punto.servientrega_agencia_codigo}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                  showConfirmation(
+                    "Confirmar asignación de saldo Servientrega",
+                    `¿Está seguro de asignar $${monto.toLocaleString()} al punto "${
+                      punto.nombre
+                    }" para servicios de Servientrega?`,
+                    async () => {
+                      setLoadingPuntos((prev) => ({ ...prev, [punto.id]: true }));
+                      try {
+                        await axiosInstance.post(
+                          "/servientrega/saldo",
+                          {
+                            monto_total: monto,
+                            creado_por: user?.nombre ?? "admin",
+                            punto_atencion_id: punto.id,
+                          }
+                        );
 
-                {/* Saldo actual */}
-                <div>
-                  <Label className="text-sm font-medium text-gray-600">
-                    Saldo Servientrega Disponible
-                  </Label>
-                  <div
-                    className={`font-semibold text-xl mb-2 ${
-                      saldoBajoPunto ? "text-red-600" : "text-green-700"
-                    }`}
-                  >
-                    $
-                    {saldoActualPunto.toLocaleString("es-ES", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                    {saldoBajoPunto && (
-                      <span className="ml-2 text-xs bg-red-100 text-red-600 px-2 py-1 rounded-full animate-pulse">
-                        ⚠️ Saldo bajo
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Umbral mínimo: ${UMBRAL_SALDO_BAJO.toFixed(2)}
-                  </div>
-                </div>
+                        toast.success(
+                          `✅ Saldo de $${monto.toLocaleString()} asignado correctamente a ${
+                            punto.nombre
+                          }`
+                        );
+                        setMontosInput((prev) => ({ ...prev, [punto.id]: "" }));
 
-                {/* Asignación de saldo */}
-                {esAdmin && (
-                  <>
-                    <div>
-                      <Label className="text-sm font-medium text-gray-600">
-                        Asignar Saldo para Servientrega
-                      </Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={montoInput}
-                        onChange={(e) =>
-                          setMontosInput((prev) => ({
-                            ...prev,
-                            [punto.id]: e.target.value,
-                          }))
-                        }
-                        placeholder="0.00"
-                        className="mt-1"
-                        disabled={loadingPunto}
-                      />
-                    </div>
-                    <Button
-                      className="w-full"
-                      onClick={handleAsignarSaldoPunto}
-                      disabled={
-                        loadingPunto ||
-                        !montoInput.trim() ||
-                        parseFloat(montoInput) <= 0
+                        // Actualizar datos
+                        await Promise.all([
+                          obtenerPuntosYSaldo(),
+                          obtenerHistorial(),
+                        ]);
+                      } catch (error) {
+                        console.error(
+                          "❌ Error al asignar saldo Servientrega:",
+                          error
+                        );
+                        toast.error("Error al asignar saldo");
+                      } finally {
+                        setLoadingPuntos((prev) => ({
+                          ...prev,
+                          [punto.id]: false,
+                        }));
                       }
-                    >
-                      {loadingPunto ? (
-                        <>
-                          <span className="animate-spin mr-2">⏳</span>
-                          Asignando...
-                        </>
-                      ) : (
-                        <>💰 Asignar Saldo</>
-                      )}
-                    </Button>
-                  </>
-                )}
+                    }
+                  );
+                };
 
-                {/* Información adicional para no-admin */}
-                {!esAdmin && (
-                  <div className="text-center py-2 text-gray-500 text-sm">
-                    👤 Solo los administradores pueden asignar saldos
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                return (
+                  <div
+                    key={punto.id}
+                    className="border rounded-lg p-6 bg-white shadow-sm space-y-4"
+                  >
+                    <div className="mb-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-semibold text-lg">
+                          {punto.nombre}
+                        </span>
+                        <span className="text-xs bg-cyan-100 text-cyan-700 px-2 py-1 rounded-full">
+                          📦 Servientrega
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500 block">
+                        📍 {punto.ciudad}
+                      </span>
+                    </div>
 
-      {/* Solicitudes de saldo */}
-      {esAdmin && (
-        <Card className="p-4">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between text-lg">
-              <div className="flex items-center gap-2">
-                <span>📋 Solicitudes de saldo</span>
-                {(solicitudes || []).filter((s) => s.estado === "PENDIENTE")
-                  .length > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                    {
-                      (solicitudes || []).filter(
-                        (s) => s.estado === "PENDIENTE"
-                      ).length
-                    }{" "}
-                    pendientes
-                  </span>
-                )}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={obtenerSolicitudes}
-                className="text-xs"
-              >
-                🔄 Actualizar
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {(solicitudes || []).length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-500 mb-2">
-                  📭 No hay solicitudes de saldo
-                </p>
-                <p className="text-sm text-gray-400">
-                  Las solicitudes aparecerán aquí cuando los operadores las
-                  envíen
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Solicitudes pendientes primero */}
-                {(solicitudes || [])
-                  .filter((sol) => sol.estado === "PENDIENTE")
-                  .map((sol) => (
                     <div
-                      key={sol.id}
-                      className="border-2 border-yellow-300 rounded-lg p-4 bg-yellow-50"
+                      className={`p-4 rounded-lg flex justify-between items-center ${
+                        saldoBajoPunto ? "bg-red-50" : "bg-green-50"
+                      }`}
                     >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-semibold text-lg text-gray-800">
-                              {sol.punto_atencion_nombre}
-                            </h3>
-                            <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full">
-                              PENDIENTE
-                            </span>
-                          </div>
+                      <span className="text-sm font-medium text-gray-700">
+                        Saldo disponible:
+                      </span>
+                      <span
+                        className={`text-2xl font-bold font-mono ${
+                          saldoBajoPunto ? "text-red-600" : "text-green-700"
+                        }`}
+                      >
+                        ${saldoActualPunto.toLocaleString()}
+                      </span>
+                    </div>
 
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-                            <div>
-                              <p className="text-sm text-gray-600">
-                                <strong>💰 Monto solicitado:</strong>
-                              </p>
-                              <p className="text-xl font-bold text-green-600">
-                                ${Number(sol.monto_requerido).toFixed(2)}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-sm text-gray-600">
-                                <strong>📅 Fecha de solicitud:</strong>
-                              </p>
-                              <p className="text-sm">
-                                {new Date(sol.creado_en).toLocaleString()}
-                              </p>
-                            </div>
-                          </div>
-
-                          {sol.observaciones && (
-                            <div className="mb-3">
-                              <p className="text-sm text-gray-600">
-                                <strong>📝 Observaciones:</strong>
-                              </p>
-                              <p className="text-sm bg-white p-2 rounded border">
-                                {sol.observaciones}
-                              </p>
-                            </div>
-                          )}
-
-                          <div className="text-xs text-gray-500">
-                            <strong>ID:</strong> {sol.id}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 ml-4">
-                          <Button
-                            className="bg-green-600 hover:bg-green-700 text-white px-6"
-                            onClick={() =>
-                              responderSolicitud(
-                                sol.id,
-                                "APROBADA",
-                                sol.monto_requerido,
-                                sol.punto_atencion_id
-                              )
+                    <div className="space-y-2 pt-2">
+                      <Label className="text-xs text-gray-500 uppercase tracking-wider font-bold">
+                        Recargar Cupo
+                      </Label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                            $
+                          </span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                            className="pl-7"
+                            value={montoInput}
+                            onChange={(e) =>
+                              setMontosInput((prev) => ({
+                                ...prev,
+                                [punto.id]: e.target.value,
+                              }))
                             }
-                          >
-                            ✅ Aprobar
-                          </Button>
-                          <Button
-                            className="bg-red-600 hover:bg-red-700 text-white px-6"
-                            onClick={() =>
-                              responderSolicitud(
-                                sol.id,
-                                "RECHAZADA",
-                                sol.monto_requerido,
-                                sol.punto_atencion_id
-                              )
-                            }
-                          >
-                            ❌ Rechazar
-                          </Button>
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter") handleAsignarSaldoPunto();
+                            }}
+                          />
                         </div>
+                        <Button
+                          onClick={handleAsignarSaldoPunto}
+                          disabled={loadingPunto || !montoInput}
+                          className="bg-cyan-600 hover:bg-cyan-700"
+                        >
+                          {loadingPunto ? "⏳" : "✅"}
+                        </Button>
                       </div>
                     </div>
-                  ))}
-
-                {/* Solicitudes procesadas */}
-                {(solicitudes || []).filter((sol) => sol.estado !== "PENDIENTE")
-                  .length > 0 && (
-                  <div className="mt-6">
-                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      📋 Historial de solicitudes procesadas
-                      <span className="text-xs bg-gray-200 px-2 py-1 rounded">
-                        {
-                          (solicitudes || []).filter(
-                            (sol) => sol.estado !== "PENDIENTE"
-                          ).length
-                        }
-                      </span>
-                    </h4>
-
-                    <div className="space-y-3">
-                      {(solicitudes || [])
-                        .filter((sol) => sol.estado !== "PENDIENTE")
-                        .sort(
-                          (a, b) =>
-                            new Date(b.creado_en).getTime() -
-                            new Date(a.creado_en).getTime()
-                        )
-                        .slice(0, 5) // Mostrar solo las últimas 5
-                        .map((sol) => (
-                          <div
-                            key={sol.id}
-                            className={`border rounded-lg p-3 ${
-                              sol.estado === "APROBADA"
-                                ? "bg-green-50 border-green-200"
-                                : "bg-red-50 border-red-200"
-                            }`}
-                          >
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-medium text-gray-800">
-                                    {sol.punto_atencion_nombre}
-                                  </span>
-                                  <span
-                                    className={`text-xs px-2 py-1 rounded-full ${
-                                      sol.estado === "APROBADA"
-                                        ? "bg-green-500 text-white"
-                                        : "bg-red-500 text-white"
-                                    }`}
-                                  >
-                                    {sol.estado}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-600">
-                                  <strong>Monto:</strong> $
-                                  {Number(sol.monto_requerido).toFixed(2)} |
-                                  <strong> Fecha:</strong>{" "}
-                                  {new Date(sol.creado_en).toLocaleDateString()}
-                                  {sol.aprobado_por && (
-                                    <span>
-                                      {" "}
-                                      | <strong>Por:</strong> {sol.aprobado_por}
-                                    </span>
-                                  )}
-                                </p>
-                                {sol.observaciones && (
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    <strong>Obs:</strong> {sol.observaciones}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="text-right">
-                                <span
-                                  className={`text-2xl ${
-                                    sol.estado === "APROBADA"
-                                      ? "text-green-600"
-                                      : "text-red-600"
-                                  }`}
-                                >
-                                  {sol.estado === "APROBADA" ? "✅" : "❌"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-
-                    {(solicitudes || []).filter(
-                      (sol) => sol.estado !== "PENDIENTE"
-                    ).length > 5 && (
-                      <p className="text-xs text-gray-500 text-center mt-2">
-                        Mostrando las últimas 5 solicitudes procesadas
-                      </p>
-                    )}
                   </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                );
+              })}
+            </div>
+          )}
 
-      {/* Historial de asignaciones */}
-      {esAdmin && (
-        <Card className="p-4">
-          <CardHeader>
-            <CardTitle className="text-lg flex justify-between items-center">
-              <span>
-                Historial de asignaciones ({(historial || []).length} total,{" "}
-                {historialFiltrado.length} mostrados)
-              </span>
-              <div className="flex gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testDB}
-                  className="text-xs"
-                >
-                  🔌 Test DB
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={debugHistorial}
-                  className="text-xs"
-                >
-                  🔧 Debug
-                </Button>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* Controles de filtro */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
-              <div className="space-y-2">
-                <Label>Filtrar por punto</Label>
+          {/* Sección de Solicitudes Pendientes */}
+          {esAdmin &&
+            (solicitudes || []).filter((s) => s.estado === "PENDIENTE").length >
+              0 && (
+              <Card className="mt-8 border-red-200">
+                <CardHeader className="bg-red-50 border-b border-red-100">
+                  <CardTitle className="text-red-800 text-lg flex items-center gap-2">
+                    🔔 Solicitudes de Saldo Pendientes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                        <tr>
+                          <th className="px-6 py-3 text-left">Fecha</th>
+                          <th className="px-6 py-3 text-left">Punto</th>
+                          <th className="px-6 py-3 text-right">Monto</th>
+                          <th className="px-6 py-3 text-left">Observaciones</th>
+                          <th className="px-6 py-3 text-center">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {solicitudes
+                          .filter((s) => s.estado === "PENDIENTE")
+                          .map((sol) => (
+                            <tr key={sol.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 text-sm">
+                                {new Date(sol.creado_en).toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 text-sm font-medium">
+                                {sol.punto_atencion_nombre}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-right font-bold text-blue-600">
+                                ${sol.monto_requerido.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 text-sm italic">
+                                {sol.observaciones || "-"}
+                              </td>
+                              <td className="px-6 py-4 text-center space-x-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-green-600 border-green-200 hover:bg-green-50"
+                                  onClick={() =>
+                                    responderSolicitud(
+                                      sol.id,
+                                      "APROBADA",
+                                      sol.monto_requerido,
+                                      sol.punto_atencion_id
+                                    )
+                                  }
+                                >
+                                  Aprobar
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-red-600 border-red-200 hover:bg-red-50"
+                                  onClick={() =>
+                                    responderSolicitud(
+                                      sol.id,
+                                      "RECHAZADA",
+                                      sol.monto_requerido,
+                                      sol.punto_atencion_id
+                                    )
+                                  }
+                                >
+                                  Rechazar
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+          {/* Sección de Historial Consolidado */}
+          <Card className="mt-8">
+            <CardHeader className="flex flex-row items-center justify-between p-4 bg-gray-50 border-b">
+              <CardTitle className="text-lg">📋 Historial de Asignaciones</CardTitle>
+              <div className="flex gap-4">
                 <Select value={filtroPunto} onValueChange={setFiltroPunto}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos los puntos" />
+                  <SelectTrigger className="w-[200px] h-9">
+                    <SelectValue placeholder="Filtrar por punto" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos los puntos</SelectItem>
-                    {(puntos || []).map((p) => (
+                    {puntos.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.nombre}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Filtrar por fecha</Label>
                 <Input
                   type="date"
+                  className="w-[150px] h-9"
                   value={filtroFecha}
                   onChange={(e) => setFiltroFecha(e.target.value)}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>&nbsp;</Label>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setFiltroPunto("todos");
-                    setFiltroFecha("");
-                  }}
-                  className="w-full"
-                >
-                  Limpiar filtros
-                </Button>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="max-h-[500px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100 text-gray-600 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Fecha y Hora</th>
+                      <th className="px-4 py-3 text-left">Punto de Atención</th>
+                      <th className="px-4 py-3 text-right">Monto</th>
+                      <th className="px-4 py-3 text-left">Asignado por</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {historialFiltrado.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center py-8 text-gray-500 italic">
+                          No hay registros que coincidan con los filtros
+                        </td>
+                      </tr>
+                    ) : (
+                      historialFiltrado.map((item) => (
+                        <tr key={item.id} className="hover:bg-blue-50/50">
+                          <td className="px-4 py-3 text-gray-600">
+                            {new Date(item.creado_en).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 font-medium">
+                            {item.punto_atencion_nombre}
+                          </td>
+                          <td className={`px-4 py-3 text-right font-bold ${item.monto_total > 0 ? "text-green-600" : "text-red-600"}`}>
+                            {item.monto_total > 0 ? "+" : ""}${Number(item.monto_total).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-gray-500">
+                            {item.creado_por}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
-            </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-            {historialFiltrado.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-sm text-gray-500 italic">
-                  {(historial || []).length === 0
-                    ? "No hay asignaciones registradas."
-                    : "No hay asignaciones que coincidan con los filtros aplicados."}
-                </p>
-                {(historial || []).length > 0 &&
-                  (filtroFecha || (filtroPunto && filtroPunto !== "todos")) && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setFiltroPunto("todos");
-                        setFiltroFecha("");
-                      }}
-                      className="mt-2"
-                    >
-                      Ver todas las asignaciones
-                    </Button>
-                  )}
-              </div>
-            ) : (
-              <ul className="space-y-2 max-h-[400px] overflow-auto pr-2">
-                {historialFiltrado.map((h) => (
-                  <li
-                    key={h.id}
-                    className="border p-3 rounded-md bg-gray-50 hover:bg-gray-100 transition"
+        <TabsContent value="investigacion">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                🔍 Investigación Diaria de Cupo Servientrega
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <Label>Punto de Atención</Label>
+                  <Select
+                    value={invFiltros.punto_id}
+                    onValueChange={(value) => setInvFiltros(p => ({ ...p, punto_id: value }))}
                   >
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center">
-                      <div className="flex-1 space-y-1">
-                        <p className="text-base font-medium text-gray-800">
-                          {h.punto_atencion_nombre}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Asignado por: {h.creado_por}
-                        </p>
-                      </div>
-                      <div className="flex flex-col sm:items-end mt-2 sm:mt-0">
-                        <span className="text-green-700 font-bold">
-                          +${Number(h.monto_total || 0).toFixed(2)}
-                        </span>
-                        <span className="text-gray-500 text-xs">
-                          {new Date(h.creado_en).toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar punto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {puntos.map((punto) => (
+                        <SelectItem key={punto.id} value={punto.id}>
+                          {punto.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Fecha Desde</Label>
+                  <Input
+                    type="date"
+                    value={invFiltros.fecha_desde}
+                    onChange={(e) => setInvFiltros(p => ({ ...p, fecha_desde: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Fecha Hasta</Label>
+                  <Input
+                    type="date"
+                    value={invFiltros.fecha_hasta}
+                    onChange={(e) => setInvFiltros(p => ({ ...p, fecha_hasta: e.target.value }))}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    onClick={handleInvestigar}
+                    disabled={buscandoInvestigacion}
+                    className="w-full"
+                  >
+                    {buscandoInvestigacion ? "Buscando..." : "🚀 Iniciar Investigación"}
+                  </Button>
+                </div>
+              </div>
+
+              {investigacionDias.length > 0 && (
+                <div className="space-y-4">
+                  <div className="overflow-x-auto bg-white rounded-lg shadow border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100 border-b">
+                        <tr>
+                          <th className="p-3 text-left">Fecha</th>
+                          <th className="p-3 text-right">Saldo Inicial</th>
+                          <th className="p-3 text-right">Asignaciones (+)</th>
+                          <th className="p-3 text-right">Gastos (-)</th>
+                          <th className="p-3 text-right">Saldo Final</th>
+                          <th className="p-3 text-center">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {investigacionDias.map((dia) => (
+                          <React.Fragment key={dia.fecha}>
+                            <tr className="border-b hover:bg-gray-50">
+                              <td className="p-3 font-medium">{dia.fecha}</td>
+                              <td className="p-3 text-right font-mono">${dia.saldo_inicial.toFixed(2)}</td>
+                              <td className="p-3 text-right text-blue-600 font-mono">
+                                {dia.asignaciones > 0 ? `+$${dia.asignaciones.toFixed(2)}` : "-"}
+                              </td>
+                              <td className="p-3 text-right text-red-600 font-mono">
+                                {dia.egresos > 0 ? `-$${dia.egresos.toFixed(2)}` : "-"}
+                              </td>
+                              <td className="p-3 text-right font-bold font-mono">${dia.saldo_final.toFixed(2)}</td>
+                              <td className="p-3 text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setDiaExpandido(diaExpandido === dia.fecha ? null : dia.fecha)}
+                                >
+                                  {diaExpandido === dia.fecha ? "🔼 Ocultar" : `🔽 Ver (${dia.num_movimientos})`}
+                                </Button>
+                              </td>
+                            </tr>
+                            {diaExpandido === dia.fecha && (
+                              <tr>
+                                <td colSpan={6} className="p-4 bg-gray-50">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                      <h4 className="font-bold text-xs mb-2 text-blue-800 text-uppercase">RECARGAS DE CUPO</h4>
+                                      <div className="space-y-2">
+                                        {dia.detalles_asignaciones?.map((a: any) => (
+                                          <div key={a.id} className="bg-white p-2 rounded shadow-sm text-xs flex justify-between">
+                                            <span>{a.hora} - {a.observaciones}</span>
+                                            <span className="font-bold text-blue-600">+${a.monto.toFixed(2)}</span>
+                                          </div>
+                                        ))}
+                                        {dia.detalles_asignaciones?.length === 0 && <p className="text-xs text-gray-400">Sin recargas</p>}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <h4 className="font-bold text-xs mb-2 text-red-800 text-uppercase">USO DE CUPO (GUÍAS)</h4>
+                                      <div className="space-y-2">
+                                        {dia.detalles_movimientos?.map((m: any) => (
+                                          <div key={m.id} className="bg-white p-2 rounded shadow-sm text-xs flex justify-between items-center">
+                                            <div className="flex flex-col">
+                                              <span className="font-medium">{m.hora} - {m.tipo}</span>
+                                              <span className="text-[10px] text-gray-500">{m.descripcion}</span>
+                                            </div>
+                                            <span className="font-bold text-red-600">
+                                              -${m.monto.toFixed(2)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                        {dia.detalles_movimientos?.length === 0 && <p className="text-xs text-gray-400">Sin gastos</p>}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <ConfirmationDialog />
     </div>

@@ -1,9 +1,9 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, ServicioExterno } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("\n=== RECALCULAR TODOS LOS SALDOS ===\n");
+  console.log("\n=== RECALCULANDO TODOS LOS SALDOS (DIVISAS Y SERVICIOS) ===\n");
 
   const puntos = await prisma.puntoAtencion.findMany({
     where: { activo: true },
@@ -15,129 +15,154 @@ async function main() {
     select: { id: true, codigo: true },
   });
 
-  let updated = 0;
+  let updatedDivisas = 0;
+  let updatedServicios = 0;
 
+  // 1. RECALCULAR DIVISAS (Efectivo en Caja)
+  console.log("--- Procesando Divisas ---");
   for (const punto of puntos) {
     for (const moneda of monedas) {
-      // Obtener saldo inicial
-      const saldoInicial = await prisma.saldoInicial.findFirst({
-        where: {
-          punto_atencion_id: punto.id,
-          moneda_id: moneda.id,
-          activo: true,
-        },
-        orderBy: { fecha_asignacion: "desc" },
+      // Sumar TODOS los movimientos de la historia (incluyendo SALDO_INICIAL)
+      const movs = await prisma.movimientoSaldo.findMany({
+        where: { punto_atencion_id: punto.id, moneda_id: moneda.id },
+        select: { monto: true, tipo_movimiento: true, descripcion: true },
       });
 
-      let saldoCalculado = saldoInicial
-        ? Number(saldoInicial.cantidad_inicial)
-        : 0;
+      let saldoCalculado = 0;
+      for (const m of movs) {
+        const abs = Math.abs(Number(m.monto));
+        const tipo = m.tipo_movimiento;
+        const desc = (m.descripcion || "").toLowerCase();
 
-      // Obtener movimientos (excepto SALDO_INICIAL para no duplicar)
-      const movimientos = await prisma.movimientoSaldo.findMany({
-        where: {
-          punto_atencion_id: punto.id,
-          moneda_id: moneda.id,
-          tipo_movimiento: { not: "SALDO_INICIAL" },
-        },
-        orderBy: { fecha: "asc" },
-      });
-
-      // Recalcular saldo
-      let subtotalMovimientos = 0;
-      const tiposEncontrados = new Set<string>();
-
-      for (const mov of movimientos) {
-        const monto = Number(mov.monto);
-        tiposEncontrados.add(mov.tipo_movimiento);
-        
-        if (mov.tipo_movimiento === "EGRESO" || mov.tipo_movimiento === "TRANSFERENCIA_SALIENTE") {
-          saldoCalculado -= Math.abs(monto);
-          subtotalMovimientos -= Math.abs(monto);
-        } else if (
-          mov.tipo_movimiento === "INGRESO" ||
-          mov.tipo_movimiento === "TRANSFERENCIA_ENTRANTE" ||
-          mov.tipo_movimiento === "TRANSFERENCIA_DEVOLUCION"
-        ) {
-          saldoCalculado += Math.abs(monto);
-          subtotalMovimientos += Math.abs(monto);
-        } else {
-          saldoCalculado += monto;
-          subtotalMovimientos += monto;
+        // Lógica de signos (Caja)
+        if (tipo === "EGRESO" || tipo === "TRANSFERENCIA_SALIENTE" || tipo === "TRANSFERENCIA_SALIDA") {
+          saldoCalculado -= abs;
+        } else if (tipo === "INGRESO" || tipo === "TRANSFERENCIA_ENTRANTE" || tipo === "TRANSFERENCIA_RECIBIDA" || tipo === "SALDO_INICIAL" || tipo === "TRANSFERENCIA_DEVOLUCION") {
+          saldoCalculado += abs;
+        } else if (tipo === "AJUSTE") {
+          saldoCalculado += Number(m.monto);
+        } else if (tipo === "CAMBIO_DIVISA") {
+          if (desc.startsWith("egreso por cambio")) saldoCalculado -= abs;
+          else if (desc.startsWith("ingreso por cambio")) saldoCalculado += abs;
+          else saldoCalculado += Number(m.monto);
         }
       }
 
       saldoCalculado = Number(saldoCalculado.toFixed(2));
 
-      // Actualizar BD
-      const saldoBD = await prisma.saldo.findUnique({
-        where: {
-          punto_atencion_id_moneda_id: {
-            punto_atencion_id: punto.id,
-            moneda_id: moneda.id,
-          },
-        },
+      // Actualizar tabla Saldo
+      const existing = await prisma.saldo.findUnique({
+        where: { punto_atencion_id_moneda_id: { punto_atencion_id: punto.id, moneda_id: moneda.id } }
       });
 
-      if (saldoBD) {
-        const cantidadAnterior = Number(saldoBD.cantidad);
-        const billetesAnterior = Number(saldoBD.billetes);
-        const monedasAnterior = Number(saldoBD.monedas_fisicas);
-        
-        let nuevosBilletes = billetesAnterior;
-        let nuevasMonedas = monedasAnterior;
-
-        const diferencia = Math.abs(cantidadAnterior - saldoCalculado);
-        
-        if (diferencia > 0.01) {
-          // Si hay cambio, debemos ajustar el desglose físico para mantener consistencia
-          // Ya que Saldo Actual (UI) = billetes + monedas_fisicas
-          
-          if (cantidadAnterior > 0) {
-            // Ajuste proporcional
-            const propBilletes = billetesAnterior / cantidadAnterior;
-            nuevosBilletes = Number((saldoCalculado * propBilletes).toFixed(2));
-            nuevasMonedas = Number((saldoCalculado - nuevosBilletes).toFixed(2));
-          } else {
-            // Si el anterior era 0, todo a billetes por defecto
-            nuevosBilletes = saldoCalculado;
-            nuevasMonedas = 0;
-          }
-
+      if (existing) {
+        const diff = Math.abs(Number(existing.cantidad) - saldoCalculado);
+        if (diff > 0.01) {
           await prisma.saldo.update({
-            where: {
-              punto_atencion_id_moneda_id: {
-                punto_atencion_id: punto.id,
-                moneda_id: moneda.id,
-              },
-            },
-            data: {
-              cantidad: saldoCalculado,
-              billetes: nuevosBilletes,
-              monedas_fisicas: nuevasMonedas,
-              updated_at: new Date(),
-            },
+            where: { id: existing.id },
+            data: { 
+              cantidad: saldoCalculado, 
+              billetes: saldoCalculado, 
+              monedas_fisicas: 0, 
+              updated_at: new Date() 
+            }
           });
+          console.log(`  [DIVISA] ${punto.nombre} | ${moneda.codigo}: ${existing.cantidad} -> ${saldoCalculado}`);
+          updatedDivisas++;
+        }
+      } else if (saldoCalculado !== 0) {
+        await prisma.saldo.create({
+          data: {
+            punto_atencion_id: punto.id,
+            moneda_id: moneda.id,
+            cantidad: saldoCalculado,
+            billetes: saldoCalculado,
+            monedas_fisicas: 0,
+            bancos: 0
+          }
+        });
+        console.log(`  [DIVISA] ${punto.nombre} | ${moneda.codigo}: NUEVO -> ${saldoCalculado}`);
+        updatedDivisas++;
+      }
 
-          updated++;
-          console.log(
-            `  ${punto.nombre} | ${moneda.codigo}:`
-          );
-          console.log(`    Base Inicial: ${Number(saldoInicial?.cantidad_inicial || 0).toFixed(2)}`);
-          console.log(`    Movimientos:  ${subtotalMovimientos > 0 ? "+" : ""}${subtotalMovimientos.toFixed(2)} (${Array.from(tiposEncontrados).join(", ")})`);
-          console.log(`    Resultado:    ${cantidadAnterior.toFixed(2)} → ${saldoCalculado.toFixed(2)}`);
-          console.log(`    Físico:       (${billetesAnterior.toFixed(2)}B + ${monedasAnterior.toFixed(2)}M) → (${nuevosBilletes.toFixed(2)}B + ${nuevasMonedas.toFixed(2)}M)`);
+      // Sincronizar SaldoInicial consolidado
+      const sumHistorial = await prisma.historialSaldo.aggregate({
+        where: { punto_atencion_id: punto.id, moneda_id: moneda.id, tipo_movimiento: "INGRESO" },
+        _sum: { cantidad_incrementada: true }
+      });
+      const totalAsignado = Number(sumHistorial._sum.cantidad_incrementada || 0);
+      
+      const si = await prisma.saldoInicial.findFirst({
+        where: { punto_atencion_id: punto.id, moneda_id: moneda.id, activo: true }
+      });
+      if (si && Number(si.cantidad_inicial) !== totalAsignado) {
+        await prisma.saldoInicial.update({ where: { id: si.id }, data: { cantidad_inicial: totalAsignado } });
+      }
+    }
+  }
+
+  // 2. RECALCULAR SERVICIOS EXTERNOS (Crédito Digital)
+  console.log("\n--- Procesando Servicios Externos ---");
+  const usdId = (await prisma.moneda.findFirst({ where: { codigo: 'USD' } }))?.id;
+  if (usdId) {
+    for (const punto of puntos) {
+      const servicios = Object.values(ServicioExterno);
+      for (const svc of servicios) {
+        const asigs = await prisma.servicioExternoAsignacion.aggregate({
+          where: { punto_atencion_id: punto.id, servicio: svc, moneda_id: usdId },
+          _sum: { monto: true }
+        });
+        const movs = await prisma.servicioExternoMovimiento.findMany({
+          where: { punto_atencion_id: punto.id, servicio: svc, moneda_id: usdId }
+        });
+
+        const totalAsig = Number(asigs._sum.monto || 0);
+        let egresos = 0; // Reposición (+)
+        let ingresos = 0; // Consumo (-)
+        for (const m of movs) {
+          if (m.tipo_movimiento === "EGRESO") egresos += Number(m.monto);
+          else if (m.tipo_movimiento === "INGRESO") ingresos += Number(m.monto);
+        }
+
+        const saldoFinal = Number((totalAsig + egresos - ingresos).toFixed(2));
+
+        const existingSvc = await prisma.servicioExternoSaldo.findUnique({
+          where: { punto_atencion_id_servicio_moneda_id: { punto_atencion_id: punto.id, servicio: svc, moneda_id: usdId } }
+        });
+
+        if (existingSvc) {
+          const diff = Math.abs(Number(existingSvc.cantidad) - saldoFinal);
+          if (diff > 0.01) {
+            await prisma.servicioExternoSaldo.update({
+              where: { id: existingSvc.id },
+              data: { cantidad: saldoFinal, updated_at: new Date() }
+            });
+            console.log(`  [SVC] ${punto.nombre} | ${svc}: ${existingSvc.cantidad} -> ${saldoFinal}`);
+            updatedServicios++;
+          }
+        } else if (saldoFinal !== 0) {
+          await prisma.servicioExternoSaldo.create({
+            data: {
+              punto_atencion_id: punto.id,
+              servicio: svc,
+              moneda_id: usdId,
+              cantidad: saldoFinal,
+              billetes: 0,
+              monedas_fisicas: 0,
+              bancos: 0
+            }
+          });
+          console.log(`  [SVC] ${punto.nombre} | ${svc}: NUEVO -> ${saldoFinal}`);
+          updatedServicios++;
         }
       }
     }
   }
 
-  console.log(`\n✅ ${updated} saldos recalculados\n`);
+  console.log(`\n✅ ${updatedDivisas} saldos de divisas corregidos.`);
+  console.log(`✅ ${updatedServicios} saldos de servicios corregidos.\n`);
 
   await prisma.$disconnect();
 }
 
-main().catch((e) => {
-  console.error("Error:", e);
-  process.exit(1);
-});
+main().catch(console.error);

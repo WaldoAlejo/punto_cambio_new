@@ -8,6 +8,13 @@ import {
   TipoMovimiento,
   TipoReferencia,
 } from "../services/movimientoSaldoService.js";
+import {
+  nowEcuador,
+  todayGyeDateOnly,
+  gyeDayRangeUtcFromDateOnly,
+  gyeDayRangeUtcFromDate,
+  formatEcuadorTime,
+} from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -397,6 +404,189 @@ router.post(
       return res.status(500).json({
         success: false,
         error: "Error al asignar saldo inicial",
+      });
+    }
+  }
+);
+
+// ======================= GET: investigación de saldos (divisas) =======================
+router.get(
+  "/investigacion/auditoria",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request, res: Response) => {
+    try {
+      const { punto_id, moneda_id, fecha_desde, fecha_hasta } = req.query;
+
+      if (!punto_id || !moneda_id) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Faltan parámetros obligatorios" });
+      }
+
+      // 1. Encontrar la primera asignación para este punto y moneda
+      const primeraAsignacion = await prisma.historialSaldo.findFirst({
+        where: {
+          punto_atencion_id: punto_id as string,
+          moneda_id: moneda_id as string,
+        },
+        orderBy: { fecha: "asc" },
+      });
+
+      if (!primeraAsignacion) {
+        return res.json({
+          success: true,
+          dias: [],
+          message:
+            "No se encontraron asignaciones para esta moneda en este punto",
+        });
+      }
+
+      // 2. Determinar rango de fechas
+      const fechaInicio = fecha_desde
+        ? new Date(fecha_desde as string)
+        : primeraAsignacion.fecha;
+      const fechaFin = fecha_hasta
+        ? new Date(fecha_hasta as string)
+        : nowEcuador();
+
+      // Ajustar a medianoche GYE para iterar
+      const startStr = todayGyeDateOnly(fechaInicio);
+      const endStr = todayGyeDateOnly(fechaFin);
+
+      const currentDay = new Date(gyeDayRangeUtcFromDateOnly(startStr).gte);
+      const lastDay = new Date(gyeDayRangeUtcFromDateOnly(endStr).gte);
+
+      const resultados = [];
+      let saldoAcumulado = 0;
+
+      // Calcular el saldo acumulado hasta el día anterior al inicio
+      // Las asignaciones están en historialSaldo (tipo_movimiento="INGRESO" y numero_referencia apunta a saldoInicial)
+      const asigAnteriores = await prisma.historialSaldo.aggregate({
+        where: {
+          punto_atencion_id: punto_id as string,
+          moneda_id: moneda_id as string,
+          fecha: { lt: currentDay },
+          tipo_movimiento: "INGRESO",
+        },
+        _sum: { cantidad_incrementada: true },
+      });
+
+      // Movimientos de operatividad (compras/ventas/etc)
+      // Usamos MovimientoSaldo centralizado
+      const movAnteriores = await prisma.movimientoSaldo.aggregate({
+        where: {
+          punto_atencion_id: punto_id as string,
+          moneda_id: moneda_id as string,
+          fecha: { lt: currentDay },
+          tipo_movimiento: { not: "SALDO_INICIAL" },
+        },
+        _sum: { monto: true },
+      });
+
+      saldoAcumulado = Number(asigAnteriores._sum.cantidad_incrementada || 0) + Number(movAnteriores._sum.monto || 0);
+
+      // Iterar día a día
+      const dayIter = new Date(currentDay);
+      let daysProcessed = 0;
+      while (dayIter <= lastDay && daysProcessed < 90) {
+        const { gte, lt } = gyeDayRangeUtcFromDate(dayIter);
+        const dayStr = todayGyeDateOnly(dayIter);
+
+        // Asignaciones del día
+        const asigs = await prisma.historialSaldo.findMany({
+          where: {
+            punto_atencion_id: punto_id as string,
+            moneda_id: moneda_id as string,
+            fecha: { gte, lt },
+            tipo_movimiento: "INGRESO",
+          },
+          include: {
+            usuario: { select: { nombre: true } },
+          },
+        });
+        const totalAsig = asigs.reduce(
+          (acc, curr) => acc + Number(curr.cantidad_incrementada),
+          0
+        );
+
+        // Movimientos del día
+        const movs = await prisma.movimientoSaldo.findMany({
+          where: {
+            punto_atencion_id: punto_id as string,
+            moneda_id: moneda_id as string,
+            fecha: { gte, lt },
+            tipo_movimiento: { not: "SALDO_INICIAL" },
+          },
+          include: {
+            usuario: { select: { nombre: true } },
+          },
+        });
+
+        const ingresos = movs
+          .filter((m) => Number(m.monto) > 0)
+          .reduce((acc, curr) => acc + Number(curr.monto), 0);
+        const egresos = movs
+          .filter((m) => Number(m.monto) < 0)
+          .reduce((acc, curr) => acc + Math.abs(Number(curr.monto)), 0);
+
+        const saldoInicial = saldoAcumulado;
+        // En MovimientoSaldo, los ingresos son + y egresos son -
+        const variacionMovs = movs.reduce((acc, curr) => acc + Number(curr.monto), 0);
+        saldoAcumulado = saldoAcumulado + totalAsig + variacionMovs;
+        const saldoFinal = saldoAcumulado;
+
+        if (
+          totalAsig !== 0 ||
+          movs.length > 0 ||
+          dayStr === startStr ||
+          dayStr === endStr
+        ) {
+          resultados.push({
+            fecha: dayStr,
+            saldo_inicial: Number(saldoInicial.toFixed(2)),
+            asignaciones: Number(totalAsig.toFixed(2)),
+            ingresos: Number(ingresos.toFixed(2)),
+            egresos: Number(egresos.toFixed(2)),
+            saldo_final: Number(saldoFinal.toFixed(2)),
+            num_movimientos: movs.length,
+            detalles_movimientos: movs.map((m) => ({
+              id: m.id,
+              tipo: m.tipo_movimiento,
+              monto: Number(m.monto),
+              descripcion: m.descripcion,
+              usuario: m.usuario?.nombre,
+              hora: formatEcuadorTime(m.fecha),
+            })),
+            detalles_asignaciones: asigs.map((a) => ({
+              id: a.id,
+              monto: Number(a.cantidad_incrementada),
+              tipo: "ASIGNACION",
+              observaciones: a.descripcion,
+              usuario: a.usuario?.nombre,
+              hora: formatEcuadorTime(a.fecha),
+            })),
+          });
+        }
+
+        dayIter.setDate(dayIter.getDate() + 1);
+        daysProcessed++;
+      }
+
+      res.json({
+        success: true,
+        punto_id,
+        moneda_id,
+        fecha_inicio: startStr,
+        fecha_fin: endStr,
+        dias: resultados,
+      });
+    } catch (error) {
+      logger.error("Error en investigacion-saldos divisas:", { error: String(error) });
+      res.status(500).json({
+        success: false,
+        message: "Error en la investigación de saldos",
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   }

@@ -1,5 +1,14 @@
 import express from "express";
 import { ServientregaDBService } from "../../services/servientregaDBService.js";
+import prisma from "../../lib/prisma.js";
+import {
+  nowEcuador,
+  todayGyeDateOnly,
+  gyeDayRangeUtcFromDateOnly,
+  gyeDayRangeUtcFromDate,
+  formatEcuadorTime,
+} from "../../utils/timezone.js";
+import { authenticateToken, requireRole } from "../../middleware/auth.js";
 
 const router = express.Router();
 
@@ -312,6 +321,148 @@ router.put(
         success: false,
         error: "Error al actualizar estado de solicitud",
         details: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+);
+
+// =============================
+// 🔍 Investigación de Saldos
+// =============================
+
+router.get(
+  "/investigacion/auditoria",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { punto_id, fecha_desde, fecha_hasta } = req.query;
+
+      if (!punto_id) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Faltan parámetros obligatorios" });
+      }
+
+      // 1. Encontrar la primera asignación para este punto
+      const primeraAsignacion = await prisma.servientregaHistorialSaldo.findFirst({
+        where: {
+          punto_atencion_id: punto_id as string,
+        },
+        orderBy: { creado_en: "asc" },
+      });
+
+      if (!primeraAsignacion) {
+        return res.json({
+          success: true,
+          dias: [],
+          message: "No se encontraron asignaciones para este punto",
+        });
+      }
+
+      // 2. Determinar rango de fechas
+      const fechaInicio = fecha_desde
+        ? new Date(fecha_desde as string)
+        : primeraAsignacion.creado_en;
+      const fechaFin = fecha_hasta ? new Date(fecha_hasta as string) : nowEcuador();
+
+      // Ajustar a medianoche GYE para iterar
+      const startStr = todayGyeDateOnly(fechaInicio);
+      const endStr = todayGyeDateOnly(fechaFin);
+
+      const currentDay = new Date(gyeDayRangeUtcFromDateOnly(startStr).gte);
+      const lastDay = new Date(gyeDayRangeUtcFromDateOnly(endStr).gte);
+
+      const resultados = [];
+      let saldoAcumulado = 0;
+
+      // Calcular el saldo acumulado hasta el día anterior al inicio
+      // Saldo disponible = suma de historial (positivos=asignación, negativos=gasto)
+      const historialAnterior = await prisma.servientregaHistorialSaldo.aggregate({
+        where: {
+          punto_atencion_id: punto_id as string,
+          creado_en: { lt: currentDay },
+        },
+        _sum: { monto_total: true },
+      });
+
+      saldoAcumulado = Number(historialAnterior._sum.monto_total || 0);
+
+      // Iterar día a día
+      const dayIter = new Date(currentDay);
+      let daysProcessed = 0;
+      while (dayIter <= lastDay && daysProcessed < 90) {
+        const { gte, lt } = gyeDayRangeUtcFromDate(dayIter);
+        const dayStr = todayGyeDateOnly(dayIter);
+
+        // Historial del día (incluye asignaciones (+) y gastos (-))
+        const items = await prisma.servientregaHistorialSaldo.findMany({
+          where: {
+            punto_atencion_id: punto_id as string,
+            creado_en: { gte, lt },
+          },
+          orderBy: { creado_en: "asc" },
+        });
+
+        const asigs = items.filter((i) => Number(i.monto_total) > 0);
+        const gastos = items.filter((i) => Number(i.monto_total) < 0);
+
+        const totalAsig = asigs.reduce((acc, curr) => acc + Number(curr.monto_total), 0);
+        const totalGastos = gastos.reduce((acc, curr) => acc + Math.abs(Number(curr.monto_total)), 0);
+
+        const saldoInicial = saldoAcumulado;
+        saldoAcumulado = saldoAcumulado + totalAsig - totalGastos;
+        const saldoFinal = saldoAcumulado;
+
+        if (
+          items.length > 0 ||
+          dayStr === startStr ||
+          dayStr === endStr
+        ) {
+          resultados.push({
+            fecha: dayStr,
+            saldo_inicial: Number(saldoInicial.toFixed(2)),
+            asignaciones: Number(totalAsig.toFixed(2)),
+            ingresos: 0, // En Servientrega no hay "ingresos" per se en este contexto
+            egresos: Number(totalGastos.toFixed(2)),
+            saldo_final: Number(saldoFinal.toFixed(2)),
+            num_movimientos: items.length,
+            detalles_movimientos: gastos.map((g) => ({
+              id: g.id,
+              tipo: "GASTO_GUIA",
+              monto: Math.abs(Number(g.monto_total)),
+              descripcion: g.creado_por,
+              usuario: "Sistema",
+              hora: formatEcuadorTime(g.creado_en),
+            })),
+            detalles_asignaciones: asigs.map((a) => ({
+              id: a.id,
+              monto: Number(a.monto_total),
+              tipo: "ASIGNACION",
+              observaciones: `Asignado por: ${a.creado_por}`,
+              usuario: a.creado_por,
+              hora: formatEcuadorTime(a.creado_en),
+            })),
+          });
+        }
+
+        dayIter.setDate(dayIter.getDate() + 1);
+        daysProcessed++;
+      }
+
+      res.json({
+        success: true,
+        punto_id,
+        fecha_inicio: startStr,
+        fecha_fin: endStr,
+        dias: resultados,
+      });
+    } catch (error) {
+      console.error("Error en investigacion-saldos servientrega:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error en la investigación de saldos",
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   }

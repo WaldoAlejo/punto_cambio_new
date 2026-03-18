@@ -273,7 +273,9 @@ export async function registrarMovimientoSaldo(
       ? "NINGUNO"
       : inferredBucket);
 
-  if (bucket !== "NINGUNO") {
+  // ⚠️ SOLO sincronizar Saldo si NO viene de SALDO_INICIAL (ya se actualizó en la transacción principal)
+  // Esto evita condiciones de carrera donde el upsert sobrescribe el saldo correctamente actualizado
+  if (bucket !== "NINGUNO" && params.tipoMovimiento !== TipoMovimiento.SALDO_INICIAL) {
     const saldoNuevoDec = new Prisma.Decimal(
       typeof params.saldoNuevo === "number"
         ? params.saldoNuevo
