@@ -273,14 +273,23 @@ export async function registrarMovimientoSaldo(
       ? "NINGUNO"
       : inferredBucket);
 
-  // ⚠️ SOLO sincronizar Saldo si NO viene de SALDO_INICIAL (ya se actualizó en la transacción principal)
-  // Esto evita condiciones de carrera donde el upsert sobrescribe el saldo correctamente actualizado
-  if (bucket !== "NINGUNO" && params.tipoMovimiento !== TipoMovimiento.SALDO_INICIAL) {
+  // Sincronizar tabla Saldo si aplica
+  if (bucket !== "NINGUNO") {
     const saldoNuevoDec = new Prisma.Decimal(
       typeof params.saldoNuevo === "number"
         ? params.saldoNuevo
         : params.saldoNuevo.toNumber()
     );
+
+    // Para SALDO_INICIAL: usar increment para sumar al existente (no reemplazar)
+    // Para otros movimientos: usar el valor calculado directamente
+    const updateData = params.tipoMovimiento === TipoMovimiento.SALDO_INICIAL
+      ? (bucket === "BANCOS" 
+          ? { bancos: { increment: saldoNuevoDec } } 
+          : { cantidad: { increment: saldoNuevoDec } })
+      : (bucket === "BANCOS" 
+          ? { bancos: saldoNuevoDec } 
+          : { cantidad: saldoNuevoDec });
 
     await client.saldo.upsert({
       where: {
@@ -289,9 +298,7 @@ export async function registrarMovimientoSaldo(
           moneda_id: String(params.monedaId),
         },
       },
-      update: {
-        ...(bucket === "BANCOS" ? { bancos: saldoNuevoDec } : { cantidad: saldoNuevoDec }),
-      },
+      update: updateData,
       create: {
         punto_atencion_id: String(params.puntoAtencionId),
         moneda_id: String(params.monedaId),

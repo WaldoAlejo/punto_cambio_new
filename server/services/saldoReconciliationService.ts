@@ -134,19 +134,15 @@ export const saldoReconciliationService = {
       });
 
       // 4. Calcular saldo basado en movimientos
+      // NOTA: Los montos en MovimientoSaldo YA tienen el signo correcto
+      // (positivo para ingresos, negativo para egresos)
+      // No aplicamos _normalizarMonto() aquí porque eso re-signaría los montos
       for (const mov of movimientosCaja) {
-        const montoRaw = Number(mov.monto);
-        const tipoMovimiento = mov.tipo_movimiento;
+        const monto = Number(mov.monto);
 
-        if (isNaN(montoRaw) || !isFinite(montoRaw)) continue;
+        if (isNaN(monto) || !isFinite(monto)) continue;
 
-        const delta = this._normalizarMonto(
-          tipoMovimiento,
-          montoRaw,
-          mov.descripcion
-        );
-
-        saldoCalculado += delta;
+        saldoCalculado += monto;
       }
 
       if (isNaN(saldoCalculado) || !isFinite(saldoCalculado)) return 0;
