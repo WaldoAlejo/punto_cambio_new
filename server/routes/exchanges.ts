@@ -1246,7 +1246,7 @@ router.post(
         // Un cambio de divisa DEBE tener exactamente 2 movimientos: 1 ingreso (origen) + 1 egreso (destino)
         const movimientosCreados = await tx.movimientoSaldo.count({
           where: {
-            tipo_referencia: 'CAMBIO_DIVISA',
+            tipo_referencia: 'EXCHANGE',
             referencia_id: cambio.id
           }
         });
@@ -1257,7 +1257,7 @@ router.post(
           // Crear movimientos faltantes como contingencia
           const movimientosExistentes = await tx.movimientoSaldo.findMany({
             where: {
-              tipo_referencia: 'CAMBIO_DIVISA',
+              tipo_referencia: 'EXCHANGE',
               referencia_id: cambio.id
             },
             select: { moneda_id: true, tipo_movimiento: true }
