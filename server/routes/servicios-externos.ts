@@ -822,7 +822,7 @@ router.post(
             tipo_movimiento,
             moneda_id: usdId,
             monto: montoNum,
-            usuario_id: req.user.id,
+            usuario_id: user.id,
             fecha: new Date(), // UTC - la UI se encarga de mostrar en zona horaria local
             descripcion: typeof descripcion === "string" ? descripcion : null,
             numero_referencia:
@@ -855,7 +855,7 @@ router.post(
               referenciaId: svcMov.id,
               saldoBucket: "CAJA",
               descripcion: `${servicio} - ${descripcion || tipo_movimiento} (CAJA)` ,
-              usuarioId: req.user.id,
+              usuarioId: user.id,
             },
             tx
           );
@@ -874,7 +874,7 @@ router.post(
               referenciaId: svcMov.id,
               saldoBucket: "BANCOS",
               descripcion: `${servicio} - ${descripcion || tipo_movimiento} (BANCOS)` ,
-              usuarioId: req.user.id,
+              usuarioId: user.id,
             },
             tx
           );
