@@ -260,7 +260,7 @@ async function validarSaldoServicioExterno(
 ) {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const servicio = body.servicio;
-  const tipo_movimiento = body.tipo_movimiento;
+  const tipo_movimiento = body.tipo_movimiento || body.tipo;
   const monto = body.monto;
   const billetes = body.billetes;
   const monedas_fisicas = body.monedas_fisicas;
@@ -315,12 +315,21 @@ async function validarSaldoServicioExterno(
       }
 
       const usdId = await ensureUsdMonedaId();
-      const puntoId = (req as Partial<AuthedRequest>).user?.punto_atencion_id;
+      const user = (req as Partial<AuthedRequest>).user;
+      const body = (req.body ?? {}) as Record<string, unknown>;
+
+      const puntoId =
+        user?.rol === "OPERADOR"
+          ? user.punto_atencion_id
+          : (body.punto_atencion_id as string);
+
       if (!puntoId) {
         res.status(400).json({
           success: false,
           message:
-            "Debes iniciar una jornada y tener un punto de atención asignado para registrar movimientos.",
+            user?.rol === "OPERADOR"
+              ? "Debes iniciar una jornada y tener un punto de atención asignado para registrar movimientos."
+              : "punto_atencion_id es requerido para administradores.",
         });
         return;
       }
@@ -376,21 +385,19 @@ async function validarSaldoServicioExterno(
 router.post(
   "/movimientos",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   idempotency({ route: "/api/servicios-externos/movimientos" }),
   validarSaldoServicioExterno,
   async (req: Request, res: Response) => {
     try {
-      if (!isOperador(req)) {
-        res.status(403).json({
-          success: false,
-          message: "Permisos insuficientes (solo OPERADOR)",
-        });
-        return;
+      const user = (req as Partial<AuthedRequest>).user;
+      if (!user) {
+        return res.status(401).json({ success: false, message: "No autorizado" });
       }
 
       const body = (req.body ?? {}) as Record<string, unknown>;
       const servicio = body.servicio;
-      const tipo_movimiento = body.tipo_movimiento;
+      const tipo_movimiento = body.tipo_movimiento || body.tipo;
       const monto = body.monto;
       const descripcion = body.descripcion;
       const numero_referencia = body.numero_referencia;
@@ -399,13 +406,19 @@ router.post(
       const monedas_fisicas = body.monedas_fisicas;
       const metodo_ingreso = body.metodo_ingreso;
 
-      const puntoId = req.user.punto_atencion_id;
+      // El puntoId puede venir del user (OPERADOR) o del body (ADMIN)
+      const puntoId =
+        user.rol === "OPERADOR"
+          ? user.punto_atencion_id
+          : (body.punto_atencion_id as string);
 
       if (!puntoId) {
         res.status(400).json({
           success: false,
           message:
-            "Debes iniciar una jornada y tener un punto de atención asignado para registrar movimientos.",
+            user.rol === "OPERADOR"
+              ? "Debes iniciar una jornada y tener un punto de atención asignado para registrar movimientos."
+              : "punto_atencion_id es requerido para administradores.",
         });
         return;
       }
@@ -1154,26 +1167,28 @@ router.get("/ayuda", authenticateToken, async (_req: Request, res: Response) => 
 router.post(
   "/validar",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
-      if (!isOperador(req)) {
-        res.status(403).json({
-          success: false,
-          message: "Permisos insuficientes",
-        });
-        return;
-      }
-
+      const user = (req as Partial<AuthedRequest>).user;
       const body = (req.body ?? {}) as Record<string, unknown>;
+
       const servicio = body.servicio;
-      const tipo_movimiento = body.tipo_movimiento;
+      const tipo_movimiento = body.tipo_movimiento || body.tipo;
       const monto = body.monto;
 
-      const puntoId = req.user.punto_atencion_id;
+      const puntoId =
+        user?.rol === "OPERADOR"
+          ? user.punto_atencion_id
+          : (body.punto_atencion_id as string);
+
       if (!puntoId) {
         res.status(400).json({
           success: false,
-          message: "No tiene punto de atención asignado",
+          message:
+            user?.rol === "OPERADOR"
+              ? "Debes iniciar una jornada y tener un punto de atención asignado para registrar movimientos."
+              : "punto_atencion_id es requerido para administradores.",
         });
         return;
       }
