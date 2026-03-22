@@ -948,7 +948,19 @@ router.get(
         },
       });
 
-      res.json({ success: true, movimientos: rows });
+      const formatted = rows.map((m) => ({
+        ...m,
+        tipo: m.tipo_movimiento,
+        monto: Number(m.monto),
+        billetes: m.billetes ? Number(m.billetes) : null,
+        monedas_fisicas: m.monedas_fisicas ? Number(m.monedas_fisicas) : null,
+        bancos: m.bancos ? Number(m.bancos) : null,
+        creado_por: m.usuario?.nombre || "Sistema",
+        punto_atencion_nombre: m.puntoAtencion?.nombre || "N/A",
+        creado_en: m.fecha.toISOString(),
+      }));
+
+      res.json({ success: true, movimientos: formatted });
     } catch {
       res.status(500).json({ success: false, message: "Error listando movimientos" });
     }
@@ -1508,7 +1520,19 @@ router.get(
         },
       });
 
-      res.json({ success: true, movimientos: rows });
+      const formatted = rows.map((m) => ({
+        ...m,
+        tipo: m.tipo_movimiento,
+        monto: Number(m.monto),
+        billetes: m.billetes ? Number(m.billetes) : null,
+        monedas_fisicas: m.monedas_fisicas ? Number(m.monedas_fisicas) : null,
+        bancos: m.bancos ? Number(m.bancos) : null,
+        creado_por: m.usuario?.nombre || "Sistema",
+        punto_atencion_nombre: m.puntoAtencion?.nombre || "N/A",
+        creado_en: m.fecha.toISOString(),
+      }));
+
+      res.json({ success: true, movimientos: formatted });
     } catch (error) {
       console.error("Error listando movimientos admin:", error);
       res.status(500).json({ success: false, message: "Error listando movimientos" });
