@@ -96,7 +96,11 @@ export const saldoReconciliationService = {
   },
 
   /**
-   * Calcula el saldo correcto basado en todos los movimientos registrados
+   * Calcula el saldo correcto basado en el SaldoInicial activo + movimientos
+   * 
+   * NOTA: Usamos el SaldoInicial ACTIVO de la tabla como base, y sumamos solo
+   * los movimientos que NO son SALDO_INICIAL. Esto evita el doble conteo que
+   * ocurriría si sumamos todos los movimientos SALDO_INICIAL históricos.
    */
   async calcularSaldoReal(
     puntoAtencionId: string,
@@ -105,15 +109,26 @@ export const saldoReconciliationService = {
     try {
       if (!puntoAtencionId || !monedaId) return 0;
 
-      // 1. Empezamos desde 0 y sumamos TODOS los movimientos históricos.
-      // Cada asignación de Saldo Inicial genera un MovimientoSaldo tipo SALDO_INICIAL.
-      let saldoCalculado = 0;
+      // 1. Obtener el SaldoInicial ACTIVO (fuente de verdad)
+      const saldoInicialActivo = await prisma.saldoInicial.findFirst({
+        where: {
+          punto_atencion_id: puntoAtencionId,
+          moneda_id: monedaId,
+          activo: true,
+        },
+        select: { cantidad_inicial: true },
+      });
 
-      // 2. Obtener TODOS los movimientos históricos para esta moneda/punto
+      // Empezar desde el saldo inicial activo (o 0 si no hay)
+      let saldoCalculado = Number(saldoInicialActivo?.cantidad_inicial || 0);
+
+      // 2. Obtener movimientos EXCLUYENDO SALDO_INICIAL
+      // (los SALDO_INICIAL históricos ya están consolidados en saldoInicialActivo)
       const movimientos = await prisma.movimientoSaldo.findMany({
         where: {
           punto_atencion_id: puntoAtencionId,
           moneda_id: monedaId,
+          tipo_movimiento: { not: "SALDO_INICIAL" }, // Excluir para evitar doble conteo
         },
         select: {
           monto: true,
@@ -136,7 +151,6 @@ export const saldoReconciliationService = {
       // 4. Calcular saldo basado en movimientos
       // NOTA: Los montos en MovimientoSaldo YA tienen el signo correcto
       // (positivo para ingresos, negativo para egresos)
-      // No aplicamos _normalizarMonto() aquí porque eso re-signaría los montos
       for (const mov of movimientosCaja) {
         const monto = Number(mov.monto);
 

@@ -22,13 +22,26 @@ async function main() {
   console.log("--- Procesando Divisas ---");
   for (const punto of puntos) {
     for (const moneda of monedas) {
-      // Sumar TODOS los movimientos de la historia (incluyendo SALDO_INICIAL)
+      // Obtener saldo inicial ACTIVO (fuente de verdad)
+      const saldoInicialActivo = await prisma.saldoInicial.findFirst({
+        where: { punto_atencion_id: punto.id, moneda_id: moneda.id, activo: true },
+        select: { cantidad_inicial: true, fecha_asignacion: true }
+      });
+      
+      // Empezar desde el saldo inicial activo (o 0 si no hay)
+      let saldoCalculado = Number(saldoInicialActivo?.cantidad_inicial || 0);
+      
+      // Sumar solo los movimientos que NO son SALDO_INICIAL
+      // (los SALDO_INICIAL históricos ya están consolidados en saldoInicialActivo)
       const movs = await prisma.movimientoSaldo.findMany({
-        where: { punto_atencion_id: punto.id, moneda_id: moneda.id },
+        where: { 
+          punto_atencion_id: punto.id, 
+          moneda_id: moneda.id,
+          tipo_movimiento: { not: "SALDO_INICIAL" }  // Excluir SALDO_INICIAL para evitar doble conteo
+        },
         select: { monto: true, tipo_movimiento: true, descripcion: true },
       });
 
-      let saldoCalculado = 0;
       for (const m of movs) {
         const abs = Math.abs(Number(m.monto));
         const tipo = m.tipo_movimiento;
@@ -37,7 +50,7 @@ async function main() {
         // Lógica de signos (Caja)
         if (tipo === "EGRESO" || tipo === "TRANSFERENCIA_SALIENTE" || tipo === "TRANSFERENCIA_SALIDA") {
           saldoCalculado -= abs;
-        } else if (tipo === "INGRESO" || tipo === "TRANSFERENCIA_ENTRANTE" || tipo === "TRANSFERENCIA_RECIBIDA" || tipo === "SALDO_INICIAL" || tipo === "TRANSFERENCIA_DEVOLUCION") {
+        } else if (tipo === "INGRESO" || tipo === "TRANSFERENCIA_ENTRANTE" || tipo === "TRANSFERENCIA_RECIBIDA" || tipo === "TRANSFERENCIA_DEVOLUCION") {
           saldoCalculado += abs;
         } else if (tipo === "AJUSTE") {
           saldoCalculado += Number(m.monto);
