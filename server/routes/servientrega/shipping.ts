@@ -955,7 +955,8 @@ router.post("/generar-guia", async (req, res) => {
 
           const resultadoDescuento = await db.descontarSaldo(
             punto_atencion_id_captado,
-            Number(valorTotalGuia)
+            Number(valorTotalGuia),
+            guia
           );
 
           console.log("✅ PASO 1: Saldo descontado de Servientrega", {

@@ -9,12 +9,37 @@ import {
   formatEcuadorTime,
 } from "../../utils/timezone.js";
 import { authenticateToken, requireRole } from "../../middleware/auth.js";
+import { ServicioExterno } from "@prisma/client";
 
 const router = express.Router();
 
+/** Asegura que exista USD y devuelve su id */
+async function ensureUsdMonedaId(): Promise<string> {
+  const existing = await prisma.moneda.findUnique({
+    where: { codigo: "USD" },
+    select: { id: true },
+  });
+  if (existing?.id) return existing.id;
+
+  const created = await prisma.moneda.create({
+    data: {
+      nombre: "Dólar estadounidense",
+      simbolo: "$",
+      codigo: "USD",
+      activo: true,
+      orden_display: 0,
+      comportamiento_compra: "MULTIPLICA",
+      comportamiento_venta: "DIVIDE",
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
 // =============================
-// 💰 Gestión de Saldos
+// 💰 Gestión de Saldos - INTEGRADO CON SERVICIOS EXTERNOS
 // =============================
+// Ahora Servientrega usa ServicioExternoSaldo igual que Western
 
 router.get(
   "/saldo/historial",
@@ -34,6 +59,10 @@ router.get(
   }
 );
 
+/**
+ * Valida si hay saldo suficiente para generar una guía
+ * Ahora usa ServicioExternoSaldo (igual que Western)
+ */
 router.get(
   "/saldo/validar/:puntoAtencionId",
   async (req: express.Request, res: express.Response) => {
@@ -42,7 +71,7 @@ router.get(
       const { monto } = req.query;
 
       console.log(
-        `🔍 Servientrega: Validando saldo para punto ${puntoAtencionId}, monto: ${monto}`
+        `🔍 Servientrega: Validando saldo (como servicio externo) para punto ${puntoAtencionId}, monto: ${monto}`
       );
 
       if (!puntoAtencionId) {
@@ -52,21 +81,31 @@ router.get(
         });
       }
 
-      const dbService = new ServientregaDBService();
-      const saldo = await dbService.obtenerSaldo(puntoAtencionId);
+      const usdId = await ensureUsdMonedaId();
+      
+      // Buscar saldo en ServicioExternoSaldo (igual que Western)
+      const saldo = await prisma.servicioExternoSaldo.findUnique({
+        where: {
+          punto_atencion_id_servicio_moneda_id: {
+            punto_atencion_id: puntoAtencionId,
+            servicio: ServicioExterno.SERVIENTREGA,
+            moneda_id: usdId,
+          },
+        },
+      });
 
       if (!saldo) {
         console.log(
-          `❌ Servientrega: No se encontró saldo para punto ${puntoAtencionId}`
+          `❌ Servientrega: No se encontró saldo asignado para punto ${puntoAtencionId}`
         );
         return res.json({
           estado: "SIN_SALDO",
-          mensaje: "No hay saldo asignado para este punto de atención",
+          mensaje: "No hay saldo asignado para Servientrega en este punto de atención. Contacte al administrador.",
           disponible: 0,
         });
       }
 
-      const disponible = saldo.monto_total.sub(saldo.monto_usado).toNumber();
+      const disponible = Number(saldo.cantidad || 0);
       const montoRequerido = monto ? parseFloat(monto as string) : 0;
 
       console.log(
@@ -76,7 +115,7 @@ router.get(
       if (disponible <= 0) {
         return res.json({
           estado: "SALDO_AGOTADO",
-          mensaje: "El saldo disponible se ha agotado",
+          mensaje: "El saldo de Servientrega se ha agotado",
           disponible: disponible,
           monto_requerido: montoRequerido,
         });
@@ -85,7 +124,7 @@ router.get(
       if (montoRequerido > 0 && disponible < montoRequerido) {
         return res.json({
           estado: "SALDO_INSUFICIENTE",
-          mensaje: `Saldo insuficiente. Disponible: $${disponible.toFixed(
+          mensaje: `Saldo insuficiente en Servientrega. Disponible: $${disponible.toFixed(
             2
           )}, Requerido: $${montoRequerido.toFixed(2)}`,
           disponible: disponible,
@@ -95,11 +134,11 @@ router.get(
 
       return res.json({
         estado: "OK",
-        mensaje: "Saldo suficiente para la operación",
+        mensaje: "Saldo suficiente para generar la guía",
         disponible: disponible,
         monto_requerido: montoRequerido,
-        monto_total: saldo.monto_total.toNumber(),
-        monto_usado: saldo.monto_usado.toNumber(),
+        saldo_asignado: disponible,
+        servicio: "SERVIENTREGA",
       });
     } catch (error) {
       console.error(
@@ -115,6 +154,10 @@ router.get(
   }
 );
 
+/**
+ * Obtiene el saldo de Servientrega desde el sistema de Servicios Externos
+ * Ahora Servientrega usa ServicioExternoSaldo igual que Western
+ */
 router.get(
   "/saldo/:puntoAtencionId",
   async (req: express.Request, res: express.Response) => {
@@ -122,7 +165,7 @@ router.get(
       const { puntoAtencionId } = req.params;
 
       console.log(
-        `💰 Servientrega: Consultando saldo para punto ${puntoAtencionId}`
+        `💰 Servientrega: Consultando saldo (como servicio externo) para punto ${puntoAtencionId}`
       );
 
       if (!puntoAtencionId) {
@@ -134,21 +177,41 @@ router.get(
           .json({ error: "El ID del punto de atención es requerido" });
       }
 
-      const dbService = new ServientregaDBService();
-      const saldo = await dbService.obtenerSaldo(puntoAtencionId);
+      const usdId = await ensureUsdMonedaId();
+      
+      // Buscar saldo en ServicioExternoSaldo (igual que Western)
+      const saldo = await prisma.servicioExternoSaldo.findUnique({
+        where: {
+          punto_atencion_id_servicio_moneda_id: {
+            punto_atencion_id: puntoAtencionId,
+            servicio: ServicioExterno.SERVIENTREGA,
+            moneda_id: usdId,
+          },
+        },
+      });
 
       if (!saldo) {
         console.log(
-          `💰 Servientrega: No se encontró saldo para punto ${puntoAtencionId}, devolviendo 0`
+          `💰 Servientrega: No se encontró saldo asignado para punto ${puntoAtencionId}, devolviendo 0`
         );
-        return res.json({ disponible: 0 });
+        return res.json({ 
+          disponible: 0,
+          servicio: "SERVIENTREGA",
+          nota: "No hay saldo asignado. Contacte al administrador."
+        });
       }
 
-      const disponible = saldo.monto_total.sub(saldo.monto_usado);
+      const disponible = Number(saldo.cantidad || 0);
       const resultado = {
-        disponible: disponible.toNumber(),
-        monto_total: saldo.monto_total.toNumber(),
-        monto_usado: saldo.monto_usado.toNumber(),
+        disponible: disponible,
+        saldo_asignado: disponible,
+        billetes: Number(saldo.billetes || 0),
+        monedas_fisicas: Number(saldo.monedas_fisicas || 0),
+        bancos: Number(saldo.bancos || 0),
+        servicio: "SERVIENTREGA",
+        // Campos legacy para compatibilidad
+        monto_total: disponible,
+        monto_usado: 0,
       };
 
       console.log(
@@ -169,6 +232,10 @@ router.get(
   }
 );
 
+/**
+ * Asigna saldo a Servientrega (usando el sistema de servicios externos)
+ * Los administradores pueden usar /servicios-externos/asignar-saldo
+ */
 router.post("/saldo", async (req: express.Request, res: express.Response) => {
   try {
     const { monto_total, creado_por, punto_atencion_id } = req.body;
@@ -186,20 +253,63 @@ router.post("/saldo", async (req: express.Request, res: express.Response) => {
         .json({ error: "El monto total debe ser un número válido" });
     }
 
-    const dbService = new ServientregaDBService();
-    const resultado = await dbService.gestionarSaldo({
-      punto_atencion_id,
-      monto_total: parseFloat(monto_total),
-      creado_por,
+    const usdId = await ensureUsdMonedaId();
+    
+    // Crear/actualizar saldo en ServicioExternoSaldo (igual que Western)
+    const existing = await prisma.servicioExternoSaldo.findUnique({
+      where: {
+        punto_atencion_id_servicio_moneda_id: {
+          punto_atencion_id,
+          servicio: ServicioExterno.SERVIENTREGA,
+          moneda_id: usdId,
+        },
+      },
+    });
+
+    let resultado;
+    if (existing) {
+      resultado = await prisma.servicioExternoSaldo.update({
+        where: { id: existing.id },
+        data: {
+          cantidad: { increment: parseFloat(monto_total) },
+          updated_at: new Date(),
+        },
+      });
+    } else {
+      resultado = await prisma.servicioExternoSaldo.create({
+        data: {
+          punto_atencion_id,
+          servicio: ServicioExterno.SERVIENTREGA,
+          moneda_id: usdId,
+          cantidad: parseFloat(monto_total),
+          billetes: 0,
+          monedas_fisicas: 0,
+          bancos: 0,
+        },
+      });
+    }
+
+    // Registrar en historial de asignaciones
+    await prisma.servicioExternoAsignacion.create({
+      data: {
+        punto_atencion_id,
+        servicio: ServicioExterno.SERVIENTREGA,
+        moneda_id: usdId,
+        monto: parseFloat(monto_total),
+        tipo: "RECARGA",
+        asignado_por: (req as any).user?.id || "system",
+        observaciones: creado_por ? `Asignado por ${creado_por}` : undefined,
+      },
     });
 
     res.json({
       success: true,
       saldo: {
-        ...resultado,
-        monto_total: resultado.monto_total.toNumber(),
-        monto_usado: resultado.monto_usado.toNumber(),
+        disponible: Number(resultado.cantidad),
+        saldo_asignado: Number(resultado.cantidad),
+        servicio: "SERVIENTREGA",
       },
+      nota: "Servientrega ahora usa el sistema de saldos de servicios externos (como Western)",
     });
   } catch (error) {
     console.error("Error al gestionar saldo:", error);

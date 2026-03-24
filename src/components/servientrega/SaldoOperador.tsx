@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import axiosInstance from "@/services/axiosInstance";
-import { movimientosContablesService } from "@/services/movimientosContablesService";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +38,7 @@ interface SaldoInfo {
   monedas_fisicas?: number;
   estado: "OK" | "SALDO_BAJO" | "ERROR";
   mensaje?: string;
+  servicio?: string;
 }
 
 const UMBRAL_SALDO_BAJO = 2.0; // $2.00
@@ -54,46 +54,62 @@ export default function SaldoOperador({
   const [observaciones, setObservaciones] = useState<string>("");
   const [enviandoSolicitud, setEnviandoSolicitud] = useState(false);
 
-  // ✅ Obtener saldo disponible (usando saldo reconciliado)
+  // ✅ Obtener saldo disponible de Servientrega (como servicio externo, igual que Western)
   const obtenerSaldo = useCallback(async () => {
     if (!puntoAtencionId) return;
 
     setLoading(true);
     try {
-      const { saldos, error } = await movimientosContablesService.getSaldosActualesPorPunto(puntoAtencionId);
-      if (error || !saldos) {
+      // Consultar saldo de servicios externos (igual que Western)
+      const { data } = await axiosInstance.get("/servicios-externos/saldos-asignados");
+      
+      if (data?.saldos_asignados) {
+        // Buscar el saldo de SERVIENTREGA
+        const saldoServientrega = data.saldos_asignados.find(
+          (s: any) => s.servicio === "SERVIENTREGA"
+        );
+        
+        const disponible = Number(saldoServientrega?.saldo_asignado || 0);
+        const estado = disponible < UMBRAL_SALDO_BAJO ? "SALDO_BAJO" : "OK";
+        
         setSaldo({
-          disponible: 0,
-          billetes: 0,
-          monedas_fisicas: 0,
-          estado: "ERROR",
-          mensaje: "Error al consultar el saldo",
+          disponible,
+          billetes: Number(saldoServientrega?.billetes ?? 0),
+          monedas_fisicas: Number(saldoServientrega?.monedas_fisicas ?? 0),
+          estado,
+          servicio: "SERVIENTREGA",
+          mensaje:
+            estado === "SALDO_BAJO"
+              ? `Saldo bajo. Se recomienda solicitar más saldo.`
+              : undefined,
         });
-        toast.error("Error al consultar el saldo");
-        return;
+      } else {
+        // Fallback al endpoint legacy
+        const legacyResponse = await axiosInstance.get(`/servientrega/saldo/${puntoAtencionId}`);
+        const disponible = Number(legacyResponse.data?.disponible || 0);
+        const estado = disponible < UMBRAL_SALDO_BAJO ? "SALDO_BAJO" : "OK";
+        
+        setSaldo({
+          disponible,
+          billetes: Number(legacyResponse.data?.billetes ?? 0),
+          monedas_fisicas: Number(legacyResponse.data?.monedas_fisicas ?? 0),
+          estado,
+          servicio: legacyResponse.data?.servicio || "SERVIENTREGA",
+          mensaje:
+            estado === "SALDO_BAJO"
+              ? `Saldo bajo. Se recomienda solicitar más saldo.`
+              : undefined,
+        });
       }
-      // Buscar USD por defecto, si hay varias monedas puedes adaptar esto
-      const saldoUSD = saldos.find((s) => s.moneda_codigo === "USD");
-      const disponible = Number(saldoUSD?.saldo ?? 0);
-      const estado = disponible < UMBRAL_SALDO_BAJO ? "SALDO_BAJO" : "OK";
-      setSaldo({
-        disponible,
-        billetes: Number(saldoUSD?.billetes ?? 0),
-        monedas_fisicas: Number(saldoUSD?.monedas_fisicas ?? 0),
-        estado,
-        mensaje:
-          estado === "SALDO_BAJO"
-            ? `Saldo bajo. Se recomienda solicitar más saldo.`
-            : undefined,
-      });
     } catch (error) {
-      console.error("❌ Error al obtener saldo:", error);
+      console.error("❌ Error al obtener saldo de Servientrega:", error);
       setSaldo({
         disponible: 0,
         billetes: 0,
         monedas_fisicas: 0,
         estado: "ERROR",
-        mensaje: "Error al consultar el saldo",
+        servicio: "SERVIENTREGA",
+        mensaje: "Error al consultar el saldo de Servientrega",
       });
       toast.error("Error al consultar el saldo");
     } finally {

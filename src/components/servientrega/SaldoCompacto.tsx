@@ -22,6 +22,7 @@ interface SaldoInfo {
   disponible: number;
   estado: "OK" | "SALDO_BAJO" | "ERROR";
   mensaje?: string;
+  servicio?: string;
 }
 
 const UMBRAL_SALDO_BAJO = 2.0;
@@ -33,24 +34,43 @@ export default function SaldoCompacto({
   const [saldo, setSaldo] = useState<SaldoInfo | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // ✅ Obtener saldo disponible
+  // ✅ Obtener saldo disponible desde Servicios Externos (igual que Western)
   const obtenerSaldo = useCallback(async () => {
     if (!puntoAtencionId) return;
 
     setLoading(true);
     try {
-      const { data } = await axiosInstance.get(
-        `/servientrega/saldo/${puntoAtencionId}`
-      );
+      // Usar el endpoint de saldos-asignados para obtener saldo de Servientrega
+      const { data } = await axiosInstance.get("/servicios-externos/saldos-asignados");
+      
+      if (data?.saldos_asignados) {
+        // Buscar el saldo de SERVIENTREGA en la respuesta
+        const saldoServientrega = data.saldos_asignados.find(
+          (s: any) => s.servicio === "SERVIENTREGA"
+        );
+        
+        const disponible = Number(saldoServientrega?.saldo_asignado || 0);
+        const estado = disponible < UMBRAL_SALDO_BAJO ? "SALDO_BAJO" : "OK";
 
-      const disponible = Number(data.disponible || 0);
-      const estado = disponible < UMBRAL_SALDO_BAJO ? "SALDO_BAJO" : "OK";
+        setSaldo({
+          disponible,
+          estado,
+          mensaje: estado === "SALDO_BAJO" ? `Saldo bajo` : undefined,
+          servicio: "SERVIENTREGA",
+        });
+      } else {
+        // Fallback al endpoint legacy
+        const legacyData = await axiosInstance.get(`/servientrega/saldo/${puntoAtencionId}`);
+        const disponible = Number(legacyData.data?.disponible || 0);
+        const estado = disponible < UMBRAL_SALDO_BAJO ? "SALDO_BAJO" : "OK";
 
-      setSaldo({
-        disponible,
-        estado,
-        mensaje: estado === "SALDO_BAJO" ? `Saldo bajo` : undefined,
-      });
+        setSaldo({
+          disponible,
+          estado,
+          mensaje: estado === "SALDO_BAJO" ? `Saldo bajo` : undefined,
+          servicio: legacyData.data?.servicio || "SERVIENTREGA",
+        });
+      }
     } catch (error) {
       console.error("❌ Error al obtener saldo:", error);
       setSaldo({

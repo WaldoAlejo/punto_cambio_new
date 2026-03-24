@@ -88,12 +88,13 @@ export default function PasoConfirmarEnvio({
   });
 
   // ==========================
-  // 🔍 Validar saldo disponible
+  // 🔍 Validar saldo disponible de Servientrega (como servicio externo)
   // ==========================
   const validarSaldo = async () => {
     try {
       const montoTotal = totalEstimado || 0;
 
+      // Usar el endpoint legacy que ahora consulta ServicioExternoSaldo
       const { data } = await axiosInstance.get(
         `/servientrega/saldo/validar/${
           formData?.punto_atencion_id || ""
@@ -109,11 +110,11 @@ export default function PasoConfirmarEnvio({
 
         if (data?.estado === "SIN_SALDO") {
           mensaje =
-            "No hay saldo asignado para este punto de atención. Contacte al administrador.";
+            "No hay saldo asignado para Servientrega en este punto. Contacte al administrador.";
         } else if (data?.estado === "SALDO_AGOTADO") {
-          mensaje = "El saldo disponible se ha agotado. Solicite una recarga.";
+          mensaje = "El saldo de Servientrega se ha agotado. Solicite una recarga.";
         } else if (data?.estado === "SALDO_INSUFICIENTE") {
-          mensaje = `Saldo insuficiente. Disponible: $${Number(
+          mensaje = `Saldo insuficiente en Servientrega. Disponible: $${Number(
             data.disponible || 0
           ).toFixed(2)}, Requerido: $${Number(montoTotal).toFixed(2)}`;
         }
@@ -124,7 +125,7 @@ export default function PasoConfirmarEnvio({
       return true;
     } catch (error) {
       console.error("Error al validar saldo:", error);
-      toast.error("No se pudo validar el saldo.");
+      toast.error("No se pudo validar el saldo de Servientrega.");
       setSaldoEstado("ERROR");
       return false;
     }
@@ -560,7 +561,7 @@ export default function PasoConfirmarEnvio({
           <>
             <p className="text-gray-700">
               Revisa el resumen antes de confirmar. Esta acción descontará saldo
-              del punto de atención.
+              de Servientrega y registrará el ingreso en caja.
             </p>
 
             <div className="border rounded-md p-3 bg-gray-50 text-sm space-y-2">
