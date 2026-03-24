@@ -10,6 +10,7 @@ import cuatreCajaService, {
   ContabilidadDiariaResponse,
 } from "@/services/cuatreCajaService";
 import saldoService from "@/services/saldoService";
+import cierreReporteService, { ValidacionCierre } from "@/services/cierreReporteService";
 
 /**
  * Utilidad: formatea hoy como YYYY-MM-DD en local (sin libs externas).
@@ -69,12 +70,14 @@ export type UseCuadreCaja = {
   loading: boolean;
   saving: boolean;
   reconciliando: boolean;
+  validando: boolean;
   error?: string | null;
 
   // datos del cuadre
   cuadre?: CuadreResponse["data"];
   contabilidad?: ContabilidadDiariaResponse;
   parciales?: ParcialesPendientesResponse["data"];
+  validacion?: ValidacionCierre;
 
   // estado editable (conteos y observaciones)
   estado: EstadoCuadre;
@@ -113,15 +116,37 @@ export type UseCuadreCaja = {
     fueraDeTolerancia: boolean;
   }>;
   puedeCerrar: boolean;
+  validacionesCompletas: boolean;
 
   // acciones
   refresh: () => Promise<void>;
+  validarCierre: () => Promise<ValidacionCierre | null>;
   guardarParcial: (opts?: { allowMismatch?: boolean }) => Promise<GuardarCierreResponse | null>;
   guardarCerrado: (opts?: { allowMismatch?: boolean }) => Promise<GuardarCierreResponse | null>;
   
   // reconciliación
   reconciliarSaldo: (monedaId?: string) => Promise<ReconciliacionResult | null>;
   calcularSaldoReal: (monedaId?: string) => Promise<number | null>;
+
+  // reporte
+  getReporteParaImpresion: () => Array<{
+    moneda_id: string;
+    codigo: string;
+    nombre: string;
+    simbolo: string;
+    saldo_apertura: number;
+    ingresos_periodo: number;
+    egresos_periodo: number;
+    saldo_cierre: number;
+    conteo_fisico: number;
+    billetes: number;
+    monedas: number;
+    bancos_teorico?: number;
+    conteo_bancos?: number;
+    diferencia: number;
+    diferencia_bancos?: number;
+    movimientos_periodo: number;
+  }>;
 };
 
 /**
@@ -132,6 +157,7 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
   const [loading, setLoading] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [reconciliando, setReconciliando] = useState<boolean>(false);
+  const [validando, setValidando] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const [cuadre, setCuadre] = useState<CuadreResponse["data"] | undefined>(undefined);
@@ -141,6 +167,7 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
   const [parciales, setParciales] = useState<ParcialesPendientesResponse["data"] | undefined>(
     undefined
   );
+  const [validacion, setValidacion] = useState<ValidacionCierre | undefined>(undefined);
 
   const [estado, setEstado] = useState<EstadoCuadre>({
     fecha,
@@ -198,6 +225,9 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
 
       // Parciales del día
       cargarParciales();
+
+      // Limpiar validación anterior
+      setValidacion(undefined);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "No se pudo cargar el cuadre");
     } finally {
@@ -296,6 +326,46 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
     return diferencias.every((d) => !Number.isNaN(d.fisico));
   }, [estado.detalles, diferencias]);
 
+  const validacionesCompletas = useMemo(() => {
+    // Verificar que todos los conteos estén completos
+    if (estado.detalles.length === 0) return false;
+    
+    return estado.detalles.every((d) => {
+      const tol = d.codigo === "USD" ? 1.0 : 0.01;
+      const diffEfectivo = Math.abs((d.conteo_fisico || 0) - d.saldo_cierre);
+      const diffBancos = Math.abs((d.conteo_bancos || 0) - (d.bancos_teorico || 0));
+      const desgloseOk = Math.abs((d.billetes || 0) + (d.monedas || 0) - (d.conteo_fisico || 0)) <= 0.01;
+      
+      return diffEfectivo <= tol && diffBancos <= tol && desgloseOk;
+    });
+  }, [estado.detalles]);
+
+  // ---------- Validación ----------
+  const validarCierre = useCallback(async (): Promise<ValidacionCierre | null> => {
+    if (!options?.pointId) {
+      setError("Se requiere un punto de atención para validar");
+      return null;
+    }
+    
+    setValidando(true);
+    setError(null);
+    try {
+      const result = await cierreReporteService.validarCierre(options.pointId, fecha);
+      if (result.success && result.data) {
+        setValidacion(result.data);
+        return result.data;
+      } else {
+        setError(result.error || "Error al validar cierre");
+        return null;
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Error al validar cierre");
+      return null;
+    } finally {
+      setValidando(false);
+    }
+  }, [options?.pointId, fecha]);
+
   // ---------- Persistencia ----------
   const buildGuardarBody = useCallback((): GuardarCierreBody => {
     const detalles: GuardarDetalleRequest[] = estado.detalles.map((d) => ({
@@ -364,6 +434,28 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
     [buildGuardarBody, refresh]
   );
 
+  // ---------- Reporte para impresión ----------
+  const getReporteParaImpresion = useCallback(() => {
+    return estado.detalles.map((d) => ({
+      moneda_id: d.moneda_id,
+      codigo: d.codigo,
+      nombre: d.nombre,
+      simbolo: d.simbolo,
+      saldo_apertura: d.saldo_apertura,
+      ingresos_periodo: d.ingresos_periodo || 0,
+      egresos_periodo: d.egresos_periodo || 0,
+      saldo_cierre: d.saldo_cierre,
+      conteo_fisico: d.conteo_fisico || 0,
+      billetes: d.billetes || 0,
+      monedas: d.monedas || 0,
+      bancos_teorico: d.bancos_teorico,
+      conteo_bancos: d.conteo_bancos,
+      diferencia: round2((d.conteo_fisico || 0) - d.saldo_cierre),
+      diferencia_bancos: round2((d.conteo_bancos || 0) - (d.bancos_teorico || 0)),
+      movimientos_periodo: d.movimientos_periodo || 0,
+    }));
+  }, [estado.detalles]);
+
   // ---------- Reconciliación ----------
   const reconciliarSaldo = useCallback(async (monedaId?: string): Promise<ReconciliacionResult | null> => {
     if (!options?.pointId) {
@@ -406,10 +498,12 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
     loading,
     saving,
     reconciliando,
+    validando,
     error,
     cuadre,
     contabilidad,
     parciales,
+    validacion,
 
     estado,
     setObservaciones,
@@ -421,10 +515,13 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
     totales,
     diferencias,
     puedeCerrar,
+    validacionesCompletas,
 
     refresh,
+    validarCierre,
     guardarParcial,
     guardarCerrado,
+    getReporteParaImpresion,
     reconciliarSaldo,
     calcularSaldoReal,
   };
