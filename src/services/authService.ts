@@ -31,6 +31,8 @@ interface LoginResponse {
   hasActiveJornada?: boolean;
   timestamp?: string;
   error?: string;
+  message?: string;
+  retryAfterSeconds?: number;
 }
 
 interface TokenVerificationResponse {
@@ -58,6 +60,13 @@ export const authService = {
       });
 
       if (!response.ok) {
+        let errorPayload: Partial<LoginResponse> | null = null;
+        try {
+          errorPayload = (await response.json()) as Partial<LoginResponse>;
+        } catch {
+          errorPayload = null;
+        }
+
         if (response.status >= 500) {
           return {
             user: null,
@@ -73,10 +82,32 @@ export const authService = {
             error: "Credenciales incorrectas. Verifique usuario y contraseña.",
           };
         }
+        if (response.status === 429) {
+          const retryAfterHeader = response.headers.get("Retry-After");
+          const retryAfterSeconds = Number(
+            errorPayload?.retryAfterSeconds ?? retryAfterHeader ?? 0
+          );
+          const retryAfterMinutes =
+            retryAfterSeconds > 0 ? Math.ceil(retryAfterSeconds / 60) : null;
+
+          return {
+            user: null,
+            token: null,
+            error:
+              errorPayload?.message ||
+              errorPayload?.error ||
+              (retryAfterMinutes
+                ? `Demasiados intentos de inicio de sesión. Intente nuevamente en ${retryAfterMinutes} minuto(s).`
+                : "Demasiados intentos de inicio de sesión. Intente nuevamente más tarde."),
+          };
+        }
         return {
           user: null,
           token: null,
-          error: "Error de conexión o credenciales incorrectas",
+          error:
+            errorPayload?.message ||
+            errorPayload?.error ||
+            "Error de conexión o credenciales incorrectas",
         };
       }
 

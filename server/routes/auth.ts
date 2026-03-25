@@ -9,14 +9,53 @@ import { loginSchema, type LoginRequest } from "../schemas/validation.js";
 
 const router = express.Router();
 
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_LIMIT = 5;
+
+const getNormalizedLoginUsername = (req: express.Request): string => {
+  const username = (req.body as { username?: unknown } | undefined)?.username;
+  return typeof username === "string" ? username.trim().toLowerCase() : "";
+};
+
+const loginKeyGenerator = (req: express.Request): string => {
+  const username = getNormalizedLoginUsername(req) || "anonymous";
+  return `login:${req.ip}:${username}`;
+};
+
+const loginRateLimitHandler = (
+  req: express.Request,
+  res: express.Response
+): express.Response => {
+  const retryAfterSeconds = Math.ceil(LOGIN_WINDOW_MS / 1000);
+  const username = getNormalizedLoginUsername(req) || "anonymous";
+
+  logger.warn("Login rate limit exceeded", {
+    ip: req.ip,
+    username,
+    retryAfterSeconds,
+  });
+
+  res.setHeader("Retry-After", String(retryAfterSeconds));
+
+  return res.status(429).json({
+    error: "Too Many Requests",
+    message:
+      "Demasiados intentos de inicio de sesión. Intente nuevamente más tarde.",
+    retryAfterSeconds,
+    success: false,
+    timestamp: new Date().toISOString(),
+  });
+};
+
 // Rate limiting estricto para login
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 5,
-  message: { error: "Demasiados intentos de login, intente más tarde" },
+  windowMs: LOGIN_WINDOW_MS,
+  limit: LOGIN_LIMIT,
   skipSuccessfulRequests: true,
+  keyGenerator: loginKeyGenerator,
   standardHeaders: "draft-7",
   legacyHeaders: false,
+  handler: loginRateLimitHandler,
 });
 
 router.post(
