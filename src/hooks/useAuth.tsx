@@ -62,52 +62,65 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUser(verifiedUser);
 
           const storedPoint = localStorage.getItem("puntoAtencionSeleccionado");
-          if (!storedPoint) {
-            const forcePointSelection =
-              (typeof window !== "undefined" && sessionStorage.getItem("pc_force_point_select") === "1") || false;
-            if (forcePointSelection) {
-              try {
-                sessionStorage.removeItem("pc_force_point_select");
-              } catch {
-                // noop: sessionStorage may be unavailable
-              }
+          const forcePointSelection =
+            (typeof window !== "undefined" && sessionStorage.getItem("pc_force_point_select") === "1") || false;
+          if (forcePointSelection) {
+            try {
+              sessionStorage.removeItem("pc_force_point_select");
+            } catch {
+              // noop: sessionStorage may be unavailable
             }
-            // Si es admin, conectar automáticamente al punto principal
-            if (
-              verifiedUser.rol === "ADMIN" ||
-              verifiedUser.rol === "SUPER_USUARIO"
-            ) {
-              try {
-                const { points } = await pointService.getAllPoints();
-                const adminPoint = points.find(
-                  (p) => p.id === verifiedUser.punto_atencion_id
-                ) || points.find((p) => p.es_principal);
-                if (adminPoint) {
-                  setSelectedPointState(adminPoint);
-                }
-              } catch (error) {
-                console.error("Error al cargar punto principal para admin:", error);
+          }
+          
+          // Si es admin, conectar automáticamente al punto principal
+          if (
+            verifiedUser.rol === "ADMIN" ||
+            verifiedUser.rol === "SUPER_USUARIO"
+          ) {
+            try {
+              const { points } = await pointService.getAllPoints();
+              const adminPoint = points.find(
+                (p) => p.id === verifiedUser.punto_atencion_id
+              ) || points.find((p) => p.es_principal);
+              if (adminPoint) {
+                setSelectedPointState(adminPoint);
               }
-            } else if (verifiedUser.rol === "OPERADOR") {
-              // Para operadores, usar la lógica existente de jornada activa
-              if (!forcePointSelection) {
+            } catch (error) {
+              console.error("Error al cargar punto principal para admin:", error);
+            }
+          } else if (verifiedUser.rol === "OPERADOR") {
+            // Para operadores, SIEMPRE refrescar el punto desde la jornada activa
+            // para asegurar que tengamos los datos más actualizados (incluyendo campos de Servientrega)
+            if (!forcePointSelection) {
+              try {
                 const res = await scheduleService.getActiveSchedule();
                 if (res?.schedule?.puntoAtencion) {
                   setSelectedPointState(
                     res.schedule.puntoAtencion as PuntoAtencion
                   );
                 }
-              }
-            } else if (verifiedUser.rol === "CONCESION") {
-              // Para concesión, usar el punto asignado en su perfil si existe
-              if (verifiedUser.punto_atencion_id) {
-                const { points } = await pointService.getAllPoints();
-                const concesionPoint = points.find(
-                  (p) => p.id === verifiedUser.punto_atencion_id
-                );
-                if (concesionPoint) {
-                  setSelectedPointState(concesionPoint);
+              } catch (error) {
+                console.error("Error al cargar jornada activa:", error);
+                // Si falla, usar el punto almacenado como fallback
+                if (storedPoint) {
+                  try {
+                    const parsedPoint: PuntoAtencion = JSON.parse(storedPoint);
+                    setSelectedPointState(parsedPoint);
+                  } catch {
+                    localStorage.removeItem("puntoAtencionSeleccionado");
+                  }
                 }
+              }
+            }
+          } else if (verifiedUser.rol === "CONCESION") {
+            // Para concesión, usar el punto asignado en su perfil si existe
+            if (verifiedUser.punto_atencion_id) {
+              const { points } = await pointService.getAllPoints();
+              const concesionPoint = points.find(
+                (p) => p.id === verifiedUser.punto_atencion_id
+              );
+              if (concesionPoint) {
+                setSelectedPointState(concesionPoint);
               }
             }
           }
