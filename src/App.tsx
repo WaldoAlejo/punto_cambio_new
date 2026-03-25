@@ -38,60 +38,52 @@ function App() {
   const [verifyingJornada, setVerifyingJornada] = useState(false);
 
   // Verifica si existe jornada activa para OPERADOR
-  // Se ejecuta al montar y cada 30 segundos para mantener datos actualizados
+  // Solo se ejecuta UNA VEZ al montar el componente para evitar interrumpir el trabajo del operador
   useEffect(() => {
     if (!user || user.rol !== "OPERADOR") return;
+    // Solo ejecutar si no hay punto seleccionado (evita sobreescribir mientras trabaja)
+    if (selectedPoint) return;
 
-    const checkActiveSchedule = () => {
-      setVerifyingJornada(true);
-      axiosInstance
-        .get<JornadaActiveResponse>("/schedules/active")
-        .then(({ data }) => {
-          const active = data?.schedule;
-          if (!active) {
-            setSelectedPoint(null);
-            localStorage.removeItem("puntoAtencionSeleccionado");
-          } else if (active.punto_atencion_id) {
-            // SIEMPRE actualizar el punto con los datos más recientes de la API
-            // para asegurar que tengamos todos los campos actualizados (incluyendo Servientrega)
-            setSelectedPoint({
-              id: active.puntoAtencion?.id || active.punto_atencion_id,
-              nombre: active.puntoAtencion?.nombre || "",
-              direccion: active.puntoAtencion?.direccion || "",
-              ciudad: active.puntoAtencion?.ciudad || "",
-              provincia: active.puntoAtencion?.provincia || "",
-              codigo_postal: active.puntoAtencion?.codigo_postal || "",
-              telefono: active.puntoAtencion?.telefono || "",
-              servientrega_agencia_codigo:
-                active.puntoAtencion?.servientrega_agencia_codigo,
-              servientrega_agencia_nombre:
-                active.puntoAtencion?.servientrega_agencia_nombre,
-              servientrega_alianza:
-                active.puntoAtencion?.servientrega_alianza,
-              servientrega_oficina_alianza:
-                active.puntoAtencion?.servientrega_oficina_alianza,
-              activo: true,
-              es_principal: false,
-              created_at: "",
-              updated_at: "",
-            });
-          }
-          setVerifyingJornada(false);
-        })
-        .catch(() => {
+    setVerifyingJornada(true);
+    axiosInstance
+      .get<JornadaActiveResponse>("/schedules/active")
+      .then(({ data }) => {
+        const active = data?.schedule;
+        if (!active) {
           setSelectedPoint(null);
           localStorage.removeItem("puntoAtencionSeleccionado");
-          setVerifyingJornada(false);
-        });
-    };
-
-    // Ejecutar inmediatamente al montar
-    checkActiveSchedule();
-
-    // Refrescar cada 30 segundos para mantener datos actualizados
-    const interval = setInterval(checkActiveSchedule, 30000);
-
-    return () => clearInterval(interval);
+        } else if (active.punto_atencion_id && active.puntoAtencion) {
+          // Solo actualizar si no hay punto seleccionado o si es diferente
+          const newPoint = {
+            id: active.puntoAtencion.id || active.punto_atencion_id,
+            nombre: active.puntoAtencion.nombre || "",
+            direccion: active.puntoAtencion.direccion || "",
+            ciudad: active.puntoAtencion.ciudad || "",
+            provincia: active.puntoAtencion.provincia || "",
+            codigo_postal: active.puntoAtencion.codigo_postal || "",
+            telefono: active.puntoAtencion.telefono || "",
+            servientrega_agencia_codigo:
+              active.puntoAtencion.servientrega_agencia_codigo,
+            servientrega_agencia_nombre:
+              active.puntoAtencion.servientrega_agencia_nombre,
+            servientrega_alianza:
+              active.puntoAtencion.servientrega_alianza,
+            servientrega_oficina_alianza:
+              active.puntoAtencion.servientrega_oficina_alianza,
+            activo: true,
+            es_principal: false,
+            created_at: "",
+            updated_at: "",
+          };
+          setSelectedPoint(newPoint);
+        }
+        setVerifyingJornada(false);
+      })
+      .catch(() => {
+        setSelectedPoint(null);
+        localStorage.removeItem("puntoAtencionSeleccionado");
+        setVerifyingJornada(false);
+      });
     // eslint-disable-next-line
   }, [user]);
 

@@ -88,12 +88,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     codpais: 63,
   });
 
-  const [extraDireccion, setExtraDireccion] = useState({
-    callePrincipal: "",
-    numeracion: "",
-    calleSecundaria: "",
-    referencia: "",
-  });
+  // Campo único para dirección completa (consolidado de 4 campos)
+  const [direccionCompleta, setDireccionCompleta] = useState("");
 
   const esInternacional = useMemo(() => form.codpais !== 63, [form.codpais]);
   const ciudadSeleccionValida = useMemo(
@@ -309,12 +305,6 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [e.target.name]: e.target.value.trimStart() });
 
-  const handleExtraDireccionChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setExtraDireccion((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value.trimStart(),
-    }));
-
   // 8) Validar código postal (internacional)
   const validarCodigoPostal = (): boolean => {
     if (!esInternacional) return true;
@@ -359,15 +349,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       return;
     }
 
-    const direccionFinal = [
-      extraDireccion.callePrincipal.trim(),
-      extraDireccion.numeracion && `#${extraDireccion.numeracion.trim()}`,
-      extraDireccion.calleSecundaria &&
-        `y ${extraDireccion.calleSecundaria.trim()}`,
-      extraDireccion.referencia && `Ref: ${extraDireccion.referencia.trim()}`,
-    ]
-      .filter(Boolean)
-      .join(", ");
+    const direccionFinal = direccionCompleta.trim();
 
     if (!direccionFinal) {
       toast.error("La dirección es requerida");
@@ -591,53 +573,20 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             </div>
           </div>
 
-          {/* Dirección manual */}
+          {/* Dirección manual - Campo único consolidado */}
           <div className="mt-6">
-            <h4 className="font-semibold mb-4">🏠 Dirección</h4>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="callePrincipal">Calle principal</Label>
-                <Input
-                  id="callePrincipal"
-                  name="callePrincipal"
-                  placeholder="Ingrese calle principal"
-                  value={extraDireccion.callePrincipal}
-                  onChange={handleExtraDireccionChange}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="numeracion">Numeración</Label>
-                <Input
-                  id="numeracion"
-                  name="numeracion"
-                  placeholder="Ej: #123, Lote 35 A"
-                  value={extraDireccion.numeracion}
-                  onChange={handleExtraDireccionChange}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="calleSecundaria">Calle secundaria</Label>
-                <Input
-                  id="calleSecundaria"
-                  name="calleSecundaria"
-                  placeholder="Ingrese calle secundaria"
-                  value={extraDireccion.calleSecundaria}
-                  onChange={handleExtraDireccionChange}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="referencia">Referencia</Label>
-                <Input
-                  id="referencia"
-                  name="referencia"
-                  placeholder="Punto de referencia"
-                  value={extraDireccion.referencia}
-                  onChange={handleExtraDireccionChange}
-                />
-              </div>
+            <h4 className="font-semibold mb-4">🏠 Dirección completa</h4>
+            <div>
+              <Label htmlFor="direccionCompleta">Dirección</Label>
+              <textarea
+                id="direccionCompleta"
+                name="direccionCompleta"
+                placeholder="Ingrese la dirección completa (calle principal, numeración, calle secundaria, referencia...)"
+                value={direccionCompleta}
+                onChange={(e) => setDireccionCompleta(e.target.value)}
+                className="w-full min-h-[80px] p-3 border rounded-md text-sm resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                rows={3}
+              />
             </div>
           </div>
         </div>

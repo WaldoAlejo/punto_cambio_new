@@ -5,6 +5,7 @@ import axiosInstance from "@/services/axiosInstance";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Usuario, PuntoAtencion } from "../../types";
@@ -47,12 +48,8 @@ export default function PasoRemitente({
     pais: "ECUADOR",
   });
 
-  const [extraDireccion, setExtraDireccion] = useState({
-    callePrincipal: "",
-    numeracion: "",
-    calleSecundaria: "",
-    referencia: "",
-  });
+  // Campo único para dirección completa (consolidado de 4 campos)
+  const [direccionCompleta, setDireccionCompleta] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [ciudadValida, setCiudadValida] = useState(false);
@@ -239,9 +236,6 @@ export default function PasoRemitente({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const handleExtraDireccionChange = (e: React.ChangeEvent<HTMLInputElement>) =>
-    setExtraDireccion((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-
   const handleContinue = async () => {
     if (cargandoCiudades) {
       toast.info("Cargando catálogo de ciudades...");
@@ -264,17 +258,9 @@ export default function PasoRemitente({
       return;
     }
 
-    const direccionFinal = [
-      extraDireccion.callePrincipal.trim(),
-      extraDireccion.numeracion && `#${extraDireccion.numeracion.trim()}`,
-      extraDireccion.calleSecundaria &&
-        `y ${extraDireccion.calleSecundaria.trim()}`,
-      extraDireccion.referencia && `Ref: ${extraDireccion.referencia.trim()}`,
-    ]
-      .filter(Boolean)
-      .join(", ");
+    const direccionFinal = direccionCompleta.trim();
 
-    if (!direccionFinal.trim()) {
+    if (!direccionFinal) {
       toast.error("La dirección es requerida");
       return;
     }
@@ -384,31 +370,19 @@ export default function PasoRemitente({
           onChange={handleChange}
         />
 
-        {/* Dirección desglosada */}
-        <Input
-          name="callePrincipal"
-          placeholder="Calle principal"
-          value={extraDireccion.callePrincipal}
-          onChange={handleExtraDireccionChange}
-        />
-        <Input
-          name="numeracion"
-          placeholder="Numeración"
-          value={extraDireccion.numeracion}
-          onChange={handleExtraDireccionChange}
-        />
-        <Input
-          name="calleSecundaria"
-          placeholder="Calle secundaria"
-          value={extraDireccion.calleSecundaria}
-          onChange={handleExtraDireccionChange}
-        />
-        <Input
-          name="referencia"
-          placeholder="Referencia"
-          value={extraDireccion.referencia}
-          onChange={handleExtraDireccionChange}
-        />
+        {/* Dirección completa - Campo único consolidado */}
+        <div className="space-y-2">
+          <Label htmlFor="direccionCompleta">Dirección completa</Label>
+          <textarea
+            id="direccionCompleta"
+            name="direccionCompleta"
+            placeholder="Ingrese la dirección completa (calle principal, numeración, calle secundaria, referencia...)"
+            value={direccionCompleta}
+            onChange={(e) => setDireccionCompleta(e.target.value)}
+            className="w-full min-h-[80px] p-3 border rounded-md text-sm resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            rows={3}
+          />
+        </div>
 
         {/* Ciudad y Provincia — SIEMPRE desde punto de atención y validadas contra catálogo */}
         <Input
