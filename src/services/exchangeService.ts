@@ -1,5 +1,6 @@
 import { apiService, ApiError } from "./apiService";
 import { CambioDivisa } from "../types";
+import { generateIdempotencyKey } from "../utils/idempotency";
 
 export interface CreateExchangeData {
   moneda_origen_id: string;
@@ -187,10 +188,14 @@ export const exchangeService = {
   ): Promise<{ exchange: CambioDivisa | null; error: string | null }> {
     try {
       const payload = sanitizeCreatePayload(data);
+      
+      // 🔑 Generar clave de idempotencia única para prevenir duplicados
+      const idempotencyKey = generateIdempotencyKey("exchange");
 
       const response = await apiService.post<ExchangeResponse>(
         "/exchanges",
-        payload
+        payload,
+        idempotencyKey
       );
 
       if (response?.success) {

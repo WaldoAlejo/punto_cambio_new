@@ -37,6 +37,8 @@ export interface GuiaData {
   usuario_id?: string;
   costo_envio?: number;
   valor_declarado?: number;
+  agencia_codigo?: string;    // Código de agencia Servientrega del punto de atención
+  agencia_nombre?: string;    // Nombre de agencia Servientrega del punto de atención
 }
 
 export interface SaldoData {
@@ -308,6 +310,8 @@ export class ServientregaDBService {
       numero_guia: data.numero_guia,
       costo_envio: data.costo_envio,
       punto_atencion_id: data.punto_atencion_id,
+      agencia_codigo: data.agencia_codigo,
+      agencia_nombre: data.agencia_nombre,
     });
 
     const cleanData: Prisma.ServientregaGuiaUncheckedCreateInput = {
@@ -324,6 +328,10 @@ export class ServientregaDBService {
     if (data.usuario_id) cleanData.usuario_id = data.usuario_id;
     if (typeof data.costo_envio === "number") cleanData.costo_envio = new Prisma.Decimal(data.costo_envio);
     if (typeof data.valor_declarado === "number") cleanData.valor_declarado = new Prisma.Decimal(data.valor_declarado);
+    
+    // ✅ NUEVO: Guardar información de la agencia Servientrega
+    if (data.agencia_codigo) cleanData.agencia_codigo = data.agencia_codigo;
+    if (data.agencia_nombre) cleanData.agencia_nombre = data.agencia_nombre;
 
     log("🔍 [guardarGuia] Datos limpios antes de crear:", cleanData);
 

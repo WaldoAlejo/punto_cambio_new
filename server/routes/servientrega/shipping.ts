@@ -9,6 +9,8 @@ import {
 } from "../../services/servientregaDBService.js";
 import prisma from "../../lib/prisma.js";
 import { ServientregaValidationService } from "../../services/servientregaValidationService.js";
+import { idempotency } from "../../middleware/idempotency.js";
+import { registrarMovimientoSaldo, TipoMovimiento, TipoReferencia } from "../../services/movimientoSaldoService.js";
 
 const router = express.Router();
 
@@ -65,6 +67,113 @@ const maskCreds = (c: ServientregaCredentials) => ({
   usuingreso: c.usuingreso,
   contrasenha: "***",
 });
+
+/** ============================
+ *  🛡️ Validación de Saldo para Generación de Guías
+ *  ============================ */
+async function validarSaldoGenerarGuia(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+): Promise<void> {
+  try {
+    const valorTotal = Number(req.body?.valor_total ?? 0);
+    const metodoIngreso = (req.body?.metodo_ingreso || "EFECTIVO").toString().toUpperCase();
+    const billetes = Number(req.body?.billetes || 0);
+    const monedas = Number(req.body?.monedas_fisicas || 0);
+    
+    if (!isFinite(valorTotal) || valorTotal <= 0) {
+      res.status(400).json({
+        success: false,
+        error: "El valor total de la guía debe ser mayor a 0",
+      });
+      return;
+    }
+
+    const puntoId = req.user?.punto_atencion_id;
+    if (!puntoId) {
+      res.status(400).json({
+        success: false,
+        error: "Debes tener un punto de atención asignado para generar guías",
+      });
+      return;
+    }
+
+    // Obtener moneda USD
+    const monedaUsd = await prisma.moneda.findUnique({
+      where: { codigo: "USD" },
+      select: { id: true },
+    });
+
+    if (!monedaUsd) {
+      res.status(500).json({
+        success: false,
+        error: "Moneda USD no encontrada en el sistema",
+      });
+      return;
+    }
+
+    // Obtener saldo actual
+    const saldo = await prisma.saldo.findUnique({
+      where: {
+        punto_atencion_id_moneda_id: {
+          punto_atencion_id: puntoId,
+          moneda_id: monedaUsd.id,
+        },
+      },
+    });
+
+    const saldoCaja = Number(saldo?.cantidad ?? 0);
+    const saldoBancos = Number(saldo?.bancos ?? 0);
+
+    let saldoDisponible = 0;
+    let tipoSaldo = "";
+
+    if (metodoIngreso === "EFECTIVO") {
+      saldoDisponible = saldoCaja;
+      tipoSaldo = "efectivo (caja)";
+    } else if (metodoIngreso === "BANCO") {
+      saldoDisponible = saldoBancos;
+      tipoSaldo = "bancos";
+    } else if (metodoIngreso === "MIXTO") {
+      saldoDisponible = saldoCaja + saldoBancos;
+      tipoSaldo = "efectivo + bancos";
+    } else {
+      saldoDisponible = saldoCaja;
+      tipoSaldo = "efectivo (caja)";
+    }
+
+    if (saldoDisponible < valorTotal) {
+      res.status(400).json({
+        success: false,
+        error: `Saldo insuficiente`,
+        detalles: {
+          saldo_disponible: saldoDisponible,
+          saldo_requerido: valorTotal,
+          tipo_saldo: tipoSaldo,
+          metodo_ingreso: metodoIngreso,
+          mensaje: `El saldo disponible en ${tipoSaldo} ($${saldoDisponible.toFixed(2)}) es menor al valor de la guía ($${valorTotal.toFixed(2)})`,
+        },
+      });
+      return;
+    }
+
+    // Pasar saldo a la request para uso posterior
+    (req as any).saldoValidado = {
+      saldoCaja,
+      saldoBancos,
+      saldoDisponible,
+    };
+
+    next();
+  } catch (error) {
+    console.error("Error validando saldo para guía:", error);
+    res.status(500).json({
+      success: false,
+      error: "Error interno al validar saldo",
+    });
+  }
+}
 
 /** ============================
  *  💰 Cálculo de Tarifas
@@ -201,7 +310,10 @@ router.post("/tarifa", async (req, res) => {
 /** ============================
  *  🚚 Generación de Guías
  *  ============================ */
-router.post("/generar-guia", async (req, res) => {
+router.post("/generar-guia",
+  idempotency({ route: "/api/servientrega/generar-guia" }),
+  validarSaldoGenerarGuia,
+  async (req, res) => {
   try {
     const credentials = getCredentialsFromEnv();
     const apiService = new ServientregaAPIService(credentials);
@@ -352,25 +464,30 @@ router.post("/generar-guia", async (req, res) => {
               mensaje: `No se encontró el punto de atención con ID: ${punto_atencion_id_captado}`,
             });
           }
-          // Si tiene agencia configurada, usar los datos específicos del punto SOLO si no son vacíos
-          if (typeof punto.servientrega_alianza === "string" && punto.servientrega_alianza.trim() !== "") {
-            servientregaAlianza = punto.servientrega_alianza;
-          }
-          if (typeof punto.servientrega_oficina_alianza === "string" && punto.servientrega_oficina_alianza.trim() !== "") {
-            servientregaOficinaAlianza = punto.servientrega_oficina_alianza;
-          }
-          if (!punto.servientrega_agencia_codigo) {
+          // ⚠️ VALIDACIÓN ESTRICTA: Todos los campos de Servientrega son requeridos
+          const camposFaltantes: string[] = [];
+          if (!punto.servientrega_agencia_codigo) camposFaltantes.push("agencia_codigo");
+          if (!punto.servientrega_agencia_nombre) camposFaltantes.push("agencia_nombre");
+          if (!punto.servientrega_alianza) camposFaltantes.push("alianza");
+          if (!punto.servientrega_oficina_alianza) camposFaltantes.push("oficina_alianza");
+
+          if (camposFaltantes.length > 0) {
             return res.status(403).json({
               error: "Servientrega no habilitado",
               mensaje:
-                `El punto "${punto.nombre}" no tiene Servientrega configurado. ` +
-                `Por favor, contacta al administrador para asignar una agencia de Servientrega a este punto.`,
+                `El punto "${punto.nombre}" no tiene configuración completa de Servientrega. ` +
+                `Faltan los siguientes campos: ${camposFaltantes.join(", ")}.`,
               punto_nombre: punto.nombre,
               punto_id: punto_atencion_id_captado,
+              campos_faltantes: camposFaltantes,
               solucion:
-                "El administrador debe ir a Puntos de Atención y configurar los campos de Servientrega para este punto.",
+                "El administrador debe ir a Puntos de Atención y configurar todos los campos de Servientrega (agencia_codigo, agencia_nombre, alianza, oficina_alianza) para este punto.",
             });
           }
+
+          // Usar los datos específicos del punto (ya validamos que no son null)
+          servientregaAlianza = punto.servientrega_alianza!;
+          servientregaOficinaAlianza = punto.servientrega_oficina_alianza!;
           console.log("✅ Punto con Servientrega habilitado:", {
             punto_id: punto_atencion_id_captado,
             punto_nombre: punto.nombre,
@@ -896,6 +1013,8 @@ router.post("/generar-guia", async (req, res) => {
           usuario_id: req.user?.id || undefined, // 👈 IMPORTANTE: Guardar usuario_id para rastrabilidad
           costo_envio: valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
           valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta
+          agencia_codigo: agencia_codigo,      // ✅ Código de agencia Servientrega del punto
+          agencia_nombre: agencia_nombre,      // ✅ Nombre de agencia Servientrega del punto
         };
 
         // Solo incluir remitente_id y destinatario_id si tienen valor
@@ -1067,7 +1186,9 @@ router.post("/generar-guia", async (req, res) => {
 /** ============================
  *  ❌ Anulación de Guías
  *  ============================ */
-router.post("/anular-guia", async (req, res) => {
+router.post("/anular-guia",
+  idempotency({ route: "/api/servientrega/anular-guia" }),
+  async (req, res) => {
   try {
     const { guia } = req.body;
     if (!guia) {

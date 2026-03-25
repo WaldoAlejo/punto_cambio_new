@@ -14,6 +14,8 @@ import PointSelector from "../layout/PointSelector";
 import { User, PuntoAtencion } from "../../types";
 // ✅ Ruta correcta del helper de eventos (no "@/lib/events/pointEvents")
 import { emitPointSelected } from "@/lib/pointEvents";
+import { AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 /** Lazy imports */
 const ExchangeManagement = React.lazy(
@@ -103,6 +105,12 @@ const SystemHealthDashboard = React.lazy(
 const AdminDashboard = React.lazy(
   () => import("../admin/AdminDashboard")
 );
+const AperturaCaja = React.lazy(
+  () => import("../caja/AperturaCaja")
+);
+const AperturasPendientes = React.lazy(
+  () => import("../admin/AperturasPendientes")
+);
 
 /** Utils */
 const STORAGE_KEY_VIEW = "pc_active_view";
@@ -136,6 +144,8 @@ const VALID_VIEWS = new Set<string>([
   "servicios-externos-admin",
   "cierres-diarios",
   "system-health",
+  "apertura-caja",
+  "aperturas-pendientes",
 ]);
 
 function getInitialView(
@@ -437,6 +447,35 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isAdmin)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
         return <SystemHealthDashboard />;
+
+      case "apertura-caja":
+        if (!isOperador)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        // Verificar que tenga punto seleccionado
+        if (!selectedPoint) {
+          return (
+            <div className="p-8 text-center">
+              <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold mb-2">Punto de atención no seleccionado</h2>
+              <p className="text-gray-600 mb-4">Debes seleccionar un punto de atención para realizar la apertura de caja.</p>
+              <Button onClick={() => setActiveView("dashboard")}>
+                Volver al Dashboard
+              </Button>
+            </div>
+          );
+        }
+        // El jornada_id se obtiene de la jornada activa
+        return (
+          <AperturaCaja 
+            jornadaId="" 
+            onAperturaCompletada={() => setActiveView("dashboard")} 
+          />
+        );
+
+      case "aperturas-pendientes":
+        if (!isAdmin)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <AperturasPendientes />;
 
       default:
         if (isOperador) {

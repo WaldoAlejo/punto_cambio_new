@@ -47,6 +47,8 @@ model Usuario {
   transferenciasSolicitadas               Transferencia[]               @relation("UsuarioSolicitante")
   guiasServientrega                       ServientregaGuia[]
   idempotencyKeys                         IdempotencyKey[]
+  aperturasOperador                       AperturaCaja[]                @relation("OperadorApertura")
+  aperturasAprobadasAdmin                 AperturaCaja[]                @relation("AdminApertura")
   puntoAtencion                           PuntoAtencion?                @relation(fields: [punto_atencion_id], references: [id])
 
   @@index([username])
@@ -95,6 +97,7 @@ model PuntoAtencion {
   transferenciasDestino           Transferencia[]               @relation("TransferenciasDestino")
   transferenciasOrigen            Transferencia[]               @relation("TransferenciasOrigen")
   usuarios                        Usuario[]
+  aperturasCaja                   AperturaCaja[]
 
   @@index([ciudad])
   @@index([activo])
@@ -389,6 +392,7 @@ model Jornada {
   
   puntoAtencion     PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
   usuario           Usuario       @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  apertura          AperturaCaja?
 
   @@index([usuario_id])
   @@index([fecha_inicio])
@@ -943,4 +947,68 @@ enum DiaSemana {
   VIERNES
   SABADO
   DOMINGO
+}
+
+// Estados del proceso de apertura de caja
+enum EstadoApertura {
+  PENDIENTE        // Inicial, esperando que operador inicie conteo
+  EN_CONTEO        // Operador está ingresando conteo
+  CUADRADO         // Cuadre perfecto, listo para abrir
+  CON_DIFERENCIA   // Hay diferencia, requiere aprobación admin
+  RESUELTO         // Admin resolvió la diferencia
+  ABIERTA          // Jornada oficialmente abierta
+  RECHAZADO        // Admin rechazó, requiere re-conteo
+}
+
+// Modelo para registrar el arqueo de apertura de caja por operador
+model AperturaCaja {
+  id                    String        @id @default(uuid())
+  jornada_id            String        @unique  // Una apertura por jornada
+  usuario_id            String        // Operador que realiza la apertura
+  punto_atencion_id     String
+  
+  // Fechas
+  fecha                 DateTime      @db.Date
+  hora_inicio_conteo    DateTime?     // Cuando el operador empieza a contar
+  hora_fin_conteo       DateTime?     // Cuando termina de ingresar conteo
+  hora_apertura         DateTime?     // Cuando se aprueba y abre la jornada
+  
+  // Saldos esperados del sistema (snapshot al momento de la apertura)
+  saldo_esperado        Json          // [{moneda_id, codigo, cantidad, billetes, monedas}]
+  
+  // Conteo físico realizado por operador
+  conteo_fisico         Json          // [{moneda_id, desglose_billetes[], desglose_monedas[], total}]
+  
+  // Conteo de servicios externos (para validar saldos externos)
+  conteo_servicios_externos Json?     // [{servicio, moneda_id, saldo_sistema, saldo_validado, diferencia}]
+  
+  // Resultado de la validación
+  estado                EstadoApertura @default(PENDIENTE)
+  diferencias           Json?         // [{moneda_id, esperado, fisico, diferencia, fuera_tolerancia}]
+  tolerancia_usd        Decimal       @default(1.00) @db.Decimal(10, 2)
+  tolerancia_otras      Decimal       @default(0.01) @db.Decimal(10, 2)
+  
+  // Verificación por administrador
+  requiere_aprobacion   Boolean       @default(false)
+  aprobado_por          String?       // Admin que aprueba (si aplica)
+  hora_aprobacion       DateTime?
+  metodo_verificacion   String?       // "AUTOMATICO", "VIDEOCALL", "PRESENCIAL"
+  link_videollamada     String?       // Link de Meet/Zoom usado
+  
+  // Fotos evidencia
+  fotos_urls            Json?         // ["url1", "url2"]
+  
+  // Observaciones
+  observaciones_operador String?
+  observaciones_admin   String?
+  
+  // Relaciones
+  jornada               Jornada       @relation(fields: [jornada_id], references: [id], onDelete: Cascade)
+  usuario               Usuario       @relation("OperadorApertura", fields: [usuario_id], references: [id])
+  puntoAtencion         PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  aprobador             Usuario?      @relation("AdminApertura", fields: [aprobado_por], references: [id])
+  
+  @@index([punto_atencion_id, fecha])
+  @@index([estado])
+  @@index([usuario_id, fecha])
 }

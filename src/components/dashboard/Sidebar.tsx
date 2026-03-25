@@ -83,6 +83,12 @@ const Sidebar = ({
       roles: ["OPERADOR", "ADMINISTRATIVO"],
     },
     {
+      id: "apertura-caja",
+      label: "Apertura de Caja",
+      color: "text-green-600",
+      roles: ["OPERADOR"],
+    },
+    {
       id: "daily-close",
       label: "Cierre Diario",
       color: "text-orange-600",
@@ -190,6 +196,11 @@ const Sidebar = ({
       id: "permission-approvals",
       label: "Aprobación de Permisos",
       color: "text-pink-700",
+    },
+    {
+      id: "aperturas-pendientes",
+      label: "Aperturas Pendientes",
+      color: "text-green-600",
     },
     {
       id: "cierres-diarios",
@@ -346,11 +357,14 @@ const Sidebar = ({
                 // Filtrar por rol
                 if (!item.roles?.includes(user.rol || "")) return false;
 
-                // Para opciones de Servientrega, verificar que el punto tenga agencia asignada
+                // Para opciones de Servientrega, verificar que el punto tenga TODA la configuración requerida
                 if (item.id === "servientrega") {
-                  return selectedPoint?.servientrega_agencia_codigo
-                    ? true
-                    : false;
+                  const tieneConfiguracionCompleta =
+                    selectedPoint?.servientrega_agencia_codigo &&
+                    selectedPoint?.servientrega_agencia_nombre &&
+                    selectedPoint?.servientrega_alianza &&
+                    selectedPoint?.servientrega_oficina_alianza;
+                  return !!tieneConfiguracionCompleta;
                 }
 
                 return true;

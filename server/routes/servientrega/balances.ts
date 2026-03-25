@@ -578,4 +578,93 @@ router.get(
   }
 );
 
+// ========================================
+// ✅ Verificar configuración de Servientrega en el punto
+// ========================================
+
+router.get(
+  "/configuracion/:puntoAtencionId",
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { puntoAtencionId } = req.params;
+
+      console.log(
+        `🔍 Servientrega: Verificando configuración para punto ${puntoAtencionId}`
+      );
+
+      if (!puntoAtencionId) {
+        return res.status(400).json({
+          habilitado: false,
+          error: "El ID del punto de atención es requerido",
+        });
+      }
+
+      const punto = await prisma.puntoAtencion.findUnique({
+        where: { id: puntoAtencionId },
+        select: {
+          id: true,
+          nombre: true,
+          servientrega_agencia_codigo: true,
+          servientrega_agencia_nombre: true,
+          servientrega_alianza: true,
+          servientrega_oficina_alianza: true,
+        },
+      });
+
+      if (!punto) {
+        return res.status(404).json({
+          habilitado: false,
+          error: "Punto de atención no encontrado",
+        });
+      }
+
+      // Verificar que tenga TODOS los campos requeridos
+      const camposRequeridos = {
+        agencia_codigo: punto.servientrega_agencia_codigo,
+        agencia_nombre: punto.servientrega_agencia_nombre,
+        alianza: punto.servientrega_alianza,
+        oficina_alianza: punto.servientrega_oficina_alianza,
+      };
+
+      const camposFaltantes = Object.entries(camposRequeridos)
+        .filter(([_, valor]) => !valor)
+        .map(([campo]) => campo);
+
+      const habilitado = camposFaltantes.length === 0;
+
+      console.log(
+        `🔍 Servientrega: Punto ${punto.nombre} - Habilitado: ${habilitado}, Faltan: [${camposFaltantes.join(", ")}]`
+      );
+
+      return res.json({
+        habilitado,
+        punto_id: punto.id,
+        punto_nombre: punto.nombre,
+        configuracion: habilitado
+          ? {
+              agencia_codigo: punto.servientrega_agencia_codigo,
+              agencia_nombre: punto.servientrega_agencia_nombre,
+              alianza: punto.servientrega_alianza,
+              oficina_alianza: punto.servientrega_oficina_alianza,
+            }
+          : null,
+        campos_faltantes: camposFaltantes.length > 0 ? camposFaltantes : undefined,
+        mensaje: habilitado
+          ? "Servientrega habilitado para este punto"
+          : `Faltan campos requeridos: ${camposFaltantes.join(", ")}`,
+      });
+    } catch (error) {
+      console.error(
+        `❌ Servientrega: Error al verificar configuración para punto ${req.params.puntoAtencionId}:`,
+        error
+      );
+      res.status(500).json({
+        habilitado: false,
+        error: "Error interno al verificar configuración",
+        details: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+);
+
 export { router as balancesRouter };

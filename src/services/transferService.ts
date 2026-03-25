@@ -1,5 +1,6 @@
 import { apiService } from "./apiService";
 import { Transferencia, ResponsableMovilizacion } from "../types";
+import { generateIdempotencyKey } from "../utils/idempotency";
 
 export interface CreateTransferData {
   origen_id: string;
@@ -55,10 +56,14 @@ export const transferService = {
       };
 
       console.log("[TransferService] Enviando datos:", payload);
+      
+      // 🔑 Generar clave de idempotencia única para prevenir duplicados
+      const idempotencyKey = generateIdempotencyKey("transfer");
 
       const response = await apiService.post<TransferResponse>(
         "/transfers",
-        payload
+        payload,
+        idempotencyKey
       );
 
       if (response && response.success && response.transfer) {

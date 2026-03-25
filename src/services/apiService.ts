@@ -19,8 +19,9 @@ class ApiService {
    * Construye headers según el método/cuerpo:
    * - Authorization si existe token
    * - Content-Type solo cuando hay body (evita preflight innecesario en GET/DELETE)
+   * - Idempotency-Key si se proporciona (para prevenir duplicados)
    */
-  private getHeaders(hasBody: boolean): HeadersInit {
+  private getHeaders(hasBody: boolean, idempotencyKey?: string): HeadersInit {
     const token = localStorage.getItem("authToken");
     const headers: Record<string, string> = {};
 
@@ -29,6 +30,11 @@ class ApiService {
     }
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
+    }
+    
+    // 🔑 Clave de idempotencia para prevenir duplicados por race condition
+    if (idempotencyKey) {
+      headers["Idempotency-Key"] = idempotencyKey;
     }
 
     // IMPORTANTE: no enviar headers de caché en la solicitud (Cache-Control/Pragma/Expires)
@@ -146,7 +152,7 @@ class ApiService {
     return this.handleResponse<T>(res, cleanEndpoint);
   }
 
-  async post<T>(endpoint: string, data: unknown): Promise<T> {
+  async post<T>(endpoint: string, data: unknown, idempotencyKey?: string): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
     console.warn(`[API] POST ${cleanEndpoint}`, data);
 
@@ -154,7 +160,7 @@ class ApiService {
       `${API_BASE_URL}${cleanEndpoint}`,
       {
         method: "POST",
-        headers: this.getHeaders(true), // con Content-Type
+        headers: this.getHeaders(true, idempotencyKey), // con Content-Type y opcionalmente Idempotency-Key
         body: JSON.stringify(data),
       },
       cleanEndpoint
@@ -163,7 +169,7 @@ class ApiService {
     return this.handleResponse<T>(res, cleanEndpoint);
   }
 
-  async put<T>(endpoint: string, data: unknown): Promise<T> {
+  async put<T>(endpoint: string, data: unknown, idempotencyKey?: string): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
     console.warn(`[API] PUT ${cleanEndpoint}`, data);
 
@@ -171,7 +177,7 @@ class ApiService {
       `${API_BASE_URL}${cleanEndpoint}`,
       {
         method: "PUT",
-        headers: this.getHeaders(true), // con Content-Type
+        headers: this.getHeaders(true, idempotencyKey), // con Content-Type y opcionalmente Idempotency-Key
         body: JSON.stringify(data),
       },
       cleanEndpoint
@@ -180,7 +186,7 @@ class ApiService {
     return this.handleResponse<T>(res, cleanEndpoint);
   }
 
-  async patch<T>(endpoint: string, data?: unknown): Promise<T> {
+  async patch<T>(endpoint: string, data?: unknown, idempotencyKey?: string): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
     console.warn(`[API] PATCH ${cleanEndpoint}`, data);
     const hasBody = data !== undefined;
@@ -189,7 +195,7 @@ class ApiService {
       `${API_BASE_URL}${cleanEndpoint}`,
       {
         method: "PATCH",
-        headers: this.getHeaders(hasBody), // Content-Type solo si hay body
+        headers: this.getHeaders(hasBody, idempotencyKey), // Content-Type solo si hay body
         ...(hasBody ? { body: JSON.stringify(data) } : {}),
       },
       cleanEndpoint
@@ -212,6 +218,17 @@ class ApiService {
     );
 
     return this.handleResponse<T>(res, cleanEndpoint);
+  }
+  
+  /**
+   * POST con idempotencia garantizada
+   * Genera automáticamente una clave de idempotencia única
+   * Útil para operaciones críticas que no deben duplicarse
+   */
+  async postIdempotent<T>(endpoint: string, data: unknown): Promise<T> {
+    const { generateIdempotencyKey } = await import("../utils/idempotency");
+    const key = generateIdempotencyKey();
+    return this.post<T>(endpoint, data, key);
   }
 }
 

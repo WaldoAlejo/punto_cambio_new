@@ -95,6 +95,7 @@ import cierresDiariosRoutes from "./routes/cierres-diarios.js";
 import saldoDiagnosticoRoutes from "./routes/saldo-diagnostico.js";
 import debugSaldosRoutes from "./routes/debug-saldos.js";
 import cierreReporteRoutes from "./routes/cierreReporte.js";
+import aperturaCajaRoutes from "./routes/apertura-caja.js";
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
@@ -370,6 +371,7 @@ app.use("/api/cierres-diarios", cierresDiariosRoutes);
 app.use("/api/saldo-diagnostico", saldoDiagnosticoRoutes);
 app.use("/api/debug-saldos", debugSaldosRoutes);
 app.use("/api/cierre-reporte", cierreReporteRoutes);
+app.use("/api/apertura-caja", aperturaCajaRoutes);
 
 // ------- Frontend estático (serve SPA build) -------
 try {

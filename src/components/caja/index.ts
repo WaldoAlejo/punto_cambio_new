@@ -8,3 +8,4 @@ export { default as CierreDialog } from "./CierreDialog";
 export { default as MonedaRow } from "./MonedaRow";
 export { default as PrintCuadre } from "./PrintCuadre";
 export { default as ResumenCuadre } from "./ResumenCuadre";
+export { default as AperturaCaja } from "./AperturaCaja";

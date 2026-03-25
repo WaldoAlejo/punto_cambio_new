@@ -11,6 +11,8 @@ const router = express.Router();
 type PuntoAtencionExtra = {
   servientrega_agencia_codigo?: string | null;
   servientrega_agencia_nombre?: string | null;
+  servientrega_alianza?: string | null;
+  servientrega_oficina_alianza?: string | null;
 };
 
 type PuntoAtencionOut = {
@@ -23,6 +25,8 @@ type PuntoAtencionOut = {
   telefono: string | null;
   servientrega_agencia_codigo?: string | null;
   servientrega_agencia_nombre?: string | null;
+  servientrega_alianza?: string | null;
+  servientrega_oficina_alianza?: string | null;
   activo: boolean;
   es_principal: boolean;
   created_at: string;
@@ -44,6 +48,10 @@ function formatPoint(
       (punto as PuntoAtencionExtra).servientrega_agencia_codigo ?? null,
     servientrega_agencia_nombre:
       (punto as PuntoAtencionExtra).servientrega_agencia_nombre ?? null,
+    servientrega_alianza:
+      (punto as PuntoAtencionExtra).servientrega_alianza ?? null,
+    servientrega_oficina_alianza:
+      (punto as PuntoAtencionExtra).servientrega_oficina_alianza ?? null,
     activo: punto.activo,
     es_principal: punto.es_principal,
     created_at: punto.created_at.toISOString(),
