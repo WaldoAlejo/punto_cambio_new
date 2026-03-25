@@ -25,6 +25,11 @@ interface SaldoInfo {
   servicio?: string;
 }
 
+interface SaldoAsignado {
+  servicio: string;
+  saldo_asignado: number;
+}
+
 const UMBRAL_SALDO_BAJO = 2.0;
 
 export default function SaldoCompacto({
@@ -45,8 +50,8 @@ export default function SaldoCompacto({
       
       if (data?.saldos_asignados) {
         // Buscar el saldo de SERVIENTREGA en la respuesta
-        const saldoServientrega = data.saldos_asignados.find(
-          (s: any) => s.servicio === "SERVIENTREGA"
+        const saldoServientrega = (data.saldos_asignados as SaldoAsignado[]).find(
+          (s) => s.servicio === "SERVIENTREGA"
         );
         
         const disponible = Number(saldoServientrega?.saldo_asignado || 0);

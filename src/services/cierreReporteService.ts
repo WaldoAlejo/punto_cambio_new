@@ -7,6 +7,15 @@
 
 import axiosInstance from "./axiosInstance";
 
+// Tipo para errores de Axios
+interface AxiosError {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+}
+
 export interface ReporteCierreOperador {
   cuadre_id: string;
   fecha: string;
@@ -121,10 +130,11 @@ class CierreReporteService {
         `/cierre-reporte/operador${params}`
       );
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const axiosError = error as AxiosError;
       return {
         success: false,
-        error: error.response?.data?.error || "Error al obtener reporte",
+        error: axiosError.response?.data?.error || "Error al obtener reporte",
       };
     }
   }
@@ -143,10 +153,11 @@ class CierreReporteService {
         `/cierre-reporte/admin${params}`
       );
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const axiosError = error as AxiosError;
       return {
         success: false,
-        error: error.response?.data?.error || "Error al obtener reporte",
+        error: axiosError.response?.data?.error || "Error al obtener reporte",
       };
     }
   }
@@ -171,10 +182,11 @@ class CierreReporteService {
         `/cierre-reporte/validar?${params.toString()}`
       );
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const axiosError = error as AxiosError;
       return {
         success: false,
-        error: error.response?.data?.error || "Error al validar cierre",
+        error: axiosError.response?.data?.error || "Error al validar cierre",
       };
     }
   }
@@ -205,10 +217,11 @@ class CierreReporteService {
         `/cierre-reporte/historial/${puntoId}?dias=${dias}`
       );
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const axiosError = error as AxiosError;
       return {
         success: false,
-        error: error.response?.data?.error || "Error al obtener historial",
+        error: axiosError.response?.data?.error || "Error al obtener historial",
       };
     }
   }
@@ -226,10 +239,11 @@ class CierreReporteService {
         `/cierre-reporte/pdf/${cuadreId}`
       );
       return response.data;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const axiosError = error as AxiosError;
       return {
         success: false,
-        error: error.response?.data?.error || "Error al generar PDF",
+        error: axiosError.response?.data?.error || "Error al generar PDF",
       };
     }
   }

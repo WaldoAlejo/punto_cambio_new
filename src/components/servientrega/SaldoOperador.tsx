@@ -32,6 +32,13 @@ interface SaldoOperadorProps {
   puntoAtencionNombre: string;
 }
 
+interface SaldoAsignado {
+  servicio: string;
+  saldo_asignado: number;
+  billetes?: number;
+  monedas_fisicas?: number;
+}
+
 interface SaldoInfo {
   disponible: number;
   billetes?: number;
@@ -65,8 +72,8 @@ export default function SaldoOperador({
       
       if (data?.saldos_asignados) {
         // Buscar el saldo de SERVIENTREGA
-        const saldoServientrega = data.saldos_asignados.find(
-          (s: any) => s.servicio === "SERVIENTREGA"
+        const saldoServientrega = (data.saldos_asignados as SaldoAsignado[]).find(
+          (s) => s.servicio === "SERVIENTREGA"
         );
         
         const disponible = Number(saldoServientrega?.saldo_asignado || 0);

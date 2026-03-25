@@ -20,6 +20,16 @@ export interface SaldoRealResponse {
   };
 }
 
+export interface InconsistenciaSaldo {
+  punto_atencion_id: string;
+  punto_nombre?: string;
+  moneda_id: string;
+  moneda_codigo?: string;
+  saldo_registrado: number;
+  saldo_calculado: number;
+  diferencia: number;
+}
+
 /**
  * Servicio para operaciones relacionadas con saldos y reconciliación
  * Usa el endpoint /api/saldo-reconciliation/
@@ -101,7 +111,7 @@ const saldoService = {
       diferencia: number;
     }>;
   }> {
-    const response = await axiosInstance.get<{ success: boolean; data: { valido: boolean; inconsistencias: any[] } }>(
+    const response = await axiosInstance.get<{ success: boolean; data: { valido: boolean; inconsistencias: InconsistenciaSaldo[] } }>(
       "/api/saldo-reconciliation/validar-consistencia"
     );
     return response.data.data;

@@ -10,6 +10,16 @@ type ApiFail = {
   code?: string;
 };
 
+// Tipo para día de investigación de saldos
+interface DiaInvestigacion {
+  fecha: string;
+  saldo_inicial?: number;
+  movimientos?: MovimientoSaldo[];
+  saldo_calculado?: number;
+  saldo_registrado?: number;
+  diferencia?: number;
+}
+
 const isRecord = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === "object";
 
@@ -212,10 +222,10 @@ export const saldoInicialService = {
     moneda_id: string;
     fecha_desde?: string;
     fecha_hasta?: string;
-  }): Promise<{ dias: any[]; error: string | null }> {
+  }): Promise<{ dias: DiaInvestigacion[]; error: string | null }> {
     try {
-      const qs = new URLSearchParams(params as any).toString();
-      const response = await apiService.get<ApiOk<{ dias: any[] }> | ApiFail>(
+      const qs = new URLSearchParams(params as Record<string, string>).toString();
+      const response = await apiService.get<ApiOk<{ dias: DiaInvestigacion[] }> | ApiFail>(
         `/saldos-iniciales/investigacion/auditoria?${qs}`
       );
 

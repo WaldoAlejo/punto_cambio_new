@@ -177,13 +177,13 @@ router.post(
           jornada_id,
           usuario_id: usuario_id!,
           punto_atencion_id: jornada.punto_atencion_id,
-          fecha: fechaHoy,
+          fecha: new Date(fechaHoy + "T00:00:00.000Z"),
           hora_inicio_conteo: nowEcuador(),
           estado: EstadoApertura.EN_CONTEO,
-          saldo_esperado: JSON.parse(JSON.stringify(saldoEsperado)),
-          conteo_fisico: JSON.parse(JSON.stringify([])),
-          tolerancia_usd: new Prisma.Decimal(1.0),
-          tolerancia_otras: new Prisma.Decimal(0.01),
+          saldo_esperado: saldoEsperado as Prisma.InputJsonValue,
+          conteo_fisico: [] as Prisma.InputJsonValue,
+          tolerancia_usd: 1.0,
+          tolerancia_otras: 0.01,
         },
       });
 
@@ -290,18 +290,18 @@ router.post(
       }
 
       // Preparar datos de servicios externos si existen
-      const serviciosData = servicios_externos ? JSON.parse(JSON.stringify(servicios_externos)) : null;
+      const serviciosData = servicios_externos ? (servicios_externos as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
 
       // Actualizar apertura
       const aperturaActualizada = await prisma.aperturaCaja.update({
         where: { id: apertura_id },
         data: {
-          conteo_fisico: JSON.parse(JSON.stringify(conteosValidados)),
-          diferencias: JSON.parse(JSON.stringify(diferencias)),
+          conteo_fisico: conteosValidados as unknown as Prisma.InputJsonValue,
+          diferencias: diferencias as unknown as Prisma.InputJsonValue,
           estado: nuevoEstado,
           hora_fin_conteo: nowEcuador(),
           requiere_aprobacion: requiereAprobacion,
-          fotos_urls: fotos_urls ? JSON.parse(JSON.stringify(fotos_urls)) : null,
+          fotos_urls: fotos_urls ? (fotos_urls as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
           observaciones_operador: observaciones || null,
           conteo_servicios_externos: serviciosData,
         },
@@ -656,18 +656,14 @@ router.post(
                   },
                 },
                 data: {
-                  cantidad: new Prisma.Decimal(conteo.total),
-                  billetes: new Prisma.Decimal(
-                    conteo.billetes.reduce(
-                      (sum: number, b: any) => sum + b.denominacion * b.cantidad,
-                      0
-                    )
+                  cantidad: conteo.total,
+                  billetes: conteo.billetes.reduce(
+                    (sum: number, b: { denominacion: number; cantidad: number }) => sum + b.denominacion * b.cantidad,
+                    0
                   ),
-                  monedas_fisicas: new Prisma.Decimal(
-                    conteo.monedas.reduce(
-                      (sum: number, m: any) => sum + m.denominacion * m.cantidad,
-                      0
-                    )
+                  monedas_fisicas: conteo.monedas.reduce(
+                    (sum: number, m: { denominacion: number; cantidad: number }) => sum + m.denominacion * m.cantidad,
+                    0
                   ),
                 },
               });
