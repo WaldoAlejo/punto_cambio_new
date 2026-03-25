@@ -606,11 +606,30 @@ export class ServientregaDBService {
           throw new Error(`Saldo insuficiente en Servientrega. Disponible: $${saldoAnterior.toFixed(2)}, Requerido: $${monto.toFixed(2)}`);
         }
 
-        // Actualizar saldo del servicio (descontar)
+        // Calcular nuevos valores de billetes y monedas
+        // Primero restamos de billetes, luego de monedas si es necesario
+        let billetesActuales = Number(saldoServicio.billetes || 0);
+        let monedasActuales = Number(saldoServicio.monedas_fisicas || 0);
+        let montoRestante = monto;
+
+        // Restar primero de billetes
+        if (billetesActuales >= montoRestante) {
+          billetesActuales -= montoRestante;
+          montoRestante = 0;
+        } else {
+          montoRestante -= billetesActuales;
+          billetesActuales = 0;
+          // Restar el resto de monedas
+          monedasActuales = Math.max(0, monedasActuales - montoRestante);
+        }
+
+        // Actualizar saldo del servicio (descontar) - incluyendo desglose
         const actualizado = await tx.servicioExternoSaldo.update({
           where: { id: saldoServicio.id },
           data: {
             cantidad: nuevoSaldo,
+            billetes: billetesActuales,
+            monedas_fisicas: monedasActuales,
             updated_at: new Date(),
           },
         });
@@ -692,11 +711,17 @@ export class ServientregaDBService {
       const saldoAnterior = Number(saldoServicio.cantidad || 0);
       const nuevoSaldo = saldoAnterior + monto;
 
-      // Actualizar saldo del servicio (devolver)
+      // Calcular nuevos valores de billetes y monedas
+      // La devolución se suma a billetes
+      const billetesActuales = Number(saldoServicio.billetes || 0);
+      const nuevosBilletes = billetesActuales + monto;
+
+      // Actualizar saldo del servicio (devolver) - incluyendo desglose
       const actualizado = await tx.servicioExternoSaldo.update({
         where: { id: saldoServicio.id },
         data: {
           cantidad: nuevoSaldo,
+          billetes: nuevosBilletes,
           updated_at: new Date(),
         },
       });

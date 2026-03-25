@@ -228,6 +228,11 @@ router.post(
         return;
       }
 
+      // 🔧 CORRECCIÓN: servientrega_alianza SIEMPRE debe ser "PUNTO CAMBIO SAS"
+      // servientrega_oficina_alianza debe ser igual a servientrega_agencia_nombre si no se proporciona
+      const alianzaCorrecta = "PUNTO CAMBIO SAS";
+      const alianzaOficinaCorrecta = servientrega_oficina_alianza || servientrega_agencia_nombre || null;
+      
       const createData: Prisma.PuntoAtencionCreateInput = {
         nombre,
         direccion,
@@ -242,12 +247,9 @@ router.post(
         ...(servientrega_agencia_nombre !== undefined && {
           servientrega_agencia_nombre: servientrega_agencia_nombre || null,
         }),
-        ...(servientrega_alianza !== undefined && {
-          servientrega_alianza: servientrega_alianza || null,
-        }),
-        ...(servientrega_oficina_alianza !== undefined && {
-          servientrega_oficina_alianza: servientrega_oficina_alianza || null,
-        }),
+        // 🔧 FORZAR valores correctos de alianza
+        servientrega_alianza: alianzaCorrecta,
+        servientrega_oficina_alianza: alianzaOficinaCorrecta,
         activo: true,
       };
 
@@ -323,6 +325,11 @@ router.put(
         return;
       }
 
+      // 🔧 CORRECCIÓN: servientrega_alianza SIEMPRE debe ser "PUNTO CAMBIO SAS"
+      // servientrega_oficina_alianza debe ser igual a servientrega_agencia_nombre si se actualiza
+      const alianzaCorrecta = "PUNTO CAMBIO SAS";
+      const alianzaOficinaCorrecta = servientrega_oficina_alianza || servientrega_agencia_nombre || existingPoint.servientrega_oficina_alianza;
+      
       const updateData: Prisma.PuntoAtencionUpdateInput = {
         nombre,
         direccion,
@@ -336,12 +343,9 @@ router.put(
         ...(servientrega_agencia_nombre !== undefined && {
           servientrega_agencia_nombre: servientrega_agencia_nombre || null,
         }),
-        ...(servientrega_alianza !== undefined && {
-          servientrega_alianza: servientrega_alianza || null,
-        }),
-        ...(servientrega_oficina_alianza !== undefined && {
-          servientrega_oficina_alianza: servientrega_oficina_alianza || null,
-        }),
+        // 🔧 FORZAR valores correctos de alianza
+        servientrega_alianza: alianzaCorrecta,
+        servientrega_oficina_alianza: alianzaOficinaCorrecta,
         activo: typeof activo === "boolean" ? activo : existingPoint.activo,
       };
 

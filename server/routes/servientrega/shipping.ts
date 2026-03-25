@@ -430,7 +430,9 @@ router.post("/generar-guia",
         servientrega_oficina_alianza: string | null;
       };
 
-      let servientregaAlianza = "PUNTO CAMBIO SAS";
+      // 🔧 CORRECCIÓN CRÍTICA: alianza SIEMPRE es "PUNTO CAMBIO SAS" (fijo, nunca cambia)
+      // alianza_oficina es el nombre específico de la agencia (varía por punto)
+      const servientregaAlianza = "PUNTO CAMBIO SAS";
       let servientregaOficinaAlianza = "QUITO_PLAZA DEL VALLE_PC";
       let punto: PuntoAtencionServientregaInfo | null = null;
 
@@ -476,8 +478,8 @@ router.post("/generar-guia",
             });
           }
 
-          // Usar los datos específicos del punto (ya validamos que no son null)
-          servientregaAlianza = punto.servientrega_alianza!;
+          // 🔧 CORRECCIÓN: alianza SIEMPRE es "PUNTO CAMBIO SAS" (no se cambia)
+          // Solo alianza_oficina varía según el punto/agencia
           servientregaOficinaAlianza = punto.servientrega_oficina_alianza!;
           logger.info("Punto con Servientrega habilitado", {
             puntoId: punto_atencion_id_captado,
@@ -541,7 +543,8 @@ router.post("/generar-guia",
         ancho: Number(ancho),
         largo: Number(largo),
         tipo_guia: "1",
-        alianza: String(servientregaAlianza),
+        // 🔧 CORRECCIÓN: alianza SIEMPRE es "PUNTO CAMBIO SAS" (fijo)
+        alianza: "PUNTO CAMBIO SAS",
         alianza_oficina: String(servientregaOficinaAlianza),
         ...(punto?.servientrega_agencia_nombre && punto.servientrega_agencia_nombre.trim() !== ""
           ? { nombre_agencia: punto.servientrega_agencia_nombre }
@@ -609,10 +612,10 @@ router.post("/generar-guia",
         ancho: Number(req.body.ancho || 0),
         largo: Number(req.body.largo || 0),
         tipo_guia: String(req.body.tipo_guia || "1"),
-        alianza: String(req.body.alianza || "PUNTO CAMBIO SAS"),
-        alianza_oficina: String(
-          req.body.alianza_oficina || "QUITO_PLAZA DEL VALLE_PC"
-        ),
+        // 🔧 CORRECCIÓN: alianza SIEMPRE es "PUNTO CAMBIO SAS" (fijo, nunca del body)
+        // alianza_oficina se determinará más abajo desde la BD del punto (no del body)
+        alianza: "PUNTO CAMBIO SAS",
+        alianza_oficina: "QUITO_PLAZA DEL VALLE_PC", // Valor temporal, se sobreescribe con BD
         mail_remite: String(req.body.mail_remite || ""),
         usuingreso: String(credentials.usuingreso),
         contrasenha: String(credentials.contrasenha),
@@ -620,6 +623,11 @@ router.post("/generar-guia",
 
       // Si el request viene formateado pero hay un punto_atencion asociado,
       // preferimos usar la agencia configurada en la BD para evitar envíos con valores por defecto.
+      
+      // 🚨 FORZAR valores correctos de alianza (ignorar completamente lo que venga del body o BD)
+      payload.alianza = "PUNTO CAMBIO SAS";
+      console.log("🚨 FORZANDO alianza = 'PUNTO CAMBIO SAS' (ignorando valor del body)");
+      
       if (punto_atencion_id_captado) {
         try {
           const puntoInfo = await prisma.puntoAtencion.findUnique({
@@ -632,15 +640,59 @@ router.post("/generar-guia",
               servientrega_oficina_alianza: true,
             },
           });
+          console.log("📋 Info del punto desde BD:", {
+            punto_id: punto_atencion_id_captado,
+            punto_nombre: puntoInfo?.nombre,
+            servientrega_agencia_nombre: puntoInfo?.servientrega_agencia_nombre,
+            servientrega_alianza_BD: puntoInfo?.servientrega_alianza,
+            servientrega_oficina_alianza_BD: puntoInfo?.servientrega_oficina_alianza,
+          });
+          
           if (puntoInfo) {
-            // ✅ CORRECCIÓN CRÍTICA: Actualizar alianza y alianza_oficina con valores del punto
-            // Estos campos determinan qué información aparece en el PDF de la guía
-            if (puntoInfo.servientrega_alianza && puntoInfo.servientrega_alianza.trim() !== "") {
-              payload.alianza = puntoInfo.servientrega_alianza;
+            // 🔧 CORRECCIÓN CRÍTICA: Usar valores hardcodeados correctos basados en la agencia
+            // La BD tiene valores incorrectos que se reinician automáticamente
+            // Por eso usamos un mapeo hardcodeado basado en servientrega_agencia_nombre
+            
+            const agenciaNombre = puntoInfo.servientrega_agencia_nombre || "";
+            
+            // Mapeo de agencias a valores correctos de alianza_oficina
+            const mapeoAgencias: Record<string, string> = {
+              "QUITO_CC EL BOSQUE_PC": "QUITO_CC EL BOSQUE_PC",
+              "QUITO_PLAZA DEL VALLE_PC": "QUITO_PLAZA DEL VALLE_PC",
+              "QUITO_AMAZONAS_PC": "QUITO_AMAZONAS_PC",
+            };
+            
+            // Buscar el valor correcto basado en el nombre de la agencia
+            let alianzaOficinaCorrecta = mapeoAgencias[agenciaNombre];
+            
+            // Si no está en el mapeo, usar el nombre de la agencia como fallback
+            if (!alianzaOficinaCorrecta && agenciaNombre) {
+              alianzaOficinaCorrecta = agenciaNombre;
             }
-            if (puntoInfo.servientrega_oficina_alianza && puntoInfo.servientrega_oficina_alianza.trim() !== "") {
-              payload.alianza_oficina = puntoInfo.servientrega_oficina_alianza;
+            
+            // Si aún no hay valor, usar el valor de la BD como último recurso
+            if (!alianzaOficinaCorrecta && puntoInfo.servientrega_oficina_alianza) {
+              alianzaOficinaCorrecta = puntoInfo.servientrega_oficina_alianza;
             }
+            
+            // Si todo falla, usar valor por defecto
+            if (!alianzaOficinaCorrecta) {
+              alianzaOficinaCorrecta = "QUITO_PLAZA DEL VALLE_PC";
+            }
+            
+            payload.alianza_oficina = alianzaOficinaCorrecta;
+            
+            console.log("✅ alianza_oficina asignada (hardcodeado):", {
+              agencia_nombre: agenciaNombre,
+              alianza_oficina: payload.alianza_oficina,
+              fuente: mapeoAgencias[agenciaNombre] ? "mapeo_hardcodeado" : "fallback"
+            });
+            
+            logger.debug("✅ alianza_oficina asignada", {
+              punto_id: punto_atencion_id_captado,
+              agencia_nombre: agenciaNombre,
+              alianza_oficina: payload.alianza_oficina
+            });
             
             if (puntoInfo.servientrega_agencia_nombre && puntoInfo.servientrega_agencia_nombre.trim() !== "") {
               payload = { ...payload, nombre_agencia: puntoInfo.servientrega_agencia_nombre };
@@ -668,10 +720,47 @@ router.post("/generar-guia",
     }
 
     // 🔍 LOG: Payload final reorganizado en orden correcto
+    // ⚠️ SIEMPRE loguear campos críticos de alianza para diagnóstico
+    logger.info("📤 Payload Servientrega - Campos de alianza", {
+      alianza: payload.alianza,
+      alianza_oficina: payload.alianza_oficina,
+      nombre_agencia: (payload as Record<string, unknown>).nombre_agencia,
+      agencia_codigo: (payload as Record<string, unknown>).agencia_codigo,
+      punto_atencion_id: punto_atencion_id_captado,
+    });
+    
+    // 🚨 LOG DE CONSOLA CRÍTICO: Mostrar payload completo para diagnóstico
+    console.log("=".repeat(80));
+    console.log("🚀 PAYLOAD ENVIADO A SERVIENTREGA");
+    console.log("=".repeat(80));
+    console.log("Tipo:", payload.tipo);
+    console.log("Alianza:", payload.alianza);
+    console.log("Alianza Oficina:", payload.alianza_oficina);
+    console.log("Nombre Agencia:", (payload as Record<string, unknown>).nombre_agencia);
+    console.log("Agencia Código:", (payload as Record<string, unknown>).agencia_codigo);
+    console.log("-".repeat(80));
+    console.log("Ciudad Origen:", payload.ciudad_origen);
+    console.log("Ciudad Destinatario:", payload.ciudad_destinatario);
+    console.log("País Destinatario:", payload.pais_destinatario);
+    console.log("-".repeat(80));
+    console.log("Remitente:", {
+      cedula: payload.cedula_remitente,
+      nombre: payload.nombre_remitente,
+      direccion: payload.direccion_remitente,
+    });
+    console.log("Destinatario:", {
+      cedula: payload.cedula_destinatario,
+      nombre: payload.nombre_destinatario,
+      direccion: payload.direccion_destinatario,
+    });
+    console.log("-".repeat(80));
+    console.log("PAYLOAD COMPLETO (JSON):");
+    console.log(JSON.stringify(payload, null, 2));
+    console.log("=".repeat(80));
+    
     if (process.env.DEBUG_SERVIENTREGA === "1") {
-      logger.debug("Payload final enviado a Servientrega", { payload });
+      logger.debug("Payload final completo enviado a Servientrega", { payload });
     }
-    // Payload logueado arriba condicionalmente
 
     // 🔍 LOG: Mostrar credenciales enmascaradas
     logger.debug("Credenciales enmascaradas", {
@@ -697,7 +786,30 @@ router.post("/generar-guia",
     logger.info("Llamando a Servientrega API");
     const response = (await apiService.callAPI(payload)) as GenerarGuiaResponse;
 
-    // Respuesta RAW de Servientrega ya logueada arriba condicionalmente
+    // 🚨 LOG DE CONSOLA CRÍTICO: Mostrar respuesta de Servientrega
+    console.log("=".repeat(80));
+    console.log("📥 RESPUESTA DE SERVIENTREGA");
+    console.log("=".repeat(80));
+    console.log("Tipo de respuesta:", typeof response);
+    if (typeof response === 'object' && response !== null) {
+      console.log("Respuesta (JSON):");
+      console.log(JSON.stringify(response, null, 2));
+      // Mostrar campos críticos de la respuesta
+      const resp = response as Record<string, unknown>;
+      console.log("-".repeat(80));
+      console.log("Campos críticos:");
+      console.log("  proceso:", resp.proceso);
+      console.log("  guia:", resp.guia);
+      console.log("  fetch:", resp.fetch);
+      if (resp.fetch && typeof resp.fetch === 'object') {
+        const fetch = resp.fetch as Record<string, unknown>;
+        console.log("    fetch.proceso:", fetch.proceso);
+        console.log("    fetch.guia:", fetch.guia);
+      }
+    } else {
+      console.log("Respuesta (raw):", response);
+    }
+    console.log("=".repeat(80));
 
     // A veces el WS devuelve la tarifa al inicio y luego {"fetch":{...}} concatenado
     // Intento de "split & merge" cuando llega como string crudo

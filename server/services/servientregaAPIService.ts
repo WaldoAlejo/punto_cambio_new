@@ -228,6 +228,17 @@ export class ServientregaAPIService {
   ): Promise<ServientregaAPIResponse> {
     const url = this.apiUrl || MAIN_URL;
     const full = { tipo: "GeneracionGuia", ...payload, ...this.credentials };
+    
+    // 🚨 LOG DE CONSOLA CRÍTICO: Payload exacto enviado a Servientrega
+    console.log("🔥🔥🔥 SERVIENTREGA API SERVICE - generarGuia 🔥🔥🔥");
+    console.log("URL:", url);
+    console.log("Payload completo (con credenciales):");
+    console.log(JSON.stringify(full, null, 2));
+    console.log("Campos alianza en payload:");
+    console.log("  alianza:", (full as Record<string, unknown>).alianza);
+    console.log("  alianza_oficina:", (full as Record<string, unknown>).alianza_oficina);
+    console.log("🔥🔥🔥 FIN LOG 🔥🔥🔥");
+    
     const res = await doPost(url, full, "json", timeoutMs);
     const data = normalizeUpstream<ServientregaAPIResponse>(res.data);
 

@@ -238,6 +238,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       codpais: Number.isFinite(dest.codpais) ? dest.codpais : form.codpais,
     });
 
+    // Parseo de dirección y reconstrucción en campo único
     if (dest.direccion) {
       const partes = String(dest.direccion)
         .split(",")
@@ -256,22 +257,33 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
         calleSecundaria = parteCalleSecundaria.replace(/^y\s*/i, "").trim();
       }
 
-      setExtraDireccion({
-        callePrincipal: partes[0] || "",
-        numeracion,
-        calleSecundaria,
-        referencia:
-          partes
-            .find(
-              (p: string) =>
-                p.toLowerCase().startsWith("ref:") ||
-                (!p.includes("#") &&
-                  !p.toLowerCase().startsWith("y ") &&
-                  p !== partes[0])
-            )
-            ?.replace(/^Ref:\s*/i, "")
-            .trim() || "",
-      });
+      const referencia =
+        partes
+          .find(
+            (p: string) =>
+              p.toLowerCase().startsWith("ref:") ||
+              (!p.includes("#") &&
+                !p.toLowerCase().startsWith("y ") &&
+                p !== partes[0])
+          )
+          ?.replace(/^Ref:\s*/i, "")
+          .trim() || "";
+
+      // Reconstruir dirección completa en formato legible
+      let direccionReconstruida = partes[0] || "";
+      if (numeracion) {
+        direccionReconstruida += ` #${numeracion}`;
+      }
+      if (calleSecundaria) {
+        direccionReconstruida += ` y ${calleSecundaria}`;
+      }
+      if (referencia) {
+        direccionReconstruida += `, Ref: ${referencia}`;
+      }
+
+      setDireccionCompleta(direccionReconstruida.trim());
+    } else {
+      setDireccionCompleta("");
     }
 
     setDestinatarioExistente(dest);

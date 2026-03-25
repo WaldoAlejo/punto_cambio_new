@@ -221,10 +221,10 @@ export default function PasoConfirmarEnvio({
         ancho: ancho,
         largo: largo,
         tipo_guia: "1",
-        alianza: selectedPoint?.servientrega_alianza || "PUNTO CAMBIO SAS",
-        alianza_oficina:
-          selectedPoint?.servientrega_oficina_alianza ||
-          "QUITO_PLAZA DEL VALLE_PC",
+        // 🔧 CORRECCIÓN: alianza SIEMPRE es "PUNTO CAMBIO SAS" (fijo)
+        // alianza_oficina viene de la configuración del punto en BD
+        alianza: "PUNTO CAMBIO SAS",
+        alianza_oficina: selectedPoint?.servientrega_oficina_alianza || "QUITO_PLAZA DEL VALLE_PC",
         mail_remite: r.email?.trim() || "",
         // 💳 IMPORTANTE: Enviar punto_atencion_id para que el backend pueda descontar del saldo
         punto_atencion_id: selectedPoint?.id || undefined,
@@ -240,6 +240,15 @@ export default function PasoConfirmarEnvio({
         valor_total: totalEstimado || 0,
       } as const;
 
+      // 🔍 DEBUG: Ver valores del punto seleccionado
+      devWarn("📋 Valores del punto seleccionado:", {
+        punto_id: selectedPoint?.id,
+        punto_nombre: selectedPoint?.nombre,
+        servientrega_alianza: selectedPoint?.servientrega_alianza,
+        servientrega_oficina_alianza: selectedPoint?.servientrega_oficina_alianza,
+        servientrega_agencia_nombre: selectedPoint?.servientrega_agencia_nombre,
+        servientrega_agencia_codigo: selectedPoint?.servientrega_agencia_codigo,
+      });
       devWarn("📤 Payload GeneracionGuia (Production):", payload);
 
       const res = await axiosInstance.post(

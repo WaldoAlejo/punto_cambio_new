@@ -195,9 +195,10 @@ const EditPointDialog = ({
                     ...formData,
                     servientrega_agencia_codigo: agencia?.tipo_cs || "",
                     servientrega_agencia_nombre: agencia?.nombre || "",
-                    servientrega_alianza: agencia?.agencia || "",
-                    servientrega_oficina_alianza:
-                      agencia?.codigo_establecimiento || "",
+                    // 🔧 CORRECCIÓN: alianza SIEMPRE es "PUNTO CAMBIO SAS"
+                    servientrega_alianza: "PUNTO CAMBIO SAS",
+                    // 🔧 CORRECCIÓN: oficina_alianza es el nombre de la agencia
+                    servientrega_oficina_alianza: agencia?.nombre || "",
                   });
                 }}
                 placeholder="Seleccionar agencia de Servientrega..."

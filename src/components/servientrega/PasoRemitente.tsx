@@ -167,7 +167,7 @@ export default function PasoRemitente({
       pais: "ECUADOR",
     }));
 
-    // Parseo de dirección
+    // Parseo de dirección y reconstrucción en campo único
     if (rem.direccion) {
       const partes = String(rem.direccion)
         .split(",")
@@ -199,12 +199,21 @@ export default function PasoRemitente({
         calleSecundaria = segundaParte.replace(/^y\s*/i, "").trim();
       }
 
-      setExtraDireccion({
-        callePrincipal,
-        numeracion,
-        calleSecundaria,
-        referencia,
-      });
+      // Reconstruir dirección completa en formato legible
+      let direccionReconstruida = callePrincipal;
+      if (numeracion) {
+        direccionReconstruida += ` #${numeracion}`;
+      }
+      if (calleSecundaria) {
+        direccionReconstruida += ` y ${calleSecundaria}`;
+      }
+      if (referencia) {
+        direccionReconstruida += `, Ref: ${referencia}`;
+      }
+
+      setDireccionCompleta(direccionReconstruida.trim());
+    } else {
+      setDireccionCompleta("");
     }
 
     setRemitenteExistente(rem);
