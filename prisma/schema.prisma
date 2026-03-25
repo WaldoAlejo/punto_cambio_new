@@ -129,9 +129,8 @@ model Moneda {
   solicitudes                   SolicitudSaldo[]
   transferencias                Transferencia[]
 
-  @@index([codigo])
-  @@index([activo])
   @@index([codigo], map: "idx_moneda_codigo")
+  @@index([activo])
 }
 
 model Saldo {
@@ -191,10 +190,9 @@ model MovimientoSaldo {
   usuario           Usuario       @relation(fields: [usuario_id], references: [id])
 
   @@index([punto_atencion_id])
-  @@index([moneda_id])
+  @@index([moneda_id], map: "idx_movsaldo_moneda")
   @@index([fecha])
   @@index([referencia_id, tipo_referencia])
-  @@index([moneda_id], map: "idx_movsaldo_moneda")
 }
 
 model HistorialSaldo {
@@ -669,7 +667,6 @@ model CierreDiario {
   @@index([fecha])
   @@index([punto_atencion_id])
   @@index([estado])
-  @@index([fecha, punto_atencion_id])
 }
 
 model ServicioExternoMovimiento {

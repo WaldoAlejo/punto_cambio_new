@@ -143,7 +143,7 @@ router.post("/parcial", authenticateToken, async (req, res) => {
     }
 
     const actualizado = await prisma.$transaction(async (tx) => {
-      // Actualiza cabecera a PARCIAL con totales y fecha_cierre
+      // 1. Actualiza cabecera a PARCIAL con totales y fecha_cierre
       const cabecera = await tx.cuadreCaja.update({
         where: { id: cabeceraAbierta.id },
         data: {
@@ -153,10 +153,11 @@ router.post("/parcial", authenticateToken, async (req, res) => {
           total_cambios: totalMovimientos,
           total_ingresos: totalIngresos,
           total_egresos: totalEgresos,
+          usuario_cierre_parcial: usuario.id,
         },
       });
 
-      // Reemplazar detalles
+      // 2. Reemplazar detalles
       await tx.detalleCuadreCaja.deleteMany({
         where: { cuadre_id: cabecera.id },
       });
@@ -195,7 +196,33 @@ router.post("/parcial", authenticateToken, async (req, res) => {
         await tx.detalleCuadreCaja.createMany({ data: payload });
       }
 
-      // *** Importante: en PARCIAL NO se cierra jornada ni se libera punto ***
+      // 3. Cerrar la jornada del operador actual para liberar el punto
+      const jornadaActiva = await tx.jornada.findFirst({
+        where: {
+          usuario_id: usuario.id,
+          punto_atencion_id: puntoAtencionId,
+          estado: { in: ["ACTIVO", "ALMUERZO"] },
+          fecha_inicio: { gte: hoyGte, lt: hoyLt },
+        },
+        orderBy: { fecha_inicio: "desc" },
+      });
+
+      if (jornadaActiva) {
+        await tx.jornada.update({
+          where: { id: jornadaActiva.id },
+          data: {
+            fecha_salida: new Date(),
+            estado: "COMPLETADO",
+          },
+        });
+      }
+
+      // 4. Liberar el punto del usuario (para que otro operador pueda seleccionarlo)
+      await tx.usuario.update({
+        where: { id: usuario.id },
+        data: { punto_atencion_id: null },
+      });
+
       return cabecera;
     });
 

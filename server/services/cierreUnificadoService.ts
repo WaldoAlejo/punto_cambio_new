@@ -7,7 +7,8 @@
  * consistencia y prevenir errores. Todas las operaciones son atómicas.
  */
 
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { nowEcuador } from "../utils/timezone.js";
 import {
@@ -15,8 +16,6 @@ import {
   TipoMovimiento,
   TipoReferencia,
 } from "./movimientoSaldoService.js";
-
-const prisma = new PrismaClient();
 
 // Constantes de configuración
 const UMBRAL_DIFERENCIA_ALERTA = 10; // $10 USD o equivalente

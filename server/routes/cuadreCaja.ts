@@ -69,6 +69,7 @@ interface CuadreCaja {
   observaciones: string;
   fecha: string;
   punto_atencion_id: string;
+  usuario_cierre_parcial?: string;
 }
 
 router.post("/", authenticateToken, async (req, res) => {
@@ -83,7 +84,8 @@ router.post("/", authenticateToken, async (req, res) => {
     const { gte } = gyeDayRangeUtcFromDate(fechaBase);
     const fechaInicioDia: Date = new Date(gte);
 
-    const cuadreResult = await pool.query<CuadreCaja>(
+    // 1. Buscar cuadre ABIERTO existente
+    const cuadreAbiertoResult = await pool.query<CuadreCaja>(
       `SELECT * FROM "CuadreCaja"
         WHERE punto_atencion_id = $1
           AND fecha >= $2::timestamp
@@ -91,10 +93,49 @@ router.post("/", authenticateToken, async (req, res) => {
         LIMIT 1`,
       [String(puntoAtencionId), fechaInicioDia.toISOString()]
     );
-    if (cuadreResult.rows[0]) {
-      return res.status(200).json({ success: true, cuadre: cuadreResult.rows[0], message: "Ya existe cuadre abierto" });
+    
+    if (cuadreAbiertoResult.rows[0]) {
+      return res.status(200).json({ success: true, cuadre: cuadreAbiertoResult.rows[0], message: "Ya existe cuadre abierto" });
     }
 
+    // 2. Buscar cuadre PARCIAL (cambio de turno) y reactivarlo a ABIERTO
+    const cuadreParcialResult = await pool.query<CuadreCaja>(
+      `SELECT * FROM "CuadreCaja"
+        WHERE punto_atencion_id = $1
+          AND fecha >= $2::timestamp
+          AND estado = 'PARCIAL'
+        ORDER BY fecha_cierre DESC
+        LIMIT 1`,
+      [String(puntoAtencionId), fechaInicioDia.toISOString()]
+    );
+
+    if (cuadreParcialResult.rows[0]) {
+      // Reactivar el cuadre PARCIAL a ABIERTO para el nuevo operador
+      const updateResult = await pool.query<CuadreCaja>(
+        `UPDATE "CuadreCaja" 
+         SET estado = 'ABIERTO', 
+             usuario_id = $1,
+             observaciones = COALESCE(observaciones, '') || ' | Reactivado por cambio de turno'
+         WHERE id = $2
+         RETURNING *`,
+        [usuario.id, cuadreParcialResult.rows[0].id]
+      );
+
+      logger.info("✅ Cuadre PARCIAL reactivado a ABIERTO (cambio de turno)", {
+        usuario_id: usuario.id,
+        punto_atencion_id: puntoAtencionId,
+        cuadre_id: updateResult.rows[0]?.id,
+        cuadre_anterior_id: cuadreParcialResult.rows[0].usuario_cierre_parcial
+      });
+
+      return res.status(200).json({ 
+        success: true, 
+        cuadre: updateResult.rows[0], 
+        message: "Cuadre reactivado desde cierre parcial" 
+      });
+    }
+
+    // 3. Crear nuevo cuadre si no existe ni ABIERTO ni PARCIAL
     const cuadreId = randomUUID();
     const insertResult = await pool.query<CuadreCaja>(
       `INSERT INTO "CuadreCaja" (id, estado, fecha, punto_atencion_id, usuario_id, observaciones)

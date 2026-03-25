@@ -6,15 +6,14 @@
  * Gestiona la actualización de saldos y registro de movimientos.
  */
 
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import prisma from "../../lib/prisma.js";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento,
   TipoReferencia,
 } from "../movimientoSaldoService.js";
 import { round2 } from "./exchangeCalculationService.js";
-
-const prisma = new PrismaClient();
 
 export interface SaldoUpdateData {
   puntoAtencionId: string;

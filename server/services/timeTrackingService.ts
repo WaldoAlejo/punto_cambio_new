@@ -8,15 +8,14 @@
  * garantizar integridad y prevenir manipulación.
  */
 
-import { PrismaClient, EstadoJornada, Prisma } from "@prisma/client";
+import { EstadoJornada, Prisma } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import {
   gyeDayRangeUtcFromDate,
   todayGyeDateOnly,
   gyeDayRangeUtcFromDateOnly,
 } from "../utils/timezone.js";
-
-const prisma = new PrismaClient();
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Tipos y Interfaces

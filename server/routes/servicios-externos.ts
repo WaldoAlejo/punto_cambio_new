@@ -16,6 +16,9 @@ import {
 } from "../services/movimientoSaldoService.js";
 import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
 import {
+  calcularSaldoCajaDesdeMovimientos,
+} from "../services/saldoCalculationService.js";
+import {
   nowEcuador,
   todayGyeDateOnly,
   gyeDayRangeUtcFromDateOnly,
@@ -149,80 +152,6 @@ const TIPOS_VALIDOS: Array<Extract<PrismaTipoMovimiento, "INGRESO" | "EGRESO">> 
 async function gyeTodayWindow() {
   const { gyeDayRangeUtcFromDate } = await import("../utils/timezone.js");
   return gyeDayRangeUtcFromDate(new Date()); // { gte, lt }
-}
-
-/**
- * Calcula el saldo de CAJA desde movimientos (igual que la UI).
- * Acepta un cliente de Prisma (global o transacción) para flexibilidad.
- */
-async function calcularSaldoCajaDesdeMovimientos(
-  puntoAtencionId: string,
-  monedaId: string,
-  tx: Prisma.TransactionClient | typeof prisma = prisma
-): Promise<number> {
-  // 1. Obtener saldo inicial más reciente
-  const saldoInicial = await tx.saldoInicial.findFirst({
-    where: {
-      punto_atencion_id: puntoAtencionId,
-      moneda_id: monedaId,
-      activo: true,
-    },
-    orderBy: { fecha_asignacion: "desc" },
-  });
-
-  let saldoCalculado = saldoInicial ? Number(saldoInicial.cantidad_inicial) : 0;
-  const fechaCorte = saldoInicial?.fecha_asignacion ?? null;
-
-  // 2. Obtener movimientos (excluyendo bancarios)
-  const movimientos = await tx.movimientoSaldo.findMany({
-    where: {
-      punto_atencion_id: puntoAtencionId,
-      moneda_id: monedaId,
-      ...(fechaCorte ? { fecha: { gte: fechaCorte } } : {}),
-    },
-    select: { monto: true, tipo_movimiento: true, descripcion: true },
-    orderBy: { fecha: "asc" },
-  });
-
-  // 3. Filtrar movimientos bancarios y calcular saldo
-  for (const mov of movimientos) {
-    const desc = (mov.descripcion ?? "").toLowerCase();
-    
-    // Si el movimiento está marcado como "(CAJA)", SIEMPRE afecta caja
-    if (desc.includes("(caja)")) {
-      const monto = Number(mov.monto);
-      if (!isNaN(monto) && isFinite(monto)) {
-        saldoCalculado += monto;
-      }
-      continue;
-    }
-    
-    // Excluir cuando 'banco'/'bancos' aparece como palabra completa
-    const hasBancoWord = /\bbancos?\b/i.test(desc);
-    if (hasBancoWord) continue;
-
-    // Aplicar monto según tipo
-    const tipo = (mov.tipo_movimiento || "").toUpperCase();
-    const monto = Number(mov.monto);
-    
-    if (isNaN(monto) || !isFinite(monto)) continue;
-    
-    if (tipo === "SALDO_INICIAL") continue; // Ya está incluido
-    
-    // Normalizar signo para tipos conocidos
-    if (tipo === "EGRESO" || tipo === "TRANSFERENCIA_SALIENTE" || tipo === "TRANSFERENCIA_SALIDA") {
-      saldoCalculado -= Math.abs(monto);
-    } else if (tipo === "INGRESO" || tipo === "TRANSFERENCIA_ENTRANTE" || tipo === "TRANSFERENCIA_ENTRADA" || tipo === "TRANSFERENCIA_DEVOLUCION") {
-      saldoCalculado += Math.abs(monto);
-    } else if (tipo === "AJUSTE") {
-      saldoCalculado += monto; // AJUSTE mantiene su signo
-    } else {
-      // Para otros tipos, usar el signo del monto como está
-      saldoCalculado += monto;
-    }
-  }
-
-  return Number(saldoCalculado.toFixed(2));
 }
 
 /** Asegura que exista USD y devuelve su id (usa unique por codigo) */

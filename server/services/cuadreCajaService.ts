@@ -17,10 +17,9 @@
  *   * EGRESOS: negativos (-)
  */
 
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-
-const prisma = new PrismaClient();
 
 export interface CuadreCajaData {
   puntoAtencionId: string;

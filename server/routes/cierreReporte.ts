@@ -99,14 +99,8 @@ router.get("/operador", authenticateToken, async (req, res) => {
     }
 
     // Calcular totales
-    const totalIngresos = cuadre.detalles.reduce(
-      (sum, d) => sum + Number(d.ingresos_periodo || 0),
-      0
-    );
-    const totalEgresos = cuadre.detalles.reduce(
-      (sum, d) => sum + Number(d.egresos_periodo || 0),
-      0
-    );
+    // NOTA: ingresos_periodo y egresos_periodo no están en el modelo,
+    // se calculan desde los movimientos si es necesario
     const totalMovimientos = cuadre.detalles.reduce(
       (sum, d) => sum + Number(d.movimientos_periodo || 0),
       0
@@ -127,8 +121,6 @@ router.get("/operador", authenticateToken, async (req, res) => {
         nombre: d.moneda.nombre,
         simbolo: d.moneda.simbolo,
         saldo_apertura: Number(d.saldo_apertura),
-        ingresos_periodo: Number(d.ingresos_periodo || 0),
-        egresos_periodo: Number(d.egresos_periodo || 0),
         saldo_cierre: Number(d.saldo_cierre),
         conteo_fisico: Number(d.conteo_fisico),
         billetes: Number(d.billetes || 0),
@@ -140,8 +132,6 @@ router.get("/operador", authenticateToken, async (req, res) => {
         movimientos_periodo: Number(d.movimientos_periodo || 0),
       })),
       totales: {
-        ingresos: totalIngresos,
-        egresos: totalEgresos,
         movimientos: totalMovimientos,
       },
       observaciones: cuadre.observaciones,
@@ -474,14 +464,14 @@ router.get("/validar", authenticateToken, async (req, res) => {
 
         // Validar desglose
         const billetes = Number(detalle.billetes || 0);
-        const monedas = Number(detalle.monedas_fisicas || 0);
-        const sumaDesglose = billetes + monedas;
+        const monedasFisicas = Number(detalle.monedas_fisicas || 0);
+        const sumaDesglose = billetes + monedasFisicas;
 
         if (Math.abs(sumaDesglose - conteoFisico) > 0.01) {
           errores.push({
             tipo: "DESGLOSE",
             moneda_codigo: codigo,
-            mensaje: `${codigo}: Billetes (${billetes}) + Monedas (${monedas}) ≠ Conteo (${conteoFisico})`,
+            mensaje: `${codigo}: Billetes (${billetes}) + Monedas (${monedasFisicas}) ≠ Conteo (${conteoFisico})`,
             severidad: "ERROR",
           });
         }

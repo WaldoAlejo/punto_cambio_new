@@ -6,11 +6,10 @@
  * Centraliza todas las validaciones de cambios de divisa.
  */
 
-import { PrismaClient, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import prisma from "../../lib/prisma.js";
 import { round2 } from "./exchangeCalculationService.js";
 import { MAX_RATE_ALLOWED } from "../../types/index.js";
-
-const prisma = new PrismaClient();
 
 export interface ValidationError {
   field: string;
