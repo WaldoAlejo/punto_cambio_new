@@ -25,6 +25,8 @@ interface JornadaActiveResponse {
       telefono?: string;
       servientrega_agencia_codigo?: string;
       servientrega_agencia_nombre?: string;
+      servientrega_alianza?: string;
+      servientrega_oficina_alianza?: string;
     };
   } | null;
 }
@@ -36,8 +38,11 @@ function App() {
   const [verifyingJornada, setVerifyingJornada] = useState(false);
 
   // Verifica si existe jornada activa para OPERADOR
+  // Se ejecuta al montar y cada 30 segundos para mantener datos actualizados
   useEffect(() => {
-    if (user && user.rol === "OPERADOR") {
+    if (!user || user.rol !== "OPERADOR") return;
+
+    const checkActiveSchedule = () => {
       setVerifyingJornada(true);
       axiosInstance
         .get<JornadaActiveResponse>("/schedules/active")
@@ -46,10 +51,9 @@ function App() {
           if (!active) {
             setSelectedPoint(null);
             localStorage.removeItem("puntoAtencionSeleccionado");
-          } else if (
-            active.punto_atencion_id &&
-            (!selectedPoint || selectedPoint.id !== active.punto_atencion_id)
-          ) {
+          } else if (active.punto_atencion_id) {
+            // SIEMPRE actualizar el punto con los datos más recientes de la API
+            // para asegurar que tengamos todos los campos actualizados (incluyendo Servientrega)
             setSelectedPoint({
               id: active.puntoAtencion?.id || active.punto_atencion_id,
               nombre: active.puntoAtencion?.nombre || "",
@@ -62,6 +66,10 @@ function App() {
                 active.puntoAtencion?.servientrega_agencia_codigo,
               servientrega_agencia_nombre:
                 active.puntoAtencion?.servientrega_agencia_nombre,
+              servientrega_alianza:
+                active.puntoAtencion?.servientrega_alianza,
+              servientrega_oficina_alianza:
+                active.puntoAtencion?.servientrega_oficina_alianza,
               activo: true,
               es_principal: false,
               created_at: "",
@@ -75,7 +83,15 @@ function App() {
           localStorage.removeItem("puntoAtencionSeleccionado");
           setVerifyingJornada(false);
         });
-    }
+    };
+
+    // Ejecutar inmediatamente al montar
+    checkActiveSchedule();
+
+    // Refrescar cada 30 segundos para mantener datos actualizados
+    const interval = setInterval(checkActiveSchedule, 30000);
+
+    return () => clearInterval(interval);
     // eslint-disable-next-line
   }, [user]);
 
