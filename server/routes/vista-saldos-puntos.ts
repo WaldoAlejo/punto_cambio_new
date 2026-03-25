@@ -2,20 +2,15 @@ import express, { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { authenticateToken } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
-
+import logger from "../utils/logger.js";
 
 const router = express.Router();
-
-const log = (...args: unknown[]) => {
-  console.warn(...args);
-};
 
 // GET /api/vista-saldos-puntos — Vista consolidada de saldos por punto
 router.get("/", authenticateToken, async (req: Request, res: Response) => {
   try {
-    log("🔍 Vista saldos: Iniciando consulta...");
-    log("👤 Usuario solicitante:", {
-      id: req.user?.id,
+    logger.debug("Vista saldos: Iniciando consulta", {
+      usuarioId: req.user?.id,
       rol: req.user?.rol,
     });
 
@@ -237,7 +232,7 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       ({ __punto_sort, __moneda_sort_1, __moneda_sort_2, ...rest }) => rest
     );
 
-    log(`💰 Saldos encontrados: ${vista.length} registros`);
+    logger.debug(`Saldos encontrados: ${vista.length} registros`);
 
     // Resumen por punto (solo para logs)
     const puntosSummary = vista.reduce<
@@ -253,12 +248,12 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       acc[row.punto_atencion_id].monedas++;
       return acc;
     }, {});
-    log("📍 Resumen por puntos:", puntosSummary);
-    log("💰 Primeros 5 registros:", vista.slice(0, 5));
+    logger.debug("Resumen por puntos", { puntosSummary });
+    logger.debug("Primeros 5 registros", { primeros: vista.slice(0, 5) });
 
     res.json({ success: true, saldos: vista });
   } catch (error) {
-    console.error("❌ Error in balance view route:", error);
+    logger.error("Error in balance view route", { error });
     res.status(500).json({
       success: false,
       error: "Error interno del servidor",

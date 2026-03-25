@@ -1,6 +1,7 @@
 import express from "express";
 import { ServientregaDBService } from "../../services/servientregaDBService.js";
 import prisma from "../../lib/prisma.js";
+import logger from "../../utils/logger.js";
 import {
   nowEcuador,
   todayGyeDateOnly,
@@ -50,7 +51,7 @@ router.get(
 
       res.json(historial);
     } catch (error) {
-      console.error("Error al obtener historial Servientrega:", error);
+      logger.error("Error al obtener historial Servientrega", { error });
       res.status(500).json({
         error: "Error al obtener historial",
         details: error instanceof Error ? error.message : "Error desconocido",
@@ -70,9 +71,7 @@ router.get(
       const { puntoAtencionId } = req.params;
       const { monto } = req.query;
 
-      console.log(
-        `🔍 Servientrega: Validando saldo (como servicio externo) para punto ${puntoAtencionId}, monto: ${monto}`
-      );
+      logger.debug("Validando saldo Servientrega", { puntoAtencionId, monto });
 
       if (!puntoAtencionId) {
         return res.status(400).json({
@@ -95,9 +94,7 @@ router.get(
       });
 
       if (!saldo) {
-        console.log(
-          `❌ Servientrega: No se encontró saldo asignado para punto ${puntoAtencionId}`
-        );
+        logger.warn("No se encontró saldo asignado para Servientrega", { puntoAtencionId });
         return res.json({
           estado: "SIN_SALDO",
           mensaje: "No hay saldo asignado para Servientrega en este punto de atención. Contacte al administrador.",
@@ -108,9 +105,7 @@ router.get(
       const disponible = Number(saldo.cantidad || 0);
       const montoRequerido = monto ? parseFloat(monto as string) : 0;
 
-      console.log(
-        `💰 Servientrega: Saldo disponible: ${disponible}, Monto requerido: ${montoRequerido}`
-      );
+      logger.debug("Saldo Servientrega", { disponible, montoRequerido });
 
       if (disponible <= 0) {
         return res.json({
@@ -169,9 +164,7 @@ router.get(
       );
 
       if (!puntoAtencionId) {
-        console.error(
-          "❌ Servientrega: ID de punto de atención no proporcionado"
-        );
+        logger.error("ID de punto de atención no proporcionado");
         return res
           .status(400)
           .json({ error: "El ID del punto de atención es requerido" });
@@ -191,9 +184,7 @@ router.get(
       });
 
       if (!saldo) {
-        console.log(
-          `💰 Servientrega: No se encontró saldo asignado para punto ${puntoAtencionId}, devolviendo 0`
-        );
+        logger.debug("No se encontró saldo asignado, devolviendo 0", { puntoAtencionId });
         return res.json({ 
           disponible: 0,
           servicio: "SERVIENTREGA",
@@ -214,16 +205,10 @@ router.get(
         monto_usado: 0,
       };
 
-      console.log(
-        `✅ Servientrega: Saldo para punto ${puntoAtencionId}:`,
-        resultado
-      );
+      logger.debug("Saldo Servientrega", { puntoAtencionId, disponible: resultado.disponible });
       res.json(resultado);
     } catch (error) {
-      console.error(
-        `❌ Servientrega: Error al obtener saldo para punto ${req.params.puntoAtencionId}:`,
-        error
-      );
+      logger.error("Error al obtener saldo", { puntoAtencionId: req.params.puntoAtencionId, error });
       res.status(500).json({
         error: "Error al obtener saldo",
         details: error instanceof Error ? error.message : "Error desconocido",
@@ -359,7 +344,7 @@ router.post(
         message: "Solicitud de saldo creada correctamente",
       });
     } catch (error) {
-      console.error("Error al crear solicitud de saldo:", error);
+      logger.error("Error al crear solicitud de saldo", { error });
       res.status(500).json({
         success: false,
         error: "Error al crear solicitud de saldo",
@@ -386,7 +371,7 @@ router.get(
         solicitudes,
       });
     } catch (error) {
-      console.error("Error al listar solicitudes de saldo:", error);
+      logger.error("Error al listar solicitudes de saldo", { error });
       res.status(500).json({
         success: false,
         error: "Error al listar solicitudes de saldo",
@@ -426,7 +411,7 @@ router.put(
         message: `Solicitud ${estado.toLowerCase()} correctamente`,
       });
     } catch (error) {
-      console.error("Error al actualizar estado de solicitud:", error);
+      logger.error("Error al actualizar estado de solicitud", { error });
       res.status(500).json({
         success: false,
         error: "Error al actualizar estado de solicitud",
@@ -568,7 +553,7 @@ router.get(
         dias: resultados,
       });
     } catch (error) {
-      console.error("Error en investigacion-saldos servientrega:", error);
+      logger.error("Error en investigacion-saldos servientrega", { error });
       res.status(500).json({
         success: false,
         message: "Error en la investigación de saldos",

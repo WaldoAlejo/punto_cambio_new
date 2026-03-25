@@ -1,6 +1,7 @@
 import express from "express";
 import { authenticateToken } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
+import logger from "../utils/logger.js";
 import { Prisma } from "@prisma/client";
 
 const router = express.Router();
@@ -39,7 +40,7 @@ const toNum = (x: D | null | undefined) => Number((x ?? d0()).toString());
 ============================================================================ */
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    console.log("🔍 Calculando balance completo del sistema...");
+    logger.info("Calculando balance completo del sistema");
 
     // 1) Resumen general (paralelo)
     const [
@@ -166,10 +167,6 @@ router.get("/", authenticateToken, async (req, res) => {
     // Ordenar por balance desc
     balancesRaw.sort((a, b) => b.balance.minus(a.balance).toNumber());
 
-    console.log(
-      `✅ Balance calculado: ${balancesRaw.length} monedas con movimientos`
-    );
-
     res.json({
       success: true,
       data: {
@@ -196,7 +193,7 @@ router.get("/", authenticateToken, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Error al calcular balance completo:", error);
+    logger.error("Error al calcular balance completo", { error });
     res.status(500).json({
       success: false,
       error: "Error interno del servidor",
@@ -215,7 +212,7 @@ router.get("/", authenticateToken, async (req, res) => {
 router.get("/punto/:pointId", authenticateToken, async (req, res) => {
   try {
     const { pointId } = req.params;
-    console.log(`🔍 Calculando balance completo para punto: ${pointId}`);
+    logger.info("Calculando balance completo para punto", { pointId });
 
     const punto = await prisma.puntoAtencion.findUnique({
       where: { id: pointId },
@@ -361,15 +358,6 @@ router.get("/punto/:pointId", authenticateToken, async (req, res) => {
         Math.abs(b.detalles.transferenciasNetas) > 0.01
     );
 
-    console.log(
-      `✅ Balance por punto calculado: ${
-        cambiosDivisas +
-        serviciosExternos +
-        transferenciasOrigen +
-        transferenciasDestino
-      } movimientos totales, ${balancesConMovimiento.length} monedas con saldo`
-    );
-
     res.json({
       success: true,
       data: {
@@ -389,7 +377,7 @@ router.get("/punto/:pointId", authenticateToken, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("❌ Error al calcular balance por punto:", error);
+    logger.error("Error al calcular balance por punto", { error });
     res.status(500).json({
       success: false,
       error: "Error interno del servidor",

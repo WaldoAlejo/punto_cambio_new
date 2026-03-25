@@ -3,6 +3,7 @@ import {
   ServientregaAPIService,
   ServientregaCredentials,
 } from "../../services/servientregaAPIService.js";
+import logger from "../../utils/logger.js";
 
 const router = express.Router();
 
@@ -126,7 +127,7 @@ router.post("/productos", async (_req, res) => {
       raw_fetch: process.env.NODE_ENV === "production" ? undefined : result,
     });
   } catch (error) {
-    console.error("Error al obtener productos:", error);
+    logger.error("Error al obtener productos", { error });
     return res.status(500).json({
       success: false,
       error: "Error al obtener productos",
@@ -145,7 +146,7 @@ router.post("/paises", async (_req, res) => {
     const result = await apiService.obtenerPaises();
     res.json(result);
   } catch (error) {
-    console.error("Error al obtener países:", error);
+    logger.error("Error al obtener países", { error });
     res.status(500).json({
       error: "Error al obtener países",
       details: error instanceof Error ? error.message : "Error desconocido",
@@ -166,7 +167,7 @@ router.post("/ciudades", async (req, res) => {
     const result = await apiService.obtenerCiudades(codpais);
     res.json(result);
   } catch (error) {
-    console.error("Error al obtener ciudades:", error);
+    logger.error("Error al obtener ciudades", { error });
     res.status(500).json({
       error: "Error al obtener ciudades",
       details: error instanceof Error ? error.message : "Error desconocido",
@@ -176,15 +177,14 @@ router.post("/ciudades", async (req, res) => {
 
 router.post("/agencias", async (_req, res) => {
   try {
-    console.log("🔍 Servientrega API: Obteniendo agencias...");
+    logger.debug("Servientrega API: Obteniendo agencias");
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();
 
     const result: unknown = await apiService.obtenerAgencias();
-    console.log(
-      "📍 Servientrega API: Respuesta completa de agencias:",
-      JSON.stringify(result, null, 2)
-    );
+    if (process.env.DEBUG_SERVIENTREGA === "1") {
+      logger.debug("Servientrega API: Respuesta de agencias", { result });
+    }
 
     // Log detallado del array
     const resultFetch = isRecord(result) ? result.fetch : undefined;
@@ -194,32 +194,26 @@ router.post("/agencias", async (_req, res) => {
     let agenciasArray: unknown[] = [];
     if (Array.isArray(resultFetch)) {
       agenciasArray = resultFetch;
-      console.log(
-        `✅ Found agencias in result.fetch: ${agenciasArray.length} items`
-      );
+      logger.debug(`Found agencias in result.fetch: ${agenciasArray.length} items`);
     } else if (Array.isArray(resultData)) {
       agenciasArray = resultData;
-      console.log(
-        `✅ Found agencias in result.data: ${agenciasArray.length} items`
+      logger.debug(`Found agencias in result.data: ${agenciasArray.length} items`
       );
     } else if (Array.isArray(resultAgencias)) {
       agenciasArray = resultAgencias;
-      console.log(
-        `✅ Found agencias in result.agencias: ${agenciasArray.length} items`
-      );
+      logger.debug(`Found agencias in result.agencias: ${agenciasArray.length} items`);
     } else if (Array.isArray(result)) {
       agenciasArray = result;
-      console.log(`✅ Result is direct array: ${agenciasArray.length} items`);
+      logger.debug(`Result is direct array: ${agenciasArray.length} items`);
     }
 
-    // Log primeros 5 items
-    console.log(
-      "📊 Primeras 5 agencias raw:",
-      JSON.stringify(agenciasArray.slice(0, 5), null, 2)
-    );
+    // Log primeros 5 items (solo en debug)
+    if (process.env.DEBUG_SERVIENTREGA === "1") {
+      logger.debug("Primeras 5 agencias raw", { agencias: agenciasArray.slice(0, 5) });
+    }
 
     if (!result) {
-      console.error("❌ Respuesta vacía de la API de Servientrega");
+      logger.error("Respuesta vacía de la API de Servientrega");
       return res.status(500).json({
         success: false,
         error: "Respuesta vacía de la API de Servientrega",
@@ -250,8 +244,7 @@ router.post("/agencias", async (_req, res) => {
       }
     }
 
-    console.log(`✅ Agencias procesadas: ${agencias.length} encontradas`);
-    console.log(`📊 Primeras 2 agencias:`, agencias.slice(0, 2));
+    logger.info(`Agencias procesadas: ${agencias.length} encontradas`);
 
     res.json({
       success: true,
@@ -259,7 +252,7 @@ router.post("/agencias", async (_req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error("❌ Error al obtener agencias:", error);
+    logger.error("Error al obtener agencias", { error });
     res.status(500).json({
       success: false,
       error: "Error al obtener agencias",
@@ -277,7 +270,7 @@ router.post("/empaques", async (_req, res) => {
     const result = await apiService.obtenerEmpaques();
     res.json(result);
   } catch (error) {
-    console.error("Error al obtener empaques:", error);
+    logger.error("Error al obtener empaques", { error });
     res.status(500).json({
       error: "Error al obtener empaques",
       details: error instanceof Error ? error.message : "Error desconocido",
@@ -297,7 +290,7 @@ router.post("/validar-retail", async (req, res) => {
     const result = await apiService.callAPI(req.body, 15000, true);
     res.json(result);
   } catch (error) {
-    console.error("Error al validar endpoint retail:", error);
+    logger.error("Error al validar endpoint retail", { error });
     res.status(500).json({
       error: "Error al validar endpoint retail",
       details: error instanceof Error ? error.message : "Error desconocido",
@@ -317,7 +310,7 @@ router.get("/test-retail", async (_req, res) => {
       data: result,
     });
   } catch (error) {
-    console.error("Error al probar endpoint retail:", error);
+    logger.error("Error al probar endpoint retail", { error });
     res.status(500).json({
       success: false,
       error: "Error al conectar con endpoint retail",

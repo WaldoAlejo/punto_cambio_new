@@ -743,19 +743,16 @@ router.post(
         // DEBUG opcional: mostrar payload que vamos a insertar en DB (evitar datos sensibles)
         if (process.env.DEBUG_EXCHANGES === "1") {
           try {
-            console.log(
-              "[DEBUG] intento crear CambioDivisa con valores:",
-              JSON.stringify({
-                moneda_origen_id,
-                moneda_destino_id,
-                monto_origen: round2(monto_origen_final),
-                monto_destino: round2(monto_destino_final),
-                tasa_cambio_billetes: num(tasa_cambio_billetes),
-                tasa_cambio_monedas: num(tasa_cambio_monedas),
-              })
-            );
+            logger.debug("Intento crear CambioDivisa", {
+              moneda_origen_id,
+              moneda_destino_id,
+              monto_origen: round2(monto_origen_final),
+              monto_destino: round2(monto_destino_final),
+              tasa_cambio_billetes: num(tasa_cambio_billetes),
+              tasa_cambio_monedas: num(tasa_cambio_monedas),
+            });
           } catch (dbgErr) {
-            console.warn("[DEBUG] No se pudo serializar payload de cambio:", dbgErr);
+            logger.debug("No se pudo serializar payload de cambio", { error: dbgErr });
           }
         }
         const cambio = await tx.cambioDivisa.create({
@@ -1271,7 +1268,10 @@ router.post(
           );
 
           if (!tieneMovimientoOrigen) {
-            console.warn(`[AUTO-FIX] Creando movimiento de ingreso faltante para origen ${cambio.monedaOrigen?.codigo}`);
+            logger.warn("Auto-fix: Creando movimiento de ingreso faltante", {
+              moneda: cambio.monedaOrigen?.codigo,
+              cambioId: cambio.id,
+            });
             await logMovimientoSaldo(tx, {
               punto_atencion_id,
               moneda_id: moneda_origen_id,
@@ -1287,7 +1287,10 @@ router.post(
           }
 
           if (!tieneMovimientoDestino) {
-            console.warn(`[AUTO-FIX] Creando movimiento de egreso faltante para destino ${cambio.monedaDestino?.codigo}`);
+            logger.warn("Auto-fix: Creando movimiento de egreso faltante", {
+              moneda: cambio.monedaDestino?.codigo,
+              cambioId: cambio.id,
+            });
             await logMovimientoSaldo(tx, {
               punto_atencion_id,
               moneda_id: moneda_destino_id,

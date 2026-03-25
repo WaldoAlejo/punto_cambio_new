@@ -8,6 +8,7 @@ import {
   ServientregaDBService,
 } from "../../services/servientregaDBService.js";
 import prisma from "../../lib/prisma.js";
+import logger from "../../utils/logger.js";
 import { ServientregaValidationService } from "../../services/servientregaValidationService.js";
 import { idempotency } from "../../middleware/idempotency.js";
 import { registrarMovimientoSaldo, TipoMovimiento, TipoReferencia } from "../../services/movimientoSaldoService.js";
@@ -167,7 +168,7 @@ async function validarSaldoGenerarGuia(
 
     next();
   } catch (error) {
-    console.error("Error validando saldo para guía:", error);
+    logger.error("Error validando saldo para guía", { error });
     res.status(500).json({
       success: false,
       error: "Error interno al validar saldo",
@@ -207,21 +208,14 @@ router.post("/tarifa", async (req, res) => {
     const sanitizedData =
       ServientregaValidationService.sanitizeTarifaRequest(bodyConTipo);
 
-    // DEBUG: Log del payload que se va a enviar
-    console.log(
-      "🔍 PAYLOAD ORIGINAL DEL FRONTEND:",
-      JSON.stringify(req.body, null, 2)
-    );
-    console.log("🔍 PAYLOAD CON TIPO:", JSON.stringify(bodyConTipo, null, 2));
-    console.log(
-      "🔍 PAYLOAD SANITIZADO:",
-      JSON.stringify(sanitizedData, null, 2)
-    );
+    // DEBUG: Log del payload que se va a enviar (solo en desarrollo)
+    if (process.env.DEBUG_SERVIENTREGA === "1") {
+      logger.debug("Payload original", { body: req.body });
+      logger.debug("Payload sanitizado", { sanitizedData });
+    }
 
     // 4) Preparar API Service con credenciales de env
     const credentials = getCredentialsFromEnv();
-    console.log("🔍 CREDENCIALES:", JSON.stringify(maskCreds(credentials)));
-    console.log("🔍 URL API:", getApiUrl());
 
     const apiService = new ServientregaAPIService(credentials);
     apiService.apiUrl = getApiUrl();
@@ -254,7 +248,7 @@ router.post("/tarifa", async (req, res) => {
     const noEmpaqueRequested = !sanitizedData.empaque;
 
     if (noEmpaqueRequested && result) {
-      console.log("🔧 AJUSTANDO COSTOS - No se solicitó empaque");
+      logger.debug("Ajustando costos - No se solicitó empaque");
 
       // Si es un array, ajustar el primer elemento
       const dataToAdjust = Array.isArray(result) ? result[0] : result;
@@ -266,7 +260,7 @@ router.post("/tarifa", async (req, res) => {
         const gtotal = parseFloat(dataToAdjust.gtotal || 0);
         const totalTransacion = parseFloat(dataToAdjust.total_transacion || 0);
 
-        console.log("🔧 Valores originales:", {
+        logger.debug("Valores originales", {
           valor_empaque: valorEmpaque,
           valor_empaque_iva: valorEmpaqueIva,
           total_empaque: totalEmpaque,
@@ -284,7 +278,7 @@ router.post("/tarifa", async (req, res) => {
           total_transacion: Math.max(0, totalTransacion - totalEmpaque),
         };
 
-        console.log("🔧 Valores ajustados:", {
+        logger.debug("Valores ajustados", {
           valor_empaque: adjustedData.valor_empaque,
           valor_empaque_iva: adjustedData.valor_empaque_iva,
           total_empaque: adjustedData.total_empaque,
@@ -298,7 +292,7 @@ router.post("/tarifa", async (req, res) => {
 
     return res.json(adjustedResult);
   } catch (error) {
-    console.error("💥 Error al calcular tarifa:", error);
+    logger.error("Error al calcular tarifa", { error });
     return res.status(500).json({
       error: "Error al calcular tarifa",
       details: error instanceof Error ? error.message : "Error desconocido",
@@ -334,7 +328,7 @@ router.post("/generar-guia",
     const monedasCaptadas = Number(req.body?.monedas_fisicas || 0);
     const bancosCaptados = Number(req.body?.bancos || 0);
 
-    console.log("🔍 CAPTURA INICIAL:", {
+    logger.debug("Captura inicial", {
       punto_atencion_id: punto_atencion_id_captado || "NO RECIBIDO",
       costoEnvioPrecalculado,
       metodoIngreso,
@@ -363,10 +357,7 @@ router.post("/generar-guia",
       });
     }
 
-    console.log(
-      "💰 Costo de envío precalculado (frontend):",
-      costoEnvioPrecalculado
-    );
+    logger.debug("Costo de envío precalculado", { costoEnvioPrecalculado });
 
     // Construcción robusta del payload si NO viene formateado
     let payload: Record<string, unknown>;
@@ -456,7 +447,7 @@ router.post("/generar-guia",
             },
           });
           // LOG DETALLADO: Mostrar el objeto punto recuperado
-          console.log("[DEBUG] Punto recuperado por Prisma:", JSON.stringify(punto, null, 2));
+          logger.debug("Punto recuperado", { puntoId: punto_atencion_id_captado });
           // ⚠️ VALIDACIÓN CRÍTICA: Solo puntos con Servientrega configurado pueden generar guías
           if (!punto) {
             return res.status(404).json({
@@ -488,14 +479,12 @@ router.post("/generar-guia",
           // Usar los datos específicos del punto (ya validamos que no son null)
           servientregaAlianza = punto.servientrega_alianza!;
           servientregaOficinaAlianza = punto.servientrega_oficina_alianza!;
-          console.log("✅ Punto con Servientrega habilitado:", {
-            punto_id: punto_atencion_id_captado,
-            punto_nombre: punto.nombre,
-            agencia_codigo: punto.servientrega_agencia_codigo,
-            agencia_nombre: punto.servientrega_agencia_nombre,
+          logger.info("Punto con Servientrega habilitado", {
+            puntoId: punto_atencion_id_captado,
+            puntoNombre: punto.nombre,
           });
         } catch (e) {
-          console.error("❌ Error al validar punto de atención:", e);
+          logger.error("Error al validar punto de atención", { error: e });
           return res.status(500).json({
             error: "Error de validación",
             mensaje:
@@ -567,12 +556,9 @@ router.post("/generar-guia",
         contrasenha: String(credentials.contrasenha),
       };
 
-      console.log("📌 PUNTO DE ATENCIÓN CONFIGURADO:", {
-        punto_atencion_id_captado,
-        agencia_codigo: punto?.servientrega_agencia_codigo,
-        agencia_nombre: punto?.servientrega_agencia_nombre,
-        alianza: servientregaAlianza,
-        alianza_oficina: servientregaOficinaAlianza,
+      logger.info("Punto de atención configurado", {
+        puntoAtencionId: punto_atencion_id_captado,
+        agenciaCodigo: punto?.servientrega_agencia_codigo,
       });
     } else {
       // Ya viene formateado (tipo:"GeneracionGuia") → reorganizar en orden correcto
@@ -664,7 +650,7 @@ router.post("/generar-guia",
             if (puntoInfo.servientrega_agencia_codigo) {
               payload = { ...payload, agencia_codigo: puntoInfo.servientrega_agencia_codigo };
             }
-            console.log("🔧 [shipping] Se ajustó payload formateado con agencia del punto:", {
+            logger.debug("Se ajustó payload formateado con agencia del punto", {
               punto_atencion_id_captado,
               punto_nombre: puntoInfo.nombre,
               servientrega_alianza: puntoInfo.servientrega_alianza,
@@ -676,23 +662,25 @@ router.post("/generar-guia",
             });
           }
         } catch (e) {
-          console.warn("⚠️ [shipping] No se pudo recuperar agencia del punto para payload formateado:", e);
+          logger.warn("No se pudo recuperar agencia del punto para payload formateado", { error: e });
         }
       }
     }
 
     // 🔍 LOG: Payload final reorganizado en orden correcto
-    console.log("📤 PAYLOAD FINAL ENVIADO A SERVIENTREGA:");
-    console.log(JSON.stringify(payload, null, 2));
+    if (process.env.DEBUG_SERVIENTREGA === "1") {
+      logger.debug("Payload final enviado a Servientrega", { payload });
+    }
+    // Payload logueado arriba condicionalmente
 
     // 🔍 LOG: Mostrar credenciales enmascaradas
-    console.log("🔐 Credenciales (enmascaradas):", {
+    logger.debug("Credenciales enmascaradas", {
       usuingreso: payload.usuingreso,
       contrasenha: "***",
     });
 
     // 🔍 LOG: Validación de campos críticos
-    console.log("✅ Validación de campos críticos:", {
+    logger.debug("Validación de campos críticos", {
       tipo: payload.tipo,
       nombre_producto: payload.nombre_producto,
       ciudad_origen: payload.ciudad_origen,
@@ -706,12 +694,10 @@ router.post("/generar-guia",
     });
 
     // Llamada al WS
-    console.log("📡 Llamando a Servientrega API...");
+    logger.info("Llamando a Servientrega API");
     const response = (await apiService.callAPI(payload)) as GenerarGuiaResponse;
 
-    // 📥 LOG: Respuesta RAW de Servientrega
-    console.log("📥 RESPUESTA RAW DE SERVIENTREGA:");
-    console.log(JSON.stringify(response, null, 2));
+    // Respuesta RAW de Servientrega ya logueada arriba condicionalmente
 
     // A veces el WS devuelve la tarifa al inicio y luego {"fetch":{...}} concatenado
     // Intento de "split & merge" cuando llega como string crudo
@@ -760,7 +746,7 @@ router.post("/generar-guia",
           : "N/A";
 
     // 📊 LOG: Extracción de guía y base64
-    console.log("📊 Extracción de guía y base64:", {
+    logger.debug("Extracción de guía y base64", {
       guia: guia ? `✓ ${String(guia)}` : "✗ (no encontrada)",
       base64: base64
         ? `✓ (${base64.length} caracteres)`
@@ -776,8 +762,8 @@ router.post("/generar-guia",
     if (guia && base64) {
       const db = new ServientregaDBService();
 
-      console.log("💰 INICIANDO CÁLCULO DE valorTotalGuia...");
-      console.log("💰 Fuentes disponibles:", {
+      logger.debug("Iniciando cálculo de valorTotalGuia");
+      logger.debug("Fuentes disponibles", {
         costoEnvioPrecalculado,
         processed_total_transacion: processedRoot.total_transacion,
         processed_gtotal: processedRoot.gtotal,
@@ -794,10 +780,7 @@ router.post("/generar-guia",
       // 🎯 PRIORIDAD 1: Usar el costo precalculado que viene del frontend (confiable)
       if (costoEnvioPrecalculado > 0) {
         valorTotalGuia = costoEnvioPrecalculado;
-        console.log(
-          "✅ PRIORIDAD 1 MATCH: Usando costo precalculado del frontend:",
-          valorTotalGuia
-        );
+        logger.debug("Prioridad 1: Usando costo precalculado del frontend", { valorTotalGuia });
       }
       // PRIORIDAD 2: Intentar con total_transacion de respuesta de Servientrega
       else if (
@@ -805,15 +788,12 @@ router.post("/generar-guia",
         Number(processedRoot.total_transacion as string | number) > 0
       ) {
         valorTotalGuia = Number(processedRoot.total_transacion as string | number);
-        console.log(
-          "✅ PRIORIDAD 2 MATCH: Usando total_transacion de Servientrega:",
-          valorTotalGuia
-        );
+        logger.debug("Prioridad 2: Usando total_transacion de Servientrega", { valorTotalGuia });
       }
       // PRIORIDAD 3: Usar gtotal de respuesta de Servientrega
       else if (processedRoot.gtotal && Number(processedRoot.gtotal as string | number) > 0) {
         valorTotalGuia = Number(processedRoot.gtotal as string | number);
-        console.log("✅ PRIORIDAD 3 MATCH: Usando gtotal de Servientrega:", valorTotalGuia);
+        logger.debug("Prioridad 3: Usando gtotal de Servientrega", { valorTotalGuia });
       }
       // PRIORIDAD 4: Combinar componentes de la respuesta de Servientrega
       else if (processedRoot.flete && Number(processedRoot.flete as string | number) > 0) {
@@ -824,7 +804,7 @@ router.post("/generar-guia",
         if (processedRoot.valor_empaque) {
           valorTotalGuia += Number(processedRoot.valor_empaque as string | number) || 0;
         }
-        console.log("✅ PRIORIDAD 4 MATCH: Sumando componentes de Servientrega:", {
+        logger.debug("Prioridad 4: Sumando componentes de Servientrega", {
           flete: Number((processedRoot.flete as string | number) || 0),
           valor_asegurado: Number((processedRoot.valor_asegurado as string | number) || 0),
           valor_empaque: Number((processedRoot.valor_empaque as string | number) || 0),
@@ -838,7 +818,7 @@ router.post("/generar-guia",
         if (payload?.valor_empaque) valorTotalGuia += Number(payload.valor_empaque) || 0;
         if (payload?.seguro) valorTotalGuia += Number(payload.seguro) || 0;
         if (payload?.tiva) valorTotalGuia += Number(payload.tiva) || 0;
-        console.log("✅ PRIORIDAD 5 MATCH: Sumando componentes del payload:", {
+        logger.debug("Prioridad 5: Sumando componentes del payload", {
           flete: payload?.flete,
           valor_empaque: payload?.valor_empaque,
           seguro: payload?.seguro,
@@ -849,21 +829,21 @@ router.post("/generar-guia",
       // PRIORIDAD 6: Usar gtotal del payload
       else if (payload?.gtotal && Number(payload.gtotal) > 0) {
         valorTotalGuia = Number(payload.gtotal);
-        console.log("✅ PRIORIDAD 6 MATCH: Usando gtotal del payload:", valorTotalGuia);
+        logger.debug("Prioridad 6: Usando gtotal del payload", { valorTotalGuia });
       }
       // PRIORIDAD 7: Fallback al valor_total del payload
       else if (payload?.valor_total && Number(payload.valor_total) > 0) {
         valorTotalGuia = Number(payload.valor_total);
-        console.log("✅ PRIORIDAD 7 MATCH: Usando valor_total del payload:", valorTotalGuia);
+        logger.debug("Prioridad 7: Usando valor_total del payload", { valorTotalGuia });
       }
 
       // ⚠️ FALLBACK FINAL: Si aún es 0, registramos advertencia
       if (valorTotalGuia === 0) {
-        console.warn("⚠️ ADVERTENCIA: valorTotalGuia calculado como 0 después de todas las prioridades");
-        console.warn("⚠️ NO se descontará saldo ni se registrará ingreso de servicio externo");
+        logger.warn("valorTotalGuia calculado como 0 después de todas las prioridades");
+        logger.warn("No se descontará saldo ni se registrará ingreso de servicio externo");
       }
 
-      console.log("💰 DESGLOSE FINAL DE COSTOS:", {
+      logger.debug("Desglose final de costos", {
         flete_servientrega: Number((processedRoot.flete as string | number) || 0),
         valor_asegurado_servientrega: Number(
           (processedRoot.valor_asegurado as string | number) || 0
@@ -910,66 +890,43 @@ router.post("/generar-guia",
         let remitente_id: string | undefined;
         let destinatario_id: string | undefined;
 
-        console.log(
-          "📝 [shipping] Iniciando guardado de remitente/destinatario:",
-          {
-            remitente_cedula: remitente?.cedula,
-            remitente_nombre: remitente?.nombre,
-            destinatario_cedula: destinatario?.cedula,
-            destinatario_nombre: destinatario?.nombre,
-          }
-        );
+        logger.debug("Iniciando guardado de remitente/destinatario", {
+          remitenteCedula: remitente?.cedula,
+          destinatarioCedula: destinatario?.cedula,
+        });
 
         // Guardar remitente y capturar su ID
         if (remitente?.cedula && remitente?.nombre) {
           try {
-            console.log("🔄 [shipping] Guardando remitente:", remitente);
+            logger.debug("Guardando remitente", { remitenteCedula: remitente.cedula });
             const remitenteGuardado = await db.guardarRemitente(remitente);
             remitente_id = remitenteGuardado?.id;
-            console.log(
-              "✅ [shipping] Remitente guardado con ID:",
-              remitente_id,
-              "Objeto completo:",
-              remitenteGuardado
-            );
+            logger.debug("Remitente guardado", { remitenteId: remitente_id });
           } catch (err) {
-            console.error("❌ [shipping] Error guardando remitente:", err);
+            logger.error("Error guardando remitente", { error: err });
           }
         } else {
-          console.log(
-            "⚠️ [shipping] Remitente incompleto, saltando guardado:",
-            {
-              cedula: remitente?.cedula,
-              nombre: remitente?.nombre,
-            }
-          );
+          logger.warn("Remitente incompleto, saltando guardado", {
+            cedula: remitente?.cedula,
+          });
         }
 
         // Guardar destinatario y capturar su ID
         if (destinatario?.cedula && destinatario?.nombre) {
           try {
-            console.log("🔄 [shipping] Guardando destinatario:", destinatario);
+            logger.debug("Guardando destinatario", { destinatarioCedula: destinatario.cedula });
             const destinatarioGuardado = await db.guardarDestinatario(
               destinatario
             );
             destinatario_id = destinatarioGuardado?.id;
-            console.log(
-              "✅ [shipping] Destinatario guardado con ID:",
-              destinatario_id,
-              "Objeto completo:",
-              destinatarioGuardado
-            );
+            logger.debug("Destinatario guardado", { destinatarioId: destinatario_id });
           } catch (err) {
-            console.error("❌ [shipping] Error guardando destinatario:", err);
+            logger.error("Error guardando destinatario", { error: err });
           }
         } else {
-          console.log(
-            "⚠️ [shipping] Destinatario incompleto, saltando guardado:",
-            {
-              cedula: destinatario?.cedula,
-              nombre: destinatario?.nombre,
-            }
-          );
+          logger.warn("Destinatario incompleto, saltando guardado", {
+            cedula: destinatario?.cedula,
+          });
         }
 
         // 📌 SIEMPRE guardar la cabecera de guía con punto de atención, usuario, agencia y costo
@@ -991,10 +948,9 @@ router.post("/generar-guia",
           agencia_codigo = puntoAtencion?.servientrega_agencia_codigo || undefined;
           agencia_nombre = puntoAtencion?.servientrega_agencia_nombre || undefined;
           
-          console.log("🏢 Agencia del punto de atención:", {
-            punto_atencion_id: punto_atencion_id_captado,
-            agencia_codigo,
-            agencia_nombre,
+          logger.debug("Agencia del punto de atención", {
+            puntoAtencionId: punto_atencion_id_captado,
+            agenciaCodigo: agencia_codigo,
           });
         }
         
@@ -1020,56 +976,43 @@ router.post("/generar-guia",
         // Solo incluir remitente_id y destinatario_id si tienen valor
         if (remitente_id) {
           guiaData.remitente_id = remitente_id;
-          console.log(
-            "✅ [shipping] Agregado remitente_id a guiaData:",
-            remitente_id
-          );
+          logger.debug("Agregado remitente_id a guiaData", { remitenteId: remitente_id });
         } else {
-          console.log("⚠️ [shipping] NO se agregó remitente_id (es undefined)");
+          logger.warn("No se agregó remitente_id (es undefined)");
         }
 
         if (destinatario_id) {
           guiaData.destinatario_id = destinatario_id;
-          console.log(
-            "✅ [shipping] Agregado destinatario_id a guiaData:",
-            destinatario_id
-          );
+          logger.debug("Agregado destinatario_id a guiaData", { destinatarioId: destinatario_id });
         } else {
-          console.log(
-            "⚠️ [shipping] NO se agregó destinatario_id (es undefined)"
-          );
+          logger.warn("No se agregó destinatario_id (es undefined)");
         }
 
-        console.log("📋 [shipping] guiaData FINAL antes de guardar:", {
-          ...guiaData,
-          agencia_codigo,
-          agencia_nombre,
+        logger.debug("guiaData final antes de guardar", {
+          numeroGuia: guia,
+          agenciaCodigo: agencia_codigo,
         });
 
         await db.guardarGuia(guiaData);
 
-        console.log("✅ Guía guardada en BD:", {
-          numero_guia: guia,
-          punto_atencion_id: punto_atencion_id_captado,
-          costo_envio: valorTotalGuia,
+        logger.info("Guía guardada en BD", {
+          numeroGuia: guia,
+          puntoAtencionId: punto_atencion_id_captado,
+          costoEnvio: valorTotalGuia,
         });
 
-        // 💳 Descontar del saldo SOLO el costo de la guía (no el valor_declarado)
-        console.log("💳 VERIFICACIÓN ANTES DE DESCONTAR:", {
-          punto_atencion_id_captado,
+        // Descontar del saldo SOLO el costo de la guía (no el valor_declarado)
+        logger.debug("Verificación antes de descontar", {
+          puntoAtencionId: punto_atencion_id_captado,
           valorTotalGuia,
-          deberia_descontar: punto_atencion_id_captado && valorTotalGuia > 0,
-          costoEnvioPrecalculado,
-          processed_total_transacion: processedRoot.total_transacion,
-          processed_gtotal: processedRoot.gtotal,
-          processed_flete: processedRoot.flete,
+          deberiaDescontar: punto_atencion_id_captado && valorTotalGuia > 0,
         });
 
         if (punto_atencion_id_captado && valorTotalGuia > 0) {
-          console.log("💳 PROCESANDO FLUJO DE SALDO:", {
-            punto_atencion_id: punto_atencion_id_captado,
+          logger.debug("Procesando flujo de saldo", {
+            puntoAtencionId: punto_atencion_id_captado,
             monto: valorTotalGuia,
-            numero_guia: guia,
+            numeroGuia: guia,
           });
 
           const resultadoDescuento = await db.descontarSaldo(
@@ -1078,13 +1021,13 @@ router.post("/generar-guia",
             guia
           );
 
-          console.log("✅ PASO 1: Saldo descontado de Servientrega", {
-            punto_atencion_id: punto_atencion_id_captado,
+          logger.info("Saldo descontado de Servientrega", {
+            puntoAtencionId: punto_atencion_id_captado,
             monto: valorTotalGuia,
             resultado: resultadoDescuento ? "ACTUALIZADO" : "SIN CAMBIOS",
           });
 
-          console.log("🔄 PASO 2: Registrando ingreso de servicio externo...");
+          logger.debug("Registrando ingreso de servicio externo");
           
           // Calcular desglose final basado en el valor real de la guía
           let billetes = 0;
@@ -1112,49 +1055,37 @@ router.post("/generar-guia",
             bancos
           );
 
-          console.log(
-            "✅ PASO 2: Ingreso registrado en saldo general USD",
-            {
-              numero_guia: guia,
-              monto: valorTotalGuia,
-              saldoServicio: {
-                anterior: resultadoIngreso.saldoServicio.anterior,
-                nuevo: resultadoIngreso.saldoServicio.nuevo,
-              },
-              saldoGeneral: {
-                anterior: resultadoIngreso.saldoGeneral.anterior,
-                nuevo: resultadoIngreso.saldoGeneral.nuevo,
-              },
-            }
-          );
+          logger.info("Paso 2: Ingreso registrado en saldo general USD", {
+            numeroGuia: guia,
+            monto: valorTotalGuia,
+            saldoServicioAnterior: resultadoIngreso.saldoServicio.anterior,
+            saldoServicioNuevo: resultadoIngreso.saldoServicio.nuevo,
+          });
 
-          console.log("✅ FLUJO COMPLETADO: Descuento e ingreso realizados");
+          logger.info("Flujo completado: Descuento e ingreso realizados");
         } else {
-          console.warn("⚠️ NO se descontó saldo - razones:", {
-            punto_atencion_id_presente: !!punto_atencion_id_captado,
-            valorTotalGuia_mayor_que_cero: valorTotalGuia > 0,
-            punto_atencion_id: punto_atencion_id_captado,
+          logger.warn("No se descontó saldo", {
+            puntoAtencionIdPresente: !!punto_atencion_id_captado,
+            valorTotalGuiaMayorQueCero: valorTotalGuia > 0,
+            puntoAtencionId: punto_atencion_id_captado,
             valorTotalGuia,
           });
         }
       } catch (dbErr) {
-        console.error("❌ ERROR CRÍTICO al persistir en BD:", {
-          numero_guia: guia,
-          punto_atencion_id: punto_atencion_id_captado,
+        logger.error("Error crítico al persistir en BD", {
+          numeroGuia: guia,
+          puntoAtencionId: punto_atencion_id_captado,
           monto: valorTotalGuia,
           error: dbErr instanceof Error ? dbErr.message : String(dbErr),
-          stack: dbErr instanceof Error ? dbErr.stack : undefined,
         });
         throw dbErr;
       }
     } else {
-      // ❌ LOG: Guía NO se generó
-      console.error("❌ FALLO: Guía NO se generó correctamente");
-      console.error("Razón:", {
-        guia_presente: !!guia,
-        base64_presente: !!base64,
+      // Guía NO se generó
+      logger.error("Guía no se generó correctamente", {
+        guiaPresente: !!guia,
+        base64Presente: !!base64,
         proceso,
-        respuesta_completa: JSON.stringify(processed, null, 2),
       });
     }
 
@@ -1175,7 +1106,7 @@ router.post("/generar-guia",
 
     return res.json(normalizedResponse);
   } catch (error) {
-    console.error("💥 Error al generar guía:", error);
+    logger.error("Error al generar guía", { error });
     return res.status(500).json({
       error: "Error al generar guía",
       details: error instanceof Error ? error.message : "Error desconocido",
@@ -1243,23 +1174,22 @@ router.post("/anular-guia",
               guiaInfo.punto_atencion_id,
               Number(guiaInfo.costo_envio)
             );
-            console.log(
-              `✅ Saldo devuelto: $${guiaInfo.costo_envio} al punto ${guiaInfo.punto_atencion_id}`
-            );
+            logger.info("Saldo devuelto", {
+              monto: guiaInfo.costo_envio,
+              puntoId: guiaInfo.punto_atencion_id,
+            });
           } else {
-            console.log(
-              "⚠️ La guía no se anula el mismo día, no se devuelve saldo"
-            );
+            logger.warn("La guía no se anula el mismo día, no se devuelve saldo");
           }
         }
       } catch (dbError) {
-        console.error("⚠️ Error al actualizar guía en BD:", dbError);
+        logger.error("Error al actualizar guía en BD", { error: dbError });
       }
     }
 
     return res.json(response);
   } catch (error) {
-    console.error("💥 Error al anular guía:", error);
+    logger.error("Error al anular guía", { error });
     return res.status(500).json({
       error: "Error al anular guía",
       details: error instanceof Error ? error.message : "Error desconocido",
@@ -1295,7 +1225,7 @@ router.get("/guias", async (req, res) => {
 
     // Si es admin, eliminar filtros por punto/usuario/agencia para mostrar todas las guías
     if (isAdmin) {
-      console.log("🔓 Admin request - mostrando guías sin filtrar por punto/usuario/agencia", {
+      logger.info("Admin request - mostrando guías sin filtrar", {
         userId: req.user?.id,
         rol: req.user?.rol,
       });
@@ -1304,10 +1234,10 @@ router.get("/guias", async (req, res) => {
       agencia_codigo = undefined;
     }
 
-    console.log("🔍 GET /guias - Filtro de búsqueda:", {
-      punto_atencion_id,
-      usuario_id,
-      agencia_codigo,
+    logger.debug("GET /guias - Filtro de búsqueda", {
+      puntoAtencionId: punto_atencion_id,
+      usuarioId: usuario_id,
+      agenciaCodigo: agencia_codigo,
       desde,
       hasta,
     });
@@ -1315,7 +1245,7 @@ router.get("/guias", async (req, res) => {
     // ⚠️ IMPORTANTE: Filtrar por agencia si el punto tiene una asignada
     // Esto evita que diferentes puntos vean guías de otras agencias
     if (!punto_atencion_id && !usuario_id) {
-      console.warn("⚠️ Usuario sin punto_atencion_id ni usuario_id asignado");
+      logger.warn("Usuario sin punto_atencion_id ni usuario_id asignado");
       return res.json([]);
     }
 
@@ -1327,18 +1257,17 @@ router.get("/guias", async (req, res) => {
       agencia_codigo // 👈 FILTRAR por agencia Servientrega
     );
 
-    console.log("📋 Guías recuperadas de BD:", {
+    logger.debug("Guías recuperadas de BD", {
       cantidad: guias?.length || 0,
       desde,
       hasta,
-      punto_atencion_id,
-      usuario_id,
+      puntoAtencionId: punto_atencion_id,
     });
 
     // 🔧 Devolver array directamente, no envuelto en objeto
     return res.json(guias || []);
   } catch (error) {
-    console.error("💥 Error al consultar guías:", error);
+    logger.error("Error al consultar guías", { error });
     return res.status(500).json({
       error: "Error al consultar guías",
       details: error instanceof Error ? error.message : "Error desconocido",

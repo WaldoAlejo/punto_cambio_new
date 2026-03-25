@@ -171,6 +171,8 @@ router.get("/", authenticateToken, async (req, res) => {
             activo: true,
             servientrega_agencia_codigo: true,
             servientrega_agencia_nombre: true,
+            servientrega_alianza: true,
+            servientrega_oficina_alianza: true,
             created_at: true,
             updated_at: true,
           },
@@ -487,9 +489,10 @@ router.post(
         }
         if (fecha_salida) {
           // === AJUSTE: exentos cierran jornada sin exigir cierres ===
-          console.log(
-            `🚀 FINALIZACION_JORNADA_INICIADA - Usuario: ${req.user?.rol}, Punto: ${punto_atencion_id}`
-          );
+          logger.info("Finalización de jornada iniciada", {
+            rol: req.user?.rol,
+            puntoId: punto_atencion_id,
+          });
           // Usar hora actual del servidor convertida a UTC
           // Si el servidor está en Ecuador, new Date() es hora local y Prisma la guarda como UTC
           // Por eso usamos toISOString() para asegurar formato UTC correcto
@@ -497,9 +500,10 @@ router.post(
           if (!esExentoDeCaja(req.user?.rol)) {
             // Para roles que sí manejan caja, verificar Cierre de Caja (divisas)
             const { gte } = gyeDayRangeUtcFromDate(new Date());
-            console.log(
-              `🔍 BUSCANDO_CIERRE - Punto: ${punto_atencion_id}, Fecha: ${gte.toISOString()}`
-            );
+            logger.debug("Buscando cierre de caja", {
+              puntoId: punto_atencion_id,
+              fechaDesde: gte.toISOString(),
+            });
             const cierreHoy = await prisma.cuadreCaja.findFirst({
               where: {
                 punto_atencion_id,
@@ -507,15 +511,15 @@ router.post(
                 estado: "CERRADO",
               },
             });
-            console.log(
-              `📊 RESULTADO_CIERRE - Encontrado: ${!!cierreHoy}, ID: ${
-                cierreHoy?.id || "N/A"
-              }`
-            );
+            logger.debug("Resultado búsqueda de cierre", {
+              encontrado: !!cierreHoy,
+              cierreId: cierreHoy?.id,
+            });
             if (!cierreHoy) {
-              console.log(
-                `❌ ERROR_CIERRE_REQUERIDO - Enviando respuesta de error`
-              );
+              logger.warn("Cierre de caja requerido", {
+                puntoId: punto_atencion_id,
+                usuarioId: req.user?.id,
+              });
               res.status(400).json({
                 success: false,
                 error: "Cierre de caja requerido",
@@ -695,6 +699,8 @@ router.get("/active", authenticateToken, async (req, res) => {
             activo: true,
             servientrega_agencia_codigo: true,
             servientrega_agencia_nombre: true,
+            servientrega_alianza: true,
+            servientrega_oficina_alianza: true,
             created_at: true,
             updated_at: true,
           },

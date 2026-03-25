@@ -1,5 +1,4 @@
 // server/routes/contabilidad-diaria.ts
-console.log('[CONTABILIDAD_DIARIA] Archivo de rutas cargado');
 import express from "express";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
@@ -333,11 +332,11 @@ router.get(
         | undefined;
 
       // Log de auditoría para depuración de errores 403
-      console.log("[VALIDAR_CIERRES]", {
-        usuario_id: usuario?.id,
-        usuario_rol: usuario?.rol,
-        usuario_punto_atencion_id: usuario?.punto_atencion_id,
-        requested_point_id: pointId,
+      logger.debug("Validar cierres", {
+        usuarioId: usuario?.id,
+        usuarioRol: usuario?.rol,
+        usuarioPuntoId: usuario?.punto_atencion_id,
+        requestedPointId: pointId,
         fecha,
       });
 
