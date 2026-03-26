@@ -87,11 +87,25 @@ export interface Guia {
   usuario_id?: string;
   usuario_nombre?: string;
   punto_atencion_nombre?: string;
+  // Agencia
+  agencia_codigo?: string;
+  agencia_nombre?: string;
+  alianza?: string;
+  oficina_alianza?: string;
+  // Ciudad origen
+  ciudad_origen?: string;
+  provincia_origen?: string;
+  // Ciudad destino
+  ciudad_destino?: string;
+  provincia_destino?: string;
+  // Destinatario
   destinatario_nombre?: string;
   destinatario_telefono?: string;
   destinatario_direccion?: string;
+  // Valores
   valor_declarado?: number;
   costo_envio?: number;
+  valor_cobrado?: number; // Valor que se cobró por la guía
   motivo_anulacion?: string;
   fecha_anulacion?: string;
   anulada_por?: string;

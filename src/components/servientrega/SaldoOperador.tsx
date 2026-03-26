@@ -191,7 +191,7 @@ export default function SaldoOperador({
 
   const { color, icon: IconComponent, bg } = getSaldoDisplay();
   const saldoBajo = saldo?.estado === "SALDO_BAJO";
-  const sinSaldo = saldo?.disponible === 0;
+  const sinSaldo = (saldo?.disponible || 0) <= 0;
 
   return (
     <>
@@ -260,17 +260,15 @@ export default function SaldoOperador({
             </div>
           )}
 
-          {/* Botón para solicitar saldo */}
-          {(saldoBajo || sinSaldo) && (
-            <Button
-              onClick={() => setSolicitudOpen(true)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={enviandoSolicitud}
-            >
-              <Send className="mr-2 h-4 w-4" />
-              Solicitar Saldo
-            </Button>
-          )}
+          {/* Botón para solicitar saldo - SIEMPRE VISIBLE */}
+          <Button
+            onClick={() => setSolicitudOpen(true)}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+            disabled={enviandoSolicitud}
+          >
+            <Send className="mr-2 h-4 w-4" />
+            Solicitar Saldo
+          </Button>
         </CardContent>
       </Card>
 

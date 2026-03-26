@@ -998,6 +998,13 @@ export class ServientregaDBService {
       include: {
         remitente: true,
         destinatario: true,
+        usuario: {
+          select: {
+            id: true,
+            nombre: true,
+            username: true,
+          },
+        },
         punto_atencion: {
           select: {
             id: true,
