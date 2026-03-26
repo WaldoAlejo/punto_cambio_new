@@ -34,7 +34,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, CuadreCaja } from "../../types";
-import { AlertCircle, CheckCircle } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowRight,
+  Banknote,
+  CheckCircle,
+  Coins,
+  MapPin,
+  RefreshCw,
+} from "lucide-react";
 // import ExternalServicesClose from "./ExternalServicesClose"; // Ya no se requiere cierre separado
 import { contabilidadDiariaService } from "../../services/contabilidadDiariaService";
 import cuatreCajaService from "@/services/cuatreCajaService";
@@ -1365,33 +1374,107 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const textoSinDetalle = cierreSinDetallePeroConMovimientos
     ? `Se detectaron movimientos del día (${resumenMovimientosDetectados}), pero el cuadre automático no devolvió el detalle esperado.`
     : "No se han registrado movimientos hoy";
+  const detallesCount = cuadreData?.detalles?.length ?? 0;
+  const estadoFormulario = todayClose
+    ? "COMPLETADO"
+    : loading || loadingResumen || closing
+      ? "PROCESANDO"
+      : detallesCount > 0
+        ? "EN_CONTEO"
+        : cierreSinDetallePeroConMovimientos
+          ? "CON_ALERTA"
+          : "PENDIENTE";
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">Cierre Diario</h1>
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-500">
-            Punto: {selectedPoint?.nombre ?? "—"} - {new Date().toLocaleDateString()}
-          </div>
-          <Button
-            variant="outline"
-            className="border-gray-300"
-            onClick={fetchCuadreData}
-            disabled={loading}
-            title="Actualizar datos de cuadre"
-          >
-            Actualizar
-          </Button>
+        <div className="flex items-center gap-2">
+          <Banknote className="h-6 w-6 text-blue-600" />
+          <h1 className="text-2xl font-bold">Cierre Diario</h1>
         </div>
+        <Badge
+          variant={
+            estadoFormulario === "COMPLETADO"
+              ? "default"
+              : estadoFormulario === "CON_ALERTA"
+                ? "destructive"
+                : "secondary"
+          }
+        >
+          {estadoFormulario === "PENDIENTE" && "Pendiente"}
+          {estadoFormulario === "EN_CONTEO" && "En conteo"}
+          {estadoFormulario === "PROCESANDO" && "Procesando"}
+          {estadoFormulario === "CON_ALERTA" && "Con alerta"}
+          {estadoFormulario === "COMPLETADO" && "Completado"}
+        </Badge>
       </div>
 
-      {/* Diagnóstico visible para debugging */}
-      <div className="bg-gray-100 p-3 rounded text-xs font-mono space-y-1">
-        <div><strong>Estado:</strong> loading={loading.toString()} | hasActiveJornada={hasActiveJornada?.toString()}</div>
-        <div><strong>Cuadre:</strong> detalles={cuadreData?.detalles?.length ?? 0} | error={fetchError || "ninguno"}</div>
-        <div><strong>Cierre:</strong> todayClose={todayClose ? "EXISTE" : "null"}</div>
-      </div>
+      {fetchError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{fetchError}</AlertDescription>
+        </Alert>
+      )}
+
+      {!todayClose && detallesCount > 0 && (
+        <Alert className="bg-blue-50 border-blue-300">
+          <CheckCircle className="h-4 w-4 text-blue-600" />
+          <AlertTitle className="text-blue-800">Cuadre listo para revisión</AlertTitle>
+          <AlertDescription className="text-blue-700">
+            Revise los conteos físicos y bancarios de cada divisa antes de confirmar el cierre.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!todayClose && cierreSinDetallePeroConMovimientos && (
+        <Alert className="bg-amber-50 border-amber-300">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-800">Movimientos detectados sin desglose</AlertTitle>
+          <AlertDescription className="text-amber-700">
+            Hay {resumenMovimientosDetectados} registrados para {selectedPoint?.nombre || "el punto seleccionado"}, pero el cuadre automático no cargó el detalle esperado.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!todayClose && detallesCount === 0 && !cierreSinDetallePeroConMovimientos && (
+        <Alert className="bg-green-50 border-green-300">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertTitle className="text-green-800">Sin movimientos del día</AlertTitle>
+          <AlertDescription className="text-green-700">
+            No se registraron movimientos hoy. Puede proceder con el cierre diario.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {selectedPoint && (
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-2 text-blue-800">
+              <MapPin className="h-5 w-5" />
+              <span className="font-medium">Punto de Atención:</span>
+              <span>{selectedPoint.nombre}</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!todayClose && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Instrucciones</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+              <li>Revise el saldo esperado calculado por el sistema para cada divisa.</li>
+              <li>Ingrese el conteo físico real en billetes, monedas y bancos.</li>
+              <li>Verifique que la diferencia quede dentro de tolerancia antes de cerrar.</li>
+              <li>Si detecta faltantes o sobrantes, déjelos registrados en observaciones.</li>
+              <li>Confirme el cierre únicamente cuando todo el formulario esté revisado.</li>
+            </ol>
+          </CardContent>
+        </Card>
+      )}
 
       {/* NOTA: El cierre de servicios externos ya NO es necesario como paso separado.
           Los movimientos de servicios externos se incluyen automáticamente en el cierre diario. */}
@@ -1410,24 +1493,14 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       ) : !todayClose ? (
         <Card>
           <CardHeader>
-            <CardTitle>Cuadre de Caja Automático</CardTitle>
+            <CardTitle>Cuadre de Caja</CardTitle>
             <CardDescription>
-              {(cuadreData?.detalles?.length ?? 0) === 0
+              {detallesCount === 0
                 ? textoSinDetalle
                 : "Revise y ajuste los conteos físicos. Los valores están pre-calculados según los movimientos del día."}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {fetchError && (
-              <div className="mb-4 p-4 rounded-md border border-red-200 bg-red-50 text-red-700 flex items-center justify-between gap-3">
-                <span className="text-sm">
-                  Ocurrió un problema al cargar el cuadre: {fetchError}
-                </span>
-                <Button onClick={fetchCuadreData} variant="destructive">
-                  Reintentar
-                </Button>
-              </div>
-            )}
             {/* Mostrar totales del día */}
             {cuadreData?.totales && (
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
@@ -1464,7 +1537,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
               </div>
             )}
 
-            {(cuadreData?.detalles?.length ?? 0) === 0 ? (
+            {detallesCount === 0 ? (
               <div className="space-y-6">
                 <div className="text-center py-8">
                   <div
@@ -1511,21 +1584,32 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 </div>
 
                 {/* Botón de cierre para días sin movimientos */}
-                <Button
-                  onClick={confirmDailyClose}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
-                  size="lg"
-                  disabled={loading || closing || !cuadreData}
-                >
-                  {closing ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-4 w-4 rounded-full border-2 border-white border-b-transparent animate-spin"></span>
-                      Cerrando...
-                    </span>
-                  ) : (
-                    "Realizar Cierre Diario"
-                  )}
-                </Button>
+                <div className="flex flex-wrap gap-3 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={fetchCuadreData}
+                    disabled={loading}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                    Actualizar
+                  </Button>
+                  <Button
+                    onClick={confirmDailyClose}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    size="lg"
+                    disabled={loading || closing || !cuadreData}
+                  >
+                    {closing ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-4 w-4 rounded-full border-2 border-white border-b-transparent animate-spin"></span>
+                        Cerrando...
+                      </span>
+                    ) : (
+                      "Realizar Cierre Diario"
+                    )}
+                  </Button>
+                </div>
 
                 <div className="mt-3 text-xs text-gray-600 text-center">
                   {cierreSinDetallePeroConMovimientos
@@ -1549,12 +1633,20 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                           : "border-gray-200"
                       }`}
                     >
-                      <CardHeader className="pb-3">
-                        <div className="flex justify-between items-center">
-                          <CardTitle className="text-xl flex items-center gap-2">
-                            <span className="text-2xl">{detalle.simbolo}</span>
-                            {detalle.codigo} - {detalle.nombre}
-                          </CardTitle>
+                      <CardHeader className="bg-gray-50 pb-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Coins className="h-5 w-5 text-blue-600" />
+                            <CardTitle>
+                              {detalle.codigo} - {detalle.nombre}
+                            </CardTitle>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-gray-500">Saldo esperado</div>
+                            <div className="text-xl font-bold">
+                              {detalle.simbolo} {detalle.saldo_cierre.toFixed(2)}
+                            </div>
+                          </div>
                           {!isValid && (
                             <Badge variant="destructive" className="text-xs">
                               ⚠️ No cuadra
@@ -1562,7 +1654,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                           )}
                         </div>
                       </CardHeader>
-                      <CardContent className="space-y-4">
+                      <CardContent className="pt-6 space-y-6">
                         {/* Resumen de movimientos */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                           <Card className="bg-blue-50 border-blue-200">
@@ -1630,9 +1722,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                         <Card className="bg-yellow-50 border-yellow-200">
                           <CardContent className="p-4">
                             <div className="flex items-start gap-2">
-                              <span className="text-yellow-600 text-lg">
-                                📝
-                              </span>
+                              <Banknote className="h-5 w-5 text-yellow-600 mt-0.5" />
                               <div>
                                 <h4 className="font-medium text-yellow-800 mb-1">
                                   Instrucciones de Conteo
@@ -1699,10 +1789,11 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                         })()}
 
                         {/* Conteo físico del usuario */}
-                        <Card className="border-gray-300">
+                        <Card className="border-gray-300 overflow-hidden">
                           <CardHeader className="pb-3">
-                            <CardTitle className="text-lg">
-                              💰 Conteo Físico
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              <Banknote className="h-5 w-5 text-blue-600" />
+                              Conteo Físico
                             </CardTitle>
                             <CardDescription>
                               Registre el dinero que tiene físicamente en caja
@@ -1838,9 +1929,12 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                         </Card>
 
                         {/* Conteo bancos */}
-                        <Card className="border-gray-300">
+                        <Card className="border-gray-300 overflow-hidden">
                           <CardHeader className="pb-3">
-                            <CardTitle className="text-lg">🏦 Bancos</CardTitle>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                              <ArrowRight className="h-5 w-5 text-purple-600" />
+                              Bancos
+                            </CardTitle>
                             <CardDescription>
                               Registre el saldo bancario (transferencias) por moneda
                             </CardDescription>
@@ -2037,26 +2131,37 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                   </Card>
                 )}
 
-                <Button
-                  onClick={confirmDailyClose}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3"
-                  size="lg"
-                  disabled={loading || closing || loadingResumen || !cuadreData}
-                >
-                  {loadingResumen ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-4 w-4 rounded-full border-2 border-white border-b-transparent animate-spin"></span>
-                      Cargando resumen...
-                    </span>
-                  ) : closing ? (
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-4 w-4 rounded-full border-2 border-white border-b-transparent animate-spin"></span>
-                      Cerrando...
-                    </span>
-                  ) : (
-                    "Realizar Cierre Diario"
-                  )}
-                </Button>
+                <div className="flex flex-wrap gap-3 justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={fetchCuadreData}
+                    disabled={loading}
+                    className="gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                    Actualizar Datos
+                  </Button>
+                  <Button
+                    onClick={confirmDailyClose}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    size="lg"
+                    disabled={loading || closing || loadingResumen || !cuadreData}
+                  >
+                    {loadingResumen ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-4 w-4 rounded-full border-2 border-white border-b-transparent animate-spin"></span>
+                        Cargando resumen...
+                      </span>
+                    ) : closing ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-4 w-4 rounded-full border-2 border-white border-b-transparent animate-spin"></span>
+                        Cerrando...
+                      </span>
+                    ) : (
+                      "Realizar Cierre Diario"
+                    )}
+                  </Button>
+                </div>
 
                 {/* Sugerencia: accesos rápidos para cuadrar */}
                 <div className="mt-3 text-xs text-gray-600 text-center">
