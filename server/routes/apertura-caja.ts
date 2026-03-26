@@ -7,6 +7,57 @@ import { todayGyeDateOnly, nowEcuador } from "../utils/timezone.js";
 
 const router = express.Router();
 
+/**
+ * Calcula el saldo real de una moneda en un punto desde MovimientoSaldo
+ * Igual que lo hace la contabilidad general
+ */
+async function calcularSaldoDesdeMovimientos(
+  puntoAtencionId: string,
+  monedaId: string
+): Promise<number> {
+  try {
+    // 1. Obtener SaldoInicial activo
+    const saldoInicial = await prisma.saldoInicial.findFirst({
+      where: {
+        punto_atencion_id: puntoAtencionId,
+        moneda_id: monedaId,
+        activo: true,
+      },
+      select: { cantidad_inicial: true },
+    });
+
+    let saldoCalculado = Number(saldoInicial?.cantidad_inicial || 0);
+
+    // 2. Obtener movimientos EXCLUYENDO SALDO_INICIAL
+    const movimientos = await prisma.movimientoSaldo.findMany({
+      where: {
+        punto_atencion_id: puntoAtencionId,
+        moneda_id: monedaId,
+        tipo_movimiento: { not: "SALDO_INICIAL" },
+      },
+      select: { monto: true },
+    });
+
+    // 3. Sumar movimientos
+    for (const mov of movimientos) {
+      const monto = Number(mov.monto);
+      if (!isNaN(monto) && isFinite(monto)) {
+        saldoCalculado += monto;
+      }
+    }
+
+    return Number(saldoCalculado.toFixed(2));
+  } catch (error) {
+    logger.error("Error calculando saldo desde movimientos", {
+      error: error instanceof Error ? error.message : String(error),
+      puntoAtencionId,
+      monedaId,
+    });
+    // Fallback a 0 si hay error
+    return 0;
+  }
+}
+
 // Tipos
 interface ConteoMoneda {
   moneda_id: string;
@@ -121,28 +172,30 @@ router.post(
         });
       }
 
-      // Obtener saldos actuales del punto
-      const saldos = await prisma.saldo.findMany({
-        where: {
-          punto_atencion_id: jornada.punto_atencion_id,
-        },
-        include: {
-          moneda: {
-            select: { id: true, codigo: true, nombre: true, simbolo: true },
-          },
-        },
+      // Obtener todas las monedas activas
+      const monedas = await prisma.moneda.findMany({
+        where: { activo: true },
+        select: { id: true, codigo: true, nombre: true, simbolo: true },
       });
 
-      // Formatear saldo esperado
-      const saldoEsperado = saldos.map((s) => ({
-        moneda_id: s.moneda_id,
-        codigo: s.moneda.codigo,
-        nombre: s.moneda.nombre,
-        simbolo: s.moneda.simbolo,
-        cantidad: Number(s.cantidad),
-        billetes: Number(s.billetes),
-        monedas: Number(s.monedas_fisicas),
-      }));
+      // Calcular saldos dinámicamente desde MovimientoSaldo (igual que contabilidad general)
+      const saldoEsperado = await Promise.all(
+        monedas.map(async (moneda) => {
+          const cantidadCalculada = await calcularSaldoDesdeMovimientos(
+            jornada.punto_atencion_id,
+            moneda.id
+          );
+          return {
+            moneda_id: moneda.id,
+            codigo: moneda.codigo,
+            nombre: moneda.nombre,
+            simbolo: moneda.simbolo,
+            cantidad: cantidadCalculada,
+            billetes: cantidadCalculada, // Usar cantidad calculada como billetes por defecto
+            monedas: 0,
+          };
+        })
+      );
 
       // Obtener saldos de servicios externos
       const serviciosExternosSaldos = await prisma.servicioExternoSaldo.findMany({
