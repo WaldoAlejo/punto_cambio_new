@@ -94,9 +94,9 @@ export async function requireAperturaAprobada(
 
     // Verificar estado de la apertura
     // PERMITIR operar con CON_DIFERENCIA - el admin revisará después
-    const estadosPermitidos = [EstadoApertura.ABIERTA, EstadoApertura.CON_DIFERENCIA];
+    const puedeOperar = apertura.estado === EstadoApertura.ABIERTA || apertura.estado === EstadoApertura.CON_DIFERENCIA;
     
-    if (!estadosPermitidos.includes(apertura.estado)) {
+    if (!puedeOperar) {
       // Solo bloquear si está en conteo o cuadrado (procesando)
       const mensajes: Record<string, string> = {
         [EstadoApertura.EN_CONTEO]: "Debe completar el conteo de apertura de caja.",
