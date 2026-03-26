@@ -20,6 +20,57 @@ import { EstadoApertura, EstadoJornada } from "@prisma/client";
 
 const router = express.Router();
 
+/**
+ * Calcula el saldo real de una moneda en un punto desde MovimientoSaldo
+ * Igual que lo hace la contabilidad general
+ */
+async function calcularSaldoDesdeMovimientos(
+  puntoAtencionId: string,
+  monedaId: string
+): Promise<number> {
+  try {
+    // 1. Obtener SaldoInicial activo
+    const saldoInicial = await prisma.saldoInicial.findFirst({
+      where: {
+        punto_atencion_id: puntoAtencionId,
+        moneda_id: monedaId,
+        activo: true,
+      },
+      select: { cantidad_inicial: true },
+    });
+
+    let saldoCalculado = Number(saldoInicial?.cantidad_inicial || 0);
+
+    // 2. Obtener movimientos EXCLUYENDO SALDO_INICIAL
+    const movimientos = await prisma.movimientoSaldo.findMany({
+      where: {
+        punto_atencion_id: puntoAtencionId,
+        moneda_id: monedaId,
+        tipo_movimiento: { not: "SALDO_INICIAL" },
+      },
+      select: { monto: true },
+    });
+
+    // 3. Sumar movimientos
+    for (const mov of movimientos) {
+      const monto = Number(mov.monto);
+      if (!isNaN(monto) && isFinite(monto)) {
+        saldoCalculado += monto;
+      }
+    }
+
+    return Number(saldoCalculado.toFixed(2));
+  } catch (error) {
+    logger.error("Error calculando saldo desde movimientos", {
+      error: error instanceof Error ? error.message : String(error),
+      puntoAtencionId,
+      monedaId,
+    });
+    // Fallback a 0 si hay error
+    return 0;
+  }
+}
+
 // Tolerancias para validación
 const TOLERANCIA_USD = 1.0;
 const TOLERANCIA_OTRAS = 0.01;
@@ -120,19 +171,35 @@ router.post("/iniciar", authenticateToken, async (req, res) => {
       punto_id: punto_atencion_id,
     });
 
-    // Obtener saldos actuales del punto
-    const saldos = await prisma.saldo.findMany({
-      where: { punto_atencion_id },
-      include: {
-        moneda: {
-          select: { id: true, codigo: true, nombre: true, simbolo: true },
-        },
-      },
+    // Obtener todas las monedas activas
+    const monedas = await prisma.moneda.findMany({
+      where: { activo: true },
+      select: { id: true, codigo: true, nombre: true, simbolo: true },
     });
 
+    // Calcular saldos dinámicamente desde MovimientoSaldo (igual que contabilidad general)
+    const saldosCalculados = await Promise.all(
+      monedas.map(async (moneda) => {
+        const cantidadCalculada = await calcularSaldoDesdeMovimientos(
+          punto_atencion_id,
+          moneda.id
+        );
+        return {
+          moneda_id: moneda.id,
+          codigo: moneda.codigo,
+          nombre: moneda.nombre,
+          simbolo: moneda.simbolo,
+          cantidad: cantidadCalculada,
+          billetes: cantidadCalculada, // Usar cantidad calculada como billetes por defecto
+          monedas: 0,
+          es_obligatoria: ["USD", "EUR"].includes(moneda.codigo),
+        };
+      })
+    );
+
     // Identificar USD y EUR
-    const monedaUSD = saldos.find(s => (s.moneda as any)?.codigo === "USD");
-    const monedaEUR = saldos.find(s => (s.moneda as any)?.codigo === "EUR");
+    const monedaUSD = saldosCalculados.find(s => s.codigo === "USD");
+    const monedaEUR = saldosCalculados.find(s => s.codigo === "EUR");
 
     if (!monedaUSD || !monedaEUR) {
       logger.error("No se encontraron USD o EUR en los saldos del punto", {
@@ -146,16 +213,7 @@ router.post("/iniciar", authenticateToken, async (req, res) => {
       success: true,
       jornada,
       requiere_apertura: true,
-      saldos_esperados: saldos.map(s => ({
-        moneda_id: s.moneda_id,
-        codigo: (s.moneda as any)?.codigo,
-        nombre: (s.moneda as any)?.nombre,
-        simbolo: (s.moneda as any)?.simbolo,
-        cantidad: Number(s.cantidad),
-        billetes: Number(s.billetes),
-        monedas: Number(s.monedas_fisicas),
-        es_obligatoria: ["USD", "EUR"].includes((s.moneda as any)?.codigo),
-      })),
+      saldos_esperados: saldosCalculados,
       monedas_obligatorias: ["USD", "EUR"],
       message: "Jornada creada. Debe completar la apertura de caja obligatoriamente.",
     });
@@ -213,23 +271,40 @@ router.post("/validar-apertura", authenticateToken, async (req, res) => {
       });
     }
 
-    // Obtener saldos esperados
-    const saldos = await prisma.saldo.findMany({
-      where: { punto_atencion_id: jornada.punto_atencion_id },
-      include: {
-        moneda: { select: { id: true, codigo: true, nombre: true } },
-      },
+    // Obtener todas las monedas activas
+    const monedas = await prisma.moneda.findMany({
+      where: { activo: true },
+      select: { id: true, codigo: true, nombre: true, simbolo: true },
     });
+
+    // Calcular saldos dinámicamente desde MovimientoSaldo
+    const saldosCalculados = await Promise.all(
+      monedas.map(async (moneda) => {
+        const cantidadCalculada = await calcularSaldoDesdeMovimientos(
+          jornada.punto_atencion_id,
+          moneda.id
+        );
+        return {
+          moneda_id: moneda.id,
+          codigo: moneda.codigo,
+          nombre: moneda.nombre,
+          simbolo: moneda.simbolo,
+          cantidad: cantidadCalculada,
+          billetes: cantidadCalculada,
+          monedas: 0,
+        };
+      })
+    );
 
     // Validar que USD y EUR estén presentes y sean > 0
     const conteoUSD = conteos.find(c => {
-      const moneda = saldos.find(s => s.moneda_id === c.moneda_id);
-      return (moneda?.moneda as any)?.codigo === "USD";
+      const moneda = saldosCalculados.find(s => s.moneda_id === c.moneda_id);
+      return moneda?.codigo === "USD";
     });
     
     const conteoEUR = conteos.find(c => {
-      const moneda = saldos.find(s => s.moneda_id === c.moneda_id);
-      return (moneda?.moneda as any)?.codigo === "EUR";
+      const moneda = saldosCalculados.find(s => s.moneda_id === c.moneda_id);
+      return moneda?.codigo === "EUR";
     });
 
     const errores: string[] = [];
@@ -262,8 +337,8 @@ router.post("/validar-apertura", authenticateToken, async (req, res) => {
 
     let hayDiferenciasFueraTolerancia = false;
 
-    for (const saldo of saldos) {
-      const monedaCodigo = (saldo.moneda as any)?.codigo;
+    for (const saldo of saldosCalculados) {
+      const monedaCodigo = saldo.codigo;
       const conteo = conteos.find(c => c.moneda_id === saldo.moneda_id);
       const fisico = conteo ? conteo.total : 0;
       const esperado = Number(saldo.cantidad);
@@ -335,10 +410,10 @@ router.post("/validar-apertura", authenticateToken, async (req, res) => {
           hora_inicio_conteo: nowEcuador(),
           hora_fin_conteo: nowEcuador(),
           estado: hayDiferenciasFueraTolerancia ? EstadoApertura.CON_DIFERENCIA : EstadoApertura.CUADRADO,
-          saldo_esperado: saldos.map(s => ({
+          saldo_esperado: saldosCalculados.map(s => ({
             moneda_id: s.moneda_id,
-            codigo: (s.moneda as any)?.codigo,
-            nombre: (s.moneda as any)?.nombre,
+            codigo: s.codigo,
+            nombre: s.nombre,
             cantidad: Number(s.cantidad),
           })) as any,
           conteo_fisico: conteos as any,
@@ -376,7 +451,7 @@ router.post("/validar-apertura", authenticateToken, async (req, res) => {
         });
 
         // Crear detalles del cuadre con las diferencias registradas
-        for (const saldo of saldos) {
+        for (const saldo of saldosCalculados) {
           const conteo = conteos.find(c => c.moneda_id === saldo.moneda_id);
           const conteoTotal = conteo ? conteo.total : 0;
           
@@ -440,7 +515,7 @@ router.post("/validar-apertura", authenticateToken, async (req, res) => {
       });
 
       // Crear detalles del cuadre
-      for (const saldo of saldos) {
+      for (const saldo of saldosCalculados) {
         const conteo = conteos.find(c => c.moneda_id === saldo.moneda_id);
         const conteoTotal = conteo ? conteo.total : 0;
         
