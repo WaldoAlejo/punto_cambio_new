@@ -536,74 +536,48 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       setFetchError(null);
       console.log("[DailyClose] Iniciando fetchCuadreData...");
 
-      const token = localStorage.getItem("authToken");
-      if (!token) {
-        console.error("[DailyClose] ❌ No token found in localStorage");
-        const msg = "Por favor, inicie sesión nuevamente.";
-        toast({
-          title: "Sesión Expirada",
-          description: msg,
-          variant: "destructive",
-        });
-        setFetchError(msg);
-        return;
-      }
-
-      const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
-      const endpoint = `${apiUrl}/cuadre-caja`;
-      console.log(`[DailyClose] Llamando endpoint: ${endpoint}`);
-
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+      const fechaHoy = todayGyeDateOnly();
+      console.log("[DailyClose] Solicitando cuadre con fecha y punto:", {
+        fecha: fechaHoy,
+        pointId: selectedPoint?.id,
       });
 
-      console.log(`[DailyClose] Respuesta cuadre-caja status: ${response.status}`);
+      const data = await cuatreCajaService.getCuadre({
+        fecha: fechaHoy,
+        pointId: selectedPoint?.id,
+      });
+      console.log("[DailyClose] Respuesta cuadre-caja data:", data);
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log("[DailyClose] Respuesta cuadre-caja data:", data);
+      if (data.success && data.data) {
+        console.log(`[DailyClose] Cuadre recibido con ${data.data.detalles?.length || 0} detalles`);
+        setCuadreData(data.data);
 
-        if (data.success && data.data) {
-          console.log(`[DailyClose] Cuadre recibido con ${data.data.detalles?.length || 0} detalles`);
-          setCuadreData(data.data);
-
-          // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
-          const initialAdjustments: {
-            [key: string]: { bills: string; coins: string; banks: string; note?: string };
-          } = {};
-          if (data.data.detalles && data.data.detalles.length > 0) {
-            data.data.detalles.forEach((detalle: CuadreDetalle) => {
-              initialAdjustments[detalle.moneda_id] = {
-                bills: detalle.saldo_cierre.toFixed(2),
-                coins: "0.00",
-                banks: Number(detalle.bancos_teorico ?? 0).toFixed(2),
-                note: "",
-              };
-            });
-          }
-          setUserAdjustments(initialAdjustments);
-          setFetchError(null);
-        } else if (data.data?.mensaje) {
-          // No hay movimientos hoy
-          console.log("[DailyClose] No hay movimientos:", data.data.mensaje);
-          setCuadreData({ detalles: [], observaciones: "" });
-          setUserAdjustments({});
-          setFetchError(null);
-        } else {
-          console.warn("[DailyClose] Respuesta inesperada:", data);
+        // Inicializar ajustes del usuario con valores esperados (saldo de cierre)
+        const initialAdjustments: {
+          [key: string]: { bills: string; coins: string; banks: string; note?: string };
+        } = {};
+        if (data.data.detalles && data.data.detalles.length > 0) {
+          data.data.detalles.forEach((detalle: CuadreDetalle) => {
+            initialAdjustments[detalle.moneda_id] = {
+              bills: detalle.saldo_cierre.toFixed(2),
+              coins: "0.00",
+              banks: Number(detalle.bancos_teorico ?? 0).toFixed(2),
+              note: "",
+            };
+          });
         }
-      } else {
-        const errorText = await response.text();
-        console.error(
-          "[DailyClose] ❌ Error response from cuadre API:",
-          response.status,
-          response.statusText,
-          errorText
+        setUserAdjustments(initialAdjustments);
+        setFetchError(null);
+      } else if ((data.data as { mensaje?: string } | undefined)?.mensaje) {
+        console.log(
+          "[DailyClose] No hay movimientos:",
+          (data.data as { mensaje?: string }).mensaje
         );
-        throw new Error(`Error al obtener datos de cuadre: ${response.status}`);
+        setCuadreData({ detalles: [], observaciones: "" });
+        setUserAdjustments({});
+        setFetchError(null);
+      } else {
+        console.warn("[DailyClose] Respuesta inesperada:", data);
       }
     } catch (error) {
       console.error("[DailyClose] ❌ Error al obtener datos de cuadre:", error);
@@ -654,7 +628,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const fetchTodayClose = useCallback(async () => {
     try {
       const fechaHoy = todayGyeDateOnly();
-      const resp = await cuatreCajaService.getCuadre({ fecha: fechaHoy });
+      const resp = await cuatreCajaService.getCuadre({
+        fecha: fechaHoy,
+        pointId: selectedPoint?.id,
+      });
       if (resp?.success && resp.data) {
         const tot = isRecord(resp.data.totales) ? resp.data.totales : {};
         const observaciones =
@@ -1356,6 +1333,39 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     );
   }
 
+  const cantidadCambiosDetectados =
+    validacionCierres?.conteos?.cambios_divisas ??
+    getCantidad(cuadreData?.totales?.cambios);
+  const cantidadServiciosDetectados =
+    validacionCierres?.conteos?.servicios_externos ??
+    getCantidad(cuadreData?.totales?.servicios_externos);
+  const cantidadTransferenciasEntrada = getCantidad(
+    cuadreData?.totales?.transferencias_entrada
+  );
+  const cantidadTransferenciasSalida = getCantidad(
+    cuadreData?.totales?.transferencias_salida
+  );
+  const movimientosDetectados = [
+    cantidadCambiosDetectados > 0
+      ? `${cantidadCambiosDetectados} cambio(s) de divisas`
+      : null,
+    cantidadServiciosDetectados > 0
+      ? `${cantidadServiciosDetectados} movimiento(s) de servicios externos`
+      : null,
+    cantidadTransferenciasEntrada > 0
+      ? `${cantidadTransferenciasEntrada} transferencia(s) de entrada`
+      : null,
+    cantidadTransferenciasSalida > 0
+      ? `${cantidadTransferenciasSalida} transferencia(s) de salida`
+      : null,
+  ].filter(Boolean) as string[];
+  const cierreSinDetallePeroConMovimientos =
+    (cuadreData?.detalles?.length ?? 0) === 0 && movimientosDetectados.length > 0;
+  const resumenMovimientosDetectados = movimientosDetectados.join(", ");
+  const textoSinDetalle = cierreSinDetallePeroConMovimientos
+    ? `Se detectaron movimientos del día (${resumenMovimientosDetectados}), pero el cuadre automático no devolvió el detalle esperado.`
+    : "No se han registrado movimientos hoy";
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -1403,7 +1413,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             <CardTitle>Cuadre de Caja Automático</CardTitle>
             <CardDescription>
               {(cuadreData?.detalles?.length ?? 0) === 0
-                ? "No se han registrado movimientos de divisas hoy"
+                ? textoSinDetalle
                 : "Revise y ajuste los conteos físicos. Los valores están pre-calculados según los movimientos del día."}
             </CardDescription>
           </CardHeader>
@@ -1457,17 +1467,45 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             {(cuadreData?.detalles?.length ?? 0) === 0 ? (
               <div className="space-y-6">
                 <div className="text-center py-8">
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-blue-800 mb-2">
-                      ✅ Cierre sin Movimientos de Divisas
+                  <div
+                    className={
+                      cierreSinDetallePeroConMovimientos
+                        ? "bg-amber-50 border border-amber-200 rounded-lg p-6"
+                        : "bg-blue-50 border border-blue-200 rounded-lg p-6"
+                    }
+                  >
+                    <h3
+                      className={`text-lg font-semibold mb-2 ${
+                        cierreSinDetallePeroConMovimientos
+                          ? "text-amber-800"
+                          : "text-blue-800"
+                      }`}
+                    >
+                      {cierreSinDetallePeroConMovimientos
+                        ? "Se detectaron movimientos sin detalle de cuadre"
+                        : "✅ Cierre sin Movimientos del Día"}
                     </h3>
-                    <p className="text-blue-700 mb-4">
-                      No se registraron cambios de divisas hoy, pero puede
-                      proceder con el cierre.
+                    <p
+                      className={`mb-4 ${
+                        cierreSinDetallePeroConMovimientos
+                          ? "text-amber-700"
+                          : "text-blue-700"
+                      }`}
+                    >
+                      {cierreSinDetallePeroConMovimientos
+                        ? `Hay ${resumenMovimientosDetectados} registrados para ${selectedPoint?.nombre || "el punto seleccionado"}, pero el cuadre automático no cargó el desglose.`
+                        : "No se registraron movimientos hoy, pero puede proceder con el cierre."}
                     </p>
-                    <p className="text-sm text-blue-600">
-                      El cierre incluirá todos los movimientos del día
-                      (servicios externos, transferencias, etc.).
+                    <p
+                      className={`text-sm ${
+                        cierreSinDetallePeroConMovimientos
+                          ? "text-amber-600"
+                          : "text-blue-600"
+                      }`}
+                    >
+                      {cierreSinDetallePeroConMovimientos
+                        ? "Actualice la vista. Si el problema persiste, revise el resumen previo al cierre para confirmar los movimientos del día."
+                        : "El cierre incluirá todos los movimientos del día (servicios externos, transferencias, etc.)."}
                     </p>
                   </div>
                 </div>
@@ -1490,8 +1528,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                 </Button>
 
                 <div className="mt-3 text-xs text-gray-600 text-center">
-                  El cierre se realizará sin detalles de cuadre de caja, ya que
-                  no hubo movimientos de divisas.
+                  {cierreSinDetallePeroConMovimientos
+                    ? "El cierre se realizará sin detalles de cuadre de caja aunque sí se detectaron movimientos del día. Revise el resumen antes de confirmar."
+                    : "El cierre se realizará sin detalles de cuadre de caja porque no se detectaron movimientos del día."}
                 </div>
               </div>
             ) : (

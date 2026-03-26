@@ -74,16 +74,33 @@ interface CuadreCaja {
 }
 
 router.post("/", authenticateToken, async (req, res) => {
-  const usuario = req.user as UsuarioAutenticado;
-  if (!usuario?.punto_atencion_id) {
-    return res.status(401).json({ success: false, error: "Sin punto de atención" });
-  }
-
+  const usuario = req.user as any;
+  
   try {
-    const puntoAtencionId = usuario.punto_atencion_id;
-    const fechaBase = parseFechaParam((req.body.fecha as string | undefined)?.trim());
+    const { fecha, pointId, observaciones, movimientos } = req.body;
+    
+    // Priorizar pointId del body si el usuario tiene permisos
+    let puntoAtencionId = usuario.punto_atencion_id;
+    const esAdmin = ["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"].includes(usuario.rol);
+    
+    if (pointId) {
+      if (esAdmin || pointId === usuario.punto_atencion_id) {
+        puntoAtencionId = pointId;
+      } else {
+        return res.status(403).json({ 
+          success: false, 
+          error: "No tiene permisos para operar en este punto de atención" 
+        });
+      }
+    }
+
+    if (!puntoAtencionId) {
+      return res.status(400).json({ success: false, error: "Sin punto de atención" });
+    }
+
+    const fechaBase = parseFechaParam((fecha as string | undefined)?.trim());
     const { gte } = gyeDayRangeUtcFromDate(fechaBase);
-    const fechaInicioDia: Date = new Date(gte);
+    const fechaInicioDia = gte;
 
     // 1. Buscar cuadre ABIERTO existente
     const cuadreAbiertoResult = await pool.query<CuadreCaja>(
@@ -142,13 +159,13 @@ router.post("/", authenticateToken, async (req, res) => {
       `INSERT INTO "CuadreCaja" (id, estado, fecha, punto_atencion_id, usuario_id, observaciones)
         VALUES ($1, 'ABIERTO', $2, $3, $4, $5)
         RETURNING *`,
-      [cuadreId, fechaInicioDia.toISOString(), String(puntoAtencionId), usuario.id, req.body.observaciones || ""]
+      [cuadreId, fechaInicioDia.toISOString(), String(puntoAtencionId), usuario.id, observaciones || ""]
     );
 
-    if (Array.isArray(req.body.movimientos)) {
-      for (const mov of req.body.movimientos) {
+    if (Array.isArray(movimientos)) {
+      for (const mov of movimientos) {
         await actualizarSaldoFisicoYLogico(
-          puntoAtencionId,
+          String(puntoAtencionId),
           mov.moneda_id,
           mov.monto,
           mov.tipoMovimiento,
@@ -172,7 +189,8 @@ router.post("/", authenticateToken, async (req, res) => {
 
 function parseFechaParam(fecha?: string): Date {
   if (!fecha) return new Date();
-  const d = new Date(`${fecha}T00:00:00`);
+  // Usar mediodía para evitar problemas de zona horaria al extraer el día calendario
+  const d = new Date(`${fecha}T12:00:00`);
   return isNaN(d.getTime()) ? new Date() : d;
 }
 
@@ -186,7 +204,7 @@ async function calcularSaldoApertura(
       `SELECT dc.conteo_fisico
          FROM "DetalleCuadreCaja" dc
          INNER JOIN "CuadreCaja" c ON dc.cuadre_id = c.id
-        WHERE dc.moneda_id = $1::uuid
+        WHERE dc.moneda_id = $1
           AND c.punto_atencion_id = $2
           AND c.estado = 'CERRADO'
           AND c.fecha < $3::timestamp
@@ -222,14 +240,27 @@ async function calcularSaldoApertura(
 }
 
 router.get("/", authenticateToken, async (req, res) => {
-  const usuario = req.user as UsuarioAutenticado;
-  if (!usuario?.punto_atencion_id) {
-    return res.status(401).json({ success: false, error: "Sin punto de atención" });
-  }
-
+  const usuario = req.user as any;
+  
   try {
     const fechaParam = (req.query.fecha as string | undefined)?.trim();
-    const puntoAtencionId = usuario.punto_atencion_id;
+    const queryPointId = (req.query.pointId as string | undefined)?.trim();
+    
+    // Priorizar pointId de la query si el usuario es ADMIN/SUPER_USUARIO/ADMINISTRATIVO
+    // O si es su propio punto
+    let puntoAtencionId = usuario.punto_atencion_id;
+    const esAdmin = ["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"].includes(usuario.rol);
+    
+    if (queryPointId) {
+      if (esAdmin || queryPointId === usuario.punto_atencion_id) {
+        puntoAtencionId = queryPointId;
+      } else {
+        return res.status(403).json({ 
+          success: false, 
+          error: "No tiene permisos para consultar este punto de atención" 
+        });
+      }
+    }
 
     if (!puntoAtencionId) {
       logger.error("❌ usuario sin punto de atención asignado", {
@@ -241,14 +272,25 @@ router.get("/", authenticateToken, async (req, res) => {
       });
     }
 
-    const fechaBase = parseFechaParam(fechaParam);
-    const { gte, lt } = gyeDayRangeUtcFromDate(fechaBase);
-    const fechaInicioDia: Date = new Date(gte);
-    const fechaFinDia: Date = new Date(lt);
+    // Calcular rango de fechas correctamente
+    let gte: Date, lt: Date;
+    if (fechaParam) {
+      const range = gyeDayRangeUtcFromDate(parseFechaParam(fechaParam));
+      gte = range.gte;
+      lt = range.lt;
+    } else {
+      const range = gyeDayRangeUtcFromDate(new Date());
+      gte = range.gte;
+      lt = range.lt;
+    }
+    
+    const fechaInicioDia = gte;
+    const fechaFinDia = lt;
     
     logger.info("🔍 GET /cuadre-caja iniciado", {
       usuario_id: usuario.id,
       punto_atencion_id: puntoAtencionId,
+      punto_atencion_id_type: typeof puntoAtencionId,
       fecha: fechaInicioDia.toISOString(),
     });
 
@@ -302,6 +344,17 @@ router.get("/", authenticateToken, async (req, res) => {
       }),
     ]);
 
+    logger.info("🔍 Resultados de conteos (debug):", {
+      puntoAtencionId,
+      fechaGte: fechaInicioDia.toISOString(),
+      fechaLt: fechaFinDia.toISOString(),
+      movimientosSaldo,
+      cambiosDivisa,
+      transferencias,
+      serviciosExternos,
+      guiasServientrega
+    });
+
     const totalMovimientos = 
       movimientosSaldo + 
       cambiosDivisa + 
@@ -311,7 +364,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
     if (totalMovimientos === 0) {
       logger.info("ℹ️ Sin movimientos del día; devolviendo cuadre vacío", {
-        punto_atencion_id: puntoAtencionId,
+        punto_atencion_id: String(puntoAtencionId),
         fecha: fechaInicioDia.toISOString(),
       });
       return res.status(200).json({
@@ -395,7 +448,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
     for (const moneda of monedas) {
       try {
-        logger.info(`📦 Procesando moneda: ${moneda.codigo}`);
+        logger.info(`📦 Procesando moneda: ${moneda.codigo}`, { moneda_id: moneda.id });
         
         // Obtener saldo de apertura (último conteo físico del cierre anterior)
         const saldoApertura = await calcularSaldoApertura(
@@ -470,7 +523,7 @@ router.get("/", authenticateToken, async (req, res) => {
         // Obtener o crear detalle del cuadre
         const detalleResult = await pool.query<DetalleCuadreCaja>(
           `SELECT * FROM "DetalleCuadreCaja"
-            WHERE cuadre_id = $1::uuid AND moneda_id = $2::uuid`,
+            WHERE cuadre_id = $1 AND moneda_id = $2`,
           [cuadre.id, moneda.id]
         );
 
@@ -483,7 +536,7 @@ router.get("/", authenticateToken, async (req, res) => {
             `INSERT INTO "DetalleCuadreCaja" (
               id, cuadre_id, moneda_id, saldo_apertura, saldo_cierre, conteo_fisico, 
               diferencia, billetes, monedas_fisicas, movimientos_periodo
-            ) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *`,
             [detalleId, cuadre.id, moneda.id, saldoApertura, saldoCierreTeórico, conteoFísico, diferencia, billetes, monedasFísicas, movimientosPeriodo.length]
           );
@@ -500,7 +553,7 @@ router.get("/", authenticateToken, async (req, res) => {
             `UPDATE "DetalleCuadreCaja"
               SET saldo_apertura = $1, saldo_cierre = $2, conteo_fisico = $3,
                   diferencia = $4, billetes = $5, monedas_fisicas = $6, movimientos_periodo = $7
-              WHERE id = $8::uuid`,
+              WHERE id = $8`,
             [saldoApertura, saldoCierreTeórico, conteoFísico, diferencia, billetes, monedasFísicas, movimientosPeriodo.length, detalle.id]
           );
           detalle.saldo_apertura = saldoApertura;
