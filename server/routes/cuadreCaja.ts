@@ -433,15 +433,74 @@ router.get("/", authenticateToken, async (req, res) => {
       }
     }
 
-    // Obtener todas las monedas activas
+    // Obtener solo monedas activas con movimientos del día o con saldo no cero
     const monedasResult = await pool.query<Moneda>(
       `SELECT id, codigo, nombre, simbolo, activo, orden_display
         FROM "Moneda"
         WHERE activo = true
+          AND id IN (
+            SELECT DISTINCT moneda_id
+            FROM (
+              SELECT ms.moneda_id
+              FROM "MovimientoSaldo" ms
+              WHERE ms.punto_atencion_id = $1
+                AND ms.fecha >= $2::timestamp
+                AND ms.fecha < $3::timestamp
+
+              UNION
+
+              SELECT cd.moneda_origen_id AS moneda_id
+              FROM "CambioDivisa" cd
+              WHERE cd.punto_atencion_id = $1
+                AND cd.fecha >= $2::timestamp
+                AND cd.fecha < $3::timestamp
+
+              UNION
+
+              SELECT cd.moneda_destino_id AS moneda_id
+              FROM "CambioDivisa" cd
+              WHERE cd.punto_atencion_id = $1
+                AND cd.fecha >= $2::timestamp
+                AND cd.fecha < $3::timestamp
+
+              UNION
+
+              SELECT se.moneda_id
+              FROM "ServicioExternoMovimiento" se
+              WHERE se.punto_atencion_id = $1
+                AND se.fecha >= $2::timestamp
+                AND se.fecha < $3::timestamp
+                AND se.moneda_id IS NOT NULL
+
+              UNION
+
+              SELECT t.moneda_id
+              FROM "Transferencia" t
+              WHERE (t.origen_id = $1 OR t.destino_id = $1)
+                AND t.fecha >= $2::timestamp
+                AND t.fecha < $3::timestamp
+                AND t.estado IN ('COMPLETADO', 'APROBADO')
+                AND t.moneda_id IS NOT NULL
+
+              UNION
+
+              SELECT s.moneda_id
+              FROM "Saldo" s
+              WHERE s.punto_atencion_id = $1
+                AND (
+                  COALESCE(s.cantidad, 0) <> 0
+                  OR COALESCE(s.billetes, 0) <> 0
+                  OR COALESCE(s.monedas_fisicas, 0) <> 0
+                  OR COALESCE(s.bancos, 0) <> 0
+                )
+            ) AS monedas_relevantes
+            WHERE moneda_id IS NOT NULL
+          )
         ORDER BY orden_display ASC`
+      , [puntoAtencionId, fechaInicioDia.toISOString(), fechaFinDia.toISOString()]
     );
     const monedas = monedasResult.rows;
-    logger.info(`📊 Monedas encontradas: ${monedas.length}`);
+    logger.info(`📊 Monedas relevantes encontradas: ${monedas.length}`);
 
     // Calcular saldos para cada moneda (incluyendo TODAS las monedas activas)
     const detalles: DetalleCuadreCaja[] = [];
