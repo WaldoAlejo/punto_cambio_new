@@ -36,28 +36,56 @@ export class ServientregaValidationService {
     static validarIdentificacionEcuatorianaOExtranjera(valor: string): boolean {
       if (!valor || typeof valor !== "string") return false;
       const clean = valor.trim();
-      // Cédula ecuatoriana (10 dígitos, algoritmo oficial)
-      if (/^\d{10}$/.test(clean)) {
-        return ServientregaValidationService.validarCedula(clean);
+      
+      // Si no son solo números, validar como pasaporte genérico
+      if (!/^\d+$/.test(clean)) {
+        return /^[A-Z0-9]{6,12}$/i.test(clean);
       }
-      // RUC ecuatoriano (13 dígitos).
-      // - Natural persons have RUC formed by a valid cédula + suffix '001'.
-      // - Legal entities / empresas also have 13-digit RUCs that do not derive
-      //   from a valid cédula; accept any 13-digit numeric RUC to allow empresas.
-      if (/^\d{13}$/.test(clean)) {
-        const cedula = clean.slice(0, 10);
-        const sufijo = clean.slice(10);
-        // Keep the strict check for natural-person RUCs (cedula + 001)
-        if (ServientregaValidationService.validarCedula(cedula) && sufijo === "001") {
-          return true;
+
+      const len = clean.length;
+      if (len !== 10 && len !== 13) return false;
+
+      const provincia = parseInt(clean.substring(0, 2), 10);
+      if (provincia < 1 || (provincia > 24 && provincia !== 30)) return false;
+
+      const tercerDigito = parseInt(clean[2], 10);
+
+      if (tercerDigito < 6) {
+        // Persona Natural: Cédula (10) o RUC (13)
+        if (len === 13 && parseInt(clean.substring(10), 10) === 0) return false;
+        
+        // Algoritmo de cédula (módulo 10)
+        return ServientregaValidationService.validarCedula(clean.substring(0, 10));
+      } else if (tercerDigito === 6) {
+        // Entidad Pública
+        if (len !== 13) return false;
+        if (parseInt(clean.substring(9), 10) === 0) return false;
+        
+        const d9 = parseInt(clean[8], 10);
+        const coef = [3, 2, 7, 6, 5, 4, 3, 2];
+        let suma = 0;
+        for (let i = 0; i < 8; i++) {
+          suma += parseInt(clean[i], 10) * coef[i];
         }
-        // Permit other 13-digit numeric RUCs (empresas / instituciones)
-        return true;
+        const check = (11 - (suma % 11)) % 11;
+        const finalCheck = (suma % 11) === 0 ? 0 : check;
+        return finalCheck === d9;
+      } else if (tercerDigito === 9) {
+        // Sociedad Privada o Extranjera
+        if (len !== 13) return false;
+        if (parseInt(clean.substring(10), 10) === 0) return false;
+        
+        const d10 = parseInt(clean[9], 10);
+        const coef = [4, 3, 2, 7, 6, 5, 4, 3, 2];
+        let suma = 0;
+        for (let i = 0; i < 9; i++) {
+          suma += parseInt(clean[i], 10) * coef[i];
+        }
+        const check = (11 - (suma % 11)) % 11;
+        const finalCheck = (suma % 11) === 0 ? 0 : check;
+        return finalCheck === d10;
       }
-      // Pasaporte (extranjero o ecuatoriano): letras y números, 6-12 caracteres
-      if (/^[A-Z0-9]{6,12}$/i.test(clean)) {
-        return true;
-      }
+
       return false;
     }
 
@@ -67,9 +95,9 @@ export class ServientregaValidationService {
     static validarCedula(cedula: string): boolean {
       if (!/^\d{10}$/.test(cedula)) return false;
       const provincia = parseInt(cedula.slice(0, 2), 10);
-      if (provincia < 1 || provincia > 24) return false;
+      if (provincia < 1 || (provincia > 24 && provincia !== 30)) return false;
       const tercer = parseInt(cedula[2], 10);
-      if (tercer > 6) return false;
+      if (tercer >= 6) return false;
       let suma = 0;
       for (let i = 0; i < 9; i++) {
         let num = parseInt(cedula[i], 10);

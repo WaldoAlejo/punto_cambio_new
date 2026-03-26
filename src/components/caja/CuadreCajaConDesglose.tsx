@@ -35,7 +35,7 @@ function formatMoney(amount: number): string {
   });
 }
 
-export default function CuadreCajaMejorado({ pointId }: Props) {
+export default function CuadreCajaConDesglose({ pointId }: Props) {
   const { user } = useAuth();
   const [fecha, setFecha] = useState<string>(
     new Date().toISOString().slice(0, 10)

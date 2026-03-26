@@ -25,10 +25,43 @@ import {
 import { aperturaCajaService, ConteoMoneda, DiferenciaMoneda } from "@/services/aperturaCajaService";
 import { toast } from "@/hooks/use-toast";
 
-// Denominaciones estándar
-const DENOMINACIONES_BILLETES = [100, 50, 20, 10, 5, 1];
-const DENOMINACIONES_MONEDAS_USD = [1, 0.5, 0.25, 0.1, 0.05, 0.01];
-const DENOMINACIONES_MONEDAS_OTRAS = [1, 0.5, 0.2, 0.1, 0.05, 0.01];
+// Denominaciones por defecto (fallback)
+const DENOMINACIONES_DEFAULT = {
+  billetes: [100, 50, 20, 10, 5, 1],
+  monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
+};
+
+// Denominaciones específicas por código de moneda
+const DENOMINACIONES_POR_MONEDA: Record<string, { billetes: number[]; monedas: number[] }> = {
+  USD: {
+    billetes: [100, 50, 20, 10, 5, 2, 1],
+    monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
+  },
+  COP: {
+    billetes: [100000, 50000, 20000, 10000, 5000, 2000, 1000],
+    monedas: [1000, 500, 200, 100, 50],
+  },
+  EUR: {
+    billetes: [500, 200, 100, 50, 20, 10, 5],
+    monedas: [2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01],
+  },
+  PEN: {
+    billetes: [200, 100, 50, 20, 10],
+    monedas: [5, 2, 1, 0.5, 0.2, 0.1],
+  },
+  CLP: {
+    billetes: [20000, 10000, 5000, 2000, 1000],
+    monedas: [500, 100, 50, 10, 5, 1],
+  },
+  ARS: {
+    billetes: [10000, 2000, 1000, 500, 200, 100, 50, 20, 10],
+    monedas: [50, 10, 5, 2, 1, 0.5],
+  },
+  VES: {
+    billetes: [100, 50, 20, 10, 5, 2, 1],
+    monedas: [1, 0.5, 0.25, 0.1, 0.05],
+  },
+};
 
 interface BilleteInput {
   denominacion: number;
@@ -94,6 +127,9 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
   const [puntoAtencion, setPuntoAtencion] = useState<{ id: string; nombre: string; ciudad: string } | null>(null);
   const [serviciosExternos, setServiciosExternos] = useState<ServicioExternoInput[]>([]);
   const [conDiferenciaPendiente, setConDiferenciaPendiente] = useState(false);
+  const [tipoArqueo, setTipoArqueo] = useState<"COMPLETO" | "PARCIAL" | null>(null);
+  const [monedasExcluidas, setMonedasExcluidas] = useState<Array<{ moneda_id: string; codigo: string; razon: string }>>([]);
+  const [requiereArqueoCompleto, setRequiereArqueoCompleto] = useState(false);
 
   // Obtener jornada activa si no se proporcionó
   useEffect(() => {
@@ -146,27 +182,32 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
         setAperturaId(result.apertura.id);
         setEstado(result.apertura.estado);
         setSaldoEsperado(result.apertura.saldo_esperado || []);
+        setTipoArqueo(result.apertura.tipo_arqueo || null);
+        setMonedasExcluidas(result.apertura.monedas_excluidas || []);
+        setRequiereArqueoCompleto(result.apertura.requiere_arqueo_completo || false);
 
         // Inicializar formularios de conteo para cada moneda
         const conteosIniciales: ConteoForm[] = (result.apertura.saldo_esperado || []).map(
-          (saldo: any) => ({
-            moneda_id: saldo.moneda_id,
-            codigo: saldo.codigo,
-            billetes: DENOMINACIONES_BILLETES.map((d) => ({
-              denominacion: d,
-              cantidad: 0,
-            })),
-            monedas:
-              saldo.codigo === "USD"
-                ? DENOMINACIONES_MONEDAS_USD.map((d) => ({
-                    denominacion: d,
-                    cantidad: 0,
-                  }))
-                : DENOMINACIONES_MONEDAS_OTRAS.map((d) => ({
-                    denominacion: d,
-                    cantidad: 0,
-                  })),
-          })
+          (saldo: any) => {
+            // Obtener denominaciones: primero del backend, luego específicas, luego default
+            let denominaciones = saldo.denominaciones;
+            if (!denominaciones) {
+              denominaciones = DENOMINACIONES_POR_MONEDA[saldo.codigo] || DENOMINACIONES_DEFAULT;
+            }
+            
+            return {
+              moneda_id: saldo.moneda_id,
+              codigo: saldo.codigo,
+              billetes: denominaciones.billetes.map((d: number) => ({
+                denominacion: d,
+                cantidad: 0,
+              })),
+              monedas: denominaciones.monedas.map((d: number) => ({
+                denominacion: d,
+                cantidad: 0,
+              })),
+            };
+          }
         );
 
         // Inicializar servicios externos
@@ -483,6 +524,56 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
               <span>{puntoAtencion.nombre}</span>
               <span className="text-blue-600">({puntoAtencion.ciudad})</span>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Banner de tipo de arqueo */}
+      {tipoArqueo && (
+        <Card className={tipoArqueo === "COMPLETO" ? "border-blue-300 bg-blue-50" : "border-amber-300 bg-amber-50"}>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              {tipoArqueo === "COMPLETO" ? (
+                <>
+                  <CheckCircle className="h-5 w-5 text-blue-600" />
+                  <CardTitle className="text-base text-blue-800">Arqueo Completo Requerido</CardTitle>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  <CardTitle className="text-base text-amber-800">Arqueo Parcial</CardTitle>
+                </>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {tipoArqueo === "COMPLETO" ? (
+              <p className="text-sm text-blue-700">
+                Este es el <strong>primer arqueo completo</strong> del punto. Debes contar <strong>todas las divisas</strong>.
+                Este registro servirá como base para auditorías futuras.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-amber-700">
+                  Se muestran solo las divisas que tuvieron movimiento en el último día.
+                  Las divisas sin movimiento quedan registradas con su saldo histórico.
+                </p>
+                {monedasExcluidas.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs font-medium text-amber-800 mb-1">
+                      Divisas excluidas (sin movimiento):
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {monedasExcluidas.map((m) => (
+                        <Badge key={m.moneda_id} variant="outline" className="text-xs">
+                          {m.codigo}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

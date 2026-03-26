@@ -10,6 +10,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Usuario, PuntoAtencion } from "../../types";
 import { Remitente } from "@/types/servientrega"; // Usa tu tipado global
+import { validarIdentificacion } from "@/utils/identificacion";
 
 interface PasoRemitenteProps {
   user: Usuario;
@@ -220,27 +221,6 @@ export default function PasoRemitente({
     setCedulaResultados([]);
   };
 
-  // Validación identificación EC (cédula/RUC) + fallback pasaporte
-  const validarIdentificacion = (id: string): boolean => {
-    const cleanId = (id || "").trim();
-    if (!cleanId) return false;
-    if (/^\d{10}$/.test(cleanId)) {
-      const provincia = parseInt(cleanId.substring(0, 2));
-      if (provincia < 1 || provincia > 24) return false;
-      const digitoVerificador = parseInt(cleanId[9]);
-      const coef = [2, 1, 2, 1, 2, 1, 2, 1, 2];
-      let suma = 0;
-      for (let i = 0; i < 9; i++) {
-        let val = parseInt(cleanId[i]) * coef[i];
-        if (val >= 10) val -= 9;
-        suma += val;
-      }
-      return digitoVerificador === (10 - (suma % 10)) % 10;
-    }
-    if (/^\d{13}$/.test(cleanId))
-      return validarIdentificacion(cleanId.substring(0, 10));
-    return /^[A-Za-z0-9]{6,}$/.test(cleanId); // pasaporte genérico
-  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, Circle } from "lucide-react";
 import { toast } from "sonner";
 import { Destinatario } from "@/types/servientrega";
+import { validarIdentificacion } from "@/utils/identificacion";
 
 interface Pais {
   codpais: number;
@@ -329,6 +330,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     return true;
   };
 
+
   // 9) Guardar/continuar (requiere ciudad/provincia canónicas del catálogo)
   const handleContinue = async () => {
     if (cargandoPaises || cargandoCiudades) {
@@ -345,6 +347,12 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       !form.provincia
     ) {
       toast.error("Completa todos los campos obligatorios.");
+      return;
+    }
+
+    // Validar identificación si es Ecuador (codpais 63)
+    if (form.codpais === 63 && !validarIdentificacion(form.identificacion)) {
+      toast.error("Número de identificación inválido.");
       return;
     }
 

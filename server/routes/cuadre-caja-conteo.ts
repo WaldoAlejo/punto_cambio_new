@@ -42,6 +42,17 @@ const conteoFisicoSchema = z.object({
   monedas_fisicas: z.number().min(0).default(0),
   conteo_bancos: z.number().min(0).default(0),
   observaciones: z.string().max(500).optional(),
+  // Desglose por denominación (opcional)
+  desglose_denominaciones: z.object({
+    billetes: z.array(z.object({
+      denominacion: z.number(),
+      cantidad: z.number().min(0),
+    })),
+    monedas: z.array(z.object({
+      denominacion: z.number(),
+      cantidad: z.number().min(0),
+    })),
+  }).optional(),
 });
 
 const validarCierreSchema = z.object({
@@ -57,7 +68,7 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
   const usuario = req.user as UsuarioAutenticado;
   
   try {
-    const { cuadre_id, moneda_id, billetes, monedas_fisicas, conteo_bancos, observaciones } = req.body;
+    const { cuadre_id, moneda_id, billetes, monedas_fisicas, conteo_bancos, observaciones, desglose_denominaciones } = req.body;
     
     logger.info("📝 Guardando conteo físico manual", {
       usuario_id: usuario.id,
@@ -66,6 +77,7 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
       billetes,
       monedas_fisicas,
       conteo_bancos,
+      tiene_desglose: !!desglose_denominaciones,
     });
 
     // Verificar que el cuadre existe y pertenece al punto del usuario
@@ -116,6 +128,9 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
     const requiereAlerta = Math.abs(diferencia) > UMBRAL_DIFERENCIA_ALERTA || 
                            Math.abs(diferenciaBancos) > UMBRAL_DIFERENCIA_ALERTA;
 
+    // Preparar el desglose para guardar en JSON
+    const desgloseJSON = desglose_denominaciones ? JSON.stringify(desglose_denominaciones) : null;
+
     // Guardar o actualizar el detalle
     if (detalleResult.rows.length === 0) {
       // Crear nuevo detalle
@@ -123,8 +138,8 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
         `INSERT INTO "DetalleCuadreCaja" (
           id, cuadre_id, moneda_id, saldo_apertura, saldo_cierre, conteo_fisico,
           diferencia, billetes, monedas_fisicas, bancos_teorico, conteo_bancos, 
-          diferencia_bancos, observaciones_detalle
-        ) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+          diferencia_bancos, observaciones_detalle, desglose_denominaciones
+        ) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
         [
           randomUUID(),
           cuadre_id,
@@ -139,6 +154,7 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
           conteo_bancos,
           diferenciaBancos,
           observaciones || null,
+          desgloseJSON,
         ]
       );
     } else {
@@ -152,8 +168,9 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
              conteo_bancos = $5,
              diferencia_bancos = $6,
              observaciones_detalle = COALESCE($7, observaciones_detalle),
+             desglose_denominaciones = COALESCE($8, desglose_denominaciones),
              updated_at = NOW()
-         WHERE id = $8::uuid`,
+         WHERE id = $9::uuid`,
         [
           conteoFisicoTotal,
           diferencia,
@@ -162,6 +179,7 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
           conteo_bancos,
           diferenciaBancos,
           observaciones || null,
+          desgloseJSON,
           detalleResult.rows[0].id,
         ]
       );
@@ -211,6 +229,7 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
         diferencia_bancos: diferenciaBancos,
         requiere_alerta: requiereAlerta,
         umbral_alerta: UMBRAL_DIFERENCIA_ALERTA,
+        desglose_denominaciones: desglose_denominaciones || null,
       },
       alerta: requiereAlerta ? {
         tipo: Math.abs(diferencia) > UMBRAL_DIFERENCIA_ALERTA ? 'DIFERENCIA_EFECTIVO' : 'DIFERENCIA_BANCOS',
@@ -752,6 +771,18 @@ router.get("/detalles/:cuadreId", authenticateToken, async (req, res) => {
       const diferencia = Number(detalle.diferencia) || 0;
       const diferenciaBancos = Number(detalle.diferencia_bancos) || 0;
       
+      // Parsear el desglose de denominaciones si existe
+      let desgloseDenominaciones = null;
+      if (detalle.desglose_denominaciones) {
+        try {
+          desgloseDenominaciones = typeof detalle.desglose_denominaciones === 'string' 
+            ? JSON.parse(detalle.desglose_denominaciones)
+            : detalle.desglose_denominaciones;
+        } catch (e) {
+          logger.warn("Error parseando desglose_denominaciones", { detalle_id: detalle.id });
+        }
+      }
+      
       return {
         id: detalle.id,
         moneda_id: detalle.moneda_id,
@@ -769,6 +800,7 @@ router.get("/detalles/:cuadreId", authenticateToken, async (req, res) => {
         diferencia_bancos: diferenciaBancos,
         movimientos_periodo: detalle.movimientos_periodo,
         observaciones: detalle.observaciones_detalle,
+        desglose_denominaciones: desgloseDenominaciones,
         alertas: {
           diferencia_efectivo: Math.abs(diferencia) > UMBRAL_DIFERENCIA_ALERTA,
           diferencia_bancos: Math.abs(diferenciaBancos) > UMBRAL_DIFERENCIA_ALERTA,

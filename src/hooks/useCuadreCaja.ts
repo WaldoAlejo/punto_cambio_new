@@ -8,6 +8,7 @@ import cuatreCajaService, {
   GuardarCierreResponse,
   ParcialesPendientesResponse,
   ContabilidadDiariaResponse,
+  DesgloseDenominacion,
 } from "@/services/cuatreCajaService";
 import saldoService from "@/services/saldoService";
 import cierreReporteService, { ValidacionCierre } from "@/services/cierreReporteService";
@@ -23,11 +24,65 @@ function todayYYYYMMDD(): string {
   return `${y}-${m}-${day}`;
 }
 
+// Denominaciones por defecto (fallback)
+const DENOMINACIONES_DEFAULT = {
+  billetes: [100, 50, 20, 10, 5, 1],
+  monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
+};
+
+// Denominaciones específicas por código de moneda
+const DENOMINACIONES_POR_MONEDA: Record<string, { billetes: number[]; monedas: number[] }> = {
+  USD: {
+    billetes: [100, 50, 20, 10, 5, 2, 1],
+    monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
+  },
+  COP: {
+    billetes: [100000, 50000, 20000, 10000, 5000, 2000, 1000],
+    monedas: [1000, 500, 200, 100, 50],
+  },
+  EUR: {
+    billetes: [500, 200, 100, 50, 20, 10, 5],
+    monedas: [2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01],
+  },
+  PEN: {
+    billetes: [200, 100, 50, 20, 10],
+    monedas: [5, 2, 1, 0.5, 0.2, 0.1],
+  },
+  CLP: {
+    billetes: [20000, 10000, 5000, 2000, 1000],
+    monedas: [500, 100, 50, 10, 5, 1],
+  },
+  ARS: {
+    billetes: [10000, 2000, 1000, 500, 200, 100, 50, 20, 10],
+    monedas: [50, 10, 5, 2, 1, 0.5],
+  },
+  VES: {
+    billetes: [100, 50, 20, 10, 5, 2, 1],
+    monedas: [1, 0.5, 0.25, 0.1, 0.05],
+  },
+};
+
+export interface BilleteInput {
+  denominacion: number;
+  cantidad: number;
+}
+
+export interface MonedaInput {
+  denominacion: number;
+  cantidad: number;
+}
+
+export interface DesgloseDenominaciones {
+  billetes: BilleteInput[];
+  monedas: MonedaInput[];
+}
+
 export type ConteoEditable = {
   conteo_fisico: number;
   conteo_bancos: number;
-  billetes: number;
-  monedas: number; // alias de monedas_fisicas
+  billetes: number; // total calculado
+  monedas: number;  // total calculado
+  desglose: DesgloseDenominaciones; // desglose por denominación
   observaciones_detalle?: string | null;
 };
 
@@ -84,7 +139,7 @@ export type UseCuadreCaja = {
   setObservaciones: (v: string) => void;
   setFecha: (yyyyMMdd: string) => void;
 
-  // edición por moneda
+  // edición por moneda - totales
   updateConteo: (
     moneda_id: string,
     patch: Partial<
@@ -98,6 +153,11 @@ export type UseCuadreCaja = {
       >
     >
   ) => void;
+  
+  // edición por moneda - desglose por denominación
+  updateDesgloseBillete: (moneda_id: string, denominacion: number, cantidad: number) => void;
+  updateDesgloseMoneda: (moneda_id: string, denominacion: number, cantidad: number) => void;
+  
   resetConteos: () => void;
 
   // cálculos derivados
@@ -146,6 +206,7 @@ export type UseCuadreCaja = {
     diferencia: number;
     diferencia_bancos?: number;
     movimientos_periodo: number;
+    desglose_denominaciones?: DesgloseDenominacion[];
   }>;
 };
 
@@ -177,17 +238,61 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
 
   const withContabilidad = options?.withContabilidad !== false;
 
+  // Helper para obtener denominaciones por moneda
+  const getDenominacionesPorMoneda = useCallback((codigo: string): { billetes: number[]; monedas: number[] } => {
+    return DENOMINACIONES_POR_MONEDA[codigo] || DENOMINACIONES_DEFAULT;
+  }, []);
+
+  // Helper para calcular totales desde el desglose
+  const calcularTotalesDesdeDesglose = useCallback((desglose: DesgloseDenominaciones): { billetes: number; monedas: number; total: number } => {
+    const totalBilletes = desglose.billetes.reduce((sum, b) => sum + b.denominacion * b.cantidad, 0);
+    const totalMonedas = desglose.monedas.reduce((sum, m) => sum + m.denominacion * m.cantidad, 0);
+    return {
+      billetes: Math.round(totalBilletes * 100) / 100,
+      monedas: Math.round(totalMonedas * 100) / 100,
+      total: Math.round((totalBilletes + totalMonedas) * 100) / 100,
+    };
+  }, []);
+
   // ---------- Helpers internos ----------
   const hydrateEditable = useCallback((det: DetalleCuadreResumen[]): DetalleEditable[] => {
-    return det.map((d) => ({
-      ...d,
-      conteo_fisico: d.saldo_cierre, // default: igual al teórico
-      conteo_bancos: Number(d.conteo_bancos ?? d.bancos_teorico ?? 0),
-      billetes: 0,
-      monedas: 0,
-      observaciones_detalle: null,
-    }));
-  }, []);
+    return det.map((d) => {
+      const denominaciones = getDenominacionesPorMoneda(d.codigo);
+      
+      // Si hay desglose guardado previamente, usarlo
+      let desglose: DesgloseDenominaciones;
+      if (d.desglose_denominaciones && d.desglose_denominaciones.length > 0) {
+        desglose = {
+          billetes: denominaciones.billetes.map(denom => ({
+            denominacion: denom,
+            cantidad: d.desglose_denominaciones?.find(dd => dd.denominacion === denom && dd.tipo === 'BILLETE')?.cantidad || 0,
+          })),
+          monedas: denominaciones.monedas.map(denom => ({
+            denominacion: denom,
+            cantidad: d.desglose_denominaciones?.find(dd => dd.denominacion === denom && dd.tipo === 'MONEDA')?.cantidad || 0,
+          })),
+        };
+      } else {
+        // Inicializar con cantidades en 0
+        desglose = {
+          billetes: denominaciones.billetes.map(denom => ({ denominacion: denom, cantidad: 0 })),
+          monedas: denominaciones.monedas.map(denom => ({ denominacion: denom, cantidad: 0 })),
+        };
+      }
+
+      const totales = calcularTotalesDesdeDesglose(desglose);
+      
+      return {
+        ...d,
+        conteo_fisico: d.saldo_cierre, // default: igual al teórico
+        conteo_bancos: Number(d.conteo_bancos ?? d.bancos_teorico ?? 0),
+        billetes: totales.billetes,
+        monedas: totales.monedas,
+        desglose,
+        observaciones_detalle: null,
+      };
+    });
+  }, [getDenominacionesPorMoneda, calcularTotalesDesdeDesglose]);
 
   const cargarParciales = useCallback(async () => {
     try {
@@ -279,19 +384,80 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
     }));
   }, []);
 
+  const updateDesgloseBillete: UseCuadreCaja["updateDesgloseBillete"] = useCallback((moneda_id, denominacion, cantidad) => {
+    setEstado((prev) => ({
+      ...prev,
+      detalles: prev.detalles.map((d) => {
+        if (d.moneda_id !== moneda_id) return d;
+        
+        const nuevoDesglose = {
+          ...d.desglose,
+          billetes: d.desglose.billetes.map(b =>
+            b.denominacion === denominacion ? { ...b, cantidad: Math.max(0, cantidad) } : b
+          ),
+        };
+        
+        const totales = calcularTotalesDesdeDesglose(nuevoDesglose);
+        
+        return {
+          ...d,
+          desglose: nuevoDesglose,
+          billetes: totales.billetes,
+          monedas: totales.monedas,
+          conteo_fisico: totales.total,
+        };
+      }),
+    }));
+  }, [calcularTotalesDesdeDesglose]);
+
+  const updateDesgloseMoneda: UseCuadreCaja["updateDesgloseMoneda"] = useCallback((moneda_id, denominacion, cantidad) => {
+    setEstado((prev) => ({
+      ...prev,
+      detalles: prev.detalles.map((d) => {
+        if (d.moneda_id !== moneda_id) return d;
+        
+        const nuevoDesglose = {
+          ...d.desglose,
+          monedas: d.desglose.monedas.map(m =>
+            m.denominacion === denominacion ? { ...m, cantidad: Math.max(0, cantidad) } : m
+          ),
+        };
+        
+        const totales = calcularTotalesDesdeDesglose(nuevoDesglose);
+        
+        return {
+          ...d,
+          desglose: nuevoDesglose,
+          billetes: totales.billetes,
+          monedas: totales.monedas,
+          conteo_fisico: totales.total,
+        };
+      }),
+    }));
+  }, [calcularTotalesDesdeDesglose]);
+
   const resetConteos = useCallback(() => {
     setEstado((prev) => ({
       ...prev,
-      detalles: prev.detalles.map((d) => ({
-        ...d,
-        conteo_fisico: d.saldo_cierre,
-        conteo_bancos: Number(d.bancos_teorico ?? 0),
-        billetes: 0,
-        monedas: 0,
-        observaciones_detalle: null,
-      })),
+      detalles: prev.detalles.map((d) => {
+        const denominaciones = getDenominacionesPorMoneda(d.codigo);
+        const desgloseVacio: DesgloseDenominaciones = {
+          billetes: denominaciones.billetes.map(denom => ({ denominacion: denom, cantidad: 0 })),
+          monedas: denominaciones.monedas.map(denom => ({ denominacion: denom, cantidad: 0 })),
+        };
+        
+        return {
+          ...d,
+          conteo_fisico: d.saldo_cierre,
+          conteo_bancos: Number(d.bancos_teorico ?? 0),
+          billetes: 0,
+          monedas: 0,
+          desglose: desgloseVacio,
+          observaciones_detalle: null,
+        };
+      }),
     }));
-  }, []);
+  }, [getDenominacionesPorMoneda]);
 
   // ---------- Derivados ----------
   const totales = useMemo(() => {
@@ -368,20 +534,41 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
 
   // ---------- Persistencia ----------
   const buildGuardarBody = useCallback((): GuardarCierreBody => {
-    const detalles: GuardarDetalleRequest[] = estado.detalles.map((d) => ({
-      moneda_id: d.moneda_id,
-      saldo_apertura: d.saldo_apertura,
-      saldo_cierre: d.saldo_cierre,
-      conteo_fisico: d.conteo_fisico,
-      bancos_teorico: Number(d.bancos_teorico ?? 0),
-      conteo_bancos: d.conteo_bancos,
-      billetes: d.billetes,
-      monedas: d.monedas,
-      ingresos_periodo: d.ingresos_periodo,
-      egresos_periodo: d.egresos_periodo,
-      movimientos_periodo: d.movimientos_periodo,
-      observaciones_detalle: d.observaciones_detalle ?? undefined,
-    }));
+    const detalles: GuardarDetalleRequest[] = estado.detalles.map((d) => {
+      // Convertir desglose al formato del backend
+      const desglose_denominaciones: DesgloseDenominacion[] = [
+        ...d.desglose.billetes
+          .filter(b => b.cantidad > 0)
+          .map(b => ({
+            denominacion: b.denominacion,
+            tipo: 'BILLETE' as const,
+            cantidad: b.cantidad,
+          })),
+        ...d.desglose.monedas
+          .filter(m => m.cantidad > 0)
+          .map(m => ({
+            denominacion: m.denominacion,
+            tipo: 'MONEDA' as const,
+            cantidad: m.cantidad,
+          })),
+      ];
+
+      return {
+        moneda_id: d.moneda_id,
+        saldo_apertura: d.saldo_apertura,
+        saldo_cierre: d.saldo_cierre,
+        conteo_fisico: d.conteo_fisico,
+        bancos_teorico: Number(d.bancos_teorico ?? 0),
+        conteo_bancos: d.conteo_bancos,
+        billetes: d.billetes,
+        monedas: d.monedas,
+        ingresos_periodo: d.ingresos_periodo,
+        egresos_periodo: d.egresos_periodo,
+        movimientos_periodo: d.movimientos_periodo,
+        observaciones_detalle: d.observaciones_detalle ?? undefined,
+        desglose_denominaciones: desglose_denominaciones.length > 0 ? desglose_denominaciones : undefined,
+      };
+    });
 
     return {
       detalles,
@@ -436,24 +623,44 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
 
   // ---------- Reporte para impresión ----------
   const getReporteParaImpresion = useCallback(() => {
-    return estado.detalles.map((d) => ({
-      moneda_id: d.moneda_id,
-      codigo: d.codigo,
-      nombre: d.nombre,
-      simbolo: d.simbolo,
-      saldo_apertura: d.saldo_apertura,
-      ingresos_periodo: d.ingresos_periodo || 0,
-      egresos_periodo: d.egresos_periodo || 0,
-      saldo_cierre: d.saldo_cierre,
-      conteo_fisico: d.conteo_fisico || 0,
-      billetes: d.billetes || 0,
-      monedas: d.monedas || 0,
-      bancos_teorico: d.bancos_teorico,
-      conteo_bancos: d.conteo_bancos,
-      diferencia: round2((d.conteo_fisico || 0) - d.saldo_cierre),
-      diferencia_bancos: round2((d.conteo_bancos || 0) - (d.bancos_teorico || 0)),
-      movimientos_periodo: d.movimientos_periodo || 0,
-    }));
+    return estado.detalles.map((d) => {
+      const desglose_denominaciones: DesgloseDenominacion[] = [
+        ...d.desglose.billetes
+          .filter(b => b.cantidad > 0)
+          .map(b => ({
+            denominacion: b.denominacion,
+            tipo: 'BILLETE' as const,
+            cantidad: b.cantidad,
+          })),
+        ...d.desglose.monedas
+          .filter(m => m.cantidad > 0)
+          .map(m => ({
+            denominacion: m.denominacion,
+            tipo: 'MONEDA' as const,
+            cantidad: m.cantidad,
+          })),
+      ];
+
+      return {
+        moneda_id: d.moneda_id,
+        codigo: d.codigo,
+        nombre: d.nombre,
+        simbolo: d.simbolo,
+        saldo_apertura: d.saldo_apertura,
+        ingresos_periodo: d.ingresos_periodo || 0,
+        egresos_periodo: d.egresos_periodo || 0,
+        saldo_cierre: d.saldo_cierre,
+        conteo_fisico: d.conteo_fisico || 0,
+        billetes: d.billetes || 0,
+        monedas: d.monedas || 0,
+        bancos_teorico: d.bancos_teorico,
+        conteo_bancos: d.conteo_bancos,
+        diferencia: round2((d.conteo_fisico || 0) - d.saldo_cierre),
+        diferencia_bancos: round2((d.conteo_bancos || 0) - (d.bancos_teorico || 0)),
+        movimientos_periodo: d.movimientos_periodo || 0,
+        desglose_denominaciones: desglose_denominaciones.length > 0 ? desglose_denominaciones : undefined,
+      };
+    });
   }, [estado.detalles]);
 
   // ---------- Reconciliación ----------
@@ -510,6 +717,8 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
     setFecha,
 
     updateConteo,
+    updateDesgloseBillete,
+    updateDesgloseMoneda,
     resetConteos,
 
     totales,
@@ -557,6 +766,7 @@ function mergeEditable(prev: DetalleEditable[], next: DetalleEditable[]): Detall
       conteo_bancos: p.conteo_bancos ?? n.conteo_bancos,
       billetes: p.billetes ?? n.billetes,
       monedas: p.monedas ?? n.monedas,
+      desglose: p.desglose ?? n.desglose,
       observaciones_detalle: p.observaciones_detalle ?? n.observaciones_detalle,
     };
   });

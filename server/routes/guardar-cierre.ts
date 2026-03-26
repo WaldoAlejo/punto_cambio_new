@@ -1,6 +1,6 @@
 // server/routes/guardar-cierre.ts
 import express from "express";
-import prisma from "../lib/prisma.js";
+import prisma, { Prisma } from "../lib/prisma.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { idempotency } from "../middleware/idempotency.js";
 import logger from "../utils/logger.js";
@@ -12,6 +12,12 @@ import {
 } from "../services/movimientoSaldoService.js";
 
 const router = express.Router();
+
+interface DesgloseDenominacion {
+  denominacion: number;
+  tipo: 'BILLETE' | 'MONEDA';
+  cantidad: number;
+}
 
 interface DetalleRequest {
   moneda_id: string;
@@ -26,6 +32,7 @@ interface DetalleRequest {
   egresos_periodo?: number;
   movimientos_periodo?: number;
   observaciones_detalle?: string;
+  desglose_denominaciones?: DesgloseDenominacion[];
 }
 
 function asNumber(x: unknown, fallback = 0): number {
@@ -253,6 +260,11 @@ router.post(
             (conteo_bancos - bancos_teorico).toFixed(2)
           );
 
+          // Preparar desglose_denominaciones para Prisma (Json field)
+          const desgloseData = d.desglose_denominaciones && d.desglose_denominaciones.length > 0
+            ? d.desglose_denominaciones as unknown as Prisma.InputJsonValue
+            : undefined;
+
           return {
             cuadre_id: cabecera.id,
             moneda_id: d.moneda_id,
@@ -267,6 +279,7 @@ router.post(
             diferencia,
             movimientos_periodo: asNumber(d.movimientos_periodo),
             observaciones_detalle: d.observaciones_detalle ?? null,
+            ...(desgloseData ? { desglose_denominaciones: desgloseData } : {}),
           };
         });
 

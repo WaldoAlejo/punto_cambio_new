@@ -34,6 +34,10 @@ export interface SaldoEsperado {
   cantidad: number;
   billetes: number;
   monedas: number;
+  denominaciones?: {
+    billetes: number[];
+    monedas: number[];
+  };
 }
 
 export interface ConteoServicioExterno {
@@ -76,6 +80,14 @@ export interface AperturaCaja {
   observaciones_admin: string | null;
   created_at: string;
   updated_at: string;
+  // Campos adicionales para arqueo
+  tipo_arqueo?: "COMPLETO" | "PARCIAL";
+  monedas_excluidas?: Array<{
+    moneda_id: string;
+    codigo: string;
+    razon: string;
+  }>;
+  requiere_arqueo_completo?: boolean;
   usuario?: {
     id: string;
     nombre: string;
@@ -427,6 +439,247 @@ export const aperturaCajaService = {
       const msg = extractErrorMessage(e, "Error de conexión");
       console.error("Error rechazando apertura:", e);
       return { apertura: null, error: msg };
+    }
+  },
+
+  // ============ HISTORIAL DE ARQUEOS ============
+
+  // Obtener historial de arqueos
+  async getHistorialArqueos(params?: {
+    punto_atencion_id?: string;
+    fecha_desde?: string;
+    fecha_hasta?: string;
+    tipo_arqueo?: string;
+  }): Promise<{
+    arqueos: Array<{
+      id: string;
+      apertura_id: string;
+      punto_atencion_id: string;
+      usuario_id: string;
+      fecha: string;
+      tipo_arqueo: "COMPLETO" | "PARCIAL";
+      monedas_arqueadas: Array<{
+        moneda_id: string;
+        codigo: string;
+        nombre: string;
+        cantidad: number;
+      }>;
+      monedas_excluidas?: Array<{
+        moneda_id: string;
+        codigo: string;
+        razon: string;
+      }>;
+      conteo_fisico: ConteoMoneda[];
+      diferencias: DiferenciaMoneda[] | null;
+      observaciones: string | null;
+      created_at: string;
+      puntoAtencion?: {
+        id: string;
+        nombre: string;
+        ciudad: string;
+      };
+      usuario?: {
+        id: string;
+        nombre: string;
+        username: string;
+      };
+      apertura?: {
+        id: string;
+        estado: string;
+        hora_apertura: string | null;
+      };
+    }>;
+    stats: {
+      total_arqueos: number;
+      arqueos_completos: number;
+      arqueos_parciales: number;
+    };
+    error: string | null;
+  }> {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params?.punto_atencion_id) queryParams.append("punto_atencion_id", params.punto_atencion_id);
+      if (params?.fecha_desde) queryParams.append("fecha_desde", params.fecha_desde);
+      if (params?.fecha_hasta) queryParams.append("fecha_hasta", params.fecha_hasta);
+      if (params?.tipo_arqueo) queryParams.append("tipo_arqueo", params.tipo_arqueo);
+
+      const url = `/apertura-caja/arqueos/historial${
+        queryParams.toString() ? "?" + queryParams.toString() : ""
+      }`;
+
+      const response = await apiService.get<
+        ApiOk<{
+          arqueos: Array<{
+            id: string;
+            apertura_id: string;
+            punto_atencion_id: string;
+            usuario_id: string;
+            fecha: string;
+            tipo_arqueo: "COMPLETO" | "PARCIAL";
+            monedas_arqueadas: Array<{
+              moneda_id: string;
+              codigo: string;
+              nombre: string;
+              cantidad: number;
+            }>;
+            monedas_excluidas?: Array<{
+              moneda_id: string;
+              codigo: string;
+              razon: string;
+            }>;
+            conteo_fisico: ConteoMoneda[];
+            diferencias: DiferenciaMoneda[] | null;
+            observaciones: string | null;
+            created_at: string;
+            puntoAtencion?: {
+              id: string;
+              nombre: string;
+              ciudad: string;
+            };
+            usuario?: {
+              id: string;
+              nombre: string;
+              username: string;
+            };
+            apertura?: {
+              id: string;
+              estado: string;
+              hora_apertura: string | null;
+            };
+          }>;
+          stats: {
+            total_arqueos: number;
+            arqueos_completos: number;
+            arqueos_parciales: number;
+          };
+        }> | ApiFail
+      >(url);
+
+      if (response.success) {
+        return {
+          arqueos: response.arqueos || [],
+          stats: response.stats || { total_arqueos: 0, arqueos_completos: 0, arqueos_parciales: 0 },
+          error: null,
+        };
+      } else {
+        const r = response as ApiFail;
+        const msg = r.error || r.message || r.details || "Error al obtener historial de arqueos";
+        return { arqueos: [], stats: { total_arqueos: 0, arqueos_completos: 0, arqueos_parciales: 0 }, error: msg };
+      }
+    } catch (e) {
+      const msg = extractErrorMessage(e, "Error de conexión");
+      console.error("Error obteniendo historial de arqueos:", e);
+      return { arqueos: [], stats: { total_arqueos: 0, arqueos_completos: 0, arqueos_parciales: 0 }, error: msg };
+    }
+  },
+
+  // Obtener detalle de un arqueo específico
+  async getArqueoDetalle(id: string): Promise<{
+    arqueo: {
+      id: string;
+      apertura_id: string;
+      punto_atencion_id: string;
+      usuario_id: string;
+      fecha: string;
+      tipo_arqueo: "COMPLETO" | "PARCIAL";
+      monedas_arqueadas: Array<{
+        moneda_id: string;
+        codigo: string;
+        nombre: string;
+        cantidad: number;
+      }>;
+      monedas_excluidas?: Array<{
+        moneda_id: string;
+        codigo: string;
+        razon: string;
+      }>;
+      conteo_fisico: ConteoMoneda[];
+      diferencias: DiferenciaMoneda[] | null;
+      observaciones: string | null;
+      created_at: string;
+      puntoAtencion?: {
+        id: string;
+        nombre: string;
+        ciudad: string;
+      };
+      usuario?: {
+        id: string;
+        nombre: string;
+        username: string;
+      };
+      apertura?: {
+        id: string;
+        estado: string;
+        hora_apertura: string | null;
+        jornada?: {
+          id: string;
+          fecha_inicio: string;
+          fecha_salida: string | null;
+        };
+      };
+    } | null;
+    error: string | null;
+  }> {
+    try {
+      const response = await apiService.get<
+        ApiOk<{
+          arqueo: {
+            id: string;
+            apertura_id: string;
+            punto_atencion_id: string;
+            usuario_id: string;
+            fecha: string;
+            tipo_arqueo: "COMPLETO" | "PARCIAL";
+            monedas_arqueadas: Array<{
+              moneda_id: string;
+              codigo: string;
+              nombre: string;
+              cantidad: number;
+            }>;
+            monedas_excluidas?: Array<{
+              moneda_id: string;
+              codigo: string;
+              razon: string;
+            }>;
+            conteo_fisico: ConteoMoneda[];
+            diferencias: DiferenciaMoneda[] | null;
+            observaciones: string | null;
+            created_at: string;
+            puntoAtencion?: {
+              id: string;
+              nombre: string;
+              ciudad: string;
+            };
+            usuario?: {
+              id: string;
+              nombre: string;
+              username: string;
+            };
+            apertura?: {
+              id: string;
+              estado: string;
+              hora_apertura: string | null;
+              jornada?: {
+                id: string;
+                fecha_inicio: string;
+                fecha_salida: string | null;
+              };
+            };
+          };
+        }> | ApiFail
+      >(`/apertura-caja/arqueos/${id}`);
+
+      if (response.success) {
+        return { arqueo: response.arqueo, error: null };
+      } else {
+        const r = response as ApiFail;
+        const msg = r.error || r.message || r.details || "Error al obtener detalle del arqueo";
+        return { arqueo: null, error: msg };
+      }
+    } catch (e) {
+      const msg = extractErrorMessage(e, "Error de conexión");
+      console.error("Error obteniendo detalle del arqueo:", e);
+      return { arqueo: null, error: msg };
     }
   },
 };

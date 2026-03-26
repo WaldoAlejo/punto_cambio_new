@@ -13,6 +13,12 @@ export interface MonedaInfo {
   simbolo: string;
 }
 
+export interface DesgloseDenominacion {
+  denominacion: number;
+  tipo: 'BILLETE' | 'MONEDA';
+  cantidad: number;
+}
+
 export interface DetalleCuadreResumen {
   moneda_id: UUID;
   codigo: string;
@@ -25,6 +31,7 @@ export interface DetalleCuadreResumen {
   ingresos_periodo: number;
   egresos_periodo: number;
   movimientos_periodo?: number;
+  desglose_denominaciones?: DesgloseDenominacion[]; // desglose guardado previamente
   desglose?: {
     cambios?: { ingresos: number; egresos: number; cantidad: number };
     transferencias?: {
@@ -64,6 +71,7 @@ export interface GuardarDetalleRequest {
   egresos_periodo?: number;
   movimientos_periodo?: number;
   observaciones_detalle?: string | null;
+  desglose_denominaciones?: DesgloseDenominacion[]; // desglose por denominación
 }
 
 export interface GuardarCierreBody {

@@ -49,6 +49,7 @@ model Usuario {
   idempotencyKeys                         IdempotencyKey[]
   aperturasOperador                       AperturaCaja[]                @relation("OperadorApertura")
   aperturasAprobadasAdmin                 AperturaCaja[]                @relation("AdminApertura")
+  arqueosHistoricos                       ArqueoCajaHistorico[]
   puntoAtencion                           PuntoAtencion?                @relation(fields: [punto_atencion_id], references: [id])
 
   @@index([username])
@@ -98,6 +99,7 @@ model PuntoAtencion {
   transferenciasOrigen            Transferencia[]               @relation("TransferenciasOrigen")
   usuarios                        Usuario[]
   aperturasCaja                   AperturaCaja[]
+  arqueosHistoricos               ArqueoCajaHistorico[]
 
   @@index([ciudad])
   @@index([activo])
@@ -112,6 +114,11 @@ model Moneda {
   orden_display                 Int                            @default(0)
   comportamiento_compra         ComportamientoCalculo          @default(MULTIPLICA)
   comportamiento_venta          ComportamientoCalculo          @default(DIVIDE)
+  
+  // Denominaciones específicas de la moneda (JSON)
+  // { billetes: [100, 50, 20, 10, 5, 1], monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01] }
+  denominaciones                Json?
+  
   created_at                    DateTime                       @default(now())
   updated_at                    DateTime                       @updatedAt
   cambiosDestino                CambioDivisa[]                 @relation("MonedaDestino")
@@ -503,6 +510,11 @@ model DetalleCuadreCaja {
   diferencia            Decimal    @default(0) @db.Decimal(15, 2)
   movimientos_periodo   Int        @default(0)
   observaciones_detalle String?
+  
+  // Desglose por denominación (JSON)
+  // { billetes: [{denominacion, cantidad}], monedas: [{denominacion, cantidad}] }
+  desglose_denominaciones Json?
+  
   cuadre                CuadreCaja @relation(fields: [cuadre_id], references: [id], onDelete: Cascade)
   moneda                Moneda     @relation(fields: [moneda_id], references: [id])
 
@@ -1005,7 +1017,50 @@ model AperturaCaja {
   puntoAtencion         PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
   aprobador             Usuario?      @relation("AdminApertura", fields: [aprobado_por], references: [id])
   
+  // Relación con arqueos históricos
+  arqueosHistoricos     ArqueoCajaHistorico[]
+  
   @@index([punto_atencion_id, fecha])
   @@index([estado])
   @@index([usuario_id, fecha])
+}
+
+// Modelo para registrar arqueos completos de caja (auditoría)
+model ArqueoCajaHistorico {
+  id                    String        @id @default(uuid())
+  apertura_id           String        // Referencia a la apertura que generó este arqueo
+  punto_atencion_id     String
+  usuario_id            String        // Operador que realizó el arqueo
+  
+  // Fecha del arqueo
+  fecha                 DateTime      @db.Date
+  
+  // Tipo de arqueo: COMPLETO (primera vez) o PARCIAL (solo monedas con movimiento)
+  tipo_arqueo           String        @default("COMPLETO") // "COMPLETO" | "PARCIAL"
+  
+  // Monedas incluidas en este arqueo
+  monedas_arqueadas     Json          // [{moneda_id, codigo, nombre, cantidad, billetes, monedas}]
+  
+  // Si es PARCIAL, qué monedas se excluyeron y por qué
+  monedas_excluidas     Json?         // [{moneda_id, codigo, razon: "SIN_MOVIMIENTO"}]
+  
+  // Conteo físico realizado
+  conteo_fisico         Json          // [{moneda_id, desglose_billetes[], desglose_monedas[], total}]
+  
+  // Diferencias encontradas
+  diferencias           Json?         // [{moneda_id, esperado, fisico, diferencia}]
+  
+  // Observaciones
+  observaciones         String?
+  
+  // Relaciones
+  apertura              AperturaCaja  @relation(fields: [apertura_id], references: [id], onDelete: Cascade)
+  puntoAtencion         PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  usuario               Usuario       @relation(fields: [usuario_id], references: [id])
+  
+  created_at            DateTime      @default(now())
+  
+  @@index([punto_atencion_id, fecha])
+  @@index([tipo_arqueo])
+  @@index([created_at])
 }

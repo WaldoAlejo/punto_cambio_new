@@ -125,6 +125,48 @@ function validarDiferencias(
   return { diferencias, cuadrado };
 }
 
+// Helper para obtener monedas con movimiento en el día anterior
+async function getMonedasConMovimiento(
+  puntoAtencionId: string,
+  fechaDesde: Date
+): Promise<Set<string>> {
+  const monedasConMovimiento = new Set<string>();
+
+  // Buscar movimientos de saldo desde la fecha indicada
+  const movimientos = await prisma.movimientoSaldo.findMany({
+    where: {
+      punto_atencion_id: puntoAtencionId,
+      fecha: {
+        gte: fechaDesde,
+      },
+      // Excluir movimientos de apertura/cierre que no son transacciones reales
+      tipo_movimiento: {
+        notIn: ["SALDO_INICIAL"],
+      },
+    },
+    select: {
+      moneda_id: true,
+    },
+    distinct: ["moneda_id"],
+  });
+
+  movimientos.forEach((m) => monedasConMovimiento.add(m.moneda_id));
+
+  return monedasConMovimiento;
+}
+
+// Helper para verificar si existe un arqueo completo previo
+async function tieneArqueoCompleto(puntoAtencionId: string): Promise<boolean> {
+  const arqueoCompleto = await prisma.arqueoCajaHistorico.findFirst({
+    where: {
+      punto_atencion_id: puntoAtencionId,
+      tipo_arqueo: "COMPLETO",
+    },
+  });
+
+  return !!arqueoCompleto;
+}
+
 // ======================= POST: Iniciar apertura de caja =======================
 router.post(
   "/iniciar",
@@ -172,30 +214,135 @@ router.post(
         });
       }
 
-      // Obtener todas las monedas activas
+      // Verificar si existe un arqueo completo previo
+      const existeArqueoCompleto = await tieneArqueoCompleto(jornada.punto_atencion_id);
+
+      // Obtener todas las monedas activas con sus denominaciones
       const monedas = await prisma.moneda.findMany({
         where: { activo: true },
-        select: { id: true, codigo: true, nombre: true, simbolo: true },
+        select: { 
+          id: true, 
+          codigo: true, 
+          nombre: true, 
+          simbolo: true,
+          denominaciones: true,
+        },
       });
+      
+      // Denominaciones por defecto si no están configuradas
+      const denominacionesDefault = {
+        billetes: [100, 50, 20, 10, 5, 1],
+        monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
+      };
+      
+      // Denominaciones específicas por código de moneda
+      const denominacionesEspecificas: Record<string, { billetes: number[]; monedas: number[] }> = {
+        USD: {
+          billetes: [100, 50, 20, 10, 5, 2, 1],
+          monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
+        },
+        COP: {
+          billetes: [100000, 50000, 20000, 10000, 5000, 2000, 1000],
+          monedas: [1000, 500, 200, 100, 50],
+        },
+        EUR: {
+          billetes: [500, 200, 100, 50, 20, 10, 5],
+          monedas: [2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01],
+        },
+        PEN: {
+          billetes: [200, 100, 50, 20, 10],
+          monedas: [5, 2, 1, 0.5, 0.2, 0.1],
+        },
+        CLP: {
+          billetes: [20000, 10000, 5000, 2000, 1000],
+          monedas: [500, 100, 50, 10, 5, 1],
+        },
+        ARS: {
+          billetes: [10000, 2000, 1000, 500, 200, 100, 50, 20, 10],
+          monedas: [50, 10, 5, 2, 1, 0.5],
+        },
+        VES: {
+          billetes: [100, 50, 20, 10, 5, 2, 1],
+          monedas: [1, 0.5, 0.25, 0.1, 0.05],
+        },
+      };
 
-      // Calcular saldos dinámicamente desde MovimientoSaldo (igual que contabilidad general)
-      const saldoEsperado = await Promise.all(
+      // Calcular saldos dinámicamente desde MovimientoSaldo
+      let saldoEsperado = await Promise.all(
         monedas.map(async (moneda) => {
           const cantidadCalculada = await calcularSaldoDesdeMovimientos(
             jornada.punto_atencion_id,
             moneda.id
           );
+          
+          // Obtener denominaciones: primero de la BD, luego específicas, luego default
+          let denominaciones = denominacionesDefault;
+          
+          // Si hay denominaciones en la BD, usarlas
+          if (moneda.denominaciones) {
+            const denomsFromDB = moneda.denominaciones as any;
+            if (denomsFromDB.billetes && Array.isArray(denomsFromDB.billetes)) {
+              denominaciones = {
+                billetes: denomsFromDB.billetes,
+                monedas: denomsFromDB.monedas || denominacionesDefault.monedas,
+              };
+            }
+          } 
+          // Si no hay en BD, usar las específicas por código
+          else if (denominacionesEspecificas[moneda.codigo]) {
+            denominaciones = denominacionesEspecificas[moneda.codigo];
+          }
+          
           return {
             moneda_id: moneda.id,
             codigo: moneda.codigo,
             nombre: moneda.nombre,
             simbolo: moneda.simbolo,
             cantidad: cantidadCalculada,
-            billetes: cantidadCalculada, // Usar cantidad calculada como billetes por defecto
+            billetes: cantidadCalculada,
             monedas: 0,
+            denominaciones: denominaciones,
           };
         })
       );
+
+      // Si ya existe un arqueo completo, filtrar solo las monedas con movimiento
+      let tipoArqueo: "COMPLETO" | "PARCIAL" = "COMPLETO";
+      let monedasExcluidas: any[] = [];
+
+      if (existeArqueoCompleto) {
+        // Calcular fecha de ayer
+        const ayer = new Date();
+        ayer.setDate(ayer.getDate() - 1);
+        ayer.setHours(0, 0, 0, 0);
+
+        const monedasConMovimiento = await getMonedasConMovimiento(
+          jornada.punto_atencion_id,
+          ayer
+        );
+
+        // Filtrar monedas
+        const monedasFiltradas = saldoEsperado.filter((s) => {
+          const tieneMovimiento = monedasConMovimiento.has(s.moneda_id);
+          const tieneSaldo = s.cantidad > 0;
+          
+          if (!tieneMovimiento && !tieneSaldo) {
+            monedasExcluidas.push({
+              moneda_id: s.moneda_id,
+              codigo: s.codigo,
+              razon: "SIN_MOVIMIENTO",
+            });
+            return false;
+          }
+          return true;
+        });
+
+        // Si hay monedas filtradas, usarlas; si no, mantener todas (caso extremo)
+        if (monedasFiltradas.length > 0) {
+          saldoEsperado = monedasFiltradas;
+          tipoArqueo = "PARCIAL";
+        }
+      }
 
       // Obtener saldos de servicios externos
       const serviciosExternosSaldos = await prisma.servicioExternoSaldo.findMany({
@@ -245,6 +392,9 @@ router.post(
         jornada_id,
         usuario_id,
         punto_id: jornada.punto_atencion_id,
+        tipo_arqueo: tipoArqueo,
+        monedas_incluidas: saldoEsperado.length,
+        monedas_excluidas: monedasExcluidas.length,
       });
 
       return res.json({
@@ -253,8 +403,13 @@ router.post(
           ...apertura,
           saldo_esperado: saldoEsperado,
           saldos_servicios_externos: saldosServiciosExternos,
+          tipo_arqueo: tipoArqueo,
+          monedas_excluidas: monedasExcluidas,
+          requiere_arqueo_completo: !existeArqueoCompleto,
         },
-        message: "Proceso de apertura iniciado. Por favor cuente el efectivo físico y valide los saldos de servicios externos.",
+        message: tipoArqueo === "COMPLETO"
+          ? "Proceso de apertura iniciado. Debes realizar un conteo COMPLETO de todas las divisas (primer arqueo)."
+          : `Proceso de apertura iniciado. Arqueo PARCIAL: solo se muestran ${saldoEsperado.length} moneda(s) con movimiento.`,
       });
     } catch (error) {
       logger.error("Error al iniciar apertura de caja", {
@@ -360,12 +515,36 @@ router.post(
         },
       });
 
+      // Registrar arqueo histórico
+      const existeArqueoCompleto = await tieneArqueoCompleto(apertura.punto_atencion_id);
+      const tipoArqueo = existeArqueoCompleto ? "PARCIAL" : "COMPLETO";
+
+      await prisma.arqueoCajaHistorico.create({
+        data: {
+          apertura_id: apertura_id,
+          punto_atencion_id: apertura.punto_atencion_id,
+          usuario_id: usuario_id!,
+          fecha: apertura.fecha,
+          tipo_arqueo: tipoArqueo,
+          monedas_arqueadas: saldoEsperado.map((s) => ({
+            moneda_id: s.moneda_id,
+            codigo: s.codigo,
+            nombre: s.nombre,
+            cantidad: s.cantidad,
+          })) as Prisma.InputJsonValue,
+          conteo_fisico: conteosValidados as unknown as Prisma.InputJsonValue,
+          diferencias: diferencias as unknown as Prisma.InputJsonValue,
+          observaciones: observaciones || null,
+        },
+      });
+
       logger.info("Conteo de apertura guardado", {
         apertura_id,
         estado: nuevoEstado,
         cuadrado,
         diferencias_count: diferencias.filter((d) => d.fuera_tolerancia).length,
         servicios_count: servicios_externos?.length || 0,
+        tipo_arqueo: tipoArqueo,
       });
 
       return res.json({
@@ -373,10 +552,11 @@ router.post(
         apertura: aperturaActualizada,
         diferencias,
         cuadrado,
-        puede_abrir: true, // Siempre permitir abrir, incluso con diferencias
+        puede_abrir: true,
+        tipo_arqueo: tipoArqueo,
         message: cuadrado
-          ? "Todo cuadrado. Puedes confirmar la apertura."
-          : "Hay diferencias registradas. Puedes confirmar la apertura - el administrador será notificado.",
+          ? `Todo cuadrado. Arqueo ${tipoArqueo} registrado. Puedes confirmar la apertura.`
+          : `Hay diferencias registradas (Arqueo ${tipoArqueo}). Puedes confirmar la apertura - el administrador será notificado.`,
       });
     } catch (error) {
       logger.error("Error al guardar conteo de apertura", {
@@ -878,6 +1058,157 @@ router.post(
         error: error instanceof Error ? error.message : "Unknown error",
         apertura_id: req.params.id,
         admin_id: req.user?.id,
+      });
+      return res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    }
+  }
+);
+
+// ======================= GET: Historial de arqueos (Admin/Auditoría) =======================
+router.get(
+  "/arqueos/historial",
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const { punto_atencion_id, fecha_desde, fecha_hasta, tipo_arqueo } = req.query;
+      const usuario_id = req.user?.id;
+      const rol = req.user?.rol;
+
+      // Construir where clause
+      const whereClause: any = {};
+
+      if (punto_atencion_id) {
+        whereClause.punto_atencion_id = punto_atencion_id as string;
+      }
+
+      // Si no es admin, solo puede ver arqueos de su punto
+      if (rol !== "ADMIN" && rol !== "SUPER_USUARIO") {
+        const usuario = await prisma.usuario.findUnique({
+          where: { id: usuario_id },
+          select: { punto_atencion_id: true },
+        });
+        whereClause.punto_atencion_id = usuario?.punto_atencion_id;
+      }
+
+      if (tipo_arqueo) {
+        whereClause.tipo_arqueo = tipo_arqueo as string;
+      }
+
+      if (fecha_desde || fecha_hasta) {
+        whereClause.fecha = {};
+        if (fecha_desde) {
+          whereClause.fecha.gte = new Date(fecha_desde as string);
+        }
+        if (fecha_hasta) {
+          whereClause.fecha.lte = new Date(fecha_hasta as string);
+        }
+      }
+
+      const arqueos = await prisma.arqueoCajaHistorico.findMany({
+        where: whereClause,
+        include: {
+          puntoAtencion: {
+            select: { id: true, nombre: true, ciudad: true },
+          },
+          usuario: {
+            select: { id: true, nombre: true, username: true },
+          },
+          apertura: {
+            select: { 
+              id: true, 
+              estado: true,
+              hora_apertura: true,
+            },
+          },
+        },
+        orderBy: { created_at: "desc" },
+      });
+
+      // Calcular estadísticas
+      const stats = {
+        total_arqueos: arqueos.length,
+        arqueos_completos: arqueos.filter((a) => a.tipo_arqueo === "COMPLETO").length,
+        arqueos_parciales: arqueos.filter((a) => a.tipo_arqueo === "PARCIAL").length,
+      };
+
+      return res.json({
+        success: true,
+        arqueos,
+        stats,
+      });
+    } catch (error) {
+      logger.error("Error al obtener historial de arqueos", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+      return res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
+      });
+    }
+  }
+);
+
+// ======================= GET: Detalle de un arqueo específico =======================
+router.get(
+  "/arqueos/:id",
+  authenticateToken,
+  async (req: Request<{ id: string }>, res: Response) => {
+    try {
+      const { id } = req.params;
+      const usuario_id = req.user?.id;
+      const rol = req.user?.rol;
+
+      const arqueo = await prisma.arqueoCajaHistorico.findUnique({
+        where: { id },
+        include: {
+          puntoAtencion: {
+            select: { id: true, nombre: true, ciudad: true },
+          },
+          usuario: {
+            select: { id: true, nombre: true, username: true },
+          },
+          apertura: {
+            include: {
+              jornada: {
+                select: { id: true, fecha_inicio: true, fecha_salida: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (!arqueo) {
+        return res.status(404).json({
+          success: false,
+          error: "Arqueo no encontrado",
+        });
+      }
+
+      // Verificar permisos
+      if (rol !== "ADMIN" && rol !== "SUPER_USUARIO") {
+        const usuario = await prisma.usuario.findUnique({
+          where: { id: usuario_id },
+          select: { punto_atencion_id: true },
+        });
+        if (arqueo.punto_atencion_id !== usuario?.punto_atencion_id) {
+          return res.status(403).json({
+            success: false,
+            error: "No tienes permiso para ver este arqueo",
+          });
+        }
+      }
+
+      return res.json({
+        success: true,
+        arqueo,
+      });
+    } catch (error) {
+      logger.error("Error al obtener detalle de arqueo", {
+        error: error instanceof Error ? error.message : "Unknown error",
+        arqueo_id: req.params.id,
       });
       return res.status(500).json({
         success: false,

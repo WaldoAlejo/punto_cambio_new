@@ -60,6 +60,7 @@ interface DetalleCuadreCaja {
   monedas_fisicas: number;
   diferencia: number;
   movimientos_periodo?: number;
+  desglose_denominaciones?: string | object;
   moneda?: Moneda;
 }
 
@@ -559,6 +560,18 @@ router.get("/", authenticateToken, async (req, res) => {
           }
         }
 
+        // Parsear desglose_denominaciones si existe
+        let desgloseDenominaciones = null;
+        if (detalle.desglose_denominaciones) {
+          try {
+            desgloseDenominaciones = typeof detalle.desglose_denominaciones === 'string'
+              ? JSON.parse(detalle.desglose_denominaciones)
+              : detalle.desglose_denominaciones;
+          } catch (e) {
+            logger.warn("Error parseando desglose_denominaciones", { detalle_id: detalle.id });
+          }
+        }
+
         return {
           moneda_id: detalle.moneda_id,
           codigo: detalle.moneda?.codigo || "",
@@ -574,6 +587,7 @@ router.get("/", authenticateToken, async (req, res) => {
           ingresos_periodo: ingresos,
           egresos_periodo: egresos,
           movimientos_periodo: detalle.movimientos_periodo || 0,
+          desglose_denominaciones: desgloseDenominaciones,
         };
       })
     );
