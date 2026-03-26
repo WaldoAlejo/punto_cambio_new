@@ -1,0 +1,513 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * INICIO DE JORNADA CON VALIDACIÓN DE APERTURA DE CAJA OBLIGATORIA
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Este endpoint maneja el flujo completo de inicio de jornada:
+ * 1. Crear jornada
+ * 2. Validar que se complete apertura de caja
+ * 3. USD y EUR son obligatorios
+ * 4. Si no cuadra, registrar novedad y notificar admin
+ * 5. No permitir operar sin apertura validada
+ */
+
+import express from "express";
+import { authenticateToken } from "../middleware/auth.js";
+import prisma from "../lib/prisma.js";
+import logger from "../utils/logger.js";
+import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
+import { EstadoApertura, EstadoJornada } from "@prisma/client";
+
+const router = express.Router();
+
+// Tolerancias para validación
+const TOLERANCIA_USD = 1.0;
+const TOLERANCIA_OTRAS = 0.01;
+
+interface ConteoMoneda {
+  moneda_id: string;
+  codigo: string;
+  billetes: { denominacion: number; cantidad: number }[];
+  monedas: { denominacion: number; cantidad: number }[];
+  total: number;
+}
+
+/**
+ * POST /inicio-jornada-validado/iniciar
+ * 
+ * Crea la jornada y verifica si ya existe apertura de caja para el día.
+ * Si no existe, devuelve los saldos esperados para que el operador haga el conteo.
+ */
+router.post("/iniciar", authenticateToken, async (req, res) => {
+  try {
+    const { punto_atencion_id } = req.body;
+    const usuario_id = req.user?.id;
+
+    if (!punto_atencion_id) {
+      return res.status(400).json({
+        success: false,
+        error: "Se requiere punto_atencion_id",
+      });
+    }
+
+    // Verificar si el punto existe
+    const punto = await prisma.puntoAtencion.findUnique({
+      where: { id: punto_atencion_id },
+    });
+
+    if (!punto) {
+      return res.status(404).json({
+        success: false,
+        error: "Punto de atención no encontrado",
+      });
+    }
+
+    // Verificar si ya existe jornada activa para este usuario hoy
+    const { gte: hoyGte, lt: hoyLt } = gyeDayRangeUtcFromDate(new Date());
+    
+    const jornadaExistente = await prisma.jornada.findFirst({
+      where: {
+        usuario_id,
+        fecha_inicio: { gte: hoyGte, lt: hoyLt },
+        OR: [
+          { estado: EstadoJornada.ACTIVO },
+          { estado: EstadoJornada.ALMUERZO },
+        ],
+      },
+    });
+
+    if (jornadaExistente) {
+      // Verificar si ya tiene apertura completada
+      const apertura = await prisma.aperturaCaja.findUnique({
+        where: { jornada_id: jornadaExistente.id },
+      });
+
+      if (apertura && apertura.estado === EstadoApertura.ABIERTA) {
+        return res.json({
+          success: true,
+          jornada: jornadaExistente,
+          apertura: {
+            id: apertura.id,
+            estado: apertura.estado,
+          },
+          requiere_apertura: false,
+          message: "Jornada activa con apertura completada",
+        });
+      }
+
+      // Tiene jornada pero sin apertura completada
+      return res.json({
+        success: true,
+        jornada: jornadaExistente,
+        requiere_apertura: true,
+        message: "Debe completar la apertura de caja para continuar",
+      });
+    }
+
+    // Crear nueva jornada
+    const jornada = await prisma.jornada.create({
+      data: {
+        usuario_id: usuario_id!,
+        punto_atencion_id,
+        fecha_inicio: new Date(),
+        estado: EstadoJornada.ACTIVO,
+      },
+    });
+
+    logger.info("Jornada creada", {
+      jornada_id: jornada.id,
+      usuario_id,
+      punto_id: punto_atencion_id,
+    });
+
+    // Obtener saldos actuales del punto
+    const saldos = await prisma.saldo.findMany({
+      where: { punto_atencion_id },
+      include: {
+        moneda: {
+          select: { id: true, codigo: true, nombre: true, simbolo: true },
+        },
+      },
+    });
+
+    // Identificar USD y EUR
+    const monedaUSD = saldos.find(s => (s.moneda as any)?.codigo === "USD");
+    const monedaEUR = saldos.find(s => (s.moneda as any)?.codigo === "EUR");
+
+    if (!monedaUSD || !monedaEUR) {
+      logger.error("No se encontraron USD o EUR en los saldos del punto", {
+        punto_id: punto_atencion_id,
+        tieneUSD: !!monedaUSD,
+        tieneEUR: !!monedaEUR,
+      });
+    }
+
+    return res.json({
+      success: true,
+      jornada,
+      requiere_apertura: true,
+      saldos_esperados: saldos.map(s => ({
+        moneda_id: s.moneda_id,
+        codigo: (s.moneda as any)?.codigo,
+        nombre: (s.moneda as any)?.nombre,
+        simbolo: (s.moneda as any)?.simbolo,
+        cantidad: Number(s.cantidad),
+        billetes: Number(s.billetes),
+        monedas: Number(s.monedas_fisicas),
+        es_obligatoria: ["USD", "EUR"].includes((s.moneda as any)?.codigo),
+      })),
+      monedas_obligatorias: ["USD", "EUR"],
+      message: "Jornada creada. Debe completar la apertura de caja obligatoriamente.",
+    });
+
+  } catch (error) {
+    logger.error("Error al iniciar jornada", {
+      error: error instanceof Error ? error.message : String(error),
+      usuario_id: req.user?.id,
+    });
+    return res.status(500).json({
+      success: false,
+      error: "Error interno del servidor",
+    });
+  }
+});
+
+/**
+ * POST /inicio-jornada-validado/validar-apertura
+ * 
+ * Valida el conteo de apertura:
+ * 1. USD y EUR deben estar presentes y ser > 0
+ * 2. Si hay diferencias, registrar novedad
+ * 3. Notificar al administrador si hay diferencias o si no se ingresó información
+ */
+router.post("/validar-apertura", authenticateToken, async (req, res) => {
+  try {
+    const { jornada_id, conteos } = req.body as {
+      jornada_id: string;
+      conteos: ConteoMoneda[];
+    };
+    const usuario_id = req.user?.id;
+
+    if (!jornada_id || !conteos || !Array.isArray(conteos)) {
+      return res.status(400).json({
+        success: false,
+        error: "Se requiere jornada_id y conteos",
+      });
+    }
+
+    // Verificar jornada
+    const jornada = await prisma.jornada.findFirst({
+      where: {
+        id: jornada_id,
+        usuario_id,
+      },
+      include: {
+        puntoAtencion: true,
+      },
+    });
+
+    if (!jornada) {
+      return res.status(404).json({
+        success: false,
+        error: "Jornada no encontrada",
+      });
+    }
+
+    // Obtener saldos esperados
+    const saldos = await prisma.saldo.findMany({
+      where: { punto_atencion_id: jornada.punto_atencion_id },
+      include: {
+        moneda: { select: { id: true, codigo: true, nombre: true } },
+      },
+    });
+
+    // Validar que USD y EUR estén presentes y sean > 0
+    const conteoUSD = conteos.find(c => {
+      const moneda = saldos.find(s => s.moneda_id === c.moneda_id);
+      return (moneda?.moneda as any)?.codigo === "USD";
+    });
+    
+    const conteoEUR = conteos.find(c => {
+      const moneda = saldos.find(s => s.moneda_id === c.moneda_id);
+      return (moneda?.moneda as any)?.codigo === "EUR";
+    });
+
+    const errores: string[] = [];
+
+    if (!conteoUSD || conteoUSD.total <= 0) {
+      errores.push("Debe ingresar el conteo de USD (Dólares) obligatoriamente");
+    }
+
+    if (!conteoEUR || conteoEUR.total <= 0) {
+      errores.push("Debe ingresar el conteo de EUR (Euros) obligatoriamente");
+    }
+
+    if (errores.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Validación fallida",
+        detalles: errores,
+      });
+    }
+
+    // Calcular diferencias
+    const diferencias: Array<{
+      moneda_id: string;
+      codigo: string;
+      esperado: number;
+      fisico: number;
+      diferencia: number;
+      fuera_tolerancia: boolean;
+    }> = [];
+
+    let hayDiferenciasFueraTolerancia = false;
+
+    for (const saldo of saldos) {
+      const monedaCodigo = (saldo.moneda as any)?.codigo;
+      const conteo = conteos.find(c => c.moneda_id === saldo.moneda_id);
+      const fisico = conteo ? conteo.total : 0;
+      const esperado = Number(saldo.cantidad);
+      const diferencia = fisico - esperado;
+      
+      const tolerancia = monedaCodigo === "USD" ? TOLERANCIA_USD : TOLERANCIA_OTRAS;
+      const fueraTolerancia = Math.abs(diferencia) > tolerancia;
+
+      if (fueraTolerancia) {
+        hayDiferenciasFueraTolerancia = true;
+      }
+
+      diferencias.push({
+        moneda_id: saldo.moneda_id,
+        codigo: monedaCodigo,
+        esperado,
+        fisico,
+        diferencia,
+        fuera_tolerancia: fueraTolerancia,
+      });
+    }
+
+    // Si hay diferencias fuera de tolerancia, preparar observaciones de alerta
+    let observacionesAlerta = "";
+    if (hayDiferenciasFueraTolerancia) {
+      const diferenciasCriticas = diferencias.filter(d => d.fuera_tolerancia);
+      
+      observacionesAlerta = `ALERTA - Diferencias en conteo de apertura: ${diferenciasCriticas.map(d => 
+        `${d.codigo}: Esperado $${d.esperado}, Físico $${d.fisico}, Dif: $${d.diferencia}`
+      ).join("; ")}`;
+
+      logger.warn("Diferencias en apertura de caja", {
+        jornada_id,
+        usuario_id,
+        punto: jornada.puntoAtencion?.nombre,
+        diferencias: diferenciasCriticas,
+      });
+
+      // TODO: Integrar con sistema de notificaciones para alertar al admin
+      // Por ahora se registra en logs y en las observaciones de la apertura
+    }
+
+    // Crear o actualizar apertura de caja
+    const aperturaExistente = await prisma.aperturaCaja.findUnique({
+      where: { jornada_id },
+    });
+
+    let apertura;
+    const fechaHoy = new Date().toISOString().split("T")[0];
+
+    if (aperturaExistente) {
+      apertura = await prisma.aperturaCaja.update({
+        where: { id: aperturaExistente.id },
+        data: {
+          conteo_fisico: conteos as any,
+          diferencias: diferencias as any,
+          estado: hayDiferenciasFueraTolerancia ? EstadoApertura.CON_DIFERENCIA : EstadoApertura.CUADRADO,
+          requiere_aprobacion: hayDiferenciasFueraTolerancia,
+          hora_fin_conteo: nowEcuador(),
+        },
+      });
+    } else {
+      apertura = await prisma.aperturaCaja.create({
+        data: {
+          jornada_id,
+          usuario_id: usuario_id!,
+          punto_atencion_id: jornada.punto_atencion_id,
+          fecha: new Date(fechaHoy + "T00:00:00.000Z"),
+          hora_inicio_conteo: nowEcuador(),
+          hora_fin_conteo: nowEcuador(),
+          estado: hayDiferenciasFueraTolerancia ? EstadoApertura.CON_DIFERENCIA : EstadoApertura.CUADRADO,
+          saldo_esperado: saldos.map(s => ({
+            moneda_id: s.moneda_id,
+            codigo: (s.moneda as any)?.codigo,
+            nombre: (s.moneda as any)?.nombre,
+            cantidad: Number(s.cantidad),
+          })) as any,
+          conteo_fisico: conteos as any,
+          diferencias: diferencias as any,
+          requiere_aprobacion: hayDiferenciasFueraTolerancia,
+          observaciones_operador: observacionesAlerta || null,
+          tolerancia_usd: TOLERANCIA_USD,
+          tolerancia_otras: TOLERANCIA_OTRAS,
+        },
+      });
+    }
+
+    // Si hay diferencias, NO permitir continuar hasta que el admin apruebe
+    if (hayDiferenciasFueraTolerancia) {
+      return res.json({
+        success: true,
+        apertura: {
+          id: apertura.id,
+          estado: apertura.estado,
+        },
+        diferencias: diferencias.filter(d => d.fuera_tolerancia),
+        alerta_admin: observacionesAlerta,
+        puede_operar: false,
+        requiere_aprobacion_admin: true,
+        message: "Se registraron diferencias en el conteo. Debe esperar la aprobación del administrador para operar.",
+      });
+    }
+
+    // Todo cuadrado - crear cuadre de caja automáticamente
+    const cuadreExistente = await prisma.cuadreCaja.findFirst({
+      where: {
+        punto_atencion_id: jornada.punto_atencion_id,
+        fecha: {
+          gte: new Date(fechaHoy + "T00:00:00.000Z"),
+          lt: new Date(fechaHoy + "T23:59:59.999Z"),
+        },
+      },
+    });
+
+    if (!cuadreExistente) {
+      const cuadre = await prisma.cuadreCaja.create({
+        data: {
+          estado: "ABIERTO",
+          fecha: new Date(fechaHoy + "T00:00:00.000Z"),
+          punto_atencion_id: jornada.punto_atencion_id,
+          usuario_id: usuario_id!,
+          observaciones: `Cuadre creado desde apertura validada (${apertura.id})`,
+        },
+      });
+
+      // Crear detalles del cuadre
+      for (const saldo of saldos) {
+        const conteo = conteos.find(c => c.moneda_id === saldo.moneda_id);
+        const conteoTotal = conteo ? conteo.total : 0;
+        
+        await prisma.detalleCuadreCaja.create({
+          data: {
+            cuadre_id: cuadre.id,
+            moneda_id: saldo.moneda_id,
+            saldo_apertura: conteoTotal,
+            saldo_cierre: Number(saldo.cantidad),
+            conteo_fisico: conteoTotal,
+            diferencia: conteoTotal - Number(saldo.cantidad),
+            billetes: conteo ? conteo.billetes.reduce((sum, b) => sum + b.denominacion * b.cantidad, 0) : 0,
+            monedas_fisicas: conteo ? conteo.monedas.reduce((sum, m) => sum + m.denominacion * m.cantidad, 0) : 0,
+            movimientos_periodo: 0,
+          },
+        });
+      }
+
+      logger.info("Cuadre creado desde apertura validada", {
+        cuadre_id: cuadre.id,
+        apertura_id: apertura.id,
+        jornada_id,
+      });
+    }
+
+    // Actualizar apertura a ABIERTA
+    await prisma.aperturaCaja.update({
+      where: { id: apertura.id },
+      data: {
+        estado: EstadoApertura.ABIERTA,
+        hora_apertura: nowEcuador(),
+      },
+    });
+
+    return res.json({
+      success: true,
+      apertura: {
+        id: apertura.id,
+        estado: EstadoApertura.ABIERTA,
+      },
+      diferencias: [],
+      puede_operar: true,
+      requiere_aprobacion_admin: false,
+      message: "Apertura validada correctamente. Puede iniciar operaciones.",
+    });
+
+  } catch (error) {
+    logger.error("Error al validar apertura", {
+      error: error instanceof Error ? error.message : String(error),
+      usuario_id: req.user?.id,
+    });
+    return res.status(500).json({
+      success: false,
+      error: "Error interno del servidor",
+    });
+  }
+});
+
+/**
+ * GET /inicio-jornada-validado/estado/:jornada_id
+ * 
+ * Verifica el estado de la jornada y si puede operar
+ */
+router.get("/estado/:jornada_id", authenticateToken, async (req, res) => {
+  try {
+    const { jornada_id } = req.params;
+    const usuario_id = req.user?.id;
+
+    const jornada = await prisma.jornada.findFirst({
+      where: {
+        id: jornada_id,
+        usuario_id,
+      },
+      include: {
+        puntoAtencion: { select: { id: true, nombre: true } },
+      },
+    });
+
+    if (!jornada) {
+      return res.status(404).json({
+        success: false,
+        error: "Jornada no encontrada",
+      });
+    }
+
+    const apertura = await prisma.aperturaCaja.findUnique({
+      where: { jornada_id },
+    });
+
+    const puedeOperar = apertura?.estado === EstadoApertura.ABIERTA;
+    const requiereApertura = !apertura || apertura.estado !== EstadoApertura.ABIERTA;
+
+    return res.json({
+      success: true,
+      jornada: {
+        id: jornada.id,
+        estado: jornada.estado,
+        punto: jornada.puntoAtencion,
+      },
+      apertura: apertura ? {
+        id: apertura.id,
+        estado: apertura.estado,
+        requiere_aprobacion: apertura.requiere_aprobacion,
+      } : null,
+      puede_operar: puedeOperar,
+      requiere_apertura: requiereApertura,
+    });
+
+  } catch (error) {
+    logger.error("Error al obtener estado", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return res.status(500).json({
+      success: false,
+      error: "Error interno del servidor",
+    });
+  }
+});
+
+export default router;

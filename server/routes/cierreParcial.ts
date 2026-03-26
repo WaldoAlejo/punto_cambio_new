@@ -55,8 +55,11 @@ router.post("/parcial", authenticateToken, async (req, res) => {
     const puntoAtencionId = usuario.punto_atencion_id;
     const { gte: hoyGte, lt: hoyLt } = gyeDayRangeUtcFromDate(new Date());
 
-    // Buscar cabecera ABIERTO de hoy
-    const cabeceraAbierta = await prisma.cuadreCaja.findFirst({
+    // ═════════════════════════════════════════════════════════════════
+    // BUSCAR CUADRE ABIERTO (hoy o anterior)
+    // ═════════════════════════════════════════════════════════════════
+    // Primero buscar cuadre ABIERTO de hoy
+    let cabeceraAbierta = await prisma.cuadreCaja.findFirst({
       where: {
         punto_atencion_id: puntoAtencionId,
         fecha: { gte: hoyGte, lt: hoyLt },
@@ -64,6 +67,18 @@ router.post("/parcial", authenticateToken, async (req, res) => {
       },
       select: { id: true },
     });
+
+    // Si no hay del día, buscar cualquier cuadre ABIERTO más reciente
+    if (!cabeceraAbierta) {
+      cabeceraAbierta = await prisma.cuadreCaja.findFirst({
+        where: {
+          punto_atencion_id: puntoAtencionId,
+          estado: "ABIERTO",
+        },
+        orderBy: { fecha: "desc" },
+        select: { id: true },
+      });
+    }
 
     if (!cabeceraAbierta) {
       return res.status(400).json({

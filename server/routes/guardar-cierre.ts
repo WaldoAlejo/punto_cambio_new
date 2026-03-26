@@ -157,7 +157,10 @@ router.post(
 
     // Transacción para mantener consistencia entre header y detalles
     const result = await prisma.$transaction(async (tx) => {
-      // Reutilizar cabecera ABIERTO del día o crear una nueva
+      // ═════════════════════════════════════════════════════════════════
+      // BUSCAR CUADRE ABIERTO O PARCIAL MÁS RECIENTE
+      // ═════════════════════════════════════════════════════════════════
+      // Primero buscar cuadre ABIERTO del día actual
       let cabecera = await tx.cuadreCaja.findFirst({
         where: {
           punto_atencion_id: puntoAtencionId,
@@ -166,7 +169,44 @@ router.post(
         },
       });
 
+      // Si no hay ABIERTO del día, buscar cuadre PARCIAL (cambio de turno)
       if (!cabecera) {
+        cabecera = await tx.cuadreCaja.findFirst({
+          where: {
+            punto_atencion_id: puntoAtencionId,
+            fecha: { gte: hoyGte, lt: hoyLt },
+            estado: "PARCIAL",
+          },
+          orderBy: { fecha_cierre: "desc" },
+        });
+      }
+
+      // Si no hay cuadre del día, buscar cualquier cuadre ABIERTO anterior
+      // (para permitir cerrar días anteriores que quedaron pendientes)
+      if (!cabecera && tipo_cierre === "CERRADO") {
+        cabecera = await tx.cuadreCaja.findFirst({
+          where: {
+            punto_atencion_id: puntoAtencionId,
+            estado: { in: ["ABIERTO", "PARCIAL"] },
+          },
+          orderBy: { fecha: "desc" },
+        });
+
+        if (cabecera) {
+          logger.info("Usando cuadre anterior para cierre", {
+            cuadre_id: cabecera.id,
+            cuadre_fecha: cabecera.fecha,
+            cuadre_estado: cabecera.estado,
+          });
+        }
+      }
+
+      if (!cabecera) {
+        // Si no hay cuadre existente, crear uno nuevo (solo si hay detalles)
+        if (detalles.length === 0) {
+          throw new Error("No hay cuadre abierto para cerrar y no se proporcionaron detalles");
+        }
+
         cabecera = await tx.cuadreCaja.create({
           data: {
             usuario_id: usuario.id,

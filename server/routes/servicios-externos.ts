@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
+import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
 import { idempotency } from "../middleware/idempotency.js";
 import prisma from "../lib/prisma.js";
 import {
@@ -314,6 +315,7 @@ async function validarSaldoServicioExterno(
 router.post(
   "/movimientos",
   authenticateToken,
+  requireAperturaAprobada, // 🛡️ Verificar apertura de caja aprobada
   requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   idempotency({ route: "/api/servicios-externos/movimientos" }),
   validarSaldoServicioExterno,

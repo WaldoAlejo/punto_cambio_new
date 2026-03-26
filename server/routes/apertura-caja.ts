@@ -383,6 +383,72 @@ router.post(
         ? "AUTOMATICO" 
         : "CON_DIFERENCIA_PENDIENTE";
 
+      // ═════════════════════════════════════════════════════════════════
+      // CREAR CUADRE DE CAJA PARA EL DÍA
+      // ═════════════════════════════════════════════════════════════════
+      // Verificar si ya existe un cuadre para hoy
+      const fechaHoy = todayGyeDateOnly();
+      const cuadreExistente = await prisma.cuadreCaja.findFirst({
+        where: {
+          punto_atencion_id: apertura.punto_atencion_id,
+          fecha: {
+            gte: new Date(fechaHoy + "T00:00:00.000Z"),
+            lt: new Date(fechaHoy + "T23:59:59.999Z"),
+          },
+        },
+      });
+
+      let cuadreCaja;
+      if (!cuadreExistente) {
+        // Crear nuevo cuadre de caja
+        cuadreCaja = await prisma.cuadreCaja.create({
+          data: {
+            estado: "ABIERTO",
+            fecha: new Date(fechaHoy + "T00:00:00.000Z"),
+            punto_atencion_id: apertura.punto_atencion_id,
+            usuario_id: usuario_id!,
+            observaciones: `Cuadre creado automáticamente desde apertura de caja (${apertura_id})`,
+          },
+        });
+
+        // Crear detalles del cuadre con el conteo físico de la apertura
+        const conteoFisico = (apertura.conteo_fisico as any[]) || [];
+        const saldoEsperado = (apertura.saldo_esperado as any[]) || [];
+
+        for (const saldo of saldoEsperado) {
+          const conteo = conteoFisico.find((c: any) => c.moneda_id === saldo.moneda_id);
+          const conteoTotal = conteo ? conteo.total : 0;
+          const diferencia = Number((conteoTotal - saldo.cantidad).toFixed(2));
+
+          await prisma.detalleCuadreCaja.create({
+            data: {
+              cuadre_id: cuadreCaja.id,
+              moneda_id: saldo.moneda_id,
+              saldo_apertura: conteoTotal, // El conteo físico de apertura es el saldo inicial
+              saldo_cierre: saldo.cantidad, // Saldo teórico esperado
+              conteo_fisico: conteoTotal,
+              diferencia: diferencia,
+              billetes: conteo ? conteo.billetes.reduce((sum: number, b: any) => sum + b.denominacion * b.cantidad, 0) : 0,
+              monedas_fisicas: conteo ? conteo.monedas.reduce((sum: number, m: any) => sum + m.denominacion * m.cantidad, 0) : 0,
+              movimientos_periodo: 0,
+            },
+          });
+        }
+
+        logger.info("Cuadre de caja creado desde apertura", {
+          cuadre_id: cuadreCaja.id,
+          apertura_id,
+          punto_id: apertura.punto_atencion_id,
+          detalles_creados: saldoEsperado.length,
+        });
+      } else {
+        cuadreCaja = cuadreExistente;
+        logger.info("Cuadre de caja ya existente para el día", {
+          cuadre_id: cuadreCaja.id,
+          apertura_id,
+        });
+      }
+
       // Actualizar estado a ABIERTA (incluso con diferencias, queda marcado para revisión)
       const aperturaActualizada = await prisma.aperturaCaja.update({
         where: { id: apertura_id },
@@ -399,6 +465,7 @@ router.post(
         apertura_id,
         usuario_id,
         con_diferencia: apertura.estado === EstadoApertura.CON_DIFERENCIA,
+        cuadre_id: cuadreCaja.id,
       });
 
       const message = apertura.estado === EstadoApertura.CON_DIFERENCIA

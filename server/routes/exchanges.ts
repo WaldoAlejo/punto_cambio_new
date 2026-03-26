@@ -9,6 +9,7 @@ import {
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
+import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
 import { idempotency } from "../middleware/idempotency.js";
 import { validate } from "../middleware/validation.js";
 import { validarSaldoCambioDivisa } from "../middleware/saldoValidation.js";
@@ -311,6 +312,7 @@ interface AuthenticatedRequest extends express.Request {
 router.post(
   "/",
   authenticateToken,
+  requireAperturaAprobada, // 🛡️ Verificar apertura de caja aprobada
   idempotency({ route: "/api/exchanges" }),
   validate(exchangeSchema),
   validarSaldoCambioDivisa, // 🛡️ Validar saldo suficiente antes del cambio

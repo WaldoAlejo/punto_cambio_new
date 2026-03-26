@@ -251,15 +251,64 @@ router.get("/", authenticateToken, async (req, res) => {
       fecha: fechaInicioDia.toISOString(),
     });
 
-    // Short-circuit: si no hay movimientos del día, devolver respuesta vacía
-    const movimientosDelDia = await prisma.movimientoSaldo.count({
-      where: {
-        punto_atencion_id: puntoAtencionId,
-        fecha: { gte: fechaInicioDia, lt: fechaFinDia },
-      },
-    });
+    // Verificar si hay movimientos de cualquier tipo del día
+    const [
+      movimientosSaldo,
+      cambiosDivisa,
+      transferencias,
+      serviciosExternos,
+      guiasServientrega,
+    ] = await Promise.all([
+      // 1. Movimientos de saldo (tabla MovimientoSaldo)
+      prisma.movimientoSaldo.count({
+        where: {
+          punto_atencion_id: puntoAtencionId,
+          fecha: { gte: fechaInicioDia, lt: fechaFinDia },
+        },
+      }),
+      // 2. Cambios de divisa
+      prisma.cambioDivisa.count({
+        where: {
+          punto_atencion_id: puntoAtencionId,
+          fecha: { gte: fechaInicioDia, lt: fechaFinDia },
+        },
+      }),
+      // 3. Transferencias (entrantes o salientes)
+      prisma.transferencia.count({
+        where: {
+          OR: [
+            { origen_id: puntoAtencionId },
+            { destino_id: puntoAtencionId },
+          ],
+          fecha: { gte: fechaInicioDia, lt: fechaFinDia },
+          estado: { in: ['COMPLETADO', 'APROBADO'] },
+        },
+      }),
+      // 4. Servicios externos
+      prisma.servicioExternoMovimiento.count({
+        where: {
+          punto_atencion_id: puntoAtencionId,
+          fecha: { gte: fechaInicioDia, lt: fechaFinDia },
+        },
+      }),
+      // 5. Guías Servientrega
+      prisma.servientregaGuia.count({
+        where: {
+          punto_atencion_id: puntoAtencionId,
+          created_at: { gte: fechaInicioDia, lt: fechaFinDia },
+          estado: { not: 'CANCELADO' },
+        },
+      }),
+    ]);
 
-    if (movimientosDelDia === 0) {
+    const totalMovimientos = 
+      movimientosSaldo + 
+      cambiosDivisa + 
+      transferencias + 
+      serviciosExternos + 
+      guiasServientrega;
+
+    if (totalMovimientos === 0) {
       logger.info("ℹ️ Sin movimientos del día; devolviendo cuadre vacío", {
         punto_atencion_id: puntoAtencionId,
         fecha: fechaInicioDia.toISOString(),
@@ -279,6 +328,15 @@ router.get("/", authenticateToken, async (req, res) => {
         },
       });
     }
+
+    logger.info("📊 Movimientos encontrados", {
+      movimientos_saldo: movimientosSaldo,
+      cambios_divisa: cambiosDivisa,
+      transferencias: transferencias,
+      servicios_externos: serviciosExternos,
+      guias_servientrega: guiasServientrega,
+      total: totalMovimientos,
+    });
 
     // Obtener o crear cuadre abierto del día
     const cuadreResult = await pool.query<CuadreCaja>(

@@ -1459,9 +1459,47 @@ export class ServientregaDBService {
         movimiento.id
       );
 
-      // 2️⃣ SERVIENTREGA: no tocamos ServicioExternoSaldo (usa ServientregaSaldo separado)
-      const saldoServicioAnterior = new Prisma.Decimal(0);
-      const saldoServicioNuevo = new Prisma.Decimal(0);
+      // 2️⃣ DEVOLVER SALDO A SERVIENTREGA (ServicioExternoSaldo)
+      log("📤 [revertirIngresoServicioExterno] Devolviendo saldo a Servientrega...");
+      const saldoServicio = await tx.servicioExternoSaldo.findUnique({
+        where: {
+          punto_atencion_id_servicio_moneda_id: {
+            punto_atencion_id: puntoAtencionId,
+            servicio: ServicioExterno.SERVIENTREGA,
+            moneda_id: usdId,
+          },
+        },
+      });
+
+      let saldoServicioAnterior = new Prisma.Decimal(0);
+      let saldoServicioNuevo = new Prisma.Decimal(0);
+
+      if (saldoServicio) {
+        saldoServicioAnterior = saldoServicio.cantidad;
+        saldoServicioNuevo = saldoServicioAnterior.add(new Prisma.Decimal(monto));
+
+        // Actualizar saldo de Servientrega (sumar la devolución)
+        await tx.servicioExternoSaldo.update({
+          where: { id: saldoServicio.id },
+          data: {
+            cantidad: saldoServicioNuevo,
+            billetes: {
+              increment: new Prisma.Decimal(desglose.billetes),
+            },
+            monedas_fisicas: {
+              increment: new Prisma.Decimal(desglose.monedas),
+            },
+            updated_at: new Date(),
+          },
+        });
+
+        log("✅ [revertirIngresoServicioExterno] Saldo Servientrega actualizado:", {
+          anterior: saldoServicioAnterior.toNumber(),
+          nuevo: saldoServicioNuevo.toNumber(),
+        });
+      } else {
+        log("⚠️ [revertirIngresoServicioExterno] No se encontró saldo de Servientrega para devolver");
+      }
 
       // 3️⃣ Actualizar Saldo general USD por bucket usando el ledger
       const saldoActual = await tx.saldo.findUnique({

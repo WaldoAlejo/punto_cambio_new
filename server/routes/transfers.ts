@@ -1,6 +1,7 @@
 import express from "express";
 import { EstadoJornada } from "@prisma/client";
 import { authenticateToken } from "../middleware/auth.js";
+import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
 import { idempotency } from "../middleware/idempotency.js";
 import { validate } from "../middleware/validation.js";
 import { validarSaldoTransferencia } from "../middleware/saldoValidation.js";
@@ -78,6 +79,7 @@ const createTransferSchema = z.object({
 router.post(
   "/",
   authenticateToken,
+  requireAperturaAprobada, // 🛡️ Verificar apertura de caja aprobada
   idempotency({ route: "/api/transfers" }),
   validate(createTransferSchema),
   validarSaldoTransferencia, // 🛡️ Validar saldo suficiente antes de transferir
