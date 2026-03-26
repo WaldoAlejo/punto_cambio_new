@@ -233,18 +233,33 @@ router.post("/parcial", authenticateToken, async (req, res) => {
       }
 
       // 4. Liberar el punto del usuario (para que otro operador pueda seleccionarlo)
-      await tx.usuario.update({
+      const usuarioActual = await tx.usuario.findUnique({
         where: { id: usuario.id },
-        data: { punto_atencion_id: null },
+        select: { punto_atencion_id: true },
       });
 
-      return cabecera;
+      let puntoLiberado = false;
+      if (usuarioActual?.punto_atencion_id === puntoAtencionId) {
+        await tx.usuario.update({
+          where: { id: usuario.id },
+          data: { punto_atencion_id: null },
+        });
+        puntoLiberado = true;
+      }
+
+      return {
+        cabecera,
+        jornadaFinalizada: !!jornadaActiva,
+        puntoLiberado,
+      };
     });
 
     return res.status(200).json({
       success: true,
       message: "Cierre parcial realizado correctamente",
-      cuadre_id: actualizado.id,
+      cuadre_id: actualizado.cabecera.id,
+      jornada_finalizada: actualizado.jornadaFinalizada,
+      punto_liberado: actualizado.puntoLiberado,
     });
   } catch (error) {
     logger.error("Error al realizar cierre parcial", {

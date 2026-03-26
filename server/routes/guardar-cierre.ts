@@ -286,7 +286,7 @@ router.post(
         await tx.detalleCuadreCaja.createMany({ data: payload });
       }
 
-      // Si el cierre es definitivo, actualizar saldos, cerrar jornada y liberar punto
+      // Si el cierre es definitivo, actualizar saldos y registrar ajustes de reconciliación
       if (tipo_cierre === "CERRADO") {
         // Actualizar tabla Saldo con el conteo_fisico (saldo cuadrado = saldo inicial siguiente día)
         if (detalles.length > 0) {
@@ -366,36 +366,55 @@ router.post(
           }
         }
 
-        // Cerrar jornada activa del usuario (si existe)
-        const jornadaActiva = await tx.jornada.findFirst({
-          where: {
-            usuario_id: usuario.id,
-            punto_atencion_id: puntoAtencionId,
-            fecha_salida: null,
-            estado: { in: ["ACTIVO", "ALMUERZO"] },
+      }
+
+      // Tanto el cierre total como el parcial deben finalizar la jornada del operador actual
+      const jornadaActiva = await tx.jornada.findFirst({
+        where: {
+          usuario_id: usuario.id,
+          punto_atencion_id: puntoAtencionId,
+          fecha_salida: null,
+          estado: { in: ["ACTIVO", "ALMUERZO"] },
+        },
+        orderBy: { fecha_inicio: "desc" },
+      });
+
+      let jornadaFinalizada = false;
+      if (jornadaActiva) {
+        await tx.jornada.update({
+          where: { id: jornadaActiva.id },
+          data: {
+            fecha_salida: new Date(), // UTC - corregido
+            estado: "COMPLETADO",
+            observaciones:
+              tipo_cierre === "PARCIAL"
+                ? "Jornada finalizada automáticamente al completar cierre parcial de caja"
+                : "Jornada finalizada automáticamente al completar cierre de caja",
           },
-          orderBy: { fecha_inicio: "desc" },
         });
+        jornadaFinalizada = true;
+      }
 
-        if (jornadaActiva) {
-          await tx.jornada.update({
-            where: { id: jornadaActiva.id },
-            data: {
-              fecha_salida: new Date(), // UTC - corregido
-              estado: "COMPLETADO",
-              observaciones: "Jornada finalizada automáticamente al completar cierre de caja",
-            },
-          });
-        }
+      // Liberar punto de atención del usuario cuando el punto cerrado es el que tenía asignado
+      const usuarioActual = await tx.usuario.findUnique({
+        where: { id: usuario.id },
+        select: { punto_atencion_id: true },
+      });
 
-        // Liberar punto de atención del usuario
+      let puntoLiberado = false;
+      if (usuarioActual?.punto_atencion_id === puntoAtencionId) {
         await tx.usuario.update({
           where: { id: usuario.id },
           data: { punto_atencion_id: null },
         });
+        puntoLiberado = true;
       }
 
-      return cabecera;
+      return {
+        cabecera,
+        jornadaFinalizada,
+        puntoLiberado,
+      };
     });
 
     res.status(200).json({
@@ -404,7 +423,9 @@ router.post(
         tipo_cierre === "PARCIAL"
           ? "Cierre parcial realizado correctamente"
           : "Cierre de caja realizado correctamente",
-      cuadre_id: result.id,
+      cuadre_id: result.cabecera.id,
+      jornada_finalizada: result.jornadaFinalizada,
+      punto_liberado: result.puntoLiberado,
     });
   } catch (error) {
     logger.error("Error al guardar el cuadre de caja", {

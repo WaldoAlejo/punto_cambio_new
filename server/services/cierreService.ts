@@ -39,6 +39,7 @@ interface ResultadoCierre {
   cierre_id?: string;
   cuadre_id?: string;
   jornada_finalizada?: boolean;
+  punto_liberado?: boolean;
   mensaje?: string;
   error?: string;
   codigo?: string;
@@ -633,6 +634,25 @@ class CierreService {
           });
         }
 
+        let puntoLiberado = false;
+        const usuarioActual = await tx.usuario.findUnique({
+          where: { id: usuario_id },
+          select: { punto_atencion_id: true },
+        });
+
+        if (usuarioActual?.punto_atencion_id === punto_atencion_id) {
+          await tx.usuario.update({
+            where: { id: usuario_id },
+            data: { punto_atencion_id: null },
+          });
+          puntoLiberado = true;
+
+          logger.info("✅ Punto liberado automáticamente tras cierre", {
+            usuario_id,
+            punto_atencion_id,
+          });
+        }
+
         // 2.5. Actualizar saldos en tabla Saldo con CONTEO FÍSICO
         // ═══════════════════════════════════════════════════════════════════
         // CRÍTICO: El saldo al cierre (conteo físico) es el saldo inicial
@@ -775,6 +795,7 @@ class CierreService {
           cuadre,
           cierreDiario,
           jornadaFinalizada,
+          puntoLiberado,
         };
       },
       {
@@ -790,6 +811,7 @@ class CierreService {
         punto_atencion_id,
         fecha: fecha.toISOString().split("T")[0],
         jornada_finalizada: resultado.jornadaFinalizada,
+        punto_liberado: resultado.puntoLiberado,
       });
 
       const mensaje = resultado.jornadaFinalizada
@@ -801,6 +823,7 @@ class CierreService {
         cierre_id: resultado.cierreDiario.id,
         cuadre_id: resultado.cuadre.id,
         jornada_finalizada: resultado.jornadaFinalizada,
+        punto_liberado: resultado.puntoLiberado,
         mensaje,
       };
     } catch (error) {

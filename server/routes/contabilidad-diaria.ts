@@ -1127,13 +1127,28 @@ router.post(
           });
         }
 
-        return { cierre, jornadaFinalizada };
+        let puntoLiberado = false;
+        const usuarioActual = await tx.usuario.findUnique({
+          where: { id: usuario.id },
+          select: { punto_atencion_id: true },
+        });
+
+        if (usuarioActual?.punto_atencion_id === pointId) {
+          await tx.usuario.update({
+            where: { id: usuario.id },
+            data: { punto_atencion_id: null },
+          });
+          puntoLiberado = true;
+        }
+
+        return { cierre, jornadaFinalizada, puntoLiberado };
       });
 
       return res.status(200).json({
         success: true,
         cierre: result.cierre,
         jornada_finalizada: !!result.jornadaFinalizada,
+        punto_liberado: result.puntoLiberado,
         mensaje: result.jornadaFinalizada
           ? "Cierre diario completado y jornada finalizada automáticamente"
           : "Cierre diario completado",
