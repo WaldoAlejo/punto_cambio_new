@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -72,6 +73,110 @@ function toNumber(val: unknown, fallback = 0): number {
 
 function toStringSafe(val: unknown, fallback = ""): string {
   return typeof val === "string" ? val : fallback;
+}
+
+const DENOMINACIONES_DEFAULT = {
+  billetes: [100, 50, 20, 10, 5, 1],
+  monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
+};
+
+const DENOMINACIONES_POR_MONEDA: Record<string, { billetes: number[]; monedas: number[] }> = {
+  USD: {
+    billetes: [100, 50, 20, 10, 5, 2, 1],
+    monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
+  },
+  COP: {
+    billetes: [100000, 50000, 20000, 10000, 5000, 2000, 1000],
+    monedas: [1000, 500, 200, 100, 50],
+  },
+  EUR: {
+    billetes: [500, 200, 100, 50, 20, 10, 5],
+    monedas: [2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01],
+  },
+  PEN: {
+    billetes: [200, 100, 50, 20, 10],
+    monedas: [5, 2, 1, 0.5, 0.2, 0.1],
+  },
+  CLP: {
+    billetes: [20000, 10000, 5000, 2000, 1000],
+    monedas: [500, 100, 50, 10, 5, 1],
+  },
+  ARS: {
+    billetes: [10000, 2000, 1000, 500, 200, 100, 50, 20, 10],
+    monedas: [50, 10, 5, 2, 1, 0.5],
+  },
+  VES: {
+    billetes: [100, 50, 20, 10, 5, 2, 1],
+    monedas: [1, 0.5, 0.25, 0.1, 0.05],
+  },
+};
+
+interface DenominacionInput {
+  denominacion: number;
+  cantidad: number;
+}
+
+interface DesgloseDenominacion {
+  denominacion: number;
+  tipo: "BILLETE" | "MONEDA";
+  cantidad: number;
+}
+
+interface DenominationAdjustment {
+  bills: DenominacionInput[];
+  coins: DenominacionInput[];
+}
+
+function getDenominacionesPorMoneda(codigo: string): {
+  billetes: number[];
+  monedas: number[];
+} {
+  return DENOMINACIONES_POR_MONEDA[codigo] || DENOMINACIONES_DEFAULT;
+}
+
+function hydrateDesgloseDenominaciones(
+  codigo: string,
+  desgloseGuardado?: DesgloseDenominacion[]
+): DenominationAdjustment {
+  const denominaciones = getDenominacionesPorMoneda(codigo);
+
+  return {
+    bills: denominaciones.billetes.map((denominacion) => ({
+      denominacion,
+      cantidad:
+        desgloseGuardado?.find(
+          (item) => item.denominacion === denominacion && item.tipo === "BILLETE"
+        )?.cantidad || 0,
+    })),
+    coins: denominaciones.monedas.map((denominacion) => ({
+      denominacion,
+      cantidad:
+        desgloseGuardado?.find(
+          (item) => item.denominacion === denominacion && item.tipo === "MONEDA"
+        )?.cantidad || 0,
+    })),
+  };
+}
+
+function calcularTotalesDenominaciones(desglose: DenominationAdjustment): {
+  bills: number;
+  coins: number;
+  total: number;
+} {
+  const bills = desglose.bills.reduce(
+    (sum, item) => sum + item.denominacion * item.cantidad,
+    0
+  );
+  const coins = desglose.coins.reduce(
+    (sum, item) => sum + item.denominacion * item.cantidad,
+    0
+  );
+
+  return {
+    bills: Math.round(bills * 100) / 100,
+    coins: Math.round(coins * 100) / 100,
+    total: Math.round((bills + coins) * 100) / 100,
+  };
 }
 
 function normalizeResumenCierre(raw: unknown): ResumenCierre | null {
@@ -310,6 +415,7 @@ interface CuadreDetalle {
   ingresos_periodo: number;
   egresos_periodo: number;
   movimientos_periodo: number;
+  desglose_denominaciones?: DesgloseDenominacion[];
 }
 
 const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
@@ -330,6 +436,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const [userAdjustments, setUserAdjustments] = useState<{
     [key: string]: { bills: string; coins: string; banks: string; note?: string };
   }>({});
+  const [denominationAdjustments, setDenominationAdjustments] = useState<
+    Record<string, DenominationAdjustment>
+  >({});
   const [todayClose, setTodayClose] = useState<CuadreCaja | null>(null);
   const [hasActiveJornada, setHasActiveJornada] = useState<boolean | null>(
     null
@@ -422,6 +531,10 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     type: "bills" | "coins" | "banks" | "note",
     value: string
   ) => {
+    if (type === "bills" || type === "coins") {
+      return;
+    }
+
     if (type === "note") {
       setUserAdjustments((prev) => ({
         ...prev,
@@ -446,10 +559,16 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     }));
   };
 
+  const calculateBreakdownTotals = useCallback((monedaId: string) => {
+    const desglose = denominationAdjustments[monedaId];
+    if (!desglose) {
+      return { bills: 0, coins: 0, total: 0 };
+    }
+    return calcularTotalesDenominaciones(desglose);
+  }, [denominationAdjustments]);
+
   const calculateUserTotal = (monedaId: string) => {
-    const bills = parseFloat(userAdjustments[monedaId]?.bills || "0");
-    const coins = parseFloat(userAdjustments[monedaId]?.coins || "0");
-    return bills + coins;
+    return calculateBreakdownTotals(monedaId).total;
   };
 
   const calculateUserBanks = (monedaId: string) => {
@@ -459,9 +578,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
   // ✅ NUEVA FUNCIÓN: Validar que el desglose cuadre con el conteo total
   const validateBreakdown = (monedaId: string): { valid: boolean; breakdownTotal: number; difference: number } => {
-    const bills = parseFloat(userAdjustments[monedaId]?.bills || "0");
-    const coins = parseFloat(userAdjustments[monedaId]?.coins || "0");
-    const breakdownTotal = bills + coins;
+    const { total: breakdownTotal } = calculateBreakdownTotals(monedaId);
     
     // El conteo físico es lo que el operador declara tener
     // Se compara contra el saldo_cierre teórico
@@ -481,16 +598,54 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
   // ✅ NUEVA FUNCIÓN: Verificar si el desglose interno es consistente
   const isBreakdownConsistent = (monedaId: string): boolean => {
-    const bills = parseFloat(userAdjustments[monedaId]?.bills || "0");
-    const coins = parseFloat(userAdjustments[monedaId]?.coins || "0");
-    const total = bills + coins;
+    const desglose = denominationAdjustments[monedaId];
+    if (!desglose) return true;
+    const items = [...desglose.bills, ...desglose.coins];
     
-    // Si no hay valores, es consistente
-    if (bills === 0 && coins === 0) return true;
+    if (items.every((item) => item.cantidad === 0)) return true;
     
-    // El desglose es consistente si ambos valores son >= 0
-    return bills >= 0 && coins >= 0 && total >= 0;
+    return items.every((item) => Number.isFinite(item.cantidad) && item.cantidad >= 0);
   };
+
+  const updateDenominationCount = useCallback(
+    (
+      monedaId: string,
+      type: "bills" | "coins",
+      denominacion: number,
+      value: string
+    ) => {
+      const cantidad = Math.max(0, parseInt(value || "0", 10) || 0);
+
+      setDenominationAdjustments((prev) => {
+        const current = prev[monedaId] || { bills: [], coins: [] };
+        const nextSection = current[type].map((item) =>
+          item.denominacion === denominacion ? { ...item, cantidad } : item
+        );
+        const next = {
+          ...current,
+          [type]: nextSection,
+        };
+        const totals = calcularTotalesDenominaciones(next);
+
+        setUserAdjustments((prevAdjustments) => ({
+          ...prevAdjustments,
+          [monedaId]: {
+            ...prevAdjustments[monedaId],
+            bills: totals.bills.toFixed(2),
+            coins: totals.coins.toFixed(2),
+            banks: prevAdjustments[monedaId]?.banks ?? "0.00",
+            note: prevAdjustments[monedaId]?.note || "",
+          },
+        }));
+
+        return {
+          ...prev,
+          [monedaId]: next,
+        };
+      });
+    },
+    []
+  );
 
   // Permitir hasta ±1.00 USD de ajuste; otras divisas deben cuadrar (±0.01)
   const getTolerance = (detalle: CuadreDetalle) =>
@@ -565,17 +720,25 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         const initialAdjustments: {
           [key: string]: { bills: string; coins: string; banks: string; note?: string };
         } = {};
+        const initialDenominations: Record<string, DenominationAdjustment> = {};
         if (data.data.detalles && data.data.detalles.length > 0) {
           data.data.detalles.forEach((detalle: CuadreDetalle) => {
+            const desglose = hydrateDesgloseDenominaciones(
+              detalle.codigo,
+              detalle.desglose_denominaciones
+            );
+            const totals = calcularTotalesDenominaciones(desglose);
+            initialDenominations[detalle.moneda_id] = desglose;
             initialAdjustments[detalle.moneda_id] = {
-              bills: detalle.saldo_cierre.toFixed(2),
-              coins: "0.00",
+              bills: totals.bills.toFixed(2),
+              coins: totals.coins.toFixed(2),
               banks: Number(detalle.bancos_teorico ?? 0).toFixed(2),
               note: "",
             };
           });
         }
         setUserAdjustments(initialAdjustments);
+        setDenominationAdjustments(initialDenominations);
         setFetchError(null);
       } else if ((data.data as { mensaje?: string } | undefined)?.mensaje) {
         console.log(
@@ -584,6 +747,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         );
         setCuadreData({ detalles: [], observaciones: "" });
         setUserAdjustments({});
+        setDenominationAdjustments({});
         setFetchError(null);
       } else {
         console.warn("[DailyClose] Respuesta inesperada:", data);
@@ -609,6 +773,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             // Proceder como "sin movimientos de divisas": permitir cierre
             setCuadreData({ detalles: [], observaciones: "" });
             setUserAdjustments({});
+            setDenominationAdjustments({});
             setFetchError(null);
             toast({
               title: "Sin movimientos de divisas",
@@ -737,9 +902,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
         // Validación estricta con tolerancia
         const invalidBalances = cuadreData?.detalles?.filter((detalle) => {
-          const bills = parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0");
-          const coins = parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0");
-          const total = bills + coins;
+          const { total } = calculateBreakdownTotals(detalle.moneda_id);
           const diff = Math.abs(total - detalle.saldo_cierre);
           const tol = detalle.codigo === "USD" ? 1.0 : 0.01;
           const banks = parseFloat(userAdjustments[detalle.moneda_id]?.banks || "0");
@@ -750,9 +913,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         if (invalidBalances.length > 0) {
           const msg = `Los siguientes saldos no cuadran con los movimientos del día:\n\n${invalidBalances
             .map((d) => {
-              const bills = parseFloat(userAdjustments[d.moneda_id]?.bills || "0");
-              const coins = parseFloat(userAdjustments[d.moneda_id]?.coins || "0");
-              const total = bills + coins;
+              const { total } = calculateBreakdownTotals(d.moneda_id);
               const banks = parseFloat(userAdjustments[d.moneda_id]?.banks || "0");
               const banksExpected = Number(d.bancos_teorico ?? 0);
               const tolerance = (d.codigo === "USD" ? 1.0 : 0.01).toFixed(2);
@@ -767,10 +928,9 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
 
       // 2. Preparar detalles para enviar
       const detalles = (cuadreData?.detalles || []).map((detalle) => {
-        const bills = parseFloat(userAdjustments[detalle.moneda_id]?.bills || "0");
-        const coins = parseFloat(userAdjustments[detalle.moneda_id]?.coins || "0");
+        const totals = calculateBreakdownTotals(detalle.moneda_id);
         const banks = parseFloat(userAdjustments[detalle.moneda_id]?.banks || "0");
-        const conteo = bills + coins;
+        const conteo = totals.total;
         return {
           moneda_id: detalle.moneda_id,
           saldo_apertura: detalle.saldo_apertura,
@@ -778,12 +938,25 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           conteo_fisico: conteo,
           bancos_teorico: Number(detalle.bancos_teorico ?? 0),
           conteo_bancos: banks,
-          billetes: bills,
-          monedas: coins,
+          billetes: totals.bills,
+          monedas: totals.coins,
+          monedas_fisicas: totals.coins,
           ingresos_periodo: detalle.ingresos_periodo || 0,
           egresos_periodo: detalle.egresos_periodo || 0,
           movimientos_periodo: detalle.movimientos_periodo || 0,
           observaciones_detalle: userAdjustments[detalle.moneda_id]?.note || "",
+          desglose_denominaciones: [
+            ...(denominationAdjustments[detalle.moneda_id]?.bills || []).map((item) => ({
+              denominacion: item.denominacion,
+              tipo: "BILLETE" as const,
+              cantidad: item.cantidad,
+            })),
+            ...(denominationAdjustments[detalle.moneda_id]?.coins || []).map((item) => ({
+              denominacion: item.denominacion,
+              tipo: "MONEDA" as const,
+              cantidad: item.cantidad,
+            })),
+          ],
         };
       });
 
@@ -1799,108 +1972,120 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                               Registre el dinero que tiene físicamente en caja
                             </CardDescription>
                           </CardHeader>
-                          <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium flex items-center gap-1">
-                                  💵 Billetes
-                                  <span className="text-xs text-gray-500">
-                                    ({detalle.simbolo})
-                                  </span>
-                                </Label>
-                                <Input
-                                  type="number"
-                                  step="0.001"
-                                  min="0"
-                                  value={
-                                    userAdjustments[detalle.moneda_id]?.bills ||
-                                    ""
-                                  }
-                                  onChange={(e) =>
-                                    handleUserAdjustment(
-                                      detalle.moneda_id,
-                                      "bills",
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder="0.00"
-                                  className={!isValid ? "border-red-300" : ""}
-                                />
+                          <CardContent className="pt-6 space-y-6">
+                            <div>
+                              <h4 className="font-medium mb-3 flex items-center gap-2">
+                                <Banknote className="h-4 w-4" />
+                                Billetes
+                                <span className="text-sm font-normal text-gray-500">
+                                  (Total: {detalle.simbolo} {calculateBreakdownTotals(detalle.moneda_id).bills.toFixed(2)})
+                                </span>
+                              </h4>
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                {(denominationAdjustments[detalle.moneda_id]?.bills || []).map((billete) => (
+                                  <div key={billete.denominacion} className="space-y-1">
+                                    <Label className="text-xs text-gray-500">
+                                      {detalle.simbolo}{billete.denominacion}
+                                    </Label>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="1"
+                                      value={billete.cantidad || ""}
+                                      onChange={(e) =>
+                                        updateDenominationCount(
+                                          detalle.moneda_id,
+                                          "bills",
+                                          billete.denominacion,
+                                          e.target.value
+                                        )
+                                      }
+                                      className="text-center"
+                                      placeholder="0"
+                                    />
+                                    <div className="text-xs text-right text-gray-500">
+                                      = {detalle.simbolo}
+                                      {(billete.denominacion * billete.cantidad).toFixed(2)}
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
+                            </div>
 
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium flex items-center gap-1">
-                                  🪙 Monedas
-                                  <span className="text-xs text-gray-500">
-                                    ({detalle.simbolo})
-                                  </span>
-                                </Label>
-                                <Input
-                                  type="number"
-                                  step="0.001"
-                                  min="0"
-                                  value={
-                                    userAdjustments[detalle.moneda_id]?.coins ||
-                                    ""
-                                  }
-                                  onChange={(e) =>
-                                    handleUserAdjustment(
-                                      detalle.moneda_id,
-                                      "coins",
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder="0.00"
-                                  className={!isValid ? "border-red-300" : ""}
-                                />
+                            <Separator />
+
+                            <div>
+                              <h4 className="font-medium mb-3 flex items-center gap-2">
+                                <Coins className="h-4 w-4" />
+                                Monedas
+                                <span className="text-sm font-normal text-gray-500">
+                                  (Total: {detalle.simbolo} {calculateBreakdownTotals(detalle.moneda_id).coins.toFixed(2)})
+                                </span>
+                              </h4>
+                              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                {(denominationAdjustments[detalle.moneda_id]?.coins || []).map((moneda) => (
+                                  <div key={moneda.denominacion} className="space-y-1">
+                                    <Label className="text-xs text-gray-500">
+                                      {moneda.denominacion >= 1
+                                        ? `${detalle.simbolo}${moneda.denominacion}`
+                                        : `${(moneda.denominacion * 100).toFixed(0)}¢`}
+                                    </Label>
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      step="1"
+                                      value={moneda.cantidad || ""}
+                                      onChange={(e) =>
+                                        updateDenominationCount(
+                                          detalle.moneda_id,
+                                          "coins",
+                                          moneda.denominacion,
+                                          e.target.value
+                                        )
+                                      }
+                                      className="text-center"
+                                      placeholder="0"
+                                    />
+                                    <div className="text-xs text-right text-gray-500">
+                                      = {detalle.simbolo}
+                                      {(moneda.denominacion * moneda.cantidad).toFixed(2)}
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
+                            </div>
 
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium">
-                                  💰 Total Contado
-                                </Label>
-                                <div className="flex items-center gap-2">
+                            <div
+                              className={`p-4 rounded-lg ${
+                                !isValid
+                                  ? "bg-red-50 border border-red-200"
+                                  : userTotal === detalle.saldo_cierre
+                                    ? "bg-green-50 border border-green-200"
+                                    : "bg-gray-50 border"
+                              }`}
+                            >
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <div className="text-sm text-gray-600">Tu conteo total</div>
+                                  <div className="text-2xl font-bold">
+                                    {detalle.simbolo} {userTotal.toFixed(2)}
+                                  </div>
+                                </div>
+                                <ArrowRight className="h-5 w-5 text-gray-400" />
+                                <div className="text-right">
+                                  <div className="text-sm text-gray-600">Diferencia</div>
                                   <div
-                                    className={`h-10 px-3 py-2 border rounded-md flex items-center font-bold text-lg ${
-                                      !isValid
-                                        ? "bg-red-50 border-red-300 text-red-700"
-                                        : "bg-green-50 border-green-300 text-green-700"
+                                    className={`text-2xl font-bold ${
+                                      userTotal - detalle.saldo_cierre > 0
+                                        ? "text-green-600"
+                                        : userTotal - detalle.saldo_cierre < 0
+                                          ? "text-red-600"
+                                          : "text-gray-600"
                                     }`}
                                   >
-                                    {detalle.simbolo}
-                                    {userTotal.toFixed(2)}
+                                    {userTotal - detalle.saldo_cierre > 0 ? "+" : ""}
+                                    {(userTotal - detalle.saldo_cierre).toFixed(2)}
                                   </div>
-                                  {(() => {
-                                    const diff = parseFloat(
-                                      (
-                                        userTotal - detalle.saldo_cierre
-                                      ).toFixed(2)
-                                    );
-                                    const abs = Math.abs(diff);
-                                    const tol = getTolerance(detalle);
-                                    const within = abs <= tol;
-                                    const sign =
-                                      diff > 0 ? "+" : diff < 0 ? "-" : "";
-                                    const color = within
-                                      ? diff === 0
-                                        ? "bg-gray-200 text-gray-800 border-gray-300"
-                                        : "bg-green-100 text-green-800 border-green-300"
-                                      : "bg-red-100 text-red-800 border-red-300";
-                                    const label = `${sign}${abs.toFixed(2)}`;
-                                    return (
-                                      <Badge
-                                        className={`border ${color} whitespace-nowrap`}
-                                        variant={
-                                          within ? "secondary" : "destructive"
-                                        }
-                                        title={`Diferencia vs esperado (tolerancia ±${tol.toFixed(
-                                          2
-                                        )})`}
-                                      >
-                                        Diff: {label}
-                                      </Badge>
-                                    );
-                                  })()}
                                 </div>
                               </div>
                             </div>
