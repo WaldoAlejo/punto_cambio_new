@@ -351,8 +351,58 @@ router.post("/validar-apertura", authenticateToken, async (req, res) => {
       });
     }
 
-    // Si hay diferencias, NO permitir continuar hasta que el admin apruebe
+    // Si hay diferencias, PERMITIR operar pero marcar para revisión del admin
     if (hayDiferenciasFueraTolerancia) {
+      // Crear cuadre de caja automáticamente aunque haya diferencias
+      const cuadreExistente = await prisma.cuadreCaja.findFirst({
+        where: {
+          punto_atencion_id: jornada.punto_atencion_id,
+          fecha: {
+            gte: new Date(fechaHoy + "T00:00:00.000Z"),
+            lt: new Date(fechaHoy + "T23:59:59.999Z"),
+          },
+        },
+      });
+
+      if (!cuadreExistente) {
+        const cuadre = await prisma.cuadreCaja.create({
+          data: {
+            estado: "ABIERTO",
+            fecha: new Date(fechaHoy + "T00:00:00.000Z"),
+            punto_atencion_id: jornada.punto_atencion_id,
+            usuario_id: usuario_id!,
+            observaciones: `Cuadre creado con diferencias en apertura (${apertura.id}). Revisión pendiente.`,
+          },
+        });
+
+        // Crear detalles del cuadre con las diferencias registradas
+        for (const saldo of saldos) {
+          const conteo = conteos.find(c => c.moneda_id === saldo.moneda_id);
+          const conteoTotal = conteo ? conteo.total : 0;
+          
+          await prisma.detalleCuadreCaja.create({
+            data: {
+              cuadre_id: cuadre.id,
+              moneda_id: saldo.moneda_id,
+              saldo_apertura: conteoTotal,
+              saldo_cierre: Number(saldo.cantidad),
+              conteo_fisico: conteoTotal,
+              diferencia: conteoTotal - Number(saldo.cantidad),
+              billetes: conteo ? conteo.billetes.reduce((sum, b) => sum + b.denominacion * b.cantidad, 0) : 0,
+              monedas_fisicas: conteo ? conteo.monedas.reduce((sum, m) => sum + m.denominacion * m.cantidad, 0) : 0,
+              movimientos_periodo: 0,
+            },
+          });
+        }
+
+        logger.info("Cuadre creado con diferencias en apertura", {
+          cuadre_id: cuadre.id,
+          apertura_id: apertura.id,
+          jornada_id,
+          diferencias: diferencias.filter(d => d.fuera_tolerancia),
+        });
+      }
+
       return res.json({
         success: true,
         apertura: {
@@ -361,9 +411,9 @@ router.post("/validar-apertura", authenticateToken, async (req, res) => {
         },
         diferencias: diferencias.filter(d => d.fuera_tolerancia),
         alerta_admin: observacionesAlerta,
-        puede_operar: false,
-        requiere_aprobacion_admin: true,
-        message: "Se registraron diferencias en el conteo. Debe esperar la aprobación del administrador para operar.",
+        puede_operar: true,  // <-- AHORA PERMITE OPERAR
+        requiere_aprobacion_admin: true,  // <-- Pero marca para revisión
+        message: "Apertura registrada con diferencias. Puede operar - el administrador revisará las diferencias.",
       });
     }
 
@@ -480,8 +530,9 @@ router.get("/estado/:jornada_id", authenticateToken, async (req, res) => {
       where: { jornada_id },
     });
 
-    const puedeOperar = apertura?.estado === EstadoApertura.ABIERTA;
-    const requiereApertura = !apertura || apertura.estado !== EstadoApertura.ABIERTA;
+    // PERMITIR operar con ABIERTA o CON_DIFERENCIA
+    const puedeOperar = apertura?.estado === EstadoApertura.ABIERTA || apertura?.estado === EstadoApertura.CON_DIFERENCIA;
+    const requiereApertura = !apertura || (apertura.estado !== EstadoApertura.ABIERTA && apertura.estado !== EstadoApertura.CON_DIFERENCIA);
 
     return res.json({
       success: true,

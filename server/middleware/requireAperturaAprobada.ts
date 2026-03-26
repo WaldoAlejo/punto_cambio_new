@@ -93,11 +93,13 @@ export async function requireAperturaAprobada(
     }
 
     // Verificar estado de la apertura
-    if (apertura.estado !== EstadoApertura.ABIERTA) {
-      // Si está en conteo o con diferencia, no puede operar
+    // PERMITIR operar con CON_DIFERENCIA - el admin revisará después
+    const estadosPermitidos = [EstadoApertura.ABIERTA, EstadoApertura.CON_DIFERENCIA];
+    
+    if (!estadosPermitidos.includes(apertura.estado)) {
+      // Solo bloquear si está en conteo o cuadrado (procesando)
       const mensajes: Record<string, string> = {
         [EstadoApertura.EN_CONTEO]: "Debe completar el conteo de apertura de caja.",
-        [EstadoApertura.CON_DIFERENCIA]: "Su apertura tiene diferencias pendientes de aprobación por el administrador.",
         [EstadoApertura.CUADRADO]: "Su apertura está siendo procesada, espere un momento.",
       };
 
@@ -107,26 +109,23 @@ export async function requireAperturaAprobada(
         code: "APERTURA_NO_APROBADA",
         apertura_estado: apertura.estado,
         requiere_apertura: apertura.estado === EstadoApertura.EN_CONTEO,
-        requiere_aprobacion: apertura.estado === EstadoApertura.CON_DIFERENCIA,
+        requiere_aprobacion: false,
         jornada_id: jornada.id,
         apertura_id: apertura.id,
       });
       return;
     }
 
-    // Si la apertura requiere aprobación (campo booleano adicional)
-    if (apertura.requiere_aprobacion) {
-      res.status(403).json({
-        success: false,
-        error: "Su apertura de caja está pendiente de aprobación por el administrador.",
-        code: "APERTURA_PENDIENTE_APROBACION",
-        apertura_estado: apertura.estado,
-        requiere_aprobacion: true,
-        jornada_id: jornada.id,
-        apertura_id: apertura.id,
-      });
-      return;
+    // Si tiene diferencias, agregar advertencia pero permitir operar
+    if (apertura.estado === EstadoApertura.CON_DIFERENCIA) {
+      (req as any).aperturaAdvertencia = {
+        tiene_diferencias: true,
+        mensaje: "Su apertura tiene diferencias registradas. El administrador las revisará.",
+      };
     }
+
+    // El campo requiere_aprobacion ya no bloquea - solo es informativo
+    // Las diferencias se registran pero el operador puede trabajar
 
     // Todo OK, agregar info al request para uso posterior
     (req as any).jornada = jornada;
