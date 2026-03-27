@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 // Cambia este import:
 import axiosInstance from "@/services/axiosInstance";
 import { pointService } from "@/services/pointService";
+import { scheduleService } from "@/services/scheduleService";
 import { PuntoAtencion } from "./types";
 
 interface JornadaActiveResponse {
@@ -45,10 +46,10 @@ function App() {
     if (selectedPoint) return;
 
     setVerifyingJornada(true);
-    axiosInstance
-      .get<JornadaActiveResponse>("/schedules/active")
-      .then(({ data }) => {
-        const active = data?.schedule;
+    scheduleService
+      .getActiveSchedule()
+      .then(({ schedule }) => {
+        const active = schedule;
         if (!active) {
           setSelectedPoint(null);
           localStorage.removeItem("puntoAtencionSeleccionado");

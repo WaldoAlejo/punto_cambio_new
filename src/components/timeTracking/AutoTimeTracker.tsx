@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { User, PuntoAtencion } from "../../types";
 import axiosInstance from "@/services/axiosInstance";
 import { toGyeClock } from "@/utils/timezone";
+import { scheduleService } from "@/services/scheduleService";
 
 interface AutoTimeTrackerProps {
   user: User;
@@ -43,12 +44,8 @@ const AutoTimeTracker = ({
     const loadActiveSchedule = async () => {
       try {
         if (!user?.id) return;
-        const { data } = await axiosInstance.get<ActiveScheduleResponse>(
-          "/schedules/active"
-        );
-        if (data.success) {
-          setSchedule(data.schedule);
-        }
+        const result = await scheduleService.getActiveSchedule();
+        setSchedule((result.schedule as JornadaEstadoBackend | null) || null);
       } finally {
         setLoading(false);
       }

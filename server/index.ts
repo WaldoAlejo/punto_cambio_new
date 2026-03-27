@@ -152,6 +152,7 @@ const excludedPaths = [
   "/api/exchanges",
   "/api/transfers",
   "/api/servientrega",
+  "/api/schedules/active",
 ];
 
 // Limiter global (más permisivo y con keyGenerator por user/token)
@@ -340,6 +341,7 @@ app.get("/api/rate-limit-status", (req, res) => {
 app.use("/api/users", relaxedLimiter, userRoutes);
 app.use("/api/points", relaxedLimiter, pointRoutes);
 app.use("/api/transfer-approvals", relaxedLimiter, transferApprovalRoutes);
+app.use("/api/schedules", relaxedLimiter, scheduleRoutes);
 
 // Resto de rutas
 app.use("/api/auth", authRoutes);
@@ -348,7 +350,6 @@ app.use("/api/currencies", currencyBehaviorRoutes);
 app.use("/api/balances", balanceRoutes);
 app.use("/api/transfers", transferRoutes);
 app.use("/api/exchanges", exchangeRoutes);
-app.use("/api/schedules", scheduleRoutes);
 app.use("/api/schedule-config", scheduleConfigRoutes);
 app.use("/api/spontaneous-exits", spontaneousExitRoutes);
 app.use("/api/reports", reportRoutes);

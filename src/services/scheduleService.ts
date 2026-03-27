@@ -42,6 +42,21 @@ interface ScheduleResponse {
 type SchedulesResult = { schedules: Schedule[]; error: string | null };
 type ScheduleResult = { schedule: Schedule | null; error: string | null };
 
+const ACTIVE_SCHEDULE_CACHE_TTL_MS = 5000;
+
+let activeScheduleCache:
+  | {
+      value: ScheduleResult;
+      expiresAt: number;
+    }
+  | null = null;
+let activeScheduleRequest: Promise<ScheduleResult> | null = null;
+
+function invalidateActiveScheduleCache() {
+  activeScheduleCache = null;
+  activeScheduleRequest = null;
+}
+
 const devLog = (...args: unknown[]) => {
   if (import.meta.env.DEV) console.warn(...args);
 };
@@ -95,28 +110,69 @@ export const scheduleService = {
   },
 
   // Jornada activa del usuario autenticado
-  async getActiveSchedule(): Promise<ScheduleResult> {
+  invalidateActiveScheduleCache,
+
+  async getActiveSchedule(options?: { force?: boolean }): Promise<ScheduleResult> {
+    const force = options?.force === true;
+
+    if (!force && activeScheduleCache && activeScheduleCache.expiresAt > Date.now()) {
+      return activeScheduleCache.value;
+    }
+
+    if (!force && activeScheduleRequest) {
+      return activeScheduleRequest;
+    }
+
+    activeScheduleRequest = (async () => {
     try {
       const response = await apiService.get<ScheduleResponse>(
         "/schedules/active"
       );
       if (!response) {
-        return {
+        const result = {
           schedule: null,
           error: "No se pudo obtener la respuesta del servidor",
         };
+        activeScheduleCache = {
+          value: result,
+          expiresAt: Date.now() + 1500,
+        };
+        return result;
       }
       if (response.error || !response.success) {
-        return {
+        const result = {
           schedule: null,
           error: response.error || "Error al obtener horario activo",
         };
+        activeScheduleCache = {
+          value: result,
+          expiresAt: Date.now() + 1500,
+        };
+        return result;
       }
-      return { schedule: response.schedule, error: null };
+      const result = { schedule: response.schedule, error: null };
+      activeScheduleCache = {
+        value: result,
+        expiresAt: Date.now() + ACTIVE_SCHEDULE_CACHE_TTL_MS,
+      };
+      return result;
     } catch (error) {
       console.error("Error en getActiveSchedule:", error);
-      return { schedule: null, error: "Error de conexión con el servidor" };
+      const result = {
+        schedule: null,
+        error: "Error de conexión con el servidor",
+      };
+      activeScheduleCache = {
+        value: result,
+        expiresAt: Date.now() + 1500,
+      };
+      return result;
+    } finally {
+      activeScheduleRequest = null;
     }
+    })();
+
+    return activeScheduleRequest;
   },
 
   // Crear o actualizar jornada
@@ -158,6 +214,7 @@ export const scheduleService = {
           error: response.error || "Error al guardar horario",
         };
       }
+      invalidateActiveScheduleCache();
       return { schedule: response.schedule, error: null };
     } catch (error) {
       console.error("Error en createOrUpdateSchedule:", error);
@@ -187,6 +244,7 @@ export const scheduleService = {
           schedule: null,
           error: response.error || "Error en reasignación",
         };
+      invalidateActiveScheduleCache();
       return { schedule: response.schedule, error: null };
     } catch (e) {
       console.error("Error en reassignPoint:", e);

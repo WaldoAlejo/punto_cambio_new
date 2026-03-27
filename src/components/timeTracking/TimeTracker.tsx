@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, SalidaEspontanea } from "../../types";
 import { toGyeClock } from "@/utils/timezone";
+import { scheduleService } from "@/services/scheduleService";
 
 interface TimeTrackerProps {
   user: User;
@@ -113,13 +114,11 @@ const TimeTracker = ({
     const cargarJornadaActual = async () => {
       try {
         if (!user.id || !selectedPoint?.id) return;
-        const { data } = await axiosInstance.get<ActiveScheduleResponse>(
-          "/schedules/active"
-        );
-        if (data.success && data.schedule) {
+        const result = await scheduleService.getActiveSchedule();
+        if (result.schedule) {
           setJornadaActual({
-            ...data.schedule,
-            estado: mapEstadoJornada(data.schedule.estado),
+            ...result.schedule,
+            estado: mapEstadoJornada(result.schedule.estado),
           });
         } else {
           setJornadaActual({ estado: "NO_INICIADO" });

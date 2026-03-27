@@ -338,8 +338,6 @@ export default function AperturaCaja({
             description: "Esta jornada ya fue abierta anteriormente.",
           });
         }
-
-        onAperturaActualizada?.();
       }
     } catch (e) {
       setError("Error al iniciar apertura");

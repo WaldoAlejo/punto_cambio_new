@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
+import { scheduleService } from "@/services/scheduleService";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, CuadreCaja } from "../../types";
 import {
@@ -480,36 +481,16 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   useEffect(() => {
     const checkActiveJornada = async (): Promise<void> => {
       try {
-        const token = localStorage.getItem("authToken");
-
-        if (!token) {
+        if (!localStorage.getItem("authToken")) {
           setHasActiveJornada(false);
           return;
         }
 
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL || "/api"}/schedules/active`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        if (response.ok) {
-          const data = await response.json();
-
-          // Verificar que tenga schedule y que esté ACTIVO
-          const hasJornada =
-            data.success &&
-            data.schedule &&
-            (data.schedule.estado === "ACTIVO" ||
-              data.schedule.estado === "ALMUERZO");
-          setHasActiveJornada(hasJornada);
-        } else {
-          setHasActiveJornada(false);
-        }
+        const data = await scheduleService.getActiveSchedule();
+        const hasJornada =
+          !!data.schedule &&
+          (data.schedule.estado === "ACTIVO" || data.schedule.estado === "ALMUERZO");
+        setHasActiveJornada(hasJornada);
       } catch (error) {
         console.error("💥 Error checking active jornada:", error);
         setHasActiveJornada(false);
