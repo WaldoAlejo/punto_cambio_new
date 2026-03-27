@@ -117,6 +117,41 @@ function calcularTotalConteo(billetes: BilleteInput[], monedas: MonedaInput[]): 
   return Math.round((totalBilletes + totalMonedas) * 100) / 100;
 }
 
+function mergeDenominacionesGuardadas(
+  base: Array<{ denominacion: number; cantidad: number }>,
+  guardadas: Array<{ denominacion: number; cantidad: number }> | null | undefined
+) {
+  const cantidadesPorDenominacion = new Map<number, number>();
+
+  (guardadas || []).forEach((item) => {
+    cantidadesPorDenominacion.set(item.denominacion, item.cantidad);
+  });
+
+  const combinadas = base.map((item) => ({
+    denominacion: item.denominacion,
+    cantidad: cantidadesPorDenominacion.get(item.denominacion) ?? item.cantidad,
+  }));
+
+  (guardadas || []).forEach((item) => {
+    if (!cantidadesPorDenominacion.has(item.denominacion)) {
+      return;
+    }
+
+    const yaExiste = combinadas.some(
+      (actual) => actual.denominacion === item.denominacion
+    );
+
+    if (!yaExiste) {
+      combinadas.push({
+        denominacion: item.denominacion,
+        cantidad: item.cantidad,
+      });
+    }
+  });
+
+  return combinadas;
+}
+
 function getEstadoMonedasObligatorias(
   monedasObligatorias: string[],
   saldoEsperadoActual: Array<{ moneda_id: string; codigo: string }>,
@@ -313,14 +348,14 @@ export default function AperturaCaja({
           result.apertura.conteo_fisico.forEach((conteo: ConteoMoneda) => {
             const idx = conteosIniciales.findIndex((c) => c.moneda_id === conteo.moneda_id);
             if (idx >= 0) {
-              conteosIniciales[idx].billetes = conteo.billetes.map((b) => ({
-                denominacion: b.denominacion,
-                cantidad: b.cantidad,
-              }));
-              conteosIniciales[idx].monedas = conteo.monedas.map((m) => ({
-                denominacion: m.denominacion,
-                cantidad: m.cantidad,
-              }));
+              conteosIniciales[idx].billetes = mergeDenominacionesGuardadas(
+                conteosIniciales[idx].billetes,
+                conteo.billetes
+              );
+              conteosIniciales[idx].monedas = mergeDenominacionesGuardadas(
+                conteosIniciales[idx].monedas,
+                conteo.monedas
+              );
             }
           });
         }
