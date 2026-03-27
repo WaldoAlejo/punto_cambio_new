@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "nodemon --watch server --ext ts,tsx,json --exec \"tsx server/index.ts\"",
-    "build": "npm run build:frontend && npm run build:server",
+    "build": "npm run build:frontend && npm run build:server && npm run build:verify",
     "build:frontend": "vite build",
     "build:server": "npx prisma generate && tsc -p tsconfig.server.json",
+    "build:verify": "node scripts/verify-build-ready.cjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",

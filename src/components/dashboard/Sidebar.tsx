@@ -13,6 +13,11 @@ interface SidebarProps {
   onViewChange: (view: string) => void;
   isOpen: boolean;
   onToggle: () => void;
+  navigationLock?: {
+    enabled: boolean;
+    allowedViews: string[];
+    message: string;
+  };
 }
 
 interface MenuItem {
@@ -29,6 +34,7 @@ const Sidebar = ({
   onViewChange,
   isOpen,
   onToggle,
+  navigationLock,
 }: SidebarProps) => {
   const [adminExpanded, setAdminExpanded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -44,6 +50,15 @@ const Sidebar = ({
 
   const isAdmin = user.rol === "ADMIN" || user.rol === "SUPER_USUARIO";
   const _isConcesion = user.rol === "CONCESION";
+  const navigationLockEnabled = navigationLock?.enabled === true;
+
+  const isViewAllowed = (viewId: string) => {
+    if (!navigationLockEnabled) {
+      return true;
+    }
+
+    return navigationLock?.allowedViews.includes(viewId) ?? false;
+  };
 
   const menuItems: MenuItem[] = [
     {
@@ -254,6 +269,10 @@ const Sidebar = ({
       return isOpen ? <Separator key={item.id} className="my-2" /> : null;
     }
 
+    if (!isViewAllowed(item.id)) {
+      return null;
+    }
+
     const isActive = activeView === item.id;
     return (
       <Button
@@ -333,24 +352,32 @@ const Sidebar = ({
               </div>
             )}
 
-            <Button
-              variant={activeView === "dashboard" ? "default" : "ghost"}
-              className={`w-full justify-start h-10 px-3 ${
-                activeView === "dashboard"
-                  ? "bg-blue-700 text-white shadow"
-                  : "hover:bg-gray-100"
-              } ${!isOpen ? "px-2" : ""} transition-all`}
-              onClick={() => onViewChange("dashboard")}
-            >
-              <BarChart3
-                className={`h-4 w-4 text-blue-700 ${
-                  activeView === "dashboard" ? "text-white" : ""
-                } ${!isOpen ? "mx-auto" : "mr-3"}`}
-              />
-              {isOpen && <span className="text-sm font-medium">Dashboard</span>}
-            </Button>
+            {isViewAllowed("dashboard") && (
+              <Button
+                variant={activeView === "dashboard" ? "default" : "ghost"}
+                className={`w-full justify-start h-10 px-3 ${
+                  activeView === "dashboard"
+                    ? "bg-blue-700 text-white shadow"
+                    : "hover:bg-gray-100"
+                } ${!isOpen ? "px-2" : ""} transition-all`}
+                onClick={() => onViewChange("dashboard")}
+              >
+                <BarChart3
+                  className={`h-4 w-4 text-blue-700 ${
+                    activeView === "dashboard" ? "text-white" : ""
+                  } ${!isOpen ? "mx-auto" : "mr-3"}`}
+                />
+                {isOpen && <span className="text-sm font-medium">Dashboard</span>}
+              </Button>
+            )}
 
             <Separator className="my-2" />
+
+            {navigationLockEnabled && isOpen && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                {navigationLock?.message}
+              </div>
+            )}
 
             {menuItems
               .filter((item) => {

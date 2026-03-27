@@ -301,8 +301,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
 
     try {
       const token = localStorage.getItem("authToken");
-      const apiUrl =
-        import.meta.env.VITE_API_URL || "http://34.122.108.114:3001/api";
+      const apiUrl = import.meta.env.VITE_API_URL || "/api";
 
       const requestBody = {
         reportType: effectiveReportType,

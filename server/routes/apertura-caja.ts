@@ -4,8 +4,116 @@ import { Prisma, EstadoApertura, ServicioExterno } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { todayGyeDateOnly, nowEcuador } from "../utils/timezone.js";
+import {
+  MONEDAS_APERTURA_OBLIGATORIAS,
+  getEstadoMonedasObligatorias,
+  obtenerEstadoAperturaOperativa,
+} from "../utils/aperturaCajaRequirements.js";
 
 const router = express.Router();
+
+const DENOMINACIONES_DEFAULT = {
+  billetes: [100, 50, 20, 10, 5, 1],
+  monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
+};
+
+const DENOMINACIONES_ESPECIFICAS: Record<string, { billetes: number[]; monedas: number[] }> = {
+  USD: {
+    billetes: [100, 50, 20, 10, 5, 2, 1],
+    monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
+  },
+  COP: {
+    billetes: [100000, 50000, 20000, 10000, 5000, 2000, 1000],
+    monedas: [1000, 500, 200, 100, 50],
+  },
+  EUR: {
+    billetes: [500, 200, 100, 50, 20, 10, 5],
+    monedas: [2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01],
+  },
+  CHF: {
+    billetes: [1000, 200, 100, 50, 20, 10],
+    monedas: [0.5, 0.2, 0.1, 0.05],
+  },
+  PEN: {
+    billetes: [200, 100, 50, 20, 10],
+    monedas: [5, 2, 1, 0.5, 0.2, 0.1],
+  },
+  CLP: {
+    billetes: [20000, 10000, 5000, 2000, 1000],
+    monedas: [500, 100, 50, 10, 5, 1],
+  },
+  ARS: {
+    billetes: [10000, 2000, 1000, 500, 200, 100, 50, 20, 10],
+    monedas: [50, 10, 5, 2, 1, 0.5],
+  },
+  VES: {
+    billetes: [100, 50, 20, 10, 5, 2, 1],
+    monedas: [1, 0.5, 0.25, 0.1, 0.05],
+  },
+};
+
+type MonedaCatalogo = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  simbolo: string;
+  denominaciones: unknown;
+};
+
+function resolveDenominaciones(moneda: MonedaCatalogo) {
+  if (moneda.denominaciones && typeof moneda.denominaciones === "object") {
+    const desdeBd = moneda.denominaciones as { billetes?: number[]; monedas?: number[] };
+    if (Array.isArray(desdeBd.billetes) && Array.isArray(desdeBd.monedas)) {
+      return {
+        billetes: desdeBd.billetes,
+        monedas: desdeBd.monedas,
+      };
+    }
+  }
+
+  return DENOMINACIONES_ESPECIFICAS[moneda.codigo] || DENOMINACIONES_DEFAULT;
+}
+
+async function buildSaldoEsperadoMoneda(moneda: MonedaCatalogo, puntoAtencionId: string) {
+  const cantidadCalculada = await calcularSaldoDesdeMovimientos(puntoAtencionId, moneda.id);
+
+  return {
+    moneda_id: moneda.id,
+    codigo: moneda.codigo,
+    nombre: moneda.nombre,
+    simbolo: moneda.simbolo,
+    cantidad: cantidadCalculada,
+    billetes: cantidadCalculada,
+    monedas: 0,
+    denominaciones: resolveDenominaciones(moneda),
+  };
+}
+
+async function ensureMonedasObligatoriasEnSaldoEsperado(
+  saldoEsperado: any[],
+  monedas: MonedaCatalogo[],
+  puntoAtencionId: string
+) {
+  const codigosActuales = new Set(
+    saldoEsperado.map((item) => String(item.codigo || "").toUpperCase()).filter(Boolean)
+  );
+
+  const faltantes = MONEDAS_APERTURA_OBLIGATORIAS.filter((codigo) => !codigosActuales.has(codigo));
+  if (faltantes.length === 0) {
+    return { saldoEsperado, monedasAgregadas: [] as string[] };
+  }
+
+  const adicionales = await Promise.all(
+    monedas
+      .filter((moneda) => faltantes.includes(moneda.codigo.toUpperCase() as (typeof MONEDAS_APERTURA_OBLIGATORIAS)[number]))
+      .map((moneda) => buildSaldoEsperadoMoneda(moneda, puntoAtencionId))
+  );
+
+  return {
+    saldoEsperado: [...saldoEsperado, ...adicionales],
+    monedasAgregadas: adicionales.map((item) => item.codigo),
+  };
+}
 
 /**
  * Calcula el saldo real de una moneda en un punto desde MovimientoSaldo
@@ -183,6 +291,18 @@ router.post(
         });
       }
 
+      // Obtener todas las monedas activas con sus denominaciones
+      const monedas = await prisma.moneda.findMany({
+        where: { activo: true },
+        select: {
+          id: true,
+          codigo: true,
+          nombre: true,
+          simbolo: true,
+          denominaciones: true,
+        },
+      });
+
       // Verificar que la jornada existe y pertenece al usuario
       const jornada = await prisma.jornada.findFirst({
         where: {
@@ -207,9 +327,34 @@ router.post(
       });
 
       if (aperturaExistente) {
+        const saldoEsperadoExistente = Array.isArray(aperturaExistente.saldo_esperado)
+          ? (aperturaExistente.saldo_esperado as any[])
+          : [];
+        const normalizado = await ensureMonedasObligatoriasEnSaldoEsperado(
+          saldoEsperadoExistente,
+          monedas,
+          jornada.punto_atencion_id
+        );
+
+        const aperturaNormalizada =
+          normalizado.monedasAgregadas.length > 0
+            ? await prisma.aperturaCaja.update({
+                where: { id: aperturaExistente.id },
+                data: {
+                  saldo_esperado: normalizado.saldoEsperado as Prisma.InputJsonValue,
+                },
+              })
+            : aperturaExistente;
+
         return res.json({
           success: true,
-          apertura: aperturaExistente,
+          apertura: {
+            ...aperturaNormalizada,
+            saldo_esperado:
+              normalizado.monedasAgregadas.length > 0
+                ? normalizado.saldoEsperado
+                : aperturaNormalizada.saldo_esperado,
+          },
           message: "Ya existe una apertura para esta jornada",
         });
       }
@@ -217,93 +362,9 @@ router.post(
       // Verificar si existe un arqueo completo previo
       const existeArqueoCompleto = await tieneArqueoCompleto(jornada.punto_atencion_id);
 
-      // Obtener todas las monedas activas con sus denominaciones
-      const monedas = await prisma.moneda.findMany({
-        where: { activo: true },
-        select: { 
-          id: true, 
-          codigo: true, 
-          nombre: true, 
-          simbolo: true,
-          denominaciones: true,
-        },
-      });
-      
-      // Denominaciones por defecto si no están configuradas
-      const denominacionesDefault = {
-        billetes: [100, 50, 20, 10, 5, 1],
-        monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
-      };
-      
-      // Denominaciones específicas por código de moneda
-      const denominacionesEspecificas: Record<string, { billetes: number[]; monedas: number[] }> = {
-        USD: {
-          billetes: [100, 50, 20, 10, 5, 2, 1],
-          monedas: [1, 0.5, 0.25, 0.1, 0.05, 0.01],
-        },
-        COP: {
-          billetes: [100000, 50000, 20000, 10000, 5000, 2000, 1000],
-          monedas: [1000, 500, 200, 100, 50],
-        },
-        EUR: {
-          billetes: [500, 200, 100, 50, 20, 10, 5],
-          monedas: [2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01],
-        },
-        PEN: {
-          billetes: [200, 100, 50, 20, 10],
-          monedas: [5, 2, 1, 0.5, 0.2, 0.1],
-        },
-        CLP: {
-          billetes: [20000, 10000, 5000, 2000, 1000],
-          monedas: [500, 100, 50, 10, 5, 1],
-        },
-        ARS: {
-          billetes: [10000, 2000, 1000, 500, 200, 100, 50, 20, 10],
-          monedas: [50, 10, 5, 2, 1, 0.5],
-        },
-        VES: {
-          billetes: [100, 50, 20, 10, 5, 2, 1],
-          monedas: [1, 0.5, 0.25, 0.1, 0.05],
-        },
-      };
-
       // Calcular saldos dinámicamente desde MovimientoSaldo
       let saldoEsperado = await Promise.all(
-        monedas.map(async (moneda) => {
-          const cantidadCalculada = await calcularSaldoDesdeMovimientos(
-            jornada.punto_atencion_id,
-            moneda.id
-          );
-          
-          // Obtener denominaciones: primero de la BD, luego específicas, luego default
-          let denominaciones = denominacionesDefault;
-          
-          // Si hay denominaciones en la BD, usarlas
-          if (moneda.denominaciones) {
-            const denomsFromDB = moneda.denominaciones as any;
-            if (denomsFromDB.billetes && Array.isArray(denomsFromDB.billetes)) {
-              denominaciones = {
-                billetes: denomsFromDB.billetes,
-                monedas: denomsFromDB.monedas || denominacionesDefault.monedas,
-              };
-            }
-          } 
-          // Si no hay en BD, usar las específicas por código
-          else if (denominacionesEspecificas[moneda.codigo]) {
-            denominaciones = denominacionesEspecificas[moneda.codigo];
-          }
-          
-          return {
-            moneda_id: moneda.id,
-            codigo: moneda.codigo,
-            nombre: moneda.nombre,
-            simbolo: moneda.simbolo,
-            cantidad: cantidadCalculada,
-            billetes: cantidadCalculada,
-            monedas: 0,
-            denominaciones: denominaciones,
-          };
-        })
+        monedas.map((moneda) => buildSaldoEsperadoMoneda(moneda, jornada.punto_atencion_id))
       );
 
       // Si ya existe un arqueo completo, filtrar solo las monedas con movimiento
@@ -323,6 +384,10 @@ router.post(
 
         // Filtrar monedas
         const monedasFiltradas = saldoEsperado.filter((s) => {
+          if (MONEDAS_APERTURA_OBLIGATORIAS.includes(String(s.codigo || "").toUpperCase() as (typeof MONEDAS_APERTURA_OBLIGATORIAS)[number])) {
+            return true;
+          }
+
           const tieneMovimiento = monedasConMovimiento.has(s.moneda_id);
           const tieneSaldo = s.cantidad > 0;
           
@@ -343,6 +408,13 @@ router.post(
           tipoArqueo = "PARCIAL";
         }
       }
+
+      const saldoConObligatorias = await ensureMonedasObligatoriasEnSaldoEsperado(
+        saldoEsperado,
+        monedas,
+        jornada.punto_atencion_id
+      );
+      saldoEsperado = saldoConObligatorias.saldoEsperado;
 
       // Obtener saldos de servicios externos
       const serviciosExternosSaldos = await prisma.servicioExternoSaldo.findMany({
@@ -474,6 +546,26 @@ router.post(
         };
       });
 
+      const estadoObligatorias = getEstadoMonedasObligatorias({
+        saldo_esperado: saldoEsperado,
+        conteo_fisico: conteosValidados,
+        tolerancia_usd: apertura.tolerancia_usd,
+        tolerancia_otras: apertura.tolerancia_otras,
+      });
+
+      if (estadoObligatorias.pendientes_guardado.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Debes guardar el cuadre obligatorio de ${estadoObligatorias.pendientes_guardado.join(" y ")} antes de continuar.`,
+          code: "APERTURA_OBLIGATORIA_INCOMPLETA",
+          monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+          monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
+          monedas_obligatorias_cuadradas: estadoObligatorias.cuadradas,
+          monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
+          monedas_obligatorias_pendientes: estadoObligatorias.pendientes,
+        });
+      }
+
       // Calcular diferencias
       const { diferencias, cuadrado } = validarDiferencias(
         saldoEsperado.map((s) => ({
@@ -552,11 +644,19 @@ router.post(
         apertura: aperturaActualizada,
         diferencias,
         cuadrado,
-        puede_abrir: true,
+        puede_abrir: estadoObligatorias.descuadradas.length === 0,
         tipo_arqueo: tipoArqueo,
-        message: cuadrado
-          ? `Todo cuadrado. Arqueo ${tipoArqueo} registrado. Puedes confirmar la apertura.`
-          : `Hay diferencias registradas (Arqueo ${tipoArqueo}). Puedes confirmar la apertura - el administrador será notificado.`,
+        monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+        monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
+        monedas_obligatorias_cuadradas: estadoObligatorias.cuadradas,
+        monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
+        monedas_obligatorias_pendientes: estadoObligatorias.pendientes,
+        message:
+          estadoObligatorias.descuadradas.length > 0
+            ? `USD y EUR deben quedar cuadrados antes de confirmar la apertura. Descuadradas: ${estadoObligatorias.descuadradas.join(", ")}.`
+            : cuadrado
+            ? `Todo cuadrado. Arqueo ${tipoArqueo} registrado. Puedes confirmar la apertura.`
+            : `Hay diferencias registradas en otras divisas (Arqueo ${tipoArqueo}). USD y EUR ya están cuadrados, puedes confirmar la apertura.`,
       });
     } catch (error) {
       logger.error("Error al guardar conteo de apertura", {
@@ -599,6 +699,33 @@ router.post(
         return res.status(404).json({
           success: false,
           error: "Apertura no encontrada",
+        });
+      }
+
+      const estadoObligatorias = getEstadoMonedasObligatorias(apertura);
+      if (estadoObligatorias.pendientes_guardado.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `No puedes confirmar la apertura sin guardar ${estadoObligatorias.pendientes_guardado.join(" y ")}.`,
+          code: "APERTURA_OBLIGATORIA_INCOMPLETA",
+          monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+          monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
+          monedas_obligatorias_cuadradas: estadoObligatorias.cuadradas,
+          monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
+          monedas_obligatorias_pendientes: estadoObligatorias.pendientes,
+        });
+      }
+
+      if (estadoObligatorias.descuadradas.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `No puedes confirmar la apertura hasta cuadrar ${estadoObligatorias.descuadradas.join(" y ")}.`,
+          code: "APERTURA_OBLIGATORIA_INCOMPLETA",
+          monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+          monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
+          monedas_obligatorias_cuadradas: estadoObligatorias.cuadradas,
+          monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
+          monedas_obligatorias_pendientes: estadoObligatorias.pendientes,
         });
       }
 
@@ -723,6 +850,26 @@ router.post(
     }
   }
 );
+
+router.get("/estado-actual", authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const estado = await obtenerEstadoAperturaOperativa(req.user);
+
+    return res.json({
+      success: true,
+      ...estado,
+    });
+  } catch (error) {
+    logger.error("Error al obtener estado actual de apertura", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      user_id: req.user?.id,
+    });
+    return res.status(500).json({
+      success: false,
+      error: "Error interno del servidor",
+    });
+  }
+});
 
 // ======================= GET: Obtener apertura por ID =======================
 router.get(

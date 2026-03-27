@@ -53,6 +53,31 @@ export interface ConteoServicioExterno {
   observaciones?: string;
 }
 
+export interface AperturaEstadoActual {
+  puede_operar: boolean;
+  requiere_inicio_jornada: boolean;
+  requiere_apertura: boolean;
+  requiere_confirmacion: boolean;
+  requiere_cuadre_obligatorio: boolean;
+  monedas_obligatorias: string[];
+  monedas_obligatorias_guardadas: string[];
+  monedas_obligatorias_cuadradas: string[];
+  monedas_obligatorias_descuadradas: string[];
+  monedas_obligatorias_pendientes: string[];
+  code: string;
+  error?: string;
+  jornada: {
+    id: string;
+    estado: string;
+    punto_atencion_id: string;
+  } | null;
+  apertura: {
+    id: string;
+    estado: string;
+    requiere_aprobacion?: boolean;
+  } | null;
+}
+
 export interface AperturaCaja {
   id: string;
   jornada_id: string;
@@ -190,6 +215,11 @@ export const aperturaCajaService = {
     diferencias: DiferenciaMoneda[] | null;
     cuadrado: boolean;
     puede_abrir: boolean;
+    monedas_obligatorias?: string[];
+    monedas_obligatorias_guardadas?: string[];
+    monedas_obligatorias_cuadradas?: string[];
+    monedas_obligatorias_descuadradas?: string[];
+    monedas_obligatorias_pendientes?: string[];
     error: string | null;
     message?: string;
   }> {
@@ -216,6 +246,11 @@ export const aperturaCajaService = {
           diferencias: response.diferencias || null,
           cuadrado: response.cuadrado,
           puede_abrir: response.puede_abrir,
+          monedas_obligatorias: response.monedas_obligatorias,
+          monedas_obligatorias_guardadas: response.monedas_obligatorias_guardadas,
+          monedas_obligatorias_cuadradas: response.monedas_obligatorias_cuadradas,
+          monedas_obligatorias_descuadradas: response.monedas_obligatorias_descuadradas,
+          monedas_obligatorias_pendientes: response.monedas_obligatorias_pendientes,
           error: null,
           message: response.message,
         };
@@ -228,6 +263,11 @@ export const aperturaCajaService = {
           diferencias: null,
           cuadrado: false,
           puede_abrir: false,
+          monedas_obligatorias: [],
+          monedas_obligatorias_guardadas: [],
+          monedas_obligatorias_cuadradas: [],
+          monedas_obligatorias_descuadradas: [],
+          monedas_obligatorias_pendientes: [],
           error: msg,
         };
       }
@@ -239,6 +279,42 @@ export const aperturaCajaService = {
         diferencias: null,
         cuadrado: false,
         puede_abrir: false,
+        monedas_obligatorias: [],
+        monedas_obligatorias_guardadas: [],
+        monedas_obligatorias_cuadradas: [],
+        monedas_obligatorias_descuadradas: [],
+        monedas_obligatorias_pendientes: [],
+        error: msg,
+      };
+    }
+  },
+
+  async getEstadoActual(): Promise<{
+    estado: AperturaEstadoActual | null;
+    error: string | null;
+  }> {
+    try {
+      const response = await apiService.get<(ApiOk<AperturaEstadoActual> | ApiFail)>(
+        "/apertura-caja/estado-actual"
+      );
+
+      if (response.success) {
+        return {
+          estado: response,
+          error: null,
+        };
+      }
+
+      const r = response as ApiFail;
+      return {
+        estado: null,
+        error: r.error || r.message || r.details || "Error al consultar apertura",
+      };
+    } catch (e) {
+      const msg = extractErrorMessage(e, "Error de conexión al consultar apertura");
+      console.error("Error consultando estado de apertura:", e);
+      return {
+        estado: null,
         error: msg,
       };
     }

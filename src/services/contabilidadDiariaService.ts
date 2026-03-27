@@ -1,7 +1,7 @@
 import { ResumenDiario, CierreDiario } from "../types";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+  import.meta.env.VITE_API_URL || "/api";
 
 export const contabilidadDiariaService = {
   // Obtener resumen de contabilidad diaria

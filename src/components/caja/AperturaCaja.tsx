@@ -61,6 +61,10 @@ const DENOMINACIONES_POR_MONEDA: Record<string, { billetes: number[]; monedas: n
     billetes: [100, 50, 20, 10, 5, 2, 1],
     monedas: [1, 0.5, 0.25, 0.1, 0.05],
   },
+  CHF: {
+    billetes: [1000, 200, 100, 50, 20, 10],
+    monedas: [0.5, 0.2, 0.1, 0.05],
+  },
 };
 
 interface BilleteInput {
@@ -95,6 +99,9 @@ interface ServicioExternoInput {
 interface Props {
   jornadaId?: string;
   onAperturaCompletada?: () => void;
+  onAperturaActualizada?: () => void;
+  monedasObligatorias?: string[];
+  bloquearHastaGuardarObligatorias?: boolean;
 }
 
 function formatMoney(amount: number): string {
@@ -110,7 +117,48 @@ function calcularTotalConteo(billetes: BilleteInput[], monedas: MonedaInput[]): 
   return Math.round((totalBilletes + totalMonedas) * 100) / 100;
 }
 
-export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompletada }: Props) {
+function getEstadoMonedasObligatorias(
+  monedasObligatorias: string[],
+  saldoEsperadoActual: Array<{ moneda_id: string; codigo: string }>,
+  conteoFisico: Array<{ moneda_id: string; total?: number; billetes?: BilleteInput[]; monedas?: MonedaInput[] }> | null | undefined
+) {
+  const saldoPorCodigo = new Map(
+    saldoEsperadoActual.map((saldo: any) => [saldo.codigo.toUpperCase(), saldo])
+  );
+  const guardadas = new Set<string>();
+  const cuadradas = new Set<string>();
+  const descuadradas = new Set<string>();
+
+  (conteoFisico || []).forEach((conteo) => {
+    const saldo = saldoEsperadoActual.find((item) => item.moneda_id === conteo.moneda_id) as any;
+    const codigo = saldo?.codigo?.toUpperCase();
+    if (codigo && monedasObligatorias.includes(codigo)) {
+      guardadas.add(codigo);
+      const total = conteo.total ?? calcularTotalConteo(conteo.billetes || [], conteo.monedas || []);
+      const esperado = Number(saldoPorCodigo.get(codigo)?.cantidad || 0);
+      const tolerancia = codigo === "USD" ? 1 : 0.01;
+      if (Math.abs(total - esperado) <= tolerancia) {
+        cuadradas.add(codigo);
+      } else {
+        descuadradas.add(codigo);
+      }
+    }
+  });
+
+  return {
+    guardadas: Array.from(guardadas),
+    cuadradas: Array.from(cuadradas),
+    descuadradas: Array.from(descuadradas),
+  };
+}
+
+export default function AperturaCaja({
+  jornadaId: propJornadaId,
+  onAperturaCompletada,
+  onAperturaActualizada,
+  monedasObligatorias = ["USD", "EUR"],
+  bloquearHastaGuardarObligatorias = false,
+}: Props) {
   const { user } = useAuth();
   const [jornadaId, setJornadaId] = useState<string>(propJornadaId || "");
   const [loading, setLoading] = useState(true);
@@ -130,6 +178,13 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
   const [tipoArqueo, setTipoArqueo] = useState<"COMPLETO" | "PARCIAL" | null>(null);
   const [monedasExcluidas, setMonedasExcluidas] = useState<Array<{ moneda_id: string; codigo: string; razon: string }>>([]);
   const [requiereArqueoCompleto, setRequiereArqueoCompleto] = useState(false);
+  const [monedasObligatoriasGuardadas, setMonedasObligatoriasGuardadas] = useState<string[]>([]);
+  const [monedasObligatoriasCuadradas, setMonedasObligatoriasCuadradas] = useState<string[]>([]);
+  const [monedasObligatoriasDescuadradas, setMonedasObligatoriasDescuadradas] = useState<string[]>([]);
+
+  const monedasObligatoriasPendientes = monedasObligatorias.filter(
+    (codigo) => !monedasObligatoriasCuadradas.includes(codigo)
+  );
 
   // Obtener jornada activa si no se proporcionó
   useEffect(() => {
@@ -181,10 +236,19 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
       if (result.apertura) {
         setAperturaId(result.apertura.id);
         setEstado(result.apertura.estado);
-        setSaldoEsperado(result.apertura.saldo_esperado || []);
+          const saldoEsperadoActual = result.apertura.saldo_esperado || [];
+          setSaldoEsperado(saldoEsperadoActual);
         setTipoArqueo(result.apertura.tipo_arqueo || null);
         setMonedasExcluidas(result.apertura.monedas_excluidas || []);
         setRequiereArqueoCompleto(result.apertura.requiere_arqueo_completo || false);
+          const estadoMonedas = getEstadoMonedasObligatorias(
+              monedasObligatorias,
+              saldoEsperadoActual,
+              (result.apertura.conteo_fisico as Array<{ moneda_id: string; total?: number; billetes?: BilleteInput[]; monedas?: MonedaInput[] }>) || []
+            );
+          setMonedasObligatoriasGuardadas(estadoMonedas.guardadas);
+          setMonedasObligatoriasCuadradas(estadoMonedas.cuadradas);
+          setMonedasObligatoriasDescuadradas(estadoMonedas.descuadradas);
 
         // Inicializar formularios de conteo para cada moneda
         const conteosIniciales: ConteoForm[] = (result.apertura.saldo_esperado || []).map(
@@ -274,6 +338,8 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
             description: "Esta jornada ya fue abierta anteriormente.",
           });
         }
+
+        onAperturaActualizada?.();
       }
     } catch (e) {
       setError("Error al iniciar apertura");
@@ -331,6 +397,18 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
         total: calcularTotalConteo(c.billetes, c.monedas),
       }));
 
+      const monedasPresentes = new Set(conteos.map((c) => c.codigo.toUpperCase()));
+      const monedasPendientes = monedasObligatorias.filter((codigo) => !monedasPresentes.has(codigo));
+      if (monedasPendientes.length > 0) {
+        setError(`Faltan las monedas obligatorias: ${monedasPendientes.join(", ")}`);
+        toast({
+          title: "Apertura incompleta",
+          description: `Debes registrar ${monedasPendientes.join(" y ")} en la apertura.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const serviciosData = serviciosExternos.map((s) => ({
         servicio: s.servicio,
         servicio_nombre: s.servicio_nombre,
@@ -364,15 +442,22 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
 
       setDiferencias(result.diferencias || []);
       setCuadrado(result.cuadrado);
-      setPuedeAbrir(true); // Permitir abrir incluso con diferencias
+      setPuedeAbrir(result.puede_abrir);
       setConDiferenciaPendiente(!result.cuadrado);
       setEstado(result.apertura?.estado || "EN_CONTEO");
+      setMonedasObligatoriasGuardadas(result.monedas_obligatorias_guardadas || monedasObligatorias);
+      setMonedasObligatoriasCuadradas(result.monedas_obligatorias_cuadradas || []);
+      setMonedasObligatoriasDescuadradas(result.monedas_obligatorias_descuadradas || []);
+      onAperturaActualizada?.();
 
       toast({
-        title: result.cuadrado ? "¡Conteo guardado!" : "Conteo guardado con diferencias",
-        description: result.cuadrado 
-          ? "Todo cuadrado. Puedes confirmar la apertura."
-          : "Hay diferencias registradas. El administrador será notificado. Puedes iniciar a operar.",
+        title:
+          result.puede_abrir
+            ? result.cuadrado
+              ? "¡Conteo guardado!"
+              : "Conteo guardado con diferencias"
+            : "USD y EUR siguen descuadrados",
+        description: result.message || "Revisa el conteo obligatorio antes de continuar.",
       });
     } catch (e) {
       setError("Error al guardar conteo");
@@ -398,6 +483,7 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
 
       setEstado("ABIERTA");
       setPuedeAbrir(true);
+      onAperturaActualizada?.();
       
       if (result.con_diferencia) {
         toast({
@@ -514,6 +600,45 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
         </Alert>
       )}
 
+      <Alert className="bg-amber-50 border-amber-300">
+        <AlertCircle className="h-4 w-4 text-amber-700" />
+        <AlertTitle className="text-amber-900">USD y EUR son obligatorios</AlertTitle>
+        <AlertDescription className="text-amber-800 space-y-2">
+          <p>
+            Debes dejar cuadrados {monedasObligatorias.join(" y ")} para habilitar la operación.
+            {bloquearHastaGuardarObligatorias
+              ? " Mientras no lo hagas, seguirás bloqueado en esta pantalla."
+              : ""}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {monedasObligatorias.map((codigo) => {
+              const guardada = monedasObligatoriasGuardadas.includes(codigo);
+              const cuadrada = monedasObligatoriasCuadradas.includes(codigo);
+              return (
+                <Badge
+                  key={codigo}
+                  variant={cuadrada ? "default" : "outline"}
+                  className={
+                    cuadrada
+                      ? "bg-green-600 text-white"
+                      : guardada
+                      ? "border-red-400 text-red-900"
+                      : "border-amber-400 text-amber-900"
+                  }
+                >
+                  {codigo} {cuadrada ? "cuadrado" : guardada ? "descuadrado" : "pendiente"}
+                </Badge>
+              );
+            })}
+          </div>
+          {monedasObligatoriasPendientes.length > 0 && (
+            <p className="text-sm font-medium">
+              Debes cuadrar: {monedasObligatoriasPendientes.join(", ")}
+            </p>
+          )}
+        </AlertDescription>
+      </Alert>
+
       {/* Info del punto de atención */}
       {puntoAtencion && (
         <Card className="bg-blue-50 border-blue-200">
@@ -587,9 +712,10 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
           <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
             <li>Cuenta físicamente todo el efectivo que tienes en caja</li>
             <li>Ingresa la cantidad de billetes y monedas por denominación</li>
+            <li>USD y EUR son obligatorios, aunque el resto de divisas sea parcial</li>
             <li>Valida los saldos de los servicios externos en sus páginas web</li>
-            <li>Si hay diferencias, puedes operar igual - quedarán registradas para el admin</li>
-            <li>Confirma la apertura para iniciar tu jornada</li>
+            <li>Guarda el conteo para registrar los cuadres obligatorios</li>
+            <li>Confirma la apertura para iniciar tu jornada y habilitar operaciones</li>
           </ol>
         </CardContent>
       </Card>
@@ -614,6 +740,11 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
                   <Coins className="h-5 w-5 text-blue-600" />
                   <CardTitle>
                     {saldoEsperadoMoneda?.codigo} - {saldoEsperadoMoneda?.nombre}
+                    {monedasObligatorias.includes(String(saldoEsperadoMoneda?.codigo || "").toUpperCase()) && (
+                      <Badge variant="outline" className="ml-2 border-amber-400 text-amber-900">
+                        Obligatoria
+                      </Badge>
+                    )}
                   </CardTitle>
                 </div>
                 <div className="text-right">
@@ -729,6 +860,11 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
                 {diferenciaInfo?.fuera_tolerancia && (
                   <div className="mt-2 text-sm text-red-600 font-medium">
                     ⚠️ Fuera de tolerancia - Se notificará al administrador
+                  </div>
+                )}
+                {monedasObligatoriasDescuadradas.includes(String(saldoEsperadoMoneda?.codigo || "").toUpperCase()) && (
+                  <div className="mt-2 text-sm text-red-700 font-medium">
+                    Esta divisa obligatoria debe quedar cuadrada antes de confirmar la apertura.
                   </div>
                 )}
               </div>
@@ -872,6 +1008,11 @@ export default function AperturaCaja({ jornadaId: propJornadaId, onAperturaCompl
               ? "Confirmar Apertura (con Diferencias)" 
               : "Confirmar Apertura"}
           </Button>
+        )}
+        {!puedeAbrir && monedasObligatoriasPendientes.length > 0 && (
+          <div className="w-full text-right text-sm text-red-700 font-medium">
+            No puedes confirmar la apertura hasta cuadrar {monedasObligatoriasPendientes.join(" y ")}.
+          </div>
         )}
       </div>
     </div>

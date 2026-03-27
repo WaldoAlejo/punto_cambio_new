@@ -109,6 +109,10 @@ const DENOMINACIONES_POR_MONEDA: Record<string, { billetes: number[]; monedas: n
     billetes: [100, 50, 20, 10, 5, 2, 1],
     monedas: [1, 0.5, 0.25, 0.1, 0.05],
   },
+  CHF: {
+    billetes: [1000, 200, 100, 50, 20, 10],
+    monedas: [0.5, 0.2, 0.1, 0.05],
+  },
 };
 
 interface DenominacionInput {
@@ -484,7 +488,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         }
 
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL || "http://35.238.95.118/api"}/schedules/active`,
+          `${import.meta.env.VITE_API_URL || "/api"}/schedules/active`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -963,7 +967,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
       // 3. Ejecutar cierre
       const token = localStorage.getItem("authToken");
       const fechaHoy = todayGyeDateOnly();
-      const apiUrl = import.meta.env.VITE_API_URL || "http://35.238.95.118/api";
+      const apiUrl = import.meta.env.VITE_API_URL || "/api";
       const endpoint = `${apiUrl}/contabilidad-diaria/${selectedPoint.id}/${fechaHoy}/cerrar`;
 
       const controller = new AbortController();

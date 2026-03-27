@@ -109,7 +109,7 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
     try {
       const token = localStorage.getItem("authToken");
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || "http://35.238.95.118/api"}/reports`,
+        `${import.meta.env.VITE_API_URL || "/api"}/reports`,
         {
           method: "POST",
           headers: {

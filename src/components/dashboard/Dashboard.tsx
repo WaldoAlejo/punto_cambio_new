@@ -16,6 +16,8 @@ import { User, PuntoAtencion } from "../../types";
 import { emitPointSelected } from "@/lib/pointEvents";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { aperturaCajaService, AperturaEstadoActual } from "@/services/aperturaCajaService";
+import { toast } from "@/hooks/use-toast";
 
 /** Lazy imports */
 const ExchangeManagement = React.lazy(
@@ -187,6 +189,8 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
     getInitialView(user, selectedPoint, searchParams.get("view"))
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [openingStatus, setOpeningStatus] = useState<AperturaEstadoActual | null>(null);
+  const [checkingOpeningStatus, setCheckingOpeningStatus] = useState(false);
 
   /** Helpers para query params */
   const setQueryParam = useCallback(
@@ -254,17 +258,86 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   );
   const isOperador = useMemo(() => user.rol === "OPERADOR", [user.rol]);
   const isConcesion = useMemo(() => user.rol === "CONCESION", [user.rol]);
+
+  const loadOpeningStatus = useCallback(async () => {
+    if (!isOperador || !selectedPoint) {
+      setOpeningStatus(null);
+      return null;
+    }
+
+    try {
+      setCheckingOpeningStatus(true);
+      const result = await aperturaCajaService.getEstadoActual();
+      if (result.error) {
+        setOpeningStatus(null);
+        return null;
+      }
+
+      setOpeningStatus(result.estado);
+      return result.estado;
+    } finally {
+      setCheckingOpeningStatus(false);
+    }
+  }, [isOperador, selectedPoint]);
+
+  useEffect(() => {
+    void loadOpeningStatus();
+  }, [loadOpeningStatus]);
+
+  const navigationLockedByOpening = useMemo(() => {
+    return Boolean(
+      isOperador &&
+        selectedPoint &&
+        openingStatus?.requiere_cuadre_obligatorio
+    );
+  }, [isOperador, selectedPoint, openingStatus]);
+
+  useEffect(() => {
+    if (navigationLockedByOpening && activeView !== "apertura-caja") {
+      setActiveView("apertura-caja");
+    }
+  }, [navigationLockedByOpening, activeView]);
+
+  const handleViewChange = useCallback(
+    (view: string) => {
+      if (navigationLockedByOpening && view !== "apertura-caja") {
+        toast({
+          title: "Apertura obligatoria pendiente",
+          description:
+            openingStatus?.error ||
+            "Debes guardar USD y EUR en la apertura de caja antes de salir de esta pantalla.",
+          variant: "destructive",
+        });
+        setActiveView("apertura-caja");
+        return;
+      }
+
+      setActiveView(view);
+    },
+    [navigationLockedByOpening, openingStatus]
+  );
   
   const handleNotificationClick = useCallback(() => {
     // Admin/Super: ver transferencias pendientes de aprobación
     if (isAdmin || isConcesion) {
-      setActiveView("transfer-approvals");
+      handleViewChange("transfer-approvals");
     } 
     // Operador: ver transferencias pendientes de aceptación
     else if (isOperador) {
-      setActiveView("transfer-acceptance");
+      handleViewChange("transfer-acceptance");
     }
-  }, [isAdmin, isOperador, isConcesion]);
+  }, [handleViewChange, isAdmin, isOperador, isConcesion]);
+
+  const handleAperturaActualizada = useCallback(() => {
+    void loadOpeningStatus();
+  }, [loadOpeningStatus]);
+
+  const handleAperturaCompletada = useCallback(async () => {
+    const status = await loadOpeningStatus();
+    if (status?.puede_operar) {
+      handleViewChange("dashboard");
+    }
+  }, [handleViewChange, loadOpeningStatus]);
 
   const isAdministrativo = useMemo(
     () => user.rol === "ADMINISTRATIVO",
@@ -468,7 +541,10 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         return (
           <AperturaCaja 
             jornadaId="" 
-            onAperturaCompletada={() => setActiveView("dashboard")} 
+            onAperturaCompletada={handleAperturaCompletada}
+            onAperturaActualizada={handleAperturaActualizada}
+            bloquearHastaGuardarObligatorias={navigationLockedByOpening}
+            monedasObligatorias={openingStatus?.monedas_obligatorias || ["USD", "EUR"]}
           />
         );
 
@@ -586,7 +662,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
                   <h3 className="font-semibold text-foreground mb-4">Accesos Rápidos</h3>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <button 
-                      onClick={() => setActiveView('exchanges')}
+                      onClick={() => handleViewChange('exchanges')}
                       className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[hsl(217,100%,97%)] hover:bg-[hsl(217,100%,94%)] transition-colors text-center"
                     >
                       <svg className="w-6 h-6 text-[hsl(217,70%,45%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -595,7 +671,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
                       <span className="text-sm font-medium text-[hsl(217,80%,35%)]">Cambio de Divisas</span>
                     </button>
                     <button 
-                      onClick={() => setActiveView('transfers')}
+                      onClick={() => handleViewChange('transfers')}
                       className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[hsl(145,60%,96%)] hover:bg-[hsl(145,60%,92%)] transition-colors text-center"
                     >
                       <svg className="w-6 h-6 text-[hsl(145,55%,42%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -604,7 +680,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
                       <span className="text-sm font-medium text-[hsl(145,55%,32%)]">Transferencias</span>
                     </button>
                     <button 
-                      onClick={() => setActiveView('daily-close')}
+                      onClick={() => handleViewChange('daily-close')}
                       className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[hsl(32,100%,96%)] hover:bg-[hsl(32,100%,92%)] transition-colors text-center"
                     >
                       <svg className="w-6 h-6 text-[hsl(32,95%,55%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -613,7 +689,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
                       <span className="text-sm font-medium text-[hsl(32,80%,35%)]">Cierre de Caja</span>
                     </button>
                     <button 
-                      onClick={() => setActiveView('contabilidad-divisas')}
+                      onClick={() => handleViewChange('contabilidad-divisas')}
                       className="flex flex-col items-center gap-2 p-4 rounded-lg bg-[hsl(200,85%,97%)] hover:bg-[hsl(200,85%,93%)] transition-colors text-center"
                     >
                       <svg className="w-6 h-6 text-[hsl(200,80%,50%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -638,6 +714,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
     selectedPoint,
     searchParams,
     setQueryParam,
+    handleViewChange,
   ]);
 
   return (
@@ -646,9 +723,16 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         user={user}
         selectedPoint={selectedPoint}
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={handleViewChange}
         isOpen={sidebarOpen}
         onToggle={toggleSidebar}
+        navigationLock={{
+          enabled: navigationLockedByOpening,
+          allowedViews: ["apertura-caja"],
+          message:
+            openingStatus?.error ||
+            "Debes guardar el cuadre obligatorio de USD y EUR antes de habilitar el resto del sistema.",
+        }}
       />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -662,6 +746,14 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
 
         <main className="flex-1 overflow-y-auto p-2 sm:p-3 md:p-4 lg:p-6">
           <div className="w-full h-full">
+            {checkingOpeningStatus && isOperador && selectedPoint ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p className="text-gray-600">Validando estado de apertura…</p>
+                </div>
+              </div>
+            ) : (
             <Suspense
               fallback={
                 <div className="w-full h-full flex items-center justify-center">
@@ -674,6 +766,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
             >
               {renderContent()}
             </Suspense>
+            )}
           </div>
         </main>
       </div>
