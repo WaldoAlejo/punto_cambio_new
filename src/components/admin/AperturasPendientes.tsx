@@ -47,6 +47,14 @@ function formatDateTime(dateStr: string | null): string {
   });
 }
 
+function esIncidenciaApertura(apertura: AperturaCaja): boolean {
+  return Boolean(
+    apertura.estado === "ABIERTA" &&
+      apertura.requiere_aprobacion &&
+      apertura.incidencia_apertura
+  );
+}
+
 export default function AperturasPendientes() {
   const { user } = useAuth();
   const [aperturas, setAperturas] = useState<AperturaCaja[]>([]);
@@ -277,9 +285,9 @@ export default function AperturasPendientes() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">En Conteo</p>
+                <p className="text-sm text-gray-500">Con Incidencia</p>
                 <p className="text-3xl font-bold text-amber-600">
-                  {aperturas.filter((a) => a.estado === "EN_CONTEO").length}
+                  {aperturas.filter((a) => esIncidenciaApertura(a)).length}
                 </p>
               </div>
               <Banknote className="h-8 w-8 text-amber-600" />
@@ -312,11 +320,15 @@ export default function AperturasPendientes() {
                         className={`p-3 rounded-lg ${
                           apertura.estado === "CON_DIFERENCIA"
                             ? "bg-red-100"
+                            : esIncidenciaApertura(apertura)
+                            ? "bg-orange-100"
                             : "bg-amber-100"
                         }`}
                       >
                         {apertura.estado === "CON_DIFERENCIA" ? (
                           <AlertTriangle className="h-6 w-6 text-red-600" />
+                        ) : esIncidenciaApertura(apertura) ? (
+                          <AlertTriangle className="h-6 w-6 text-orange-600" />
                         ) : (
                           <Clock className="h-6 w-6 text-amber-600" />
                         )}
@@ -330,14 +342,24 @@ export default function AperturasPendientes() {
                             variant={
                               apertura.estado === "CON_DIFERENCIA"
                                 ? "destructive"
+                                : esIncidenciaApertura(apertura)
+                                ? "outline"
                                 : "secondary"
                             }
+                            className={esIncidenciaApertura(apertura) ? "border-orange-400 text-orange-900" : undefined}
                           >
                             {apertura.estado === "CON_DIFERENCIA"
                               ? "Con Diferencia"
+                              : esIncidenciaApertura(apertura)
+                              ? "Abierta por Incidencia"
                               : "En Conteo"}
                           </Badge>
                         </div>
+                        {esIncidenciaApertura(apertura) && apertura.incidencia_apertura && (
+                          <p className="mt-2 text-sm text-orange-800">
+                            Motivo: {apertura.incidencia_apertura.motivo}
+                          </p>
+                        )}
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
                           <span className="flex items-center gap-1">
                             <User className="h-3 w-3" />
@@ -622,21 +644,39 @@ export default function AperturasPendientes() {
                 </div>
               )}
 
+              {selectedApertura.incidencia_apertura && (
+                <Alert className="bg-orange-50 border-orange-300">
+                  <AlertTriangle className="h-4 w-4 text-orange-700" />
+                  <AlertTitle className="text-orange-900">
+                    Incidencia registrada por el operador
+                  </AlertTitle>
+                  <AlertDescription className="text-orange-800 space-y-1">
+                    <p>Motivo: {selectedApertura.incidencia_apertura.motivo}</p>
+                    <p>
+                      Monedas afectadas: {selectedApertura.incidencia_apertura.monedas_afectadas.join(", ")}
+                    </p>
+                    <p>{selectedApertura.incidencia_apertura.detalle}</p>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Acciones de admin */}
               <div className="space-y-4 pt-4 border-t">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="ajustar"
-                    checked={ajustarSaldos}
-                    onCheckedChange={(checked) =>
-                      setAjustarSaldos(checked as boolean)
-                    }
-                  />
-                  <Label htmlFor="ajustar" className="text-sm">
-                    Ajustar saldos del sistema para que coincidan con el conteo
-                    físico
-                  </Label>
-                </div>
+                {!esIncidenciaApertura(selectedApertura) && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="ajustar"
+                      checked={ajustarSaldos}
+                      onCheckedChange={(checked) =>
+                        setAjustarSaldos(checked as boolean)
+                      }
+                    />
+                    <Label htmlFor="ajustar" className="text-sm">
+                      Ajustar saldos del sistema para que coincidan con el conteo
+                      físico
+                    </Label>
+                  </div>
+                )}
 
                 <div>
                   <Label htmlFor="observaciones">Tus observaciones:</Label>
@@ -663,7 +703,7 @@ export default function AperturasPendientes() {
             <Button
               variant="destructive"
               onClick={handleRechazar}
-              disabled={processing}
+              disabled={processing || (selectedApertura ? esIncidenciaApertura(selectedApertura) : false)}
               className="gap-1"
             >
               {processing ? (
@@ -671,7 +711,9 @@ export default function AperturasPendientes() {
               ) : (
                 <XCircle className="h-4 w-4" />
               )}
-              Rechazar
+              {selectedApertura && esIncidenciaApertura(selectedApertura)
+                ? "No aplica rechazo"
+                : "Rechazar"}
             </Button>
             <Button
               onClick={handleAprobar}
@@ -683,7 +725,9 @@ export default function AperturasPendientes() {
               ) : (
                 <CheckCircle className="h-4 w-4" />
               )}
-              Aprobar Apertura
+              {selectedApertura && esIncidenciaApertura(selectedApertura)
+                ? "Marcar Incidencia Revisada"
+                : "Aprobar Apertura"}
             </Button>
           </DialogFooter>
         </DialogContent>

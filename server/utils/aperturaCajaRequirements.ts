@@ -2,6 +2,15 @@ import { EstadoApertura, EstadoJornada } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 
 export const MONEDAS_APERTURA_OBLIGATORIAS = ["USD", "EUR"] as const;
+const INCIDENCIA_APERTURA_PREFIX = "[INCIDENCIA_APERTURA]";
+const INCIDENCIA_APERTURA_SUFFIX = "[/INCIDENCIA_APERTURA]";
+
+export type AperturaIncidencia = {
+  motivo: string;
+  detalle: string;
+  monedas_afectadas: string[];
+  registrada_en?: string;
+};
 
 type AperturaJsonItem = {
   moneda_id?: string;
@@ -24,6 +33,7 @@ type AperturaConJson = {
   saldo_esperado?: unknown;
   conteo_fisico?: unknown;
   requiere_aprobacion?: boolean;
+  observaciones_operador?: string | null;
   tolerancia_usd?: unknown;
   tolerancia_otras?: unknown;
 };
@@ -87,6 +97,105 @@ function calcularTotalConteoItem(item: AperturaJsonItem | undefined): number {
   );
 
   return Number((totalBilletes + totalMonedas).toFixed(2));
+}
+
+export function parseObservacionesApertura(
+  observaciones: string | null | undefined
+): {
+  incidencia: AperturaIncidencia | null;
+  textoLibre: string;
+} {
+  const valor = String(observaciones || "");
+  const inicio = valor.indexOf(INCIDENCIA_APERTURA_PREFIX);
+  const fin = valor.indexOf(INCIDENCIA_APERTURA_SUFFIX);
+
+  if (inicio === -1 || fin === -1 || fin <= inicio) {
+    return {
+      incidencia: null,
+      textoLibre: valor.trim(),
+    };
+  }
+
+  const bloque = valor
+    .slice(inicio + INCIDENCIA_APERTURA_PREFIX.length, fin)
+    .trim();
+
+  try {
+    const parsed = JSON.parse(bloque) as Partial<AperturaIncidencia>;
+    const incidencia =
+      parsed &&
+      typeof parsed.motivo === "string" &&
+      parsed.motivo.trim() &&
+      typeof parsed.detalle === "string" &&
+      parsed.detalle.trim()
+        ? {
+            motivo: parsed.motivo.trim(),
+            detalle: parsed.detalle.trim(),
+            monedas_afectadas: Array.isArray(parsed.monedas_afectadas)
+              ? parsed.monedas_afectadas
+                  .map((item) => String(item || "").toUpperCase())
+                  .filter(Boolean)
+              : [],
+            registrada_en:
+              typeof parsed.registrada_en === "string"
+                ? parsed.registrada_en
+                : undefined,
+          }
+        : null;
+
+    const textoLibre = `${valor.slice(0, inicio)} ${valor.slice(
+      fin + INCIDENCIA_APERTURA_SUFFIX.length
+    )}`.trim();
+
+    return {
+      incidencia,
+      textoLibre,
+    };
+  } catch {
+    return {
+      incidencia: null,
+      textoLibre: valor.trim(),
+    };
+  }
+}
+
+export function buildObservacionesApertura(
+  observaciones: string | null | undefined,
+  incidencia: AperturaIncidencia | null | undefined
+): string | null {
+  const textoLibre = String(observaciones || "").trim();
+
+  if (!incidencia) {
+    return textoLibre || null;
+  }
+
+  const payload = {
+    motivo: incidencia.motivo.trim(),
+    detalle: incidencia.detalle.trim(),
+    monedas_afectadas: (incidencia.monedas_afectadas || [])
+      .map((item) => String(item || "").toUpperCase())
+      .filter(Boolean),
+    registrada_en: incidencia.registrada_en,
+  };
+
+  const bloque = `${INCIDENCIA_APERTURA_PREFIX}${JSON.stringify(
+    payload
+  )}${INCIDENCIA_APERTURA_SUFFIX}`;
+
+  return textoLibre ? `${bloque}\n${textoLibre}` : bloque;
+}
+
+export function tieneIncidenciaAperturaRegistrada(
+  apertura:
+    | Pick<AperturaConJson, "estado" | "requiere_aprobacion" | "observaciones_operador">
+    | null
+    | undefined
+): boolean {
+  if (!apertura || apertura.estado !== EstadoApertura.ABIERTA) {
+    return false;
+  }
+
+  return Boolean(parseObservacionesApertura(apertura.observaciones_operador).incidencia);
 }
 
 export function getEstadoMonedasObligatorias(apertura: Pick<AperturaConJson, "saldo_esperado" | "conteo_fisico" | "tolerancia_usd" | "tolerancia_otras"> | null | undefined): {
@@ -262,6 +371,7 @@ export async function obtenerEstadoAperturaOperativa(
       saldo_esperado: true,
       conteo_fisico: true,
       requiere_aprobacion: true,
+      observaciones_operador: true,
       tolerancia_usd: true,
       tolerancia_otras: true,
     },
@@ -288,6 +398,7 @@ export async function obtenerEstadoAperturaOperativa(
 
   const { guardadas, cuadradas, descuadradas, pendientes_guardado, pendientes } = getEstadoMonedasObligatorias(apertura);
   const aperturaConfirmada = apertura.estado === EstadoApertura.ABIERTA;
+  const aperturaConIncidencia = tieneIncidenciaAperturaRegistrada(apertura);
 
   if (pendientes_guardado.length > 0) {
     return {
@@ -308,7 +419,7 @@ export async function obtenerEstadoAperturaOperativa(
     };
   }
 
-  if (descuadradas.length > 0) {
+  if (descuadradas.length > 0 && !aperturaConIncidencia) {
     return {
       puede_operar: false,
       requiere_inicio_jornada: false,

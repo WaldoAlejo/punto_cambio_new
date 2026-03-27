@@ -2,11 +2,19 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { scheduleService } from "@/services/scheduleService";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -24,6 +32,17 @@ import {
 } from "lucide-react";
 import { aperturaCajaService, ConteoMoneda, DiferenciaMoneda } from "@/services/aperturaCajaService";
 import { toast } from "@/hooks/use-toast";
+
+const INCIDENCIA_APERTURA_PREFIX = "[INCIDENCIA_APERTURA]";
+const INCIDENCIA_APERTURA_SUFFIX = "[/INCIDENCIA_APERTURA]";
+const INCIDENCIA_APERTURA_OPTIONS = [
+  { value: "DIFERENCIA_HEREDADA", label: "Diferencia heredada del día anterior" },
+  { value: "FALTANTE_ROBO", label: "Faltante por robo o presunto robo" },
+  { value: "FALTANTE_PERDIDA", label: "Faltante por pérdida operativa" },
+  { value: "TRASLADO_PENDIENTE", label: "Traslado pendiente de registrar" },
+  { value: "AJUSTE_PENDIENTE", label: "Ajuste contable pendiente" },
+  { value: "OTRO", label: "Otro" },
+] as const;
 
 // Denominaciones por defecto (fallback)
 const DENOMINACIONES_DEFAULT = {
@@ -104,6 +123,12 @@ interface Props {
   bloquearHastaGuardarObligatorias?: boolean;
 }
 
+interface IncidenciaAperturaForm {
+  motivo: string;
+  detalle: string;
+  monedas_afectadas: string[];
+}
+
 function formatMoney(amount: number): string {
   return amount.toLocaleString("es-EC", {
     minimumFractionDigits: 2,
@@ -150,6 +175,43 @@ function mergeDenominacionesGuardadas(
   });
 
   return combinadas;
+}
+
+function parseIncidenciaApertura(
+  observaciones: string | null | undefined
+): IncidenciaAperturaForm | null {
+  const valor = String(observaciones || "");
+  const inicio = valor.indexOf(INCIDENCIA_APERTURA_PREFIX);
+  const fin = valor.indexOf(INCIDENCIA_APERTURA_SUFFIX);
+
+  if (inicio === -1 || fin === -1 || fin <= inicio) {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(
+      valor.slice(inicio + INCIDENCIA_APERTURA_PREFIX.length, fin).trim()
+    ) as Partial<IncidenciaAperturaForm>;
+
+    if (
+      typeof payload.motivo !== "string" ||
+      !payload.motivo.trim() ||
+      typeof payload.detalle !== "string" ||
+      !payload.detalle.trim()
+    ) {
+      return null;
+    }
+
+    return {
+      motivo: payload.motivo.trim(),
+      detalle: payload.detalle.trim(),
+      monedas_afectadas: Array.isArray(payload.monedas_afectadas)
+        ? payload.monedas_afectadas.map((item) => String(item || "").toUpperCase()).filter(Boolean)
+        : [],
+    };
+  } catch {
+    return null;
+  }
 }
 
 function getEstadoMonedasObligatorias(
@@ -216,10 +278,23 @@ export default function AperturaCaja({
   const [monedasObligatoriasGuardadas, setMonedasObligatoriasGuardadas] = useState<string[]>([]);
   const [monedasObligatoriasCuadradas, setMonedasObligatoriasCuadradas] = useState<string[]>([]);
   const [monedasObligatoriasDescuadradas, setMonedasObligatoriasDescuadradas] = useState<string[]>([]);
+  const [abrirConIncidencia, setAbrirConIncidencia] = useState(false);
+  const [incidenciaMotivo, setIncidenciaMotivo] = useState("");
+  const [incidenciaDetalle, setIncidenciaDetalle] = useState("");
 
   const monedasObligatoriasPendientes = monedasObligatorias.filter(
     (codigo) => !monedasObligatoriasCuadradas.includes(codigo)
   );
+  const incidenciaDisponible = monedasObligatoriasDescuadradas.length > 0;
+  const incidenciaCompleta =
+    abrirConIncidencia && incidenciaMotivo.trim().length > 0 && incidenciaDetalle.trim().length > 0;
+  const incidenciaApertura = incidenciaCompleta
+    ? {
+        motivo: incidenciaMotivo.trim(),
+        detalle: incidenciaDetalle.trim(),
+        monedas_afectadas: monedasObligatoriasDescuadradas,
+      }
+    : null;
   const aperturaCompletaPeroBloqueada =
     estado === "ABIERTA" &&
     bloquearHastaGuardarObligatorias &&
@@ -288,6 +363,18 @@ export default function AperturaCaja({
           setMonedasObligatoriasGuardadas(estadoMonedas.guardadas);
           setMonedasObligatoriasCuadradas(estadoMonedas.cuadradas);
           setMonedasObligatoriasDescuadradas(estadoMonedas.descuadradas);
+          const incidenciaGuardada = parseIncidenciaApertura(
+            result.apertura.observaciones_operador
+          );
+          if (incidenciaGuardada) {
+            setAbrirConIncidencia(true);
+            setIncidenciaMotivo(incidenciaGuardada.motivo);
+            setIncidenciaDetalle(incidenciaGuardada.detalle);
+          } else {
+            setAbrirConIncidencia(false);
+            setIncidenciaMotivo("");
+            setIncidenciaDetalle("");
+          }
 
         // Inicializar formularios de conteo para cada moneda
         const conteosIniciales: ConteoForm[] = (result.apertura.saldo_esperado || []).map(
@@ -466,7 +553,8 @@ export default function AperturaCaja({
         conteosData,
         undefined,
         observaciones,
-        serviciosData
+        serviciosData,
+        incidenciaApertura
       );
 
       if (result.error) {
@@ -491,7 +579,9 @@ export default function AperturaCaja({
 
       toast({
         title:
-          result.puede_abrir
+          result.puede_abrir_con_incidencia
+            ? "Incidencia registrada"
+            : result.puede_abrir
             ? result.cuadrado
               ? "¡Conteo guardado!"
               : "Conteo guardado con diferencias"
@@ -509,7 +599,10 @@ export default function AperturaCaja({
   const confirmarApertura = async () => {
     try {
       setSaving(true);
-      const result = await aperturaCajaService.confirmarApertura(aperturaId!);
+      const result = await aperturaCajaService.confirmarApertura(
+        aperturaId!,
+        incidenciaApertura
+      );
 
       if (result.error) {
         toast({
@@ -522,9 +615,15 @@ export default function AperturaCaja({
 
       setEstado("ABIERTA");
       setPuedeAbrir(true);
+      setConDiferenciaPendiente(Boolean(result.apertura_abierta_con_incidencia) || cuadrado === false);
       onAperturaActualizada?.();
       
-      if (result.con_diferencia) {
+      if (result.apertura_abierta_con_incidencia) {
+        toast({
+          title: "Apertura confirmada con incidencia",
+          description: result.message || "La novedad quedó registrada para revisión del administrador.",
+        });
+      } else if (result.con_diferencia) {
         toast({
           title: "Apertura confirmada con diferencias",
           description: "La novedad ha sido registrada para revisión del administrador. Puedes iniciar a operar.",
@@ -646,6 +745,17 @@ export default function AperturaCaja({
           <AlertDescription className="text-red-700">
             Hay diferencias entre tu conteo físico y el saldo esperado. 
             Puedes confirmar la apertura y operar normalmente. La novedad quedará registrada para revisión del administrador.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {incidenciaDisponible && (
+        <Alert className="bg-orange-50 border-orange-300">
+          <AlertTriangle className="h-4 w-4 text-orange-700" />
+          <AlertTitle className="text-orange-900">Apertura con incidencia disponible</AlertTitle>
+          <AlertDescription className="text-orange-800">
+            Si el faltante o sobrante de {monedasObligatoriasDescuadradas.join(" y ")} es real,
+            puedes registrar la incidencia, guardar el conteo y confirmar la apertura para seguir operando.
           </AlertDescription>
         </Alert>
       )}
@@ -1016,6 +1126,74 @@ export default function AperturaCaja({
         </CardContent>
       </Card>
 
+      {incidenciaDisponible && (
+        <Card className="border-orange-300 bg-orange-50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base text-orange-900">
+              Registro de Incidencia de Apertura
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-start gap-3 rounded-lg border border-orange-200 bg-white p-3">
+              <Checkbox
+                checked={abrirConIncidencia}
+                onCheckedChange={(checked) => setAbrirConIncidencia(Boolean(checked))}
+                disabled={saving}
+              />
+              <div className="space-y-1">
+                <Label className="text-sm font-medium text-orange-900">
+                  Permitir apertura con incidencia registrada
+                </Label>
+                <p className="text-sm text-orange-800">
+                  Usa esta opción solo si el faltante o sobrante es real y el punto debe seguir operando.
+                </p>
+              </div>
+            </div>
+
+            {abrirConIncidencia && (
+              <>
+                <div className="space-y-2">
+                  <Label>Motivo de la incidencia</Label>
+                  <Select value={incidenciaMotivo} onValueChange={setIncidenciaMotivo}>
+                    <SelectTrigger disabled={saving}>
+                      <SelectValue placeholder="Seleccione el motivo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {INCIDENCIA_APERTURA_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Detalle obligatorio</Label>
+                  <Textarea
+                    value={incidenciaDetalle}
+                    onChange={(e) => setIncidenciaDetalle(e.target.value)}
+                    placeholder="Describe qué pasó, monto faltante/sobrante, soporte o acción inmediata realizada..."
+                    rows={4}
+                    disabled={saving}
+                  />
+                </div>
+
+                <div className="rounded-lg border border-orange-200 bg-white p-3 text-sm text-orange-900">
+                  Monedas afectadas: {monedasObligatoriasDescuadradas.join(", ")}
+                </div>
+
+                {!incidenciaCompleta && (
+                  <p className="text-sm font-medium text-red-700">
+                    Para habilitar la confirmación con incidencia debes seleccionar un motivo y completar el detalle.
+                  </p>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Botones de acción */}
       <div className="flex flex-wrap gap-3 justify-end">
         <Button
@@ -1054,14 +1232,18 @@ export default function AperturaCaja({
             ) : (
               <CheckCircle className="h-4 w-4" />
             )}
-            {cuadrado === false 
+            {abrirConIncidencia && incidenciaCompleta
+              ? "Confirmar Apertura con Incidencia"
+              : cuadrado === false 
               ? "Confirmar Apertura (con Diferencias)" 
               : "Confirmar Apertura"}
           </Button>
         )}
         {!puedeAbrir && monedasObligatoriasPendientes.length > 0 && (
           <div className="w-full text-right text-sm text-red-700 font-medium">
-            No puedes confirmar la apertura hasta cuadrar {monedasObligatoriasPendientes.join(" y ")}.
+            {abrirConIncidencia && incidenciaCompleta
+              ? `Guarda nuevamente el conteo para registrar la incidencia de ${monedasObligatoriasPendientes.join(" y ")} y habilitar la confirmación.`
+              : `No puedes confirmar la apertura hasta cuadrar ${monedasObligatoriasPendientes.join(" y ")}.`}
           </div>
         )}
       </div>

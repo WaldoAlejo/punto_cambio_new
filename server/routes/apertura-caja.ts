@@ -5,9 +5,12 @@ import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { todayGyeDateOnly, nowEcuador } from "../utils/timezone.js";
 import {
+  buildObservacionesApertura,
   MONEDAS_APERTURA_OBLIGATORIAS,
   getEstadoMonedasObligatorias,
   obtenerEstadoAperturaOperativa,
+  parseObservacionesApertura,
+  type AperturaIncidencia,
 } from "../utils/aperturaCajaRequirements.js";
 
 const router = express.Router();
@@ -59,6 +62,40 @@ type MonedaCatalogo = {
   simbolo: string;
   denominaciones: unknown;
 };
+
+function normalizarIncidenciaApertura(
+  incidencia: unknown,
+  monedasAfectadasDefault: string[] = []
+): AperturaIncidencia | null {
+  if (!incidencia || typeof incidencia !== "object") {
+    return null;
+  }
+
+  const payload = incidencia as {
+    motivo?: unknown;
+    detalle?: unknown;
+    monedas_afectadas?: unknown;
+  };
+
+  const motivo = String(payload.motivo || "").trim();
+  const detalle = String(payload.detalle || "").trim();
+  const monedas_afectadas = Array.isArray(payload.monedas_afectadas)
+    ? payload.monedas_afectadas
+        .map((item) => String(item || "").toUpperCase())
+        .filter(Boolean)
+    : monedasAfectadasDefault;
+
+  if (!motivo || !detalle) {
+    return null;
+  }
+
+  return {
+    motivo,
+    detalle,
+    monedas_afectadas,
+    registrada_en: nowEcuador().toISOString(),
+  };
+}
 
 function resolveDenominaciones(moneda: MonedaCatalogo) {
   if (moneda.denominaciones && typeof moneda.denominaciones === "object") {
@@ -502,7 +539,14 @@ router.post(
   authenticateToken,
   async (req: Request, res: Response) => {
     try {
-      const { apertura_id, conteos, fotos_urls, observaciones, servicios_externos } = req.body;
+      const {
+        apertura_id,
+        conteos,
+        fotos_urls,
+        observaciones,
+        servicios_externos,
+        incidencia_apertura,
+      } = req.body;
       const usuario_id = req.user?.id;
 
       if (!apertura_id || !conteos || !Array.isArray(conteos)) {
@@ -558,6 +602,10 @@ router.post(
         tolerancia_usd: apertura.tolerancia_usd,
         tolerancia_otras: apertura.tolerancia_otras,
       });
+      const incidenciaApertura = normalizarIncidenciaApertura(
+        incidencia_apertura,
+        estadoObligatorias.descuadradas
+      );
 
       if (estadoObligatorias.pendientes_guardado.length > 0) {
         return res.status(400).json({
@@ -608,7 +656,10 @@ router.post(
           hora_fin_conteo: nowEcuador(),
           requiere_aprobacion: requiereAprobacion,
           fotos_urls: fotos_urls ? (fotos_urls as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
-          observaciones_operador: observaciones || null,
+          observaciones_operador: buildObservacionesApertura(
+            observaciones,
+            incidenciaApertura
+          ),
           conteo_servicios_externos: serviciosData,
         },
       });
@@ -651,7 +702,9 @@ router.post(
         apertura: aperturaActualizada,
         diferencias,
         cuadrado,
-        puede_abrir: estadoObligatorias.descuadradas.length === 0,
+        puede_abrir:
+          estadoObligatorias.descuadradas.length === 0 || Boolean(incidenciaApertura),
+        puede_abrir_con_incidencia: Boolean(incidenciaApertura),
         tipo_arqueo: tipoArqueo,
         monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
         monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
@@ -659,7 +712,9 @@ router.post(
         monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
         monedas_obligatorias_pendientes: estadoObligatorias.pendientes,
         message:
-          estadoObligatorias.descuadradas.length > 0
+          estadoObligatorias.descuadradas.length > 0 && incidenciaApertura
+            ? `Incidencia registrada para ${estadoObligatorias.descuadradas.join(", ")}. Puedes confirmar la apertura y el administrador deberá revisarla.`
+            : estadoObligatorias.descuadradas.length > 0
             ? `USD y EUR deben quedar cuadrados antes de confirmar la apertura. Descuadradas: ${estadoObligatorias.descuadradas.join(", ")}.`
             : cuadrado
             ? `Todo cuadrado. Arqueo ${tipoArqueo} registrado. Puedes confirmar la apertura.`
@@ -684,7 +739,7 @@ router.post(
   authenticateToken,
   async (req: Request, res: Response) => {
     try {
-      const { apertura_id } = req.body;
+      const { apertura_id, incidencia_apertura } = req.body;
       const usuario_id = req.user?.id;
 
       if (!apertura_id) {
@@ -709,7 +764,15 @@ router.post(
         });
       }
 
+      const observacionesParseadas = parseObservacionesApertura(
+        apertura.observaciones_operador
+      );
       const estadoObligatorias = getEstadoMonedasObligatorias(apertura);
+      const incidenciaApertura =
+        normalizarIncidenciaApertura(
+          incidencia_apertura,
+          estadoObligatorias.descuadradas
+        ) || observacionesParseadas.incidencia;
       if (estadoObligatorias.pendientes_guardado.length > 0) {
         return res.status(400).json({
           success: false,
@@ -724,21 +787,24 @@ router.post(
       }
 
       if (estadoObligatorias.descuadradas.length > 0) {
-        return res.status(400).json({
-          success: false,
-          error: `No puedes confirmar la apertura hasta cuadrar ${estadoObligatorias.descuadradas.join(" y ")}.`,
-          code: "APERTURA_OBLIGATORIA_INCOMPLETA",
-          monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
-          monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
-          monedas_obligatorias_cuadradas: estadoObligatorias.cuadradas,
-          monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
-          monedas_obligatorias_pendientes: estadoObligatorias.pendientes,
-        });
+        if (!incidenciaApertura) {
+          return res.status(400).json({
+            success: false,
+            error: `No puedes confirmar la apertura hasta cuadrar ${estadoObligatorias.descuadradas.join(" y ")} o registrar una incidencia de apertura.`,
+            code: "APERTURA_OBLIGATORIA_INCOMPLETA",
+            monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+            monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
+            monedas_obligatorias_cuadradas: estadoObligatorias.cuadradas,
+            monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
+            monedas_obligatorias_pendientes: estadoObligatorias.pendientes,
+          });
+        }
       }
 
-      // Permitir confirmar si está CUADRADO o CON_DIFERENCIA
-      if (apertura.estado !== EstadoApertura.CUADRADO && 
-          apertura.estado !== EstadoApertura.CON_DIFERENCIA) {
+      if (
+        apertura.estado !== EstadoApertura.CUADRADO &&
+        apertura.estado !== EstadoApertura.CON_DIFERENCIA
+      ) {
         return res.status(400).json({
           success: false,
           error: "La apertura debe estar en estado CUADRADO o CON_DIFERENCIA para confirmar",
@@ -746,8 +812,10 @@ router.post(
       }
 
       // Determinar método de verificación
-      const metodoVerificacion = apertura.estado === EstadoApertura.CUADRADO 
-        ? "AUTOMATICO" 
+      const metodoVerificacion = incidenciaApertura
+        ? "INCIDENCIA_OPERADOR"
+        : apertura.estado === EstadoApertura.CUADRADO
+        ? "AUTOMATICO"
         : "CON_DIFERENCIA_PENDIENTE";
 
       // ═════════════════════════════════════════════════════════════════
@@ -824,7 +892,12 @@ router.post(
           hora_apertura: nowEcuador(),
           metodo_verificacion: metodoVerificacion,
           // Si hay diferencias, marcar que requiere revisión de admin
-          requiere_aprobacion: apertura.estado === EstadoApertura.CON_DIFERENCIA,
+          requiere_aprobacion:
+            apertura.estado === EstadoApertura.CON_DIFERENCIA || Boolean(incidenciaApertura),
+          observaciones_operador: buildObservacionesApertura(
+            observacionesParseadas.textoLibre,
+            incidenciaApertura
+          ),
         },
       });
 
@@ -832,10 +905,15 @@ router.post(
         apertura_id,
         usuario_id,
         con_diferencia: apertura.estado === EstadoApertura.CON_DIFERENCIA,
+        apertura_con_incidencia: Boolean(incidenciaApertura),
+        monedas_descuadradas: estadoObligatorias.descuadradas,
+        razon_incidencia: incidenciaApertura?.motivo || null,
         cuadre_id: cuadreCaja.id,
       });
 
-      const message = apertura.estado === EstadoApertura.CON_DIFERENCIA
+      const message = incidenciaApertura
+        ? "Apertura confirmada con incidencia registrada. Puedes operar mientras el administrador revisa la novedad."
+        : apertura.estado === EstadoApertura.CON_DIFERENCIA
         ? "Apertura confirmada con diferencias. La novedad ha sido registrada para revisión del administrador. Puedes iniciar a operar."
         : "Apertura confirmada. Jornada iniciada correctamente.";
 
@@ -843,6 +921,7 @@ router.post(
         success: true,
         apertura: aperturaActualizada,
         con_diferencia: apertura.estado === EstadoApertura.CON_DIFERENCIA,
+        apertura_abierta_con_incidencia: Boolean(incidenciaApertura),
         message,
       });
     } catch (error) {
@@ -947,9 +1026,17 @@ router.get(
       const { punto_atencion_id, fecha } = req.query;
 
       const whereClause: any = {
-        estado: {
-          in: [EstadoApertura.CON_DIFERENCIA, EstadoApertura.EN_CONTEO],
-        },
+        OR: [
+          {
+            estado: {
+              in: [EstadoApertura.CON_DIFERENCIA, EstadoApertura.EN_CONTEO],
+            },
+          },
+          {
+            estado: EstadoApertura.ABIERTA,
+            requiere_aprobacion: true,
+          },
+        ],
       };
 
       if (punto_atencion_id) {
@@ -973,10 +1060,22 @@ router.get(
         orderBy: { hora_inicio_conteo: "desc" },
       });
 
+      const aperturasFormateadas = aperturas.map((apertura) => {
+        const { incidencia, textoLibre } = parseObservacionesApertura(
+          apertura.observaciones_operador
+        );
+
+        return {
+          ...apertura,
+          incidencia_apertura: incidencia,
+          observaciones_operador: textoLibre || apertura.observaciones_operador,
+        };
+      });
+
       return res.json({
         success: true,
-        aperturas,
-        count: aperturas.length,
+        aperturas: aperturasFormateadas,
+        count: aperturasFormateadas.length,
       });
     } catch (error) {
       logger.error("Error al listar aperturas pendientes", {
@@ -1064,10 +1163,13 @@ router.post(
         });
       }
 
-      if (apertura.estado !== EstadoApertura.CON_DIFERENCIA) {
+      const esIncidenciaAbierta =
+        apertura.estado === EstadoApertura.ABIERTA && apertura.requiere_aprobacion;
+
+      if (apertura.estado !== EstadoApertura.CON_DIFERENCIA && !esIncidenciaAbierta) {
         return res.status(400).json({
           success: false,
-          error: "Solo se pueden aprobar aperturas con diferencias",
+          error: "Solo se pueden aprobar aperturas con diferencias o incidencias pendientes",
         });
       }
 
@@ -1078,14 +1180,15 @@ router.post(
           estado: EstadoApertura.ABIERTA,
           aprobado_por: admin_id,
           hora_aprobacion: nowEcuador(),
-          hora_apertura: nowEcuador(),
+          hora_apertura: apertura.hora_apertura || nowEcuador(),
           observaciones_admin: observaciones || null,
-          metodo_verificacion: "VIDEOCALL",
+          metodo_verificacion: esIncidenciaAbierta ? "INCIDENCIA_APROBADA" : "VIDEOCALL",
+          requiere_aprobacion: false,
         },
       });
 
       // Si se solicita ajustar saldos para que coincidan con el físico
-      if (ajustar_saldos) {
+      if (ajustar_saldos && apertura.estado === EstadoApertura.CON_DIFERENCIA) {
         const conteoFisico = (apertura.conteo_fisico as any[]) || [];
         
         for (const conteo of conteoFisico) {
@@ -1137,12 +1240,15 @@ router.post(
         apertura_id: id,
         admin_id,
         ajustar_saldos: !!ajustar_saldos,
+        incidencia_abierta: esIncidenciaAbierta,
       });
 
       return res.json({
         success: true,
         apertura: aperturaActualizada,
-        message: "Apertura aprobada correctamente. La jornada puede iniciar.",
+        message: esIncidenciaAbierta
+          ? "Incidencia de apertura revisada correctamente."
+          : "Apertura aprobada correctamente. La jornada puede iniciar.",
       });
     } catch (error) {
       logger.error("Error al aprobar apertura", {
@@ -1183,7 +1289,7 @@ router.post(
       if (apertura.estado !== EstadoApertura.CON_DIFERENCIA) {
         return res.status(400).json({
           success: false,
-          error: "Solo se pueden rechazar aperturas con diferencias",
+          error: "Solo se pueden rechazar aperturas pendientes antes de abrir. Las incidencias de aperturas ya abiertas deben resolverse con observaciones administrativas.",
         });
       }
 

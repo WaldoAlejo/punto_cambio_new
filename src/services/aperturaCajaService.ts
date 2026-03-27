@@ -53,6 +53,13 @@ export interface ConteoServicioExterno {
   observaciones?: string;
 }
 
+export interface IncidenciaApertura {
+  motivo: string;
+  detalle: string;
+  monedas_afectadas: string[];
+  registrada_en?: string;
+}
+
 export interface AperturaEstadoActual {
   puede_operar: boolean;
   requiere_inicio_jornada: boolean;
@@ -103,6 +110,7 @@ export interface AperturaCaja {
   fotos_urls: string[] | null;
   observaciones_operador: string | null;
   observaciones_admin: string | null;
+  incidencia_apertura?: IncidenciaApertura | null;
   created_at: string;
   updated_at: string;
   // Campos adicionales para arqueo
@@ -209,12 +217,14 @@ export const aperturaCajaService = {
     conteos: ConteoMoneda[],
     fotos_urls?: string[],
     observaciones?: string,
-    servicios_externos?: ConteoServicioExterno[]
+    servicios_externos?: ConteoServicioExterno[],
+    incidencia_apertura?: IncidenciaApertura | null
   ): Promise<{
     apertura: AperturaCaja | null;
     diferencias: DiferenciaMoneda[] | null;
     cuadrado: boolean;
     puede_abrir: boolean;
+    puede_abrir_con_incidencia?: boolean;
     monedas_obligatorias?: string[];
     monedas_obligatorias_guardadas?: string[];
     monedas_obligatorias_cuadradas?: string[];
@@ -238,6 +248,7 @@ export const aperturaCajaService = {
         fotos_urls,
         observaciones,
         servicios_externos,
+        incidencia_apertura,
       });
 
       if (response.success) {
@@ -246,6 +257,7 @@ export const aperturaCajaService = {
           diferencias: response.diferencias || null,
           cuadrado: response.cuadrado,
           puede_abrir: response.puede_abrir,
+          puede_abrir_con_incidencia: response.puede_abrir_con_incidencia,
           monedas_obligatorias: response.monedas_obligatorias,
           monedas_obligatorias_guardadas: response.monedas_obligatorias_guardadas,
           monedas_obligatorias_cuadradas: response.monedas_obligatorias_cuadradas,
@@ -279,6 +291,7 @@ export const aperturaCajaService = {
         diferencias: null,
         cuadrado: false,
         puede_abrir: false,
+        puede_abrir_con_incidencia: false,
         monedas_obligatorias: [],
         monedas_obligatorias_guardadas: [],
         monedas_obligatorias_cuadradas: [],
@@ -321,20 +334,25 @@ export const aperturaCajaService = {
   },
 
   // Confirmar apertura (cuando cuadra)
-  async confirmarApertura(apertura_id: string): Promise<{
+  async confirmarApertura(
+    apertura_id: string,
+    incidencia_apertura?: IncidenciaApertura | null
+  ): Promise<{
     apertura: AperturaCaja | null;
     error: string | null;
+    apertura_abierta_con_incidencia?: boolean;
     message?: string;
   }> {
     try {
       const response = await apiService.post<
         ApiOk<{ apertura: AperturaCaja; message?: string }> | ApiFail
-      >("/apertura-caja/confirmar", { apertura_id });
+      >("/apertura-caja/confirmar", { apertura_id, incidencia_apertura });
 
       if (response.success) {
         return {
           apertura: response.apertura,
           error: null,
+          apertura_abierta_con_incidencia: response.apertura_abierta_con_incidencia,
           message: response.message,
         };
       } else {
