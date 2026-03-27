@@ -71,6 +71,8 @@
     "fix:jornada:dry": "node scripts/fix-jornada-dates.cjs --dry-run",
     "fix:jornada:fix": "node scripts/fix-jornada-dates.cjs --fix",
     "fix:jornada:check": "node scripts/fix-jornada-timezone.cjs",
+    "fix:aperturas-obligatorias:dry": "tsx scripts/fix/fix-aperturas-obligatorias-inconsistentes.ts",
+    "fix:aperturas-obligatorias": "tsx scripts/fix/fix-aperturas-obligatorias-inconsistentes.ts --execute",
     "fix:normalize-saldos": "tsx scripts/fix/normalize-saldos-breakdown.ts",
     "fix:servicios-externos-breakdown": "tsx scripts/fix/fix-servicios-externos-movimiento-breakdown.ts",
     "fix:servicios-externos-ref": "tsx scripts/fix/fill-servicios-externos-numero-referencia.ts",

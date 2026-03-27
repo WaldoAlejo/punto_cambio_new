@@ -185,6 +185,10 @@ export default function AperturaCaja({
   const monedasObligatoriasPendientes = monedasObligatorias.filter(
     (codigo) => !monedasObligatoriasCuadradas.includes(codigo)
   );
+  const aperturaCompletaPeroBloqueada =
+    estado === "ABIERTA" &&
+    bloquearHastaGuardarObligatorias &&
+    monedasObligatoriasPendientes.length > 0;
 
   // Obtener jornada activa si no se proporcionó
   useEffect(() => {
@@ -331,12 +335,14 @@ export default function AperturaCaja({
           setConDiferenciaPendiente(hayDiferencias);
         }
 
-        if (result.apertura.estado === "ABIERTA") {
+        if (result.apertura.estado === "ABIERTA" && estadoMonedas.descuadradas.length === 0) {
           setPuedeAbrir(true);
           toast({
             title: "Apertura ya completada",
             description: "Esta jornada ya fue abierta anteriormente.",
           });
+        } else if (result.apertura.estado === "ABIERTA") {
+          setPuedeAbrir(false);
         }
       }
     } catch (e) {
@@ -519,7 +525,7 @@ export default function AperturaCaja({
     );
   }
 
-  if (estado === "ABIERTA") {
+  if (estado === "ABIERTA" && !aperturaCompletaPeroBloqueada) {
     return (
       <Card className="border-green-300 bg-green-50">
         <CardContent className="pt-6">
@@ -567,6 +573,17 @@ export default function AperturaCaja({
           {estado === "PENDIENTE" && "Pendiente"}
         </Badge>
       </div>
+
+      {aperturaCompletaPeroBloqueada && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Correccion obligatoria antes de operar</AlertTitle>
+          <AlertDescription>
+            Esta apertura quedo marcada como completada, pero USD/EUR siguen descuadrados.
+            Debes corregir y guardar nuevamente el conteo de {monedasObligatoriasPendientes.join(" y ")}.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Alertas */}
       {error && (

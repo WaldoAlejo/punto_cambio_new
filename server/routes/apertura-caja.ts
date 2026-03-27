@@ -527,7 +527,13 @@ router.post(
         });
       }
 
-      if (apertura.estado === EstadoApertura.ABIERTA) {
+      const estadoActualObligatorias = getEstadoMonedasObligatorias(apertura);
+      const aperturaAbiertaBloqueadaPorObligatorias =
+        apertura.estado === EstadoApertura.ABIERTA &&
+        (estadoActualObligatorias.pendientes_guardado.length > 0 ||
+          estadoActualObligatorias.descuadradas.length > 0);
+
+      if (apertura.estado === EstadoApertura.ABIERTA && !aperturaAbiertaBloqueadaPorObligatorias) {
         return res.status(400).json({
           success: false,
           error: "Esta apertura ya fue completada",
@@ -637,6 +643,7 @@ router.post(
         diferencias_count: diferencias.filter((d) => d.fuera_tolerancia).length,
         servicios_count: servicios_externos?.length || 0,
         tipo_arqueo: tipoArqueo,
+        reapertura_correccion: aperturaAbiertaBloqueadaPorObligatorias,
       });
 
       return res.json({
