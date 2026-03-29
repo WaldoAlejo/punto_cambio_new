@@ -71,6 +71,44 @@ async function calcularSaldoDesdeMovimientos(
   }
 }
 
+async function obtenerSaldoActualParaConteo(
+  puntoAtencionId: string,
+  monedaId: string
+): Promise<{ cantidad: number; billetes: number; monedas: number }> {
+  const saldoActual = await prisma.saldo.findUnique({
+    where: {
+      punto_atencion_id_moneda_id: {
+        punto_atencion_id: puntoAtencionId,
+        moneda_id: monedaId,
+      },
+    },
+    select: {
+      cantidad: true,
+      billetes: true,
+      monedas_fisicas: true,
+    },
+  });
+
+  if (saldoActual) {
+    return {
+      cantidad: Number(saldoActual.cantidad),
+      billetes: Number(saldoActual.billetes),
+      monedas: Number(saldoActual.monedas_fisicas),
+    };
+  }
+
+  const cantidadCalculada = await calcularSaldoDesdeMovimientos(
+    puntoAtencionId,
+    monedaId
+  );
+
+  return {
+    cantidad: cantidadCalculada,
+    billetes: cantidadCalculada,
+    monedas: 0,
+  };
+}
+
 // Tolerancias para validación
 const TOLERANCIA_USD = 1.0;
 const TOLERANCIA_OTRAS = 0.01;
@@ -177,10 +215,10 @@ router.post("/iniciar", authenticateToken, async (req, res) => {
       select: { id: true, codigo: true, nombre: true, simbolo: true },
     });
 
-    // Calcular saldos dinámicamente desde MovimientoSaldo (igual que contabilidad general)
+    // Tomar saldo actual de caja como referencia principal para el conteo.
     const saldosCalculados = await Promise.all(
       monedas.map(async (moneda) => {
-        const cantidadCalculada = await calcularSaldoDesdeMovimientos(
+        const saldoActual = await obtenerSaldoActualParaConteo(
           punto_atencion_id,
           moneda.id
         );
@@ -189,9 +227,9 @@ router.post("/iniciar", authenticateToken, async (req, res) => {
           codigo: moneda.codigo,
           nombre: moneda.nombre,
           simbolo: moneda.simbolo,
-          cantidad: cantidadCalculada,
-          billetes: cantidadCalculada, // Usar cantidad calculada como billetes por defecto
-          monedas: 0,
+          cantidad: saldoActual.cantidad,
+          billetes: saldoActual.billetes,
+          monedas: saldoActual.monedas,
           es_obligatoria: ["USD", "EUR"].includes(moneda.codigo),
         };
       })
@@ -277,10 +315,10 @@ router.post("/validar-apertura", authenticateToken, async (req, res) => {
       select: { id: true, codigo: true, nombre: true, simbolo: true },
     });
 
-    // Calcular saldos dinámicamente desde MovimientoSaldo
+    // Tomar saldo actual de caja como referencia principal para el conteo.
     const saldosCalculados = await Promise.all(
       monedas.map(async (moneda) => {
-        const cantidadCalculada = await calcularSaldoDesdeMovimientos(
+        const saldoActual = await obtenerSaldoActualParaConteo(
           jornada.punto_atencion_id,
           moneda.id
         );
@@ -289,9 +327,9 @@ router.post("/validar-apertura", authenticateToken, async (req, res) => {
           codigo: moneda.codigo,
           nombre: moneda.nombre,
           simbolo: moneda.simbolo,
-          cantidad: cantidadCalculada,
-          billetes: cantidadCalculada,
-          monedas: 0,
+          cantidad: saldoActual.cantidad,
+          billetes: saldoActual.billetes,
+          monedas: saldoActual.monedas,
         };
       })
     );

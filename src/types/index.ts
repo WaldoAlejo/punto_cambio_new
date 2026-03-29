@@ -464,6 +464,11 @@ export interface SaldoActual {
   moneda_id: string;
   moneda_codigo: string;
   saldo: number;
+  saldo_calculado?: number;
+  diferencia?: number;
+  billetes?: number;
+  monedas_fisicas?: number;
+  bancos?: number;
 }
 
 export interface SaldoActualizado {
@@ -565,8 +570,11 @@ export interface SaldoMoneda {
   moneda_id: string;
   moneda_codigo: string;
   saldo: number;
+  saldo_calculado?: number;
+  diferencia?: number;
   billetes?: number;
   monedas_fisicas?: number;
+  bancos?: number;
 }
 
 export interface SaldoConsolidado extends SaldoMoneda {

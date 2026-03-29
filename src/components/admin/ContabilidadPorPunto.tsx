@@ -66,6 +66,9 @@ interface SaldoActual {
   saldo: number;
   saldo_calculado?: number;
   diferencia?: number;
+  billetes?: number;
+  monedas_fisicas?: number;
+  bancos?: number;
 }
 
 export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps) => {
@@ -162,12 +165,7 @@ export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps)
         const saldoMoneda = saldosActuales.find(
           (s) => s.moneda_codigo === selectedCurrency
         );
-        // Preferir saldo calculado (desde movimientos) cuando esté presente
-        const saldoPreferido =
-          typeof saldoMoneda?.saldo_calculado === "number"
-            ? saldoMoneda.saldo_calculado
-            : saldoMoneda?.saldo;
-        setSaldoActual(saldoPreferido || 0);
+        setSaldoActual(saldoMoneda?.saldo || 0);
       } catch (error) {
         console.error("❌ Error al obtener saldos actuales:", error);
         setSaldoActual(0);

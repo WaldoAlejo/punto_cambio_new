@@ -37,6 +37,21 @@ Scripts de diagnóstico para identificar problemas en el sistema.
 ### `scripts/fix/`
 Scripts de corrección para arreglar datos inconsistentes.
 
+Ejemplos útiles:
+```bash
+# Simular reset de saldos del punto Luis Aviles
+npm run fix:reset-luis-aviles:dry
+
+# Ejecutar reset de saldos del punto Luis Aviles
+npm run fix:reset-luis-aviles
+
+# Usar el script genérico por nombre o por id
+npm run fix:reset-point-balances:dry -- --point "Luis Aviles"
+npm run fix:reset-point-balances -- --pointId <POINT_ID>
+```
+
+El reset de punto también cancela las transferencias salientes que sigan abiertas (`PENDIENTE`, `APROBADO`, `EN_TRANSITO`) para evitar movimientos fantasma antes de dejar el punto en cero.
+
 ### `scripts/smoke/`
 Pruebas básicas de conectividad y funcionamiento.
 

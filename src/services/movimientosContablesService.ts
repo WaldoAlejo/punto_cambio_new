@@ -139,6 +139,7 @@ export const movimientosContablesService = {
       diferencia?: number;
       billetes?: number;
       monedas_fisicas?: number;
+      bancos?: number;
     }> | null;
     error: string | null;
   }> {
@@ -152,19 +153,11 @@ export const movimientosContablesService = {
           diferencia?: number;
           billetes?: number;
           monedas_fisicas?: number;
+          bancos?: number;
         }>;
       }>(`/saldos-actuales/${punto_atencion_id}?reconciliar=true`);
 
-      const saldos = response.data.saldos.map((s) => ({
-        ...s,
-        // Preferir el saldo calculado desde MovimientoSaldo para evitar desfaces
-        saldo:
-          typeof s.saldo_calculado === "number" && Number.isFinite(s.saldo_calculado)
-            ? s.saldo_calculado
-            : s.saldo,
-      }));
-
-      return { saldos, error: null };
+      return { saldos: response.data.saldos, error: null };
     } catch (error: unknown) {
       console.error("Error al obtener saldos actuales:", error);
       return {

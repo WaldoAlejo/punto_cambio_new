@@ -517,6 +517,7 @@ router.get("/", authenticateToken, async (req, res) => {
         );
 
         // Calcular saldo teórico (cierre) usando reconciliación de movimientos
+        // como respaldo si no existe saldo físico persistido.
         let saldoCierreTeórico = 0;
         try {
           saldoCierreTeórico = await saldoReconciliationService.calcularSaldoReal(
@@ -548,6 +549,10 @@ router.get("/", authenticateToken, async (req, res) => {
             bancos: true,
           },
         });
+
+        if (saldoFísico) {
+          saldoCierreTeórico = Number(saldoFísico.cantidad);
+        }
 
         const conteoFísico = saldoFísico ? Number(saldoFísico.cantidad) : saldoCierreTeórico;
         const billetes = saldoFísico ? Number(saldoFísico.billetes) : 0;

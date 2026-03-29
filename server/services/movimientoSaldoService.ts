@@ -280,13 +280,14 @@ export async function registrarMovimientoSaldo(
         ? params.saldoNuevo
         : params.saldoNuevo.toNumber()
     );
+    const deltaDec = new Prisma.Decimal(montoConSigno);
 
-    // Para SALDO_INICIAL: usar increment para sumar al existente (no reemplazar)
+    // Para SALDO_INICIAL: incrementar solo por el delta del movimiento, no por saldoNuevo.
     // Para otros movimientos: usar el valor calculado directamente
     const updateData = params.tipoMovimiento === TipoMovimiento.SALDO_INICIAL
       ? (bucket === "BANCOS" 
-          ? { bancos: { increment: saldoNuevoDec } } 
-          : { cantidad: { increment: saldoNuevoDec } })
+          ? { bancos: { increment: deltaDec } } 
+          : { cantidad: { increment: deltaDec } })
       : (bucket === "BANCOS" 
           ? { bancos: saldoNuevoDec } 
           : { cantidad: saldoNuevoDec });

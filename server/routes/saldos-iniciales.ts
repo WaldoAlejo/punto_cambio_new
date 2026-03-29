@@ -328,6 +328,7 @@ router.post(
             saldoNuevo: saldoResult.cantidad,
             tipoReferencia: TipoReferencia.SALDO_INICIAL,
             referenciaId: saldoInicialResult.id,
+            saldoBucket: "NINGUNO",
             descripcion: observaciones || undefined,
             usuarioId: user.id,
           },

@@ -93,6 +93,34 @@ async function getSaldo(
     },
   });
 }
+
+function calcularCantidadCaja(data: {
+  billetes?: number | Prisma.Decimal | null;
+  monedas_fisicas?: number | Prisma.Decimal | null;
+}) {
+  return round2(num(data.billetes) + num(data.monedas_fisicas));
+}
+
+function calcularEgresoDestino(params: {
+  isDestinoUSD: boolean;
+  metodoEntrega?: string | null;
+  totalDestino: number;
+  usdEntregadoEfectivo?: number | null;
+  usdEntregadoTransfer?: number | null;
+}) {
+  if (!params.isDestinoUSD) {
+    return {
+      egresoEf: round2(params.totalDestino),
+      egresoBk: 0,
+    };
+  }
+
+  return {
+    egresoEf: round2(num(params.usdEntregadoEfectivo)),
+    egresoBk: round2(num(params.usdEntregadoTransfer)),
+  };
+}
+
 async function upsertSaldoEfectivoYBancos(
   tx: Prisma.TransactionClient,
   puntoId: string,
@@ -111,8 +139,11 @@ async function upsertSaldoEfectivoYBancos(
     const newMonedas = typeof data.monedas_fisicas === "number" ? round2(data.monedas_fisicas) : existing.monedas_fisicas;
     const newBancos = typeof data.bancos === "number" ? round2(data.bancos) : (existing.bancos || 0);
     
-    // Calcular cantidad automáticamente como suma de billetes + monedas + bancos
-    const cantidadCalculada = round2(Number(newBilletes) + Number(newMonedas) + Number(newBancos));
+    // `Saldo.cantidad` representa solo caja física.
+    const cantidadCalculada = calcularCantidadCaja({
+      billetes: newBilletes,
+      monedas_fisicas: newMonedas,
+    });
     
     return tx.saldo.update({
       where: {
@@ -143,7 +174,10 @@ async function upsertSaldoEfectivoYBancos(
   const billetes = round2(data.billetes ?? 0);
   const monedas = round2(data.monedas_fisicas ?? 0);
   const bancos = round2(data.bancos ?? 0);
-  const cantidadCalculada = round2(Number(billetes) + Number(monedas) + Number(bancos));
+  const cantidadCalculada = calcularCantidadCaja({
+    billetes,
+    monedas_fisicas: monedas,
+  });
   
   return tx.saldo.create({
     data: {
@@ -1051,29 +1085,18 @@ router.post(
             : 0;
 
         const isDestinoUSD = isUSDByCode(cambio.monedaDestino?.codigo);
-        let egresoEf = 0;
-        let egresoBk = 0;
+        let { egresoEf, egresoBk } = calcularEgresoDestino({
+          isDestinoUSD,
+          metodoEntrega: metodo_entrega,
+          totalDestino: round2(divisas_recibidas_total_final),
+          usdEntregadoEfectivo: num(usd_entregado_efectivo),
+          usdEntregadoTransfer: num(usd_entregado_transfer),
+        });
 
-        if (isDestinoUSD) {
-          egresoEf = num(usd_entregado_efectivo);
-          egresoBk = num(usd_entregado_transfer);
-          if (
-            round2(egresoEf + egresoBk) !==
-            round2(divisas_recibidas_total_final)
-          ) {
-            const tot = round2(divisas_recibidas_total_final);
-            if (metodo_entrega === "efectivo") {
-              egresoEf = tot;
-              egresoBk = 0;
-            } else if (metodo_entrega === "transferencia") {
-              egresoEf = 0;
-              egresoBk = tot;
-            } else {
-              egresoEf = round2(tot / 2);
-              egresoBk = round2(tot - egresoEf);
-            }
-          }
-        } else {
+        if (
+          isDestinoUSD &&
+          round2(egresoEf + egresoBk) !== round2(divisas_recibidas_total_final)
+        ) {
           const tot = round2(divisas_recibidas_total_final);
           if (metodo_entrega === "efectivo") {
             egresoEf = tot;
@@ -1082,12 +1105,8 @@ router.post(
             egresoEf = 0;
             egresoBk = tot;
           } else {
-            egresoEf = num(usd_entregado_efectivo);
-            egresoBk = num(usd_entregado_transfer);
-            if (round2(egresoEf + egresoBk) !== tot) {
-              egresoEf = round2(tot / 2);
-              egresoBk = round2(tot - egresoEf);
-            }
+            egresoEf = round2(tot / 2);
+            egresoBk = round2(tot - egresoEf);
           }
         }
 
@@ -1597,7 +1616,14 @@ router.patch(
           .json({ error: "Usuario no autenticado", success: false });
         return;
       }
-      const cambio = await prisma.cambioDivisa.findUnique({ where: { id } });
+      const cambio = await prisma.cambioDivisa.findUnique({
+        where: { id },
+        include: {
+          monedaDestino: {
+            select: { codigo: true },
+          },
+        },
+      });
       if (!cambio) {
         res.status(404).json({ error: "Cambio no encontrado", success: false });
         return;
@@ -1698,14 +1724,15 @@ router.patch(
         }
 
         // Egreso en moneda destino
-        const egresoEfRestante =
-          cambio.metodo_entrega === "efectivo"
-            ? round2(num(cambio.divisas_recibidas_total) * porcentajeRestante)
-            : 0;
-        const egresoBkRestante =
-          cambio.metodo_entrega === "transferencia"
-            ? round2(num(cambio.divisas_recibidas_total) * porcentajeRestante)
-            : 0;
+        const destinoRestante = calcularEgresoDestino({
+          isDestinoUSD: isUSDByCode(cambio.monedaDestino?.codigo),
+          metodoEntrega: cambio.metodo_entrega,
+          totalDestino: round2(num(cambio.divisas_recibidas_total) * porcentajeRestante),
+          usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo) * porcentajeRestante,
+          usdEntregadoTransfer: num(cambio.usd_entregado_transfer) * porcentajeRestante,
+        });
+        const egresoEfRestante = destinoRestante.egresoEf;
+        const egresoBkRestante = destinoRestante.egresoBk;
 
         // Calcular billetes y monedas de egreso manteniendo proporción
         let billetesEgresoRestante = 0;
@@ -1962,7 +1989,14 @@ router.patch(
         return;
       }
 
-      const cambio = await prisma.cambioDivisa.findUnique({ where: { id } });
+      const cambio = await prisma.cambioDivisa.findUnique({
+        where: { id },
+        include: {
+          monedaDestino: {
+            select: { codigo: true },
+          },
+        },
+      });
       if (!cambio) {
         res.status(404).json({ error: "Cambio no encontrado", success: false });
         return;
@@ -2080,14 +2114,15 @@ router.patch(
         }
 
         // Egreso en moneda destino
-        const egresoEfRestante =
-          cambio.metodo_entrega === "efectivo"
-            ? round2(num(cambio.divisas_recibidas_total) * porcentajeRestante)
-            : 0;
-        const egresoBkRestante =
-          cambio.metodo_entrega === "transferencia"
-            ? round2(num(cambio.divisas_recibidas_total) * porcentajeRestante)
-            : 0;
+        const destinoRestante = calcularEgresoDestino({
+          isDestinoUSD: isUSDByCode(cambio.monedaDestino?.codigo),
+          metodoEntrega: cambio.metodo_entrega,
+          totalDestino: round2(num(cambio.divisas_recibidas_total) * porcentajeRestante),
+          usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo) * porcentajeRestante,
+          usdEntregadoTransfer: num(cambio.usd_entregado_transfer) * porcentajeRestante,
+        });
+        const egresoEfRestante = destinoRestante.egresoEf;
+        const egresoBkRestante = destinoRestante.egresoBk;
 
         // Calcular billetes y monedas de egreso manteniendo proporción
         let billetesEgresoRestante = 0;
@@ -2963,16 +2998,13 @@ router.post(
       const totDestino = num(
         cambio.divisas_recibidas_total || cambio.monto_destino
       );
-      const egresoEf = isDestinoUSD
-        ? num(cambio.usd_entregado_efectivo)
-        : cambio.metodo_entrega === "efectivo"
-        ? totDestino
-        : 0;
-      const egresoBk = isDestinoUSD
-        ? num(cambio.usd_entregado_transfer)
-        : cambio.metodo_entrega === "transferencia"
-        ? totDestino
-        : 0;
+      const { egresoEf, egresoBk } = calcularEgresoDestino({
+        isDestinoUSD,
+        metodoEntrega: cambio.metodo_entrega,
+        totalDestino: totDestino,
+        usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo),
+        usdEntregadoTransfer: num(cambio.usd_entregado_transfer),
+      });
 
       const totOrigen = num(
         cambio.divisas_entregadas_total || cambio.monto_origen

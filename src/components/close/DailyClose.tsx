@@ -1624,7 +1624,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           </CardHeader>
           <CardContent>
             <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
-              <li>Revise el saldo esperado calculado por el sistema para cada divisa.</li>
+              <li>Revise el saldo actual esperado por el sistema para cada divisa.</li>
               <li>Ingrese el conteo físico real en billetes, monedas y bancos.</li>
               <li>Verifique que la diferencia quede dentro de tolerancia antes de cerrar.</li>
               <li>Si detecta faltantes o sobrantes, déjelos registrados en observaciones.</li>
@@ -1655,7 +1655,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
             <CardDescription>
               {detallesCount === 0
                 ? textoSinDetalle
-                : "Revise y ajuste los conteos físicos. Los valores están pre-calculados según los movimientos del día."}
+                : "Revise y ajuste los conteos físicos. Los valores toman como referencia el saldo actual de caja y los movimientos del día."}
             </CardDescription>
           </CardHeader>
           <CardContent>

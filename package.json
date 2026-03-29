@@ -73,6 +73,10 @@
     "fix:jornada:check": "node scripts/fix-jornada-timezone.cjs",
     "fix:aperturas-obligatorias:dry": "tsx scripts/fix/fix-aperturas-obligatorias-inconsistentes.ts",
     "fix:aperturas-obligatorias": "tsx scripts/fix/fix-aperturas-obligatorias-inconsistentes.ts --execute",
+    "fix:reset-point-balances:dry": "tsx scripts/fix/reset-point-balances.ts",
+    "fix:reset-point-balances": "tsx scripts/fix/reset-point-balances.ts --execute",
+    "fix:reset-luis-aviles:dry": "tsx scripts/fix/reset-point-balances.ts --point \"Luis Aviles\"",
+    "fix:reset-luis-aviles": "tsx scripts/fix/reset-point-balances.ts --point \"Luis Aviles\" --execute",
     "fix:normalize-saldos": "tsx scripts/fix/normalize-saldos-breakdown.ts",
     "fix:servicios-externos-breakdown": "tsx scripts/fix/fix-servicios-externos-movimiento-breakdown.ts",
     "fix:servicios-externos-ref": "tsx scripts/fix/fill-servicios-externos-numero-referencia.ts",
@@ -83,9 +87,6 @@
 
     "validate:cierre-dia": "tsx scripts/validar-flujo-cierre-dia.ts",
     "diagnose:el-bosque": "tsx scripts/diagnostico-el-bosque-25-marzo.ts"
-  },
-  "prisma": {
-    "seed": "tsx prisma/seed-complete.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

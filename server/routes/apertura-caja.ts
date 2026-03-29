@@ -112,7 +112,25 @@ function resolveDenominaciones(moneda: MonedaCatalogo) {
 }
 
 async function buildSaldoEsperadoMoneda(moneda: MonedaCatalogo, puntoAtencionId: string) {
-  const cantidadCalculada = await calcularSaldoDesdeMovimientos(puntoAtencionId, moneda.id);
+  const saldoActual = await prisma.saldo.findUnique({
+    where: {
+      punto_atencion_id_moneda_id: {
+        punto_atencion_id: puntoAtencionId,
+        moneda_id: moneda.id,
+      },
+    },
+    select: {
+      cantidad: true,
+      billetes: true,
+      monedas_fisicas: true,
+    },
+  });
+
+  const cantidadCalculada = saldoActual
+    ? Number(saldoActual.cantidad)
+    : await calcularSaldoDesdeMovimientos(puntoAtencionId, moneda.id);
+  const billetes = saldoActual ? Number(saldoActual.billetes) : cantidadCalculada;
+  const monedas = saldoActual ? Number(saldoActual.monedas_fisicas) : 0;
 
   return {
     moneda_id: moneda.id,
@@ -120,8 +138,8 @@ async function buildSaldoEsperadoMoneda(moneda: MonedaCatalogo, puntoAtencionId:
     nombre: moneda.nombre,
     simbolo: moneda.simbolo,
     cantidad: cantidadCalculada,
-    billetes: cantidadCalculada,
-    monedas: 0,
+    billetes,
+    monedas,
     denominaciones: resolveDenominaciones(moneda),
   };
 }

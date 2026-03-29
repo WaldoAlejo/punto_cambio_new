@@ -1,5 +1,6 @@
 // src/services/apiService.ts
 import { env } from "../config/environment";
+import { generateIdempotencyKey } from "../utils/idempotency";
 
 const API_BASE_URL = env.API_URL;
 
@@ -226,7 +227,6 @@ class ApiService {
    * Útil para operaciones críticas que no deben duplicarse
    */
   async postIdempotent<T>(endpoint: string, data: unknown): Promise<T> {
-    const { generateIdempotencyKey } = await import("../utils/idempotency");
     const key = generateIdempotencyKey();
     return this.post<T>(endpoint, data, key);
   }

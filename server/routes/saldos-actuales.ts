@@ -33,10 +33,11 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
       saldo: parseFloat(s.cantidad.toString()),
       saldo_calculado: undefined as number | undefined,
       diferencia: undefined as number | undefined,
-      billetes: s.billetes ? parseInt(s.billetes.toString()) : 0,
+      billetes: s.billetes ? parseFloat(s.billetes.toString()) : 0,
       monedas_fisicas: s.monedas_fisicas
-        ? parseInt(s.monedas_fisicas.toString())
+        ? parseFloat(s.monedas_fisicas.toString())
         : 0,
+      bancos: s.bancos ? parseFloat(s.bancos.toString()) : 0,
     }));
 
     if (usarReconciliacion) {
@@ -129,10 +130,11 @@ router.get("/:pointId/:monedaId", authenticateToken, async (req, res) => {
       moneda_codigo: saldo.moneda?.codigo ?? null,
       moneda_nombre: saldo.moneda?.nombre ?? null,
       moneda_simbolo: saldo.moneda?.simbolo ?? null,
-      billetes: saldo.billetes ? parseInt(saldo.billetes.toString()) : 0,
+      billetes: saldo.billetes ? parseFloat(saldo.billetes.toString()) : 0,
       monedas_fisicas: saldo.monedas_fisicas
-        ? parseInt(saldo.monedas_fisicas.toString())
+        ? parseFloat(saldo.monedas_fisicas.toString())
         : 0,
+      bancos: saldo.bancos ? parseFloat(saldo.bancos.toString()) : 0,
     });
   } catch (error) {
     console.error("Error al obtener saldo específico:", error);
