@@ -25,6 +25,7 @@ import { User, PuntoAtencion, Moneda } from "@/types";
 import { pointService } from "@/services/pointService";
 import { currencyService } from "@/services/currencyService";
 import { apiService } from "@/services/apiService";
+import cuatreCajaService from "@/services/cuatreCajaService";
 
 interface ContabilidadPorPuntoProps {
   user: User;
@@ -71,6 +72,16 @@ interface SaldoActual {
   bancos?: number;
 }
 
+// Datos del cuadre de caja para mostrar valores consistentes con el reporte del operador
+interface CuadreData {
+  saldo_apertura: number;
+  ingresos_periodo: number;
+  egresos_periodo: number;
+  saldo_cierre: number;
+  conteo_fisico: number;
+  movimientos_periodo: number;
+}
+
 export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps) => {
   const [points, setPoints] = useState<PuntoAtencion[]>([]);
   const [currencies, setCurrencies] = useState<Moneda[]>([]);
@@ -84,6 +95,8 @@ export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps)
   const [saldoInicial, setSaldoInicial] = useState<number>(0);
   const [movimientos, setMovimientos] = useState<MovimientoSaldo[]>([]);
   const [saldoActual, setSaldoActual] = useState<number>(0);
+  // Datos del cuadre de caja (para mostrar valores consistentes con el reporte del operador)
+  const [cuadreData, setCuadreData] = useState<CuadreData | null>(null);
 
   // Inicializar fechas (hoy)
   useEffect(() => {
@@ -170,6 +183,40 @@ export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps)
         console.error("❌ Error al obtener saldos actuales:", error);
         setSaldoActual(0);
       }
+
+      // 4. Obtener datos del cuadre de caja (para valores consistentes con el reporte del operador)
+      // Esto es CRÍTICO: el cuadre de caja calcula el saldo de apertura desde el último cierre CERRADO
+      // que es el valor correcto que se muestra en el reporte del operador
+      try {
+        const cuadreResponse = await cuatreCajaService.getCuadre({
+          fecha: startDate,
+          pointId: selectedPointId,
+        });
+        
+        if (cuadreResponse?.success && cuadreResponse?.data?.detalles) {
+          const detalleMoneda = cuadreResponse.data.detalles.find(
+            (d) => d.codigo === selectedCurrency
+          );
+          
+          if (detalleMoneda) {
+            setCuadreData({
+              saldo_apertura: detalleMoneda.saldo_apertura || 0,
+              ingresos_periodo: detalleMoneda.ingresos_periodo || 0,
+              egresos_periodo: detalleMoneda.egresos_periodo || 0,
+              saldo_cierre: detalleMoneda.saldo_cierre || 0,
+              conteo_fisico: detalleMoneda.conteo_fisico || detalleMoneda.saldo_cierre || 0,
+              movimientos_periodo: detalleMoneda.movimientos_periodo || 0,
+            });
+          } else {
+            setCuadreData(null);
+          }
+        } else {
+          setCuadreData(null);
+        }
+      } catch (error) {
+        console.error("❌ Error al obtener cuadre de caja:", error);
+        setCuadreData(null);
+      }
     } catch (error) {
       console.error("❌ Error cargando datos de contabilidad:", error);
     } finally {
@@ -185,24 +232,94 @@ export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps)
   }, [selectedPointId, selectedCurrency, startDate, endDate, loadContabilidadData]);
 
   // Calcular estadísticas
+  // NOTA: Si tenemos datos del cuadre de caja, usamos esos valores que son los mismos
+  // que se muestran en el reporte del operador. El cuadre calcula:
+  // - saldo_apertura: desde el último cierre CERRADO (conteo_fisico)
+  // - ingresos/egresos: desde los movimientos del período
   const estadisticas = useMemo(() => {
-    const ingresos = movimientos
-      .filter(
-        (m) =>
-          m.tipo_movimiento === "INGRESO" ||
-          m.tipo_movimiento === "TRANSFERENCIA_ENTRANTE"
-      )
-      .reduce((sum, m) => sum + Math.abs(m.monto), 0);
+    // Si tenemos datos del cuadre, usamos esos valores (son los oficiales)
+    if (cuadreData) {
+      return {
+        ingresos: cuadreData.ingresos_periodo,
+        egresos: cuadreData.egresos_periodo,
+        balance: Number((cuadreData.ingresos_periodo - cuadreData.egresos_periodo).toFixed(2)),
+        cambios: 0, // Se calcularía desde movimientos si es necesario
+      };
+    }
 
-    const egresos = movimientos
-      .filter(
-        (m) =>
-          m.tipo_movimiento === "EGRESO" ||
-          m.tipo_movimiento === "TRANSFERENCIA_SALIENTE"
-      )
-      .reduce((sum, m) => sum + Math.abs(m.monto), 0);
+    // Fallback: calcular desde movimientos (lógica consistente con backend)
+    // Tipos de movimiento que son ingresos (según backend)
+    const tiposIngreso = new Set([
+      "INGRESO",
+      "INGRESOS",
+      "VENTA",
+      "SALDO",
+      "SALDO EN CAJA",
+      "TRANSFERENCIA_ENTRANTE",
+      "TRANSFERENCIA_ENTRADA",
+      "TRANSFERENCIA_RECIBIDA",
+      "TRANSFERENCIA_DEVOLUCION",
+      "SALDO_INICIAL",
+    ]);
 
-    const balance = ingresos - egresos;
+    // Tipos de movimiento que son egresos (según backend)
+    const tiposEgreso = new Set([
+      "EGRESO",
+      "EGRESOS",
+      "COMPRA",
+      "TRANSFERENCIA_SALIENTE",
+      "TRANSFERENCIA_SALIDA",
+      "TRANSFERENCIA_ENVIADA",
+    ]);
+
+    let ingresos = 0;
+    let egresos = 0;
+
+    for (const mov of movimientos) {
+      const monto = Number(mov.monto);
+      const tipo = (mov.tipo_movimiento || "").toUpperCase();
+      const desc = (mov.descripcion || "").toLowerCase();
+
+      // Normalizar el monto según el tipo (consistente con backend)
+      if (tipo === "AJUSTE") {
+        // Ajustes mantienen su signo
+        if (monto > 0) {
+          ingresos += monto;
+        } else {
+          egresos += Math.abs(monto);
+        }
+      } else if (tipo === "CAMBIO_DIVISA") {
+        // Cambios de divisa: usar descripción para determinar dirección
+        if (desc.startsWith("egreso por cambio")) {
+          egresos += Math.abs(monto);
+        } else if (desc.startsWith("ingreso por cambio")) {
+          ingresos += Math.abs(monto);
+        } else if (monto > 0) {
+          ingresos += monto;
+        } else {
+          egresos += Math.abs(monto);
+        }
+      } else if (tiposIngreso.has(tipo)) {
+        // Ingresos deben ser positivos
+        ingresos += Math.abs(monto);
+      } else if (tiposEgreso.has(tipo)) {
+        // Egresos deben ser negativos (sumamos el valor absoluto)
+        egresos += Math.abs(monto);
+      } else {
+        // Para otros tipos, usar el signo del monto
+        if (monto > 0) {
+          ingresos += monto;
+        } else {
+          egresos += Math.abs(monto);
+        }
+      }
+    }
+
+    // Redondear a 2 decimales (consistente con backend)
+    ingresos = Number(ingresos.toFixed(2));
+    egresos = Number(egresos.toFixed(2));
+
+    const balance = Number((ingresos - egresos).toFixed(2));
 
     // Contar cambios únicos
     const cambiosSet = new Set<string>();
@@ -218,7 +335,7 @@ export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps)
       balance,
       cambios: cambiosSet.size,
     };
-  }, [movimientos]);
+  }, [movimientos, cuadreData]);
 
   const formatCurrency = (amount: number, codigo = selectedCurrency) => {
     if (codigo === "USD") {
@@ -375,7 +492,7 @@ export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps)
 
       {/* Alerta cuando no hay saldo inicial */}
       {!isLoading &&
-        saldoInicial === 0 &&
+        (cuadreData?.saldo_apertura ?? saldoInicial) === 0 &&
         saldoActual === 0 &&
         movimientos.length === 0 && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -421,19 +538,24 @@ export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps)
 
       {/* Tarjetas de Métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Saldo Inicial */}
+        {/* Saldo Inicial (Apertura) */}
         <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-purple-700">
-                  Saldo Inicial
+                  Saldo Apertura
                 </p>
                 <p className="text-2xl font-bold text-purple-900">
-                  {formatCurrency(saldoInicial)}
+                  {formatCurrency(cuadreData?.saldo_apertura ?? saldoInicial)}
                 </p>
                 <p className="text-xs text-purple-600 mt-1">
                   {selectedCurrency}
+                  {cuadreData && (
+                    <span className="block text-[10px] text-purple-500">
+                      (desde último cierre)
+                    </span>
+                  )}
                 </p>
               </div>
               <Wallet className="h-8 w-8 text-purple-600" />
@@ -571,7 +693,7 @@ export const ContabilidadPorPunto = ({ user: _user }: ContabilidadPorPuntoProps)
                 }`}
               >
                 {estadisticas.balance >= 0 ? "+" : ""}
-                {((estadisticas.balance / (saldoInicial || 1)) * 100).toFixed(
+                {((estadisticas.balance / ((cuadreData?.saldo_apertura ?? saldoInicial) || 1)) * 100).toFixed(
                   1
                 )}
                 %

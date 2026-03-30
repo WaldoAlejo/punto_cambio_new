@@ -274,23 +274,20 @@ export async function registrarMovimientoSaldo(
       : inferredBucket);
 
   // Sincronizar tabla Saldo si aplica
+  // ⚠️ NOTA: Si se pasa explícitamente saldoBucket: "NINGUNO", NO sincronizamos
+  // la tabla Saldo. Esto es importante cuando el saldo ya fue actualizado manualmente
+  // antes de llamar a esta función (ej: en asignación de saldo inicial).
   if (bucket !== "NINGUNO") {
     const saldoNuevoDec = new Prisma.Decimal(
       typeof params.saldoNuevo === "number"
         ? params.saldoNuevo
         : params.saldoNuevo.toNumber()
     );
-    const deltaDec = new Prisma.Decimal(montoConSigno);
 
-    // Para SALDO_INICIAL: incrementar solo por el delta del movimiento, no por saldoNuevo.
-    // Para otros movimientos: usar el valor calculado directamente
-    const updateData = params.tipoMovimiento === TipoMovimiento.SALDO_INICIAL
-      ? (bucket === "BANCOS" 
-          ? { bancos: { increment: deltaDec } } 
-          : { cantidad: { increment: deltaDec } })
-      : (bucket === "BANCOS" 
-          ? { bancos: saldoNuevoDec } 
-          : { cantidad: saldoNuevoDec });
+    // Para todos los movimientos: usar el saldoNuevo calculado directamente
+    const updateData = bucket === "BANCOS" 
+      ? { bancos: saldoNuevoDec } 
+      : { cantidad: saldoNuevoDec };
 
     await client.saldo.upsert({
       where: {
