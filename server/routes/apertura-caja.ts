@@ -42,8 +42,8 @@ const DENOMINACIONES_ESPECIFICAS: Record<string, { billetes: number[]; monedas: 
     monedas: [5, 2, 1, 0.5, 0.2, 0.1],
   },
   CLP: {
-    billetes: [20000, 10000, 5000, 2000, 1000],
-    monedas: [500, 100, 50, 10, 5, 1],
+    billetes: [20000, 10000, 5000, 1000],
+    monedas: [500, 100, 50, 10],
   },
   ARS: {
     billetes: [10000, 2000, 1000, 500, 200, 100, 50, 20, 10],
@@ -102,16 +102,8 @@ function normalizarIncidenciaApertura(
 }
 
 function resolveDenominaciones(moneda: MonedaCatalogo) {
-  if (moneda.denominaciones && typeof moneda.denominaciones === "object") {
-    const desdeBd = moneda.denominaciones as { billetes?: number[]; monedas?: number[] };
-    if (Array.isArray(desdeBd.billetes) && Array.isArray(desdeBd.monedas)) {
-      return {
-        billetes: desdeBd.billetes,
-        monedas: desdeBd.monedas,
-      };
-    }
-  }
-
+  // Siempre usar denominaciones hardcoded para garantizar consistencia
+  // Ignorar las denominaciones almacenadas en la base de datos
   return DENOMINACIONES_ESPECIFICAS[moneda.codigo] || DENOMINACIONES_DEFAULT;
 }
 

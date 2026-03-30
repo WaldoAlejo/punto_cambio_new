@@ -99,8 +99,8 @@ const DENOMINACIONES_POR_MONEDA: Record<string, { billetes: number[]; monedas: n
     monedas: [5, 2, 1, 0.5, 0.2, 0.1],
   },
   CLP: {
-    billetes: [20000, 10000, 5000, 2000, 1000],
-    monedas: [500, 100, 50, 10, 5, 1],
+    billetes: [20000, 10000, 5000, 1000],
+    monedas: [500, 100, 50, 10],
   },
   ARS: {
     billetes: [10000, 2000, 1000, 500, 200, 100, 50, 20, 10],

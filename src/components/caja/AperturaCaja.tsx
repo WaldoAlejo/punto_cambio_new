@@ -69,8 +69,8 @@ const DENOMINACIONES_POR_MONEDA: Record<string, { billetes: number[]; monedas: n
     monedas: [5, 2, 1, 0.5, 0.2, 0.1],
   },
   CLP: {
-    billetes: [20000, 10000, 5000, 2000, 1000],
-    monedas: [500, 100, 50, 10, 5, 1],
+    billetes: [20000, 10000, 5000, 1000],
+    monedas: [500, 100, 50, 10],
   },
   ARS: {
     billetes: [10000, 2000, 1000, 500, 200, 100, 50, 20, 10],
@@ -383,11 +383,8 @@ export default function AperturaCaja({
         // Inicializar formularios de conteo para cada moneda
         const conteosIniciales: ConteoForm[] = (result.apertura.saldo_esperado || []).map(
           (saldo: any) => {
-            // Obtener denominaciones: primero del backend, luego específicas, luego default
-            let denominaciones = saldo.denominaciones;
-            if (!denominaciones) {
-              denominaciones = DENOMINACIONES_POR_MONEDA[saldo.codigo] || DENOMINACIONES_DEFAULT;
-            }
+            // Siempre usar denominaciones hardcoded para garantizar consistencia
+            const denominaciones = DENOMINACIONES_POR_MONEDA[saldo.codigo] || DENOMINACIONES_DEFAULT;
             
             return {
               moneda_id: saldo.moneda_id,
