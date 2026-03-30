@@ -20,7 +20,14 @@ Corrige la apertura de caja de SCALA para que muestre el saldo correcto.
 Este script fue necesario porque la apertura existente tenía el saldo desactualizado
 (3339.14 en lugar de 1817.07).
 
-### 3. `repair-saldo-duplicados.ts`
+### 3. `corregir-todas-aperturas.mjs`
+**Uso:** `node scripts/diagnostic/corregir-todas-aperturas.mjs [--dry-run]`
+
+Corrige todas las aperturas de caja en estado EN_CONTEO o PENDIENTE que tengan
+saldos desactualizados. Útil cuando se han corregido los saldos en la tabla `Saldo`
+pero las aperturas existentes aún muestran valores viejos.
+
+### 4. `repair-saldo-duplicados.ts`
 Versión TypeScript del script de reparación (requiere compilación).
 
 ## Historial de Problemas Resueltos
@@ -49,13 +56,24 @@ actualizada manualmente.
 
 ### 2026-03-30: Apertura de Caja con Saldo Desactualizado
 
-**Problema:** El operador de SCALA no podía abrir caja porque el saldo mostrado (3339.14)
-no coincidía con el saldo real (1817.07).
+**Problema:** Los operadores no podían abrir caja porque los saldos mostrados no
+coincidían con los saldos reales.
 
-**Causa:** La apertura de caja se creó cuando el saldo aún estaba duplicado.
+**Causa:** Las aperturas de caja se crearon cuando los saldos aún estaban duplicados
+por el bug. Después de corregir los saldos en la tabla `Saldo`, las aperturas
+existentes seguían mostrando valores viejos.
 
-**Solución:** Se ejecutó `corregir-apertura-scala.mjs` para actualizar el saldo esperado
-en la apertura existente.
+**Solución:** Se ejecutó `corregir-todas-aperturas.mjs` para actualizar todas las
+aperturas existentes con los saldos correctos.
+
+**Puntos afectados:**
+- SCALA (EUR: 3339.14 → 1817.07)
+- PLAZA DEL VALLE (EUR: 2215.52 → 1182.76)
+- OFICINA ROYAL PACIFIC (múltiples monedas)
+- AMAZONAS 2 (USD)
+- AMAZONAS (USD, EUR, COP)
+- EL BOSQUE (múltiples monedas)
+- Y otros...
 
 ## Notas para Desarrolladores
 

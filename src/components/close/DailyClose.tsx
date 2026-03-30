@@ -114,6 +114,10 @@ const DENOMINACIONES_POR_MONEDA: Record<string, { billetes: number[]; monedas: n
     billetes: [1000, 200, 100, 50, 20, 10],
     monedas: [0.5, 0.2, 0.1, 0.05],
   },
+  MXN: {
+    billetes: [1000, 500, 200, 100, 50, 20],
+    monedas: [10, 5, 2, 1, 0.5],
+  },
 };
 
 interface DenominacionInput {
