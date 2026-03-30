@@ -57,33 +57,27 @@ export class ServientregaValidationService {
         // Algoritmo de cédula (módulo 10)
         return ServientregaValidationService.validarCedula(clean.substring(0, 10));
       } else if (tercerDigito === 6) {
-        // Entidad Pública
+        // Entidad Pública - RUC (13 dígitos)
+        // Formato: 2 dígitos provincia + 6 + 6 dígitos secuencial + dígito verificador + 3 dígitos establecimiento
         if (len !== 13) return false;
-        if (parseInt(clean.substring(9), 10) === 0) return false;
         
-        const d9 = parseInt(clean[8], 10);
-        const coef = [3, 2, 7, 6, 5, 4, 3, 2];
-        let suma = 0;
-        for (let i = 0; i < 8; i++) {
-          suma += parseInt(clean[i], 10) * coef[i];
-        }
-        const check = (11 - (suma % 11)) % 11;
-        const finalCheck = (suma % 11) === 0 ? 0 : check;
-        return finalCheck === d9;
-      } else if (tercerDigito === 9) {
-        // Sociedad Privada o Extranjera
-        if (len !== 13) return false;
+        // Los últimos 3 dígitos no pueden ser 000
         if (parseInt(clean.substring(10), 10) === 0) return false;
         
-        const d10 = parseInt(clean[9], 10);
-        const coef = [4, 3, 2, 7, 6, 5, 4, 3, 2];
-        let suma = 0;
-        for (let i = 0; i < 9; i++) {
-          suma += parseInt(clean[i], 10) * coef[i];
-        }
-        const check = (11 - (suma % 11)) % 11;
-        const finalCheck = (suma % 11) === 0 ? 0 : check;
-        return finalCheck === d10;
+        // Aceptamos cualquier dígito verificador (posición 9) para ser permisivos
+        // ya que hay RUCs antiguos que no siguen el algoritmo estándar
+        return true;
+      } else if (tercerDigito === 9) {
+        // Sociedad Privada o Extranjera - RUC (13 dígitos)
+        // Formato: 2 dígitos provincia + 9 + 6 dígitos secuencial + dígito verificador + 3 dígitos establecimiento
+        if (len !== 13) return false;
+        
+        // Los últimos 3 dígitos no pueden ser 000
+        if (parseInt(clean.substring(10), 10) === 0) return false;
+        
+        // Aceptamos cualquier dígito verificador (posición 9) para ser permisivos
+        // ya que hay RUCs antiguos que no siguen el algoritmo estándar
+        return true;
       }
 
       return false;

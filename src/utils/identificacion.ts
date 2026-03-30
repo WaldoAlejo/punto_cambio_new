@@ -5,6 +5,9 @@
 /**
  * Valida una identificación ecuatoriana (Cédula, RUC Persona Natural, RUC Sociedad Privada, RUC Entidad Pública)
  * También permite pasaportes (mínimo 6 caracteres alfanuméricos)
+ * 
+ * NOTA: Esta validación es permisiva con el dígito verificador para aceptar RUCs antiguos
+ * y especiales que pueden no seguir el algoritmo estándar. Solo valida el formato básico.
  */
 export function validarIdentificacion(id: string): boolean {
   const cleanId = (id || "").trim();
@@ -28,15 +31,14 @@ export function validarIdentificacion(id: string): boolean {
 
   const tercerDigito = parseInt(cleanId[2], 10);
 
+  // Validación según tipo de identificación
   if (tercerDigito < 6) {
     // Persona Natural: Cédula (10) o RUC (13)
-    if (len === 13 && !cleanId.endsWith("001")) {
-       // Técnicamente puede terminar en 002, 003... pero el 99% es 001
-       // Para ser más permisivos con RUCs de personas naturales permitimos que termine en cualquier cosa > 0
-       if (parseInt(cleanId.substring(10), 10) === 0) return false;
-    }
+    // Validar que los últimos 3 dígitos no sean 000 (para RUC)
+    if (len === 13 && parseInt(cleanId.substring(10), 10) === 0) return false;
     
-    // Algoritmo de cédula (módulo 10)
+    // Para cédulas y RUCs de persona natural, validamos el dígito verificador
+    // usando el algoritmo de módulo 10
     const d10 = parseInt(cleanId[9], 10);
     const coef = [2, 1, 2, 1, 2, 1, 2, 1, 2];
     let suma = 0;
@@ -49,35 +51,28 @@ export function validarIdentificacion(id: string): boolean {
     return check === d10;
     
   } else if (tercerDigito === 6) {
-    // Entidad Pública
+    // Entidad Pública - RUC (13 dígitos)
+    // Formato: 2 dígitos provincia + 6 + 6 dígitos secuencial + dígito verificador + 3 dígitos establecimiento
     if (len !== 13) return false;
-    if (parseInt(cleanId.substring(9), 10) === 0) return false;
     
-    const d9 = parseInt(cleanId[8], 10);
-    const coef = [3, 2, 7, 6, 5, 4, 3, 2];
-    let suma = 0;
-    for (let i = 0; i < 8; i++) {
-      suma += parseInt(cleanId[i], 10) * coef[i];
-    }
-    const check = (11 - (suma % 11)) % 11;
-    // Si el residuo es 0, el dígito verificador es 0
-    const finalCheck = (suma % 11) === 0 ? 0 : check;
-    return finalCheck === d9;
-    
-  } else if (tercerDigito === 9) {
-    // Sociedad Privada o Extranjera
-    if (len !== 13) return false;
+    // Los últimos 3 dígitos no pueden ser 000
     if (parseInt(cleanId.substring(10), 10) === 0) return false;
     
-    const d10 = parseInt(cleanId[9], 10);
-    const coef = [4, 3, 2, 7, 6, 5, 4, 3, 2];
-    let suma = 0;
-    for (let i = 0; i < 9; i++) {
-      suma += parseInt(cleanId[i], 10) * coef[i];
-    }
-    const check = (11 - (suma % 11)) % 11;
-    const finalCheck = (suma % 11) === 0 ? 0 : check;
-    return finalCheck === d10;
+    // Aceptamos cualquier dígito verificador (posición 9) para ser permisivos
+    // ya que hay RUCs antiguos que no siguen el algoritmo estándar
+    return true;
+    
+  } else if (tercerDigito === 9) {
+    // Sociedad Privada o Extranjera - RUC (13 dígitos)
+    // Formato: 2 dígitos provincia + 9 + 6 dígitos secuencial + dígito verificador + 3 dígitos establecimiento
+    if (len !== 13) return false;
+    
+    // Los últimos 3 dígitos no pueden ser 000
+    if (parseInt(cleanId.substring(10), 10) === 0) return false;
+    
+    // Aceptamos cualquier dígito verificador (posición 9) para ser permisivos
+    // ya que hay RUCs antiguos que no siguen el algoritmo estándar
+    return true;
   }
 
   return false;
