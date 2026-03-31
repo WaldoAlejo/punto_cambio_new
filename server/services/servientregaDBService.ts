@@ -6,6 +6,7 @@ import {
   TipoMovimiento,
   TipoReferencia,
 } from "./movimientoSaldoService.js";
+import { calcularSaldoCajaDesdeMovimientos } from "./saldoCalculationService.js";
 
 const log = (...args: unknown[]) => {
   console.warn(...args);
@@ -1297,6 +1298,14 @@ export class ServientregaDBService {
       const saldoServicioNuevo = new Prisma.Decimal(0);
 
       // 3️⃣ Actualizar Saldo general USD por bucket (CAJA vs BANCOS) usando el ledger
+      // ⚠️ IMPORTANTE: Usar calcularSaldoCajaDesdeMovimientos para obtener el saldo de caja
+      // esto garantiza consistencia con la UI y evita race conditions
+      const saldoCajaAnterior = new Prisma.Decimal(
+        await calcularSaldoCajaDesdeMovimientos(puntoAtencionId, usdId, tx)
+      );
+      
+      // Obtener saldo de tabla solo para bancos (no hay tabla de movimientos para bancos aún)
+      // y para el desglose de billetes/monedas
       const saldoActual = await tx.saldo.findUnique({
         where: {
           punto_atencion_id_moneda_id: {
@@ -1306,14 +1315,12 @@ export class ServientregaDBService {
         },
         select: {
           id: true,
-          cantidad: true,
           bancos: true,
           billetes: true,
           monedas_fisicas: true,
         },
       });
 
-      const saldoCajaAnterior = saldoActual?.cantidad ?? new Prisma.Decimal(0);
       const saldoBancosAnterior = saldoActual?.bancos ?? new Prisma.Decimal(0);
 
       let saldoCajaNuevo = saldoCajaAnterior;
@@ -1346,6 +1353,8 @@ export class ServientregaDBService {
             },
           },
           update: {
+            // ⚠️ IMPORTANTE: Actualizar cantidad con el nuevo saldo calculado
+            cantidad: saldoCajaNuevo,
             billetes: new Prisma.Decimal((saldoActual?.billetes ?? new Prisma.Decimal(0)).toNumber()).add(
               new Prisma.Decimal(desglose.billetes)
             ),
@@ -1509,6 +1518,14 @@ export class ServientregaDBService {
       }
 
       // 3️⃣ Actualizar Saldo general USD por bucket usando el ledger
+      // ⚠️ IMPORTANTE: Usar calcularSaldoCajaDesdeMovimientos para obtener el saldo de caja
+      // esto garantiza consistencia con la UI y evita race conditions
+      const saldoCajaAnterior = new Prisma.Decimal(
+        await calcularSaldoCajaDesdeMovimientos(puntoAtencionId, usdId, tx)
+      );
+      
+      // Obtener saldo de tabla solo para bancos (no hay tabla de movimientos para bancos aún)
+      // y para el desglose de billetes/monedas
       const saldoActual = await tx.saldo.findUnique({
         where: {
           punto_atencion_id_moneda_id: {
@@ -1518,14 +1535,12 @@ export class ServientregaDBService {
         },
         select: {
           id: true,
-          cantidad: true,
           bancos: true,
           billetes: true,
           monedas_fisicas: true,
         },
       });
 
-      const saldoCajaAnterior = saldoActual?.cantidad ?? new Prisma.Decimal(0);
       const saldoBancosAnterior = saldoActual?.bancos ?? new Prisma.Decimal(0);
 
       let saldoCajaNuevo = saldoCajaAnterior;
@@ -1567,6 +1582,8 @@ export class ServientregaDBService {
             },
           },
           update: {
+            // ⚠️ IMPORTANTE: Actualizar cantidad con el nuevo saldo calculado
+            cantidad: saldoCajaNuevo,
             billetes: new Prisma.Decimal(billetesNuevo),
             monedas_fisicas: new Prisma.Decimal(monedasNuevo),
             updated_at: new Date(),
