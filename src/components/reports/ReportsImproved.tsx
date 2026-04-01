@@ -24,6 +24,7 @@ import { userService } from "@/services/userService";
 import { pointService } from "@/services/pointService";
 import { currencyService } from "@/services/currencyService";
 import { exportToExcel } from "@/utils/exportToExcel";
+import { formatGyeTime, formatGyeDate } from "@/utils/timezone";
 import {
   Loader2,
   Filter,
@@ -960,6 +961,29 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                               // ✅ Ocultar columna "signo" (ya se muestra con el monto)
                               if (key === "signo") {
                                 return null;
+                              }
+                              // ✅ Formateo especial para reporte worktime (timezone Ecuador)
+                              if (
+                                effectiveReportType === "worktime" &&
+                                ["entrada", "almuerzo", "regreso", "salida"].includes(key) &&
+                                typeof value === "string"
+                              ) {
+                                return (
+                                  <td key={cellIndex} className="px-4 py-3 text-sm">
+                                    {value ? formatGyeTime(value) : ""}
+                                  </td>
+                                );
+                              }
+                              if (
+                                effectiveReportType === "worktime" &&
+                                key === "date" &&
+                                typeof value === "string"
+                              ) {
+                                return (
+                                  <td key={cellIndex} className="px-4 py-3 text-sm">
+                                    {value ? formatGyeDate(value) : ""}
+                                  </td>
+                                );
                               }
                               // Renderizado normal
                               return (

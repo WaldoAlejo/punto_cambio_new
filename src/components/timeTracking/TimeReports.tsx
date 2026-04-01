@@ -29,7 +29,7 @@ import { User, PuntoAtencion, Usuario } from "../../types";
 import { useToast } from "@/hooks/use-toast";
 import { userService } from "@/services/userService";
 import { pointService } from "@/services/pointService";
-import { toGyeClock } from "@/utils/timezone";
+import { formatGyeTime } from "@/utils/timezone";
 
 interface TimeReportsProps {
   _user: User;
@@ -169,10 +169,7 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
       // Helper para formatear hora Ecuador en CSV
       const fmtTimeCSV = (iso?: string) => {
         if (!iso) return "";
-        const d = toGyeClock(new Date(iso));
-        const h = d.getUTCHours().toString().padStart(2, "0");
-        const m = d.getUTCMinutes().toString().padStart(2, "0");
-        return `${h}:${m}`;
+        return formatGyeTime(iso);
       };
       
       const rows = reportData.map((r) => [
@@ -394,10 +391,7 @@ const TimeReports = ({ selectedPoint }: TimeReportsProps) => {
                   // Formatear hora en zona horaria de Ecuador (GMT-5)
                   const fmtTime = (iso?: string) => {
                     if (!iso) return "";
-                    const d = toGyeClock(new Date(iso));
-                    const h = d.getUTCHours().toString().padStart(2, "0");
-                    const m = d.getUTCMinutes().toString().padStart(2, "0");
-                    return `${h}:${m}`;
+                    return formatGyeTime(iso);
                   };
                   return (
                     <TableRow key={index}>

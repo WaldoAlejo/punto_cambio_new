@@ -24,6 +24,7 @@ import { userService } from "@/services/userService";
 import { pointService } from "@/services/pointService";
 import { currencyService } from "@/services/currencyService";
 import { exportToExcel } from "@/utils/exportToExcel";
+import { formatGyeTime, formatGyeDate } from "@/utils/timezone";
 import {
   Loader2,
   Filter,
@@ -1021,25 +1022,56 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
                               key={index}
                               className="hover:bg-muted/30 transition-colors"
                             >
-                              {Object.values(row).map((value, cellIndex) => (
-                                <td
-                                  key={cellIndex}
-                                  className="px-4 py-3 text-sm whitespace-nowrap"
-                                >
-                                  <div
-                                    className="max-w-[200px] truncate"
-                                    title={String(value || "")}
+                              {Object.entries(row).map(([key, value], cellIndex) => {
+                                // Formateo especial para reporte worktime
+                                if (
+                                  effectiveReportType === "worktime" &&
+                                  ["entrada", "almuerzo", "regreso", "salida"].includes(key) &&
+                                  typeof value === "string"
+                                ) {
+                                  return (
+                                    <td
+                                      key={cellIndex}
+                                      className="px-4 py-3 text-sm whitespace-nowrap"
+                                    >
+                                      {value ? formatGyeTime(value) : ""}
+                                    </td>
+                                  );
+                                }
+                                if (
+                                  effectiveReportType === "worktime" &&
+                                  key === "date" &&
+                                  typeof value === "string"
+                                ) {
+                                  return (
+                                    <td
+                                      key={cellIndex}
+                                      className="px-4 py-3 text-sm whitespace-nowrap"
+                                    >
+                                      {value ? formatGyeDate(value) : ""}
+                                    </td>
+                                  );
+                                }
+                                return (
+                                  <td
+                                    key={cellIndex}
+                                    className="px-4 py-3 text-sm whitespace-nowrap"
                                   >
-                                    {typeof value === "number"
-                                      ? value.toLocaleString("es-EC", {
-                                          minimumFractionDigits:
-                                            value % 1 === 0 ? 0 : 2,
-                                          maximumFractionDigits: 2,
-                                        })
-                                      : String(value || "")}
-                                  </div>
-                                </td>
-                              ))}
+                                    <div
+                                      className="max-w-[200px] truncate"
+                                      title={String(value || "")}
+                                    >
+                                      {typeof value === "number"
+                                        ? value.toLocaleString("es-EC", {
+                                            minimumFractionDigits:
+                                              value % 1 === 0 ? 0 : 2,
+                                            maximumFractionDigits: 2,
+                                          })
+                                        : String(value || "")}
+                                    </div>
+                                  </td>
+                                );
+                              })}
                             </tr>
                           ))}
                         </tbody>

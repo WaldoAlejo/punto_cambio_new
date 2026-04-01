@@ -15,7 +15,14 @@ import {
   gyeDayRangeUtcFromDate,
   todayGyeDateOnly,
   gyeDayRangeUtcFromDateOnly,
+  toGyeClock,
 } from "../utils/timezone.js";
+
+/** Extrae hora y minuto de Ecuador desde una fecha UTC */
+function getEcuadorHM(date: Date): { h: number; m: number } {
+  const gye = toGyeClock(date);
+  return { h: gye.getUTCHours(), m: gye.getUTCMinutes() };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Tipos y Interfaces
@@ -208,9 +215,8 @@ export async function validarInicioJornada(
     errores.push("Ya existe una jornada activa para hoy. Finalice la jornada anterior antes de iniciar una nueva.");
   }
   
-  // 2. Validar hora de entrada
-  const horaActual = fechaInicio.getHours();
-  const minutosActual = fechaInicio.getMinutes();
+  // 2. Validar hora de entrada (usando hora Ecuador)
+  const { h: horaActual, m: minutosActual } = getEcuadorHM(fechaInicio);
   const tiempoActual = horaActual * 60 + minutosActual;
   
   const [horaMin, minMin] = config.horaEntradaMinima.split(":").map(Number);
@@ -359,9 +365,8 @@ export async function validarFinJornada(
     advertencias.push(`Tiempo de jornada (${horas}h ${min}m) excede el máximo permitido (${horasMax}h ${minMax}m).`);
   }
   
-  // Validar hora de salida
-  const horaActual = fechaSalida.getHours();
-  const minutosActual = fechaSalida.getMinutes();
+  // Validar hora de salida (usando hora Ecuador)
+  const { h: horaActual, m: minutosActual } = getEcuadorHM(fechaSalida);
   const tiempoActual = horaActual * 60 + minutosActual;
   
   const [horaMin, minMin] = config.horaSalidaMinima.split(":").map(Number);
@@ -500,15 +505,17 @@ export async function obtenerEstadisticasUsuario(
     totalMinutosTrabajados += minTrabajados;
     totalMinutosAlmuerzo += minAlmuerzo;
     
-    // Verificar llegada tarde
-    const horaEntrada = jornada.fecha_inicio.getHours() * 60 + jornada.fecha_inicio.getMinutes();
+    // Verificar llegada tarde (usando hora Ecuador)
+    const { h: hEnt, m: mEnt } = getEcuadorHM(jornada.fecha_inicio);
+    const horaEntrada = hEnt * 60 + mEnt;
     if (horaEntrada > tiempoMaximoEntrada + config.minToleranciaLlegada) {
       diasConLlegadaTarde++;
     }
-    
-    // Verificar salida anticipada
+
+    // Verificar salida anticipada (usando hora Ecuador)
     if (jornada.fecha_salida) {
-      const horaSalida = jornada.fecha_salida.getHours() * 60 + jornada.fecha_salida.getMinutes();
+      const { h: hSal, m: mSal } = getEcuadorHM(jornada.fecha_salida);
+      const horaSalida = hSal * 60 + mSal;
       if (horaSalida < tiempoMinimoSalida - config.minToleranciaSalida) {
         diasConSalidaAnticipada++;
       }

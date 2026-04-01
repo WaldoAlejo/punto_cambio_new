@@ -41,3 +41,43 @@ export function todayGyeDateOnly(now: Date = new Date()): string {
   const dd = d < 10 ? `0${d}` : `${d}`;
   return `${y}-${mm}-${dd}`;
 }
+
+/** Formatea una fecha UTC a hora Ecuador (HH:mm) de forma robusta */
+export function formatGyeTime(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleTimeString("es-ES", {
+    timeZone: "America/Guayaquil",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/** Formatea una fecha UTC a fecha Ecuador (DD/MM/YYYY) de forma robusta */
+export function formatGyeDate(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleDateString("es-ES", {
+    timeZone: "America/Guayaquil",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+/** Formatea una fecha UTC a fecha+hora Ecuador (DD/MM/YYYY HH:mm) */
+export function formatGyeDateTime(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const fecha = d.toLocaleDateString("es-ES", {
+    timeZone: "America/Guayaquil",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  const hora = d.toLocaleTimeString("es-ES", {
+    timeZone: "America/Guayaquil",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return `${fecha} ${hora}`;
+}

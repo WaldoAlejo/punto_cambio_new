@@ -4,7 +4,7 @@ import SpontaneousExitForm from "./SpontaneousExitForm";
 import SpontaneousExitHistory from "./SpontaneousExitHistory";
 import { User, PuntoAtencion, SalidaEspontanea } from "../../types";
 import { spontaneousExitService } from "../../services/spontaneousExitService";
-import { toGyeClock } from "@/utils/timezone";
+import { formatGyeTime, formatGyeDate } from "@/utils/timezone";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 
@@ -205,18 +205,14 @@ const TimeManagement = ({ user, selectedPoint }: TimeManagementProps) => {
                     </thead>
                     <tbody>
                       {schedules.map((s) => {
-                        const d = new Date(s.fecha_inicio);
                         const toTime = (v?: string | null) => {
                           if (!v) return "-";
-                          const date = toGyeClock(new Date(v));
-                          const h = date.getUTCHours().toString().padStart(2, "0");
-                          const m = date.getUTCMinutes().toString().padStart(2, "0");
-                          return `${h}:${m}`;
+                          return formatGyeTime(v);
                         };
                         return (
                           <tr key={s.id} className="border-t">
                             <td className="px-3 py-2">
-                              {d.toLocaleDateString("es-EC")}
+                              {formatGyeDate(s.fecha_inicio)}
                             </td>
                             <td className="px-3 py-2">
                               {toTime(s.fecha_inicio)}

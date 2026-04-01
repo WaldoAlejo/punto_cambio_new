@@ -10,7 +10,7 @@ import {
 } from "../../services/spontaneousExitService";
 import { scheduleService, Schedule } from "../../services/scheduleService";
 import { toast } from "@/hooks/use-toast";
-import { toGyeClock } from "@/utils/timezone";
+import { formatGyeTime, formatGyeDate } from "@/utils/timezone";
 
 interface OperatorTimeManagementProps {
   user: User;
@@ -213,10 +213,7 @@ const OperatorTimeManagement = ({
 
   const toTime = (v?: string | null) => {
     if (!v) return "-";
-    const d = toGyeClock(new Date(v));
-    const h = d.getUTCHours().toString().padStart(2, "0");
-    const m = d.getUTCMinutes().toString().padStart(2, "0");
-    return `${h}:${m}`;
+    return formatGyeTime(v);
   };
 
   return (
@@ -299,11 +296,10 @@ const OperatorTimeManagement = ({
                     </thead>
                     <tbody>
                       {schedules.map((s) => {
-                        const d = new Date(s.fecha_inicio);
                         return (
                           <tr key={s.id} className="border-t">
                             <td className="px-3 py-2">
-                              {d.toLocaleDateString("es-EC")}
+                              {formatGyeDate(s.fecha_inicio)}
                             </td>
                             <td className="px-3 py-2">
                               {toTime(s.fecha_inicio)}

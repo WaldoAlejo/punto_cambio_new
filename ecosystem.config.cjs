@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 
 // Load .env.production for PM2
-let envVars = { NODE_ENV: "production", PORT: 3001 };
+let envVars = { NODE_ENV: "production", PORT: 3001, TZ: "America/Guayaquil" };
 
 const prodEnvPath = path.join(__dirname, ".env.production");
 if (fs.existsSync(prodEnvPath)) {

@@ -14,7 +14,7 @@ import {
 import { toast } from "sonner";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, SalidaEspontanea } from "../../types";
-import { toGyeClock } from "@/utils/timezone";
+import { formatGyeTime } from "@/utils/timezone";
 import { scheduleService } from "@/services/scheduleService";
 
 interface TimeTrackerProps {
@@ -159,12 +159,7 @@ const TimeTracker = ({
     });
   };
 
-  const formatearHora = (fecha: string) => {
-    const d = toGyeClock(new Date(fecha));
-    const h = d.getUTCHours().toString().padStart(2, "0");
-    const m = d.getUTCMinutes().toString().padStart(2, "0");
-    return `${h}:${m}`;
-  };
+  const formatearHora = (fecha: string) => formatGyeTime(fecha);
 
   const guardarJornadaBackend = async (data: JornadaPayload) => {
     try {

@@ -493,10 +493,8 @@ router.post(
             rol: req.user?.rol,
             puntoId: punto_atencion_id,
           });
-          // Usar hora actual del servidor convertida a UTC
-          // Si el servidor está en Ecuador, new Date() es hora local y Prisma la guarda como UTC
-          // Por eso usamos toISOString() para asegurar formato UTC correcto
-          updateData.fecha_salida = new Date();
+          // Usar la fecha enviada por el frontend o, si no existe, la hora actual de Ecuador
+          updateData.fecha_salida = fecha_salida ? new Date(fecha_salida) : nowEcuador();
           if (!esExentoDeCaja(req.user?.rol)) {
             // Para roles que sí manejan caja, verificar Cierre de Caja (divisas)
             const { gte } = gyeDayRangeUtcFromDate(new Date());
@@ -576,7 +574,7 @@ router.post(
           data: {
             usuario_id,
             punto_atencion_id,
-            fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : new Date(),
+            fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : nowEcuador(),
             ubicacion_inicio:
               ubicacion_inicio !== undefined && ubicacion_inicio !== null
                 ? (ubicacion_inicio as Prisma.InputJsonValue)
@@ -1125,7 +1123,7 @@ router.post(
           data: finalizar
             ? {
                 // Cancelar/cerrar la jornada equivocada y dejar libre el punto (usuario sin punto)
-                fecha_salida: new Date(),
+                fecha_salida: nowEcuador(),
                 estado: EstadoJornada.CANCELADO,
                 motivo_cambio: motivo || "CANCELACION_ADMIN",
                 usuario_autorizo: adminId,
