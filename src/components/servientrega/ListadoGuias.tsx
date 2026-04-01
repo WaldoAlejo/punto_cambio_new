@@ -21,6 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { ChevronDown, ChevronUp, Eye } from "lucide-react";
 
 export default function ListadoGuias() {
   const hoy = new Date();
@@ -29,6 +30,7 @@ export default function ListadoGuias() {
   const [hasta, setHasta] = useState(format(hoy, "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
   const { user } = useAuth();
 
@@ -145,6 +147,35 @@ export default function ListadoGuias() {
     fetchGuias();
   }, [fetchGuias]);
 
+  const getEstadoBadge = (estado: string) => {
+    switch (estado) {
+      case "ACTIVA":
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            Activa
+          </span>
+        );
+      case "ANULADA":
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+            Anulada
+          </span>
+        );
+      case "PENDIENTE_ANULACION":
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            Pendiente
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+            {estado}
+          </span>
+        );
+    }
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto mt-3 sm:mt-4 space-y-2 sm:space-y-3">
       {/* Información del saldo */}
@@ -161,7 +192,7 @@ export default function ListadoGuias() {
         </CardHeader>
         <CardContent>
           {/* Filtros */}
-          <div className="flex gap-3 mb-4 flex-wrap">
+          <div className="flex gap-3 mb-4 flex-wrap items-end">
             <div className="flex-1 min-w-32">
               <Label className="text-xs">Desde</Label>
               <Input
@@ -180,7 +211,7 @@ export default function ListadoGuias() {
                 className="h-8 text-sm"
               />
             </div>
-            <Button onClick={fetchGuias} className="self-end h-8 text-sm">
+            <Button onClick={fetchGuias} className="h-8 text-sm">
               Buscar
             </Button>
           </div>
@@ -200,122 +231,193 @@ export default function ListadoGuias() {
               No hay guías en este periodo.
             </p>
           ) : (
-            <div className="space-y-4">
-              {guias.map((guia) => (
-                  <div
-                    key={guia.id}
-                    className="border p-4 rounded flex flex-col md:flex-row justify-between items-start md:items-center gap-2"
-                  >
-                    <div>
-                      <p>
-                        <strong>Guía:</strong> {guia.numero_guia}
-                      </p>
-                      <p>
-                        <strong>Fecha:</strong>{" "}
-                        {format(
-                          parseISO(guia.created_at || ""),
-                          "yyyy-MM-dd HH:mm"
+            <div className="overflow-x-auto -mx-2 px-2">
+              <table className="min-w-full text-sm border rounded-lg overflow-hidden">
+                <thead className="bg-gray-50 text-gray-700">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Guía</th>
+                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Fecha</th>
+                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Destinatario</th>
+                    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Destino</th>
+                    <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Costo</th>
+                    <th className="px-3 py-2 text-center font-medium whitespace-nowrap">Estado</th>
+                    <th className="px-3 py-2 text-center font-medium whitespace-nowrap">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {guias.map((guia) => {
+                    const isExpanded = expandedId === guia.id;
+                    return (
+                      <React.Fragment key={guia.id}>
+                        <tr className="hover:bg-gray-50">
+                          <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
+                            {guia.numero_guia}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-gray-600">
+                            {guia.created_at
+                              ? format(parseISO(guia.created_at), "dd/MM/yyyy HH:mm")
+                              : "N/A"}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                            {guia.destinatario_nombre || "N/A"}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-gray-600">
+                            {guia.ciudad_destino || "N/A"}
+                            {guia.provincia_destino ? ` (${guia.provincia_destino})` : ""}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-gray-900">
+                            {typeof guia.costo_envio === "number"
+                              ? `$${guia.costo_envio.toFixed(2)}`
+                              : "N/A"}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-center">
+                            {getEstadoBadge(guia.estado)}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <Button
+                                onClick={() => handleVerPDF(guia.base64_response || "")}
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                              >
+                                <Eye className="w-3.5 h-3.5 mr-1" />
+                                PDF
+                              </Button>
+
+                              {guia.estado === "ACTIVA" &&
+                                isToday(parseISO(guia.created_at || "")) && (
+                                  <>
+                                    {user?.rol === "ADMIN" ||
+                                    user?.rol === "SUPER_USUARIO" ? (
+                                      <Button
+                                        onClick={() => handleAnularDirecto(guia)}
+                                        variant="destructive"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs"
+                                      >
+                                        Anular
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        onClick={() => handleSolicitarAnulacion(guia)}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 px-2 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                                      >
+                                        Solicitar
+                                      </Button>
+                                    )}
+                                  </>
+                                )}
+
+                              {guia.estado === "PENDIENTE_ANULACION" && (
+                                <span className="text-xs text-yellow-600 font-medium">
+                                  Esperando
+                                </span>
+                              )}
+
+                              {guia.estado === "ANULADA" && (
+                                <span className="text-xs text-red-600 font-medium">
+                                  Anulada
+                                </span>
+                              )}
+
+                              {guia.estado === "ACTIVA" &&
+                                !isToday(parseISO(guia.created_at || "")) && (
+                                  <span className="text-xs text-gray-500">
+                                    Cerrada
+                                  </span>
+                                )}
+
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() =>
+                                  setExpandedId(isExpanded ? null : guia.id)
+                                }
+                                title="Ver detalles"
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="w-4 h-4" />
+                                ) : (
+                                  <ChevronDown className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr className="bg-gray-50/50">
+                            <td colSpan={7} className="px-3 py-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-sm text-gray-700">
+                                <p>
+                                  <span className="font-medium text-gray-900">Punto:</span>{" "}
+                                  {guia.punto_atencion_nombre || "N/A"}
+                                </p>
+                                <p>
+                                  <span className="font-medium text-gray-900">Usuario:</span>{" "}
+                                  {guia.usuario_nombre || "N/A"}
+                                </p>
+                                <p>
+                                  <span className="font-medium text-gray-900">Teléfono dest.:</span>{" "}
+                                  {guia.destinatario_telefono || "N/A"}
+                                </p>
+                                <p>
+                                  <span className="font-medium text-gray-900">Agencia:</span>{" "}
+                                  {guia.agencia_nombre || guia.agencia_codigo || "N/A"}
+                                </p>
+                                <p>
+                                  <span className="font-medium text-gray-900">Alianza:</span>{" "}
+                                  {guia.alianza || "N/A"}
+                                </p>
+                                <p>
+                                  <span className="font-medium text-gray-900">Oficina Alianza:</span>{" "}
+                                  {guia.oficina_alianza || "N/A"}
+                                </p>
+                                <p>
+                                  <span className="font-medium text-gray-900">Ciudad Origen:</span>{" "}
+                                  {guia.ciudad_origen || "N/A"}
+                                  {guia.provincia_origen ? ` (${guia.provincia_origen})` : ""}
+                                </p>
+                                <p>
+                                  <span className="font-medium text-gray-900">Dirección dest.:</span>{" "}
+                                  {guia.destinatario_direccion || "N/A"}
+                                </p>
+                                <p>
+                                  <span className="font-medium text-gray-900">Valor Declarado:</span>{" "}
+                                  {guia.valor_declarado !== undefined
+                                    ? `$${guia.valor_declarado.toLocaleString()}`
+                                    : "N/A"}
+                                </p>
+                                {guia.motivo_anulacion && (
+                                  <p className="sm:col-span-2 lg:col-span-3">
+                                    <span className="font-medium text-gray-900">Motivo anulación:</span>{" "}
+                                    {guia.motivo_anulacion}
+                                  </p>
+                                )}
+                                {guia.fecha_anulacion && (
+                                  <p>
+                                    <span className="font-medium text-gray-900">Fecha anulación:</span>{" "}
+                                    {format(parseISO(guia.fecha_anulacion), "dd/MM/yyyy HH:mm")}
+                                  </p>
+                                )}
+                                {guia.anulada_por && (
+                                  <p>
+                                    <span className="font-medium text-gray-900">Anulada por:</span>{" "}
+                                    {guia.anulada_por}
+                                  </p>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </p>
-                      <p>
-                        <strong>Costo:</strong>{" "}
-                        {typeof guia.costo_envio === "number"
-                          ? `$${guia.costo_envio.toFixed(2)}`
-                          : "N/A"}
-                      </p>
-                      <p>
-                        <strong>Estado:</strong>{" "}
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            guia.estado === "ACTIVA"
-                              ? "bg-green-100 text-green-800"
-                              : guia.estado === "ANULADA"
-                              ? "bg-red-100 text-red-800"
-                              : "bg-yellow-100 text-yellow-800"
-                          }`}
-                        >
-                          {guia.estado === "ACTIVA"
-                            ? "Activa"
-                            : guia.estado === "ANULADA"
-                            ? "Anulada"
-                            : "Pendiente Anulación"}
-                        </span>
-                      </p>
-                      {guia.motivo_anulacion && (
-                        <p className="text-sm text-gray-600 mt-1">
-                          <strong>Motivo:</strong> {guia.motivo_anulacion}
-                        </p>
-                      )}
-                      {/* Campos de agencia/oficina */}
-                      <p>
-                        <strong>Agencia Código:</strong> {guia.agencia_codigo || "N/A"}
-                      </p>
-                      <p>
-                        <strong>Agencia Nombre:</strong> {guia.agencia_nombre || "N/A"}
-                      </p>
-                      <p>
-                        <strong>Alianza:</strong> {guia.alianza || "N/A"}
-                      </p>
-                      <p>
-                        <strong>Oficina Alianza:</strong> {guia.oficina_alianza || "N/A"}
-                      </p>
-                    </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button
-                      onClick={() => handleVerPDF(guia.base64_response || "")}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Ver PDF
-                    </Button>
-
-                    {/* Lógica de botones según rol y estado */}
-                    {guia.estado === "ACTIVA" &&
-                      isToday(parseISO(guia.created_at || "")) && (
-                        <>
-                          {user?.rol === "ADMIN" ||
-                          user?.rol === "SUPER_USUARIO" ? (
-                            <Button
-                              onClick={() => handleAnularDirecto(guia)}
-                              variant="destructive"
-                              size="sm"
-                            >
-                              Anular
-                            </Button>
-                          ) : (
-                            <Button
-                              onClick={() => handleSolicitarAnulacion(guia)}
-                              variant="outline"
-                              size="sm"
-                              className="border-orange-300 text-orange-700 hover:bg-orange-50"
-                            >
-                              Solicitar Anulación
-                            </Button>
-                          )}
-                        </>
-                      )}
-
-                    {guia.estado === "PENDIENTE_ANULACION" && (
-                      <span className="text-sm text-yellow-600 font-medium">
-                        Esperando aprobación
-                      </span>
-                    )}
-
-                    {guia.estado === "ANULADA" && (
-                      <span className="text-sm text-red-600 font-medium">
-                        Guía anulada
-                      </span>
-                    )}
-
-                    {guia.estado === "ACTIVA" &&
-                      !isToday(parseISO(guia.created_at || "")) && (
-                        <span className="text-sm text-gray-500">
-                          No se puede anular
-                        </span>
-                      )}
-                  </div>
-                </div>
-              ))}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>

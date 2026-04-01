@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { format, parseISO, subDays } from "date-fns";
-import { Download, Eye, FileText, BarChart3, RefreshCw, Wallet, History, CreditCard } from "lucide-react";
+import { Download, Eye, FileText, BarChart3, RefreshCw, Wallet, History, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
 import { Loading } from "@/components/ui/loading";
 import { Guia } from "@/types/servientrega";
 import axiosInstance from "@/services/axiosInstance";
@@ -128,6 +128,7 @@ export const ServientregaInformes = ({
   const [error, setError] = useState<string | null>(null);
   const [puntosAtencion, setPuntosAtencion] = useState<PuntoAtencion[]>([]);
   const [loadingPuntos, setLoadingPuntos] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   
   // Estado para informe de saldos
   const [saldosData, setSaldosData] = useState<SaldosRecargasData | null>(null);
@@ -495,21 +496,9 @@ export const ServientregaInformes = ({
 
       {activeTab === "guias" ? (
         <>
-          {/* Botón exportar */}
-          <div className="flex justify-end">
-            <Button
-              onClick={handleExportarExcel}
-              className="bg-green-600 hover:bg-green-700"
-              disabled={loading || error !== null}
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Exportar Excel
-            </Button>
-          </div>
-
           {/* Estadísticas generales */}
           {estadisticas && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -571,38 +560,38 @@ export const ServientregaInformes = ({
 
           <Card>
             <CardHeader>
-              <CardTitle>Listado de Guías</CardTitle>
+              <CardTitle className="text-base">Listado de Guías</CardTitle>
             </CardHeader>
             <CardContent>
-              {/* Filtros */}
-              <div className="flex gap-4 mb-6 flex-wrap">
-                <div className="flex-1 min-w-32">
-                  <Label className="text-sm">Desde</Label>
+              {/* Filtros y exportar */}
+              <div className="flex flex-wrap gap-3 mb-4 items-end">
+                <div className="flex-1 min-w-[140px]">
+                  <Label className="text-xs">Desde</Label>
                   <Input
                     type="date"
                     value={desde}
                     onChange={(e) => setDesde(e.target.value)}
-                    className="h-9"
+                    className="h-8 text-sm"
                   />
                 </div>
-                <div className="flex-1 min-w-32">
-                  <Label className="text-sm">Hasta</Label>
+                <div className="flex-1 min-w-[140px]">
+                  <Label className="text-xs">Hasta</Label>
                   <Input
                     type="date"
                     value={hasta}
                     onChange={(e) => setHasta(e.target.value)}
-                    className="h-9"
+                    className="h-8 text-sm"
                   />
                 </div>
-                <div className="flex-1 min-w-32">
-                  <Label className="text-sm">Estado</Label>
+                <div className="flex-1 min-w-[140px]">
+                  <Label className="text-xs">Estado</Label>
                   <select
                     value={filtroEstado}
                     onChange={(e) => {
                       const v = e.target.value;
                       setFiltroEstado(isFiltroEstado(v) ? v : "TODOS");
                     }}
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+                    className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
                   >
                     <option value="TODOS">Todos</option>
                     <option value="ACTIVA">Activas</option>
@@ -612,12 +601,12 @@ export const ServientregaInformes = ({
                     </option>
                   </select>
                 </div>
-                <div className="flex-1 min-w-32">
-                  <Label className="text-sm">Punto de Atención</Label>
+                <div className="flex-1 min-w-[180px]">
+                  <Label className="text-xs">Punto de Atención</Label>
                   <select
                     value={filtroPunto}
                     onChange={(e) => setFiltroPunto(e.target.value)}
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+                    className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
                   >
                     <option value="TODOS">Todos los puntos</option>
                     {puntosFiltro.map((punto) => (
@@ -627,9 +616,19 @@ export const ServientregaInformes = ({
                     ))}
                   </select>
                 </div>
-                <Button onClick={fetchInformes} className="self-end h-9">
-                  Buscar
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={fetchInformes} className="h-8 text-sm">
+                    Buscar
+                  </Button>
+                  <Button
+                    onClick={handleExportarExcel}
+                    className="h-8 text-sm bg-green-600 hover:bg-green-700"
+                    disabled={loading || error !== null}
+                  >
+                    <Download className="w-4 h-4 mr-1" />
+                    Excel
+                  </Button>
+                </div>
               </div>
 
               {/* Lista de guías */}
@@ -647,123 +646,149 @@ export const ServientregaInformes = ({
                   No hay guías en este periodo con los filtros seleccionados.
                 </p>
               ) : (
-                <div className="space-y-4">
-                  {guiasFiltradas.map((guia) => (
-                    <div
-                      key={guia.id}
-                      className="border rounded-lg p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">
-                            Guía: {guia.numero_guia}
-                          </h3>
-                          {getEstadoBadge(guia.estado)}
-                        </div>
-                        <div className="text-sm text-gray-600 space-y-1">
-                          <p>
-                            <strong>Fecha:</strong>{" "}
-                            {format(
-                              parseISO(
-                                guia.fecha_creacion ||
-                                  guia.created_at ||
-                                  new Date().toISOString()
-                              ),
-                              "yyyy-MM-dd HH:mm"
-                            )}
-                          </p>
-                          <p>
-                            <strong>Punto:</strong>{" "}
-                            {guia.punto_atencion_nombre || "N/A"}
-                          </p>
-                          {/* Agencia */}
-                          <p>
-                            <strong>Agencia:</strong>{" "}
-                            {guia.agencia_nombre || guia.agencia_codigo || "N/A"}
-                          </p>
-                          {/* Ciudad Origen */}
-                          <p>
-                            <strong>Ciudad Origen:</strong>{" "}
-                            {guia.ciudad_origen || "N/A"}
-                            {guia.provincia_origen && ` (${guia.provincia_origen})`}
-                          </p>
-                          {/* Ciudad Destino */}
-                          <p>
-                            <strong>Ciudad Destino:</strong>{" "}
-                            {guia.ciudad_destino || "N/A"}
-                            {guia.provincia_destino && ` (${guia.provincia_destino})`}
-                          </p>
-                          {guia.usuario_nombre && (
-                            <p>
-                              <strong>Usuario:</strong> {guia.usuario_nombre}
-                            </p>
-                          )}
-                          {guia.destinatario_nombre && (
-                            <p>
-                              <strong>Destinatario:</strong>{" "}
-                              {guia.destinatario_nombre}
-                            </p>
-                          )}
-                          {guia.destinatario_telefono && (
-                            <p>
-                              <strong>Teléfono:</strong>{" "}
-                              {guia.destinatario_telefono}
-                            </p>
-                          )}
-                          {guia.valor_declarado !== undefined && (
-                            <p>
-                              <strong>Valor Declarado:</strong> $
-                              {guia.valor_declarado.toLocaleString()}
-                            </p>
-                          )}
-                          {(guia.costo_envio !== undefined || guia.valor_cobrado !== undefined) && (
-                            <p>
-                              <strong>Valor Cobrado:</strong>{" "}
-                              <span className="font-semibold text-green-700">
+                <div className="overflow-x-auto -mx-2 px-2">
+                  <table className="min-w-full text-sm border rounded-lg overflow-hidden">
+                    <thead className="bg-gray-50 text-gray-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Guía</th>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Fecha</th>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Punto</th>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Destinatario</th>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Destino</th>
+                        <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Valor Cobrado</th>
+                        <th className="px-3 py-2 text-center font-medium whitespace-nowrap">Estado</th>
+                        <th className="px-3 py-2 text-center font-medium whitespace-nowrap">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {guiasFiltradas.map((guia) => {
+                        const isExpanded = expandedId === guia.id;
+                        return (
+                          <React.Fragment key={guia.id}>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
+                                {guia.numero_guia}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-600">
+                                {format(
+                                  parseISO(
+                                    guia.fecha_creacion || guia.created_at || new Date().toISOString()
+                                  ),
+                                  "dd/MM/yyyy HH:mm"
+                                )}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                                {guia.punto_atencion_nombre || "N/A"}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                                {guia.destinatario_nombre || "N/A"}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-600">
+                                {guia.ciudad_destino || "N/A"}
+                                {guia.provincia_destino ? ` (${guia.provincia_destino})` : ""}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-green-700">
                                 ${(guia.valor_cobrado || guia.costo_envio || 0).toLocaleString()}
-                              </span>
-                            </p>
-                          )}
-                          {guia.motivo_anulacion && (
-                            <p>
-                              <strong>Motivo anulación:</strong>{" "}
-                              {guia.motivo_anulacion}
-                            </p>
-                          )}
-                          {guia.fecha_anulacion && (
-                            <p>
-                              <strong>Fecha anulación:</strong>{" "}
-                              {format(
-                                parseISO(guia.fecha_anulacion),
-                                "yyyy-MM-dd HH:mm"
-                              )}
-                            </p>
-                          )}
-                          {guia.anulada_por && (
-                            <p>
-                              <strong>Anulada por:</strong> {guia.anulada_por}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() =>
-                            handleVerPDF(
-                              guia.pdf_base64 || guia.base64_response || ""
-                            )
-                          }
-                          disabled={!guia.pdf_base64 && !guia.base64_response}
-                        >
-                          <Eye className="w-4 h-4 mr-1" />
-                          Ver PDF
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-center">
+                                {getEstadoBadge(guia.estado)}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleVerPDF(guia.pdf_base64 || guia.base64_response || "")
+                                    }
+                                    disabled={!guia.pdf_base64 && !guia.base64_response}
+                                    className="h-7 px-2 text-xs"
+                                  >
+                                    <Eye className="w-3.5 h-3.5 mr-1" />
+                                    PDF
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => setExpandedId(isExpanded ? null : guia.id)}
+                                    title="Ver detalles"
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronUp className="w-4 h-4" />
+                                    ) : (
+                                      <ChevronDown className="w-4 h-4" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="bg-gray-50/50">
+                                <td colSpan={8} className="px-3 py-3">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-sm text-gray-700">
+                                    <p>
+                                      <span className="font-medium text-gray-900">Usuario:</span>{" "}
+                                      {guia.usuario_nombre || "N/A"}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium text-gray-900">Teléfono dest.:</span>{" "}
+                                      {guia.destinatario_telefono || "N/A"}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium text-gray-900">Agencia:</span>{" "}
+                                      {guia.agencia_nombre || guia.agencia_codigo || "N/A"}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium text-gray-900">Alianza:</span>{" "}
+                                      {guia.alianza || "N/A"}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium text-gray-900">Oficina Alianza:</span>{" "}
+                                      {guia.oficina_alianza || "N/A"}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium text-gray-900">Ciudad Origen:</span>{" "}
+                                      {guia.ciudad_origen || "N/A"}
+                                      {guia.provincia_origen ? ` (${guia.provincia_origen})` : ""}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium text-gray-900">Dirección dest.:</span>{" "}
+                                      {guia.destinatario_direccion || "N/A"}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium text-gray-900">Valor Declarado:</span>{" "}
+                                      {guia.valor_declarado !== undefined
+                                        ? `$${guia.valor_declarado.toLocaleString()}`
+                                        : "N/A"}
+                                    </p>
+                                    {guia.motivo_anulacion && (
+                                      <p className="sm:col-span-2 lg:col-span-3">
+                                        <span className="font-medium text-gray-900">Motivo anulación:</span>{" "}
+                                        {guia.motivo_anulacion}
+                                      </p>
+                                    )}
+                                    {guia.fecha_anulacion && (
+                                      <p>
+                                        <span className="font-medium text-gray-900">Fecha anulación:</span>{" "}
+                                        {format(parseISO(guia.fecha_anulacion), "dd/MM/yyyy HH:mm")}
+                                      </p>
+                                    )}
+                                    {guia.anulada_por && (
+                                      <p>
+                                        <span className="font-medium text-gray-900">Anulada por:</span>{" "}
+                                        {guia.anulada_por}
+                                      </p>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </CardContent>
@@ -778,32 +803,35 @@ export const ServientregaInformes = ({
                   <CardTitle>Estadísticas por Punto de Atención</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {estadisticas.total_por_punto.map((punto, index) => (
-                      <div key={index} className="border rounded-lg p-4">
-                        <h3 className="font-semibold mb-2">
-                          {punto.punto_atencion_nombre}
-                        </h3>
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div>
-                            <p className="text-gray-600">Total</p>
-                            <p className="text-lg font-bold">{punto.total}</p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600">Activas</p>
-                            <p className="text-lg font-bold text-green-600">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm border rounded-lg overflow-hidden">
+                      <thead className="bg-gray-50 text-gray-700">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">Punto de Atención</th>
+                          <th className="px-3 py-2 text-right font-medium">Total</th>
+                          <th className="px-3 py-2 text-right font-medium">Activas</th>
+                          <th className="px-3 py-2 text-right font-medium">Anuladas</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {estadisticas.total_por_punto.map((punto, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-3 py-2 font-medium text-gray-900">
+                              {punto.punto_atencion_nombre}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              {punto.total}
+                            </td>
+                            <td className="px-3 py-2 text-right text-green-600 font-medium">
                               {punto.activas}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-gray-600">Anuladas</p>
-                            <p className="text-lg font-bold text-red-600">
+                            </td>
+                            <td className="px-3 py-2 text-right text-red-600 font-medium">
                               {punto.anuladas}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </CardContent>
               </Card>
