@@ -40,7 +40,9 @@ router.get(
   async (req: express.Request, res: express.Response) => {
     try {
       const { desde, hasta, estado, punto_atencion_id } = req.query;
-      const usuario_id = req.user?.id;
+      const rol = req.user?.rol;
+      // Solo OPERADOR ve sus propias guías. Admin/Super/Administrativo ven todas.
+      const usuario_id = rol === "OPERADOR" ? req.user?.id : undefined;
 
       console.log("🔍 Obteniendo informes de guías:", {
         desde,
@@ -48,6 +50,7 @@ router.get(
         estado,
         punto_atencion_id,
         usuario_id,
+        rol,
       });
 
       // Obtener guías de la base de datos
@@ -113,13 +116,20 @@ router.get(
   authenticateToken,
   async (req: express.Request, res: express.Response) => {
     try {
-      const { desde, hasta } = req.query;
+      const { desde, hasta, estado, punto_atencion_id } = req.query;
 
-      console.log("📊 Obteniendo estadísticas de guías:", { desde, hasta });
+      console.log("📊 Obteniendo estadísticas de guías:", {
+        desde,
+        hasta,
+        estado,
+        punto_atencion_id,
+      });
 
       const estadisticas = await dbService.obtenerEstadisticasGuias({
         desde: desde as string,
         hasta: hasta as string,
+        estado: estado as string,
+        punto_atencion_id: punto_atencion_id as string,
       });
 
       res.json({
@@ -143,7 +153,8 @@ router.get(
   async (req: express.Request, res: express.Response) => {
     try {
       const { desde, hasta, estado, punto_atencion_id } = req.query;
-      const usuario_id = req.user?.id;
+      const rol = req.user?.rol;
+      const usuario_id = rol === "OPERADOR" ? req.user?.id : undefined;
 
       console.log("📥 Exportando informes de guías:", {
         desde,
@@ -151,6 +162,7 @@ router.get(
         estado,
         punto_atencion_id,
         usuario_id,
+        rol,
       });
 
       // Obtener guías

@@ -1026,7 +1026,12 @@ export class ServientregaDBService {
     return guias;
   }
 
-  async obtenerEstadisticasGuias(filtros: { desde?: string; hasta?: string }) {
+  async obtenerEstadisticasGuias(filtros: {
+    desde?: string;
+    hasta?: string;
+    estado?: string;
+    punto_atencion_id?: string;
+  }) {
     const where: Prisma.ServientregaGuiaWhereInput = {};
     const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
@@ -1050,6 +1055,26 @@ export class ServientregaDBService {
       if (createdAt.gte || createdAt.lte) {
         where.created_at = createdAt;
       }
+    }
+
+    // Filtro por estado
+    if (filtros.estado && filtros.estado !== "TODOS") {
+      switch (filtros.estado) {
+        case "ACTIVA":
+          where.proceso = { not: "Anulada" };
+          break;
+        case "ANULADA":
+          where.proceso = "Anulada";
+          break;
+        case "PENDIENTE_ANULACION":
+          where.proceso = "Pendiente_Anulacion";
+          break;
+      }
+    }
+
+    // Filtro por punto de atención
+    if (filtros.punto_atencion_id && filtros.punto_atencion_id !== "TODOS") {
+      where.punto_atencion_id = filtros.punto_atencion_id;
     }
 
     // Estadísticas generales

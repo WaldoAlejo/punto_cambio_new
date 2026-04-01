@@ -126,6 +126,8 @@ export const ServientregaInformes = ({
   const [filtroPunto, setFiltroPunto] = useState<string>("TODOS");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [puntosAtencion, setPuntosAtencion] = useState<PuntoAtencion[]>([]);
+  const [loadingPuntos, setLoadingPuntos] = useState(false);
   
   // Estado para informe de saldos
   const [saldosData, setSaldosData] = useState<SaldosRecargasData | null>(null);
@@ -205,7 +207,16 @@ export const ServientregaInformes = ({
         axiosInstance.get<{ data: EstadisticasGuias; success: boolean }>(
           "/servientrega/informes/estadisticas",
           {
-            params: { desde: desdeValue, hasta: hastaValue },
+            params: {
+              desde: desdeValue,
+              hasta: hastaValue,
+              estado:
+                filtroEstadoValue === "TODOS"
+                  ? undefined
+                  : filtroEstadoValue,
+              punto_atencion_id:
+                filtroPuntoValue === "TODOS" ? undefined : filtroPuntoValue,
+            },
           }
         ),
       ]);
@@ -251,6 +262,33 @@ export const ServientregaInformes = ({
   useEffect(() => {
     fetchInformes();
   }, [fetchInformes]);
+
+  // Cargar todos los puntos de atención para el filtro (independiente de las guías)
+  useEffect(() => {
+    const fetchPuntos = async () => {
+      setLoadingPuntos(true);
+      try {
+        const response = await axiosInstance.get<{ success: boolean; puntos: PuntoAtencion[] }>(
+          "/puntos-atencion"
+        );
+        if (response.data?.success && Array.isArray(response.data.puntos)) {
+          // Filtrar puntos que tengan agencia Servientrega configurada
+          const puntosServientrega = response.data.puntos.filter(
+            (p) =>
+              p.activo !== false &&
+              p.servientrega_agencia_codigo &&
+              p.servientrega_agencia_codigo.trim() !== ""
+          );
+          setPuntosAtencion(puntosServientrega);
+        }
+      } catch (err) {
+        console.error("Error al cargar puntos de atención:", err);
+      } finally {
+        setLoadingPuntos(false);
+      }
+    };
+    fetchPuntos();
+  }, []);
 
   const handleExportarExcel = async () => {
     try {
@@ -367,16 +405,8 @@ export const ServientregaInformes = ({
     return cumpleEstado && cumplePunto;
   });
 
-  // Obtener lista única de puntos para el filtro
-  const puntosUnicos = Array.from(
-    new Set((guias || []).map((g) => g.punto_atencion_id))
-  ).map((id) => {
-    const guia = (guias || []).find((g) => g.punto_atencion_id === id);
-    return {
-      id,
-      nombre: guia?.punto_atencion_nombre || `Punto ${id}`,
-    };
-  });
+  // Lista de puntos para el filtro (cargada desde el backend)
+  const puntosFiltro = puntosAtencion;
 
   // Si hay error 404, mostrar mensaje informativo
   if (error && error.includes("no están disponibles")) {
@@ -590,7 +620,7 @@ export const ServientregaInformes = ({
                     className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
                   >
                     <option value="TODOS">Todos los puntos</option>
-                    {puntosUnicos.map((punto) => (
+                    {puntosFiltro.map((punto) => (
                       <option key={punto.id} value={punto.id}>
                         {punto.nombre}
                       </option>
