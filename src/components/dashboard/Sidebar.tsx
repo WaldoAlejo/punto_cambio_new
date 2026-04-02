@@ -223,6 +223,16 @@ const Sidebar = ({
       color: "text-orange-600",
     },
     {
+      id: "validacion-cierre",
+      label: "Validación Cierre vs Apertura",
+      color: "text-blue-600",
+    },
+    {
+      id: "reporte-inconsistencias",
+      label: "Reporte de Inconsistencias",
+      color: "text-red-600",
+    },
+    {
       id: "system-health",
       label: "Salud del Sistema",
       color: "text-red-600",

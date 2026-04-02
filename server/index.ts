@@ -99,6 +99,7 @@ import aperturaCajaRoutes from "./routes/apertura-caja.js";
 import cierreParcialRoutes from "./routes/cierreParcial.js";
 import inicioJornadaValidadoRoutes from "./routes/inicio-jornada-validado.js";
 import adminAperturasRoutes from "./routes/admin-aperturas.js";
+import validacionCierreRoutes from "./routes/validacion-cierre.js";
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3001;
@@ -379,6 +380,7 @@ app.use("/api/apertura-caja", aperturaCajaRoutes);
 app.use("/api/cierre-parcial", cierreParcialRoutes);
 app.use("/api/inicio-jornada-validado", inicioJornadaValidadoRoutes);
 app.use("/api/admin-aperturas", adminAperturasRoutes);
+app.use("/api/validacion-cierre", validacionCierreRoutes);
 
 // ------- Frontend estático (serve SPA build) -------
 try {

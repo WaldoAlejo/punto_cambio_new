@@ -113,6 +113,12 @@ const AperturaCaja = React.lazy(
 const AperturasPendientes = React.lazy(
   () => import("../admin/AperturasPendientes")
 );
+const ValidacionCierrePage = React.lazy(
+  () => import("../admin/ValidacionCierrePage")
+);
+const ReporteInconsistenciasPage = React.lazy(
+  () => import("../admin/ReporteInconsistenciasPage")
+);
 
 /** Utils */
 const STORAGE_KEY_VIEW = "pc_active_view";
@@ -148,6 +154,8 @@ const VALID_VIEWS = new Set<string>([
   "system-health",
   "apertura-caja",
   "aperturas-pendientes",
+  "validacion-cierre",
+  "reporte-inconsistencias",
 ]);
 
 function getInitialView(
@@ -552,6 +560,16 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isAdmin)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
         return <AperturasPendientes />;
+
+      case "validacion-cierre":
+        if (!isAdmin && !isAdministrativo)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <ValidacionCierrePage />;
+
+      case "reporte-inconsistencias":
+        if (!isAdmin && !isAdministrativo)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <ReporteInconsistenciasPage />;
 
       default:
         if (isOperador) {
