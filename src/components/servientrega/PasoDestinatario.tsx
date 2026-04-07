@@ -32,8 +32,9 @@ interface CiudadCanon {
 
 interface Agencia {
   nombre: string;
-  codigo?: string;
-  [key: string]: unknown;
+  direccion: string;
+  ciudad: string;
+  provincia: string;
 }
 
 interface PasoDestinatarioProps {
@@ -58,6 +59,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [cargandoPaises, setCargandoPaises] = useState(true);
   const [cargandoCiudades, setCargandoCiudades] = useState(true);
   const [cargandoAgencias, setCargandoAgencias] = useState(false);
+  const [errorAgencias, setErrorAgencias] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
 
@@ -75,6 +77,8 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   // Retiro en oficina
   const [retiroEnOficina, setRetiroEnOficina] = useState(false);
   const [agenciaSeleccionada, setAgenciaSeleccionada] = useState<string>("");
+  const [provinciaFiltro, setProvinciaFiltro] = useState<string>("");
+  const [ciudadFiltro, setCiudadFiltro] = useState<string>("");
 
   const [form, setForm] = useState<Destinatario>({
     identificacion: "",
@@ -127,23 +131,58 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     loadPaises();
   }, []);
 
-  // 1.1) Cargar agencias para retiro en oficina
-  useEffect(() => {
-    const loadAgencias = async () => {
-      try {
-        setCargandoAgencias(true);
-        const { data } = await axiosInstance.post("/servientrega/agencias");
-        const lista: Agencia[] = data?.data || [];
-        setAgencias(lista);
-      } catch (e) {
-        console.error("❌ Error al obtener agencias:", e);
-        setAgencias([]);
-      } finally {
-        setCargandoAgencias(false);
+  // 1.1) Cargar agencias para retiro en oficina (usando endpoint de retiro)
+  const loadAgencias = async () => {
+    try {
+      setCargandoAgencias(true);
+      setErrorAgencias(null);
+      const { data } = await axiosInstance.post("/servientrega/agencias-retiro");
+      console.log("📦 Respuesta agencias-retiro:", data);
+      const lista: Agencia[] = data?.data || [];
+      setAgencias(lista);
+      if (lista.length === 0) {
+        setErrorAgencias("No se encontraron agencias con servicio de retiro");
       }
-    };
+    } catch (e: any) {
+      console.error("❌ Error al obtener agencias de retiro:", e);
+      setErrorAgencias(e?.response?.data?.error || e?.message || "Error al cargar agencias");
+      setAgencias([]);
+    } finally {
+      setCargandoAgencias(false);
+    }
+  };
+
+  useEffect(() => {
     loadAgencias();
   }, []);
+
+  // Obtener lista única de provincias para el filtro
+  const provinciasDisponibles = useMemo(() => {
+    const provincias = agencias.map((a) => a.provincia).filter(Boolean);
+    return Array.from(new Set(provincias)).sort();
+  }, [agencias]);
+
+  // Obtener ciudades disponibles según la provincia seleccionada
+  const ciudadesDisponibles = useMemo(() => {
+    let filtered = agencias;
+    if (provinciaFiltro) {
+      filtered = filtered.filter((a) => a.provincia === provinciaFiltro);
+    }
+    const ciudades = filtered.map((a) => a.ciudad).filter(Boolean);
+    return Array.from(new Set(ciudades)).sort();
+  }, [agencias, provinciaFiltro]);
+
+  // Filtrar agencias por provincia y ciudad seleccionadas
+  const agenciasFiltradas = useMemo(() => {
+    let filtered = agencias;
+    if (provinciaFiltro) {
+      filtered = filtered.filter((a) => a.provincia === provinciaFiltro);
+    }
+    if (ciudadFiltro) {
+      filtered = filtered.filter((a) => a.ciudad === ciudadFiltro);
+    }
+    return filtered;
+  }, [agencias, provinciaFiltro, ciudadFiltro]);
 
   // 2) Cargar ciudades por país (codpais)
   const cargarCiudadesPorPais = async (codpais: number) => {
@@ -364,9 +403,19 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     if (!validarCodigoPostal()) return;
 
     // Validar retiro en oficina
-    if (retiroEnOficina && !agenciaSeleccionada) {
-      toast.error("Selecciona una agencia para retiro en oficina.");
-      return;
+    if (retiroEnOficina) {
+      if (!provinciaFiltro) {
+        toast.error("Selecciona una provincia para el retiro en oficina.");
+        return;
+      }
+      if (!ciudadFiltro) {
+        toast.error("Selecciona una ciudad para el retiro en oficina.");
+        return;
+      }
+      if (!agenciaSeleccionada) {
+        toast.error("Selecciona una agencia para retiro en oficina.");
+        return;
+      }
     }
 
     const direccionFinal = direccionCompleta.trim();
@@ -620,7 +669,10 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             onClick={() => {
               setRetiroEnOficina(!retiroEnOficina);
               if (!retiroEnOficina) {
+                // Se va a activar - limpiar selecciones previas
                 setAgenciaSeleccionada("");
+                setCiudadFiltro("");
+                setProvinciaFiltro("");
               }
             }}
             className="flex items-center gap-3 cursor-pointer p-3 rounded-md hover:bg-blue-100 transition-colors"
@@ -633,44 +685,140 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
             <span className="text-sm font-medium">
               {retiroEnOficina
                 ? "Retiro en oficina habilitado"
-                : "Desabilitar retiro en oficina"}
+                : "Habilitar retiro en oficina"}
             </span>
           </div>
 
-          {/* Dropdown de agencias (solo si retiro_oficina = true) */}
+          {/* Filtro por provincia, ciudad y selección de agencia (solo si retiro_oficina = true) */}
           {retiroEnOficina && (
-            <div className="mt-4">
-              <Label htmlFor="agencia">Agencia de Retiro *</Label>
-              {cargandoAgencias ? (
-                <div className="flex items-center mt-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-gray-400 mr-2" />
-                  <span className="text-sm text-gray-500">
-                    Cargando agencias...
-                  </span>
+            <div className="mt-4 space-y-4">
+              {/* Filtro de provincia */}
+              <div>
+                <Label htmlFor="provinciaFiltro">Provincia *</Label>
+                {cargandoAgencias ? (
+                  <div className="flex items-center mt-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-500">
+                      Cargando agencias...
+                    </span>
+                  </div>
+                ) : errorAgencias ? (
+                  <div className="mt-2">
+                    <div className="text-sm text-red-500">
+                      {errorAgencias}
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={loadAgencias}
+                      className="mt-2"
+                      type="button"
+                    >
+                      Reintentar
+                    </Button>
+                  </div>
+                ) : agencias.length === 0 ? (
+                  <div className="text-sm text-red-500 mt-2">
+                    No hay agencias disponibles para retiro
+                  </div>
+                ) : (
+                  <Select
+                    value={provinciaFiltro}
+                    onValueChange={(value) => {
+                      setProvinciaFiltro(value);
+                      setCiudadFiltro(""); // Limpiar ciudad al cambiar provincia
+                      setAgenciaSeleccionada(""); // Limpiar agencia
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={`Seleccionar provincia (${provinciasDisponibles.length} disponibles)`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {provinciasDisponibles.map((provincia, idx) => (
+                        <SelectItem key={idx} value={provincia}>
+                          {provincia}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              {/* Filtro de ciudad */}
+              {provinciaFiltro && (
+                <div>
+                  <Label htmlFor="ciudadFiltro">Ciudad *</Label>
+                  <Select
+                    value={ciudadFiltro}
+                    onValueChange={(value) => {
+                      setCiudadFiltro(value);
+                      setAgenciaSeleccionada(""); // Limpiar agencia al cambiar ciudad
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar ciudad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ciudadesDisponibles.map((ciudad, idx) => (
+                        <SelectItem key={idx} value={ciudad}>
+                          {ciudad}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              ) : agencias.length === 0 ? (
-                <div className="text-sm text-red-500 mt-2">
-                  No hay agencias disponibles
+              )}
+
+              {/* Dropdown de agencias filtradas */}
+              {ciudadFiltro && (
+                <div>
+                  <Label htmlFor="agencia">Punto de Retiro *</Label>
+                  <Select
+                    value={agenciaSeleccionada}
+                    onValueChange={setAgenciaSeleccionada}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccionar punto de retiro" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      {agenciasFiltradas.map((agencia, idx) => (
+                        <SelectItem
+                          key={idx}
+                          value={agencia.nombre}
+                          className="py-3"
+                        >
+                          <div className="flex flex-col items-start">
+                            <span className="font-medium">{agencia.nombre}</span>
+                            <span className="text-xs text-gray-500">
+                              {agencia.direccion}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              ) : (
-                <Select
-                  value={agenciaSeleccionada}
-                  onValueChange={setAgenciaSeleccionada}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar agencia de retiro" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {agencias.map((agencia, idx) => (
-                      <SelectItem
-                        key={idx}
-                        value={agencia.nombre || String(idx)}
-                      >
-                        {agencia.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              )}
+
+              {/* Resumen de la selección */}
+              {agenciaSeleccionada && (
+                <div className="mt-4 p-3 bg-white rounded-md border border-blue-200">
+                  <h5 className="font-semibold text-blue-800 mb-2 text-sm">
+                    Punto de Retiro Seleccionado
+                  </h5>
+                  {(() => {
+                    const agencia = agencias.find(
+                      (a) => a.nombre === agenciaSeleccionada
+                    );
+                    if (!agencia) return null;
+                    return (
+                      <div className="space-y-1 text-sm">
+                        <p className="font-medium">{agencia.nombre}</p>
+                        <p className="text-gray-600">{agencia.direccion}</p>
+                      </div>
+                    );
+                  })()}
+                </div>
               )}
             </div>
           )}

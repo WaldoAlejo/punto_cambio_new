@@ -279,6 +279,125 @@ router.post("/empaques", async (_req, res) => {
 });
 
 // =============================
+// 🏢 Agencias de Retiro (obtener_cs)
+// =============================
+
+router.post("/agencias-retiro", async (_req, res) => {
+  try {
+    logger.info("Servientrega API: Obteniendo agencias de retiro (obtener_cs)");
+    const credentials = getCredentials();
+    logger.debug("Servientrega API: Credenciales", { user: credentials.usuingreso });
+    
+    const apiService = new ServientregaAPIService(credentials);
+    apiService.apiUrl = getApiUrl();
+
+    // Llamar al endpoint RETAIL con tipo "obtener_cs"
+    // El endpoint RETAIL puede requerir form-data, probamos ambos formatos
+    let result: unknown;
+    try {
+      // Primero intentamos con JSON
+      result = await apiService.callAPI(
+        { tipo: "obtener_cs" },
+        15000,
+        true // useRetailUrl = true
+      );
+    } catch (jsonError) {
+      logger.warn("Error con JSON, intentando con form-data", { jsonError });
+      // Si falla, intentamos con form-data usando el método directo
+      const axios = (await import("axios")).default;
+      const https = (await import("https")).default;
+      const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+      
+      const form = new URLSearchParams();
+      form.append("tipo", "obtener_cs");
+      form.append("usuingreso", credentials.usuingreso);
+      form.append("contrasenha", credentials.contrasenha);
+      
+      const RETAIL_URL = "https://servientrega-ecuador.appsiscore.com/app/ws/serviretail_cs.php";
+      const response = await axios.post(RETAIL_URL, form.toString(), {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        httpsAgent,
+        timeout: 15000,
+      });
+      result = response.data;
+    }
+
+    logger.debug("Servientrega API: Respuesta raw de agencias de retiro", { result });
+
+    // Extraer el array de agencias de la respuesta
+    const resultFetch = isRecord(result) ? result.fetch : undefined;
+    const resultData = isRecord(result) ? result.data : undefined;
+    const resultAgencias = isRecord(result) ? result.agencias : undefined;
+
+    let agenciasArray: unknown[] = [];
+    if (Array.isArray(resultFetch)) {
+      agenciasArray = resultFetch;
+      logger.debug(`Found agencias-retiro in result.fetch: ${agenciasArray.length} items`);
+    } else if (Array.isArray(resultData)) {
+      agenciasArray = resultData;
+      logger.debug(`Found agencias-retiro in result.data: ${agenciasArray.length} items`);
+    } else if (Array.isArray(resultAgencias)) {
+      agenciasArray = resultAgencias;
+      logger.debug(`Found agencias-retiro in result.agencias: ${agenciasArray.length} items`);
+    } else if (Array.isArray(result)) {
+      agenciasArray = result;
+      logger.debug(`Result is direct array: ${agenciasArray.length} items`);
+    }
+
+    // Log primeros 5 items (solo en debug)
+    if (process.env.DEBUG_SERVIENTREGA === "1") {
+      logger.debug("Primeras 5 agencias de retiro raw", { agencias: agenciasArray.slice(0, 5) });
+    }
+
+    if (!result || agenciasArray.length === 0) {
+      logger.error("Respuesta vacía de la API de Servientrega (agencias-retiro)", { result });
+      return res.status(500).json({
+        success: false,
+        error: "Respuesta vacía de la API de Servientrega",
+        details: "El API no devolvió agencias. Verifique las credenciales o el endpoint.",
+        rawResponse: result,
+        data: [],
+      });
+    }
+
+    // Normalizar y filtrar agencias (solo las que tienen retiro:SI)
+    const agenciasNormalizadas = agenciasArray
+      .map((agencia: unknown) => {
+        if (!isRecord(agencia)) return null;
+        
+        // Solo incluir agencias con retiro:SI
+        const retiro = String(agencia.retiro || "").toUpperCase().trim();
+        if (retiro !== "SI") return null;
+        
+        return {
+          nombre: String(agencia.agencia || ""),
+          direccion: String(agencia.direccion || ""),
+          ciudad: String(agencia.ciudad || "").trim(),
+          provincia: String(agencia.provincia || "").trim(),
+        };
+      })
+      .filter((a): a is { nombre: string; direccion: string; ciudad: string; provincia: string } => a !== null);
+
+    logger.info(`Agencias de retiro procesadas: ${agenciasNormalizadas.length} encontradas (filtradas con retiro:SI)`);
+
+    res.json({
+      success: true,
+      data: agenciasNormalizadas,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    logger.error("Error al obtener agencias de retiro", { error: error?.message || error });
+    res.status(500).json({
+      success: false,
+      error: "Error al obtener agencias de retiro",
+      details: error instanceof Error ? error.message : "Error desconocido",
+      code: error?.code || "UNKNOWN_ERROR",
+      data: [],
+    });
+  }
+});
+
+// =============================
 // 🔍 Validar Endpoint Retail
 // =============================
 

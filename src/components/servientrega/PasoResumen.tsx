@@ -482,6 +482,17 @@ export default function PasoResumen({
           <Campo label="Dirección" value={destinatario?.direccion} />
         </Seccion>
 
+        {/* Retiro en Oficina */}
+        {formData?.retiro_oficina && (
+          <Seccion titulo="🏢 Retiro en Oficina">
+            <Campo label="Retiro en oficina" value="Sí" />
+            <Campo
+              label="Agencia de retiro"
+              value={formData?.nombre_agencia_retiro_oficina}
+            />
+          </Seccion>
+        )}
+
         {/* Medidas */}
         <Seccion titulo="📐 Medidas y valores">
           <Campo

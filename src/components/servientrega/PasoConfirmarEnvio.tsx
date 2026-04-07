@@ -209,7 +209,10 @@ export default function PasoConfirmarEnvio({
         pais_destinatario: (d.pais || "ECUADOR").toUpperCase(),
         codigo_postal_destinatario: d.codigo_postal?.trim() || "",
         contenido: ((m?.contenido || "").trim() || "DOCUMENTO").toUpperCase(),
-        retiro_oficina: "NO",
+        retiro_oficina: formData.retiro_oficina ? "SI" : "NO",
+        nombre_agencia_retiro_oficina: formData.retiro_oficina 
+          ? formData.nombre_agencia_retiro_oficina || ""
+          : "",
         pedido: formData.pedido?.trim() || "",
         factura: formData.factura?.trim() || "",
         valor_declarado: Number(m?.valor_declarado || 0),
