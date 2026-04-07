@@ -1486,21 +1486,35 @@ router.get(
   }
 );
 
-// ============ OPERADOR: saldos asignados por servicio (último estado) ============
+// ============ OPERADOR/CONCESION/ADMIN: saldos asignados por servicio (último estado) ============
 router.get(
   "/saldos-asignados",
   authenticateToken,
   async (req: Request, res: Response) => {
     try {
-      if (!isOperador(req)) {
-        res.status(403).json({
+      const user = (req as Partial<AuthedRequest>).user;
+      if (!user) {
+        res.status(401).json({
           success: false,
-          message: "Permisos insuficientes (solo OPERADOR)",
+          message: "No autorizado",
         });
         return;
       }
 
-      const pointId = req.user.punto_atencion_id;
+      // Permitir acceso a OPERADOR, CONCESION, ADMIN y SUPER_USUARIO
+      const rolesPermitidos = ["OPERADOR", "CONCESION", "ADMIN", "SUPER_USUARIO"];
+      if (!rolesPermitidos.includes(user.rol)) {
+        res.status(403).json({
+          success: false,
+          message: "Permisos insuficientes",
+        });
+        return;
+      }
+
+      // Para OPERADOR y CONCESION, usar su punto_asignado. Para ADMIN/SUPER_USUARIO, puede venir en query
+      const pointId = user.rol === "OPERADOR" || user.rol === "CONCESION"
+        ? user.punto_atencion_id
+        : ((req.query.pointId as string) || user.punto_atencion_id);
       if (!pointId) {
         res.status(400).json({
           success: false,

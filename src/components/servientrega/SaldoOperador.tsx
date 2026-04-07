@@ -68,7 +68,10 @@ export default function SaldoOperador({
     setLoading(true);
     try {
       // Consultar saldo de servicios externos (igual que Western)
-      const { data } = await axiosInstance.get("/servicios-externos/saldos-asignados");
+      // Ahora con punto_atencion_id para soportar CONCESION y otros roles
+      const { data } = await axiosInstance.get("/servicios-externos/saldos-asignados", {
+        params: { pointId: puntoAtencionId }
+      });
       
       if (data?.saldos_asignados) {
         // Buscar el saldo de SERVIENTREGA
@@ -91,7 +94,13 @@ export default function SaldoOperador({
               : undefined,
         });
       } else {
-        // Fallback al endpoint legacy
+        throw new Error("No se recibieron datos de saldos asignados");
+      }
+    } catch (error: any) {
+      console.warn("⚠️ Error al obtener saldo desde servicios-externos, usando fallback:", error);
+      
+      // Fallback al endpoint legacy
+      try {
         const legacyResponse = await axiosInstance.get(`/servientrega/saldo/${puntoAtencionId}`);
         const disponible = Number(legacyResponse.data?.disponible || 0);
         const estado = disponible < UMBRAL_SALDO_BAJO ? "SALDO_BAJO" : "OK";
@@ -107,18 +116,18 @@ export default function SaldoOperador({
               ? `Saldo bajo. Se recomienda solicitar más saldo.`
               : undefined,
         });
+      } catch (legacyError) {
+        console.error("❌ Error al obtener saldo de Servientrega (fallback también falló):", legacyError);
+        setSaldo({
+          disponible: 0,
+          billetes: 0,
+          monedas_fisicas: 0,
+          estado: "ERROR",
+          servicio: "SERVIENTREGA",
+          mensaje: "Error al consultar el saldo de Servientrega",
+        });
+        toast.error("Error al consultar el saldo");
       }
-    } catch (error) {
-      console.error("❌ Error al obtener saldo de Servientrega:", error);
-      setSaldo({
-        disponible: 0,
-        billetes: 0,
-        monedas_fisicas: 0,
-        estado: "ERROR",
-        servicio: "SERVIENTREGA",
-        mensaje: "Error al consultar el saldo de Servientrega",
-      });
-      toast.error("Error al consultar el saldo");
     } finally {
       setLoading(false);
     }

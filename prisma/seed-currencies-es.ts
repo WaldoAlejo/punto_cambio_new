@@ -19,6 +19,7 @@ const SPANISH_CURRENCIES: Array<{ codigo: string; nombre: string; simbolo?: stri
   { codigo: 'PYG', nombre: 'Guaraní paraguayo' },
   { codigo: 'UYU', nombre: 'Peso uruguayo' },
   { codigo: 'DOP', nombre: 'Peso dominicano' },
+  { codigo: 'CUP', nombre: 'Peso cubano' },
   { codigo: 'GBP', nombre: 'Libra esterlina' },
   { codigo: 'CHF', nombre: 'Franco suizo' },
   { codigo: 'NOK', nombre: 'Corona noruega' },
