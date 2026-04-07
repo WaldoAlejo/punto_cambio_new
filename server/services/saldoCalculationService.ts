@@ -37,7 +37,7 @@ export async function calcularSaldoCajaDesdeMovimientos(
     where: {
       punto_atencion_id: puntoAtencionId,
       moneda_id: monedaId,
-      ...(fechaCorte ? { fecha: { gte: fechaCorte } } : {}),
+      ...(fechaCorte ? { created_at: { gte: fechaCorte } } : {}),
     },
     select: { monto: true, tipo_movimiento: true, descripcion: true },
     orderBy: { fecha: "asc" },

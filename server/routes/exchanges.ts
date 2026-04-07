@@ -1085,10 +1085,18 @@ router.post(
             : 0;
 
         const isDestinoUSD = isUSDByCode(cambio.monedaDestino?.codigo);
+        // FIX: Usar monto_destino_final en lugar de divisas_recibidas_total_final
+        // cuando la moneda destino NO es USD. divisas_recibidas_total puede venir
+        // con el valor en USD desde el frontend, pero necesitamos el monto en la
+        // moneda destino para calcular correctamente el egreso.
+        const totalDestinoEgreso = isDestinoUSD
+          ? round2(divisas_recibidas_total_final)
+          : round2(monto_destino_final);
+        
         let { egresoEf, egresoBk } = calcularEgresoDestino({
           isDestinoUSD,
           metodoEntrega: metodo_entrega,
-          totalDestino: round2(divisas_recibidas_total_final),
+          totalDestino: totalDestinoEgreso,
           usdEntregadoEfectivo: num(usd_entregado_efectivo),
           usdEntregadoTransfer: num(usd_entregado_transfer),
         });
