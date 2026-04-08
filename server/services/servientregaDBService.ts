@@ -187,14 +187,20 @@ export class ServientregaDBService {
   async actualizarRemitente(cedula: string, data: Partial<RemitenteData>) {
     try {
       const filteredData = this.sanitizeRemitenteData(data);
+      const cedulaTrimmed = cedula.trim();
       
-      // Verificar si existe el remitente
+      // Verificar si existe el remitente (búsqueda case-insensitive como en buscarRemitentes)
       const existente = await prisma.servientregaRemitente.findFirst({
-        where: { cedula: cedula },
+        where: { 
+          cedula: {
+            equals: cedulaTrimmed,
+            mode: 'insensitive'
+          }
+        },
       });
       
       if (!existente) {
-        throw new Error(`Remitente con cédula ${cedula} no encontrado`);
+        throw new Error(`Remitente con cédula ${cedulaTrimmed} no encontrado`);
       }
       
       // Usar update en lugar de updateMany para obtener el registro actualizado

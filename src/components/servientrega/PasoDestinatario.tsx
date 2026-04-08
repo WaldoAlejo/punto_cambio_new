@@ -1,17 +1,10 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import axiosInstance from "@/services/axiosInstance";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, MapPin, CheckCircle2, User, Search, X } from "lucide-react";
+import { Loader2, MapPin, CheckCircle2, User, Search, X, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Destinatario } from "@/types/servientrega";
 import { validarIdentificacion } from "@/utils/identificacion";
@@ -45,6 +38,103 @@ interface PasoDestinatarioProps {
 const clean = (s: string) =>
   (s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
 
+// Componente de búsqueda tipo dropdown (igual que en PasoRemitente)
+interface SearchableSelectProps {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+  loading?: boolean;
+}
+
+function SearchableSelect({ options, value, onChange, placeholder, disabled, loading }: SearchableSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 10);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return options.slice(0, 50);
+    const q = clean(search);
+    return options.filter(o => clean(o.label).includes(q)).slice(0, 50);
+  }, [options, search]);
+
+  const selectedLabel = options.find(o => o.value === value)?.label || value || placeholder;
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen(!open)}
+        disabled={disabled || loading}
+        className={`w-full h-9 px-3 text-left text-sm border rounded-md flex items-center justify-between bg-white ${
+          disabled ? "bg-gray-100 text-gray-400" : "hover:border-gray-400"
+        }`}
+      >
+        <span className="truncate">{selectedLabel}</span>
+        {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" /> : <ChevronDown className="h-3.5 w-3.5 text-gray-400" />}
+      </button>
+
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-hidden">
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar..."
+                className="w-full pl-7 pr-7 h-8 text-xs border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <X className="h-3 w-3 text-gray-400" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="overflow-y-auto max-h-44">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-gray-400 text-center">Sin resultados</div>
+            ) : (
+              filtered.map((opt) => (
+                <div
+                  key={opt.value}
+                  onClick={() => { onChange(opt.value); setOpen(false); setSearch(""); }}
+                  className={`px-3 py-2 text-xs cursor-pointer hover:bg-gray-100 ${
+                    opt.value === value ? "bg-blue-50 text-blue-700 font-medium" : ""
+                  }`}
+                >
+                  {opt.label}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [paises, setPaises] = useState<Pais[]>([]);
   const [ciudadesCanon, setCiudadesCanon] = useState<CiudadCanon[]>([]);
@@ -63,12 +153,13 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
   const [form, setForm] = useState<Destinatario>({
     identificacion: "", nombre: "", direccion: "", telefono: "", email: "",
-    ciudad: "", provincia: "", codigo_postal: "", pais: "ECUADOR", codpais: 63,
+    ciudad: "", provincia: "", codigo_postal: "", pais: "", codpais: 0,
   });
   const [direccionCompleta, setDireccionCompleta] = useState("");
 
   const esInternacional = useMemo(() => form.codpais !== 63, [form.codpais]);
 
+  // Cargar países
   useEffect(() => {
     axiosInstance.post("/servientrega/paises").then(({ data }) => {
       const lista: Pais[] = data?.fetch || [];
@@ -85,6 +176,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }).catch(() => setAgencias([]));
   }, []);
 
+  // Cargar ciudades cuando cambia el país
   useEffect(() => {
     if (!form.codpais) return;
     setCargandoCiudades(true);
@@ -111,7 +203,14 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
   const handleConfirmarRetiro = (agencia: Agencia) => {
     setAgenciaSeleccionadaData(agencia);
-    setForm((prev) => ({ ...prev, provincia: agencia.provincia, ciudad: agencia.ciudad }));
+    const paisEcuador = paises.find((p) => p.codpais === 63);
+    setForm((prev) => ({ 
+      ...prev, 
+      codpais: 63,
+      pais: paisEcuador?.pais || "ECUADOR",
+      provincia: agencia.provincia, 
+      ciudad: agencia.ciudad 
+    }));
     setDireccionCompleta(agencia.direccion);
     setModalRetiroAbierto(false);
     toast.success("Punto de retiro seleccionado");
@@ -131,8 +230,10 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   };
 
   const handleCiudadChange = (value: string) => {
-    const [ciudad, provincia] = value.split("|");
-    setForm((prev) => ({ ...prev, ciudad, provincia }));
+    const match = ciudadesCanon.find(c => c.raw === value);
+    if (match) {
+      setForm((prev) => ({ ...prev, ciudad: match.ciudad, provincia: match.provincia }));
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -189,6 +290,21 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     finally { setLoading(false); }
   };
 
+  const paisOptions = useMemo(() => 
+    paises.map(p => ({ value: String(p.codpais), label: p.pais })),
+    [paises]
+  );
+
+  const ciudadOptions = useMemo(() => 
+    ciudadesCanon.map(c => ({ value: c.raw, label: c.raw })),
+    [ciudadesCanon]
+  );
+
+  const selectedCiudadRaw = useMemo(() => {
+    if (!form.ciudad || !form.provincia) return "";
+    return ciudadesCanon.find(c => c.ciudad === form.ciudad && c.provincia === form.provincia)?.raw || "";
+  }, [form.ciudad, form.provincia, ciudadesCanon]);
+
   return (
     <div className="w-full max-w-md mx-auto p-4">
       <div className="flex items-center gap-2 mb-4">
@@ -197,36 +313,23 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       </div>
 
       <div className="space-y-3">
-        {/* País y Ciudad */}
+        {/* País y Ciudad con búsqueda */}
         <div className="grid grid-cols-2 gap-2">
-          <Select value={String(form.codpais ?? "")} onValueChange={handlePaisChange} disabled={cargandoPaises}>
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue placeholder="País" />
-            </SelectTrigger>
-            <SelectContent>
-              {paises.map((p) => (
-                <SelectItem key={p.codpais} value={String(p.codpais)} className="text-xs">
-                  {p.pais}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select onValueChange={handleCiudadChange} value={form.ciudad && form.provincia ? `${form.ciudad}|${form.provincia}` : ""} disabled={cargandoCiudades || retiroEnOficina}>
-            <SelectTrigger className="h-9 text-xs">
-              <SelectValue placeholder={cargandoCiudades ? "..." : "Ciudad"} />
-            </SelectTrigger>
-            <SelectContent>
-              {ciudadesCanon.slice(0, 5).map((c, i) => (
-                <SelectItem key={i} value={`${c.ciudad}|${c.provincia}`} className="text-xs">
-                  {c.ciudad}
-                </SelectItem>
-              ))}
-              {ciudadesCanon.length > 5 && (
-                <div className="px-2 py-1 text-[10px] text-gray-400">+{ciudadesCanon.length - 5} más...</div>
-              )}
-            </SelectContent>
-          </Select>
+          <SearchableSelect
+            options={paisOptions}
+            value={String(form.codpais || "")}
+            onChange={handlePaisChange}
+            placeholder="Seleccionar país..."
+            loading={cargandoPaises}
+          />
+          <SearchableSelect
+            options={ciudadOptions}
+            value={selectedCiudadRaw}
+            onChange={handleCiudadChange}
+            placeholder={form.codpais ? "Buscar ciudad..." : "Primero elige país"}
+            disabled={!form.codpais || cargandoCiudades || retiroEnOficina}
+            loading={cargandoCiudades}
+          />
         </div>
 
         {/* Identificación con búsqueda */}

@@ -40,6 +40,14 @@ function SearchableSelect({ options, value, onChange, placeholder, disabled, loa
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Enfocar input cuando se abre el dropdown
+  useEffect(() => {
+    if (open && inputRef.current) {
+      setTimeout(() => inputRef.current?.focus(), 10);
+    }
+  }, [open]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -78,12 +86,13 @@ function SearchableSelect({ options, value, onChange, placeholder, disabled, loa
           <div className="p-2 border-b">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-              <Input
-                autoFocus
+              <input
+                ref={inputRef}
+                type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Buscar..."
-                className="pl-7 h-8 text-xs"
+                className="w-full pl-7 pr-7 h-8 text-xs border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               {search && (
                 <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -196,11 +205,8 @@ export default function PasoRemitente({
 
         setCiudadesCanon(lista);
 
-        // Si es Ecuador y tenemos punto seleccionado, intentar match
-        const paisSeleccionado = paises.find(p => p.codpais === formData.pais);
-        const esEcuador = paisSeleccionado && clean(paisSeleccionado.pais) === "ECUADOR";
-        
-        if (esEcuador && selectedPoint?.ciudad) {
+        // Auto-seleccionar ciudad del punto de atención si coincide
+        if (selectedPoint?.ciudad) {
           const spCiudad = clean(selectedPoint.ciudad);
           const spProv = clean(selectedPoint.provincia || "");
 
@@ -231,7 +237,7 @@ export default function PasoRemitente({
     };
 
     loadCiudades();
-  }, [formData.pais, selectedPoint?.ciudad, selectedPoint?.provincia, paises]);
+  }, [formData.pais, selectedPoint?.ciudad, selectedPoint?.provincia]);
 
   useEffect(() => {
     const query = cedulaQuery.trim();

@@ -124,7 +124,9 @@ export default function ModalRetiroOficina({
   };
 
   const getMapUrl = (lat: number, lng: number) => {
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.01}%2C${lat - 0.01}%2C${lng + 0.01}%2C${lat + 0.01}&layer=mapnik&marker=${lat}%2C${lng}`;
+    // bbox más pequeño = más zoom (más cercano)
+    const delta = 0.003;
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${lng - delta}%2C${lat - delta}%2C${lng + delta}%2C${lat + delta}&layer=mapnik&marker=${lat}%2C${lng}`;
   };
 
   const openInGoogleMaps = (lat: number, lng: number) => {
@@ -133,7 +135,7 @@ export default function ModalRetiroOficina({
 
   return (
     <Dialog open={abierto} onOpenChange={handleCerrar}>
-      <DialogContent className="max-w-md p-0 gap-0 max-h-[80vh]">
+      <DialogContent className="max-w-md p-0 gap-0 max-h-[85vh] flex flex-col">
         <DialogHeader className="px-4 py-3 border-b shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <MapPin className="h-4 w-4 text-blue-600" />
@@ -158,7 +160,7 @@ export default function ModalRetiroOficina({
             No hay agencias disponibles para retiro
           </div>
         ) : (
-          <div className="flex flex-col overflow-hidden">
+          <div className="flex flex-col overflow-hidden flex-1 min-h-0">
             {/* Filtros */}
             <div className="px-4 py-3 space-y-2 border-b shrink-0">
               <div className="grid grid-cols-2 gap-2">
@@ -212,7 +214,7 @@ export default function ModalRetiroOficina({
 
             {/* Contenido principal */}
             {ciudadFiltro ? (
-              <div className="flex flex-col overflow-hidden">
+              <div className="flex flex-col overflow-hidden flex-1 min-h-0">
                 {/* Contador */}
                 <div className="px-3 py-1.5 bg-gray-50 border-b text-[10px] text-gray-500 flex justify-between items-center shrink-0">
                   <span>{agenciasFiltradas.length} punto{agenciasFiltradas.length !== 1 ? 's' : ''}</span>
@@ -223,12 +225,12 @@ export default function ModalRetiroOficina({
                   )}
                 </div>
 
-                {/* Scrollable content */}
-                <div className="overflow-y-auto">
+                {/* Scrollable content - altura fija para mantener footer visible */}
+                <div className="overflow-y-auto max-h-[280px]">
                   {/* Mapa (si hay selección con coordenadas) */}
                   {agenciaSeleccionada && agenciaSeleccionada.latitud != null && agenciaSeleccionada.longitud != null && (
-                    <div className="p-3 border-b bg-blue-50/50">
-                      <div className="relative w-full h-[140px] rounded-lg overflow-hidden border mb-2">
+                    <div className="p-2 border-b bg-blue-50/50">
+                      <div className="relative w-full h-[120px] rounded-lg overflow-hidden border mb-2">
                         <iframe
                           src={getMapUrl(agenciaSeleccionada.latitud, agenciaSeleccionada.longitud)}
                           width="100%"
