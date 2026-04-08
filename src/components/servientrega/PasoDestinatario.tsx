@@ -36,6 +36,8 @@ interface Agencia {
   direccion: string;
   ciudad: string;
   provincia: string;
+  latitud: number | null;
+  longitud: number | null;
 }
 
 interface PasoDestinatarioProps {

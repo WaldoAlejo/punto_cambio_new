@@ -369,14 +369,38 @@ router.post("/agencias-retiro", async (_req, res) => {
         const retiro = String(agencia.retiro || "").toUpperCase().trim();
         if (retiro !== "SI") return null;
         
+        // Extraer coordenadas GPS si están disponibles
+        const latitudRaw = agencia.latitud || agencia.lat || agencia.latitude || agencia.gps_lat || "";
+        const longitudRaw = agencia.longitud || agencia.lng || agencia.longitude || agencia.gps_lng || agencia.lon || "";
+        
+        // Parsear coordenadas - manejar strings vacíos o con solo espacios
+        const latitudStr = String(latitudRaw).trim();
+        const longitudStr = String(longitudRaw).trim();
+        
+        const latitudNum = latitudStr ? parseFloat(latitudStr) : NaN;
+        const longitudNum = longitudStr ? parseFloat(longitudStr) : NaN;
+        
+        // Solo incluir coordenadas válidas (no NaN)
+        const latitud = !isNaN(latitudNum) && isFinite(latitudNum) ? latitudNum : null;
+        const longitud = !isNaN(longitudNum) && isFinite(longitudNum) ? longitudNum : null;
+        
         return {
           nombre: String(agencia.agencia || ""),
           direccion: String(agencia.direccion || ""),
           ciudad: String(agencia.ciudad || "").trim(),
           provincia: String(agencia.provincia || "").trim(),
+          latitud,
+          longitud,
         };
       })
-      .filter((a): a is { nombre: string; direccion: string; ciudad: string; provincia: string } => a !== null);
+      .filter((a): a is { 
+        nombre: string; 
+        direccion: string; 
+        ciudad: string; 
+        provincia: string;
+        latitud: number | null;
+        longitud: number | null;
+      } => a !== null);
 
     logger.info(`Agencias de retiro procesadas: ${agenciasNormalizadas.length} encontradas (filtradas con retiro:SI)`);
 
