@@ -1285,19 +1285,25 @@ router.post(
         });
 
         if (existing) {
+          // 🎯 Recarga: incrementar cantidad Y billetes (efectivo)
           const actualizado = await tx.servicioExternoSaldo.update({
             where: { id: existing.id },
-            data: { cantidad: { increment: montoNum }, updated_at: new Date() },
+            data: { 
+              cantidad: { increment: montoNum }, 
+              billetes: { increment: montoNum }, // 💵 Siempre en efectivo
+              updated_at: new Date() 
+            },
           });
           return { asign, saldo: actualizado };
         } else {
+          // 🎯 Asignación inicial: todo en billetes (efectivo)
           const creado = await tx.servicioExternoSaldo.create({
             data: {
               punto_atencion_id,
               servicio,
               moneda_id: usdId,
               cantidad: new Prisma.Decimal(montoNum),
-              billetes: new Prisma.Decimal(0),
+              billetes: new Prisma.Decimal(montoNum), // 💵 Siempre en efectivo
               monedas_fisicas: new Prisma.Decimal(0),
             },
           });

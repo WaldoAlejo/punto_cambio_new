@@ -39,10 +39,21 @@ router.get(
   authenticateToken,
   async (req: express.Request, res: express.Response) => {
     try {
-      const { desde, hasta, estado, punto_atencion_id } = req.query;
+      const { desde, hasta, estado, punto_atencion_id: puntoQuery } = req.query;
       const rol = req.user?.rol;
-      // Solo OPERADOR ve sus propias guías. Admin/Super/Administrativo ven todas.
-      const usuario_id = rol === "OPERADOR" ? req.user?.id : undefined;
+      
+      // 🎯 Determinar qué guías puede ver el usuario:
+      // - OPERADOR: guías de su punto asignado (todas las que se generaron en su punto)
+      // - CONCESION: guías de su punto asignado
+      // - ADMIN/SUPER_USUARIO/ADMINISTRATIVO: todas las guías (pueden filtrar por punto)
+      let usuario_id: string | undefined;
+      let punto_atencion_id: string | undefined = puntoQuery as string | undefined;
+      
+      if (rol === "OPERADOR" || rol === "CONCESION") {
+        // Operador y Concesión ven las guías de su punto asignado
+        punto_atencion_id = req.user?.punto_atencion_id || punto_atencion_id;
+      }
+      // Admin/Super/Administrativo ven todas (sin filtro de usuario/punto a menos que se especifique)
 
       console.log("🔍 Obteniendo informes de guías:", {
         desde,

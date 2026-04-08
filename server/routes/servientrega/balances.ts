@@ -102,10 +102,11 @@ router.get(
         });
       }
 
-      const disponible = Number(saldo.cantidad || 0);
+      // 🎯 El saldo debe estar en efectivo (billetes), no en bancos
+      const disponible = Number(saldo.billetes || 0);
       const montoRequerido = monto ? parseFloat(monto as string) : 0;
 
-      logger.debug("Saldo Servientrega", { disponible, montoRequerido });
+      logger.debug("Saldo Servientrega (efectivo)", { disponible, montoRequerido, total: saldo.cantidad });
 
       if (disponible <= 0) {
         return res.json({

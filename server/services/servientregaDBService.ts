@@ -600,11 +600,13 @@ export class ServientregaDBService {
           throw new Error("No hay saldo asignado para Servientrega en este punto de atención");
         }
 
+        // 🎯 Validar saldo en efectivo (billetes), no en cantidad total
+        const saldoEfectivo = Number(saldoServicio.billetes || 0);
         const saldoAnterior = Number(saldoServicio.cantidad || 0);
         const nuevoSaldo = saldoAnterior - monto;
 
-        if (nuevoSaldo < 0) {
-          throw new Error(`Saldo insuficiente en Servientrega. Disponible: $${saldoAnterior.toFixed(2)}, Requerido: $${monto.toFixed(2)}`);
+        if (saldoEfectivo < monto) {
+          throw new Error(`Saldo insuficiente en Servientrega. Disponible en efectivo: $${saldoEfectivo.toFixed(2)}, Requerido: $${monto.toFixed(2)}`);
         }
 
         // Calcular nuevos valores de billetes y monedas
@@ -1266,7 +1268,8 @@ export class ServientregaDBService {
     numeroGuia: string,
     billetes?: number,
     monedas?: number,
-    bancos?: number
+    bancos?: number,
+    actualizarSaldoGeneral: boolean = true
   ) {
     return prisma.$transaction(async (tx) => {
       log("📥 [registrarIngresoServicioExterno] Iniciando:", {
@@ -1322,101 +1325,112 @@ export class ServientregaDBService {
       const saldoServicioAnterior = new Prisma.Decimal(0);
       const saldoServicioNuevo = new Prisma.Decimal(0);
 
-      // 3️⃣ Actualizar Saldo general USD por bucket (CAJA vs BANCOS) usando el ledger
-      // ⚠️ IMPORTANTE: Usar calcularSaldoCajaDesdeMovimientos para obtener el saldo de caja
-      // esto garantiza consistencia con la UI y evita race conditions
-      const saldoCajaAnterior = new Prisma.Decimal(
-        await calcularSaldoCajaDesdeMovimientos(puntoAtencionId, usdId, tx)
-      );
-      
-      // Obtener saldo de tabla solo para bancos (no hay tabla de movimientos para bancos aún)
-      // y para el desglose de billetes/monedas
-      const saldoActual = await tx.saldo.findUnique({
-        where: {
-          punto_atencion_id_moneda_id: {
-            punto_atencion_id: puntoAtencionId,
-            moneda_id: usdId,
-          },
-        },
-        select: {
-          id: true,
-          bancos: true,
-          billetes: true,
-          monedas_fisicas: true,
-        },
-      });
+      // Inicializar variables para el return (scope fuera del if)
+      let saldoCajaAnterior = new Prisma.Decimal(0);
+      let saldoCajaNuevo = new Prisma.Decimal(0);
 
-      const saldoBancosAnterior = saldoActual?.bancos ?? new Prisma.Decimal(0);
-
-      let saldoCajaNuevo = saldoCajaAnterior;
-      let saldoBancosNuevo = saldoBancosAnterior;
-
-      if (desglose.efectivo > 0) {
-        saldoCajaNuevo = saldoCajaAnterior.add(new Prisma.Decimal(desglose.efectivo));
-        await registrarMovimientoSaldo(
-          {
-            puntoAtencionId,
-            monedaId: usdId,
-            tipoMovimiento: TipoMovimiento.INGRESO,
-            monto: desglose.efectivo,
-            saldoAnterior: saldoCajaAnterior,
-            saldoNuevo: saldoCajaNuevo,
-            tipoReferencia: TipoReferencia.SERVIENTREGA,
-            referenciaId: numeroGuia,
-            descripcion: `Ingreso (CAJA) por guía Servientrega #${numeroGuia}`,
-            saldoBucket: "CAJA",
-            usuarioId: systemUserId,
-          },
-          tx
+      // 3️⃣ Actualizar Saldo general USD SOLO si se solicita (no para concesiones)
+      // Las concesiones solo manejan saldo de Servientrega, no saldo general
+      if (actualizarSaldoGeneral) {
+        log("💰 [registrarIngresoServicioExterno] Actualizando saldo general USD");
+        
+        // ⚠️ IMPORTANTE: Usar calcularSaldoCajaDesdeMovimientos para obtener el saldo de caja
+        // esto garantiza consistencia con la UI y evita race conditions
+        saldoCajaAnterior = new Prisma.Decimal(
+          await calcularSaldoCajaDesdeMovimientos(puntoAtencionId, usdId, tx)
         );
-
-        await tx.saldo.upsert({
+        
+        // Obtener saldo de tabla solo para bancos (no hay tabla de movimientos para bancos aún)
+        // y para el desglose de billetes/monedas
+        const saldoActual = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
               punto_atencion_id: puntoAtencionId,
               moneda_id: usdId,
             },
           },
-          update: {
-            // ⚠️ IMPORTANTE: Actualizar cantidad con el nuevo saldo calculado
-            cantidad: saldoCajaNuevo,
-            billetes: new Prisma.Decimal((saldoActual?.billetes ?? new Prisma.Decimal(0)).toNumber()).add(
-              new Prisma.Decimal(desglose.billetes)
-            ),
-            monedas_fisicas: new Prisma.Decimal((saldoActual?.monedas_fisicas ?? new Prisma.Decimal(0)).toNumber()).add(
-              new Prisma.Decimal(desglose.monedas)
-            ),
-            updated_at: new Date(),
-          },
-          create: {
-            punto_atencion_id: puntoAtencionId,
-            moneda_id: usdId,
-            cantidad: saldoCajaNuevo,
-            bancos: saldoBancosAnterior,
-            billetes: new Prisma.Decimal(desglose.billetes),
-            monedas_fisicas: new Prisma.Decimal(desglose.monedas),
+          select: {
+            id: true,
+            bancos: true,
+            billetes: true,
+            monedas_fisicas: true,
           },
         });
-      }
 
-      if (desglose.bancos > 0) {
-        saldoBancosNuevo = saldoBancosAnterior.add(new Prisma.Decimal(desglose.bancos));
-        await registrarMovimientoSaldo(
-          {
-            puntoAtencionId,
-            monedaId: usdId,
-            tipoMovimiento: TipoMovimiento.INGRESO,
-            monto: desglose.bancos,
-            saldoAnterior: saldoBancosAnterior,
-            saldoNuevo: saldoBancosNuevo,
-            tipoReferencia: TipoReferencia.SERVIENTREGA,
-            referenciaId: numeroGuia,
-            descripcion: `Ingreso (BANCOS) por guía Servientrega #${numeroGuia}`,
-            saldoBucket: "BANCOS",
-            usuarioId: systemUserId,
-          },
-          tx
-        );
+        const saldoBancosAnterior = saldoActual?.bancos ?? new Prisma.Decimal(0);
+
+        saldoCajaNuevo = saldoCajaAnterior;
+        let saldoBancosNuevo = saldoBancosAnterior;
+
+        if (desglose.efectivo > 0) {
+          saldoCajaNuevo = saldoCajaAnterior.add(new Prisma.Decimal(desglose.efectivo));
+          await registrarMovimientoSaldo(
+            {
+              puntoAtencionId,
+              monedaId: usdId,
+              tipoMovimiento: TipoMovimiento.INGRESO,
+              monto: desglose.efectivo,
+              saldoAnterior: saldoCajaAnterior,
+              saldoNuevo: saldoCajaNuevo,
+              tipoReferencia: TipoReferencia.SERVIENTREGA,
+              referenciaId: numeroGuia,
+              descripcion: `Ingreso (CAJA) por guía Servientrega #${numeroGuia}`,
+              saldoBucket: "CAJA",
+              usuarioId: systemUserId,
+            },
+            tx
+          );
+
+          await tx.saldo.upsert({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: puntoAtencionId,
+                moneda_id: usdId,
+              },
+            },
+            update: {
+              // ⚠️ IMPORTANTE: Actualizar cantidad con el nuevo saldo calculado
+              cantidad: saldoCajaNuevo,
+              billetes: new Prisma.Decimal((saldoActual?.billetes ?? new Prisma.Decimal(0)).toNumber()).add(
+                new Prisma.Decimal(desglose.billetes)
+              ),
+              monedas_fisicas: new Prisma.Decimal((saldoActual?.monedas_fisicas ?? new Prisma.Decimal(0)).toNumber()).add(
+                new Prisma.Decimal(desglose.monedas)
+              ),
+              updated_at: new Date(),
+            },
+            create: {
+              punto_atencion_id: puntoAtencionId,
+              moneda_id: usdId,
+              cantidad: saldoCajaNuevo,
+              bancos: saldoBancosAnterior,
+              billetes: new Prisma.Decimal(desglose.billetes),
+              monedas_fisicas: new Prisma.Decimal(desglose.monedas),
+            },
+          });
+        }
+
+        if (desglose.bancos > 0) {
+          saldoBancosNuevo = saldoBancosAnterior.add(new Prisma.Decimal(desglose.bancos));
+          await registrarMovimientoSaldo(
+            {
+              puntoAtencionId,
+              monedaId: usdId,
+              tipoMovimiento: TipoMovimiento.INGRESO,
+              monto: desglose.bancos,
+              saldoAnterior: saldoBancosAnterior,
+              saldoNuevo: saldoBancosNuevo,
+              tipoReferencia: TipoReferencia.SERVIENTREGA,
+              referenciaId: numeroGuia,
+              descripcion: `Ingreso (BANCOS) por guía Servientrega #${numeroGuia}`,
+              saldoBucket: "BANCOS",
+              usuarioId: systemUserId,
+            },
+            tx
+          );
+        }
+      } else {
+        log("ℹ️ [registrarIngresoServicioExterno] Saltando actualización de saldo general (concesión)");
       }
       log("✅ [registrarIngresoServicioExterno] Transacción completada");
 

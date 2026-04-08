@@ -79,6 +79,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [agenciaSeleccionada, setAgenciaSeleccionada] = useState<string>("");
   const [provinciaFiltro, setProvinciaFiltro] = useState<string>("");
   const [ciudadFiltro, setCiudadFiltro] = useState<string>("");
+  const [agenciaSeleccionadaData, setAgenciaSeleccionadaData] = useState<Agencia | null>(null);
 
   const [form, setForm] = useState<Destinatario>({
     identificacion: "",
@@ -97,15 +98,24 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [direccionCompleta, setDireccionCompleta] = useState("");
 
   const esInternacional = useMemo(() => form.codpais !== 63, [form.codpais]);
-  const ciudadSeleccionValida = useMemo(
-    () =>
-      !!form.ciudad &&
-      !!form.provincia &&
-      ciudadesCanon.some(
-        (c) => c.ciudad === form.ciudad && c.provincia === form.provincia
-      ),
-    [form.ciudad, form.provincia, ciudadesCanon]
-  );
+  
+  // Validación de ciudad: puede ser del catálogo O de una agencia de retiro
+  const ciudadSeleccionValida = useMemo(() => {
+    if (!form.ciudad || !form.provincia) return false;
+    
+    // Si hay retiro en oficina, validar contra agencias
+    if (retiroEnOficina && agenciaSeleccionadaData) {
+      return (
+        form.ciudad === agenciaSeleccionadaData.ciudad &&
+        form.provincia === agenciaSeleccionadaData.provincia
+      );
+    }
+    
+    // Si no, validar contra el catálogo de ciudades
+    return ciudadesCanon.some(
+      (c) => c.ciudad === form.ciudad && c.provincia === form.provincia
+    );
+  }, [form.ciudad, form.provincia, ciudadesCanon, retiroEnOficina, agenciaSeleccionadaData]);
 
   // 1) Cargar países y setear Ecuador por defecto
   useEffect(() => {
@@ -377,15 +387,16 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       return;
     }
 
-    if (
-      !form.identificacion ||
-      !form.nombre ||
-      !form.telefono ||
-      !form.pais ||
-      !form.ciudad ||
-      !form.provincia
-    ) {
-      toast.error("Completa todos los campos obligatorios.");
+    // Validar campos obligatorios básicos (sin ciudad/provincia si hay retiro en oficina)
+    const camposBasicosOk = form.identificacion && form.nombre && form.telefono && form.pais;
+    if (!camposBasicosOk) {
+      toast.error("Completa todos los campos obligatorios (identificación, nombre, teléfono, país).");
+      return;
+    }
+    
+    // Si no hay retiro en oficina, validar que tenga ciudad y provincia del catálogo
+    if (!retiroEnOficina && (!form.ciudad || !form.provincia)) {
+      toast.error("Selecciona una ciudad y provincia.");
       return;
     }
 
@@ -396,7 +407,11 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     }
 
     if (!ciudadSeleccionValida) {
-      toast.error("Selecciona una ciudad válida del catálogo.");
+      if (retiroEnOficina) {
+        toast.error("Selecciona un punto de retiro válido.");
+      } else {
+        toast.error("Selecciona una ciudad válida del catálogo.");
+      }
       return;
     }
 
@@ -667,10 +682,20 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           {/* Toggle para retiro en oficina */}
           <div
             onClick={() => {
-              setRetiroEnOficina(!retiroEnOficina);
-              if (!retiroEnOficina) {
+              const nuevoEstado = !retiroEnOficina;
+              setRetiroEnOficina(nuevoEstado);
+              if (nuevoEstado) {
                 // Se va a activar - limpiar selecciones previas
                 setAgenciaSeleccionada("");
+                setAgenciaSeleccionadaData(null);
+                setCiudadFiltro("");
+                setProvinciaFiltro("");
+              } else {
+                // Se va a desactivar - limpiar datos autocompletados
+                setForm((prev) => ({ ...prev, ciudad: "", provincia: "" }));
+                setDireccionCompleta("");
+                setAgenciaSeleccionada("");
+                setAgenciaSeleccionadaData(null);
                 setCiudadFiltro("");
                 setProvinciaFiltro("");
               }
@@ -775,7 +800,20 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
                   <Label htmlFor="agencia">Punto de Retiro *</Label>
                   <Select
                     value={agenciaSeleccionada}
-                    onValueChange={setAgenciaSeleccionada}
+                    onValueChange={(value) => {
+                      const agencia = agencias.find((a) => a.nombre === value);
+                      if (agencia) {
+                        setAgenciaSeleccionada(value);
+                        setAgenciaSeleccionadaData(agencia);
+                        // Autocompletar datos del destinatario desde la agencia
+                        setForm((prev) => ({
+                          ...prev,
+                          provincia: agencia.provincia,
+                          ciudad: agencia.ciudad,
+                        }));
+                        setDireccionCompleta(agencia.direccion);
+                      }
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar punto de retiro" />

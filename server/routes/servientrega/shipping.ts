@@ -91,7 +91,18 @@ async function validarSaldoGenerarGuia(
       return;
     }
 
-    const puntoId = req.user?.punto_atencion_id;
+    // 🎯 Para concesionarios y admins, permitir usar punto_atencion_id del body
+    // Para operadores, usar su punto asignado
+    let puntoId: string | undefined;
+    const userRol = req.user?.rol || "";
+    const puntoIdFromBody = req.body?.punto_atencion_id as string | undefined;
+    
+    if (["ADMIN", "SUPER_USUARIO", "CONCESION"].includes(userRol) && puntoIdFromBody) {
+      puntoId = puntoIdFromBody;
+    } else {
+      puntoId = req.user?.punto_atencion_id || undefined;
+    }
+    
     if (!puntoId) {
       res.status(400).json({
         success: false,
@@ -114,35 +125,20 @@ async function validarSaldoGenerarGuia(
       return;
     }
 
-    // Obtener saldo actual
-    const saldo = await prisma.saldo.findUnique({
+    // 🎯 Obtener saldo de Servientrega (ServicioExternoSaldo), no el saldo general
+    const saldoServicio = await prisma.servicioExternoSaldo.findUnique({
       where: {
-        punto_atencion_id_moneda_id: {
+        punto_atencion_id_servicio_moneda_id: {
           punto_atencion_id: puntoId,
+          servicio: "SERVIENTREGA",
           moneda_id: monedaUsd.id,
         },
       },
     });
 
-    const saldoCaja = Number(saldo?.cantidad ?? 0);
-    const saldoBancos = Number(saldo?.bancos ?? 0);
-
-    let saldoDisponible = 0;
-    let tipoSaldo = "";
-
-    if (metodoIngreso === "EFECTIVO") {
-      saldoDisponible = saldoCaja;
-      tipoSaldo = "efectivo (caja)";
-    } else if (metodoIngreso === "BANCO") {
-      saldoDisponible = saldoBancos;
-      tipoSaldo = "bancos";
-    } else if (metodoIngreso === "MIXTO") {
-      saldoDisponible = saldoCaja + saldoBancos;
-      tipoSaldo = "efectivo + bancos";
-    } else {
-      saldoDisponible = saldoCaja;
-      tipoSaldo = "efectivo (caja)";
-    }
+    // 🎯 El saldo disponible debe estar en efectivo (billetes), no en bancos
+    const saldoDisponible = Number(saldoServicio?.billetes ?? 0);
+    const tipoSaldo = "Servientrega (efectivo)";
 
     if (saldoDisponible < valorTotal) {
       res.status(400).json({
@@ -161,9 +157,8 @@ async function validarSaldoGenerarGuia(
 
     // Pasar saldo a la request para uso posterior
     (req as any).saldoValidado = {
-      saldoCaja,
-      saldoBancos,
       saldoDisponible,
+      saldoServicio: saldoServicio,
     };
 
     next();
@@ -1158,20 +1153,27 @@ router.post("/generar-guia",
             monedas = monedasCaptadas;
           }
 
+          // 🎯 Determinar si es concesión (no actualiza saldo general)
+          const esConcesion = req.user?.rol === "CONCESION";
+          
           const resultadoIngreso = await db.registrarIngresoServicioExterno(
             punto_atencion_id_captado,
             Number(valorTotalGuia),
             guia,
             billetes,
             monedas,
-            bancos
+            bancos,
+            !esConcesion // Solo actualizar saldo general si NO es concesión
           );
 
-          logger.info("Paso 2: Ingreso registrado en saldo general USD", {
+          logger.info(esConcesion 
+            ? "Paso 2: Ingreso registrado (concesión - sin saldo general)" 
+            : "Paso 2: Ingreso registrado en saldo general USD", {
             numeroGuia: guia,
             monto: valorTotalGuia,
             saldoServicioAnterior: resultadoIngreso.saldoServicio.anterior,
             saldoServicioNuevo: resultadoIngreso.saldoServicio.nuevo,
+            esConcesion,
           });
 
           logger.info("Flujo completado: Descuento e ingreso realizados");
@@ -1317,12 +1319,15 @@ router.get("/guias", async (req, res) => {
     const { desde, hasta } = req.query;
     const dbService = new ServientregaDBService();
 
-    // 🔐 Obtener punto_atencion_id Y usuario_id del usuario autenticado
+    // 🔐 Obtener punto_atencion_id del usuario autenticado
     let punto_atencion_id = req.user?.punto_atencion_id;
-    let usuario_id = req.user?.id;
-
-    // Determinar si el usuario es administrador (puede ver TODAS las guías)
-    const isAdmin = req.user && (req.user.rol === "ADMIN" || req.user.rol === "SUPER_USUARIO");
+    
+    // 🎯 Determinar qué guías puede ver el usuario:
+    // - OPERADOR/CONCESION: guías de su punto asignado
+    // - ADMIN/SUPER_USUARIO: todas las guías
+    const rol = req.user?.rol;
+    const isAdmin = rol === "ADMIN" || rol === "SUPER_USUARIO";
+    const filtraPorPunto = rol === "OPERADOR" || rol === "CONCESION";
 
     // 🏢 Obtener agencia Servientrega del punto de atención (si aplica)
     let agencia_codigo: string | undefined;
@@ -1335,29 +1340,32 @@ router.get("/guias", async (req, res) => {
       agencia_codigo = puntoAtencion?.servientrega_agencia_codigo || undefined;
     }
 
-    // Si es admin, eliminar filtros por punto/usuario/agencia para mostrar todas las guías
+    // Si es admin, eliminar filtros por punto/agencia para mostrar todas las guías
     if (isAdmin) {
       logger.info("Admin request - mostrando guías sin filtrar", {
         userId: req.user?.id,
         rol: req.user?.rol,
       });
       punto_atencion_id = undefined;
-      usuario_id = undefined;
+      agencia_codigo = undefined;
+    } else if (!filtraPorPunto) {
+      // Si no es admin ni operador/concesión (ej: ADMINISTRATIVO), puede ver todas
+      punto_atencion_id = undefined;
       agencia_codigo = undefined;
     }
+    // Si es OPERADOR o CONCESION, se mantiene punto_atencion_id para filtrar
 
     logger.debug("GET /guias - Filtro de búsqueda", {
       puntoAtencionId: punto_atencion_id,
-      usuarioId: usuario_id,
       agenciaCodigo: agencia_codigo,
       desde,
       hasta,
+      rol,
     });
 
-    // ⚠️ IMPORTANTE: Filtrar por agencia si el punto tiene una asignada
-    // Esto evita que diferentes puntos vean guías de otras agencias
-    if (!punto_atencion_id && !usuario_id) {
-      logger.warn("Usuario sin punto_atencion_id ni usuario_id asignado");
+    // ⚠️ IMPORTANTE: Filtrar por punto si aplica
+    if (filtraPorPunto && !punto_atencion_id) {
+      logger.warn("Usuario OPERADOR/CONCESION sin punto_atencion_id asignado");
       return res.json([]);
     }
 
@@ -1365,7 +1373,7 @@ router.get("/guias", async (req, res) => {
       (desde as string) || undefined,
       (hasta as string) || undefined,
       punto_atencion_id || undefined, // 👈 FILTRAR por punto de atención
-      usuario_id || undefined, // 👈 FILTRAR por usuario (fallback si no hay punto)
+      undefined, // No filtrar por usuario_id
       agencia_codigo // 👈 FILTRAR por agencia Servientrega
     );
 
