@@ -1,15 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useMemo } from "react";
 import axiosInstance from "@/services/axiosInstance";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, User, Search, ChevronDown, X } from "lucide-react";
 import { toast } from "sonner";
 import { Usuario, PuntoAtencion } from "../../types";
-import { Remitente } from "@/types/servientrega"; // Usa tu tipado global
+import { Remitente } from "@/types/servientrega";
 import { validarIdentificacion } from "@/utils/identificacion";
 
 interface PasoRemitenteProps {
@@ -18,7 +16,6 @@ interface PasoRemitenteProps {
   onNext: (remitente: Remitente) => void;
 }
 
-// Helpers de normalización
 const clean = (s: string) =>
   (s ?? "")
     .normalize("NFD")
@@ -26,48 +23,164 @@ const clean = (s: string) =>
     .toUpperCase()
     .trim();
 
+type Pais = { codpais: string; pais: string };
 type CiudadCanon = { ciudad: string; provincia: string; raw: string };
+
+// Componente de búsqueda tipo dropdown
+interface SearchableSelectProps {
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+  loading?: boolean;
+}
+
+function SearchableSelect({ options, value, onChange, placeholder, disabled, loading }: SearchableSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return options.slice(0, 50);
+    const q = clean(search);
+    return options.filter(o => clean(o.label).includes(q)).slice(0, 50);
+  }, [options, search]);
+
+  const selectedLabel = options.find(o => o.value === value)?.label || value || placeholder;
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setOpen(!open)}
+        disabled={disabled || loading}
+        className={`w-full h-9 px-3 text-left text-sm border rounded-md flex items-center justify-between bg-white ${
+          disabled ? "bg-gray-100 text-gray-400" : "hover:border-gray-400"
+        }`}
+      >
+        <span className="truncate">{selectedLabel}</span>
+        {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" /> : <ChevronDown className="h-3.5 w-3.5 text-gray-400" />}
+      </button>
+
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-hidden">
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+              <Input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar..."
+                className="pl-7 h-8 text-xs"
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <X className="h-3 w-3 text-gray-400" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="overflow-y-auto max-h-44">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-gray-400 text-center">Sin resultados</div>
+            ) : (
+              filtered.map((opt) => (
+                <div
+                  key={opt.value}
+                  onClick={() => { onChange(opt.value); setOpen(false); setSearch(""); }}
+                  className={`px-3 py-2 text-xs cursor-pointer hover:bg-gray-100 ${
+                    opt.value === value ? "bg-blue-50 text-blue-700 font-medium" : ""
+                  }`}
+                >
+                  {opt.label}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PasoRemitente({
   selectedPoint,
   onNext,
 }: PasoRemitenteProps) {
-  // Catálogo oficial de ciudades (Servientrega)
-  const [_ciudadesCanon, setCiudadesCanon] = useState<CiudadCanon[]>([]);
+  const [paises, setPaises] = useState<Pais[]>([]);
+  const [ciudadesCanon, setCiudadesCanon] = useState<CiudadCanon[]>([]);
+  const [cargandoPaises, setCargandoPaises] = useState(true);
   const [cargandoCiudades, setCargandoCiudades] = useState(true);
 
-  // Usa SIEMPRE ciudad/provincia del punto de atención (validada contra catálogo)
   const [formData, setFormData] = useState<Remitente>({
     identificacion: "",
     nombre: "",
     direccion: "",
     telefono: "",
     email: "",
-    ciudad: selectedPoint?.ciudad || "",
-    provincia: selectedPoint?.provincia || "",
-    codigo_postal: selectedPoint?.codigo_postal || "170150",
-    pais: "ECUADOR",
+    ciudad: "",
+    provincia: "",
+    codigo_postal: "170150",
+    pais: "",
   });
 
-  // Campo único para dirección completa (consolidado de 4 campos)
   const [direccionCompleta, setDireccionCompleta] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [ciudadValida, setCiudadValida] = useState(false);
 
   const [cedulaQuery, setCedulaQuery] = useState("");
   const [cedulaResultados, setCedulaResultados] = useState<Remitente[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
-  const [remitenteExistente, setRemitenteExistente] =
-    useState<Remitente | null>(null);
+  const [remitenteExistente, setRemitenteExistente] = useState<Remitente | null>(null);
 
-  // 1) Cargar ciudades (codpais: 63 Ecuador) y validar punto de atención
+  // Cargar países
   useEffect(() => {
+    const loadPaises = async () => {
+      try {
+        setCargandoPaises(true);
+        const { data } = await axiosInstance.post("/servientrega/paises");
+        const lista: Pais[] = (data?.fetch || []).map((p: { codpais?: string; pais?: string }) => ({
+          codpais: String(p.codpais || ""),
+          pais: String(p.pais || ""),
+        })).filter((p: Pais) => p.codpais && p.pais);
+        
+        setPaises(lista);
+        
+        // Seleccionar Ecuador por defecto si existe
+        const ecuador = lista.find(p => clean(p.pais) === "ECUADOR");
+        if (ecuador) {
+          setFormData(prev => ({ ...prev, pais: ecuador.codpais }));
+        }
+      } catch {
+        toast.error("Error cargando países");
+      } finally {
+        setCargandoPaises(false);
+      }
+    };
+    loadPaises();
+  }, []);
+
+  // Cargar ciudades cuando cambia el país
+  useEffect(() => {
+    if (!formData.pais) return;
+    
     const loadCiudades = async () => {
       try {
         setCargandoCiudades(true);
         const { data } = await axiosInstance.post("/servientrega/ciudades", {
-          codpais: 63,
+          codpais: formData.pais,
         });
 
         const lista: CiudadCanon[] = (data?.fetch || []).map(
@@ -83,62 +196,43 @@ export default function PasoRemitente({
 
         setCiudadesCanon(lista);
 
-        // Validar/ajustar contra catálogo
-        const spCiudad = clean(selectedPoint?.ciudad || "");
-        const spProv = clean(selectedPoint?.provincia || "");
+        // Si es Ecuador y tenemos punto seleccionado, intentar match
+        const paisSeleccionado = paises.find(p => p.codpais === formData.pais);
+        const esEcuador = paisSeleccionado && clean(paisSeleccionado.pais) === "ECUADOR";
+        
+        if (esEcuador && selectedPoint?.ciudad) {
+          const spCiudad = clean(selectedPoint.ciudad);
+          const spProv = clean(selectedPoint.provincia || "");
 
-        // Match exacto (normalizado)
-        let match =
-          lista.find(
+          let match = lista.find(
             (c) => clean(c.ciudad) === spCiudad && clean(c.provincia) === spProv
+          ) || lista.find(
+            (c) => clean(c.ciudad).includes(spCiudad) && clean(c.provincia).includes(spProv)
           ) || null;
 
-        // Match aproximado si no hay exacto (contiene)
-        if (!match) {
-          match =
-            lista.find(
-              (c) =>
-                clean(c.ciudad).includes(spCiudad) &&
-                clean(c.provincia).includes(spProv)
-            ) || null;
-        }
-
-        if (match) {
-          setFormData((prev) => ({
-            ...prev,
-            ciudad: match.ciudad,
-            provincia: match.provincia,
-            pais: "ECUADOR",
-          }));
-          setCiudadValida(true);
+          if (match) {
+            setFormData((prev) => ({
+              ...prev,
+              ciudad: match.ciudad,
+              provincia: match.provincia,
+            }));
+            setCiudadValida(true);
+          } else {
+            setCiudadValida(false);
+          }
         } else {
           setCiudadValida(false);
-          setFormData((prev) => ({
-            ...prev,
-            ciudad: selectedPoint?.ciudad || "",
-            provincia: selectedPoint?.provincia || "",
-            pais: "ECUADOR",
-          }));
-          toast.error(
-            "La ciudad/provincia del Punto de Atención no existe en el catálogo de Servientrega. Contacta a soporte para homologar el punto."
-          );
         }
-      } catch (e) {
-        console.error("❌ Error cargando ciudades:", e);
-        setCiudadValida(false);
-        toast.error(
-          "No se pudo validar ciudades con Servientrega. Verifica conexión."
-        );
+      } catch {
+        toast.error("Error cargando ciudades");
       } finally {
         setCargandoCiudades(false);
       }
     };
 
     loadCiudades();
-     
-  }, [selectedPoint?.ciudad, selectedPoint?.provincia]);
+  }, [formData.pais, selectedPoint?.ciudad, selectedPoint?.provincia, paises]);
 
-  // 2) Búsqueda predictiva de remitente
   useEffect(() => {
     const query = cedulaQuery.trim();
     if (query.length >= 3) {
@@ -161,113 +255,81 @@ export default function PasoRemitente({
       telefono: rem.telefono || "",
       email: rem.email || "",
       direccion: rem.direccion || "",
-      // Fijar SIEMPRE la ciudad/provincia del punto (ya validadas contra catálogo)
-      ciudad: prev.ciudad,
-      provincia: prev.provincia,
-      codigo_postal: prev.codigo_postal || "170150",
-      pais: "ECUADOR",
     }));
 
-    // Parseo de dirección y reconstrucción en campo único
     if (rem.direccion) {
-      const partes = String(rem.direccion)
-        .split(",")
-        .map((p: string) => p.trim());
-      const referenciaIndex = partes.findIndex((p: string) =>
-        p.toLowerCase().startsWith("ref:")
-      );
-      const referencia =
-        referenciaIndex >= 0
-          ? partes
-              .slice(referenciaIndex)
-              .join(", ")
-              .replace(/^Ref:\s*/i, "")
-              .trim()
-          : "";
-
-      const partesAntes =
-        referenciaIndex >= 0 ? partes.slice(0, referenciaIndex) : partes;
-
-      const callePrincipal = partesAntes[0]?.trim() || "";
-      const segundaParte = partesAntes[1]?.trim() || "";
-      let numeracion = "";
-      let calleSecundaria = "";
-
-      if (segundaParte.startsWith("#")) {
-        numeracion = segundaParte.replace("#", "").trim();
-        calleSecundaria = partesAntes[2]?.replace(/^y\s*/i, "").trim() || "";
-      } else {
-        calleSecundaria = segundaParte.replace(/^y\s*/i, "").trim();
-      }
-
-      // Reconstruir dirección completa en formato legible
-      let direccionReconstruida = callePrincipal;
-      if (numeracion) {
-        direccionReconstruida += ` #${numeracion}`;
-      }
-      if (calleSecundaria) {
-        direccionReconstruida += ` y ${calleSecundaria}`;
-      }
-      if (referencia) {
-        direccionReconstruida += `, Ref: ${referencia}`;
-      }
-
-      setDireccionCompleta(direccionReconstruida.trim());
-    } else {
-      setDireccionCompleta("");
+      setDireccionCompleta(rem.direccion);
     }
 
     setRemitenteExistente(rem);
     setCedulaResultados([]);
   };
 
-
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
+  const handlePaisChange = (codpais: string) => {
+    setFormData(prev => ({
+      ...prev,
+      pais: codpais,
+      ciudad: "",
+      provincia: "",
+    }));
+    setCiudadValida(false);
+  };
+
+  const handleCiudadChange = (ciudadRaw: string) => {
+    const match = ciudadesCanon.find(c => c.raw === ciudadRaw);
+    if (match) {
+      setFormData(prev => ({
+        ...prev,
+        ciudad: match.ciudad,
+        provincia: match.provincia,
+      }));
+      setCiudadValida(true);
+    }
+  };
+
   const handleContinue = async () => {
-    if (cargandoCiudades) {
-      toast.info("Cargando catálogo de ciudades...");
+    if (cargandoPaises || cargandoCiudades) {
+      toast.info("Cargando catálogo...");
       return;
     }
     if (!ciudadValida) {
-      toast.error(
-        "La ciudad del Punto de Atención no está homologada. No se puede continuar."
-      );
+      toast.error("Selecciona una ciudad válida.");
       return;
     }
 
     const { identificacion, nombre, telefono, email, ciudad, pais } = formData;
     if (!identificacion || !nombre || !telefono || !email || !ciudad || !pais) {
-      toast.error("Completa todos los campos obligatorios.");
+      toast.error("Completa todos los campos.");
       return;
     }
     if (!validarIdentificacion(identificacion)) {
-      toast.error("Número de identificación inválido.");
+      toast.error("Identificación inválida.");
       return;
     }
 
     const direccionFinal = direccionCompleta.trim();
-
     if (!direccionFinal) {
       toast.error("La dirección es requerida");
       return;
     }
 
-    // Construye el remitente canonizado
+    const paisNombre = paises.find(p => p.codpais === pais)?.pais || "ECUADOR";
+
     const remitenteFinal: Remitente = {
       identificacion: formData.identificacion.trim(),
       nombre: formData.nombre.trim(),
       direccion: direccionFinal.trim(),
       telefono: formData.telefono.trim(),
       email: formData.email?.trim() || "",
-      ciudad: formData.ciudad.trim(), // canon Servientrega
-      provincia: formData.provincia.trim(), // canon Servientrega
+      ciudad: formData.ciudad.trim(),
+      provincia: formData.provincia.trim(),
       codigo_postal: formData.codigo_postal?.trim() || "170150",
-      pais: "ECUADOR",
+      pais: paisNombre,
     };
 
-    // Payload a BD (usa campos básicos por compatibilidad)
     const payload = {
       cedula: remitenteFinal.identificacion,
       nombre: remitenteFinal.nombre,
@@ -289,53 +351,74 @@ export default function PasoRemitente({
       } else {
         await axiosInstance.post("/servientrega/remitente/guardar", payload);
       }
-      toast.success("Remitente guardado correctamente.");
+      toast.success("Remitente guardado.");
       onNext(remitenteFinal);
-    } catch (err) {
-      console.error(
-        "❌ Error al guardar remitente:",
-        err,
-        "\nPayload:",
-        payload
-      );
-      toast.error("Hubo un problema al guardar el remitente.");
+    } catch {
+      toast.error("Error al guardar remitente.");
     } finally {
       setLoading(false);
     }
   };
 
+  const paisOptions = useMemo(() => 
+    paises.map(p => ({ value: p.codpais, label: p.pais })),
+    [paises]
+  );
+
+  const ciudadOptions = useMemo(() => 
+    ciudadesCanon.map(c => ({ value: c.raw, label: c.raw })),
+    [ciudadesCanon]
+  );
+
+  const selectedCiudadRaw = useMemo(() => {
+    if (!formData.ciudad) return "";
+    return ciudadesCanon.find(c => c.ciudad === formData.ciudad && c.provincia === formData.provincia)?.raw || "";
+  }, [formData.ciudad, formData.provincia, ciudadesCanon]);
+
   return (
-    <Card className="w-full max-w-3xl mx-auto mt-4 sm:mt-6">
-      <CardHeader>
-        <CardTitle>Información del Remitente</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Identificación (con búsqueda) */}
+    <div className="w-full max-w-md mx-auto p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <User className="h-5 w-5 text-blue-600" />
+        <h2 className="text-base font-semibold">Datos del Remitente</h2>
+      </div>
+
+      <div className="space-y-3">
+        {/* Identificación con búsqueda */}
         <div className="relative">
-          <Input
-            name="identificacion"
-            placeholder="Cédula, RUC o Pasaporte"
-            value={formData.identificacion}
-            onChange={(e) => {
-              const value = e.target.value.trimStart();
-              setFormData((prev) => ({ ...prev, identificacion: value }));
-              setCedulaQuery(value);
-            }}
-          />
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+            <Input
+              name="identificacion"
+              placeholder="Cédula, RUC o Pasaporte"
+              value={formData.identificacion}
+              onChange={(e) => {
+                const value = e.target.value.trimStart();
+                setFormData((prev) => ({ ...prev, identificacion: value }));
+                setCedulaQuery(value);
+              }}
+              className="pl-8 h-9 text-sm"
+            />
+          </div>
           {buscandoCedula && (
             <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-gray-400" />
           )}
           {cedulaResultados.length > 0 && (
-            <div className="absolute bg-white border rounded-md shadow-md w-full max-h-40 overflow-y-auto z-10">
-              {cedulaResultados.map((r, idx) => (
+            <div className="absolute bg-white border rounded-md shadow-md w-full max-h-32 overflow-y-auto z-10 mt-1">
+              {cedulaResultados.slice(0, 3).map((r, idx) => (
                 <div
                   key={idx}
-                  className="p-2 hover:bg-gray-100 cursor-pointer"
+                  className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-xs border-b last:border-b-0"
                   onClick={() => seleccionarRemitente(r)}
                 >
-                  {(r.cedula || r.identificacion) + " - " + r.nombre}
+                  <span className="font-medium">{(r.cedula || r.identificacion)}</span>
+                  <span className="text-gray-500 ml-2">{r.nombre}</span>
                 </div>
               ))}
+              {cedulaResultados.length > 3 && (
+                <div className="px-3 py-1.5 text-[10px] text-gray-400 bg-gray-50 text-center">
+                  +{cedulaResultados.length - 3} resultados más
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -345,60 +428,61 @@ export default function PasoRemitente({
           placeholder="Nombre completo"
           value={formData.nombre}
           onChange={handleChange}
-        />
-        <Input
-          name="telefono"
-          placeholder="Teléfono"
-          value={formData.telefono}
-          onChange={handleChange}
-        />
-        <Input
-          name="email"
-          placeholder="Correo electrónico"
-          value={formData.email}
-          onChange={handleChange}
+          className="h-9 text-sm"
         />
 
-        {/* Dirección completa - Campo único consolidado */}
-        <div className="space-y-2">
-          <Label htmlFor="direccionCompleta">Dirección completa</Label>
-          <textarea
-            id="direccionCompleta"
-            name="direccionCompleta"
-            placeholder="Ingrese la dirección completa (calle principal, numeración, calle secundaria, referencia...)"
-            value={direccionCompleta}
-            onChange={(e) => setDireccionCompleta(e.target.value)}
-            className="w-full min-h-[80px] p-3 border rounded-md text-sm resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            rows={3}
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            name="telefono"
+            placeholder="Teléfono"
+            value={formData.telefono}
+            onChange={handleChange}
+            className="h-9 text-sm"
+          />
+          <Input
+            name="email"
+            placeholder="Correo"
+            value={formData.email}
+            onChange={handleChange}
+            className="h-9 text-sm"
           />
         </div>
 
-        {/* Ciudad y Provincia — SIEMPRE desde punto de atención y validadas contra catálogo */}
-        <Input
-          name="ciudad"
-          value={
-            cargandoCiudades
-              ? "Validando ciudad del punto..."
-              : `${formData.ciudad} - ${formData.provincia}`
-          }
-          readOnly
+        <textarea
+          placeholder="Dirección completa"
+          value={direccionCompleta}
+          onChange={(e) => setDireccionCompleta(e.target.value)}
+          className="w-full h-16 px-3 py-2 border rounded-md text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
 
-        {/* País (fijo) */}
-        <Input name="pais" placeholder="País" value={formData.pais} readOnly />
+        {/* País y Ciudad con búsqueda */}
+        <div className="grid grid-cols-2 gap-2">
+          <SearchableSelect
+            options={paisOptions}
+            value={formData.pais}
+            onChange={handlePaisChange}
+            placeholder="Seleccionar país..."
+            loading={cargandoPaises}
+          />
+          <SearchableSelect
+            options={ciudadOptions}
+            value={selectedCiudadRaw}
+            onChange={handleCiudadChange}
+            placeholder={formData.pais ? "Buscar ciudad..." : "Primero elige país"}
+            disabled={!formData.pais || cargandoCiudades}
+            loading={cargandoCiudades}
+          />
+        </div>
 
         <Button
           disabled={loading || !ciudadValida}
           onClick={handleContinue}
-          className="w-full"
+          size="sm"
+          className="w-full bg-blue-600 hover:bg-blue-700"
         >
-          {loading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            "Continuar"
-          )}
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continuar"}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

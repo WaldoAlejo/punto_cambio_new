@@ -1,25 +1,20 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Loader2 } from "lucide-react";
+import { Loader2, Package } from "lucide-react";
 import { toast } from "sonner";
 import axiosInstance from "@/services/axiosInstance";
-import { Separator } from "@/components/ui/separator";
 import type { Empaque, Medidas } from "@/types/servientrega";
 
-// Tipado del prop
 interface PasoEmpaqueYMedidasProps {
-  nombre_producto: string; // "MERCANCIA PREMIER" | "DOCUMENTO UNITARIO"
+  nombre_producto: string;
   esDocumento: boolean;
   paisDestino: string;
   ciudadDestino: string;
   provinciaDestino: string;
-  // Datos del remitente (origen)
   paisOrigen: string;
   ciudadOrigen: string;
   provinciaOrigen: string;
@@ -34,410 +29,159 @@ interface EmpaqueApi {
 export default function PasoEmpaqueYMedidas({
   nombre_producto,
   esDocumento,
-  paisDestino: _paisDestino,
-  ciudadDestino: _ciudadDestino,
-  provinciaDestino: _provinciaDestino,
-  paisOrigen: _paisOrigen,
-  ciudadOrigen: _ciudadOrigen,
-  provinciaOrigen: _provinciaOrigen,
+  paisDestino,
+  esInternacional: _esInternacional,
   onNext,
-}: PasoEmpaqueYMedidasProps) {
+}: PasoEmpaqueYMedidasProps & { esInternacional?: boolean }) {
   const [loading, setLoading] = useState(false);
   const [empaques, setEmpaques] = useState<EmpaqueApi[]>([]);
   const [loadingEmpaques, setLoadingEmpaques] = useState(true);
 
   const [medidas, setMedidas] = useState<Medidas>({
-    alto: 0,
-    ancho: 0,
-    largo: 0,
-    peso: 0,
-    valor_declarado: 0, // ahora puede quedarse en 0
-    valor_seguro: 0,
-    recoleccion: false,
-    contenido: "",
+    alto: 0, ancho: 0, largo: 0, peso: 0, valor_declarado: 0, valor_seguro: 0, recoleccion: false, contenido: "",
   });
 
-  // Empaque desactivado por defecto (en internacional se fuerza a true)
   const [requiereEmpaque, setRequiereEmpaque] = useState(false);
   const [manualSeguro, setManualSeguro] = useState(false);
 
   const [empaque, setEmpaque] = useState<Empaque>({
-    tipo_empaque: "",
-    cantidad: 1,
-    descripcion: "",
-    costo_unitario: 0,
-    costo_total: 0,
+    tipo_empaque: "", cantidad: 1, descripcion: "", costo_unitario: 0, costo_total: 0,
   });
 
-  const esInternacional = (_paisDestino || "").toUpperCase() !== "ECUADOR";
+  const esInternacional = (paisDestino || "").toUpperCase() !== "ECUADOR" || _esInternacional;
   const PESO_MIN_DOCUMENTO = 0.5;
 
-  // ==============
-  // Cargar empaques
-  // ==============
   useEffect(() => {
-    const fetchEmpaques = async () => {
-      try {
-        setLoadingEmpaques(true);
-        const { data } = await axiosInstance.post("/servientrega/empaques", {});
-        setEmpaques(data?.fetch || []);
-      } catch {
-        toast.error("Error al obtener la lista de empaques.");
-      } finally {
-        setLoadingEmpaques(false);
-      }
-    };
-    fetchEmpaques();
+    axiosInstance.post("/servientrega/empaques", {}).then(({ data }) => {
+      setEmpaques(data?.fetch || []);
+      setLoadingEmpaques(false);
+    }).catch(() => setLoadingEmpaques(false));
   }, []);
 
-  // ============================================================
-  // Reglas por producto y tipo de envío (DOC / MERCANCÍA / INTL)
-  // ============================================================
   useEffect(() => {
     if (esDocumento) {
-      // Documento: sin medidas y con peso mínimo 0.5
       setRequiereEmpaque(false);
-      setEmpaque({
-        tipo_empaque: "",
-        cantidad: 0,
-        descripcion: "",
-        costo_unitario: 0,
-        costo_total: 0,
-      });
-      setMedidas((prev) => ({
-        ...prev,
-        alto: 0,
-        ancho: 0,
-        largo: 0,
-        peso: Math.max(prev.peso || 0, PESO_MIN_DOCUMENTO),
-      }));
+      setEmpaque({ tipo_empaque: "", cantidad: 0, descripcion: "", costo_unitario: 0, costo_total: 0 });
+      setMedidas((p) => ({ ...p, alto: 0, ancho: 0, largo: 0, peso: Math.max(p.peso || 0, PESO_MIN_DOCUMENTO) }));
       return;
     }
-
-    // Mercancía internacional: empaque obligatorio
     if (!esDocumento && esInternacional && empaques.length > 0) {
       setRequiereEmpaque(true);
-      const defaultEmpaque =
-        empaques.find((emp) =>
-          (emp.articulo || "").toUpperCase().includes("SOBRE")
-        ) || empaques[0];
-      if (defaultEmpaque) {
-        const costoUnitario = parseFloat(defaultEmpaque.valorventa) || 0;
-        setEmpaque({
-          tipo_empaque: defaultEmpaque.articulo,
-          cantidad: 1,
-          descripcion: `${defaultEmpaque.articulo} ($${costoUnitario.toFixed(
-            2
-          )})`,
-          costo_unitario: costoUnitario,
-          costo_total: costoUnitario,
-        });
+      const defaultEmp = empaques.find((e) => e.articulo.toUpperCase().includes("SOBRE")) || empaques[0];
+      if (defaultEmp) {
+        const costo = parseFloat(defaultEmp.valorventa) || 0;
+        setEmpaque({ tipo_empaque: defaultEmp.articulo, cantidad: 1, descripcion: `${defaultEmp.articulo} ($${costo.toFixed(2)})`, costo_unitario: costo, costo_total: costo });
       }
     }
   }, [esDocumento, esInternacional, empaques]);
 
-  // ==========================
-  // Recalcular costo de empaque
-  // ==========================
   useEffect(() => {
-    setEmpaque((prev) => ({
-      ...prev,
-      costo_total: (prev.costo_unitario || 0) * (prev.cantidad || 0),
-    }));
+    setEmpaque((p) => ({ ...p, costo_total: (p.costo_unitario || 0) * (p.cantidad || 0) }));
   }, [empaque.cantidad, empaque.costo_unitario]);
 
-  // ==========================
-  // Helpers de inputs y cambios
-  // ==========================
-  const getDisplayValue = (value: number): string =>
-    value === 0 ? "" : String(value);
-
   const handleMedidaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, type } = e.target;
-    if (type === "number") {
-      if (value === "") {
-        setMedidas((prev) => ({ ...prev, [name]: 0 }));
-      } else {
-        const numericValue = parseFloat(value);
-        if (!isNaN(numericValue)) {
-          setMedidas((prev) => ({ ...prev, [name]: numericValue }));
-        }
-      }
-    } else {
-      setMedidas((prev) => ({ ...prev, [name]: value }));
-    }
+    const { name, value } = e.target;
+    if (value === "") setMedidas((p) => ({ ...p, [name]: 0 }));
+    else { const n = parseFloat(value); if (!isNaN(n)) setMedidas((p) => ({ ...p, [name]: n })); }
   };
 
   const handleEmpaqueSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selected = e.target.value;
-    const empaqueData = empaques.find((emp) => emp.articulo === selected);
-    if (empaqueData) {
-      const costoUnitario = parseFloat(empaqueData.valorventa) || 0;
-      setEmpaque({
-        tipo_empaque: empaqueData.articulo,
-        cantidad: 1,
-        descripcion: `${empaqueData.articulo} ($${costoUnitario.toFixed(2)})`,
-        costo_unitario: costoUnitario,
-        costo_total: costoUnitario,
-      });
+    const emp = empaques.find((x) => x.articulo === e.target.value);
+    if (emp) {
+      const costo = parseFloat(emp.valorventa) || 0;
+      setEmpaque({ tipo_empaque: emp.articulo, cantidad: 1, descripcion: `${emp.articulo} ($${costo.toFixed(2)})`, costo_unitario: costo, costo_total: costo });
     }
   };
 
-  // ============
-  // Validaciones
-  // ============
   const validar = () => {
-    if (!medidas.contenido || !medidas.contenido.trim()) {
-      toast.error("Debes describir el contenido del paquete.");
-      return false;
-    }
-
-    // Para documentos es suficiente solo con el contenido
-    if (esDocumento) {
-      return true;
-    }
-
-    // 🔓 Valor declarado ya NO es obligatorio para mercancía (puede ser 0)
-    // Validación omitida: se permite valor_declarado = 0
-
-    // Para mercancía internacional: empaque obligatorio
-    if (!esDocumento && esInternacional) {
-      if (!requiereEmpaque) {
-        toast.error("Para envíos internacionales, el empaque es obligatorio.");
-        return false;
-      }
-      if (!empaque.tipo_empaque) {
-        toast.error("Selecciona un tipo de empaque.");
-        return false;
-      }
-      return true;
-    }
-
-    // Para mercancía nacional: requiere medidas SI no lleva empaque, O requiere empaque si lo marcó
-    if (!esDocumento) {
-      if (!requiereEmpaque) {
-        if (
-          !medidas.alto ||
-          !medidas.ancho ||
-          !medidas.largo ||
-          !medidas.peso
-        ) {
-          toast.error("Debes ingresar alto, ancho, largo y peso.");
-          return false;
-        }
-      } else {
-        if (!empaque.tipo_empaque) {
-          toast.error("Selecciona un tipo de empaque.");
-          return false;
-        }
-      }
-    }
-    // Si es documento, ya validó contenido arriba, no necesita más
-
+    if (!medidas.contenido?.trim()) { toast.error("Describe el contenido."); return false; }
+    if (esDocumento) return true;
+    if (esInternacional && (!requiereEmpaque || !empaque.tipo_empaque)) { toast.error("Empaque obligatorio internacional."); return false; }
+    if (!requiereEmpaque && (!medidas.alto || !medidas.ancho || !medidas.largo || !medidas.peso)) { toast.error("Ingresa medidas y peso."); return false; }
+    if (requiereEmpaque && !empaque.tipo_empaque) { toast.error("Selecciona empaque."); return false; }
     return true;
   };
 
-  // =========
-  // Continuar
-  // =========
   const handleContinue = () => {
     if (!validar()) return;
-
     setLoading(true);
-    try {
-      // Forzar reglas finales antes de pasar al siguiente paso
-      const finalMedidas: Medidas = {
-        alto: esDocumento ? 0 : requiereEmpaque ? 0 : medidas.alto,
-        ancho: esDocumento ? 0 : requiereEmpaque ? 0 : medidas.ancho,
-        largo: esDocumento ? 0 : requiereEmpaque ? 0 : medidas.largo,
-        peso: esDocumento
-          ? Math.max(medidas.peso || 0, PESO_MIN_DOCUMENTO)
-          : requiereEmpaque
-          ? 0
-          : medidas.peso,
-        // ✅ valor declarado puede ser 0
-        valor_declarado: medidas.valor_declarado || 0,
-        valor_seguro: manualSeguro ? medidas.valor_seguro : 0,
-        recoleccion: !!medidas.recoleccion,
-        contenido: (medidas.contenido || "").trim(),
-      };
-
-      onNext({
-        medidas: finalMedidas,
-        empaque: requiereEmpaque ? empaque : undefined,
-      });
-    } finally {
-      setLoading(false);
-    }
+    const final: Medidas = {
+      alto: esDocumento ? 0 : requiereEmpaque ? 0 : medidas.alto,
+      ancho: esDocumento ? 0 : requiereEmpaque ? 0 : medidas.ancho,
+      largo: esDocumento ? 0 : requiereEmpaque ? 0 : medidas.largo,
+      peso: esDocumento ? Math.max(medidas.peso || 0, PESO_MIN_DOCUMENTO) : requiereEmpaque ? 0 : medidas.peso,
+      valor_declarado: medidas.valor_declarado || 0,
+      valor_seguro: manualSeguro ? medidas.valor_seguro : 0,
+      recoleccion: !!medidas.recoleccion,
+      contenido: (medidas.contenido || "").trim(),
+    };
+    onNext({ medidas: final, empaque: requiereEmpaque ? empaque : undefined });
+    setLoading(false);
   };
 
   return (
-    <Card className="w-full max-w-2xl mx-auto mt-4 sm:mt-6 shadow-lg border rounded-xl">
-      <CardHeader>
-        <CardTitle>
-          Detalles del paquete —{" "}
-          {nombre_producto ||
-            (esDocumento ? "DOCUMENTOS" : "MERCANCIA PREMIER")}
-        </CardTitle>
-      </CardHeader>
+    <div className="w-full max-w-md mx-auto p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <Package className="h-5 w-5 text-blue-600" />
+        <h2 className="text-base font-semibold">Detalles del Paquete</h2>
+      </div>
 
-      <CardContent className="space-y-6">
-        {/* Switch empaque (no aplica a DOCUMENTOS) */}
-        {!esDocumento && (
-          <div className="flex items-center justify-between">
-            <Label className="font-medium">
-              ¿Requiere empaque y embalaje?
-              {esInternacional && (
-                <span className="text-red-500 ml-1">
-                  (Obligatorio internacional)
-                </span>
-              )}
-            </Label>
-            <Switch
-              checked={requiereEmpaque}
-              onCheckedChange={setRequiereEmpaque}
-              disabled={esInternacional} // en internacional siempre true
-            />
-          </div>
+      <div className="space-y-3">
+        {/* Contenido siempre visible */}
+        <Input name="contenido" placeholder="Contenido del paquete *" value={medidas.contenido} onChange={(e) => setMedidas((p) => ({ ...p, contenido: e.target.value }))} className="h-9 text-sm" />
+
+        {/* Documento: solo peso */}
+        {esDocumento && (
+          <Input name="peso" type="number" placeholder={`Peso mínimo ${PESO_MIN_DOCUMENTO}kg`} value={medidas.peso || ""} onChange={handleMedidaChange} className="h-9 text-sm" />
         )}
 
-        {/* Selector de empaques */}
-        {requiereEmpaque && !esDocumento && (
+        {/* Mercancía: empaque o medidas */}
+        {!esDocumento && (
           <>
-            <div>
-              <Label>Tipo de empaque</Label>
-              <select
-                className="w-full border rounded p-2 mt-1"
-                value={empaque.tipo_empaque}
-                onChange={handleEmpaqueSelect}
-                disabled={loadingEmpaques}
-              >
-                <option value="">
-                  {loadingEmpaques
-                    ? "Cargando empaques..."
-                    : "-- Seleccione un empaque --"}
-                </option>
-                {empaques.map((emp, idx) => (
-                  <option key={idx} value={emp.articulo}>
-                    {emp.articulo} (${emp.valorventa})
-                  </option>
-                ))}
-              </select>
+            <div className="flex items-center justify-between py-1">
+              <span className="text-xs">¿Requiere empaque?</span>
+              <Switch checked={requiereEmpaque} onCheckedChange={setRequiereEmpaque} disabled={esInternacional} className="scale-75" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Cantidad</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={empaque.cantidad}
-                  onChange={(e) =>
-                    setEmpaque((prev) => ({
-                      ...prev,
-                      cantidad: Math.max(parseInt(e.target.value) || 1, 1),
-                    }))
-                  }
-                />
+            {requiereEmpaque ? (
+              <div className="space-y-2">
+                <select className="w-full border rounded h-9 px-2 text-xs" value={empaque.tipo_empaque} onChange={handleEmpaqueSelect} disabled={loadingEmpaques}>
+                  <option value="">{loadingEmpaques ? "Cargando..." : "Seleccionar empaque"}</option>
+                  {empaques.slice(0, 5).map((e, i) => (
+                    <option key={i} value={e.articulo}>{e.articulo} (${e.valorventa})</option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-2">
+                  <Input type="number" min="1" value={empaque.cantidad} onChange={(e) => setEmpaque((p) => ({ ...p, cantidad: Math.max(parseInt(e.target.value) || 1, 1) }))} className="h-8 text-xs w-20" />
+                  <span className="text-xs text-green-600 font-medium">Total: ${empaque.costo_total.toFixed(2)}</span>
+                </div>
               </div>
-              <div className="flex flex-col justify-end">
-                <span className="text-sm">Costo total empaque:</span>
-                <span className="font-bold text-green-600">
-                  ${empaque.costo_total.toFixed(2)}
-                </span>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {["alto", "ancho", "largo", "peso"].map((c) => (
+                  <Input key={c} name={c} type="number" placeholder={c === "peso" ? "kg" : "cm"} value={medidas[c as keyof Medidas] as number || ""} onChange={handleMedidaChange} className="h-9 text-xs text-center" />
+                ))}
               </div>
-            </div>
+            )}
           </>
         )}
 
-        {/* Medidas (solo mercancía nacional sin empaque) */}
-        {!requiereEmpaque && !esDocumento && (
-          <div className="grid grid-cols-2 gap-4">
-            {["alto", "ancho", "largo", "peso"].map((campo) => (
-              <div key={campo}>
-                <Label className="capitalize">
-                  {campo} {campo === "peso" ? "(kg)" : "(cm)"}
-                </Label>
-                <Input
-                  name={campo}
-                  type="number"
-                  value={getDisplayValue(
-                    medidas[campo as keyof typeof medidas] as number
-                  )}
-                  onChange={handleMedidaChange}
-                  placeholder="0"
-                  min="0"
-                />
-              </div>
-            ))}
+        {/* Valor y seguro */}
+        <div className="grid grid-cols-2 gap-2">
+          <Input name="valor_declarado" type="number" placeholder="Valor declarado" value={medidas.valor_declarado || ""} onChange={handleMedidaChange} className="h-9 text-xs" />
+          <div className="flex items-center gap-2">
+            <Switch checked={manualSeguro} onCheckedChange={setManualSeguro} className="scale-75" />
+            <span className="text-[10px]">Seguro</span>
           </div>
-        )}
-
-        {/* Valor mercancía y seguro */}
-        <Separator />
-        <div>
-          {/* 🔓 sin asterisco, ya no es obligatorio */}
-          <Label>Valor declarado de la mercancía (USD)</Label>
-          <Input
-            name="valor_declarado"
-            type="number"
-            value={getDisplayValue(medidas.valor_declarado)}
-            onChange={handleMedidaChange}
-            placeholder="0.00"
-            min="0"
-          />
-        </div>
-
-        <div className="flex items-center justify-between mt-2">
-          <Label>¿Ingresar seguro manual?</Label>
-          <Switch checked={manualSeguro} onCheckedChange={setManualSeguro} />
         </div>
         {manualSeguro && (
-          <div>
-            <Label>Valor del seguro (USD)</Label>
-            <Input
-              name="valor_seguro"
-              type="number"
-              value={getDisplayValue(medidas.valor_seguro)}
-              onChange={handleMedidaChange}
-              placeholder="0.00"
-              min="0"
-            />
-          </div>
+          <Input name="valor_seguro" type="number" placeholder="Valor seguro" value={medidas.valor_seguro || ""} onChange={handleMedidaChange} className="h-9 text-xs" />
         )}
 
-        {/* Contenido del paquete */}
-        <Separator />
-        <div>
-          <Label>Contenido del paquete *</Label>
-          <Input
-            name="contenido"
-            type="text"
-            value={medidas.contenido}
-            onChange={(e) =>
-              setMedidas((prev) => ({ ...prev, contenido: e.target.value }))
-            }
-            placeholder="Describe el contenido del paquete"
-            required
-          />
-        </div>
-
-        {/* Botón */}
-        <Button
-          className="w-full mt-4"
-          onClick={handleContinue}
-          disabled={loading}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Continuar
-            </>
-          ) : (
-            "Continuar"
-          )}
+        <Button onClick={handleContinue} disabled={loading} size="sm" className="w-full bg-blue-600 hover:bg-blue-700">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Continuar"}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
