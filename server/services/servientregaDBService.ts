@@ -185,11 +185,29 @@ export class ServientregaDBService {
   }
 
   async actualizarRemitente(cedula: string, data: Partial<RemitenteData>) {
-    const filteredData = this.sanitizeRemitenteData(data);
-    return prisma.servientregaRemitente.updateMany({
-      where: { cedula: cedula },
-      data: filteredData,
-    });
+    try {
+      const filteredData = this.sanitizeRemitenteData(data);
+      
+      // Verificar si existe el remitente
+      const existente = await prisma.servientregaRemitente.findFirst({
+        where: { cedula: cedula },
+      });
+      
+      if (!existente) {
+        throw new Error(`Remitente con cédula ${cedula} no encontrado`);
+      }
+      
+      // Usar update en lugar de updateMany para obtener el registro actualizado
+      const actualizado = await prisma.servientregaRemitente.update({
+        where: { id: existente.id },
+        data: filteredData,
+      });
+      
+      return actualizado;
+    } catch (error) {
+      console.error("Error en actualizarRemitente:", error);
+      throw error;
+    }
   }
 
   /**

@@ -13,10 +13,11 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, Circle } from "lucide-react";
+import { Loader2, CheckCircle2, Circle, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { Destinatario } from "@/types/servientrega";
 import { validarIdentificacion } from "@/utils/identificacion";
+import ModalRetiroOficina from "./ModalRetiroOficina";
 
 interface Pais {
   codpais: number;
@@ -76,9 +77,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
 
   // Retiro en oficina
   const [retiroEnOficina, setRetiroEnOficina] = useState(false);
-  const [agenciaSeleccionada, setAgenciaSeleccionada] = useState<string>("");
-  const [provinciaFiltro, setProvinciaFiltro] = useState<string>("");
-  const [ciudadFiltro, setCiudadFiltro] = useState<string>("");
+  const [modalRetiroAbierto, setModalRetiroAbierto] = useState(false);
   const [agenciaSeleccionadaData, setAgenciaSeleccionadaData] = useState<Agencia | null>(null);
 
   const [form, setForm] = useState<Destinatario>({
@@ -166,33 +165,36 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     loadAgencias();
   }, []);
 
-  // Obtener lista única de provincias para el filtro
-  const provinciasDisponibles = useMemo(() => {
-    const provincias = agencias.map((a) => a.provincia).filter(Boolean);
-    return Array.from(new Set(provincias)).sort();
-  }, [agencias]);
+  // Handler para cuando se confirma la selección en el modal
+  const handleConfirmarRetiro = (agencia: Agencia) => {
+    setAgenciaSeleccionadaData(agencia);
+    // Autocompletar datos del destinatario desde la agencia
+    setForm((prev) => ({
+      ...prev,
+      provincia: agencia.provincia,
+      ciudad: agencia.ciudad,
+    }));
+    setDireccionCompleta(agencia.direccion);
+    setModalRetiroAbierto(false);
+    toast.success("Punto de retiro seleccionado correctamente");
+  };
 
-  // Obtener ciudades disponibles según la provincia seleccionada
-  const ciudadesDisponibles = useMemo(() => {
-    let filtered = agencias;
-    if (provinciaFiltro) {
-      filtered = filtered.filter((a) => a.provincia === provinciaFiltro);
+  // Handler para abrir el modal
+  const handleAbrirModalRetiro = () => {
+    if (!retiroEnOficina) {
+      setRetiroEnOficina(true);
     }
-    const ciudades = filtered.map((a) => a.ciudad).filter(Boolean);
-    return Array.from(new Set(ciudades)).sort();
-  }, [agencias, provinciaFiltro]);
+    setModalRetiroAbierto(true);
+  };
 
-  // Filtrar agencias por provincia y ciudad seleccionadas
-  const agenciasFiltradas = useMemo(() => {
-    let filtered = agencias;
-    if (provinciaFiltro) {
-      filtered = filtered.filter((a) => a.provincia === provinciaFiltro);
-    }
-    if (ciudadFiltro) {
-      filtered = filtered.filter((a) => a.ciudad === ciudadFiltro);
-    }
-    return filtered;
-  }, [agencias, provinciaFiltro, ciudadFiltro]);
+  // Handler para limpiar la selección de retiro
+  const handleLimpiarRetiro = () => {
+    setRetiroEnOficina(false);
+    setAgenciaSeleccionadaData(null);
+    // Limpiar datos autocompletados
+    setForm((prev) => ({ ...prev, ciudad: "", provincia: "" }));
+    setDireccionCompleta("");
+  };
 
   // 2) Cargar ciudades por país (codpais)
   const cargarCiudadesPorPais = async (codpais: number) => {
@@ -418,19 +420,9 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     if (!validarCodigoPostal()) return;
 
     // Validar retiro en oficina
-    if (retiroEnOficina) {
-      if (!provinciaFiltro) {
-        toast.error("Selecciona una provincia para el retiro en oficina.");
-        return;
-      }
-      if (!ciudadFiltro) {
-        toast.error("Selecciona una ciudad para el retiro en oficina.");
-        return;
-      }
-      if (!agenciaSeleccionada) {
-        toast.error("Selecciona una agencia para retiro en oficina.");
-        return;
-      }
+    if (retiroEnOficina && !agenciaSeleccionadaData) {
+      toast.error("Selecciona un punto de retiro en oficina.");
+      return;
     }
 
     const direccionFinal = direccionCompleta.trim();
@@ -475,7 +467,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
       onNext(
         destinatarioFinal,
         retiroEnOficina,
-        retiroEnOficina ? agenciaSeleccionada : undefined
+        retiroEnOficina ? agenciaSeleccionadaData?.nombre : undefined
       );
     } catch (err) {
       console.error("❌ Error al guardar destinatario:", err);
@@ -680,186 +672,71 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           <h4 className="font-semibold mb-4">📦 Retiro en Oficina</h4>
 
           {/* Toggle para retiro en oficina */}
-          <div
-            onClick={() => {
-              const nuevoEstado = !retiroEnOficina;
-              setRetiroEnOficina(nuevoEstado);
-              if (nuevoEstado) {
-                // Se va a activar - limpiar selecciones previas
-                setAgenciaSeleccionada("");
-                setAgenciaSeleccionadaData(null);
-                setCiudadFiltro("");
-                setProvinciaFiltro("");
-              } else {
-                // Se va a desactivar - limpiar datos autocompletados
-                setForm((prev) => ({ ...prev, ciudad: "", provincia: "" }));
-                setDireccionCompleta("");
-                setAgenciaSeleccionada("");
-                setAgenciaSeleccionadaData(null);
-                setCiudadFiltro("");
-                setProvinciaFiltro("");
-              }
-            }}
-            className="flex items-center gap-3 cursor-pointer p-3 rounded-md hover:bg-blue-100 transition-colors"
-          >
-            {retiroEnOficina ? (
-              <CheckCircle2 className="h-6 w-6 text-green-600" />
-            ) : (
-              <Circle className="h-6 w-6 text-gray-400" />
-            )}
-            <span className="text-sm font-medium">
-              {retiroEnOficina
-                ? "Retiro en oficina habilitado"
-                : "Habilitar retiro en oficina"}
-            </span>
-          </div>
-
-          {/* Filtro por provincia, ciudad y selección de agencia (solo si retiro_oficina = true) */}
-          {retiroEnOficina && (
-            <div className="mt-4 space-y-4">
-              {/* Filtro de provincia */}
-              <div>
-                <Label htmlFor="provinciaFiltro">Provincia *</Label>
-                {cargandoAgencias ? (
-                  <div className="flex items-center mt-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-400 mr-2" />
-                    <span className="text-sm text-gray-500">
-                      Cargando agencias...
-                    </span>
-                  </div>
-                ) : errorAgencias ? (
-                  <div className="mt-2">
-                    <div className="text-sm text-red-500">
-                      {errorAgencias}
-                    </div>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={loadAgencias}
-                      className="mt-2"
-                      type="button"
-                    >
-                      Reintentar
-                    </Button>
-                  </div>
-                ) : agencias.length === 0 ? (
-                  <div className="text-sm text-red-500 mt-2">
-                    No hay agencias disponibles para retiro
-                  </div>
-                ) : (
-                  <Select
-                    value={provinciaFiltro}
-                    onValueChange={(value) => {
-                      setProvinciaFiltro(value);
-                      setCiudadFiltro(""); // Limpiar ciudad al cambiar provincia
-                      setAgenciaSeleccionada(""); // Limpiar agencia
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={`Seleccionar provincia (${provinciasDisponibles.length} disponibles)`} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {provinciasDisponibles.map((provincia, idx) => (
-                        <SelectItem key={idx} value={provincia}>
-                          {provincia}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-
-              {/* Filtro de ciudad */}
-              {provinciaFiltro && (
-                <div>
-                  <Label htmlFor="ciudadFiltro">Ciudad *</Label>
-                  <Select
-                    value={ciudadFiltro}
-                    onValueChange={(value) => {
-                      setCiudadFiltro(value);
-                      setAgenciaSeleccionada(""); // Limpiar agencia al cambiar ciudad
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar ciudad" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ciudadesDisponibles.map((ciudad, idx) => (
-                        <SelectItem key={idx} value={ciudad}>
-                          {ciudad}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* Dropdown de agencias filtradas */}
-              {ciudadFiltro && (
-                <div>
-                  <Label htmlFor="agencia">Punto de Retiro *</Label>
-                  <Select
-                    value={agenciaSeleccionada}
-                    onValueChange={(value) => {
-                      const agencia = agencias.find((a) => a.nombre === value);
-                      if (agencia) {
-                        setAgenciaSeleccionada(value);
-                        setAgenciaSeleccionadaData(agencia);
-                        // Autocompletar datos del destinatario desde la agencia
-                        setForm((prev) => ({
-                          ...prev,
-                          provincia: agencia.provincia,
-                          ciudad: agencia.ciudad,
-                        }));
-                        setDireccionCompleta(agencia.direccion);
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar punto de retiro" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px]">
-                      {agenciasFiltradas.map((agencia, idx) => (
-                        <SelectItem
-                          key={idx}
-                          value={agencia.nombre}
-                          className="py-3"
-                        >
-                          <div className="flex flex-col items-start">
-                            <span className="font-medium">{agencia.nombre}</span>
-                            <span className="text-xs text-gray-500">
-                              {agencia.direccion}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
+          {!retiroEnOficina ? (
+            <Button
+              variant="outline"
+              onClick={handleAbrirModalRetiro}
+              className="w-full justify-start gap-2"
+              type="button"
+            >
+              <MapPin className="h-4 w-4" />
+              Habilitar retiro en oficina
+            </Button>
+          ) : agenciaSeleccionadaData ? (
+            <div className="space-y-3">
               {/* Resumen de la selección */}
-              {agenciaSeleccionada && (
-                <div className="mt-4 p-3 bg-white rounded-md border border-blue-200">
-                  <h5 className="font-semibold text-blue-800 mb-2 text-sm">
-                    Punto de Retiro Seleccionado
-                  </h5>
-                  {(() => {
-                    const agencia = agencias.find(
-                      (a) => a.nombre === agenciaSeleccionada
-                    );
-                    if (!agencia) return null;
-                    return (
-                      <div className="space-y-1 text-sm">
-                        <p className="font-medium">{agencia.nombre}</p>
-                        <p className="text-gray-600">{agencia.direccion}</p>
-                      </div>
-                    );
-                  })()}
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <span className="font-medium text-sm">Retiro en oficina</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLimpiarRetiro}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                    type="button"
+                  >
+                    Cambiar
+                  </Button>
                 </div>
-              )}
+                <div className="mt-3 space-y-1 text-sm">
+                  <p className="font-medium">{agenciaSeleccionadaData.nombre}</p>
+                  <p className="text-gray-600">{agenciaSeleccionadaData.direccion}</p>
+                  <p className="text-gray-500 text-xs">
+                    {agenciaSeleccionadaData.ciudad}, {agenciaSeleccionadaData.provincia}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-amber-600">
+                <CheckCircle2 className="h-5 w-5" />
+                <span>Retiro en oficina habilitado</span>
+              </div>
+              <Button
+                onClick={() => setModalRetiroAbierto(true)}
+                className="w-full"
+                type="button"
+              >
+                <MapPin className="h-4 w-4 mr-2" />
+                Seleccionar punto de retiro
+              </Button>
             </div>
           )}
+
+          {/* Modal de selección de punto de retiro */}
+          <ModalRetiroOficina
+            abierto={modalRetiroAbierto}
+            onCerrar={() => setModalRetiroAbierto(false)}
+            onConfirmar={handleConfirmarRetiro}
+            agencias={agencias}
+            cargando={cargandoAgencias}
+            error={errorAgencias}
+            onReintentar={loadAgencias}
+          />
         </div>
 
         <Button
