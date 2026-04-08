@@ -51,16 +51,35 @@ export function validarIdentificacion(id: string): boolean {
     return check === d10;
     
   } else if (tercerDigito === 6) {
-    // Entidad Pública - RUC (13 dígitos)
-    // Formato: 2 dígitos provincia + 6 + 6 dígitos secuencial + dígito verificador + 3 dígitos establecimiento
-    if (len !== 13) return false;
+    // Puede ser:
+    // 1. Cédula de Extranjero (10 dígitos) - usa mismo algoritmo que persona natural
+    // 2. Entidad Pública - RUC (13 dígitos)
     
-    // Los últimos 3 dígitos no pueden ser 000
-    if (parseInt(cleanId.substring(10), 10) === 0) return false;
+    if (len === 10) {
+      // Cédula de Extranjero: validar con algoritmo de módulo 10
+      const d10 = parseInt(cleanId[9], 10);
+      const coef = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+      let suma = 0;
+      for (let i = 0; i < 9; i++) {
+        let val = parseInt(cleanId[i], 10) * coef[i];
+        if (val >= 10) val -= 9;
+        suma += val;
+      }
+      const check = (10 - (suma % 10)) % 10;
+      return check === d10;
+    }
     
-    // Aceptamos cualquier dígito verificador (posición 9) para ser permisivos
-    // ya que hay RUCs antiguos que no siguen el algoritmo estándar
-    return true;
+    if (len === 13) {
+      // Entidad Pública - RUC
+      // Los últimos 3 dígitos no pueden ser 000
+      if (parseInt(cleanId.substring(10), 10) === 0) return false;
+      
+      // Aceptamos cualquier dígito verificador (posición 9) para ser permisivos
+      // ya que hay RUCs antiguos que no siguen el algoritmo estándar
+      return true;
+    }
+    
+    return false;
     
   } else if (tercerDigito === 9) {
     // Sociedad Privada o Extranjera - RUC (13 dígitos)
