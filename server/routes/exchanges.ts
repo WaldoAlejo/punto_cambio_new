@@ -3166,8 +3166,17 @@ router.delete(
             ? num(saldoOrigen?.bancos)
             : 0;
 
-        const ingresoEf = num(cambio.usd_recibido_efectivo, 0);
+        // FIX: Usar divisas_entregadas_total como fallback si usd_recibido_efectivo es 0
+        // Esto corrige el problema de anulación cuando la moneda origen no es USD
+        const sumOrigenTotal = num(
+          cambio.divisas_entregadas_total || cambio.monto_origen
+        );
+        const ingresoEfRaw = num(cambio.usd_recibido_efectivo, 0);
         const ingresoBk = num(cambio.usd_recibido_transfer, 0);
+        
+        // Si usd_recibido_efectivo es 0 pero hay un valor en divisas_entregadas_total,
+        // usamos ese valor para la reversión
+        const ingresoEf = ingresoEfRaw > 0 ? ingresoEfRaw : sumOrigenTotal;
 
         const nuevoEf = Math.max(0, round2(anteriorEf - ingresoEf));
         const nuevoBk = Math.max(0, round2(anteriorBk - ingresoBk));

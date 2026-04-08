@@ -694,9 +694,45 @@ ${separator}
       "operador"
     );
 
+    // Agregar estilos de impresión para formato térmico 80mm
+    const printStyles = document.createElement("style");
+    printStyles.id = "receipt-print-styles";
+    printStyles.innerHTML = `
+      @media print {
+        @page {
+          size: 80mm auto;
+          margin: 0;
+        }
+        body * {
+          visibility: hidden;
+        }
+        #receiptCliente, #receiptOperador,
+        #receiptCliente *, #receiptOperador * {
+          visibility: visible;
+        }
+        #receiptCliente, #receiptOperador {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 80mm;
+          max-width: 80mm;
+          padding: 5mm;
+          margin: 0;
+          background: white;
+          font-size: 10px;
+          line-height: 1.3;
+        }
+        /* Ocultar botones en impresión */
+        button, .no-print {
+          display: none !important;
+        }
+      }
+    `;
+    document.head.appendChild(printStyles);
+
     const receiptDiv = document.createElement("div");
     receiptDiv.innerHTML = `
-      <div style="
+      <div id="receipt-modal" style="
         position: fixed; 
         top: 0; 
         left: 0; 
@@ -739,28 +775,34 @@ ${separator}
           
           <div id="receiptCliente" style="
             font-family: 'Courier New', monospace; 
-            font-size: 11px; 
+            font-size: 12px; 
             white-space: pre-line;
             margin-bottom: 20px;
             display: block;
             background: #f8f9fa;
-            padding: 15px;
+            padding: 10px;
             border-radius: 4px;
-            max-width: 350px;
-            line-height: 1.2;
+            width: 80mm;
+            max-width: 80mm;
+            min-height: 200px;
+            line-height: 1.3;
+            box-sizing: border-box;
           "></div>
           
           <div id="receiptOperador" style="
             font-family: 'Courier New', monospace; 
-            font-size: 11px; 
+            font-size: 12px; 
             white-space: pre-line;
             margin-bottom: 20px;
             display: none;
             background: #f8f9fa;
-            padding: 15px;
+            padding: 10px;
             border-radius: 4px;
-            max-width: 350px;
-            line-height: 1.2;
+            width: 80mm;
+            max-width: 80mm;
+            min-height: 200px;
+            line-height: 1.3;
+            box-sizing: border-box;
           "></div>
           
           <div style="text-align: center;">
@@ -824,6 +866,9 @@ ${separator}
     if (closeBtn) {
       closeBtn.addEventListener("click", () => {
         receiptDiv.remove();
+        // Remover estilos de impresión
+        const styles = document.getElementById("receipt-print-styles");
+        if (styles) styles.remove();
         if (onClose) onClose();
       });
     }
