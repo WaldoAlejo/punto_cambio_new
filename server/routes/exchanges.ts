@@ -65,6 +65,11 @@ const getIdFromUnknown = (v: unknown): string | null => {
 };
 
 const num = (v: unknown, d = 0) => {
+  // Manejar objetos Decimal de Prisma correctamente
+  if (v && typeof v === "object" && "toNumber" in v && typeof (v as { toNumber: () => number }).toNumber === "function") {
+    const n = (v as { toNumber: () => number }).toNumber();
+    return Number.isFinite(n) ? n : d;
+  }
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
 };
