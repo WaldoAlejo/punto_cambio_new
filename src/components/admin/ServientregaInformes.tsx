@@ -33,11 +33,13 @@ interface EstadisticasGuias {
   guias_activas: number;
   guias_anuladas: number;
   guias_pendientes_anulacion: number;
+  total_valor_cobrado: number;
   total_por_punto: Array<{
     punto_atencion_nombre: string;
     total: number;
     activas: number;
     anuladas: number;
+    costo_total: number;
   }>;
 }
 
@@ -64,6 +66,20 @@ interface RecargaInfo {
   asignado_por: string;
 }
 
+interface AsignacionHistoricaInfo {
+  id: string;
+  fecha_asignacion: string;
+  punto_id: string;
+  punto_nombre: string;
+  punto_ciudad: string;
+  tipo: string;
+  valor_asignado: number;
+  valor_total: number;
+  asignado_por: string;
+  observaciones?: string | null;
+  saldo_actual_reporte: number;
+}
+
 interface SolicitudSaldoInfo {
   id: string;
   punto_id: string;
@@ -85,9 +101,14 @@ interface SaldosRecargasData {
     saldo_total_disponible: number;
   };
   recargas: RecargaInfo[];
+  asignaciones_historicas: AsignacionHistoricaInfo[];
   resumen_recargas: {
     total_recargas: number;
     monto_total_recargas: number;
+  };
+  resumen_asignaciones?: {
+    total_asignaciones: number;
+    monto_total_asignado: number;
   };
   solicitudes: SolicitudSaldoInfo[];
   resumen_solicitudes: {
@@ -406,6 +427,11 @@ export const ServientregaInformes = ({
     return cumpleEstado && cumplePunto;
   });
 
+  const totalCobradoGuias = guiasFiltradas.reduce(
+    (acc, guia) => acc + Number(guia.valor_cobrado || guia.costo_envio || 0),
+    0
+  );
+
   // Lista de puntos para el filtro (cargada desde el backend)
   const puntosFiltro = puntosAtencion;
 
@@ -498,7 +524,7 @@ export const ServientregaInformes = ({
         <>
           {/* Estadísticas generales */}
           {estadisticas && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
@@ -552,6 +578,21 @@ export const ServientregaInformes = ({
                       </p>
                     </div>
                     <BarChart3 className="h-8 w-8 text-yellow-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        Total Cobrado
+                      </p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        ${totalCobradoGuias.toLocaleString()}
+                      </p>
+                    </div>
+                    <CreditCard className="h-8 w-8 text-blue-600" />
                   </div>
                 </CardContent>
               </Card>
@@ -811,6 +852,7 @@ export const ServientregaInformes = ({
                           <th className="px-3 py-2 text-right font-medium">Total</th>
                           <th className="px-3 py-2 text-right font-medium">Activas</th>
                           <th className="px-3 py-2 text-right font-medium">Anuladas</th>
+                          <th className="px-3 py-2 text-right font-medium">Valor Cobrado</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -827,6 +869,9 @@ export const ServientregaInformes = ({
                             </td>
                             <td className="px-3 py-2 text-right text-red-600 font-medium">
                               {punto.anuladas}
+                            </td>
+                            <td className="px-3 py-2 text-right text-blue-700 font-medium">
+                              ${Number(punto.costo_total || 0).toLocaleString()}
                             </td>
                           </tr>
                         ))}
@@ -893,10 +938,13 @@ export const ServientregaInformes = ({
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-gray-600">
-                          Total Recargado
+                          Total Asignado
                         </p>
                         <p className="text-2xl font-bold text-purple-600">
-                          ${saldosData.resumen_recargas.monto_total_recargas.toLocaleString()}
+                          ${(
+                            saldosData.resumen_asignaciones?.monto_total_asignado ||
+                            saldosData.resumen_recargas.monto_total_recargas
+                          ).toLocaleString()}
                         </p>
                       </div>
                       <History className="h-8 w-8 text-purple-600" />
@@ -904,6 +952,64 @@ export const ServientregaInformes = ({
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Reporte histórico de asignaciones */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Reporte Histórico de Asignaciones</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {saldosData.asignaciones_historicas.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">
+                      No hay asignaciones registradas.
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm border rounded-lg overflow-hidden">
+                        <thead className="bg-gray-50 text-gray-700">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Fecha Asignación</th>
+                            <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Punto</th>
+                            <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Usuario Asigna</th>
+                            <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Tipo</th>
+                            <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Valor Asignado</th>
+                            <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Valor Total</th>
+                            <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Saldo Reporte</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {saldosData.asignaciones_historicas.map((asignacion) => (
+                            <tr key={asignacion.id} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                                {format(parseISO(asignacion.fecha_asignacion), "yyyy-MM-dd HH:mm")}
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="font-medium text-gray-900">{asignacion.punto_nombre}</div>
+                                <div className="text-xs text-gray-500">{asignacion.punto_ciudad}</div>
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                                {asignacion.asignado_por}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                                <Badge variant="outline">{asignacion.tipo}</Badge>
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-green-700">
+                                ${asignacion.valor_asignado.toLocaleString()}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-blue-700">
+                                ${asignacion.valor_total.toLocaleString()}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-purple-700">
+                                ${asignacion.saldo_actual_reporte.toLocaleString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Saldos por Punto */}
               <Card>

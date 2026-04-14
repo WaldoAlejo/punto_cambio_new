@@ -42,6 +42,32 @@ function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null;
 }
 
+function getSaldoServientregaEfectivo(
+  saldo:
+    | {
+        cantidad?: unknown;
+        billetes?: unknown;
+        monedas_fisicas?: unknown;
+        bancos?: unknown;
+      }
+    | null
+    | undefined
+): number {
+  if (!saldo) return 0;
+
+  const cantidad = Number(saldo.cantidad || 0);
+  const billetes = Number(saldo.billetes || 0);
+  const monedas = Number(saldo.monedas_fisicas || 0);
+  const bancos = Number(saldo.bancos || 0);
+
+  const efectivoDesglosado = billetes + monedas;
+  const efectivoTotal = Math.max(0, cantidad - bancos);
+
+  return Math.abs(efectivoDesglosado - efectivoTotal) > 0.01
+    ? efectivoTotal
+    : efectivoDesglosado;
+}
+
 /** ============================
  *  Helpers de entorno y logging
  *  ============================ */
@@ -136,8 +162,9 @@ async function validarSaldoGenerarGuia(
       },
     });
 
-    // 🎯 El saldo disponible debe estar en efectivo (billetes), no en bancos
-    const saldoDisponible = Number(saldoServicio?.billetes ?? 0);
+    // Validar contra el efectivo realmente disponible.
+    // Si billetes/monedas quedó desincronizado, usar el total persistido menos bancos.
+    const saldoDisponible = getSaldoServientregaEfectivo(saldoServicio);
     const tipoSaldo = "Servientrega (efectivo)";
 
     if (saldoDisponible < valorTotal) {

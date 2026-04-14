@@ -10,6 +10,70 @@ import { ServicioExterno } from "@prisma/client";
 const router = express.Router();
 const dbService = new ServientregaDBService();
 
+type AssignmentReportRow = {
+  id: string;
+  fecha_asignacion: Date;
+  punto_id: string;
+  punto_nombre: string;
+  punto_ciudad: string;
+  tipo: string;
+  valor_asignado: number;
+  valor_total: number;
+  asignado_por: string;
+  observaciones: string | null;
+  saldo_actual_reporte: number;
+};
+
+function buildServientregaAssignmentReport(
+  assignments: Array<{
+    id: string;
+    punto_atencion_id: string;
+    tipo: string;
+    monto: { toString(): string };
+    observaciones: string | null;
+    fecha: Date;
+    puntoAtencion?: { nombre: string; ciudad: string | null } | null;
+    usuarioAsignador?: { nombre: string | null; username: string } | null;
+  }>,
+  currentBalances: Array<{
+    punto_atencion_id: string;
+    cantidad: { toString(): string };
+  }>
+): AssignmentReportRow[] {
+  const currentBalanceByPoint = new Map(
+    currentBalances.map((balance) => [
+      balance.punto_atencion_id,
+      parseFloat(balance.cantidad.toString()),
+    ])
+  );
+  const cumulativeAssignedByPoint = new Map<string, number>();
+
+  return assignments.map((assignment) => {
+    const amount = parseFloat(assignment.monto.toString());
+    const previousTotal = cumulativeAssignedByPoint.get(assignment.punto_atencion_id) || 0;
+    const nextTotal = previousTotal + amount;
+    cumulativeAssignedByPoint.set(assignment.punto_atencion_id, nextTotal);
+
+    return {
+      id: assignment.id,
+      fecha_asignacion: assignment.fecha,
+      punto_id: assignment.punto_atencion_id,
+      punto_nombre: assignment.puntoAtencion?.nombre || "N/A",
+      punto_ciudad: assignment.puntoAtencion?.ciudad || "N/A",
+      tipo: assignment.tipo,
+      valor_asignado: amount,
+      valor_total: nextTotal,
+      asignado_por:
+        assignment.usuarioAsignador?.nombre ||
+        assignment.usuarioAsignador?.username ||
+        "Sistema",
+      observaciones: assignment.observaciones,
+      saldo_actual_reporte:
+        currentBalanceByPoint.get(assignment.punto_atencion_id) || 0,
+    };
+  });
+}
+
 /** Asegura que exista USD y devuelve su id */
 async function ensureUsdMonedaId(): Promise<string> {
   const existing = await prisma.moneda.findUnique({
@@ -316,7 +380,7 @@ router.get(
         },
       });
 
-      // 2. Obtener historial de asignaciones (recargas)
+      // 2. Obtener historial de asignaciones (incluye iniciales y recargas)
       const asignacionesWhere: any = {
         servicio: ServicioExterno.SERVIENTREGA,
         moneda_id: usdId,
@@ -325,7 +389,7 @@ router.get(
         asignacionesWhere.punto_atencion_id = punto_atencion_id as string;
       }
 
-      const recargas = await prisma.servicioExternoAsignacion.findMany({
+      const asignacionesHistoricasRaw = await prisma.servicioExternoAsignacion.findMany({
         where: asignacionesWhere,
         include: {
           puntoAtencion: {
@@ -343,8 +407,17 @@ router.get(
             },
           },
         },
-        orderBy: { fecha: "desc" },
+        orderBy: { fecha: "asc" },
       });
+
+      const asignacionesHistoricas = buildServientregaAssignmentReport(
+        asignacionesHistoricasRaw,
+        saldosActuales
+      );
+
+      const recargas = [...asignacionesHistoricas].sort(
+        (a, b) => new Date(b.fecha_asignacion).getTime() - new Date(a.fecha_asignacion).getTime()
+      );
 
       // 3. Obtener solicitudes de saldo con información del operador y administrador
       const solicitudesWhere: any = {};
@@ -396,7 +469,10 @@ router.get(
       const solicitudesRechazadas = solicitudes.filter((s) => s.estado === "RECHAZADA").length;
 
       // 5. Calcular totales de recargas
-      const totalRecargas = recargas.reduce((acc, r) => acc + parseFloat(r.monto.toString()), 0);
+      const totalRecargas = asignacionesHistoricas.reduce(
+        (acc, assignment) => acc + assignment.valor_asignado,
+        0
+      );
 
       // 6. Calcular saldo total disponible
       const saldoTotalDisponible = saldosActuales.reduce(
@@ -426,19 +502,24 @@ router.get(
           // Historial de recargas
           recargas: recargas.map((r) => ({
             id: r.id,
-            punto_id: r.punto_atencion_id,
-            punto_nombre: r.puntoAtencion?.nombre || "N/A",
-            punto_ciudad: r.puntoAtencion?.ciudad || "N/A",
-            monto: parseFloat(r.monto.toString()),
+            punto_id: r.punto_id,
+            punto_nombre: r.punto_nombre,
+            punto_ciudad: r.punto_ciudad,
+            monto: r.valor_asignado,
             tipo: r.tipo,
             observaciones: r.observaciones,
-            fecha: r.fecha,
-            asignado_por: r.usuarioAsignador?.nombre || r.usuarioAsignador?.username || "Sistema",
+            fecha: r.fecha_asignacion,
+            asignado_por: r.asignado_por,
           })),
+          asignaciones_historicas: recargas,
           // Resumen de recargas
           resumen_recargas: {
-            total_recargas: recargas.length,
+            total_recargas: asignacionesHistoricas.length,
             monto_total_recargas: totalRecargas,
+          },
+          resumen_asignaciones: {
+            total_asignaciones: asignacionesHistoricas.length,
+            monto_total_asignado: totalRecargas,
           },
           // Solicitudes de saldo
           solicitudes: solicitudesEnriquecidas.map((s) => ({
@@ -495,7 +576,7 @@ router.get(
         ? { punto_atencion_id: punto_atencion_id as string, servicio: ServicioExterno.SERVIENTREGA, moneda_id: usdId }
         : { servicio: ServicioExterno.SERVIENTREGA, moneda_id: usdId };
 
-      const [saldosActuales, recargas, solicitudes] = await Promise.all([
+      const [saldosActuales, asignacionesHistoricasRaw, solicitudes] = await Promise.all([
         prisma.servicioExternoSaldo.findMany({
           where: saldosWhere,
           include: {
@@ -514,7 +595,7 @@ router.get(
             puntoAtencion: { select: { nombre: true, ciudad: true } },
             usuarioAsignador: { select: { nombre: true, username: true } },
           },
-          orderBy: { fecha: "desc" },
+          orderBy: { fecha: "asc" },
         }),
         prisma.servientregaSolicitudSaldo.findMany({
           where: punto_atencion_id ? { punto_atencion_id: punto_atencion_id as string } : {},
@@ -524,6 +605,11 @@ router.get(
           orderBy: { creado_en: "desc" },
         }),
       ]);
+
+      const asignacionesHistoricas = buildServientregaAssignmentReport(
+        asignacionesHistoricasRaw,
+        saldosActuales
+      );
 
       // Crear archivo Excel
       const workbook = new ExcelJS.Workbook();
@@ -552,7 +638,35 @@ router.get(
         });
       });
 
-      // Hoja 2: Historial de Recargas
+      // Hoja 2: Asignaciones históricas
+      const wsAsignaciones = workbook.addWorksheet("Asignaciones Historicas");
+      wsAsignaciones.columns = [
+        { header: "Fecha", key: "fecha", width: 20 },
+        { header: "Punto de Atención", key: "punto", width: 30 },
+        { header: "Ciudad", key: "ciudad", width: 20 },
+        { header: "Valor Asignado", key: "monto", width: 15 },
+        { header: "Valor Total", key: "valor_total", width: 15 },
+        { header: "Saldo al Reporte", key: "saldo_reporte", width: 18 },
+        { header: "Tipo", key: "tipo", width: 15 },
+        { header: "Asignado Por", key: "asignado_por", width: 25 },
+        { header: "Observaciones", key: "observaciones", width: 40 },
+      ];
+
+      asignacionesHistoricas.forEach((r) => {
+        wsAsignaciones.addRow({
+          fecha: format(new Date(r.fecha_asignacion), "dd/MM/yyyy HH:mm", { locale: es }),
+          punto: r.punto_nombre,
+          ciudad: r.punto_ciudad,
+          monto: r.valor_asignado,
+          valor_total: r.valor_total,
+          saldo_reporte: r.saldo_actual_reporte,
+          tipo: r.tipo,
+          asignado_por: r.asignado_por,
+          observaciones: r.observaciones || "",
+        });
+      });
+
+      // Hoja 3: Historial resumido de recargas para compatibilidad
       const wsRecargas = workbook.addWorksheet("Historial Recargas");
       wsRecargas.columns = [
         { header: "Fecha", key: "fecha", width: 20 },
@@ -564,19 +678,21 @@ router.get(
         { header: "Observaciones", key: "observaciones", width: 40 },
       ];
 
-      recargas.forEach((r) => {
-        wsRecargas.addRow({
-          fecha: format(new Date(r.fecha), "dd/MM/yyyy HH:mm", { locale: es }),
-          punto: r.puntoAtencion?.nombre || "N/A",
-          ciudad: r.puntoAtencion?.ciudad || "N/A",
-          monto: parseFloat(r.monto.toString()),
-          tipo: r.tipo,
-          asignado_por: r.usuarioAsignador?.nombre || r.usuarioAsignador?.username || "Sistema",
-          observaciones: r.observaciones || "",
+      [...asignacionesHistoricas]
+        .sort((a, b) => new Date(b.fecha_asignacion).getTime() - new Date(a.fecha_asignacion).getTime())
+        .forEach((r) => {
+          wsRecargas.addRow({
+            fecha: format(new Date(r.fecha_asignacion), "dd/MM/yyyy HH:mm", { locale: es }),
+            punto: r.punto_nombre,
+            ciudad: r.punto_ciudad,
+            monto: r.valor_asignado,
+            tipo: r.tipo,
+            asignado_por: r.asignado_por,
+            observaciones: r.observaciones || "",
+          });
         });
-      });
 
-      // Hoja 3: Solicitudes de Saldo
+      // Hoja 4: Solicitudes de Saldo
       const wsSolicitudes = workbook.addWorksheet("Solicitudes de Saldo");
       wsSolicitudes.columns = [
         { header: "Fecha Solicitud", key: "fecha_solicitud", width: 20 },
@@ -619,7 +735,7 @@ router.get(
       });
 
       // Estilizar encabezados
-      [wsSaldos, wsRecargas, wsSolicitudes].forEach((ws) => {
+      [wsSaldos, wsAsignaciones, wsRecargas, wsSolicitudes].forEach((ws) => {
         ws.getRow(1).font = { bold: true };
         ws.getRow(1).fill = {
           type: "pattern",

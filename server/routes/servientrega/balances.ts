@@ -37,6 +37,32 @@ async function ensureUsdMonedaId(): Promise<string> {
   return created.id;
 }
 
+function getSaldoServientregaEfectivo(
+  saldo:
+    | {
+        cantidad?: unknown;
+        billetes?: unknown;
+        monedas_fisicas?: unknown;
+        bancos?: unknown;
+      }
+    | null
+    | undefined
+): number {
+  if (!saldo) return 0;
+
+  const cantidad = Number(saldo.cantidad || 0);
+  const billetes = Number(saldo.billetes || 0);
+  const monedas = Number(saldo.monedas_fisicas || 0);
+  const bancos = Number(saldo.bancos || 0);
+
+  const efectivoDesglosado = billetes + monedas;
+  const efectivoTotal = Math.max(0, cantidad - bancos);
+
+  return Math.abs(efectivoDesglosado - efectivoTotal) > 0.01
+    ? efectivoTotal
+    : efectivoDesglosado;
+}
+
 // =============================
 // 💰 Gestión de Saldos - INTEGRADO CON SERVICIOS EXTERNOS
 // =============================
@@ -102,11 +128,19 @@ router.get(
         });
       }
 
-      // 🎯 El saldo debe estar en efectivo (billetes), no en bancos
-      const disponible = Number(saldo.billetes || 0);
+      // Usar el desglose físico cuando está consistente y, si no,
+      // hacer fallback al efectivo total persistido para no bloquear guías.
+      const disponible = getSaldoServientregaEfectivo(saldo);
       const montoRequerido = monto ? parseFloat(monto as string) : 0;
 
-      logger.debug("Saldo Servientrega (efectivo)", { disponible, montoRequerido, total: saldo.cantidad });
+      logger.debug("Saldo Servientrega (efectivo)", {
+        disponible,
+        montoRequerido,
+        total: Number(saldo.cantidad || 0),
+        billetes: Number(saldo.billetes || 0),
+        monedas_fisicas: Number(saldo.monedas_fisicas || 0),
+        bancos: Number(saldo.bancos || 0),
+      });
 
       if (disponible <= 0) {
         return res.json({
@@ -194,11 +228,12 @@ router.get(
       }
 
       const disponible = Number(saldo.cantidad || 0);
+      const efectivoDisponible = getSaldoServientregaEfectivo(saldo);
       const resultado = {
         disponible: disponible,
         saldo_asignado: disponible,
-        billetes: Number(saldo.billetes || 0),
-        monedas_fisicas: Number(saldo.monedas_fisicas || 0),
+        billetes: efectivoDisponible,
+        monedas_fisicas: 0,
         bancos: Number(saldo.bancos || 0),
         servicio: "SERVIENTREGA",
         // Campos legacy para compatibilidad
@@ -258,6 +293,7 @@ router.post("/saldo", async (req: express.Request, res: express.Response) => {
         where: { id: existing.id },
         data: {
           cantidad: { increment: parseFloat(monto_total) },
+          billetes: { increment: parseFloat(monto_total) },
           updated_at: new Date(),
         },
       });
@@ -268,7 +304,7 @@ router.post("/saldo", async (req: express.Request, res: express.Response) => {
           servicio: ServicioExterno.SERVIENTREGA,
           moneda_id: usdId,
           cantidad: parseFloat(monto_total),
-          billetes: 0,
+          billetes: parseFloat(monto_total),
           monedas_fisicas: 0,
           bancos: 0,
         },

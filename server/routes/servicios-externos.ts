@@ -137,6 +137,45 @@ const SERVICIOS_CON_ASIGNACION: ServicioExterno[] = [
   ServicioExterno.SERVIENTREGA,
 ];
 
+function normalizeServicioExternoBreakdown(
+  saldo:
+    | {
+        cantidad?: unknown;
+        billetes?: unknown;
+        monedas_fisicas?: unknown;
+        bancos?: unknown;
+      }
+    | null
+    | undefined
+): { saldoDisponible: number; billetes: number; monedas_fisicas: number } {
+  if (!saldo) {
+    return { saldoDisponible: 0, billetes: 0, monedas_fisicas: 0 };
+  }
+
+  const cantidad = Number(saldo.cantidad || 0);
+  const billetes = Number(saldo.billetes || 0);
+  const monedas = Number(saldo.monedas_fisicas || 0);
+  const bancos = Number(saldo.bancos || 0);
+
+  const efectivoDesglosado = billetes + monedas;
+  const saldoDisponible = Math.max(0, cantidad);
+  const efectivoTotal = Math.max(0, cantidad - bancos);
+
+  if (Math.abs(efectivoDesglosado - efectivoTotal) > 0.01) {
+    return {
+      saldoDisponible,
+      billetes: efectivoTotal,
+      monedas_fisicas: 0,
+    };
+  }
+
+  return {
+    saldoDisponible,
+    billetes,
+    monedas_fisicas: monedas,
+  };
+}
+
 // Servicios que usan saldo general/efectivo (no tienen asignación)
 const SERVICIOS_SALDO_GENERAL: ServicioExterno[] = [
   ServicioExterno.INSUMOS_OFICINA,
@@ -1547,7 +1586,13 @@ router.get(
       const usdId = await ensureUsdMonedaId();
       const saldos = await prisma.servicioExternoSaldo.findMany({
         where: { punto_atencion_id: pointId, moneda_id: usdId },
-        select: { servicio: true, cantidad: true, billetes: true, monedas_fisicas: true },
+        select: {
+          servicio: true,
+          cantidad: true,
+          billetes: true,
+          monedas_fisicas: true,
+          bancos: true,
+        },
       });
 
       // Obtener últimas asignaciones solo para servicios con asignación
@@ -1560,21 +1605,15 @@ router.get(
           });
 
           const saldoActual = saldos.find((s) => s.servicio === servicio);
-
-          // ✅ CORRECCIÓN: El campo cantidad ya contiene el saldo correcto
-          // cantidad = monto_asignado + movimientos (INGRESO resta, EGRESO suma)
-          // Los campos billetes/monedas/bancos son solo para desglose, NO se suman al total
-          const saldoDisponible = Number(saldoActual?.cantidad || 0);
-          const billetes = Number(saldoActual?.billetes || 0);
-          const monedas = Number(saldoActual?.monedas_fisicas || 0);
+          const normalized = normalizeServicioExternoBreakdown(saldoActual);
 
           return {
             servicio,
-            saldo_asignado: saldoDisponible, // Saldo disponible actual (cantidad ya incluye todo)
+            saldo_asignado: normalized.saldoDisponible,
             monto_asignado_inicial: ultimaAsignacion ? Number(ultimaAsignacion.monto) : 0, // Monto inicial para referencia
             actualizado_en: ultimaAsignacion?.fecha?.toISOString() || null,
-            billetes: billetes,
-            monedas_fisicas: monedas,
+            billetes: normalized.billetes,
+            monedas_fisicas: normalized.monedas_fisicas,
           };
         })
       );

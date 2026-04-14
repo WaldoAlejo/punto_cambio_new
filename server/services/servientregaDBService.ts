@@ -1104,7 +1104,13 @@ export class ServientregaDBService {
     }
 
     // Estadísticas generales
-    const [totalGuias, guiasActivas, guiasAnuladas, guiasPendientes] =
+    const [
+      totalGuias,
+      guiasActivas,
+      guiasAnuladas,
+      guiasPendientes,
+      totalesGenerales,
+    ] =
       await Promise.all([
         prisma.servientregaGuia.count({ where }),
         prisma.servientregaGuia.count({
@@ -1115,6 +1121,12 @@ export class ServientregaDBService {
         }),
         prisma.servientregaGuia.count({
           where: { ...where, proceso: "Pendiente_Anulacion" },
+        }),
+        prisma.servientregaGuia.aggregate({
+          where,
+          _sum: {
+            costo_envio: true,
+          },
         }),
       ]);
 
@@ -1174,6 +1186,9 @@ export class ServientregaDBService {
       guias_activas: guiasActivas,
       guias_anuladas: guiasAnuladas,
       guias_pendientes_anulacion: guiasPendientes,
+      total_valor_cobrado: parseFloat(
+        totalesGenerales._sum.costo_envio?.toString() || "0"
+      ),
       total_por_punto: totalPorPunto,
     };
   }

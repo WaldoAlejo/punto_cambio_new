@@ -21,7 +21,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronDown, ChevronUp, Eye } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, CreditCard, FileText } from "lucide-react";
 
 export default function ListadoGuias() {
   const hoy = new Date();
@@ -176,6 +176,11 @@ export default function ListadoGuias() {
     }
   };
 
+  const totalCobrado = guias.reduce(
+    (acc, guia) => acc + Number(guia.valor_cobrado || guia.costo_envio || 0),
+    0
+  );
+
   return (
     <div className="w-full max-w-7xl mx-auto mt-3 sm:mt-4 space-y-2 sm:space-y-3">
       {/* Información del saldo */}
@@ -215,6 +220,29 @@ export default function ListadoGuias() {
               Buscar
             </Button>
           </div>
+
+          {!loading && !error && guias.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+              <div className="rounded-lg border bg-blue-50 p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-blue-700">Total de guías</p>
+                    <p className="text-2xl font-bold text-blue-900">{guias.length}</p>
+                  </div>
+                  <FileText className="h-6 w-6 text-blue-600" />
+                </div>
+              </div>
+              <div className="rounded-lg border bg-green-50 p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-green-700">Total cobrado</p>
+                    <p className="text-2xl font-bold text-green-900">${totalCobrado.toLocaleString()}</p>
+                  </div>
+                  <CreditCard className="h-6 w-6 text-green-600" />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Listado de guías */}
           {loading ? (
