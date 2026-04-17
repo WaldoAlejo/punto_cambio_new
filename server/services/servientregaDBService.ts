@@ -330,7 +330,7 @@ export class ServientregaDBService {
   }
 
   // ===== GUÍAS =====
-  async guardarGuia(data: GuiaData) {
+  async guardarGuia(data: GuiaData, tx?: Prisma.TransactionClient) {
     log("🔍 [guardarGuia] Iniciando guardado de guía:", {
       numero_guia: data.numero_guia,
       costo_envio: data.costo_envio,
@@ -360,8 +360,9 @@ export class ServientregaDBService {
 
     log("🔍 [guardarGuia] Datos limpios antes de crear:", cleanData);
 
+    const db = tx || prisma;
     try {
-      const resultado = await prisma.servientregaGuia.create({
+      const resultado = await db.servientregaGuia.create({
         data: cleanData,
       });
       log("✅ [guardarGuia] Guía guardada exitosamente:", {
@@ -596,115 +597,128 @@ export class ServientregaDBService {
    * - Registra movimiento en ServicioExternoMovimiento
    * Flujo: EGRESO de saldo Servientrega -> cliente paga -> INGRESO a caja
    */
-  async descontarSaldo(puntoAtencionId: string, monto: number, numeroGuia?: string) {
+  async descontarSaldo(puntoAtencionId: string, monto: number, numeroGuia?: string, tx?: Prisma.TransactionClient) {
     log("🔍 [descontarSaldo] Iniciando descuento (usando ServicioExternoSaldo):", {
       puntoAtencionId,
       monto,
       numeroGuia,
+      usaTransaccionExterna: !!tx,
     });
 
-    try {
-      return await prisma.$transaction(async (tx) => {
-        // Obtener IDs necesarios
-        const usdId = await ensureUsdMonedaId();
-        const systemUserId = await ensureSystemUserId();
+    const ejecutar = async (transaction: Prisma.TransactionClient) => {
+      // Obtener IDs necesarios
+      const usdId = await ensureUsdMonedaId();
+      const systemUserId = await ensureSystemUserId();
 
-        // Buscar saldo en ServicioExternoSaldo (igual que Western)
-        const saldoServicio = await tx.servicioExternoSaldo.findUnique({
-          where: {
-            punto_atencion_id_servicio_moneda_id: {
-              punto_atencion_id: puntoAtencionId,
-              servicio: ServicioExterno.SERVIENTREGA,
-              moneda_id: usdId,
-            },
-          },
-        });
-
-        if (!saldoServicio) {
-          throw new Error("No hay saldo asignado para Servientrega en este punto de atención");
-        }
-
-        // 🎯 Validar saldo en efectivo (billetes), no en cantidad total
-        const saldoEfectivo = Number(saldoServicio.billetes || 0);
-        const saldoAnterior = Number(saldoServicio.cantidad || 0);
-        const nuevoSaldo = saldoAnterior - monto;
-
-        if (saldoEfectivo < monto) {
-          throw new Error(`Saldo insuficiente en Servientrega. Disponible en efectivo: $${saldoEfectivo.toFixed(2)}, Requerido: $${monto.toFixed(2)}`);
-        }
-
-        // Calcular nuevos valores de billetes y monedas
-        // Primero restamos de billetes, luego de monedas si es necesario
-        let billetesActuales = Number(saldoServicio.billetes || 0);
-        let monedasActuales = Number(saldoServicio.monedas_fisicas || 0);
-        let montoRestante = monto;
-
-        // Restar primero de billetes
-        if (billetesActuales >= montoRestante) {
-          billetesActuales -= montoRestante;
-          montoRestante = 0;
-        } else {
-          montoRestante -= billetesActuales;
-          billetesActuales = 0;
-          // Restar el resto de monedas
-          monedasActuales = Math.max(0, monedasActuales - montoRestante);
-        }
-
-        // Actualizar saldo del servicio (descontar) - incluyendo desglose
-        const actualizado = await tx.servicioExternoSaldo.update({
-          where: { id: saldoServicio.id },
-          data: {
-            cantidad: nuevoSaldo,
-            billetes: billetesActuales,
-            monedas_fisicas: monedasActuales,
-            updated_at: new Date(),
-          },
-        });
-
-        // Registrar movimiento de EGRESO en ServicioExternoMovimiento
-        // El EGRESO aquí significa: se usa el crédito digital (el cliente está pagando)
-        await tx.servicioExternoMovimiento.create({
-          data: {
+      // Buscar saldo en ServicioExternoSaldo (igual que Western)
+      const saldoServicio = await transaction.servicioExternoSaldo.findUnique({
+        where: {
+          punto_atencion_id_servicio_moneda_id: {
             punto_atencion_id: puntoAtencionId,
             servicio: ServicioExterno.SERVIENTREGA,
-            tipo_movimiento: PrismaTipoMovimiento.EGRESO,
             moneda_id: usdId,
-            monto: new Prisma.Decimal(monto),
-            numero_referencia: numeroGuia || "N/A",
-            descripcion: `Uso de crédito por generación de guía ${numeroGuia || ""}`,
-            usuario_id: systemUserId,
-            metodo_ingreso: TipoViaTransferencia.EFECTIVO,
           },
-        });
-
-        // Registrar en historial legacy para compatibilidad
-        const puntoAtencion = await tx.puntoAtencion.findUnique({
-          where: { id: puntoAtencionId },
-          select: { nombre: true },
-        });
-
-        await tx.servientregaHistorialSaldo.create({
-          data: {
-            punto_atencion_id: puntoAtencionId,
-            punto_atencion_nombre: puntoAtencion?.nombre || "Punto desconocido",
-            monto_total: new Prisma.Decimal(-monto),
-            creado_por: "SYSTEM:DESCUENTO_GUIA",
-          },
-        });
-
-        log("✅ [descontarSaldo] Saldo descontado de ServicioExternoSaldo:", {
-          saldoAnterior,
-          nuevoSaldo,
-          montoDescontado: monto,
-        });
-
-        return {
-          saldoAnterior,
-          nuevoSaldo,
-          montoDescontado: monto,
-          servicio: "SERVIENTREGA",
-        };
+        },
       });
+
+      if (!saldoServicio) {
+        throw new Error("No hay saldo asignado para Servientrega en este punto de atención");
+      }
+
+      const saldoAnterior = Number(saldoServicio.cantidad || 0);
+      const saldoBancos = Number(saldoServicio.bancos || 0);
+      const saldoEfectivo = Math.max(0, saldoAnterior - saldoBancos);
+      let billetesActuales = Number(saldoServicio.billetes || 0);
+      let monedasActuales = Number(saldoServicio.monedas_fisicas || 0);
+
+      // Si el desglose físico quedó desincronizado, usar todo el efectivo como billetes.
+      if (Math.abs(billetesActuales + monedasActuales - saldoEfectivo) > 0.01) {
+        billetesActuales = saldoEfectivo;
+        monedasActuales = 0;
+      }
+
+      const nuevoSaldo = saldoAnterior - monto;
+
+      if (saldoEfectivo < monto) {
+        throw new Error(`Saldo insuficiente en Servientrega. Disponible en efectivo: $${saldoEfectivo.toFixed(2)}, Requerido: $${monto.toFixed(2)}`);
+      }
+
+      // Calcular nuevos valores de billetes y monedas
+      // Primero restamos de billetes, luego de monedas si es necesario
+      let montoRestante = monto;
+
+      // Restar primero de billetes
+      if (billetesActuales >= montoRestante) {
+        billetesActuales -= montoRestante;
+        montoRestante = 0;
+      } else {
+        montoRestante -= billetesActuales;
+        billetesActuales = 0;
+        // Restar el resto de monedas
+        monedasActuales = Math.max(0, monedasActuales - montoRestante);
+      }
+
+      // Actualizar saldo del servicio (descontar) - incluyendo desglose
+      const actualizado = await transaction.servicioExternoSaldo.update({
+        where: { id: saldoServicio.id },
+        data: {
+          cantidad: nuevoSaldo,
+          billetes: billetesActuales,
+          monedas_fisicas: monedasActuales,
+          updated_at: new Date(),
+        },
+      });
+
+      // Registrar movimiento de EGRESO en ServicioExternoMovimiento
+      // El EGRESO aquí significa: se usa el crédito digital (el cliente está pagando)
+      await transaction.servicioExternoMovimiento.create({
+        data: {
+          punto_atencion_id: puntoAtencionId,
+          servicio: ServicioExterno.SERVIENTREGA,
+          tipo_movimiento: PrismaTipoMovimiento.EGRESO,
+          moneda_id: usdId,
+          monto: new Prisma.Decimal(monto),
+          numero_referencia: numeroGuia || "N/A",
+          descripcion: `Uso de crédito por generación de guía ${numeroGuia || ""}`,
+          usuario_id: systemUserId,
+          metodo_ingreso: TipoViaTransferencia.EFECTIVO,
+        },
+      });
+
+      // Registrar en historial legacy para compatibilidad
+      const puntoAtencion = await transaction.puntoAtencion.findUnique({
+        where: { id: puntoAtencionId },
+        select: { nombre: true },
+      });
+
+      await transaction.servientregaHistorialSaldo.create({
+        data: {
+          punto_atencion_id: puntoAtencionId,
+          punto_atencion_nombre: puntoAtencion?.nombre || "Punto desconocido",
+          monto_total: new Prisma.Decimal(-monto),
+          creado_por: "SYSTEM:DESCUENTO_GUIA",
+        },
+      });
+
+      log("✅ [descontarSaldo] Saldo descontado de ServicioExternoSaldo:", {
+        saldoAnterior,
+        nuevoSaldo,
+        montoDescontado: monto,
+      });
+
+      return {
+        saldoAnterior,
+        nuevoSaldo,
+        montoDescontado: monto,
+        servicio: "SERVIENTREGA",
+      };
+    };
+
+    try {
+      if (tx) {
+        return await ejecutar(tx);
+      }
+      return await prisma.$transaction(async (transaction) => ejecutar(transaction));
     } catch (error) {
       console.error("❌ [descontarSaldo] Error en transacción:", error);
       throw error;
@@ -1308,9 +1322,10 @@ export class ServientregaDBService {
     billetes?: number,
     monedas?: number,
     bancos?: number,
-    actualizarSaldoGeneral: boolean = true
+    actualizarSaldoGeneral: boolean = true,
+    tx?: Prisma.TransactionClient
   ) {
-    return prisma.$transaction(async (tx) => {
+    const ejecutar = async (transaction: Prisma.TransactionClient) => {
       log("📥 [registrarIngresoServicioExterno] Iniciando:", {
         puntoAtencionId,
         monto,
@@ -1318,6 +1333,7 @@ export class ServientregaDBService {
         billetes,
         monedas,
         bancos,
+        usaTransaccionExterna: !!transaction,
       });
 
       // Obtener IDs necesarios
@@ -1338,7 +1354,7 @@ export class ServientregaDBService {
 
       // 1️⃣ Crear MovimientoServicioExterno (solo para registro/auditoría)
       log("📥 [registrarIngresoServicioExterno] Creando movimiento...");
-      const movimiento = await tx.servicioExternoMovimiento.create({
+      const movimiento = await transaction.servicioExternoMovimiento.create({
         data: {
           punto_atencion_id: puntoAtencionId,
           servicio: ServicioExterno.SERVIENTREGA,
@@ -1376,12 +1392,12 @@ export class ServientregaDBService {
         // ⚠️ IMPORTANTE: Usar calcularSaldoCajaDesdeMovimientos para obtener el saldo de caja
         // esto garantiza consistencia con la UI y evita race conditions
         saldoCajaAnterior = new Prisma.Decimal(
-          await calcularSaldoCajaDesdeMovimientos(puntoAtencionId, usdId, tx)
+          await calcularSaldoCajaDesdeMovimientos(puntoAtencionId, usdId, transaction)
         );
         
         // Obtener saldo de tabla solo para bancos (no hay tabla de movimientos para bancos aún)
         // y para el desglose de billetes/monedas
-        const saldoActual = await tx.saldo.findUnique({
+        const saldoActual = await transaction.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
               punto_atencion_id: puntoAtencionId,
@@ -1417,10 +1433,10 @@ export class ServientregaDBService {
               saldoBucket: "CAJA",
               usuarioId: systemUserId,
             },
-            tx
+            transaction
           );
 
-          await tx.saldo.upsert({
+          await transaction.saldo.upsert({
             where: {
               punto_atencion_id_moneda_id: {
                 punto_atencion_id: puntoAtencionId,
@@ -1465,8 +1481,30 @@ export class ServientregaDBService {
               saldoBucket: "BANCOS",
               usuarioId: systemUserId,
             },
-            tx
+            transaction
           );
+
+          // ✅ ACTUALIZAR campo bancos en tabla Saldo (bugfix: antes solo se registraba movimiento pero no se actualizaba el saldo)
+          await transaction.saldo.upsert({
+            where: {
+              punto_atencion_id_moneda_id: {
+                punto_atencion_id: puntoAtencionId,
+                moneda_id: usdId,
+              },
+            },
+            update: {
+              bancos: saldoBancosNuevo,
+              updated_at: new Date(),
+            },
+            create: {
+              punto_atencion_id: puntoAtencionId,
+              moneda_id: usdId,
+              cantidad: saldoCajaNuevo,
+              bancos: saldoBancosNuevo,
+              billetes: new Prisma.Decimal(0),
+              monedas_fisicas: new Prisma.Decimal(0),
+            },
+          });
         }
       } else {
         log("ℹ️ [registrarIngresoServicioExterno] Saltando actualización de saldo general (concesión)");
@@ -1484,7 +1522,12 @@ export class ServientregaDBService {
           nuevo: Number(saldoCajaNuevo),
         },
       };
-    });
+    };
+
+    if (tx) {
+      return await ejecutar(tx);
+    }
+    return await prisma.$transaction(async (transaction) => ejecutar(transaction));
   }
 
   /**

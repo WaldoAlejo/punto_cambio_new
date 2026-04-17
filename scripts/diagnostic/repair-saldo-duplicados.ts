@@ -20,9 +20,9 @@
  *   npx ts-node scripts/repair-saldo-duplicados.ts --moneda-id <UUID>  (solo una moneda)
  */
 
-import prisma from "../server/lib/prisma";
-import { saldoReconciliationService } from "../server/services/saldoReconciliationService";
-import logger from "../server/utils/logger";
+import prisma from "../../server/lib/prisma.js";
+import { saldoReconciliationService } from "../../server/services/saldoReconciliationService.js";
+import logger from "../../server/utils/logger.js";
 
 interface RepairResult {
   punto_atencion_id: string;

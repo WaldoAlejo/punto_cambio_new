@@ -611,6 +611,7 @@ model ServientregaGuia {
   agencia_nombre    String?                  // Nombre de agencia Servientrega del punto
   valor_declarado   Decimal?                 @default(0) @db.Decimal(15, 2)
   costo_envio       Decimal?                 @default(0) @db.Decimal(15, 2)
+  saldo_descontado  Boolean                  @default(false) // ✅ Indica si el saldo fue descontado correctamente
   created_at        DateTime                 @default(now())
   updated_at        DateTime                 @updatedAt
   destinatario      ServientregaDestinatario? @relation(fields: [destinatario_id], references: [id])

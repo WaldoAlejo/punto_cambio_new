@@ -68,7 +68,9 @@
     "validate:exchanges": "tsx scripts/validate/validate-exchanges.ts",
     "validate:transfers": "tsx scripts/validate/validate-transfers.ts",
     "validate:servicios-externos": "tsx scripts/validate/validate-servicios-externos.ts",
+    "analyze:el-bosque:servicios-externos": "tsx scripts/validate/analyze-el-bosque-servicios-externos.ts",
     "validate:cierres": "tsx scripts/validate/validate-cierres.ts",
+    "validate:boveda:4w": "tsx scripts/validate/validate-boveda-4-weeks.ts",
 
     "validate:all:100k": "tsx scripts/validate-all.ts 100000",
     "predeploy:check": "npm run build && npm run validate:all:100k",
