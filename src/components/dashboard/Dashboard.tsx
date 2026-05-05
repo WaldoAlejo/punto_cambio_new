@@ -473,7 +473,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         );
 
       case "servientrega-informes":
-        if (!isAdmin)
+        if (!isAdmin && !isAdministrativo)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
         return (
           <ServientregaInformes user={user} selectedPoint={selectedPoint} />

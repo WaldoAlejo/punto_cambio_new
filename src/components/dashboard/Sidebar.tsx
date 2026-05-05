@@ -133,6 +133,12 @@ const Sidebar = ({
       color: "text-yellow-600",
       roles: ["CONCESION"],
     },
+    {
+      id: "servientrega-informes",
+      label: "Informes Servientrega",
+      color: "text-purple-600",
+      roles: ["ADMINISTRATIVO"],
+    },
   ];
 
   const adminMenuItems: MenuItem[] = [

@@ -1007,19 +1007,9 @@ export class ServientregaDBService {
       }
     }
 
-    // Filtro por estado
+    // Filtro por estado (usar campo estado de la tabla, no proceso de Servientrega)
     if (filtros.estado && filtros.estado !== "TODOS") {
-      switch (filtros.estado) {
-        case "ACTIVA":
-          where.proceso = { not: "Anulada" };
-          break;
-        case "ANULADA":
-          where.proceso = "Anulada";
-          break;
-        case "PENDIENTE_ANULACION":
-          where.proceso = "Pendiente_Anulacion";
-          break;
-      }
+      where.estado = filtros.estado;
     }
 
     // Filtro por usuario (si se proporciona)
@@ -1097,19 +1087,9 @@ export class ServientregaDBService {
       }
     }
 
-    // Filtro por estado
+    // Filtro por estado (usar campo estado de la tabla, no proceso de Servientrega)
     if (filtros.estado && filtros.estado !== "TODOS") {
-      switch (filtros.estado) {
-        case "ACTIVA":
-          where.proceso = { not: "Anulada" };
-          break;
-        case "ANULADA":
-          where.proceso = "Anulada";
-          break;
-        case "PENDIENTE_ANULACION":
-          where.proceso = "Pendiente_Anulacion";
-          break;
-      }
+      where.estado = filtros.estado;
     }
 
     // Filtro por punto de atención
@@ -1128,13 +1108,13 @@ export class ServientregaDBService {
       await Promise.all([
         prisma.servientregaGuia.count({ where }),
         prisma.servientregaGuia.count({
-          where: { ...where, proceso: { not: "Anulada" } },
+          where: { ...where, estado: "ACTIVA" },
         }),
         prisma.servientregaGuia.count({
-          where: { ...where, proceso: "Anulada" },
+          where: { ...where, estado: "ANULADA" },
         }),
         prisma.servientregaGuia.count({
-          where: { ...where, proceso: "Pendiente_Anulacion" },
+          where: { ...where, estado: "PENDIENTE_ANULACION" },
         }),
         prisma.servientregaGuia.aggregate({
           where,
@@ -1170,14 +1150,14 @@ export class ServientregaDBService {
             where: {
               ...where,
               punto_atencion_id: grupo.punto_atencion_id,
-              proceso: { not: "Anulada" },
+              estado: "ACTIVA",
             },
           }),
           prisma.servientregaGuia.count({
             where: {
               ...where,
               punto_atencion_id: grupo.punto_atencion_id,
-              proceso: "Anulada",
+              estado: "ANULADA",
             },
           }),
         ]);

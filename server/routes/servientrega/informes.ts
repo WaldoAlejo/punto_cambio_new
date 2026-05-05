@@ -143,7 +143,7 @@ router.get(
         numero_guia: guia.numero_guia,
         created_at: guia.created_at, // Mantener el nombre original para compatibilidad
         fecha_creacion: guia.created_at,
-        estado: mapearEstadoGuia(guia.proceso),
+        estado: guia.estado,
         punto_atencion_id: guia.punto_atencion_id || "",
         punto_atencion_nombre: guia.punto_atencion?.nombre || "N/A",
         // Agencia desde la que se realizó la guía
@@ -285,7 +285,7 @@ router.get(
               locale: es,
             }
           ),
-          estado: mapearEstadoGuia(guia.proceso),
+          estado: guia.estado,
           punto_atencion: guia.punto_atencion?.nombre || "N/A",
           agencia_codigo: guia.agencia_codigo || guia.punto_atencion?.servientrega_agencia_codigo || "N/A",
           agencia_nombre: guia.agencia_nombre || guia.punto_atencion?.servientrega_agencia_nombre || "N/A",
