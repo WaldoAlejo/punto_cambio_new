@@ -278,7 +278,7 @@ async function testTransferencia({ punto, usuario, usd }: { punto: any; usuario:
           destino_id: puntoDestino.id,
           moneda_id: usd.id,
           monto: 500,
-          tipo_transferencia: "PUNTO_A_PUNTO",
+          tipo_transferencia: "ENTRE_PUNTOS",
           estado: "EN_TRANSITO",
           via: TipoViaTransferencia.EFECTIVO,
           solicitado_por: usuario.id,
@@ -337,9 +337,6 @@ async function testTransferencia({ punto, usuario, usd }: { punto: any; usuario:
   if (Number(saldoDespues?.cantidad) !== Number(saldoAntes?.cantidad)) {
     throw new Error(`❌ INCONSISTENCIA POST-ROLLBACK: Esperado ${saldoAntes?.cantidad}, obtenido ${saldoDespues?.cantidad}`);
   }
-
-  // Limpiar punto destino
-  await prisma.puntoAtencion.delete({ where: { id: puntoDestino.id } });
 
   log("TEST-TRANSFER", "✅ TEST PASADO: Transferencia consistente con rollback");
 }
