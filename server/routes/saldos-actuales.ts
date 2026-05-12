@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
 
@@ -9,7 +9,7 @@ const router = express.Router();
  * GET /saldos-actuales/:pointId
  * Saldos actuales por punto de atención (todas las monedas)
  */
-router.get("/:pointId", authenticateToken, async (req, res) => {
+router.get("/:pointId", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { pointId } = req.params;
     const reconciliar = String(req.query["reconciliar"] ?? "").toLowerCase();
@@ -68,7 +68,7 @@ router.get("/:pointId", authenticateToken, async (req, res) => {
  * GET /saldos-actuales/:pointId/:monedaId
  * Saldo actual de una moneda específica en un punto
  */
-router.get("/:pointId/:monedaId", authenticateToken, async (req, res) => {
+router.get("/:pointId/:monedaId", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { pointId, monedaId } = req.params;
     const reconciliar = String(req.query["reconciliar"] ?? "").toLowerCase();

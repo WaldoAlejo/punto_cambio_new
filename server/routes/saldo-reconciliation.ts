@@ -1,5 +1,5 @@
 import express, { Request, Response } from "express";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { saldoReconciliationService, type ReconciliationSummary } from "../services/saldoReconciliationService.js";
 import logger from "../utils/logger.js";
 import { z } from "zod";
@@ -35,6 +35,7 @@ const reconcileSingleSchema = z.object({
 router.post(
   "/reconcile-point/:pointId",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: AuthedRequest, res: Response): Promise<void> => {
     try {
       // Validar parámetros
@@ -115,6 +116,7 @@ router.post(
 router.post(
   "/reconcile-single/:pointId/:currencyId",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: AuthedRequest, res: Response): Promise<void> => {
     try {
       // Validar parámetros
@@ -186,6 +188,7 @@ router.post(
 router.get(
   "/report",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: AuthedRequest, res: Response): Promise<void> => {
     try {
       logger.info("📊 Generando reporte de inconsistencias", {
@@ -247,6 +250,7 @@ router.get(
 router.post(
   "/fix-all",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: AuthedRequest, res: Response): Promise<void> => {
     try {
       // Verificar que el usuario sea administrador
@@ -367,6 +371,7 @@ const calcularRealQuerySchema = z.object({
 router.get(
   "/calcular-real",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: AuthedRequest, res: Response): Promise<void> => {
     try {
       const parsed = calcularRealQuerySchema.safeParse(req.query);
@@ -469,6 +474,7 @@ const reconciliarBodySchema = z.object({
 router.post(
   "/reconciliar",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: AuthedRequest, res: Response): Promise<void> => {
     try {
       const parsed = reconciliarBodySchema.safeParse(req.body);
@@ -547,6 +553,7 @@ router.post(
 router.get(
   "/validar-consistencia",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: AuthedRequest, res: Response): Promise<void> => {
     try {
       // Validación temporalmente simplificada

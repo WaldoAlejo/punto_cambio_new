@@ -2,7 +2,7 @@ import express from "express";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { nowEcuador } from "../utils/timezone.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
 
@@ -42,6 +42,7 @@ const returnExitSchema = z.object({
 router.get(
   "/",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
       res.set({
@@ -134,6 +135,7 @@ router.get(
 router.post(
   "/",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   validate(createExitSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
@@ -211,6 +213,7 @@ router.post(
 router.patch(
   "/:exitId/return",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   validate(returnExitSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {

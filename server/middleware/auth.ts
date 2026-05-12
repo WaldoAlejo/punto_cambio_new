@@ -22,8 +22,10 @@ declare module "express-serve-static-core" {
 }
 
 // Usando conexión directa a PostgreSQL
-const JWT_SECRET =
-  process.env.JWT_SECRET || "your-super-secret-key-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET no está configurado en las variables de entorno");
+}
 
 // Middleware para validar JWT
 export const authenticateToken: RequestHandler = async (

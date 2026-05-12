@@ -1,13 +1,13 @@
 import express, { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 
 const router = express.Router();
 
 // GET /api/vista-saldos-puntos — Vista consolidada de saldos por punto
-router.get("/", authenticateToken, async (req: Request, res: Response) => {
+router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req: Request, res: Response) => {
   try {
     logger.debug("Vista saldos: Iniciando consulta", {
       usuarioId: req.user?.id,

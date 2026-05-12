@@ -12,7 +12,7 @@
  */
 
 import express from "express";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
@@ -127,7 +127,7 @@ interface ConteoMoneda {
  * Crea la jornada y verifica si ya existe apertura de caja para el día.
  * Si no existe, devuelve los saldos esperados para que el operador haga el conteo.
  */
-router.post("/iniciar", authenticateToken, async (req, res) => {
+router.post("/iniciar", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { punto_atencion_id } = req.body;
     const usuario_id = req.user?.id;
@@ -276,7 +276,7 @@ router.post("/iniciar", authenticateToken, async (req, res) => {
  * 2. Si hay diferencias, registrar novedad
  * 3. Notificar al administrador si hay diferencias o si no se ingresó información
  */
-router.post("/validar-apertura", authenticateToken, async (req, res) => {
+router.post("/validar-apertura", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { jornada_id, conteos } = req.body as {
       jornada_id: string;
@@ -617,7 +617,7 @@ router.post("/validar-apertura", authenticateToken, async (req, res) => {
  * 
  * Verifica el estado de la jornada y si puede operar
  */
-router.get("/estado/:jornada_id", authenticateToken, async (req, res) => {
+router.get("/estado/:jornada_id", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { jornada_id } = req.params;
     const usuario_id = req.user?.id;

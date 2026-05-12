@@ -1,7 +1,7 @@
 // server/routes/cierres-diarios.ts
 import express from "express";
 import prisma from "../lib/prisma.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import {
   gyeDayRangeUtcFromDate,
@@ -16,7 +16,7 @@ const router = express.Router();
  * Obtiene el resumen de cierres del día anterior con saldos por divisa
  * Solo accesible para ADMIN y SUPER_USUARIO
  */
-router.get("/resumen-dia-anterior", authenticateToken, async (req, res) => {
+router.get("/resumen-dia-anterior", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const usuario = req.user as { id: string; rol: string } | undefined;
 
@@ -233,7 +233,7 @@ router.get("/resumen-dia-anterior", authenticateToken, async (req, res) => {
  * Obtiene el resumen de cierres de una fecha específica
  * Solo accesible para ADMIN y SUPER_USUARIO
  */
-router.get("/resumen-por-fecha", authenticateToken, async (req, res) => {
+router.get("/resumen-por-fecha", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const usuario = req.user as { id: string; rol: string } | undefined;
 

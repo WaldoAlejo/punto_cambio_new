@@ -1,7 +1,7 @@
 // server/routes/guardar-cierre.ts
 import express from "express";
 import prisma, { Prisma } from "../lib/prisma.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { idempotency } from "../middleware/idempotency.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
@@ -43,6 +43,7 @@ function asNumber(x: unknown, fallback = 0): number {
 router.post(
   "/",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   idempotency({ route: "/api/guardar-cierre" }),
   async (req, res) => {
   try {
@@ -73,23 +74,6 @@ router.post(
 
     // Día actual (zona GYE) para evitar problemas por timezone
     const { gte: hoyGte, lt: hoyLt } = gyeDayRangeUtcFromDate(new Date());
-
-    // Si se intenta cerrar definitivamente y ya hay un CERRADO para hoy → error (idempotencia)
-    const cerradoHoy = await prisma.cuadreCaja.findFirst({
-      where: {
-        punto_atencion_id: puntoAtencionId,
-        fecha: { gte: hoyGte, lt: hoyLt },
-        estado: "CERRADO",
-      },
-      select: { id: true },
-    });
-
-    if (cerradoHoy && tipo_cierre === "CERRADO") {
-      return res.status(400).json({
-        success: false,
-        error: "Ya existe un cuadre CERRADO para el día de hoy",
-      });
-    }
 
     // Cálculo de totales (aunque vengan 0 detalles)
     const totalIngresos = detalles.reduce(
@@ -165,6 +149,26 @@ router.post(
     // Transacción para mantener consistencia entre header y detalles
     const result = await prisma.$transaction(async (tx) => {
       // ═════════════════════════════════════════════════════════════════
+      // VALIDACIÓN ATÓMICA: evitar cierre duplicado del mismo día
+      // ═════════════════════════════════════════════════════════════════
+      // Si se intenta cerrar definitivamente y ya hay un CERRADO para hoy → error
+      // Esta verificación se hace DENTRO de la transacción para prevenir race conditions
+      if (tipo_cierre === "CERRADO") {
+        const cerradoHoy = await tx.cuadreCaja.findFirst({
+          where: {
+            punto_atencion_id: puntoAtencionId,
+            fecha: { gte: hoyGte, lt: hoyLt },
+            estado: "CERRADO",
+          },
+          select: { id: true },
+        });
+
+        if (cerradoHoy) {
+          throw new Error("Ya existe un cuadre CERRADO para el día de hoy");
+        }
+      }
+
+      // ═════════════════════════════════════════════════════════════════
       // BUSCAR CUADRE ABIERTO O PARCIAL MÁS RECIENTE
       // ═════════════════════════════════════════════════════════════════
       // Primero buscar cuadre ABIERTO del día actual
@@ -188,26 +192,6 @@ router.post(
         });
       }
 
-      // Si no hay cuadre del día, buscar cualquier cuadre ABIERTO anterior
-      // (para permitir cerrar días anteriores que quedaron pendientes)
-      if (!cabecera && tipo_cierre === "CERRADO") {
-        cabecera = await tx.cuadreCaja.findFirst({
-          where: {
-            punto_atencion_id: puntoAtencionId,
-            estado: { in: ["ABIERTO", "PARCIAL"] },
-          },
-          orderBy: { fecha: "desc" },
-        });
-
-        if (cabecera) {
-          logger.info("Usando cuadre anterior para cierre", {
-            cuadre_id: cabecera.id,
-            cuadre_fecha: cabecera.fecha,
-            cuadre_estado: cabecera.estado,
-          });
-        }
-      }
-
       if (!cabecera) {
         // Si no hay cuadre existente, crear uno nuevo (solo si hay detalles)
         if (detalles.length === 0) {
@@ -218,10 +202,10 @@ router.post(
           data: {
             usuario_id: usuario.id,
             punto_atencion_id: puntoAtencionId,
-            fecha: new Date(), // UTC - la UI muestra en zona horaria local
+            fecha: nowEcuador(), // Normalizado a timezone Ecuador
             estado: tipo_cierre, // puede ser PARCIAL o CERRADO
             observaciones: observaciones || "",
-            fecha_cierre: new Date(), // UTC - la UI muestra en zona horaria local
+            fecha_cierre: nowEcuador(), // Normalizado a timezone Ecuador
             total_cambios: totalMovimientos,
             total_ingresos: totalIngresos,
             total_egresos: totalEgresos,

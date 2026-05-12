@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
 
@@ -7,7 +7,7 @@ const router = express.Router();
 
 // GET historial de saldo por punto (y opcionalmente por moneda) con paginación y filtros de fecha
 // Ruta: GET /api/historial-saldo/:pointId?monedaId=...&from=YYYY-MM-DD&to=YYYY-MM-DD&page=1&pageSize=50
-router.get("/:pointId", authenticateToken, async (req, res) => {
+router.get("/:pointId", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { pointId } = req.params as { pointId: string };
     const {

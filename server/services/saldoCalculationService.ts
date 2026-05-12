@@ -68,15 +68,11 @@ export async function calcularSaldoCajaDesdeMovimientos(
     
     if (tipo === "SALDO_INICIAL") continue; // Ya está incluido
     
-    // Normalizar signo para tipos conocidos
-    if (tipo === "EGRESO" || tipo === "TRANSFERENCIA_SALIENTE" || tipo === "TRANSFERENCIA_SALIDA") {
-      saldoCalculado -= Math.abs(monto);
-    } else if (tipo === "INGRESO" || tipo === "TRANSFERENCIA_ENTRANTE" || tipo === "TRANSFERENCIA_ENTRADA") {
-      saldoCalculado += Math.abs(monto);
-    } else {
-      // Para otros tipos, usar el monto tal cual (puede ser negativo o positivo)
-      saldoCalculado += monto;
-    }
+    // NOTA: El monto en BD YA tiene el signo correcto gracias a calcularMontoConSigno
+    // en movimientoSaldoService.ts. No se debe re-normalizar aquí.
+    // EGRESO → monto negativo, INGRESO → monto positivo.
+    // Simplemente sumamos el monto tal cual está en la BD.
+    saldoCalculado += monto;
   }
 
   return saldoCalculado;

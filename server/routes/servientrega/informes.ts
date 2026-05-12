@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticateToken } from "../../middleware/auth.js";
+import { authenticateToken, requireRole } from "../../middleware/auth.js";
 import { ServientregaDBService } from "../../services/servientregaDBService.js";
 import prisma from "../../lib/prisma.js";
 import ExcelJS from "exceljs";
@@ -101,6 +101,7 @@ async function ensureUsdMonedaId(): Promise<string> {
 router.get(
   "/informes/guias",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO", "OPERADOR", "CONCESION"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { desde, hasta, estado, punto_atencion_id: puntoQuery } = req.query;
@@ -189,6 +190,7 @@ router.get(
 router.get(
   "/informes/estadisticas",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO", "OPERADOR", "CONCESION"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { desde, hasta, estado, punto_atencion_id } = req.query;
@@ -225,6 +227,7 @@ router.get(
 router.get(
   "/informes/exportar",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO", "OPERADOR", "CONCESION"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { desde, hasta, estado, punto_atencion_id } = req.query;
@@ -351,6 +354,7 @@ function mapearEstadoGuia(proceso: string): string {
 router.get(
   "/informes/saldos-recargas",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO", "OPERADOR", "CONCESION"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { punto_atencion_id } = req.query;
@@ -561,6 +565,7 @@ router.get(
 router.get(
   "/informes/exportar-saldos-recargas",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO", "OPERADOR", "CONCESION"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { punto_atencion_id } = req.query;

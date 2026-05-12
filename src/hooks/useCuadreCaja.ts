@@ -292,7 +292,7 @@ export default function useCuadreCaja(options?: UseCuadreCajaOptions): UseCuadre
       
       return {
         ...d,
-        conteo_fisico: d.saldo_cierre, // default: igual al teórico
+        conteo_fisico: d.conteo_fisico ?? d.saldo_cierre, // respeta conteo guardado en BD
         conteo_bancos: Number(d.conteo_bancos ?? d.bancos_teorico ?? 0),
         billetes: totales.billetes,
         monedas: totales.monedas,

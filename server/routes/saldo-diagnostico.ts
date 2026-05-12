@@ -11,7 +11,7 @@ import prisma from "../lib/prisma.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import cuadreCajaService from "../services/cuadreCajaService.js";
-import { nowEcuador } from "../utils/timezone.js";
+import { nowEcuador, todayGyeDateOnly, gyeDayRangeUtcFromDateOnly } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -28,11 +28,9 @@ router.get(
       const { puntoId, monedaId } = req.params;
       const { fecha } = req.query;
 
-      const fechaConsulta = fecha ? new Date(String(fecha)) : new Date(); // UTC - la UI muestra en zona horaria local
-      const inicioDia = new Date(fechaConsulta);
-      inicioDia.setHours(0, 0, 0, 0);
-      const finDia = new Date(fechaConsulta);
-      finDia.setHours(23, 59, 59, 999);
+      const fechaStr = fecha ? String(fecha) : todayGyeDateOnly();
+      const fechaConsulta = new Date(fechaStr + 'T00:00:00-05:00');
+      const { gte: inicioDia, lt: finDia } = gyeDayRangeUtcFromDateOnly(fechaStr);
 
       // Obtener información de la moneda
       const moneda = await prisma.moneda.findUnique({
@@ -203,11 +201,9 @@ router.get(
       const { puntoId } = req.params;
       const { fecha } = req.query;
 
-      const fechaConsulta = fecha ? new Date(String(fecha)) : new Date(); // UTC - la UI muestra en zona horaria local
-      const inicioDia = new Date(fechaConsulta);
-      inicioDia.setHours(0, 0, 0, 0);
-      const finDia = new Date(fechaConsulta);
-      finDia.setHours(23, 59, 59, 999);
+      const fechaStr = fecha ? String(fecha) : todayGyeDateOnly();
+      const fechaConsulta = new Date(fechaStr + 'T00:00:00-05:00');
+      const { gte: inicioDia, lt: finDia } = gyeDayRangeUtcFromDateOnly(fechaStr);
 
       // Obtener punto
       const punto = await prisma.puntoAtencion.findUnique({

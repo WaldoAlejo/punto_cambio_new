@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticateToken } from "../../middleware/auth.js";
+import { authenticateToken, requireRole } from "../../middleware/auth.js";
 import { ServientregaDBService } from "../../services/servientregaDBService.js";
 import {
   ServientregaAPIService,
@@ -30,10 +30,14 @@ function sendError(
 }
 
 function getCredentialsFromEnv(): ServientregaCredentials {
-  return {
-    usuingreso: process.env.SERVIENTREGA_USER || "INTPUNTOC",
-    contrasenha: process.env.SERVIENTREGA_PASSWORD || "73Yes7321t",
-  };
+  const usuingreso = process.env.SERVIENTREGA_USER;
+  const contrasenha = process.env.SERVIENTREGA_PASSWORD;
+  if (!usuingreso || !contrasenha) {
+    throw new Error(
+      "Faltan variables de entorno SERVIENTREGA_USER y/o SERVIENTREGA_PASSWORD. Verifica .env.production"
+    );
+  }
+  return { usuingreso, contrasenha };
 }
 
 function getApiUrl(): string {
@@ -46,7 +50,7 @@ function getApiUrl(): string {
 /* ============================
    👤 Búsqueda de Remitentes y Destinatarios
 ============================ */
-router.get("/remitente/buscar/:cedula", authenticateToken, async (req, res) => {
+router.get("/remitente/buscar/:cedula", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { cedula } = req.params;
     if (!cedula || cedula.length < 2) {
@@ -69,6 +73,7 @@ router.get("/remitente/buscar/:cedula", authenticateToken, async (req, res) => {
 router.get(
   "/destinatario/buscar/:cedula",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req, res) => {
     try {
       const { cedula } = req.params;
@@ -93,6 +98,7 @@ router.get(
 router.get(
   "/destinatario/buscar-nombre/:nombre",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req, res) => {
     try {
       const { nombre } = req.params;
@@ -124,7 +130,7 @@ router.get(
 /* ============================
    💾 Guardar / Actualizar Remitentes y Destinatarios
 ============================ */
-router.post("/remitente/guardar", authenticateToken, async (req, res) => {
+router.post("/remitente/guardar", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const dbService = new ServientregaDBService();
     const remitente = await dbService.guardarRemitente(req.body);
@@ -141,6 +147,7 @@ router.post("/remitente/guardar", authenticateToken, async (req, res) => {
 router.put(
   "/remitente/actualizar/:cedula",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req, res) => {
     try {
       const { cedula } = req.params;
@@ -162,7 +169,7 @@ router.put(
   }
 );
 
-router.post("/destinatario/guardar", authenticateToken, async (req, res) => {
+router.post("/destinatario/guardar", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const dbService = new ServientregaDBService();
     const destinatario = await dbService.guardarDestinatario(req.body);
@@ -179,6 +186,7 @@ router.post("/destinatario/guardar", authenticateToken, async (req, res) => {
 router.put(
   "/destinatario/actualizar/:cedula",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req, res) => {
     try {
       const { cedula } = req.params;
@@ -214,6 +222,7 @@ router.put(
 router.get(
   "/remitente/puntos",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (_req: express.Request, res: express.Response) => {
   try {
     const dbService = new ServientregaDBService();
@@ -233,7 +242,7 @@ router.get(
  * Body: {}  (no requiere nada)
  * Respuesta: { fetch: [{ codpais, nombrecorto, pais, phone_code }, ...] }
  */
-router.post("/paises", authenticateToken, async (_req, res) => {
+router.post("/paises", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
   try {
     const creds = getCredentialsFromEnv();
     const api = new ServientregaAPIService(creds);
@@ -254,7 +263,7 @@ router.post("/paises", authenticateToken, async (_req, res) => {
  * Body: { codpais: number }
  * Respuesta: { fetch: [{ city: "CIUDAD-PROVINCIA" }, ...] }
  */
-router.post("/ciudades", authenticateToken, async (req, res) => {
+router.post("/ciudades", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { codpais } = req.body;
     if (typeof codpais !== "number") {

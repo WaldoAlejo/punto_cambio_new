@@ -3,7 +3,7 @@ import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { Prisma, EstadoApertura, ServicioExterno } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import { todayGyeDateOnly, nowEcuador } from "../utils/timezone.js";
+import { todayGyeDateOnly, nowEcuador, gyeDayRangeUtcFromDateOnly } from "../utils/timezone.js";
 import {
   buildObservacionesApertura,
   MONEDAS_APERTURA_OBLIGATORIAS,
@@ -122,9 +122,10 @@ async function buildSaldoEsperadoMoneda(moneda: MonedaCatalogo, puntoAtencionId:
     },
   });
 
-  const cantidadCalculada = saldoActual
-    ? Number(saldoActual.cantidad)
-    : await calcularSaldoDesdeMovimientos(puntoAtencionId, moneda.id);
+  // 🔒 FIX: Siempre calcular el saldo teórico desde el ledger (MovimientoSaldo).
+  // Saldo.cantidad puede haber sido pisada por conteos físicos intermedios
+  // (cuadre-caja-conteo) o quedar desactualizada. El ledger es la fuente de verdad.
+  const cantidadCalculada = await calcularSaldoDesdeMovimientos(puntoAtencionId, moneda.id);
   const billetes = saldoActual ? Number(saldoActual.billetes) : cantidadCalculada;
   const monedas = saldoActual ? Number(saldoActual.monedas_fisicas) : 0;
 
@@ -330,6 +331,7 @@ async function tieneArqueoCompleto(puntoAtencionId: string): Promise<boolean> {
 router.post(
   "/iniciar",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
       const { jornada_id } = req.body;
@@ -423,14 +425,13 @@ router.post(
       let monedasExcluidas: any[] = [];
 
       if (existeArqueoCompleto) {
-        // Calcular fecha de ayer
-        const ayer = new Date();
-        ayer.setDate(ayer.getDate() - 1);
-        ayer.setHours(0, 0, 0, 0);
+        // Calcular inicio del día anterior en zona Ecuador
+        const ayerStr = todayGyeDateOnly(new Date(Date.now() - 24 * 60 * 60 * 1000));
+        const { gte: ayerInicio } = gyeDayRangeUtcFromDateOnly(ayerStr);
 
         const monedasConMovimiento = await getMonedasConMovimiento(
           jornada.punto_atencion_id,
-          ayer
+          ayerInicio
         );
 
         // Filtrar monedas
@@ -551,6 +552,7 @@ router.post(
 router.post(
   "/conteo",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
       const {
@@ -751,6 +753,7 @@ router.post(
 router.post(
   "/confirmar",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
       const { apertura_id, incidencia_apertura } = req.body;
@@ -951,7 +954,7 @@ router.post(
   }
 );
 
-router.get("/estado-actual", authenticateToken, async (req: Request, res: Response) => {
+router.get("/estado-actual", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req: Request, res: Response) => {
   try {
     const estado = await obtenerEstadoAperturaOperativa(req.user);
 
@@ -975,6 +978,7 @@ router.get("/estado-actual", authenticateToken, async (req: Request, res: Respon
 router.get(
   "/:id",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request<{ id: string }>, res: Response) => {
     try {
       const { id } = req.params;
@@ -1107,6 +1111,7 @@ router.get(
 router.get(
   "/mis-aperturas/lista",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
       const usuario_id = req.user?.id;
@@ -1345,6 +1350,7 @@ router.post(
 router.get(
   "/arqueos/historial",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req: Request, res: Response) => {
     try {
       const { punto_atencion_id, fecha_desde, fecha_hasta, tipo_arqueo } = req.query;
@@ -1429,6 +1435,7 @@ router.get(
 router.get(
   "/arqueos/:id",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req: Request<{ id: string }>, res: Response) => {
     try {
       const { id } = req.params;

@@ -70,6 +70,8 @@ function getSaldoServientregaEfectivo(
 
 router.get(
   "/saldo/historial",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (_: express.Request, res: express.Response) => {
     try {
       const dbService = new ServientregaDBService();
@@ -92,6 +94,8 @@ router.get(
  */
 router.get(
   "/saldo/validar/:puntoAtencionId",
+  authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { puntoAtencionId } = req.params;
@@ -190,6 +194,8 @@ router.get(
  */
 router.get(
   "/saldo/:puntoAtencionId",
+  authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { puntoAtencionId } = req.params;
@@ -257,7 +263,7 @@ router.get(
  * Asigna saldo a Servientrega (usando el sistema de servicios externos)
  * Los administradores pueden usar /servicios-externos/asignar-saldo
  */
-router.post("/saldo", async (req: express.Request, res: express.Response) => {
+router.post("/saldo", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req: express.Request, res: express.Response) => {
   try {
     const { monto_total, creado_por, punto_atencion_id } = req.body;
 
@@ -349,6 +355,8 @@ router.post("/saldo", async (req: express.Request, res: express.Response) => {
 
 router.post(
   "/solicitar-saldo",
+  authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { punto_atencion_id, monto_solicitado, observaciones, creado_por } =
@@ -393,6 +401,8 @@ router.post(
 
 router.get(
   "/solicitar-saldo/listar",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { estado, punto_atencion_id } = req.query;
@@ -420,6 +430,8 @@ router.get(
 
 router.put(
   "/solicitar-saldo/:id/estado",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { id } = req.params;
@@ -606,6 +618,8 @@ router.get(
 
 router.get(
   "/configuracion/:puntoAtencionId",
+  authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { puntoAtencionId } = req.params;

@@ -1,12 +1,12 @@
 import express from "express";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
 
 const router = express.Router();
 
 // Obtener movimientos de saldo con filtros (query params)
-router.get("/", authenticateToken, async (req, res) => {
+router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { puntoId, monedaCodigo, fechaInicio, fechaFin } = req.query;
 
@@ -91,7 +91,7 @@ router.get("/", authenticateToken, async (req, res) => {
 });
 
 // Obtener movimientos de saldo por punto (Prisma)
-router.get("/:pointId", authenticateToken, async (req, res) => {
+router.get("/:pointId", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { pointId } = req.params;
     const rawLimit = parseInt(String(req.query.limit ?? "50"), 10);

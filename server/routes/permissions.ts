@@ -2,7 +2,7 @@ import express from "express";
 import prisma from "../lib/prisma.js";
 import { EstadoPermiso, Prisma } from "@prisma/client";
 import { z } from "zod";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import logger from "../utils/logger.js";
 import { nowEcuador } from "../utils/timezone.js";
@@ -27,6 +27,7 @@ const createPermissionSchema = z.object({
 router.get(
   "/",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
       const where: Prisma.PermisoWhereInput = {};
@@ -83,6 +84,7 @@ router.get(
 router.post(
   "/",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   validate(createPermissionSchema),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
@@ -150,6 +152,7 @@ router.post(
 router.patch(
   "/:id/approve",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
       if (!req.user || !["ADMIN", "SUPER_USUARIO"].includes(req.user.rol)) {
@@ -192,6 +195,7 @@ router.patch(
 router.patch(
   "/:id/reject",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
       if (!req.user || !["ADMIN", "SUPER_USUARIO"].includes(req.user.rol)) {

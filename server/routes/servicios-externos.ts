@@ -877,6 +877,7 @@ router.post(
 router.get(
   "/movimientos/:pointId",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
       if (!isOperador(req)) {
@@ -1119,7 +1120,7 @@ router.delete(
 /* ==============================
  * GET /ayuda - Obtener mensajes de ayuda para servicios
  * ============================== */
-router.get("/ayuda", authenticateToken, async (_req: Request, res: Response) => {
+router.get("/ayuda", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req: Request, res: Response) => {
   try {
     res.json({
       success: true,
@@ -1242,7 +1243,7 @@ router.get("/admin/movimientos", authenticateToken, requireRole(["ADMIN", "SUPER
 });
 
 // Cierres
-router.post("/cierre/abrir", authenticateToken, async (_req, _res) => {
+router.post("/cierre/abrir", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, _res) => {
   // ... lógica de apertura
 });
 
@@ -1535,6 +1536,7 @@ router.get(
 router.get(
   "/saldos-asignados",
   authenticateToken,
+  requireRole(["OPERADOR", "CONCESION", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
       const user = (req as Partial<AuthedRequest>).user;
@@ -1639,6 +1641,7 @@ router.get(
 router.get(
   "/saldo-inicial-diario",
   authenticateToken,
+  requireRole(["OPERADOR", "CONCESION", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
       const user = (req as Partial<AuthedRequest>).user;

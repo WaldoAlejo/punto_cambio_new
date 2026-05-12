@@ -406,25 +406,6 @@ export const transferCreationService = {
       });
     }
 
-    // Registrar movimiento “operacional” (para listados rápidos)
-    try {
-      await prisma.movimiento.create({
-        data: {
-          punto_atencion_id: destino_id,
-          usuario_id,
-          moneda_id,
-          monto: args.monto,
-          tipo: TipoMovimiento.TRANSFERENCIA_ENTRANTE,
-          descripcion: `Transferencia ${args.via} - ${numero_recibo}`,
-          numero_recibo: numero_recibo,
-        },
-      });
-      logger.info("Movimiento registrado exitosamente");
-    } catch (movError) {
-      logger.warn("Error registrando movimiento (no crítico)", {
-        error: movError,
-      });
-    }
   },
 
   async contabilizarSalidaOrigen(args: {
@@ -552,25 +533,9 @@ export const transferCreationService = {
       });
     }
 
-    // Registrar movimiento "operacional" (para listados rápidos)
-    try {
-      await prisma.movimiento.create({
-        data: {
-          punto_atencion_id: origen_id,
-          usuario_id,
-          moneda_id,
-          monto: args.monto,
-          tipo: TipoMovimiento.TRANSFERENCIA_SALIENTE,
-          descripcion: `Transferencia ${args.via} - ${numero_recibo} - Salida`,
-          numero_recibo: numero_recibo,
-        },
-      });
-      logger.info("Movimiento de salida registrado exitosamente");
-    } catch (movError) {
-      logger.warn("Error registrando movimiento de salida (no crítico)", {
-        error: movError,
-      });
-    }
+    // NOTA: Eliminado registro en modelo Movimiento (zombie/legacy).
+    // Los movimientos detallados de efectivo y bancos ya se registran en MovimientoSaldo
+    // via logMovimientoSaldo arriba. El modelo Movimiento está en desuso.
   },
 
   async createReceipt(data: {

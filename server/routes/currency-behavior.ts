@@ -2,7 +2,7 @@ import express from "express";
 import { z } from "zod";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 
 const router = express.Router();
@@ -29,6 +29,7 @@ interface AuthenticatedRequest extends express.Request {
 router.patch(
   "/:id/behavior",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   validate(updateBehaviorSchema),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
@@ -127,6 +128,7 @@ router.patch(
 router.get(
   "/:id/behavior",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       const { id } = req.params;

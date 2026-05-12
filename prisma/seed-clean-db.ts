@@ -16,7 +16,6 @@ type DelegateKey =
   | 'transferencia'
   | 'movimientoSaldo'
   | 'historialSaldo'
-  | 'movimiento'
   | 'saldoInicial'
   | 'saldo'
   | 'servientregaGuia'
@@ -47,7 +46,6 @@ const deleteOrder: DelegateKey[] = [
   'transferencia',
   'movimientoSaldo',
   'historialSaldo',
-  'movimiento',
   'saldoInicial',
   'saldo',
   'servientregaGuia',

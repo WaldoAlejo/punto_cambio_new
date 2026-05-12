@@ -10,7 +10,7 @@
 
 import express from "express";
 import prisma from "../lib/prisma.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate, todayGyeDateOnly, gyeParseDateOnly } from "../utils/timezone.js";
 
@@ -21,7 +21,7 @@ const router = express.Router();
  * Obtiene el reporte de cierre para el operador actual
  * Requiere: estar autenticado y tener punto de atención asignado
  */
-router.get("/operador", authenticateToken, async (req, res) => {
+router.get("/operador", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const usuario = req.user as { 
       id: string; 
@@ -158,7 +158,7 @@ router.get("/operador", authenticateToken, async (req, res) => {
  * Obtiene el reporte completo de cierres para administradores
  * Solo accesible para ADMIN y SUPER_USUARIO
  */
-router.get("/admin", authenticateToken, async (req, res) => {
+router.get("/admin", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const usuario = req.user as { id: string; rol: string } | undefined;
 
@@ -312,7 +312,7 @@ router.get("/admin", authenticateToken, async (req, res) => {
  * Valida si un cierre puede realizarse
  * Verifica: conteos completos, diferencias dentro de tolerancia, desglose correcto
  */
-router.get("/validar", authenticateToken, async (req, res) => {
+router.get("/validar", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const usuario = req.user as {
       id: string;
@@ -519,7 +519,7 @@ router.get("/validar", authenticateToken, async (req, res) => {
  * GET /api/cierre-reporte/historial/:puntoId
  * Obtiene el historial de cierres de un punto específico
  */
-router.get("/historial/:puntoId", authenticateToken, async (req, res) => {
+router.get("/historial/:puntoId", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const usuario = req.user as { id: string; rol: string } | undefined;
     const { puntoId } = req.params;

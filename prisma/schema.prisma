@@ -33,7 +33,6 @@ model Usuario {
   historialSaldos                         HistorialSaldo[]
   idempotencyKeys                         IdempotencyKey[]
   jornadas                                Jornada[]
-  movimientos                             Movimiento[]
   movimientosSaldo                        MovimientoSaldo[]
   permisosAprobados                       Permiso[]                     @relation("UsuarioAprobadorPermiso")
   permisos                                Permiso[]
@@ -81,7 +80,6 @@ model PuntoAtencion {
   historialAsignacionesNuevas     HistorialAsignacionPunto[]    @relation("PuntoNuevo")
   historialSaldos                 HistorialSaldo[]
   jornadas                        Jornada[]
-  movimientos                     Movimiento[]
   movimientosSaldo                MovimientoSaldo[]
   permisos                        Permiso[]
   recibos                         Recibo[]
@@ -121,7 +119,6 @@ model Moneda {
   cambiosOrigen                 CambioDivisa[]                 @relation("MonedaOrigen")
   detallesCuadre                DetalleCuadreCaja[]
   historialSaldos               HistorialSaldo[]
-  movimientos                   Movimiento[]
   movimientosSaldo              MovimientoSaldo[]
   saldos                        Saldo[]
   saldosIniciales               SaldoInicial[]
@@ -305,24 +302,6 @@ model Transferencia {
   @@index([estado])
   @@index([destino_id])
   @@index([origen_id])
-}
-
-model Movimiento {
-  id                String         @id @default(uuid())
-  tipo              TipoMovimiento
-  monto             Decimal        @db.Decimal(15, 2)
-  moneda_id         String
-  usuario_id        String
-  punto_atencion_id String
-  fecha             DateTime       @default(now())
-  descripcion       String?
-  numero_recibo     String?        @unique
-  moneda            Moneda         @relation(fields: [moneda_id], references: [id])
-  puntoAtencion     PuntoAtencion  @relation(fields: [punto_atencion_id], references: [id])
-  usuario           Usuario        @relation(fields: [usuario_id], references: [id])
-
-  @@index([fecha])
-  @@index([punto_atencion_id])
 }
 
 model Recibo {

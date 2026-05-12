@@ -2,7 +2,7 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import {
   gyeDayRangeUtcFromDateOnly,
   gyeParseDateOnly,
@@ -24,7 +24,7 @@ type RolUsuario = "ADMIN" | "SUPER_USUARIO" | "OPERADOR" | string;
  *  - Egresos:  COMPRA, TRANSFERENCIA_SALIDA/SALIENTE, EGRESO/EGRESOS,
  *              AJUSTE (monto < 0), CAMBIO_DIVISA (descripcion inicia con "Egreso por cambio")
  */
-router.get("/:pointId/:fecha", authenticateToken, async (req, res) => {
+router.get("/:pointId/:fecha", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { pointId, fecha } = req.params;
     const usuario = req.user as
@@ -246,7 +246,7 @@ router.get("/:pointId/:fecha", authenticateToken, async (req, res) => {
  * GET /api/contabilidad-diaria/cierre/:pointId/:fecha
  * Verifica si existe un cierre para el día especificado
  */
-router.get("/cierre/:pointId/:fecha", authenticateToken, async (req, res) => {
+router.get("/cierre/:pointId/:fecha", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { pointId, fecha } = req.params;
     const usuario = req.user as
@@ -320,6 +320,7 @@ router.get("/cierre/:pointId/:fecha", authenticateToken, async (req, res) => {
 router.get(
   "/validar-cierres/:pointId/:fecha",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req, res) => {
     try {
       const { pointId, fecha } = req.params;
@@ -445,6 +446,7 @@ router.get(
 router.get(
   "/:pointId/:fecha/resumen-cierre",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req, res) => {
     try {
       const { pointId, fecha } = req.params;
@@ -936,6 +938,7 @@ router.get(
 router.post(
   "/:pointId/:fecha/cerrar",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { pointId, fecha } = req.params;
@@ -1177,6 +1180,7 @@ router.post(
 router.post(
   "/:pointId/:fecha/cerrar-completo",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { pointId, fecha } = req.params;
@@ -1279,6 +1283,7 @@ router.post(
 router.get(
   "/:pointId/:fecha/resumen-cierre",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req, res) => {
     try {
       const { pointId, fecha } = req.params;
@@ -1369,6 +1374,7 @@ router.get(
 router.post(
   "/:pointId/:fecha/cerrar-completo",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req, res) => {
     try {
       const { pointId, fecha } = req.params;

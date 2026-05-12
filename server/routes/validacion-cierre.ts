@@ -15,7 +15,7 @@ const router = express.Router();
  * GET /api/validacion-cierre/comparacion
  * Compara el cierre de un día con la apertura del día siguiente
  */
-router.get("/comparacion", authenticateToken, async (req, res) => {
+router.get("/comparacion", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { fecha, punto_id } = req.query;
     

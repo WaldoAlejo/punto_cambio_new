@@ -10,7 +10,7 @@ import express from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
 
@@ -52,7 +52,7 @@ const requireAdmin = (
 // ==============================
 // GET /schedule-config (listar configuraciones)
 // ==============================
-router.get("/", authenticateToken, async (req, res) => {
+router.get("/", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const where: Prisma.ConfiguracionHorarioWhereInput = {};
 
@@ -86,7 +86,7 @@ router.get("/", authenticateToken, async (req, res) => {
 // ==============================
 // GET /schedule-config/:id (detalle)
 // ==============================
-router.get("/:id", authenticateToken, async (req, res) => {
+router.get("/:id", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const config = await prisma.configuracionHorario.findUnique({
       where: { id: req.params.id },
@@ -110,7 +110,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
 // ==============================
 // POST /schedule-config (crear)
 // ==============================
-router.post("/", authenticateToken, requireAdmin, validate(configSchema), async (req, res) => {
+router.post("/", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), requireAdmin, validate(configSchema), async (req, res) => {
   try {
     const data = req.body as Prisma.ConfiguracionHorarioCreateInput;
 
@@ -147,7 +147,7 @@ router.post("/", authenticateToken, requireAdmin, validate(configSchema), async 
 // ==============================
 // PUT /schedule-config/:id (actualizar)
 // ==============================
-router.put("/:id", authenticateToken, requireAdmin, validate(configSchema.partial()), async (req, res) => {
+router.put("/:id", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), requireAdmin, validate(configSchema.partial()), async (req, res) => {
   try {
     const { id } = req.params;
     const data = req.body as Prisma.ConfiguracionHorarioUpdateInput;
@@ -192,7 +192,7 @@ router.put("/:id", authenticateToken, requireAdmin, validate(configSchema.partia
 // ==============================
 // DELETE /schedule-config/:id (eliminar)
 // ==============================
-router.delete("/:id", authenticateToken, requireAdmin, async (req, res) => {
+router.delete("/:id", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -227,7 +227,7 @@ router.delete("/:id", authenticateToken, requireAdmin, async (req, res) => {
 // ==============================
 // GET /schedule-config/current (config aplicable al usuario/punto actual)
 // ==============================
-router.get("/current/applicable", authenticateToken, async (req, res) => {
+router.get("/current/applicable", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const puntoAtencionId = req.user?.punto_atencion_id;
 

@@ -11,6 +11,7 @@ import prisma from "../../lib/prisma.js";
 import logger from "../../utils/logger.js";
 import { ServientregaValidationService } from "../../services/servientregaValidationService.js";
 import { idempotency } from "../../middleware/idempotency.js";
+import { authenticateToken, requireRole } from "../../middleware/auth.js";
 import { registrarMovimientoSaldo, TipoMovimiento, TipoReferencia } from "../../services/movimientoSaldoService.js";
 
 const router = express.Router();
@@ -201,7 +202,7 @@ async function validarSaldoGenerarGuia(
 /** ============================
  *  💰 Cálculo de Tarifas
  *  ============================ */
-router.post("/tarifa", async (req, res) => {
+router.post("/tarifa", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     // 1) Forzar tipo nacional / internacional segun país
     const paisOri = (req.body.pais_ori || "").toString().toUpperCase();
@@ -327,6 +328,8 @@ router.post("/tarifa", async (req, res) => {
  *  🚚 Generación de Guías
  *  ============================ */
 router.post("/generar-guia",
+  authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   idempotency({ route: "/api/servientrega/generar-guia" }),
   validarSaldoGenerarGuia,
   async (req, res) => {
@@ -1140,142 +1143,86 @@ router.post("/generar-guia",
           agenciaCodigo: agencia_codigo,
         });
 
-        // 🔒 FLUJO DE PERSISTENCIA: Guardar guía + descontar saldo + registrar ingreso
-        // NOTA: Se usa un patrón de compensación: si el descuento de saldo falla,
-        // la guía ya está guardada pero se marca para reconciliación.
+        // 🔒 FLUJO DE PERSISTENCIA ATÓMICO: Guardar guía + descontar saldo + registrar ingreso
+        // Se ejecuta todo dentro de una transacción Prisma. Si falla cualquier paso,
+        // NADA se persiste, evitando inconsistencias (guía guardada sin saldo descontado,
+        // o saldo descontado sin ingreso registrado).
         
-        try {
-          // 1️⃣ Guardar guía PRIMERO (operación más simple, menos probable de fallar)
-          await db.guardarGuia(guiaData);
-          guiaGuardada = true;
-          logger.info("Guía guardada en BD", {
-            numeroGuia: guia,
-            puntoAtencionId: punto_atencion_id_captado,
-            costoEnvio: valorTotalGuia,
-          });
-        } catch (guardarErr) {
-          logger.error("Error guardando guía en BD", {
-            numeroGuia: guia,
-            error: guardarErr instanceof Error ? guardarErr.message : String(guardarErr),
-          });
-          throw guardarErr;
+        // Calcular desglose final ANTES de la transacción (no depende de BD)
+        let billetesFinal = 0;
+        let monedasFinal = 0;
+        let bancosFinal = 0;
+        if (metodoIngreso === "BANCO") {
+          bancosFinal = valorTotalGuia;
+        } else if (metodoIngreso === "MIXTO") {
+          billetesFinal = billetesCaptados;
+          monedasFinal = monedasCaptadas;
+          bancosFinal = Math.max(0, valorTotalGuia - (billetesFinal + monedasFinal));
+        } else {
+          billetesFinal = billetesCaptados || valorTotalGuia;
+          monedasFinal = monedasCaptadas;
         }
-        
-        // 2️⃣ Descontar del saldo SOLO el costo de la guía (no el valor_declarado)
-        if (punto_atencion_id_captado && valorTotalGuia > 0) {
-          logger.debug("Verificación antes de descontar", {
-            puntoAtencionId: punto_atencion_id_captado,
-            valorTotalGuia,
-            deberiaDescontar: true,
-          });
+        const esConcesion = req.user?.rol === "CONCESION";
 
-          try {
-            const resultadoDescuento = await db.descontarSaldo(
-              punto_atencion_id_captado,
-              Number(valorTotalGuia),
-              guia
-            );
-            saldoDescontado = true;
+        try {
+          const resultadoTx = await prisma.$transaction(async (tx) => {
+            // 1️⃣ Guardar guía
+            const guiaGuardadaTx = await db.guardarGuia(guiaData, tx);
 
-            logger.info("Saldo descontado de Servientrega", {
-              puntoAtencionId: punto_atencion_id_captado,
-              monto: valorTotalGuia,
-              resultado: resultadoDescuento ? "ACTUALIZADO" : "SIN CAMBIOS",
-            });
-          } catch (descuentoErr) {
-            logger.error("Error descontando saldo de Servientrega", {
-              numeroGuia: guia,
-              puntoAtencionId: punto_atencion_id_captado,
-              monto: valorTotalGuia,
-              error: descuentoErr instanceof Error ? descuentoErr.message : String(descuentoErr),
-            });
-            
-            // 🚨 La guía está guardada pero el saldo no se descontó.
-            // No propagamos el error para no confundir al usuario.
-            // La guía se marca para reconciliación posterior.
-            logger.error("🚨 RECONCILIACIÓN REQUERIDA: Guía guardada pero saldo no descontado", {
-              numeroGuia: guia,
-              puntoAtencionId: punto_atencion_id_captado,
-              monto: valorTotalGuia,
-            });
-            
-            // Continuamos con la respuesta al usuario - la guía ya fue generada
-            // El saldo se puede reconciliar después con el script
-          }
-
-          // 3️⃣ Registrar ingreso en caja general (solo si el descuento fue exitoso)
-          if (saldoDescontado) {
-            logger.debug("Registrando ingreso de servicio externo");
-            
-            // Calcular desglose final basado en el valor real de la guía
-            let billetes = 0;
-            let monedas = 0;
-            let bancos = 0;
-
-            if (metodoIngreso === "BANCO") {
-              bancos = valorTotalGuia;
-            } else if (metodoIngreso === "MIXTO") {
-              billetes = billetesCaptados;
-              monedas = monedasCaptadas;
-              bancos = Math.max(0, valorTotalGuia - (billetes + monedas));
-            } else {
-              // EFECTIVO o default
-              billetes = billetesCaptados || valorTotalGuia;
-              monedas = monedasCaptadas;
-            }
-
-            // 🎯 Determinar si es concesión (no actualiza saldo general)
-            const esConcesion = req.user?.rol === "CONCESION";
-            
-            try {
-              const resultadoIngreso = await db.registrarIngresoServicioExterno(
+            // 2️⃣ Descontar del saldo (solo si hay punto y valor > 0)
+            let descuentoResult = null;
+            if (punto_atencion_id_captado && valorTotalGuia > 0) {
+              descuentoResult = await db.descontarSaldo(
                 punto_atencion_id_captado,
                 Number(valorTotalGuia),
                 guia,
-                billetes,
-                monedas,
-                bancos,
-                !esConcesion // Solo actualizar saldo general si NO es concesión
+                tx
               );
-              ingresoRegistrado = true;
-
-              logger.info(esConcesion 
-                ? "Paso 2: Ingreso registrado (concesión - sin saldo general)" 
-                : "Paso 2: Ingreso registrado en saldo general USD", {
-                numeroGuia: guia,
-                monto: valorTotalGuia,
-                saldoServicioAnterior: resultadoIngreso.saldoServicio.anterior,
-                saldoServicioNuevo: resultadoIngreso.saldoServicio.nuevo,
-                esConcesion,
-              });
-
-              logger.info("Flujo completado: Descuento e ingreso realizados");
-            } catch (ingresoErr) {
-              logger.error("Error registrando ingreso en caja general", {
-                numeroGuia: guia,
-                puntoAtencionId: punto_atencion_id_captado,
-                monto: valorTotalGuia,
-                error: ingresoErr instanceof Error ? ingresoErr.message : String(ingresoErr),
-              });
-              
-              // 🚨 El saldo se descontó pero el ingreso a caja no se registró.
-              // Esto deja el saldo de Servientrega descontado pero sin el ingreso correspondiente.
-              logger.error("🚨 INCONSISTENCIA: Saldo descontado pero ingreso no registrado", {
-                numeroGuia: guia,
-                puntoAtencionId: punto_atencion_id_captado,
-                monto: valorTotalGuia,
-              });
-              
-              // No propagamos el error - la guía ya fue generada y el saldo descontado
             }
-          }
-        } else {
-          logger.warn("No se descontó saldo", {
-            puntoAtencionIdPresente: !!punto_atencion_id_captado,
-            valorTotalGuiaMayorQueCero: valorTotalGuia > 0,
-            puntoAtencionId: punto_atencion_id_captado,
-            valorTotalGuia,
+
+            // 3️⃣ Registrar ingreso en caja general (solo si se descontó saldo)
+            let ingresoResult = null;
+            if (descuentoResult && punto_atencion_id_captado && valorTotalGuia > 0) {
+              ingresoResult = await db.registrarIngresoServicioExterno(
+                punto_atencion_id_captado,
+                Number(valorTotalGuia),
+                guia,
+                billetesFinal,
+                monedasFinal,
+                bancosFinal,
+                !esConcesion,
+                tx
+              );
+            }
+
+            return { guiaGuardadaTx, descuentoResult, ingresoResult };
+          }, {
+            maxWait: 10000,
+            timeout: 15000,
           });
+
+          guiaGuardada = !!resultadoTx.guiaGuardadaTx;
+          saldoDescontado = !!resultadoTx.descuentoResult;
+          ingresoRegistrado = !!resultadoTx.ingresoResult;
+
+          logger.info("✅ Transacción atómica completada", {
+            numeroGuia: guia,
+            guiaGuardada,
+            saldoDescontado,
+            ingresoRegistrado,
+            esConcesion,
+          });
+        } catch (txError) {
+          logger.error("❌ Transacción atómica fallida - NADA se persistió", {
+            numeroGuia: guia,
+            error: txError instanceof Error ? txError.message : String(txError),
+          });
+          // Propagar el error para que el usuario sepa que la operación falló
+          // La guía puede haberse generado en Servientrega API, pero en nuestra BD no hay registro
+          throw new Error(
+            `La guía ${guia} se generó en Servientrega, pero hubo un error guardando los datos locales. ` +
+            `Por favor verifique antes de reintentar. Error: ${txError instanceof Error ? txError.message : String(txError)}`
+          );
         }
         
 
@@ -1335,6 +1282,8 @@ router.post("/generar-guia",
  *  ❌ Anulación de Guías
  *  ============================ */
 router.post("/anular-guia",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   idempotency({ route: "/api/servientrega/anular-guia" }),
   async (req, res) => {
   try {
@@ -1417,7 +1366,7 @@ router.post("/anular-guia",
 /** ============================
  *  📋 Consulta de Guías (BD)
  *  ============================ */
-router.get("/guias", async (req, res) => {
+router.get("/guias", authenticateToken, requireRole(["OPERADOR", "CONCESION", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { desde, hasta } = req.query;
     const dbService = new ServientregaDBService();

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import prisma from "../../lib/prisma.js";
-import { authenticateToken } from "../../middleware/auth.js";
+import { authenticateToken, requireRole } from "../../middleware/auth.js";
 import logger from "../../utils/logger.js";
 import { Prisma, TipoRecibo } from "@prisma/client";
 
@@ -12,7 +12,7 @@ const RECIBO_TIPO_SERVIENTREGA: TipoRecibo = TipoRecibo.MOVIMIENTO;
 // ====================================
 // 📄 CREAR RECIBO DE SERVIENTREGA
 // ====================================
-router.post("/", authenticateToken, async (req: Request, res: Response) => {
+router.post("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req: Request, res: Response) => {
   try {
     const {
       numero_recibo,
@@ -111,7 +111,7 @@ router.post("/", authenticateToken, async (req: Request, res: Response) => {
 // ====================================
 // 📄 OBTENER RECIBO POR ID
 // ====================================
-router.get("/:id", authenticateToken, async (req: Request, res: Response) => {
+router.get("/:id", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -165,6 +165,7 @@ router.get("/:id", authenticateToken, async (req: Request, res: Response) => {
 router.get(
   "/guia/:numeroGuia",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
       const { numeroGuia } = req.params;
@@ -225,6 +226,7 @@ router.get(
 router.patch(
   "/:id/impreso",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -270,7 +272,7 @@ router.patch(
 // ====================================
 // 📄 LISTAR RECIBOS DE SERVIENTREGA
 // ====================================
-router.get("/", authenticateToken, async (req: Request, res: Response) => {
+router.get("/", authenticateToken, requireRole(["OPERADOR", "CONCESION", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req: Request, res: Response) => {
   try {
     const {
       punto_atencion_id,

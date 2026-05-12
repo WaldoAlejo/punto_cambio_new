@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { Prisma } from "@prisma/client";
@@ -38,7 +38,7 @@ const toNum = (x: D | null | undefined) => Number((x ?? d0()).toString());
    GET /api/balance-completo
    Resumen general y balance por moneda (agregado sistema)
 ============================================================================ */
-router.get("/", authenticateToken, async (req, res) => {
+router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     logger.info("Calculando balance completo del sistema");
 
@@ -209,7 +209,7 @@ router.get("/", authenticateToken, async (req, res) => {
    NOTA: El balance se calcula desde MovimientoSaldo (igual que el resto del sistema)
    para mantener consistencia con la Contabilidad de Divisas.
 ============================================================================ */
-router.get("/punto/:pointId", authenticateToken, async (req, res) => {
+router.get("/punto/:pointId", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { pointId } = req.params;
     logger.info("Calculando balance completo para punto", { pointId });

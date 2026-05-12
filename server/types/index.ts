@@ -209,8 +209,6 @@ export interface MovimientoSaldoData {
 
 export type JsonRecord = Record<string, unknown>;
 
-export type RateMode = "USD_PER_UNIT" | "UNITS_PER_USD";
-
 export interface GyeDateRange {
   gte: Date;
   lt: Date;

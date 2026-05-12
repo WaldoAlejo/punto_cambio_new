@@ -2,7 +2,7 @@
 import express from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 
@@ -29,7 +29,7 @@ function asNumber(v: unknown, fallback = 0): number {
 }
 
 // ---------- POST /cierre-parcial/parcial ----------
-router.post("/parcial", authenticateToken, async (req, res) => {
+router.post("/parcial", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const {
       detalles = [],
@@ -58,8 +58,8 @@ router.post("/parcial", authenticateToken, async (req, res) => {
     // ═════════════════════════════════════════════════════════════════
     // BUSCAR CUADRE ABIERTO (hoy o anterior)
     // ═════════════════════════════════════════════════════════════════
-    // Primero buscar cuadre ABIERTO de hoy
-    let cabeceraAbierta = await prisma.cuadreCaja.findFirst({
+    // Buscar cuadre ABIERTO del día actual únicamente
+    const cabeceraAbierta = await prisma.cuadreCaja.findFirst({
       where: {
         punto_atencion_id: puntoAtencionId,
         fecha: { gte: hoyGte, lt: hoyLt },
@@ -68,22 +68,10 @@ router.post("/parcial", authenticateToken, async (req, res) => {
       select: { id: true },
     });
 
-    // Si no hay del día, buscar cualquier cuadre ABIERTO más reciente
-    if (!cabeceraAbierta) {
-      cabeceraAbierta = await prisma.cuadreCaja.findFirst({
-        where: {
-          punto_atencion_id: puntoAtencionId,
-          estado: "ABIERTO",
-        },
-        orderBy: { fecha: "desc" },
-        select: { id: true },
-      });
-    }
-
     if (!cabeceraAbierta) {
       return res.status(400).json({
         success: false,
-        error: "No existe un cuadre ABIERTO para realizar cierre parcial",
+        error: "No existe un cuadre ABIERTO para hoy. Debe realizar la apertura de caja primero.",
       });
     }
 
@@ -274,7 +262,7 @@ router.post("/parcial", authenticateToken, async (req, res) => {
 });
 
 // ---------- GET /cierre-parcial/pendientes ----------
-router.get("/pendientes", authenticateToken, async (req, res) => {
+router.get("/pendientes", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const usuario = req.user as
       | { id: string; punto_atencion_id?: string }

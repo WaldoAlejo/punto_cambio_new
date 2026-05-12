@@ -150,8 +150,7 @@ const rateLimit429Handler: RateLimitOptions["handler"] = (
 const excludedPaths = [
   "/health",
   "/api/auth/verify",
-  "/api/exchanges",
-  "/api/transfers",
+  // NOTA: /api/exchanges y /api/transfers YA NO están excluidos — son endpoints críticos de modificación de datos
   "/api/servientrega",
   "/api/schedules/active",
 ];

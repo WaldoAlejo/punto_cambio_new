@@ -2,7 +2,7 @@ import express from "express";
 import { randomUUID } from "crypto";
 import prisma from "../lib/prisma.js";
 import { pool } from "../lib/database.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 import { saldoReconciliationService } from "../services/saldoReconciliationService.js";
@@ -21,15 +21,22 @@ async function actualizarSaldoFisicoYLogico(
   } else if (tipoReferencia === "SERVICIO_EXTERNO") {
     monedas = monto;
   }
-  await pool.query(
-    `UPDATE "Saldo"
-     SET cantidad = cantidad + $1,
-         billetes = billetes + $2,
-         monedas_fisicas = monedas_fisicas + $3
-     WHERE punto_atencion_id = $4::uuid
-       AND moneda_id = $5::uuid`,
-    [monto, billetes, monedas, puntoAtencionId, monedaId]
-  );
+  const saldoActual = await prisma.saldo.findUnique({
+    where: { punto_atencion_id_moneda_id: { punto_atencion_id: puntoAtencionId, moneda_id: monedaId } },
+  });
+  const nuevaCantidad = Number(saldoActual?.cantidad || 0) + monto;
+  const nuevasBilletes = Number(saldoActual?.billetes || 0) + billetes;
+  const nuevasMonedas = Number(saldoActual?.monedas_fisicas || 0) + monedas;
+  if (saldoActual) {
+    await prisma.saldo.update({
+      where: { punto_atencion_id_moneda_id: { punto_atencion_id: puntoAtencionId, moneda_id: monedaId } },
+      data: { cantidad: nuevaCantidad, billetes: nuevasBilletes, monedas_fisicas: nuevasMonedas },
+    });
+  } else {
+    await prisma.saldo.create({
+      data: { punto_atencion_id: puntoAtencionId, moneda_id: monedaId, cantidad: nuevaCantidad, billetes: nuevasBilletes, monedas_fisicas: nuevasMonedas },
+    });
+  }
 }
 
 const router = express.Router();
@@ -73,7 +80,7 @@ interface CuadreCaja {
   usuario_cierre_parcial?: string;
 }
 
-router.post("/", authenticateToken, async (req, res) => {
+router.post("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   const usuario = req.user as any;
   
   try {
@@ -103,64 +110,57 @@ router.post("/", authenticateToken, async (req, res) => {
     const fechaInicioDia = gte;
 
     // 1. Buscar cuadre ABIERTO existente
-    const cuadreAbiertoResult = await pool.query<CuadreCaja>(
-      `SELECT * FROM "CuadreCaja"
-        WHERE punto_atencion_id = $1
-          AND fecha >= $2::timestamp
-          AND estado = 'ABIERTO'
-        LIMIT 1`,
-      [String(puntoAtencionId), fechaInicioDia.toISOString()]
-    );
+    const cuadreAbierto = await prisma.cuadreCaja.findFirst({
+      where: { punto_atencion_id: String(puntoAtencionId), fecha: { gte: fechaInicioDia }, estado: 'ABIERTO' },
+    });
     
-    if (cuadreAbiertoResult.rows[0]) {
-      return res.status(200).json({ success: true, cuadre: cuadreAbiertoResult.rows[0], message: "Ya existe cuadre abierto" });
+    if (cuadreAbierto) {
+      return res.status(200).json({ success: true, cuadre: cuadreAbierto, message: "Ya existe cuadre abierto" });
     }
 
     // 2. Buscar cuadre PARCIAL (cambio de turno) y reactivarlo a ABIERTO
-    const cuadreParcialResult = await pool.query<CuadreCaja>(
-      `SELECT * FROM "CuadreCaja"
-        WHERE punto_atencion_id = $1
-          AND fecha >= $2::timestamp
-          AND estado = 'PARCIAL'
-        ORDER BY fecha_cierre DESC
-        LIMIT 1`,
-      [String(puntoAtencionId), fechaInicioDia.toISOString()]
-    );
+    const cuadreParcial = await prisma.cuadreCaja.findFirst({
+      where: { punto_atencion_id: String(puntoAtencionId), fecha: { gte: fechaInicioDia }, estado: 'PARCIAL' },
+      orderBy: { fecha_cierre: 'desc' },
+    });
 
-    if (cuadreParcialResult.rows[0]) {
+    if (cuadreParcial) {
       // Reactivar el cuadre PARCIAL a ABIERTO para el nuevo operador
-      const updateResult = await pool.query<CuadreCaja>(
-        `UPDATE "CuadreCaja" 
-         SET estado = 'ABIERTO', 
-             usuario_id = $1,
-             observaciones = COALESCE(observaciones, '') || ' | Reactivado por cambio de turno'
-         WHERE id = $2
-         RETURNING *`,
-        [usuario.id, cuadreParcialResult.rows[0].id]
-      );
+      const cuadreReactivado = await prisma.cuadreCaja.update({
+        where: { id: cuadreParcial.id },
+        data: {
+          estado: 'ABIERTO',
+          usuario_id: usuario.id,
+          observaciones: (cuadreParcial.observaciones || '') + ' | Reactivado por cambio de turno',
+        },
+      });
 
       logger.info("✅ Cuadre PARCIAL reactivado a ABIERTO (cambio de turno)", {
         usuario_id: usuario.id,
         punto_atencion_id: puntoAtencionId,
-        cuadre_id: updateResult.rows[0]?.id,
-        cuadre_anterior_id: cuadreParcialResult.rows[0].usuario_cierre_parcial
+        cuadre_id: cuadreReactivado.id,
+        cuadre_anterior_id: cuadreParcial.usuario_cierre_parcial
       });
 
       return res.status(200).json({ 
         success: true, 
-        cuadre: updateResult.rows[0], 
+        cuadre: cuadreReactivado, 
         message: "Cuadre reactivado desde cierre parcial" 
       });
     }
 
     // 3. Crear nuevo cuadre si no existe ni ABIERTO ni PARCIAL
     const cuadreId = randomUUID();
-    const insertResult = await pool.query<CuadreCaja>(
-      `INSERT INTO "CuadreCaja" (id, estado, fecha, punto_atencion_id, usuario_id, observaciones)
-        VALUES ($1, 'ABIERTO', $2, $3, $4, $5)
-        RETURNING *`,
-      [cuadreId, fechaInicioDia.toISOString(), String(puntoAtencionId), usuario.id, observaciones || ""]
-    );
+    const nuevoCuadre = await prisma.cuadreCaja.create({
+      data: {
+        id: cuadreId,
+        estado: 'ABIERTO',
+        fecha: fechaInicioDia,
+        punto_atencion_id: String(puntoAtencionId),
+        usuario_id: usuario.id,
+        observaciones: observaciones || "",
+      },
+    });
 
     if (Array.isArray(movimientos)) {
       for (const mov of movimientos) {
@@ -178,9 +178,9 @@ router.post("/", authenticateToken, async (req, res) => {
       usuario_id: usuario.id,
       punto_atencion_id: puntoAtencionId,
       fecha: fechaInicioDia.toISOString(),
-      cuadre_id: insertResult.rows[0]?.id
+      cuadre_id: nuevoCuadre.id
     });
-    return res.status(201).json({ success: true, cuadre: insertResult.rows[0], message: "Cuadre abierto creado" });
+    return res.status(201).json({ success: true, cuadre: nuevoCuadre, message: "Cuadre abierto creado" });
   } catch (error) {
     logger.error("❌ Error creando cuadre abierto", { error });
     return res.status(500).json({ success: false, error: "Error creando cuadre abierto" });
@@ -200,21 +200,17 @@ async function calcularSaldoApertura(
   fechaInicioUtc: Date
 ): Promise<number> {
   try {
-    const cierreResult = await pool.query(
-      `SELECT dc.conteo_fisico
-         FROM "DetalleCuadreCaja" dc
-         INNER JOIN "CuadreCaja" c ON dc.cuadre_id = c.id
-        WHERE dc.moneda_id = $1
-          AND c.punto_atencion_id = $2
-          AND c.estado = 'CERRADO'
-          AND c.fecha < $3::timestamp
-        ORDER BY c.fecha DESC, c.fecha_cierre DESC
-        LIMIT 1`,
-      [monedaId, puntoAtencionId, fechaInicioUtc.toISOString()]
-    );
+    const ultimoCierre = await prisma.detalleCuadreCaja.findFirst({
+      where: {
+        moneda_id: monedaId,
+        cuadre: { punto_atencion_id: puntoAtencionId, estado: 'CERRADO', fecha: { lt: fechaInicioUtc } },
+      },
+      orderBy: { cuadre: { fecha: 'desc' } },
+      include: { cuadre: true },
+    });
 
-    if (cierreResult.rows[0]) {
-      const apertura = Number(cierreResult.rows[0].conteo_fisico) || 0;
+    if (ultimoCierre) {
+      const apertura = Number(ultimoCierre.conteo_fisico) || 0;
       logger.info("✅ Saldo de apertura obtenido del último cierre", {
         puntoAtencionId,
         monedaId,
@@ -239,7 +235,7 @@ async function calcularSaldoApertura(
   }
 }
 
-router.get("/", authenticateToken, async (req, res) => {
+router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   const usuario = req.user as any;
   
   try {
@@ -393,47 +389,40 @@ router.get("/", authenticateToken, async (req, res) => {
     });
 
     // Obtener o crear cuadre abierto del día
-    const cuadreResult = await pool.query<CuadreCaja>(
-      `SELECT * FROM "CuadreCaja"
-        WHERE punto_atencion_id = $1
-          AND fecha >= $2::timestamp
-          AND estado = 'ABIERTO'
-        LIMIT 1`,
-      [puntoAtencionId, fechaInicioDia.toISOString()]
-    );
-
-    let cuadre = cuadreResult.rows[0];
+    let cuadre = await prisma.cuadreCaja.findFirst({
+      where: { punto_atencion_id: puntoAtencionId, fecha: { gte: fechaInicioDia }, estado: 'ABIERTO' },
+    });
     if (!cuadre) {
       // Si no hay ABIERTO, verificar si ya existe uno CERRADO para el mismo día
-      const cerradoRes = await pool.query<CuadreCaja>(
-        `SELECT * FROM "CuadreCaja"
-          WHERE punto_atencion_id = $1
-            AND fecha >= $2::timestamp
-            AND estado = 'CERRADO'
-          ORDER BY fecha_cierre DESC
-          LIMIT 1`,
-        [puntoAtencionId, fechaInicioDia.toISOString()]
-      );
+      const cuadreCerrado = await prisma.cuadreCaja.findFirst({
+        where: { punto_atencion_id: puntoAtencionId, fecha: { gte: fechaInicioDia }, estado: 'CERRADO' },
+        orderBy: { fecha_cierre: 'desc' },
+      });
 
-      if (cerradoRes.rows[0]) {
-        cuadre = cerradoRes.rows[0];
+      if (cuadreCerrado) {
+        cuadre = cuadreCerrado;
         logger.info("ℹ️ Usando cuadre CERRADO existente para el día", {
           cuadre_id: cuadre.id,
         });
       } else {
         const cuadreId = randomUUID();
-        const insertResult = await pool.query<CuadreCaja>(
-          `INSERT INTO "CuadreCaja" (id, estado, fecha, punto_atencion_id, usuario_id, observaciones)
-            VALUES ($1, 'ABIERTO', $2, $3, $4, $5)
-            RETURNING *`,
-          [cuadreId, fechaInicioDia.toISOString(), puntoAtencionId, usuario.id, ""]
-        );
-        cuadre = insertResult.rows[0];
+        cuadre = await prisma.cuadreCaja.create({
+          data: {
+            id: cuadreId,
+            estado: 'ABIERTO',
+            fecha: fechaInicioDia,
+            punto_atencion_id: puntoAtencionId,
+            usuario_id: usuario.id,
+            observaciones: "",
+          },
+        });
         logger.info("📝 Cuadre creado", { cuadre_id: cuadre.id });
       }
     }
 
     // Obtener solo monedas activas con movimientos del día o con saldo no cero
+    // NOTA: Se mantiene como raw SQL intencionalmente. Prisma no soporta nativamente
+    // UNIONs de 6 tablas distintas en una sola query sin degradar rendimiento.
     const monedasResult = await pool.query<Moneda>(
       `SELECT id, codigo, nombre, simbolo, activo, orden_display
         FROM "Moneda"
@@ -534,32 +523,6 @@ router.get("/", authenticateToken, async (req, res) => {
           saldoCierreTeórico = saldoApertura;
         }
 
-        // Obtener saldo físico actual de la tabla Saldo
-        const saldoFísico = await prisma.saldo.findUnique({
-          where: {
-            punto_atencion_id_moneda_id: {
-              punto_atencion_id: puntoAtencionId,
-              moneda_id: moneda.id,
-            },
-          },
-          select: {
-            cantidad: true,
-            billetes: true,
-            monedas_fisicas: true,
-            bancos: true,
-          },
-        });
-
-        if (saldoFísico) {
-          saldoCierreTeórico = Number(saldoFísico.cantidad);
-        }
-
-        const conteoFísico = saldoFísico ? Number(saldoFísico.cantidad) : saldoCierreTeórico;
-        const billetes = saldoFísico ? Number(saldoFísico.billetes) : 0;
-        const monedasFísicas = saldoFísico ? Number(saldoFísico.monedas_fisicas) : 0;
-        const bancosTeorico = saldoFísico ? Number(saldoFísico.bancos) : 0;
-        const conteoBancos = bancosTeorico;
-
         // Calcular movimientos del período (ingresos y egresos)
         const movimientosPeriodo = await prisma.movimientoSaldo.findMany({
           where: {
@@ -584,27 +547,75 @@ router.get("/", authenticateToken, async (req, res) => {
           }
         }
 
-        // Obtener o crear detalle del cuadre
-        const detalleResult = await pool.query<DetalleCuadreCaja>(
-          `SELECT * FROM "DetalleCuadreCaja"
-            WHERE cuadre_id = $1 AND moneda_id = $2`,
-          [cuadre.id, moneda.id]
-        );
+        // Obtener detalle existente del cuadre (si el operador ya guardó conteo físico)
+        const detalleExistente = await prisma.detalleCuadreCaja.findFirst({
+          where: { cuadre_id: cuadre.id, moneda_id: moneda.id },
+        });
 
-        let detalle = detalleResult.rows[0];
+        // Leer snapshot de Saldo solo como fallback inicial (primer GET del día)
+        const saldoFísico = await prisma.saldo.findUnique({
+          where: {
+            punto_atencion_id_moneda_id: {
+              punto_atencion_id: puntoAtencionId,
+              moneda_id: moneda.id,
+            },
+          },
+          select: {
+            cantidad: true,
+            billetes: true,
+            monedas_fisicas: true,
+            bancos: true,
+          },
+        });
+
+        // 🔒 FIX: Si el operador ya guardó un conteo físico (via cuadre-caja-conteo),
+        // respetarlo SIEMPRE. El GET nunca debe pisar el conteo del operador.
+        // Solo si no existe detalle, usamos Saldo como valor inicial.
+        let conteoFísico: number;
+        let billetes: number;
+        let monedasFísicas: number;
+        let bancosTeorico: number;
+        let conteoBancos: number;
+
+        if (detalleExistente) {
+          conteoFísico = Number(detalleExistente.conteo_fisico);
+          billetes = Number(detalleExistente.billetes);
+          monedasFísicas = Number(detalleExistente.monedas_fisicas);
+          bancosTeorico = Number(detalleExistente.bancos_teorico);
+          conteoBancos = Number(detalleExistente.conteo_bancos);
+        } else {
+          // Si no hay detalle guardado por el operador, usar el teórico reconciliado
+          // como valor inicial (diferencia = 0). NUNCA usar Saldo.cantidad porque
+          // guardar-cierre.ts la actualiza con el conteo físico del cierre anterior,
+          // lo cual generaría diferencias espurias al inicio del día.
+          conteoFísico = saldoCierreTeórico;
+          billetes = 0;
+          monedasFísicas = 0;
+          bancosTeorico = saldoFísico ? Number(saldoFísico.bancos) : 0;
+          conteoBancos = bancosTeorico;
+        }
+
         const diferencia = Number((conteoFísico - saldoCierreTeórico).toFixed(2));
 
-        if (!detalle) {
+        let detalle: DetalleCuadreCaja;
+        if (!detalleExistente) {
           const detalleId = randomUUID();
-          const insertResult = await pool.query<DetalleCuadreCaja>(
-            `INSERT INTO "DetalleCuadreCaja" (
-              id, cuadre_id, moneda_id, saldo_apertura, saldo_cierre, conteo_fisico, 
-              diferencia, billetes, monedas_fisicas, movimientos_periodo
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING *`,
-            [detalleId, cuadre.id, moneda.id, saldoApertura, saldoCierreTeórico, conteoFísico, diferencia, billetes, monedasFísicas, movimientosPeriodo.length]
-          );
-          detalle = insertResult.rows[0];
+          detalle = (await prisma.detalleCuadreCaja.create({
+            data: {
+              id: detalleId,
+              cuadre_id: cuadre.id,
+              moneda_id: moneda.id,
+              saldo_apertura: saldoApertura,
+              saldo_cierre: saldoCierreTeórico,
+              conteo_fisico: conteoFísico,
+              diferencia,
+              billetes,
+              monedas_fisicas: monedasFísicas,
+              movimientos_periodo: movimientosPeriodo.length,
+              bancos_teorico: bancosTeorico,
+              conteo_bancos: conteoBancos,
+            },
+          })) as any;
           logger.info(`✅ Detalle creado para ${moneda.codigo}`, {
             saldo_apertura: saldoApertura,
             saldo_cierre_teorico: saldoCierreTeórico,
@@ -613,20 +624,17 @@ router.get("/", authenticateToken, async (req, res) => {
             egresos,
           });
         } else {
-          await pool.query(
-            `UPDATE "DetalleCuadreCaja"
-              SET saldo_apertura = $1, saldo_cierre = $2, conteo_fisico = $3,
-                  diferencia = $4, billetes = $5, monedas_fisicas = $6, movimientos_periodo = $7
-              WHERE id = $8`,
-            [saldoApertura, saldoCierreTeórico, conteoFísico, diferencia, billetes, monedasFísicas, movimientosPeriodo.length, detalle.id]
-          );
-          detalle.saldo_apertura = saldoApertura;
-          detalle.saldo_cierre = saldoCierreTeórico;
-          detalle.conteo_fisico = conteoFísico;
-          detalle.diferencia = diferencia;
-          detalle.billetes = billetes;
-          detalle.monedas_fisicas = monedasFísicas;
-          detalle.movimientos_periodo = movimientosPeriodo.length;
+          // Solo actualizar campos calculados (teórico, movimientos).
+          // NUNCA pisar conteo_fisico, billetes, monedas, bancos del operador.
+          detalle = (await prisma.detalleCuadreCaja.update({
+            where: { id: detalleExistente.id },
+            data: {
+              saldo_apertura: saldoApertura,
+              saldo_cierre: saldoCierreTeórico,
+              diferencia,
+              movimientos_periodo: movimientosPeriodo.length,
+            },
+          })) as any;
           logger.info(`✅ Detalle actualizado para ${moneda.codigo}`, {
             saldo_apertura: saldoApertura,
             saldo_cierre_teorico: saldoCierreTeórico,
@@ -636,7 +644,7 @@ router.get("/", authenticateToken, async (req, res) => {
           });
         }
 
-        // Adjuntar info de bancos (no se persiste aquí para no pisar conteos de cierre)
+        // Adjuntar info de bancos para la respuesta
         detalle.bancos_teorico = bancosTeorico;
         detalle.conteo_bancos = conteoBancos;
 

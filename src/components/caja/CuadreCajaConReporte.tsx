@@ -81,6 +81,7 @@ export default function CuadreCajaConReporte({ pointId }: Props) {
     guardarCerrado,
     validarCierre,
     getReporteParaImpresion,
+    setObservaciones,
   } = useCuadreCaja({ fecha, pointId, withContabilidad: !!pointId });
 
   // Calcular totales para mostrar
@@ -522,11 +523,7 @@ export default function CuadreCajaConReporte({ pointId }: Props) {
             className="w-full min-h-[80px] p-3 border rounded-md text-sm"
             placeholder="Ingresa observaciones sobre el cierre de caja (incidencias, justificaciones de diferencias, etc.)..."
             value={estado.observaciones}
-            onChange={(e) => {
-              // Necesitamos actualizar el estado a través de setObservaciones
-              // pero el hook no expone directamente esta función en el estado
-              // Lo hacemos mediante update de un campo ficticio o usando refresh
-            }}
+            onChange={(e) => setObservaciones(e.target.value)}
           />
         </CardContent>
       </Card>

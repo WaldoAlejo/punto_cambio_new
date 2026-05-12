@@ -2,7 +2,7 @@ import express from "express";
 import { Prisma, EstadoJornada } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { z } from "zod";
 import {
@@ -84,7 +84,7 @@ const scheduleSchema = z
 // ==============================
 // GET /schedules (listado con filtros)
 // ==============================
-router.get("/", authenticateToken, async (req, res) => {
+router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     res.set({
       "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -290,6 +290,7 @@ router.get("/", authenticateToken, async (req, res) => {
 router.post(
   "/",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   validate(scheduleSchema),
   async (req, res) => {
     try {
@@ -468,8 +469,11 @@ router.post(
       }
 
       // ═══════════════════════════════════════════════════════════════════
-      // CREAR O ACTUALIZAR JORNADA
+      // CREAR O ACTUALIZAR JORNADA — DENTRO DE TRANSACCIÓN PRISMA
       // ═══════════════════════════════════════════════════════════════════
+      // Se envuelve en $transaction para evitar race conditions:
+      // - Dos operadores no pueden iniciar jornada en el mismo punto simultáneamente
+      // - La creación de jornada y la asignación de punto al usuario son atómicas
       let schedule;
       const usuarioAuthId = req.user?.id;
 
@@ -528,84 +532,116 @@ router.post(
             }
 
             // NOTA: La validación de cierre de servicios externos fue eliminada.
-            // Los servicios externos ahora se incluyen automáticamente en el cierre diario
+            // Los servicios externos ahora se incluyen automáticamente en el cierre diaria
             // a través del endpoint /cuadre-caja que consolida todos los movimientos.
           }
           // Finalizar jornada (para exentos y para quienes ya cerraron cierres requeridos)
-          // NOTA: fecha_salida ya fue asignada arriba con new Date() (UTC)
           updateData.estado = EstadoJornada.COMPLETADO;
-          // Al cerrar jornada, limpiar punto del usuario
-          await prisma.usuario.update({
-            where: { id: usuario_id },
-            data: { punto_atencion_id: null },
-          });
         }
         if (ubicacion_salida) {
           updateData.ubicacion_salida =
             ubicacion_salida as Prisma.InputJsonValue;
         }
 
-        schedule = await prisma.jornada.update({
-          where: { id: existingSchedule.id },
-          data: updateData,
-          include: {
-            usuario: { select: { id: true, nombre: true, username: true } },
-            puntoAtencion: {
-              select: {
-                id: true,
-                nombre: true,
-                direccion: true,
-                ciudad: true,
-                provincia: true,
-                codigo_postal: true,
-                activo: true,
-                created_at: true,
-                updated_at: true,
+        // 🔒 TRANSACCIÓN ATÓMICA para update jornada + liberar punto
+        schedule = await prisma.$transaction(async (tx) => {
+          const updatedSchedule = await tx.jornada.update({
+            where: { id: existingSchedule.id },
+            data: updateData,
+            include: {
+              usuario: { select: { id: true, nombre: true, username: true } },
+              puntoAtencion: {
+                select: {
+                  id: true,
+                  nombre: true,
+                  direccion: true,
+                  ciudad: true,
+                  provincia: true,
+                  codigo_postal: true,
+                  activo: true,
+                  created_at: true,
+                  updated_at: true,
+                },
               },
             },
-          },
+          });
+
+          if (fecha_salida) {
+            // Al cerrar jornada, limpiar punto del usuario
+            await tx.usuario.update({
+              where: { id: usuario_id },
+              data: { punto_atencion_id: null },
+            });
+          }
+
+          return updatedSchedule;
         });
 
-        // Actualizar cálculos de tiempos
+        // Actualizar cálculos de tiempos (fuera de tx, no es crítico)
         await timeTrackingService.actualizarTiemposJornada(schedule.id);
       } else {
         // CREATE nueva jornada
-        schedule = await prisma.jornada.create({
-          data: {
-            usuario_id,
-            punto_atencion_id,
-            fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : nowEcuador(),
-            ubicacion_inicio:
-              ubicacion_inicio !== undefined && ubicacion_inicio !== null
-                ? (ubicacion_inicio as Prisma.InputJsonValue)
-                : Prisma.DbNull,
-            estado: EstadoJornada.ACTIVO,
-            created_by: usuarioAuthId,
-          },
-          include: {
-            usuario: { select: { id: true, nombre: true, username: true } },
-            puntoAtencion: {
-              select: {
-                id: true,
-                nombre: true,
-                direccion: true,
-                ciudad: true,
-                provincia: true,
-                codigo_postal: true,
-                activo: true,
-                created_at: true,
-                updated_at: true,
+        // 🔒 TRANSACCIÓN ATÓMICA: verificar punto libre + crear jornada + asignar punto
+        schedule = await prisma.$transaction(async (tx) => {
+          // Re-verificar que el punto NO esté ocupado DENTRO de la transacción
+          if (!esPrivilegiado) {
+            const puntoOcupado = await tx.jornada.findFirst({
+              where: {
+                punto_atencion_id,
+                fecha_inicio: { gte: hoyGte, lt: hoyLt },
+                OR: [
+                  { estado: EstadoJornada.ACTIVO },
+                  { estado: EstadoJornada.ALMUERZO },
+                ],
+                usuario: { rol: { in: ["OPERADOR", "CONCESION"] } },
+              },
+              select: { id: true },
+            });
+
+            if (puntoOcupado) {
+              throw new Error(
+                "Este punto ya tiene una jornada activa. Selecciona otro punto o espera a que se libere."
+              );
+            }
+          }
+
+          const newSchedule = await tx.jornada.create({
+            data: {
+              usuario_id,
+              punto_atencion_id,
+              fecha_inicio: fecha_inicio ? new Date(fecha_inicio) : nowEcuador(),
+              ubicacion_inicio:
+                ubicacion_inicio !== undefined && ubicacion_inicio !== null
+                  ? (ubicacion_inicio as Prisma.InputJsonValue)
+                  : Prisma.DbNull,
+              estado: EstadoJornada.ACTIVO,
+              created_by: usuarioAuthId,
+            },
+            include: {
+              usuario: { select: { id: true, nombre: true, username: true } },
+              puntoAtencion: {
+                select: {
+                  id: true,
+                  nombre: true,
+                  direccion: true,
+                  ciudad: true,
+                  provincia: true,
+                  codigo_postal: true,
+                  activo: true,
+                  created_at: true,
+                  updated_at: true,
+                },
               },
             },
-          },
-        });
-      }
+          });
 
-      // Si no es cierre, asociar el punto actual al usuario
-      if (!fecha_salida) {
-        await prisma.usuario.update({
-          where: { id: usuario_id },
-          data: { punto_atencion_id },
+          // Asociar el punto actual al usuario
+          await tx.usuario.update({
+            where: { id: usuario_id },
+            data: { punto_atencion_id },
+          });
+
+          return newSchedule;
         });
       }
 
@@ -642,11 +678,22 @@ router.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
       logger.error("Error al procesar jornada", {
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: msg,
         stack: error instanceof Error ? error.stack : undefined,
         requestedBy: req.user?.id,
       });
+
+      // Si es un error de punto ocupado (race condition dentro de la transacción), devolver 409
+      if (msg.includes("ya tiene una jornada activa")) {
+        res.status(409).json({
+          success: false,
+          error: msg,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
 
       res.status(500).json({
         error: "Error al procesar jornada",
@@ -660,7 +707,7 @@ router.post(
 // ==============================
 // GET /schedules/active (jornada activa del usuario autenticado)
 // ==============================
-router.get("/active", authenticateToken, async (req, res) => {
+router.get("/active", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const userId = req.user?.id;
 
@@ -753,7 +800,7 @@ router.get("/active", authenticateToken, async (req, res) => {
 // ==============================
 // GET /schedules/started-today (para admins)
 // ==============================
-router.get("/started-today", authenticateToken, async (req, res) => {
+router.get("/started-today", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     if (
       !req.user ||
@@ -810,7 +857,7 @@ router.get("/started-today", authenticateToken, async (req, res) => {
 // ==============================
 // GET /schedules/user/:id (historial de un usuario)
 // ==============================
-router.get("/user/:id", authenticateToken, async (req, res) => {
+router.get("/user/:id", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const userId = req.params.id;
     const isSelf = req.user?.id === userId;
@@ -893,7 +940,7 @@ router.get("/user/:id", authenticateToken, async (req, res) => {
 // ==============================
 // GET /schedules/stats/me - Estadísticas del usuario autenticado
 // ==============================
-router.get("/stats/me", authenticateToken, async (req, res) => {
+router.get("/stats/me", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -943,7 +990,7 @@ router.get("/stats/me", authenticateToken, async (req, res) => {
 // ==============================
 // GET /schedules/stats/:userId - Estadísticas de un usuario específico (admin)
 // ==============================
-router.get("/stats/:userId", authenticateToken, async (req, res) => {
+router.get("/stats/:userId", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     if (!["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"].includes(req.user?.rol || "")) {
       res.status(403).json({ success: false, error: "Permisos insuficientes" });
@@ -1005,6 +1052,7 @@ const reassignSchema = z.object({
 router.post(
   "/reassign-point",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   validate(reassignSchema),
   async (req, res) => {
     try {

@@ -8,69 +8,30 @@
  */
 
 import { TipoOperacion } from "@prisma/client";
-import { RateMode } from "../../types/index.js";
 
-// Tasas de conversión por código de moneda
-export const rateModeByCode: Record<string, RateMode> = {
-  EUR: "USD_PER_UNIT",
-  GBP: "USD_PER_UNIT",
-  CHF: "USD_PER_UNIT",
-  JPY: "USD_PER_UNIT",
-  COP: "UNITS_PER_USD",
-  PYG: "UNITS_PER_USD",
-  CLP: "UNITS_PER_USD",
-  PEN: "UNITS_PER_USD",
-  ARS: "UNITS_PER_USD",
-  MXN: "UNITS_PER_USD",
-  BRL: "UNITS_PER_USD",
-  UYU: "UNITS_PER_USD",
-  DOP: "UNITS_PER_USD",
-};
 
 /**
- * Determina el modo de tasa para un par de monedas
+ * Convierte un monto según el comportamiento de la moneda (MULTIPLICA/DIVIDE)
+ * tal como está configurado en la base de datos.
+ * Esto reemplaza la lógica hardcodeada rateModeByCode para mantener
+ * consistencia con el frontend.
  */
-export function getRateModeForPair(
-  codOrigen: string,
-  codDestino: string
-): RateMode {
-  if (codOrigen === "USD" && codDestino !== "USD") {
-    return rateModeByCode[codDestino] ?? "UNITS_PER_USD";
-  }
-  if (codDestino === "USD" && codOrigen !== "USD") {
-    return rateModeByCode[codOrigen] ?? "UNITS_PER_USD";
-  }
-  return rateModeByCode[codDestino] ?? "USD_PER_UNIT";
-}
-
-/**
- * Convierte un monto según la tasa y modo especificados
- */
-export function convertir(
-  tipo: TipoOperacion,
-  modo: RateMode,
+export function convertirPorComportamiento(
+  comportamiento: string,
   montoOrigen: number,
-  tasa: number,
-  codOrigen: string,
-  codDestino: string
+  tasa: number
 ): { montoDestinoCalc: number } {
   if (!Number.isFinite(tasa) || tasa <= 0) return { montoDestinoCalc: 0 };
+  if (!Number.isFinite(montoOrigen) || montoOrigen < 0) return { montoDestinoCalc: 0 };
 
-  if (codOrigen === "USD" && codDestino !== "USD") {
-    // VENTA: USD -> DIVISA
-    if (modo === "UNITS_PER_USD") return { montoDestinoCalc: montoOrigen * tasa };
+  if (comportamiento === "DIVIDE") {
     return { montoDestinoCalc: montoOrigen / tasa };
   }
-  
-  if (codDestino === "USD" && codOrigen !== "USD") {
-    // COMPRA: DIVISA -> USD
-    if (modo === "UNITS_PER_USD") return { montoDestinoCalc: montoOrigen / tasa };
-    return { montoDestinoCalc: montoOrigen * tasa };
-  }
-  
-  // Cross (no USD): no forzamos cálculo
-  return { montoDestinoCalc: 0 };
+  // Default MULTIPLICA (incluye comportamiento vacío o null)
+  return { montoDestinoCalc: montoOrigen * tasa };
 }
+
+
 
 /**
  * Redondea a 2 decimales
@@ -89,39 +50,32 @@ export function roundN(x: number, n = 3): number {
 
 /**
  * Calcula el monto destino basado en billetes y monedas con sus tasas
+ * usando los comportamientos configurados en la base de datos.
  */
 export function calcularMontoDestino(
   amountBilletes: number,
   amountMonedas: number,
   rateBilletes: number,
   rateMonedas: number,
-  tipoOperacion: TipoOperacion,
-  codOrigen: string,
-  codDestino: string
+  comportamientoBilletes: string,
+  comportamientoMonedas: string
 ): number {
-  const modo = getRateModeForPair(codOrigen, codDestino);
   let totalCalc = 0;
 
   if (amountBilletes > 0 && rateBilletes > 0) {
-    const { montoDestinoCalc } = convertir(
-      tipoOperacion,
-      modo,
+    const { montoDestinoCalc } = convertirPorComportamiento(
+      comportamientoBilletes || "MULTIPLICA",
       amountBilletes,
-      rateBilletes,
-      codOrigen,
-      codDestino
+      rateBilletes
     );
     if (montoDestinoCalc > 0) totalCalc += montoDestinoCalc;
   }
 
   if (amountMonedas > 0 && rateMonedas > 0) {
-    const { montoDestinoCalc } = convertir(
-      tipoOperacion,
-      modo,
+    const { montoDestinoCalc } = convertirPorComportamiento(
+      comportamientoMonedas || "MULTIPLICA",
       amountMonedas,
-      rateMonedas,
-      codOrigen,
-      codDestino
+      rateMonedas
     );
     if (montoDestinoCalc > 0) totalCalc += montoDestinoCalc;
   }
@@ -225,9 +179,7 @@ export function normalizarMontosUSD(
 }
 
 export default {
-  rateModeByCode,
-  getRateModeForPair,
-  convertir,
+  convertirPorComportamiento,
   round2,
   roundN,
   calcularMontoDestino,

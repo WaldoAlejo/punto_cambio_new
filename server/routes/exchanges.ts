@@ -12,7 +12,10 @@ import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
 import { idempotency } from "../middleware/idempotency.js";
 import { validate } from "../middleware/validation.js";
-import { validarSaldoCambioDivisa } from "../middleware/saldoValidation.js";
+// NOTA: validarSaldoCambioDivisa eliminado del middleware — la validación de saldo
+// ahora se realiza DENTRO de la transacción Prisma en este handler (líneas ~1076, ~1157)
+// para evitar race conditions (TOCTOU). El middleware validaba saldo fuera de tx.
+// import { validarSaldoCambioDivisa } from "../middleware/saldoValidation.js";
 import { z } from "zod";
 import axios from "axios";
 import {
@@ -25,6 +28,7 @@ import {
   TipoMovimiento,
   TipoReferencia,
 } from "../services/movimientoSaldoService.js";
+import { convertirPorComportamiento } from "../services/exchange/exchangeCalculationService.js";
 
 const router = express.Router();
 
@@ -351,10 +355,12 @@ interface AuthenticatedRequest extends express.Request {
 router.post(
   "/",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   requireAperturaAprobada, // 🛡️ Verificar apertura de caja aprobada
   idempotency({ route: "/api/exchanges" }),
   validate(exchangeSchema),
-  validarSaldoCambioDivisa, // 🛡️ Validar saldo suficiente antes del cambio
+  // NOTA: validarSaldoCambioDivisa eliminado — la validación atómica de saldo ocurre
+  // DENTRO de prisma.$transaction (líneas ~1076, ~1157) para prevenir race conditions.
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       const userId = req.user?.id;
@@ -509,23 +515,7 @@ router.post(
         return;
       }
 
-      // === Conversión por convención de tasa (multiplicar/dividir según divisa) ===
-      type RateMode = "USD_PER_UNIT" | "UNITS_PER_USD";
-      const rateModeByCode: Record<string, RateMode> = {
-        EUR: "USD_PER_UNIT",
-        GBP: "USD_PER_UNIT",
-        CHF: "USD_PER_UNIT",
-        JPY: "USD_PER_UNIT",
-        COP: "UNITS_PER_USD",
-        PYG: "UNITS_PER_USD",
-        CLP: "UNITS_PER_USD",
-        PEN: "UNITS_PER_USD",
-        ARS: "UNITS_PER_USD",
-        MXN: "UNITS_PER_USD",
-        BRL: "UNITS_PER_USD",
-        UYU: "UNITS_PER_USD",
-        DOP: "UNITS_PER_USD",
-      };
+      // === Conversión usando comportamientos de la base de datos (consistente con frontend) ===
       const tasaEfectiva =
         num(tasa_cambio_billetes) > 0
           ? num(tasa_cambio_billetes)
@@ -536,44 +526,13 @@ router.post(
       const codigoOrigen = (monedaOrigen?.codigo || "").toUpperCase();
       const codigoDestino = (monedaDestino?.codigo || "").toUpperCase();
 
-      function getRateModeForPair(
-        codOrigen: string,
-        codDestino: string
-      ): RateMode {
-        if (codOrigen === "USD" && codDestino !== "USD") {
-          return rateModeByCode[codDestino] ?? "UNITS_PER_USD";
-        }
-        if (codDestino === "USD" && codOrigen !== "USD") {
-          return rateModeByCode[codOrigen] ?? "UNITS_PER_USD";
-        }
-        return rateModeByCode[codDestino] ?? "USD_PER_UNIT";
-      }
-
-      function convertir(
-        _tipo: TipoOperacion,
-        modo: RateMode,
-        montoOrigen: number,
-        tasa: number,
-        codOrigen: string,
-        codDestino: string
-      ) {
-        if (!Number.isFinite(tasa) || tasa <= 0) return { montoDestinoCalc: 0 };
-
-        if (codOrigen === "USD" && codDestino !== "USD") {
-          // VENTA: USD -> DIVISA
-          if (modo === "UNITS_PER_USD")
-            return { montoDestinoCalc: montoOrigen * tasa };
-          return { montoDestinoCalc: montoOrigen / tasa };
-        }
-        if (codDestino === "USD" && codOrigen !== "USD") {
-          // COMPRA: DIVISA -> USD
-          if (modo === "UNITS_PER_USD")
-            return { montoDestinoCalc: montoOrigen / tasa };
-          return { montoDestinoCalc: montoOrigen * tasa };
-        }
-        // Cross (no USD): no forzamos cálculo
-        return { montoDestinoCalc: 0 };
-      }
+      // Determinar comportamiento igual que el frontend:
+      // COMPRA -> comportamiento_compra de moneda origen (divisa extranjera)
+      // VENTA  -> comportamiento_venta de moneda destino (divisa extranjera)
+      const comportamiento =
+        tipo_operacion === "COMPRA"
+          ? (monedaOrigen?.comportamiento_compra || "MULTIPLICA")
+          : (monedaDestino?.comportamiento_venta || "MULTIPLICA");
 
       // === Recalcular totales coherentes (manteniendo compatibilidad) ===
       const entregadas_total_calc =
@@ -601,7 +560,6 @@ router.post(
         (tasaEfectiva > 0 || num(tasa_cambio_billetes) > 0 || num(tasa_cambio_monedas) > 0) &&
         (codigoOrigen === "USD" || codigoDestino === "USD")
       ) {
-        const modo = getRateModeForPair(codigoOrigen, codigoDestino);
         if (monto_destino_final === 0 && monto_origen_final > 0) {
           let totalCalc = 0;
           const entBilletes = num(divisas_entregadas_billetes);
@@ -611,37 +569,28 @@ router.post(
 
           // Calcular por componente usando su tasa correspondiente
           if (entBilletes > 0 && tasaB > 0) {
-            const { montoDestinoCalc } = convertir(
-              tipo_operacion,
-              modo,
+            const { montoDestinoCalc } = convertirPorComportamiento(
+              comportamiento,
               entBilletes,
-              tasaB,
-              codigoOrigen,
-              codigoDestino
+              tasaB
             );
             if (montoDestinoCalc > 0) totalCalc += montoDestinoCalc;
           }
           if (entMonedas > 0 && tasaM > 0) {
-            const { montoDestinoCalc } = convertir(
-              tipo_operacion,
-              modo,
+            const { montoDestinoCalc } = convertirPorComportamiento(
+              comportamiento,
               entMonedas,
-              tasaM,
-              codigoOrigen,
-              codigoDestino
+              tasaM
             );
             if (montoDestinoCalc > 0) totalCalc += montoDestinoCalc;
           }
 
           // Si no hubo desagregación útil, caer al cálculo con tasa efectiva
           if (totalCalc === 0 && tasaEfectiva > 0) {
-            const { montoDestinoCalc } = convertir(
-              tipo_operacion,
-              modo,
+            const { montoDestinoCalc } = convertirPorComportamiento(
+              comportamiento,
               monto_origen_final,
-              tasaEfectiva,
-              codigoOrigen,
-              codigoDestino
+              tasaEfectiva
             );
             if (montoDestinoCalc > 0) totalCalc = montoDestinoCalc;
           }
@@ -1273,8 +1222,9 @@ router.post(
           });
         }
 
-        // ✅ VALIDACIÓN CRÍTICA: Asegurar que SIEMPRE se registren movimientos
+        // ✅ VALIDACIÓN CRÍTICA: Asegurar que SIEMPRE se registren exactamente 2 movimientos
         // Un cambio de divisa DEBE tener exactamente 2 movimientos: 1 ingreso (origen) + 1 egreso (destino)
+        // Si no es así, es un bug grave que debe investigarse. NUNCA auto-crear movimientos.
         const movimientosCreados = await tx.movimientoSaldo.count({
           where: {
             tipo_referencia: 'EXCHANGE',
@@ -1282,62 +1232,12 @@ router.post(
           }
         });
 
-        if (movimientosCreados < 2) {
-          console.error(`[CRITICAL] Cambio ${cambio.id} (${numeroRecibo}) solo tiene ${movimientosCreados} movimientos. Se esperaban 2.`);
-          
-          // Crear movimientos faltantes como contingencia
-          const movimientosExistentes = await tx.movimientoSaldo.findMany({
-            where: {
-              tipo_referencia: 'EXCHANGE',
-              referencia_id: cambio.id
-            },
-            select: { moneda_id: true, tipo_movimiento: true }
-          });
-
-          const tieneMovimientoOrigen = movimientosExistentes.some(
-            m => m.moneda_id === moneda_origen_id && m.tipo_movimiento === 'INGRESO'
+        if (movimientosCreados !== 2) {
+          throw new Error(
+            `INTEGRITY_ERROR: Cambio ${cambio.id} (${numeroRecibo}) tiene ${movimientosCreados} movimientos, se esperaban exactamente 2. ` +
+            `Revisar consistencia de saldos para monedas ${moneda_origen_id} y ${moneda_destino_id}. ` +
+            `NO se debe auto-crear movimientos — reportar al administrador del sistema.`
           );
-          const tieneMovimientoDestino = movimientosExistentes.some(
-            m => m.moneda_id === moneda_destino_id && m.tipo_movimiento === 'EGRESO'
-          );
-
-          if (!tieneMovimientoOrigen) {
-            logger.warn("Auto-fix: Creando movimiento de ingreso faltante", {
-              moneda: cambio.monedaOrigen?.codigo,
-              cambioId: cambio.id,
-            });
-            await logMovimientoSaldo(tx, {
-              punto_atencion_id,
-              moneda_id: moneda_origen_id,
-              tipo_movimiento: "INGRESO",
-              monto: monto_origen_final,
-              saldo_anterior: origenAnteriorEf,
-              saldo_nuevo: origenNuevoEf,
-              usuario_id: userId,
-              referencia_id: cambio.id,
-              tipo_referencia: "CAMBIO_DIVISA",
-              descripcion: `Ingreso por cambio ${numeroRecibo} (auto-creado)`,
-            });
-          }
-
-          if (!tieneMovimientoDestino) {
-            logger.warn("Auto-fix: Creando movimiento de egreso faltante", {
-              moneda: cambio.monedaDestino?.codigo,
-              cambioId: cambio.id,
-            });
-            await logMovimientoSaldo(tx, {
-              punto_atencion_id,
-              moneda_id: moneda_destino_id,
-              tipo_movimiento: "EGRESO",
-              monto: monto_destino_final,
-              saldo_anterior: destinoAnteriorEf,
-              saldo_nuevo: destinoNuevoEf,
-              usuario_id: userId,
-              referencia_id: cambio.id,
-              tipo_referencia: "CAMBIO_DIVISA",
-              descripcion: `Egreso por cambio ${numeroRecibo} (auto-creado)`,
-            });
-          }
         }
 
         return cambio;
@@ -1379,6 +1279,7 @@ router.post(
 router.get(
   "/",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       if (!req.user?.id) {
@@ -1619,6 +1520,7 @@ router.get(
 router.patch(
   "/:id/cerrar",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     const { id } = req.params;
     try {
@@ -1982,6 +1884,7 @@ router.patch(
 router.patch(
   "/:id/completar",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     const { id } = req.params;
     const {
@@ -2423,6 +2326,7 @@ router.patch(
 router.get(
   "/pending",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       const { pointId } = req.query;
@@ -2515,6 +2419,7 @@ router.get(
 router.get(
   "/partial",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       const { pointId } = req.query;
@@ -2616,6 +2521,7 @@ router.get(
 router.patch(
   "/:id/complete-partial",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       const { id } = req.params;
@@ -2715,6 +2621,7 @@ router.patch(
 router.patch(
   "/:id/register-partial-payment",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       const { id } = req.params;
@@ -2826,6 +2733,7 @@ router.patch(
 router.get(
   "/search-customers",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       if (!req.user?.id) {
@@ -2972,6 +2880,7 @@ router.get(
 router.post(
   "/:id/recontabilizar",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
     try {
       const { id } = req.params;

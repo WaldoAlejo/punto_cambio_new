@@ -3,6 +3,7 @@ import {
   ServientregaAPIService,
   ServientregaCredentials,
 } from "../../services/servientregaAPIService.js";
+import { authenticateToken, requireRole } from "../../middleware/auth.js";
 import logger from "../../utils/logger.js";
 
 const router = express.Router();
@@ -17,10 +18,14 @@ function isRecord(value: unknown): value is JsonRecord {
 // Helpers de credenciales y URL
 // =============================
 function getCredentials(): ServientregaCredentials {
-  return {
-    usuingreso: process.env.SERVIENTREGA_USER || "INTPUNTOC",
-    contrasenha: process.env.SERVIENTREGA_PASSWORD || "73Yes7321t",
-  };
+  const usuingreso = process.env.SERVIENTREGA_USER;
+  const contrasenha = process.env.SERVIENTREGA_PASSWORD;
+  if (!usuingreso || !contrasenha) {
+    throw new Error(
+      "Faltan variables de entorno SERVIENTREGA_USER y/o SERVIENTREGA_PASSWORD. Verifica .env.production"
+    );
+  }
+  return { usuingreso, contrasenha };
 }
 
 function getApiUrl(): string {
@@ -33,7 +38,7 @@ function getApiUrl(): string {
 // =============================
 // 🔍 DEBUG: Mostrar configuración actual
 // =============================
-router.get("/debug-config", (_req, res) => {
+router.get("/debug-config", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), (_req, res) => {
   const credentials = getCredentials();
   res.json({
     nodeEnv: process.env.NODE_ENV,
@@ -42,7 +47,12 @@ router.get("/debug-config", (_req, res) => {
     all_env_keys: Object.keys(process.env)
       .filter((k) => k.includes("SERVIENTREGA"))
       .reduce((acc, k) => {
-        acc[k] = process.env[k];
+        // Nunca exponer valores de variables sensibles
+        if (/PASSWORD|SECRET|KEY|TOKEN|PRIVATE/i.test(k)) {
+          acc[k] = "***REDACTED***";
+        } else {
+          acc[k] = process.env[k];
+        }
         return acc;
       }, {} as Record<string, string | undefined>),
   });
@@ -88,7 +98,7 @@ function uniquePreserveOrder(arr: string[]) {
 // 📦 Productos, 🏙 Ciudades, 🌎 Países, 🏢 Agencias, 📦 Empaques
 // =============================
 
-router.post("/productos", async (_req, res) => {
+router.post("/productos", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();
@@ -138,7 +148,7 @@ router.post("/productos", async (_req, res) => {
   }
 });
 
-router.post("/paises", async (_req, res) => {
+router.post("/paises", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();
@@ -154,7 +164,7 @@ router.post("/paises", async (_req, res) => {
   }
 });
 
-router.post("/ciudades", async (req, res) => {
+router.post("/ciudades", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { codpais } = req.body;
     if (!codpais) {
@@ -175,7 +185,7 @@ router.post("/ciudades", async (req, res) => {
   }
 });
 
-router.post("/agencias", async (_req, res) => {
+router.post("/agencias", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
   try {
     logger.debug("Servientrega API: Obteniendo agencias");
     const apiService = new ServientregaAPIService(getCredentials());
@@ -262,7 +272,7 @@ router.post("/agencias", async (_req, res) => {
   }
 });
 
-router.post("/empaques", async (_req, res) => {
+router.post("/empaques", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();
@@ -282,7 +292,7 @@ router.post("/empaques", async (_req, res) => {
 // 🏢 Agencias de Retiro (obtener_cs)
 // =============================
 
-router.post("/agencias-retiro", async (_req, res) => {
+router.post("/agencias-retiro", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
   try {
     logger.info("Servientrega API: Obteniendo agencias de retiro (obtener_cs)");
     const credentials = getCredentials();
@@ -425,7 +435,7 @@ router.post("/agencias-retiro", async (_req, res) => {
 // 🔍 Validar Endpoint Retail
 // =============================
 
-router.post("/validar-retail", async (req, res) => {
+router.post("/validar-retail", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();
@@ -441,7 +451,7 @@ router.post("/validar-retail", async (req, res) => {
   }
 });
 
-router.get("/test-retail", async (_req, res) => {
+router.get("/test-retail", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();

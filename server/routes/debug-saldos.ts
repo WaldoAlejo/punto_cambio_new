@@ -5,12 +5,24 @@
 
 import express from "express";
 import prisma from "../lib/prisma.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.get("/:puntoId/:monedaId", async (req, res) => {
+router.get("/:puntoId/:monedaId", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO", "OPERADOR", "CONCESION", "ADMINISTRATIVO"]), async (req, res) => {
   try {
     const { puntoId, monedaId } = req.params;
+    const user = (req as any).user;
+
+    // Validar que el usuario solo pueda ver puntos a los que tiene acceso
+    const allowedRoles = ["ADMIN", "SUPER_USUARIO"];
+    const isAdmin = allowedRoles.includes(user?.rol);
+    if (!isAdmin && user?.punto_atencion_id !== puntoId) {
+      return res.status(403).json({
+        error: "No tiene permiso para consultar saldos de este punto de atención",
+        success: false,
+      });
+    }
 
     // 1. Saldo en tabla
     const saldoTabla = await prisma.saldo.findUnique({

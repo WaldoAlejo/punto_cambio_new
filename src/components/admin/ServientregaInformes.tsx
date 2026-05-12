@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { format, parseISO, subDays } from "date-fns";
+import { todayGyeDateOnly } from "@/utils/timezone";
 import { Download, Eye, FileText, BarChart3, RefreshCw, Wallet, History, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
 import { Loading } from "@/components/ui/loading";
 import { Guia } from "@/types/servientrega";
@@ -131,7 +132,7 @@ export const ServientregaInformes = ({
     v === "ANULADA" ||
     v === "PENDIENTE_ANULACION";
 
-  const hoy = new Date();
+  const hoy = new Date(todayGyeDateOnly() + "T00:00:00");
   const [activeTab, setActiveTab] = useState<"guias" | "saldos">("guias");
   
   // Estado para informe de guías

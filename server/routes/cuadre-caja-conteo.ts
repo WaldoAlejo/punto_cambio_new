@@ -13,8 +13,7 @@
 import express from "express";
 import { randomUUID } from "crypto";
 import prisma from "../lib/prisma.js";
-import { pool } from "../lib/database.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 import { validate } from "../middleware/validation.js";
@@ -64,7 +63,7 @@ const validarCierreSchema = z.object({
 // POST /api/cuadre-caja/conteo-fisico
 // Guarda el conteo físico manual del operador
 // ═══════════════════════════════════════════════════════════════════════════
-router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), async (req, res) => {
+router.post("/conteo-fisico", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), validate(conteoFisicoSchema), async (req, res) => {
   const usuario = req.user as UsuarioAutenticado;
   
   try {
@@ -81,21 +80,16 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
     });
 
     // Verificar que el cuadre existe y pertenece al punto del usuario
-    const cuadreResult = await pool.query(
-      `SELECT c.*, c.punto_atencion_id 
-       FROM "CuadreCaja" c 
-       WHERE c.id = $1::uuid AND c.estado = 'ABIERTO'`,
-      [cuadre_id]
-    );
+    const cuadre = await prisma.cuadreCaja.findFirst({
+      where: { id: cuadre_id, estado: 'ABIERTO' },
+    });
 
-    if (cuadreResult.rows.length === 0) {
+    if (!cuadre) {
       return res.status(404).json({
         success: false,
         error: "Cuadre no encontrado o ya está cerrado",
       });
     }
-
-    const cuadre = cuadreResult.rows[0];
     
     // Verificar permisos - el operador solo puede contar su propio punto
     if (cuadre.punto_atencion_id !== usuario.punto_atencion_id) {
@@ -109,20 +103,18 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
     const conteoFisicoTotal = Number((billetes + monedas_fisicas).toFixed(2));
 
     // Obtener el detalle actual para calcular la diferencia
-    const detalleResult = await pool.query(
-      `SELECT * FROM "DetalleCuadreCaja" 
-       WHERE cuadre_id = $1::uuid AND moneda_id = $2::uuid`,
-      [cuadre_id, moneda_id]
-    );
+    const detalleResult = await prisma.detalleCuadreCaja.findFirst({
+      where: { cuadre_id, moneda_id },
+    });
 
     let saldoCierre = 0;
-    if (detalleResult.rows.length > 0) {
-      saldoCierre = Number(detalleResult.rows[0].saldo_cierre);
+    if (detalleResult) {
+      saldoCierre = Number(detalleResult.saldo_cierre);
     }
 
     // Calcular diferencias
     const diferencia = Number((conteoFisicoTotal - saldoCierre).toFixed(2));
-    const diferenciaBancos = Number((conteo_bancos - (detalleResult.rows[0]?.bancos_teorico || 0)).toFixed(2));
+    const diferenciaBancos = Number((conteo_bancos - (Number(detalleResult?.bancos_teorico) || 0)).toFixed(2));
 
     // Determinar si hay alerta
     const requiereAlerta = Math.abs(diferencia) > UMBRAL_DIFERENCIA_ALERTA || 
@@ -132,77 +124,55 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
     const desgloseJSON = desglose_denominaciones ? JSON.stringify(desglose_denominaciones) : null;
 
     // Guardar o actualizar el detalle
-    if (detalleResult.rows.length === 0) {
+    if (!detalleResult) {
       // Crear nuevo detalle
-      await pool.query(
-        `INSERT INTO "DetalleCuadreCaja" (
-          id, cuadre_id, moneda_id, saldo_apertura, saldo_cierre, conteo_fisico,
-          diferencia, billetes, monedas_fisicas, bancos_teorico, conteo_bancos, 
-          diferencia_bancos, observaciones_detalle, desglose_denominaciones
-        ) VALUES ($1, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-        [
-          randomUUID(),
+      await prisma.detalleCuadreCaja.create({
+        data: {
+          id: randomUUID(),
           cuadre_id,
           moneda_id,
-          0, // saldo_apertura se calculará después
-          saldoCierre,
-          conteoFisicoTotal,
+          saldo_apertura: 0, // se calculará después
+          saldo_cierre: saldoCierre,
+          conteo_fisico: conteoFisicoTotal,
           diferencia,
           billetes,
           monedas_fisicas,
-          0, // bancos_teorico
+          bancos_teorico: 0,
           conteo_bancos,
-          diferenciaBancos,
-          observaciones || null,
-          desgloseJSON,
-        ]
-      );
+          diferencia_bancos: diferenciaBancos,
+          observaciones_detalle: observaciones || null,
+          desglose_denominaciones: desgloseJSON ? JSON.parse(desgloseJSON) as any : null as any,
+        },
+      });
     } else {
       // Actualizar detalle existente
-      await pool.query(
-        `UPDATE "DetalleCuadreCaja"
-         SET conteo_fisico = $1,
-             diferencia = $2,
-             billetes = $3,
-             monedas_fisicas = $4,
-             conteo_bancos = $5,
-             diferencia_bancos = $6,
-             observaciones_detalle = COALESCE($7, observaciones_detalle),
-             desglose_denominaciones = COALESCE($8, desglose_denominaciones),
-             updated_at = NOW()
-         WHERE id = $9::uuid`,
-        [
-          conteoFisicoTotal,
-          diferencia,
-          billetes,
-          monedas_fisicas,
-          conteo_bancos,
-          diferenciaBancos,
-          observaciones || null,
-          desgloseJSON,
-          detalleResult.rows[0].id,
-        ]
-      );
+      const updateData: any = {
+        conteo_fisico: conteoFisicoTotal,
+        diferencia,
+        billetes,
+        monedas_fisicas,
+        conteo_bancos,
+        diferencia_bancos: diferenciaBancos,
+        updated_at: new Date(),
+      };
+      if (observaciones !== undefined) updateData.observaciones_detalle = observaciones || null;
+      if (desgloseJSON !== null) updateData.desglose_denominaciones = JSON.parse(desgloseJSON) as any;
+
+      await prisma.detalleCuadreCaja.update({
+        where: { id: detalleResult.id },
+        data: updateData,
+      });
     }
 
-    // Actualizar también el saldo físico en la tabla Saldo
-    await pool.query(
-      `UPDATE "Saldo"
-       SET cantidad = $1,
-           billetes = $2,
-           monedas_fisicas = $3,
-           bancos = $4,
-           updated_at = NOW()
-       WHERE punto_atencion_id = $5::uuid AND moneda_id = $6::uuid`,
-      [conteoFisicoTotal, billetes, monedas_fisicas, conteo_bancos, cuadre.punto_atencion_id, moneda_id]
-    );
+    // NOTA: El conteo físico intermedio NO actualiza la tabla Saldo.
+    // Saldo.cantidad debe mantenerse como el último saldo teórico reconciliado
+    // (cierre anterior o asignación). El conteo físico solo vive en DetalleCuadreCaja
+    // hasta el cierre definitivo, momento en que guardar-cierre.ts actualiza Saldo.
 
     // Obtener info de la moneda para la respuesta
-    const monedaResult = await pool.query(
-      `SELECT codigo, nombre, simbolo FROM "Moneda" WHERE id = $1::uuid`,
-      [moneda_id]
-    );
-    const moneda = monedaResult.rows[0];
+    const moneda = await prisma.moneda.findUnique({
+      where: { id: moneda_id },
+    });
 
     logger.info("✅ Conteo físico guardado", {
       cuadre_id,
@@ -255,7 +225,7 @@ router.post("/conteo-fisico", authenticateToken, validate(conteoFisicoSchema), a
 // GET /api/cuadre-caja/movimientos-auditoria
 // Obtiene TODOS los movimientos del día para auditoría
 // ═══════════════════════════════════════════════════════════════════════════
-router.get("/movimientos-auditoria", authenticateToken, async (req, res) => {
+router.get("/movimientos-auditoria", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   const usuario = req.user as UsuarioAutenticado;
   
   try {
@@ -591,7 +561,7 @@ router.get("/movimientos-auditoria", authenticateToken, async (req, res) => {
 // POST /api/cuadre-caja/validar
 // Valida el cuadre antes de cerrar y detecta discrepancias
 // ═══════════════════════════════════════════════════════════════════════════
-router.post("/validar", authenticateToken, validate(validarCierreSchema), async (req, res) => {
+router.post("/validar", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), validate(validarCierreSchema), async (req, res) => {
   const usuario = req.user as UsuarioAutenticado;
   
   try {
@@ -604,15 +574,12 @@ router.post("/validar", authenticateToken, validate(validarCierreSchema), async 
     });
 
     // Obtener todos los detalles del cuadre
-    const detallesResult = await pool.query(
-      `SELECT dc.*, m.codigo as moneda_codigo, m.nombre as moneda_nombre, m.simbolo as moneda_simbolo
-       FROM "DetalleCuadreCaja" dc
-       JOIN "Moneda" m ON dc.moneda_id = m.id::text
-       WHERE dc.cuadre_id = $1::uuid`,
-      [cuadre_id]
-    );
+    const detallesResult = await prisma.detalleCuadreCaja.findMany({
+      where: { cuadre_id },
+      include: { moneda: { select: { codigo: true, nombre: true, simbolo: true } } },
+    });
 
-    if (detallesResult.rows.length === 0) {
+    if (detallesResult.length === 0) {
       return res.status(404).json({
         success: false,
         error: "No se encontraron detalles para este cuadre",
@@ -632,7 +599,7 @@ router.post("/validar", authenticateToken, validate(validarCierreSchema), async 
     let puedeCerrar = true;
     let totalDiferencias = 0;
 
-    for (const detalle of detallesResult.rows) {
+    for (const detalle of detallesResult) {
       const diferencia = Number(detalle.diferencia) || 0;
       const diferenciaBancos = Number(detalle.diferencia_bancos) || 0;
 
@@ -644,23 +611,23 @@ router.post("/validar", authenticateToken, validate(validarCierreSchema), async 
           puedeCerrar = false;
           discrepancias.push({
             moneda_id: detalle.moneda_id,
-            moneda_codigo: detalle.moneda_codigo,
-            moneda_nombre: detalle.moneda_nombre,
+            moneda_codigo: detalle.moneda.codigo,
+            moneda_nombre: detalle.moneda.nombre,
             tipo: 'DIFERENCIA_EFECTIVO',
             diferencia: diferencia,
             severidad: Math.abs(diferencia) > UMBRAL_DIFERENCIA_ALERTA * 2 ? 'CRITICA' : 'ADVERTENCIA',
-            mensaje: `Diferencia en efectivo de $${Math.abs(diferencia).toFixed(2)} ${detalle.moneda_codigo}. ` +
+            mensaje: `Diferencia en efectivo de $${Math.abs(diferencia).toFixed(2)} ${detalle.moneda.codigo}. ` +
                      `${diferencia > 0 ? 'Sobrante' : 'Faltante'} detectado.`,
           });
         } else {
           discrepancias.push({
             moneda_id: detalle.moneda_id,
-            moneda_codigo: detalle.moneda_codigo,
-            moneda_nombre: detalle.moneda_nombre,
+            moneda_codigo: detalle.moneda.codigo,
+            moneda_nombre: detalle.moneda.nombre,
             tipo: 'DIFERENCIA_EFECTIVO_MINIMA',
             diferencia: diferencia,
             severidad: 'INFO',
-            mensaje: `Diferencia mínima de $${Math.abs(diferencia).toFixed(2)} ${detalle.moneda_codigo} (dentro de tolerancia).`,
+            mensaje: `Diferencia mínima de $${Math.abs(diferencia).toFixed(2)} ${detalle.moneda.codigo} (dentro de tolerancia).`,
           });
         }
       }
@@ -673,12 +640,12 @@ router.post("/validar", authenticateToken, validate(validarCierreSchema), async 
           puedeCerrar = false;
           discrepancias.push({
             moneda_id: detalle.moneda_id,
-            moneda_codigo: detalle.moneda_codigo,
-            moneda_nombre: detalle.moneda_nombre,
+            moneda_codigo: detalle.moneda.codigo,
+            moneda_nombre: detalle.moneda.nombre,
             tipo: 'DIFERENCIA_BANCOS',
             diferencia: diferenciaBancos,
             severidad: Math.abs(diferenciaBancos) > UMBRAL_DIFERENCIA_ALERTA * 2 ? 'CRITICA' : 'ADVERTENCIA',
-            mensaje: `Diferencia en bancos de $${Math.abs(diferenciaBancos).toFixed(2)} ${detalle.moneda_codigo}.`,
+            mensaje: `Diferencia en bancos de $${Math.abs(diferenciaBancos).toFixed(2)} ${detalle.moneda.codigo}.`,
           });
         }
       }
@@ -688,12 +655,12 @@ router.post("/validar", authenticateToken, validate(validarCierreSchema), async 
         puedeCerrar = false;
         discrepancias.push({
           moneda_id: detalle.moneda_id,
-          moneda_codigo: detalle.moneda_codigo,
-          moneda_nombre: detalle.moneda_nombre,
+          moneda_codigo: detalle.moneda.codigo,
+          moneda_nombre: detalle.moneda.nombre,
           tipo: 'CONTEO_FISICO_VACIO',
           diferencia: 0,
           severidad: 'CRITICA',
-          mensaje: `No se ha registrado conteo físico para ${detalle.moneda_codigo} pero existen ${detalle.movimientos_periodo} movimientos.`,
+          mensaje: `No se ha registrado conteo físico para ${detalle.moneda.codigo} pero existen ${detalle.movimientos_periodo} movimientos.`,
         });
       }
     }
@@ -752,22 +719,19 @@ router.post("/validar", authenticateToken, validate(validarCierreSchema), async 
 // GET /api/cuadre-caja/detalles/:cuadreId
 // Obtiene los detalles completos de un cuadre con alertas
 // ═══════════════════════════════════════════════════════════════════════════
-router.get("/detalles/:cuadreId", authenticateToken, async (req, res) => {
+router.get("/detalles/:cuadreId", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   const usuario = req.user as UsuarioAutenticado;
   
   try {
     const { cuadreId } = req.params;
 
-    const detallesResult = await pool.query(
-      `SELECT dc.*, m.codigo as moneda_codigo, m.nombre as moneda_nombre, m.simbolo as moneda_simbolo
-       FROM "DetalleCuadreCaja" dc
-       JOIN "Moneda" m ON dc.moneda_id = m.id::text
-       WHERE dc.cuadre_id = $1::uuid
-       ORDER BY m.codigo ASC`,
-      [cuadreId]
-    );
+    const detallesResult = await prisma.detalleCuadreCaja.findMany({
+      where: { cuadre_id: cuadreId },
+      include: { moneda: true },
+      orderBy: { moneda: { codigo: 'asc' } },
+    });
 
-    const detallesConAlertas = detallesResult.rows.map(detalle => {
+    const detallesConAlertas = detallesResult.map(detalle => {
       const diferencia = Number(detalle.diferencia) || 0;
       const diferenciaBancos = Number(detalle.diferencia_bancos) || 0;
       
@@ -786,9 +750,9 @@ router.get("/detalles/:cuadreId", authenticateToken, async (req, res) => {
       return {
         id: detalle.id,
         moneda_id: detalle.moneda_id,
-        moneda_codigo: detalle.moneda_codigo,
-        moneda_nombre: detalle.moneda_nombre,
-        moneda_simbolo: detalle.moneda_simbolo,
+        moneda_codigo: detalle.moneda.codigo,
+        moneda_nombre: detalle.moneda.nombre,
+        moneda_simbolo: detalle.moneda.simbolo,
         saldo_apertura: Number(detalle.saldo_apertura),
         saldo_cierre: Number(detalle.saldo_cierre),
         conteo_fisico: Number(detalle.conteo_fisico),

@@ -1,6 +1,6 @@
 import express from "express";
 import type { Request, Response } from "express";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import saldoValidation from "../middleware/saldoValidation.js";
 import prisma from "../lib/prisma.js";
 import { Prisma } from "@prisma/client";
@@ -44,6 +44,7 @@ const n2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 router.get(
   "/:pointId",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req: Request, res: Response) => {
     try {
       const { pointId } = req.params;
@@ -139,6 +140,7 @@ router.get(
 router.post(
   "/validar-saldo",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   async (req: Request, res: Response) => {
     try {
       const { punto_atencion_id, moneda_id, monto_requerido } = req.body ?? {};
@@ -214,6 +216,7 @@ router.post(
 router.post(
   "/procesar-cambio",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
   saldoValidation.validarSaldoSuficiente,
   async (req: Request, res: Response) => {
     try {

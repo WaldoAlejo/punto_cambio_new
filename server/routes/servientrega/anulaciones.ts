@@ -1,5 +1,5 @@
 import express from "express";
-import { authenticateToken } from "../../middleware/auth.js";
+import { authenticateToken, requireRole } from "../../middleware/auth.js";
 import { ServientregaDBService } from "../../services/servientregaDBService.js";
 import { ServientregaAPIService } from "../../services/servientregaAPIService.js";
 import prisma from "../../lib/prisma.js";
@@ -94,7 +94,7 @@ async function procesarAnulacionServientrega(numeroGuia: string) {
 /* ==============================
    GET /api/servientrega/solicitudes-anulacion
 ============================== */
-router.get("/solicitudes-anulacion", authenticateToken, async (req, res) => {
+router.get("/solicitudes-anulacion", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { desde, hasta, estado } = req.query;
 
@@ -129,7 +129,7 @@ router.get("/solicitudes-anulacion", authenticateToken, async (req, res) => {
 /* ==============================
    POST /api/servientrega/solicitudes-anulacion
 ============================== */
-router.post("/solicitudes-anulacion", authenticateToken, async (req, res) => {
+router.post("/solicitudes-anulacion", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { guia_id, numero_guia, motivo_anulacion } = req.body;
     const usuario = (req as AuthedRequest).user;
@@ -167,6 +167,7 @@ router.post("/solicitudes-anulacion", authenticateToken, async (req, res) => {
 router.put(
   "/solicitudes-anulacion/:id/responder",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req, res) => {
     try {
       const { id } = req.params;
@@ -184,7 +185,7 @@ router.put(
       const estado =
         String(accion).toUpperCase() === "APROBAR" ? "APROBADA" : "RECHAZADA";
 
-      // ⚠️ FLUJO CORREGIDO: Primero validar y anular en API, LUEGO actualizar solicitud
+      // 🔒 FLUJO ATÓMICO: Primero validar y anular en API externa, LUEGO actualizar todo en una transacción
       if (estado === "APROBADA") {
         try {
           // 1. Obtener la solicitud actual para tener el numero_guia
@@ -223,7 +224,7 @@ router.put(
             });
           }
 
-          // 3. ✅ PRIMERO intentar anular en Servientrega API (CRÍTICO)
+          // 3. ✅ PRIMERO intentar anular en Servientrega API (CRÍTICO — fuera de tx, irreversible)
           console.log("🔄 Intentando anular guía en Servientrega API...", {
             numero_guia: guia.numero_guia,
             solicitud_id: id,
@@ -233,80 +234,76 @@ router.put(
 
           console.log("✅ Anulación exitosa en Servientrega API");
 
-          // 4. Solo si la API confirmó, actualizar en nuestra BD
-          await dbService.anularGuia(guia.numero_guia);
-
-          // 5. Ahora sí, actualizar la solicitud como APROBADA
-          const solicitudActualizada =
-            await dbService.actualizarSolicitudAnulacion(id, {
-              estado: "APROBADA",
-              respondido_por: usuario?.id || "SYSTEM",
-              respondido_por_nombre: usuario?.nombre || "Sistema",
-              observaciones_respuesta: observaciones || "",
-              fecha_respuesta: new Date(), // UTC - la UI muestra en zona horaria local
-            });
-
-          // 3. Revertir los balances (restar del Saldo USD general, sumar al ServientregaSaldo)
+          // 🔍 Buscar el movimiento original ANTES de la transacción (lectura libre)
+          let movimientoOriginal = null;
           if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
-            console.log(
-              "💰 Revirtiendo ingreso de servicio externo por anulación de guía..."
-            );
-            try {
-              // 🔍 Buscar el movimiento original para obtener el desglose (billetes, monedas, bancos)
-              const movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
-                where: {
-                  numero_referencia: guia.numero_guia,
-                  servicio: "SERVIENTREGA",
-                  tipo_movimiento: "INGRESO",
-                },
-                orderBy: { fecha: "desc" },
-              });
+            movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
+              where: {
+                numero_referencia: guia.numero_guia,
+                servicio: "SERVIENTREGA",
+                tipo_movimiento: "INGRESO",
+              },
+              orderBy: { fecha: "desc" },
+            });
+          }
 
-              const billetes = movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : 0;
-              const monedas = movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : 0;
-              const bancos = movimientoOriginal?.bancos ? Number(movimientoOriginal.bancos) : 0;
+          const billetes = movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : 0;
+          const monedas = movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : 0;
+          const bancos = movimientoOriginal?.bancos ? Number(movimientoOriginal.bancos) : 0;
 
-              const resultadoReversal =
-                await dbService.revertirIngresoServicioExterno(
-                  guia.punto_atencion_id,
-                  Number(guia.costo_envio),
-                  guia.numero_guia,
-                  billetes,
-                  monedas,
-                  bancos
-                );
+          // 4. 🔒 TRANSACCIÓN ATÓMICA: anular guía + revertir ingreso + actualizar solicitud
+          const puntoAtencionId = guia.punto_atencion_id!;
 
-              console.log(
-                "✅ Ingreso de servicio externo revertido exitosamente:",
-                {
-                  numero_guia: guia.numero_guia,
-                  monto: Number(guia.costo_envio),
-                  billetes,
-                  monedas,
-                  bancos,
-                  saldoServicioAnterior:
-                    resultadoReversal.saldoServicio.anterior,
-                  saldoServicioNuevo: resultadoReversal.saldoServicio.nuevo,
-                  saldoGeneralAnterior: resultadoReversal.saldoGeneral.anterior,
-                  saldoGeneralNuevo: resultadoReversal.saldoGeneral.nuevo,
-                }
+          const { resultadoReversal, solicitudActualizada } = await prisma.$transaction(async (tx) => {
+            // Anular guía en BD
+            await dbService.anularGuia(guia.numero_guia, tx);
+
+            let resultadoReversal = null;
+
+            // Revertir saldos (si aplica)
+            if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
+              resultadoReversal = await dbService.revertirIngresoServicioExterno(
+                puntoAtencionId,
+                Number(guia.costo_envio),
+                guia.numero_guia,
+                billetes,
+                monedas,
+                bancos,
+                tx
               );
-            } catch (reversalError) {
-              console.error(
-                "⚠️ Error al revertir ingreso de servicio externo:",
-                reversalError
-              );
-              // Registrar el error pero la anulación ya fue exitosa en Servientrega
-              await dbService.actualizarSolicitudAnulacion(id, {
-                observaciones_respuesta: `${observaciones || ""}
-
-⚠️ Aviso: Anulación exitosa en Servientrega, pero hubo un error al revertir los movimientos de balance: ${
-                  reversalError instanceof Error
-                    ? reversalError.message
-                    : String(reversalError)
-                }`,
-              });
             }
+
+            // Actualizar solicitud como APROBADA
+            const solicitudActualizada = await dbService.actualizarSolicitudAnulacion(
+              id,
+              {
+                estado: "APROBADA",
+                respondido_por: usuario?.id || "SYSTEM",
+                respondido_por_nombre: usuario?.nombre || "Sistema",
+                observaciones_respuesta: observaciones || "",
+                fecha_respuesta: new Date(),
+              },
+              tx
+            );
+
+            return { resultadoReversal, solicitudActualizada };
+          }, { maxWait: 10000, timeout: 15000 });
+
+          if (resultadoReversal) {
+            console.log(
+              "✅ Ingreso de servicio externo revertido exitosamente:",
+              {
+                numero_guia: guia.numero_guia,
+                monto: Number(guia.costo_envio),
+                billetes,
+                monedas,
+                bancos,
+                saldoServicioAnterior: resultadoReversal.saldoServicio.anterior,
+                saldoServicioNuevo: resultadoReversal.saldoServicio.nuevo,
+                saldoGeneralAnterior: resultadoReversal.saldoGeneral.anterior,
+                saldoGeneralNuevo: resultadoReversal.saldoGeneral.nuevo,
+              }
+            );
           }
 
           return res.json({
@@ -321,7 +318,6 @@ router.put(
             apiError
           );
 
-          // Registrar el error en observaciones pero mantener estado PENDIENTE
           return res.status(500).json({
             success: false,
             error: "Error en API Servientrega",
@@ -358,7 +354,7 @@ router.put(
 /* ==============================
    POST /api/servientrega/solicitar-anulacion (alias)
 ============================== */
-router.post("/solicitar-anulacion", authenticateToken, async (req, res) => {
+router.post("/solicitar-anulacion", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     const { guia_id, numero_guia, motivo } = req.body;
     const usuario = (req as AuthedRequest).user;
@@ -396,6 +392,7 @@ router.post("/solicitar-anulacion", authenticateToken, async (req, res) => {
 router.post(
   "/responder-solicitud-anulacion",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
   async (req, res) => {
     try {
       const { solicitud_id, accion, comentario } = req.body;

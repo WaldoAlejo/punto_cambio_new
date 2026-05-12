@@ -1,10 +1,10 @@
 import express from "express";
 import { EstadoJornada } from "@prisma/client";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
 import { idempotency } from "../middleware/idempotency.js";
 import { validate } from "../middleware/validation.js";
-import { validarSaldoTransferencia } from "../middleware/saldoValidation.js";
+// NOTA: validarSaldoTransferencia ya no se importa — la validación atómica está en transferController
 import { z } from "zod";
 import transferController from "../controllers/transferController.js";
 import prisma from "../lib/prisma.js";
@@ -79,19 +79,22 @@ const createTransferSchema = z.object({
 router.post(
   "/",
   authenticateToken,
+  requireRole(["OPERADOR", "CONCESION", "ADMIN", "SUPER_USUARIO"]),
   requireAperturaAprobada, // 🛡️ Verificar apertura de caja aprobada
   idempotency({ route: "/api/transfers" }),
   validate(createTransferSchema),
-  validarSaldoTransferencia, // 🛡️ Validar saldo suficiente antes de transferir
+  // NOTA: validarSaldoTransferencia eliminado del middleware — la validación de saldo
+  // ahora se realiza DENTRO de la transacción Prisma en transferController.createTransfer
+  // para evitar race conditions (TOCTOU). El middleware validaba saldo fuera de tx.
   // transferAutoReconciliation, // ❌ DESHABILITADO: Causaba doble actualización de saldos
   transferController.createTransfer
 );
 
 // Listar transferencias
-router.get("/", authenticateToken, transferController.getAllTransfers);
+router.get("/", authenticateToken, requireRole(["OPERADOR", "CONCESION", "ADMIN", "SUPER_USUARIO"]), transferController.getAllTransfers);
 
 // Obtener transferencias EN_TRANSITO pendientes de aceptación para el punto actual
-router.get("/pending-acceptance", authenticateToken, async (req, res) => {
+router.get("/pending-acceptance", authenticateToken, requireRole(["OPERADOR", "CONCESION", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
     if (!req.user) {
       return res.status(401).json({
@@ -203,6 +206,7 @@ router.get("/pending-acceptance", authenticateToken, async (req, res) => {
 router.post(
   "/:transferId/cancel",
   authenticateToken,
+  requireRole(["OPERADOR", "CONCESION", "ADMIN", "SUPER_USUARIO"]),
   async (req, res) => {
     await transferController.cancelTransfer(req as any, res);
   }

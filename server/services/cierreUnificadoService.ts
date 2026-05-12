@@ -10,7 +10,7 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import { nowEcuador } from "../utils/timezone.js";
+import { nowEcuador, gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento,
@@ -202,8 +202,7 @@ export async function ejecutarCierre(
         punto_atencion_id: puntoAtencionId,
         estado: { in: ["ABIERTO", "PARCIAL"] },
         fecha: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          lt: new Date(new Date().setHours(23, 59, 59, 999)),
+          ...gyeDayRangeUtcFromDate(nowEcuador()),
         },
       },
     });

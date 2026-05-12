@@ -24,7 +24,7 @@ import { userService } from "@/services/userService";
 import { pointService } from "@/services/pointService";
 import { currencyService } from "@/services/currencyService";
 import { exportToExcel } from "@/utils/exportToExcel";
-import { formatGyeTime, formatGyeDate } from "@/utils/timezone";
+import { formatGyeTime, formatGyeDate, todayGyeDateOnly } from "@/utils/timezone";
 import {
   Loader2,
   Filter,
@@ -120,13 +120,13 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
     "efectivo" | "transferencia" | null
   >(null);
 
-  // Configuración inicial de fechas (últimos 7 días)
+  // Configuración inicial de fechas (últimos 7 días) en timezone Ecuador
   useEffect(() => {
     const today = new Date();
     const start = new Date(today);
     start.setDate(today.getDate() - 6);
-    setDateFrom(start.toISOString().slice(0, 10));
-    setDateTo(today.toISOString().slice(0, 10));
+    setDateFrom(todayGyeDateOnly(start));
+    setDateTo(todayGyeDateOnly(today));
   }, []);
 
   // Cargar catálogos según el tipo de reporte
@@ -378,7 +378,12 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
         throw new Error(data.error || "Error al generar reporte");
       }
 
-      setReportData(Array.isArray(data.data) ? data.data : []);
+      // Fix summary report: backend devuelve objeto, no array
+      if (mainType === "summary") {
+        setReportData(data.data ? [data.data] : []);
+      } else {
+        setReportData(Array.isArray(data.data) ? data.data : []);
+      }
       toast({
         title: "✅ Reporte generado",
         description: `Se encontraron ${

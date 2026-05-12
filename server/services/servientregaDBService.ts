@@ -1,6 +1,7 @@
 import { Prisma, ServicioExterno, TipoViaTransferencia, TipoMovimiento as PrismaTipoMovimiento } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { subDays } from "date-fns";
+import { todayGyeDateOnly, gyeDayRangeUtcFromDateOnly } from "../utils/timezone.js";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento,
@@ -378,8 +379,9 @@ export class ServientregaDBService {
     }
   }
 
-  async anularGuia(numeroGuia: string) {
-    return prisma.servientregaGuia.updateMany({
+  async anularGuia(numeroGuia: string, tx?: Prisma.TransactionClient) {
+    const client = tx || prisma;
+    return client.servientregaGuia.updateMany({
       where: { numero_guia: numeroGuia },
       data: {
         proceso: "Anulada",
@@ -400,31 +402,10 @@ export class ServientregaDBService {
     // Para buscar en la BD (UTC), necesitamos SUMAR 5 horas, no restar
     // Ejemplo: "2025-10-30" en Ecuador → "2025-10-30 00:00:00 Ecuador" = "2025-10-30 05:00:00 UTC"
 
-    let desdeDate: Date;
-    let hastaDate: Date;
-    const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
-
-    if (desde) {
-      desdeDate = new Date(desde);
-      // SUMAR 5 horas para convertir "2025-10-25 00:00:00 Ecuador" a UTC
-      desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS);
-      desdeDate.setHours(0, 0, 0, 0); // Inicio del día en Ecuador = UTC+5
-    } else {
-      desdeDate = subDays(new Date(), 30);
-      desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS);
-      desdeDate.setHours(0, 0, 0, 0);
-    }
-
-    if (hasta) {
-      hastaDate = new Date(hasta);
-      // SUMAR 5 horas para convertir "2025-10-30 23:59:59 Ecuador" a UTC
-      hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS);
-      hastaDate.setHours(23, 59, 59, 999); // Final del día en Ecuador = UTC+5
-    } else {
-      hastaDate = new Date();
-      hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS);
-      hastaDate.setHours(23, 59, 59, 999);
-    }
+    const desdeStr = desde || todayGyeDateOnly(subDays(new Date(), 30));
+    const hastaStr = hasta || todayGyeDateOnly();
+    const { gte: desdeDate } = gyeDayRangeUtcFromDateOnly(desdeStr);
+    const { lt: hastaDate } = gyeDayRangeUtcFromDateOnly(hastaStr);
 
     log("📅 [obtenerGuias] CORRECCIÓN DE ZONA HORARIA APLICADA", {
       desde_original: desde,
@@ -516,7 +497,7 @@ export class ServientregaDBService {
     const { punto_atencion_id, monto_total, creado_por } = data;
 
     return prisma.$transaction(async (tx) => {
-      // Obtener IDs necesarios
+      // Obtener IDs necesarios (siempre desde prisma global porque no afectan tx)
       const usdId = await ensureUsdMonedaId();
       const systemUserId = await ensureSystemUserId();
 
@@ -979,25 +960,19 @@ export class ServientregaDBService {
     usuario_id?: string;
   }) {
     const where: Prisma.ServientregaGuiaWhereInput = {};
-    const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
     log("🔍 [obtenerGuiasConFiltros] Filtros recibidos:", filtros);
 
-    // Filtro por fechas (CORRECCIÓN: considerar offset Ecuador UTC-5)
-    // Se SUMA 5 horas para convertir Ecuador time (UTC-5) a UTC para búsqueda en BD
+    // Filtro por fechas usando utilidades de timezone del proyecto
     if (filtros.desde || filtros.hasta) {
       const createdAt: Prisma.DateTimeFilter = {};
       if (filtros.desde) {
-        const desdeDate = new Date(filtros.desde);
-        desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
-        desdeDate.setHours(0, 0, 0, 0); // Inicio del día
+        const { gte: desdeDate } = gyeDayRangeUtcFromDateOnly(filtros.desde);
         createdAt.gte = desdeDate;
         log("📅 Desde (inicio del día, con offset Ecuador):", desdeDate.toISOString());
       }
       if (filtros.hasta) {
-        const hastaDate = new Date(filtros.hasta);
-        hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
-        hastaDate.setHours(23, 59, 59, 999); // Final del día
+        const { lt: hastaDate } = gyeDayRangeUtcFromDateOnly(filtros.hasta);
         createdAt.lte = hastaDate;
         log("📅 Hasta (final del día, con offset Ecuador):", hastaDate.toISOString());
       }
@@ -1063,22 +1038,16 @@ export class ServientregaDBService {
     punto_atencion_id?: string;
   }) {
     const where: Prisma.ServientregaGuiaWhereInput = {};
-    const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
-    // Filtro por fechas (CORRECCIÓN: considerar offset Ecuador UTC-5)
-    // Se SUMA 5 horas para convertir Ecuador time (UTC-5) a UTC para búsqueda en BD
+    // Filtro por fechas usando utilidades de timezone del proyecto
     if (filtros.desde || filtros.hasta) {
       const createdAt: Prisma.DateTimeFilter = {};
       if (filtros.desde) {
-        const desdeDate = new Date(filtros.desde);
-        desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
-        desdeDate.setHours(0, 0, 0, 0); // Inicio del día
+        const { gte: desdeDate } = gyeDayRangeUtcFromDateOnly(filtros.desde);
         createdAt.gte = desdeDate;
       }
       if (filtros.hasta) {
-        const hastaDate = new Date(filtros.hasta);
-        hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
-        hastaDate.setHours(23, 59, 59, 999); // Final del día
+        const { lt: hastaDate } = gyeDayRangeUtcFromDateOnly(filtros.hasta);
         createdAt.lte = hastaDate;
       }
 
@@ -1194,20 +1163,15 @@ export class ServientregaDBService {
     estado?: string;
   }) {
     const where: Prisma.ServientregaSolicitudAnulacionWhereInput = {};
-    const ECUADOR_OFFSET_MS = 5 * 60 * 60 * 1000; // 5 horas en milisegundos
 
     if (filtros.desde || filtros.hasta) {
       const fechaSolicitud: Prisma.DateTimeFilter = {};
       if (filtros.desde) {
-        const desdeDate = new Date(filtros.desde);
-        desdeDate.setTime(desdeDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
-        desdeDate.setHours(0, 0, 0, 0); // Inicio del día
+        const { gte: desdeDate } = gyeDayRangeUtcFromDateOnly(filtros.desde);
         fechaSolicitud.gte = desdeDate;
       }
       if (filtros.hasta) {
-        const hastaDate = new Date(filtros.hasta);
-        hastaDate.setTime(hastaDate.getTime() + ECUADOR_OFFSET_MS); // SUMAR 5 horas
-        hastaDate.setHours(23, 59, 59, 999); // Final del día
+        const { lt: hastaDate } = gyeDayRangeUtcFromDateOnly(filtros.hasta);
         fechaSolicitud.lte = hastaDate;
       }
 
@@ -1268,9 +1232,11 @@ export class ServientregaDBService {
       respondido_por_nombre?: string;
       observaciones_respuesta?: string;
       fecha_respuesta?: Date;
-    }
+    },
+    tx?: Prisma.TransactionClient
   ) {
-    return prisma.servientregaSolicitudAnulacion.update({
+    const client = tx || prisma;
+    return client.servientregaSolicitudAnulacion.update({
       where: { id },
       data,
     });
@@ -1524,9 +1490,10 @@ export class ServientregaDBService {
     numeroGuia: string,
     billetes?: number,
     monedas?: number,
-    bancos?: number
+    bancos?: number,
+    tx?: Prisma.TransactionClient
   ) {
-    return prisma.$transaction(async (tx) => {
+    const execute = async (innerTx: Prisma.TransactionClient) => {
       log("📤 [revertirIngresoServicioExterno] Iniciando:", {
         puntoAtencionId,
         monto,
@@ -1534,6 +1501,7 @@ export class ServientregaDBService {
         billetes,
         monedas,
         bancos,
+        dentroTxExterna: !!tx,
       });
 
       // Obtener IDs necesarios
@@ -1554,7 +1522,7 @@ export class ServientregaDBService {
 
       // 1️⃣ Crear MovimientoServicioExterno (EGRESO - reversión)
       log("📤 [revertirIngresoServicioExterno] Creando movimiento de reversión...");
-      const movimiento = await tx.servicioExternoMovimiento.create({
+      const movimiento = await innerTx.servicioExternoMovimiento.create({
         data: {
           punto_atencion_id: puntoAtencionId,
           servicio: ServicioExterno.SERVIENTREGA,
@@ -1578,7 +1546,7 @@ export class ServientregaDBService {
 
       // 2️⃣ DEVOLVER SALDO A SERVIENTREGA (ServicioExternoSaldo)
       log("📤 [revertirIngresoServicioExterno] Devolviendo saldo a Servientrega...");
-      const saldoServicio = await tx.servicioExternoSaldo.findUnique({
+      const saldoServicio = await innerTx.servicioExternoSaldo.findUnique({
         where: {
           punto_atencion_id_servicio_moneda_id: {
             punto_atencion_id: puntoAtencionId,
@@ -1596,7 +1564,7 @@ export class ServientregaDBService {
         saldoServicioNuevo = saldoServicioAnterior.add(new Prisma.Decimal(monto));
 
         // Actualizar saldo de Servientrega (sumar la devolución)
-        await tx.servicioExternoSaldo.update({
+        await innerTx.servicioExternoSaldo.update({
           where: { id: saldoServicio.id },
           data: {
             cantidad: saldoServicioNuevo,
@@ -1622,12 +1590,12 @@ export class ServientregaDBService {
       // ⚠️ IMPORTANTE: Usar calcularSaldoCajaDesdeMovimientos para obtener el saldo de caja
       // esto garantiza consistencia con la UI y evita race conditions
       const saldoCajaAnterior = new Prisma.Decimal(
-        await calcularSaldoCajaDesdeMovimientos(puntoAtencionId, usdId, tx)
+        await calcularSaldoCajaDesdeMovimientos(puntoAtencionId, usdId, innerTx)
       );
       
       // Obtener saldo de tabla solo para bancos (no hay tabla de movimientos para bancos aún)
       // y para el desglose de billetes/monedas
-      const saldoActual = await tx.saldo.findUnique({
+      const saldoActual = await innerTx.saldo.findUnique({
         where: {
           punto_atencion_id_moneda_id: {
             punto_atencion_id: puntoAtencionId,
@@ -1663,7 +1631,7 @@ export class ServientregaDBService {
             saldoBucket: "CAJA",
             usuarioId: systemUserId,
           },
-          tx
+          innerTx
         );
 
         const billetesAnteriorNum = saldoActual?.billetes
@@ -1675,7 +1643,7 @@ export class ServientregaDBService {
 
         const billetesNuevo = Math.max(0, billetesAnteriorNum - desglose.billetes);
         const monedasNuevo = Math.max(0, monedasAnteriorNum - desglose.monedas);
-        await tx.saldo.upsert({
+        await innerTx.saldo.upsert({
           where: {
             punto_atencion_id_moneda_id: {
               punto_atencion_id: puntoAtencionId,
@@ -1716,7 +1684,7 @@ export class ServientregaDBService {
             saldoBucket: "BANCOS",
             usuarioId: systemUserId,
           },
-          tx
+          innerTx
         );
       }
       log("✅ [revertirIngresoServicioExterno] Transacción completada");
@@ -1732,6 +1700,11 @@ export class ServientregaDBService {
           nuevo: Number(saldoCajaNuevo),
         },
       };
-    });
+    };
+
+    if (tx) {
+      return execute(tx);
+    }
+    return prisma.$transaction(async (innerTx) => execute(innerTx));
   }
 }

@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { z } from "zod";
 
 /** Extiende Request para que TS reconozca req.user puesto por authenticateToken */
@@ -32,6 +32,7 @@ const paramsSchema = z.object({
 router.get(
   "/:pointId",
   authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req: AuthedRequest, res: Response): Promise<void> => {
     try {
       // Headers anti-caché

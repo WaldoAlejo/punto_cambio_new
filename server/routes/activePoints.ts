@@ -1,7 +1,7 @@
 import express from "express";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
-import { authenticateToken } from "../middleware/auth.js";
+import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 import { EstadoJornada } from "@prisma/client";
 
@@ -38,6 +38,7 @@ function toISO(d: Date | null | undefined) {
 router.get(
   "/",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
       setNoCache(res);
@@ -128,6 +129,7 @@ router.get(
 router.get(
   "/occupied",
   authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   async (req: express.Request, res: express.Response): Promise<void> => {
     try {
       setNoCache(res);
