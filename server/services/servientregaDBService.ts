@@ -1001,7 +1001,17 @@ export class ServientregaDBService {
 
     const guias = await prisma.servientregaGuia.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        numero_guia: true,
+        created_at: true,
+        estado: true,
+        punto_atencion_id: true,
+        usuario_id: true,
+        agencia_codigo: true,
+        agencia_nombre: true,
+        valor_declarado: true,
+        costo_envio: true,
         remitente: true,
         destinatario: true,
         usuario: {

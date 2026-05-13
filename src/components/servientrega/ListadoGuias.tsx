@@ -31,6 +31,7 @@ export default function ListadoGuias() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loadingPdfId, setLoadingPdfId] = useState<string | null>(null);
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
   const { user } = useAuth();
 
@@ -124,7 +125,7 @@ export default function ListadoGuias() {
     );
   };
 
-  const handleVerPDF = (base64: string) => {
+  const abrirPDF = (base64: string) => {
     try {
       const pdfURL = `data:application/pdf;base64,${base64}`;
       const win = window.open();
@@ -140,6 +141,31 @@ export default function ListadoGuias() {
     } catch (err) {
       console.error("Error al abrir PDF:", err);
       toast.error("Error al mostrar el PDF.");
+    }
+  };
+
+  const handleVerPDF = async (guia: Guia) => {
+    try {
+      setLoadingPdfId(guia.id);
+
+      const response = await axiosInstance.get<{
+        data?: { pdf_base64?: string };
+        success: boolean;
+      }>(`/servientrega/informes/guias/${guia.id}/pdf`);
+
+      const pdfBase64 = response.data?.data?.pdf_base64;
+
+      if (!pdfBase64) {
+        toast.error("La guía no tiene PDF disponible.");
+        return;
+      }
+
+      abrirPDF(pdfBase64);
+    } catch (err) {
+      console.error("Error al obtener PDF de la guía:", err);
+      toast.error("No se pudo cargar el PDF de la guía.");
+    } finally {
+      setLoadingPdfId(null);
     }
   };
 
@@ -304,13 +330,14 @@ export default function ListadoGuias() {
                           <td className="px-3 py-2 whitespace-nowrap text-center">
                             <div className="flex items-center justify-center gap-2">
                               <Button
-                                onClick={() => handleVerPDF(guia.base64_response || "")}
+                                onClick={() => handleVerPDF(guia)}
                                 variant="outline"
                                 size="sm"
+                                disabled={loadingPdfId === guia.id}
                                 className="h-7 px-2 text-xs"
                               >
                                 <Eye className="w-3.5 h-3.5 mr-1" />
-                                PDF
+                                {loadingPdfId === guia.id ? "Cargando..." : "PDF"}
                               </Button>
 
                               {guia.estado === "ACTIVA" &&

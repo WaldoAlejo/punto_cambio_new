@@ -151,6 +151,7 @@ export const ServientregaInformes = ({
   const [puntosAtencion, setPuntosAtencion] = useState<PuntoAtencion[]>([]);
   const [loadingPuntos, setLoadingPuntos] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loadingPdfId, setLoadingPdfId] = useState<string | null>(null);
   
   // Estado para informe de saldos
   const [saldosData, setSaldosData] = useState<SaldosRecargasData | null>(null);
@@ -384,7 +385,7 @@ export const ServientregaInformes = ({
     }
   };
 
-  const handleVerPDF = (base64: string) => {
+  const abrirPDF = (base64: string) => {
     try {
       const pdfURL = `data:application/pdf;base64,${base64}`;
       const win = window.open();
@@ -400,6 +401,37 @@ export const ServientregaInformes = ({
     } catch (err) {
       console.error("Error al mostrar PDF:", err);
       toast.error("Error al mostrar el PDF");
+    }
+  };
+
+  const handleVerPDF = async (guia: Guia) => {
+    try {
+      setLoadingPdfId(guia.id);
+
+      const response = await axiosInstance.get<{
+        data?: { pdf_base64?: string };
+        success: boolean;
+      }>(`/servientrega/informes/guias/${guia.id}/pdf`);
+
+      const pdfBase64 = response.data?.data?.pdf_base64;
+
+      if (!pdfBase64) {
+        toast.error("La guía no tiene PDF disponible.");
+        return;
+      }
+
+      abrirPDF(pdfBase64);
+    } catch (err: unknown) {
+      console.error("Error al obtener PDF de la guía:", err);
+
+      if (getAxiosStatus(err) === 404) {
+        toast.error("La guía no tiene PDF disponible.");
+        return;
+      }
+
+      toast.error("No se pudo cargar el PDF de la guía.");
+    } finally {
+      setLoadingPdfId(null);
     }
   };
 
@@ -740,14 +772,12 @@ export const ServientregaInformes = ({
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() =>
-                                      handleVerPDF(guia.pdf_base64 || guia.base64_response || "")
-                                    }
-                                    disabled={!guia.pdf_base64 && !guia.base64_response}
+                                    onClick={() => handleVerPDF(guia)}
+                                    disabled={loadingPdfId === guia.id}
                                     className="h-7 px-2 text-xs"
                                   >
                                     <Eye className="w-3.5 h-3.5 mr-1" />
-                                    PDF
+                                    {loadingPdfId === guia.id ? "Cargando..." : "PDF"}
                                   </Button>
                                   <Button
                                     variant="ghost"

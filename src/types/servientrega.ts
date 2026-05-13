@@ -80,6 +80,7 @@ export interface Guia {
   numero_guia: string;
   base64_response?: string; // Para compatibilidad con código existente
   pdf_base64?: string; // Campo que viene del backend de informes
+  tiene_pdf?: boolean;
   created_at?: string; // Para compatibilidad con código existente
   fecha_creacion?: string; // Campo que viene del backend de informes
   estado: "ACTIVA" | "ANULADA" | "PENDIENTE_ANULACION";

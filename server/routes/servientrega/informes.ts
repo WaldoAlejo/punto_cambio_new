@@ -5,10 +5,22 @@ import prisma from "../../lib/prisma.js";
 import ExcelJS from "exceljs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { ServicioExterno } from "@prisma/client";
+import { Prisma, ServicioExterno } from "@prisma/client";
 
 const router = express.Router();
 const dbService = new ServientregaDBService();
+
+function buildGuideAccessWhere(req: express.Request): Prisma.ServientregaGuiaWhereInput {
+  const rol = req.user?.rol;
+
+  if (rol === "OPERADOR" || rol === "CONCESION") {
+    return {
+      punto_atencion_id: req.user?.punto_atencion_id || "__NO_ACCESS_POINT__",
+    };
+  }
+
+  return {};
+}
 
 type AssignmentReportRow = {
   id: string;
@@ -166,8 +178,7 @@ router.get(
         valor_declarado: parseFloat(guia.valor_declarado?.toString() || "0"),
         costo_envio: parseFloat(guia.costo_envio?.toString() || "0"),
         valor_cobrado: parseFloat(guia.costo_envio?.toString() || "0"), // Valor que se cobró por la guía
-        base64_response: guia.base64_response || "", // Mantener el nombre original para compatibilidad
-        pdf_base64: guia.base64_response || "",
+        tiene_pdf: true,
         // Usuario que generó la guía
         usuario_nombre: guia.usuario?.nombre || "N/A",
       }));
@@ -179,6 +190,59 @@ router.get(
     } catch (error) {
       console.error("❌ Error al obtener informes de guías:", error);
       res.status(500).json({
+        error: "Error interno del servidor",
+        message: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+);
+
+// GET /api/servientrega/informes/guias/:id/pdf
+router.get(
+  "/informes/guias/:id/pdf",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO", "OPERADOR", "CONCESION"]),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { id } = req.params;
+
+      const guia = await prisma.servientregaGuia.findFirst({
+        where: {
+          id,
+          ...buildGuideAccessWhere(req),
+        },
+        select: {
+          id: true,
+          numero_guia: true,
+          base64_response: true,
+        },
+      });
+
+      if (!guia) {
+        return res.status(404).json({
+          error: "Guía no encontrada",
+          message: "No existe la guía solicitada o no tiene permisos para verla",
+        });
+      }
+
+      if (!guia.base64_response) {
+        return res.status(404).json({
+          error: "PDF no disponible",
+          message: "La guía no tiene PDF almacenado",
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          id: guia.id,
+          numero_guia: guia.numero_guia,
+          pdf_base64: guia.base64_response,
+        },
+      });
+    } catch (error) {
+      console.error("❌ Error al obtener PDF de la guía:", error);
+      return res.status(500).json({
         error: "Error interno del servidor",
         message: error instanceof Error ? error.message : "Error desconocido",
       });
