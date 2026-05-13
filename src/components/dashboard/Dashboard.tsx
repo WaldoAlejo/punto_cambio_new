@@ -119,6 +119,9 @@ const ValidacionCierrePage = React.lazy(
 const ReporteInconsistenciasPage = React.lazy(
   () => import("../admin/ReporteInconsistenciasPage")
 );
+const ReporteAsignaciones = React.lazy(
+  () => import("../admin/ReporteAsignaciones")
+);
 
 /** Utils */
 const STORAGE_KEY_VIEW = "pc_active_view";
@@ -156,6 +159,7 @@ const VALID_VIEWS = new Set<string>([
   "aperturas-pendientes",
   "validacion-cierre",
   "reporte-inconsistencias",
+  "reporte-asignaciones",
 ]);
 
 function getInitialView(
@@ -570,6 +574,11 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isAdmin && !isAdministrativo)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
         return <ReporteInconsistenciasPage />;
+
+      case "reporte-asignaciones":
+        if (!isAdmin && !isAdministrativo)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <ReporteAsignaciones />;
 
       default:
         if (isOperador) {

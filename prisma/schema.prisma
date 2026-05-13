@@ -713,6 +713,8 @@ model ServicioExternoAsignacion {
   servicio          ServicioExterno
   moneda_id         String
   monto             Decimal                @db.Decimal(15, 2)
+  saldo_anterior    Decimal                @default(0) @db.Decimal(15, 2)
+  saldo_nuevo       Decimal                @default(0) @db.Decimal(15, 2)
   tipo              TipoAsignacionServicio
   observaciones     String?
   asignado_por      String
@@ -724,6 +726,7 @@ model ServicioExternoAsignacion {
   @@index([punto_atencion_id])
   @@index([servicio])
   @@index([tipo])
+  @@index([fecha])
 }
 
 model ServicioExternoCierreDiario {

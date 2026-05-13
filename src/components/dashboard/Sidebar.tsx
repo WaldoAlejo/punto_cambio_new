@@ -158,6 +158,11 @@ const Sidebar = ({
       label: "Reportes Generales",
       color: "text-red-600",
     },
+    {
+      id: "reporte-asignaciones",
+      label: "Reporte de Asignaciones",
+      color: "text-indigo-600",
+    },
     // Acceso a cambios para ver/eliminar
     {
       id: "exchanges",

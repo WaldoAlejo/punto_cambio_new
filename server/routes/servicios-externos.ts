@@ -1297,23 +1297,7 @@ router.post(
       const usdId = await ensureUsdMonedaId();
 
       const resultado = await prisma.$transaction(async (tx) => {
-        // 1) Crear registro de asignación
-        const asign = await tx.servicioExternoAsignacion.create({
-          data: {
-            punto_atencion_id,
-            servicio,
-            moneda_id: usdId,
-            monto: new Prisma.Decimal(montoNum),
-            tipo,
-            observaciones:
-              typeof creado_por === "string" && creado_por
-                ? `Asignado por ${creado_por}`
-                : undefined,
-            asignado_por: userId,
-          },
-        });
-
-        // 2) Upsert saldo del servicio
+        // 1) Obtener saldo actual del servicio para trazabilidad
         const existing = await tx.servicioExternoSaldo.findUnique({
           where: {
             punto_atencion_id_servicio_moneda_id: {
@@ -1324,14 +1308,36 @@ router.post(
           },
         });
 
+        const saldoAnterior = existing ? Number(existing.cantidad) : 0;
+        const saldoNuevo = saldoAnterior + montoNum;
+
+        // 2) Crear registro de asignación con trazabilidad completa
+        const asign = await tx.servicioExternoAsignacion.create({
+          data: {
+            punto_atencion_id,
+            servicio,
+            moneda_id: usdId,
+            monto: new Prisma.Decimal(montoNum),
+            saldo_anterior: new Prisma.Decimal(saldoAnterior),
+            saldo_nuevo: new Prisma.Decimal(saldoNuevo),
+            tipo,
+            observaciones:
+              typeof creado_por === "string" && creado_por
+                ? `Asignado por ${creado_por}`
+                : undefined,
+            asignado_por: userId,
+          },
+        });
+
+        // 3) Upsert saldo del servicio
         if (existing) {
           // 🎯 Recarga: incrementar cantidad Y billetes (efectivo)
           const actualizado = await tx.servicioExternoSaldo.update({
             where: { id: existing.id },
-            data: { 
-              cantidad: { increment: montoNum }, 
+            data: {
+              cantidad: { increment: montoNum },
               billetes: { increment: montoNum }, // 💵 Siempre en efectivo
-              updated_at: new Date() 
+              updated_at: new Date(),
             },
           });
           return { asign, saldo: actualizado };
