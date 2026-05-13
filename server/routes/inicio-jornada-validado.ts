@@ -48,11 +48,18 @@ async function calcularSaldoDesdeMovimientos(
         moneda_id: monedaId,
         tipo_movimiento: { not: "SALDO_INICIAL" },
       },
-      select: { monto: true },
+      select: { monto: true, descripcion: true },
     });
 
-    // 3. Sumar movimientos
+    // 3. Sumar movimientos de CAJA únicamente (excluir bancos)
+    //    Debe ser consistente con calcularSaldoReal() en saldoReconciliationService.ts
     for (const mov of movimientos) {
+      const desc = (mov.descripcion ?? "").toString().toLowerCase();
+      const hasBancoWord = /\bbancos?\b/i.test(desc);
+      if (hasBancoWord && !desc.includes("(caja)")) {
+        continue; // Saltar movimientos bancarios
+      }
+
       const monto = Number(mov.monto);
       if (!isNaN(monto) && isFinite(monto)) {
         saldoCalculado += monto;

@@ -90,6 +90,8 @@
     "fix:aperturas-obligatorias": "tsx scripts/fix/fix-aperturas-obligatorias-inconsistentes.ts --execute",
     "fix:reset-point-balances:dry": "tsx scripts/fix/reset-point-balances.ts",
     "fix:reset-point-balances": "tsx scripts/fix/reset-point-balances.ts --execute",
+    "fix:reset-divisas-servicios-externos:dry": "tsx scripts/fix/reset-divisas-servicios-externos.ts",
+    "fix:reset-divisas-servicios-externos": "tsx scripts/fix/reset-divisas-servicios-externos.ts --execute",
     "fix:reset-luis-aviles:dry": "tsx scripts/fix/reset-point-balances.ts --point \"Luis Aviles\"",
     "fix:reset-luis-aviles": "tsx scripts/fix/reset-point-balances.ts --point \"Luis Aviles\" --execute",
     "fix:normalize-saldos": "tsx scripts/fix/normalize-saldos-breakdown.ts",
