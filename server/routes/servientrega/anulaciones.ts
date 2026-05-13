@@ -6,6 +6,12 @@ import prisma from "../../lib/prisma.js";
 import { nowEcuador } from "../../utils/timezone.js";
 
 const router = express.Router();
+const SERVIENTREGA_OPERATIONAL_ROLES = [
+  "OPERADOR",
+  "CONCESION",
+  "ADMIN",
+  "SUPER_USUARIO",
+] as const;
 const dbService = new ServientregaDBService();
 
 type JsonRecord = Record<string, unknown>;
@@ -129,7 +135,7 @@ router.get("/solicitudes-anulacion", authenticateToken, requireRole(["ADMIN", "S
 /* ==============================
    POST /api/servientrega/solicitudes-anulacion
 ============================== */
-router.post("/solicitudes-anulacion", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
+router.post("/solicitudes-anulacion", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (req, res) => {
   try {
     const { guia_id, numero_guia, motivo_anulacion } = req.body;
     const usuario = (req as AuthedRequest).user;
@@ -354,7 +360,7 @@ router.put(
 /* ==============================
    POST /api/servientrega/solicitar-anulacion (alias)
 ============================== */
-router.post("/solicitar-anulacion", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
+router.post("/solicitar-anulacion", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (req, res) => {
   try {
     const { guia_id, numero_guia, motivo } = req.body;
     const usuario = (req as AuthedRequest).user;

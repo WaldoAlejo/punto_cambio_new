@@ -5,6 +5,12 @@ import logger from "../../utils/logger.js";
 import { Prisma, TipoRecibo } from "@prisma/client";
 
 const router = Router();
+const SERVIENTREGA_OPERATIONAL_ROLES = [
+  "OPERADOR",
+  "CONCESION",
+  "ADMIN",
+  "SUPER_USUARIO",
+] as const;
 
 // Usaremos MOVIMIENTO para los recibos de Servientrega
 const RECIBO_TIPO_SERVIENTREGA: TipoRecibo = TipoRecibo.MOVIMIENTO;
@@ -12,7 +18,7 @@ const RECIBO_TIPO_SERVIENTREGA: TipoRecibo = TipoRecibo.MOVIMIENTO;
 // ====================================
 // 📄 CREAR RECIBO DE SERVIENTREGA
 // ====================================
-router.post("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req: Request, res: Response) => {
+router.post("/", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (req: Request, res: Response) => {
   try {
     const {
       numero_recibo,
@@ -111,7 +117,7 @@ router.post("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USU
 // ====================================
 // 📄 OBTENER RECIBO POR ID
 // ====================================
-router.get("/:id", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req: Request, res: Response) => {
+router.get("/:id", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -165,7 +171,7 @@ router.get("/:id", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_U
 router.get(
   "/guia/:numeroGuia",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (req: Request, res: Response) => {
     try {
       const { numeroGuia } = req.params;
@@ -226,7 +232,7 @@ router.get(
 router.patch(
   "/:id/impreso",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;

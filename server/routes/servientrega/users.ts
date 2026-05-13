@@ -7,6 +7,12 @@ import {
 } from "../../services/servientregaAPIService.js";
 
 const router = express.Router();
+const SERVIENTREGA_OPERATIONAL_ROLES = [
+  "OPERADOR",
+  "CONCESION",
+  "ADMIN",
+  "SUPER_USUARIO",
+] as const;
 
 /* ============================
    Helpers
@@ -50,7 +56,7 @@ function getApiUrl(): string {
 /* ============================
    👤 Búsqueda de Remitentes y Destinatarios
 ============================ */
-router.get("/remitente/buscar/:cedula", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
+router.get("/remitente/buscar/:cedula", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (req, res) => {
   try {
     const { cedula } = req.params;
     if (!cedula || cedula.length < 2) {
@@ -73,7 +79,7 @@ router.get("/remitente/buscar/:cedula", authenticateToken, requireRole(["OPERADO
 router.get(
   "/destinatario/buscar/:cedula",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (req, res) => {
     try {
       const { cedula } = req.params;
@@ -98,7 +104,7 @@ router.get(
 router.get(
   "/destinatario/buscar-nombre/:nombre",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (req, res) => {
     try {
       const { nombre } = req.params;
@@ -130,7 +136,7 @@ router.get(
 /* ============================
    💾 Guardar / Actualizar Remitentes y Destinatarios
 ============================ */
-router.post("/remitente/guardar", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
+router.post("/remitente/guardar", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (req, res) => {
   try {
     const dbService = new ServientregaDBService();
     const remitente = await dbService.guardarRemitente(req.body);
@@ -147,7 +153,7 @@ router.post("/remitente/guardar", authenticateToken, requireRole(["OPERADOR", "A
 router.put(
   "/remitente/actualizar/:cedula",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (req, res) => {
     try {
       const { cedula } = req.params;
@@ -169,7 +175,7 @@ router.put(
   }
 );
 
-router.post("/destinatario/guardar", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
+router.post("/destinatario/guardar", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (req, res) => {
   try {
     const dbService = new ServientregaDBService();
     const destinatario = await dbService.guardarDestinatario(req.body);
@@ -186,7 +192,7 @@ router.post("/destinatario/guardar", authenticateToken, requireRole(["OPERADOR",
 router.put(
   "/destinatario/actualizar/:cedula",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (req, res) => {
     try {
       const { cedula } = req.params;
@@ -222,7 +228,7 @@ router.put(
 router.get(
   "/remitente/puntos",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (_req: express.Request, res: express.Response) => {
   try {
     const dbService = new ServientregaDBService();
@@ -242,7 +248,7 @@ router.get(
  * Body: {}  (no requiere nada)
  * Respuesta: { fetch: [{ codpais, nombrecorto, pais, phone_code }, ...] }
  */
-router.post("/paises", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
+router.post("/paises", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (_req, res) => {
   try {
     const creds = getCredentialsFromEnv();
     const api = new ServientregaAPIService(creds);
@@ -263,7 +269,7 @@ router.post("/paises", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUP
  * Body: { codpais: number }
  * Respuesta: { fetch: [{ city: "CIUDAD-PROVINCIA" }, ...] }
  */
-router.post("/ciudades", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
+router.post("/ciudades", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (req, res) => {
   try {
     const { codpais } = req.body;
     if (typeof codpais !== "number") {

@@ -13,6 +13,12 @@ import { authenticateToken, requireRole } from "../../middleware/auth.js";
 import { ServicioExterno } from "@prisma/client";
 
 const router = express.Router();
+const SERVIENTREGA_OPERATIONAL_ROLES = [
+  "OPERADOR",
+  "CONCESION",
+  "ADMIN",
+  "SUPER_USUARIO",
+] as const;
 
 /** Asegura que exista USD y devuelve su id */
 async function ensureUsdMonedaId(): Promise<string> {
@@ -95,7 +101,7 @@ router.get(
 router.get(
   "/saldo/validar/:puntoAtencionId",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { puntoAtencionId } = req.params;
@@ -195,7 +201,7 @@ router.get(
 router.get(
   "/saldo/:puntoAtencionId",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { puntoAtencionId } = req.params;
@@ -356,7 +362,7 @@ router.post("/saldo", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO"])
 router.post(
   "/solicitar-saldo",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { punto_atencion_id, monto_solicitado, observaciones, creado_por } =
@@ -619,7 +625,7 @@ router.get(
 router.get(
   "/configuracion/:puntoAtencionId",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   async (req: express.Request, res: express.Response) => {
     try {
       const { puntoAtencionId } = req.params;

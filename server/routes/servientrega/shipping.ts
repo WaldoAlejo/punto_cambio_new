@@ -15,6 +15,12 @@ import { authenticateToken, requireRole } from "../../middleware/auth.js";
 import { registrarMovimientoSaldo, TipoMovimiento, TipoReferencia } from "../../services/movimientoSaldoService.js";
 
 const router = express.Router();
+const SERVIENTREGA_OPERATIONAL_ROLES = [
+  "OPERADOR",
+  "CONCESION",
+  "ADMIN",
+  "SUPER_USUARIO",
+] as const;
 
 /** ============================
  *  Tipos auxiliares
@@ -202,7 +208,7 @@ async function validarSaldoGenerarGuia(
 /** ============================
  *  💰 Cálculo de Tarifas
  *  ============================ */
-router.post("/tarifa", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
+router.post("/tarifa", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (req, res) => {
   try {
     // 1) Forzar tipo nacional / internacional segun país
     const paisOri = (req.body.pais_ori || "").toString().toUpperCase();
@@ -329,7 +335,7 @@ router.post("/tarifa", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUP
  *  ============================ */
 router.post("/generar-guia",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]),
   idempotency({ route: "/api/servientrega/generar-guia" }),
   validarSaldoGenerarGuia,
   async (req, res) => {

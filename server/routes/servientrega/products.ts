@@ -70,6 +70,12 @@ const clean = (s: unknown) =>
 
 const DOC = "DOCUMENTOS";
 const MERC = "MERCANCIA PREMIER";
+const SERVIENTREGA_OPERATIONAL_ROLES = [
+  "OPERADOR",
+  "CONCESION",
+  "ADMIN",
+  "SUPER_USUARIO",
+] as const;
 
 function normalizarProducto(raw?: unknown): "" | typeof DOC | typeof MERC {
   const c = clean(raw);
@@ -98,7 +104,7 @@ function uniquePreserveOrder(arr: string[]) {
 // 📦 Productos, 🏙 Ciudades, 🌎 Países, 🏢 Agencias, 📦 Empaques
 // =============================
 
-router.post("/productos", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
+router.post("/productos", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();
@@ -148,7 +154,7 @@ router.post("/productos", authenticateToken, requireRole(["OPERADOR", "ADMIN", "
   }
 });
 
-router.post("/paises", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
+router.post("/paises", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();
@@ -165,7 +171,7 @@ router.post("/paises", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUP
   }
 });
 
-router.post("/ciudades", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
+router.post("/ciudades", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (req, res) => {
   try {
     let { codpais } = req.body;
     if (!codpais) {
@@ -216,7 +222,7 @@ router.post("/ciudades", authenticateToken, requireRole(["OPERADOR", "ADMIN", "S
   }
 });
 
-router.post("/agencias", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
+router.post("/agencias", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (_req, res) => {
   try {
     logger.debug("Servientrega API: Obteniendo agencias");
     const apiService = new ServientregaAPIService(getCredentials());
@@ -303,7 +309,7 @@ router.post("/agencias", authenticateToken, requireRole(["OPERADOR", "ADMIN", "S
   }
 });
 
-router.post("/empaques", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
+router.post("/empaques", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (_req, res) => {
   try {
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();
@@ -323,7 +329,7 @@ router.post("/empaques", authenticateToken, requireRole(["OPERADOR", "ADMIN", "S
 // 🏢 Agencias de Retiro (obtener_cs)
 // =============================
 
-router.post("/agencias-retiro", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (_req, res) => {
+router.post("/agencias-retiro", authenticateToken, requireRole([...SERVIENTREGA_OPERATIONAL_ROLES]), async (_req, res) => {
   try {
     logger.info("Servientrega API: Obteniendo agencias de retiro (obtener_cs)");
     const credentials = getCredentials();
