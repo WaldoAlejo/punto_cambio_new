@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { X, Menu, ChevronDown, ChevronRight, BarChart3 } from "lucide-react";
+import { X, Menu, ChevronDown, ChevronRight, BarChart3, FolderOpen } from "lucide-react";
 import { User, PuntoAtencion } from "../../types";
 
 interface SidebarProps {
@@ -141,146 +141,57 @@ const Sidebar = ({
     },
   ];
 
-  const adminMenuItems: MenuItem[] = [
-    // Supervisión y contabilidad
+  const adminMenuGroups = [
     {
-      id: "contabilidad-general",
-      label: "Contabilidad General",
-      color: "text-emerald-600",
+      label: "📊 Reportes e Informes",
+      items: [
+        { id: "contabilidad-general", label: "Contabilidad General", color: "text-emerald-600" },
+        { id: "contabilidad-por-punto", label: "Control por Punto", color: "text-teal-600" },
+        { id: "reporte-asignaciones", label: "Reporte de Asignaciones", color: "text-indigo-600" },
+        { id: "servientrega-informes", label: "Informes Servientrega", color: "text-purple-600" },
+        { id: "reporte-inconsistencias", label: "Inconsistencias", color: "text-red-600" },
+      ],
     },
     {
-      id: "contabilidad-por-punto",
-      label: "Control por Punto",
-      color: "text-teal-600",
+      label: "👥 Usuarios y Horarios",
+      items: [
+        { id: "users", label: "Usuarios", color: "text-blue-600" },
+        { id: "admin-time-management", label: "Control de Horarios", color: "text-purple-600" },
+        { id: "permission-approvals", label: "Aprobación de Permisos", color: "text-pink-700" },
+      ],
     },
     {
-      id: "reports",
-      label: "Reportes Generales",
-      color: "text-red-600",
+      label: "🏢 Puntos y Saldos",
+      items: [
+        { id: "points", label: "Puntos de Atención", color: "text-green-600" },
+        { id: "balance-management", label: "Gestión de Saldos", color: "text-blue-600" },
+        { id: "aperturas-pendientes", label: "Aperturas Pendientes", color: "text-green-600" },
+        { id: "cierres-diarios", label: "Resumen Cierres Diarios", color: "text-orange-600" },
+        { id: "validacion-cierre", label: "Validación Cierre vs Apertura", color: "text-blue-600" },
+      ],
     },
     {
-      id: "reporte-asignaciones",
-      label: "Reporte de Asignaciones",
-      color: "text-indigo-600",
-    },
-    // Acceso a cambios para ver/eliminar
-    {
-      id: "exchanges",
-      label: "Cambios (admin)",
-      color: "text-blue-700",
-    },
-    // Separador visual
-    {
-      id: "separator-1",
-      label: "---",
-      color: "",
-    },
-    // Gestión de usuarios y puntos
-    {
-      id: "users",
-      label: "Usuarios",
-      color: "text-blue-600",
+      label: "💱 Configuración de Divisas",
+      items: [
+        { id: "currencies", label: "Gestión de Monedas", color: "text-indigo-600" },
+        { id: "currency-behaviors", label: "Comportamientos de Divisas", color: "text-indigo-500" },
+      ],
     },
     {
-      id: "points",
-      label: "Puntos de Atención",
-      color: "text-green-600",
+      label: "📦 Servicios y Operaciones",
+      items: [
+        { id: "servicios-externos-admin", label: "Admin Servicios Externos", color: "text-emerald-700" },
+        { id: "servientrega-saldo", label: "Saldo Servientrega", color: "text-cyan-600" },
+        { id: "servientrega-anulaciones", label: "Anulaciones Servientrega", color: "text-orange-600" },
+        { id: "transfer-approvals", label: "Aprobaciones Transferencias", color: "text-yellow-600" },
+        { id: "exchanges", label: "Cambios (admin)", color: "text-blue-700" },
+      ],
     },
     {
-      id: "admin-time-management",
-      label: "Control de Horarios",
-      color: "text-purple-600",
-    },
-    // Separador visual
-    {
-      id: "separator-2",
-      label: "---",
-      color: "",
-    },
-    // Gestión financiera
-    {
-      id: "currencies",
-      label: "Gestión de Monedas",
-      color: "text-indigo-600",
-    },
-    {
-      id: "currency-behaviors",
-      label: "Comportamientos de Divisas",
-      color: "text-indigo-500",
-    },
-    {
-      id: "balance-management",
-      label: "Gestión de Saldos",
-      color: "text-blue-600",
-    },
-    {
-      id: "transfer-approvals",
-      label: "Aprobaciones",
-      color: "text-yellow-600",
-    },
-    {
-      id: "permission-approvals",
-      label: "Aprobación de Permisos",
-      color: "text-pink-700",
-    },
-    {
-      id: "aperturas-pendientes",
-      label: "Aperturas Pendientes",
-      color: "text-green-600",
-    },
-    {
-      id: "cierres-diarios",
-      label: "Resumen Cierres Diarios",
-      color: "text-orange-600",
-    },
-    {
-      id: "validacion-cierre",
-      label: "Validación Cierre vs Apertura",
-      color: "text-blue-600",
-    },
-    {
-      id: "reporte-inconsistencias",
-      label: "Reporte de Inconsistencias",
-      color: "text-red-600",
-    },
-    {
-      id: "system-health",
-      label: "Salud del Sistema",
-      color: "text-red-600",
-    },
-    // Separador visual
-    {
-      id: "separator-3",
-      label: "---",
-      color: "",
-    },
-    // Gestión de Servientrega
-    {
-      id: "servientrega-saldo",
-      label: "Saldo Servientrega",
-      color: "text-cyan-600",
-    },
-    {
-      id: "servientrega-anulaciones",
-      label: "Anulaciones Servientrega",
-      color: "text-orange-600",
-    },
-    {
-      id: "servientrega-informes",
-      label: "Informes Servientrega",
-      color: "text-purple-600",
-    },
-    // Separador visual
-    {
-      id: "separator-4",
-      label: "---",
-      color: "",
-    },
-    // Administración de servicios externos
-    {
-      id: "servicios-externos-admin",
-      label: "Admin Servicios Externos",
-      color: "text-emerald-700",
+      label: "🔍 Validación y Control",
+      items: [
+        { id: "system-health", label: "Salud del Sistema", color: "text-red-600" },
+      ],
     },
   ];
 
@@ -424,25 +335,20 @@ const Sidebar = ({
                 <Separator className="my-3" />
 
                 {isOpen && (
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-between h-8 px-3 text-blue-900 hover:bg-gray-100"
-                    onClick={() => setAdminExpanded(!adminExpanded)}
-                  >
-                    <span className="text-sm font-medium">Administración</span>
-                    {adminExpanded ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                  </Button>
-                )}
-
-                {(adminExpanded || !isOpen) && (
-                  <div className={`space-y-1 ${isOpen ? "ml-2" : ""}`}>
-                    {adminMenuItems.map(renderMenuItem)}
+                  <div className="px-1 mb-2">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                      Administración
+                    </p>
                   </div>
                 )}
+
+                <AdminMenuGroups
+                  groups={adminMenuGroups}
+                  activeView={activeView}
+                  onViewChange={onViewChange}
+                  isOpen={isOpen}
+                  isViewAllowed={isViewAllowed}
+                />
               </>
             )}
           </div>
@@ -457,6 +363,107 @@ const Sidebar = ({
         )}
       </aside>
     </>
+  );
+};
+
+/* Sub-componente: Grupos del menú admin */
+interface AdminMenuGroupsProps {
+  groups: Array<{
+    label: string;
+    items: MenuItem[];
+  }>;
+  activeView: string;
+  onViewChange: (view: string) => void;
+  isOpen: boolean;
+  isViewAllowed: (viewId: string) => boolean;
+}
+
+const AdminMenuGroups: React.FC<AdminMenuGroupsProps> = ({
+  groups,
+  activeView,
+  onViewChange,
+  isOpen,
+  isViewAllowed,
+}) => {
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
+    () => {
+      const initial: Record<string, boolean> = {};
+      groups.forEach((g) => {
+        initial[g.label] = true;
+      });
+      return initial;
+    }
+  );
+
+  const toggleGroup = (label: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  return (
+    <div className="space-y-1">
+      {groups.map((group) => {
+        const isExpanded = expandedGroups[group.label] ?? true;
+        const hasActive = group.items.some((i) => i.id === activeView);
+
+        return (
+          <div key={group.label} className="space-y-0.5">
+            {isOpen && (
+              <button
+                onClick={() => toggleGroup(group.label)}
+                className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wide transition-colors ${
+                  hasActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <span className="flex items-center gap-1.5">
+                  <FolderOpen className="w-3 h-3" />
+                  {group.label}
+                </span>
+                {isExpanded ? (
+                  <ChevronDown className="w-3 h-3" />
+                ) : (
+                  <ChevronRight className="w-3 h-3" />
+                )}
+              </button>
+            )}
+
+            {(isExpanded || !isOpen) && (
+              <div className={`space-y-0.5 ${isOpen ? "ml-2" : ""}`}>
+                {group.items
+                  .filter((item) => isViewAllowed(item.id))
+                  .map((item) => {
+                    const isActive = activeView === item.id;
+                    return (
+                      <Button
+                        key={item.id}
+                        variant={isActive ? "default" : "ghost"}
+                        className={`w-full justify-start h-7 px-2 text-xs ${
+                          isActive
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-muted"
+                        } ${!isOpen ? "px-1" : ""} transition-all`}
+                        onClick={() => onViewChange(item.id)}
+                      >
+                        {isOpen && (
+                          <span className="font-medium truncate">
+                            {item.label}
+                          </span>
+                        )}
+                        {!isOpen && (
+                          <span className="text-xs font-bold mx-auto">
+                            {item.label.charAt(0)}
+                          </span>
+                        )}
+                      </Button>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 };
 
