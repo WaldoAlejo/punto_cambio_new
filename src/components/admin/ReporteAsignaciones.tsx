@@ -34,8 +34,9 @@ const SERVICIOS_EXTERNOS = [
   { value: "OTROS", label: "Otros" },
 ];
 
+const ALL_OPTION_VALUE = "__ALL__";
+
 const CATEGORIAS = [
-  { value: "", label: "Todas las categorías" },
   { value: ALL_OPTION_VALUE, label: "Todas las categorías" },
   { value: "GENERAL", label: "Saldos Generales" },
   { value: "SERVICIO_EXTERNO", label: "Servicios Externos" },
@@ -43,7 +44,6 @@ const CATEGORIAS = [
 ];
 
 const TIPOS = [
-  { value: "", label: "Todos los tipos" },
   { value: ALL_OPTION_VALUE, label: "Todos los tipos" },
   { value: "INICIAL", label: "Inicial" },
   { value: "RECARGA", label: "Recarga" },
