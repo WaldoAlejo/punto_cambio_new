@@ -154,7 +154,8 @@ router.post("/paises", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUP
     apiService.apiUrl = getApiUrl();
 
     const result = await apiService.obtenerPaises();
-    res.json(result);
+    const fetch = Array.isArray(result?.fetch) ? result.fetch : [];
+    res.json({ fetch });
   } catch (error) {
     logger.error("Error al obtener países", { error });
     res.status(500).json({
@@ -166,16 +167,46 @@ router.post("/paises", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUP
 
 router.post("/ciudades", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
   try {
-    const { codpais } = req.body;
+    let { codpais } = req.body;
     if (!codpais) {
       return res.status(400).json({ error: "El código de país es requerido" });
+    }
+
+    // Normalizar a número
+    const codpaisNum = typeof codpais === "string" ? parseInt(codpais, 10) : Number(codpais);
+    if (isNaN(codpaisNum)) {
+      return res.status(400).json({ error: "El código de país debe ser numérico" });
     }
 
     const apiService = new ServientregaAPIService(getCredentials());
     apiService.apiUrl = getApiUrl();
 
-    const result = await apiService.obtenerCiudades(codpais);
-    res.json(result);
+    const result = await apiService.obtenerCiudades(codpaisNum);
+
+    // Normalizar respuesta al formato esperado por el frontend
+    let fetch: Array<{ city: string }> = [];
+    if (Array.isArray(result?.fetch)) {
+      fetch = result.fetch
+        .map((it: unknown) => {
+          if (!isRecord(it)) return { city: "" };
+
+          const city = it.city;
+          if (typeof city === "string") return { city };
+
+          const ciudad = it.ciudad;
+          const provincia = it.provincia;
+          if (ciudad && provincia)
+            return {
+              city: `${String(ciudad).toUpperCase()}-${String(provincia).toUpperCase()}`,
+            };
+
+          if (typeof ciudad === "string") return { city: ciudad.toUpperCase() };
+          return { city: "" };
+        })
+        .filter((x) => x.city);
+    }
+
+    res.json({ fetch });
   } catch (error) {
     logger.error("Error al obtener ciudades", { error });
     res.status(500).json({

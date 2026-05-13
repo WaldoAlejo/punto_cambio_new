@@ -23,7 +23,7 @@ const clean = (s: string) =>
     .toUpperCase()
     .trim();
 
-type Pais = { codpais: string; pais: string };
+type Pais = { codpais: number; pais: string };
 type CiudadCanon = { ciudad: string; provincia: string; raw: string };
 
 // Componente de búsqueda tipo dropdown
@@ -144,6 +144,7 @@ export default function PasoRemitente({
     codigo_postal: "170150",
     pais: "",
   });
+  const [codpais, setCodpais] = useState<number>(0);
 
   const [direccionCompleta, setDireccionCompleta] = useState("");
   const [loading, setLoading] = useState(false);
@@ -160,17 +161,18 @@ export default function PasoRemitente({
       try {
         setCargandoPaises(true);
         const { data } = await axiosInstance.post("/servientrega/paises");
-        const lista: Pais[] = (data?.fetch || []).map((p: { codpais?: string; pais?: string }) => ({
-          codpais: String(p.codpais || ""),
+        const lista: Pais[] = (data?.fetch || []).map((p: { codpais?: number; pais?: string }) => ({
+          codpais: Number(p.codpais || 0),
           pais: String(p.pais || ""),
         })).filter((p: Pais) => p.codpais && p.pais);
-        
+
         setPaises(lista);
-        
+
         // Seleccionar Ecuador por defecto si existe
         const ecuador = lista.find(p => clean(p.pais) === "ECUADOR");
         if (ecuador) {
-          setFormData(prev => ({ ...prev, pais: ecuador.codpais }));
+          setCodpais(ecuador.codpais);
+          setFormData(prev => ({ ...prev, pais: ecuador.pais }));
         }
       } catch {
         toast.error("Error cargando países");
@@ -183,13 +185,13 @@ export default function PasoRemitente({
 
   // Cargar ciudades cuando cambia el país
   useEffect(() => {
-    if (!formData.pais) return;
-    
+    if (!codpais) return;
+
     const loadCiudades = async () => {
       try {
         setCargandoCiudades(true);
         const { data } = await axiosInstance.post("/servientrega/ciudades", {
-          codpais: formData.pais,
+          codpais,
         });
 
         const lista: CiudadCanon[] = (data?.fetch || []).map(
@@ -237,7 +239,7 @@ export default function PasoRemitente({
     };
 
     loadCiudades();
-  }, [formData.pais, selectedPoint?.ciudad, selectedPoint?.provincia]);
+  }, [codpais, selectedPoint?.ciudad, selectedPoint?.provincia]);
 
   useEffect(() => {
     const query = cedulaQuery.trim();
@@ -274,10 +276,13 @@ export default function PasoRemitente({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const handlePaisChange = (codpais: string) => {
+  const handlePaisChange = (value: string) => {
+    const cod = parseInt(value, 10);
+    const paisSeleccionado = paises.find(p => p.codpais === cod);
+    setCodpais(cod);
     setFormData(prev => ({
       ...prev,
-      pais: codpais,
+      pais: paisSeleccionado?.pais || "",
       ciudad: "",
       provincia: "",
     }));
@@ -322,8 +327,6 @@ export default function PasoRemitente({
       return;
     }
 
-    const paisNombre = paises.find(p => p.codpais === pais)?.pais || "ECUADOR";
-
     const remitenteFinal: Remitente = {
       identificacion: formData.identificacion.trim(),
       nombre: formData.nombre.trim(),
@@ -333,7 +336,7 @@ export default function PasoRemitente({
       ciudad: formData.ciudad.trim(),
       provincia: formData.provincia.trim(),
       codigo_postal: formData.codigo_postal?.trim() || "170150",
-      pais: paisNombre,
+      pais: formData.pais || "ECUADOR",
     };
 
     const payload = {
@@ -366,8 +369,8 @@ export default function PasoRemitente({
     }
   };
 
-  const paisOptions = useMemo(() => 
-    paises.map(p => ({ value: p.codpais, label: p.pais })),
+  const paisOptions = useMemo(() =>
+    paises.map(p => ({ value: String(p.codpais), label: p.pais })),
     [paises]
   );
 
@@ -465,7 +468,7 @@ export default function PasoRemitente({
         <div className="grid grid-cols-2 gap-2">
           <SearchableSelect
             options={paisOptions}
-            value={formData.pais}
+            value={String(codpais || "")}
             onChange={handlePaisChange}
             placeholder="Seleccionar país..."
             loading={cargandoPaises}
