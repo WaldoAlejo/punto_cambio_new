@@ -32,7 +32,7 @@ export interface InconsistenciaSaldo {
 
 /**
  * Servicio para operaciones relacionadas con saldos y reconciliación
- * Usa el endpoint /api/saldo-reconciliation/
+ * Usa axiosInstance, que ya incluye el prefijo /api en el baseURL
  */
 const saldoService = {
   /**
@@ -50,7 +50,7 @@ const saldoService = {
     }
 
     const response = await axiosInstance.get<{ success: boolean; data: SaldoRealResponse }>(
-      `/api/saldo-reconciliation/calcular-real?${params.toString()}`
+      `/saldo-reconciliation/calcular-real?${params.toString()}`
     );
     return response.data.data.saldo_calculado;
   },
@@ -64,7 +64,7 @@ const saldoService = {
     monedaId?: string
   ): Promise<ReconciliacionResult> {
     const response = await axiosInstance.post<{ success: boolean; data: ReconciliacionResult }>(
-      "/api/saldo-reconciliation/reconciliar",
+      "/saldo-reconciliation/reconciliar",
       {
         puntoAtencionId,
         monedaId,
@@ -90,7 +90,7 @@ const saldoService = {
     if (hasta) params.append("hasta", hasta);
 
     const response = await axiosInstance.get(
-      `/api/movimientos-saldo?${params.toString()}`
+      `/movimientos-saldo?${params.toString()}`
     );
     return response.data;
   },
@@ -112,7 +112,7 @@ const saldoService = {
     }>;
   }> {
     const response = await axiosInstance.get<{ success: boolean; data: { valido: boolean; inconsistencias: InconsistenciaSaldo[] } }>(
-      "/api/saldo-reconciliation/validar-consistencia"
+      "/saldo-reconciliation/validar-consistencia"
     );
     return response.data.data;
   },
