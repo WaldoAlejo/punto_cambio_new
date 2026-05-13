@@ -36,6 +36,7 @@ const SERVICIOS_EXTERNOS = [
 
 const CATEGORIAS = [
   { value: "", label: "Todas las categorías" },
+  { value: ALL_OPTION_VALUE, label: "Todas las categorías" },
   { value: "GENERAL", label: "Saldos Generales" },
   { value: "SERVICIO_EXTERNO", label: "Servicios Externos" },
   { value: "SERVIENTREGA", label: "Servientrega" },
@@ -43,6 +44,7 @@ const CATEGORIAS = [
 
 const TIPOS = [
   { value: "", label: "Todos los tipos" },
+  { value: ALL_OPTION_VALUE, label: "Todos los tipos" },
   { value: "INICIAL", label: "Inicial" },
   { value: "RECARGA", label: "Recarga" },
 ];
@@ -238,16 +240,19 @@ const ReporteAsignaciones = () => {
             <div>
               <Label className="text-xs">Punto de Atención</Label>
               <Select
-                value={filtros.punto_atencion_id}
+                value={filtros.punto_atencion_id || ALL_OPTION_VALUE}
                 onValueChange={(v) =>
-                  setFiltros((prev) => ({ ...prev, punto_atencion_id: v }))
+                  setFiltros((prev) => ({
+                    ...prev,
+                    punto_atencion_id: v === ALL_OPTION_VALUE ? "" : v,
+                  }))
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todos los puntos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos los puntos</SelectItem>
+                  <SelectItem value={ALL_OPTION_VALUE}>Todos los puntos</SelectItem>
                   {points.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.nombre}
@@ -260,9 +265,13 @@ const ReporteAsignaciones = () => {
             <div>
               <Label className="text-xs">Categoría</Label>
               <Select
-                value={filtros.categoria}
+                value={filtros.categoria || ALL_OPTION_VALUE}
                 onValueChange={(v) =>
-                  setFiltros((prev) => ({ ...prev, categoria: v, servicio: "" }))
+                  setFiltros((prev) => ({
+                    ...prev,
+                    categoria: v === ALL_OPTION_VALUE ? "" : v,
+                    servicio: "",
+                  }))
                 }
               >
                 <SelectTrigger>
@@ -281,9 +290,12 @@ const ReporteAsignaciones = () => {
             <div>
               <Label className="text-xs">Tipo</Label>
               <Select
-                value={filtros.tipo}
+                value={filtros.tipo || ALL_OPTION_VALUE}
                 onValueChange={(v) =>
-                  setFiltros((prev) => ({ ...prev, tipo: v }))
+                  setFiltros((prev) => ({
+                    ...prev,
+                    tipo: v === ALL_OPTION_VALUE ? "" : v,
+                  }))
                 }
               >
                 <SelectTrigger>
@@ -302,16 +314,19 @@ const ReporteAsignaciones = () => {
             <div>
               <Label className="text-xs">Moneda</Label>
               <Select
-                value={filtros.moneda_id}
+                value={filtros.moneda_id || ALL_OPTION_VALUE}
                 onValueChange={(v) =>
-                  setFiltros((prev) => ({ ...prev, moneda_id: v }))
+                  setFiltros((prev) => ({
+                    ...prev,
+                    moneda_id: v === ALL_OPTION_VALUE ? "" : v,
+                  }))
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Todas las monedas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas las monedas</SelectItem>
+                  <SelectItem value={ALL_OPTION_VALUE}>Todas las monedas</SelectItem>
                   {monedas.map((m) => (
                     <SelectItem key={m.id} value={m.id}>
                       {m.nombre} ({m.codigo})
@@ -347,16 +362,19 @@ const ReporteAsignaciones = () => {
               <div>
                 <Label className="text-xs">Servicio Específico</Label>
                 <Select
-                  value={filtros.servicio}
+                  value={filtros.servicio || ALL_OPTION_VALUE}
                   onValueChange={(v) =>
-                    setFiltros((prev) => ({ ...prev, servicio: v }))
+                    setFiltros((prev) => ({
+                      ...prev,
+                      servicio: v === ALL_OPTION_VALUE ? "" : v,
+                    }))
                   }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Todos los servicios" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos los servicios</SelectItem>
+                    <SelectItem value={ALL_OPTION_VALUE}>Todos los servicios</SelectItem>
                     {SERVICIOS_EXTERNOS.map((s) => (
                       <SelectItem key={s.value} value={s.value}>
                         {s.label}

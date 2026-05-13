@@ -235,12 +235,17 @@ export default function AperturasPendientes() {
         </div>
         <div className="flex items-center gap-3">
           {/* Filtro por punto de atención */}
-          <Select value={puntoSeleccionado} onValueChange={setPuntoSeleccionado}>
+          <Select
+            value={puntoSeleccionado || ALL_POINTS_VALUE}
+            onValueChange={(value) =>
+              setPuntoSeleccionado(value === ALL_POINTS_VALUE ? "" : value)
+            }
+          >
             <SelectTrigger className="w-[250px]">
               <SelectValue placeholder="Todos los puntos" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todos los puntos</SelectItem>
+              <SelectItem value={ALL_POINTS_VALUE}>Todos los puntos</SelectItem>
               {puntos.map((punto) => (
                 <SelectItem key={punto.id} value={punto.id}>
                   {punto.nombre} ({punto.ciudad})

@@ -733,16 +733,19 @@ const SaldoInicialManagement = () => {
                   <div>
                     <Label className="text-xs">Moneda</Label>
                     <Select
-                      value={histFiltros.moneda_id}
+                      value={histFiltros.moneda_id || ALL_CURRENCIES_VALUE}
                       onValueChange={(v) =>
-                        setHistFiltros((prev) => ({ ...prev, moneda_id: v }))
+                        setHistFiltros((prev) => ({
+                          ...prev,
+                          moneda_id: v === ALL_CURRENCIES_VALUE ? "" : v,
+                        }))
                       }
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Todas las monedas" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Todas</SelectItem>
+                        <SelectItem value={ALL_CURRENCIES_VALUE}>Todas</SelectItem>
                         {monedasDelPuntoSeleccionado.map((s) => (
                           <SelectItem key={s.moneda_id} value={s.moneda_id}>
                             {s.moneda_nombre} ({s.moneda_codigo})
