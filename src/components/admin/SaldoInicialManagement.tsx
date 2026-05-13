@@ -17,6 +17,8 @@ import { pointService } from "../../services/pointService";
 import { saldoInicialService } from "../../services/saldoInicialService";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
+const ALL_CURRENCIES_VALUE = "__ALL_CURRENCIES__";
+
 const SaldoInicialManagement = () => {
   const { showConfirmation, ConfirmationDialog } = useConfirmationDialog();
 
