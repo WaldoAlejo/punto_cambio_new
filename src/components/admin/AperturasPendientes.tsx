@@ -28,6 +28,8 @@ import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+const ALL_POINTS_VALUE = "__ALL_POINTS__";
+
 function formatMoney(amount: number): string {
   return amount?.toLocaleString("es-EC", {
     minimumFractionDigits: 2,
