@@ -216,6 +216,51 @@ export const saldoInicialService = {
     }
   },
 
+  // Obtener historial de asignaciones de saldo
+  async getHistorialAsignaciones(
+    pointId: string,
+    opts?: { moneda_id?: string; from?: string; to?: string }
+  ): Promise<{ asignaciones: any[]; resumen: any[]; total: number; error: string | null }> {
+    try {
+      const params = new URLSearchParams();
+      if (opts?.moneda_id) params.set("moneda_id", opts.moneda_id);
+      if (opts?.from) params.set("from", opts.from);
+      if (opts?.to) params.set("to", opts.to);
+      const qs = params.toString();
+      const url = qs
+        ? `/saldos-iniciales/historial/${pointId}?${qs}`
+        : `/saldos-iniciales/historial/${pointId}`;
+
+      const response = await apiService.get<
+        ApiOk<{ asignaciones: any[]; resumen: any[]; total: number }> | ApiFail
+      >(url);
+
+      if (response.success) {
+        return {
+          asignaciones: response.asignaciones ?? [],
+          resumen: response.resumen ?? [],
+          total: response.total ?? 0,
+          error: null,
+        };
+      } else {
+        const r = response as ApiFail;
+        return {
+          asignaciones: [],
+          resumen: [],
+          total: 0,
+          error: r.error || r.message || "Error al obtener historial",
+        };
+      }
+    } catch (e) {
+      return {
+        asignaciones: [],
+        resumen: [],
+        total: 0,
+        error: extractErrorMessage(e, "Error de conexión al obtener historial"),
+      };
+    }
+  },
+
   // Investigar saldos día a día
   async getInvestigacionSaldos(params: {
     punto_id: string;

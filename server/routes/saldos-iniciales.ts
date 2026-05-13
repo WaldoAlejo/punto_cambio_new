@@ -350,6 +350,25 @@ router.post(
           },
         });
 
+        // Registrar asignación en historial dedicado (trazabilidad completa)
+        await tx.asignacionSaldo.create({
+          data: {
+            punto_atencion_id,
+            moneda_id,
+            tipo: existingInicial ? "RECARGA" : "INICIAL",
+            saldo_anterior: new Prisma.Decimal(existingSaldo?.cantidad ?? 0),
+            cantidad_asignada: decCantidad,
+            saldo_nuevo: saldoResult.cantidad,
+            saldo_inicial_acumulado: saldoInicialResult.cantidad_inicial,
+            billetes_asignados: decBilletes,
+            monedas_asignadas: decMonedas,
+            bancos_asignados: new Prisma.Decimal(0),
+            asignado_por: user.id,
+            observaciones: observaciones ?? null,
+            fecha: new Date(),
+          },
+        });
+
         return {
           saldoInicialResult,
           saldoResult,
@@ -588,6 +607,83 @@ router.get(
         success: false,
         message: "Error en la investigación de saldos",
         error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+);
+
+// ======================= GET: historial de asignaciones =======================
+router.get(
+  "/historial/:pointId",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO"]),
+  async (req: Request<{ pointId: string }>, res: Response) => {
+    try {
+      const { pointId } = req.params;
+      const { moneda_id, from, to } = req.query;
+
+      const where: any = { punto_atencion_id: pointId };
+      if (moneda_id) where.moneda_id = moneda_id as string;
+      if (from || to) {
+        where.fecha = {};
+        if (from) where.fecha.gte = new Date(from as string);
+        if (to) where.fecha.lte = new Date(to as string);
+      }
+
+      const asignaciones = await prisma.asignacionSaldo.findMany({
+        where,
+        orderBy: { fecha: "desc" },
+        include: {
+          moneda: { select: { id: true, codigo: true, nombre: true, simbolo: true } },
+          puntoAtencion: { select: { id: true, nombre: true, ciudad: true } },
+          usuarioAsignador: { select: { id: true, nombre: true, username: true } },
+        },
+      });
+
+      const resultados = asignaciones.map((a) => ({
+        id: a.id,
+        fecha: a.fecha,
+        tipo: a.tipo,
+        moneda: a.moneda,
+        saldo_anterior: Number(a.saldo_anterior),
+        cantidad_asignada: Number(a.cantidad_asignada),
+        saldo_nuevo: Number(a.saldo_nuevo),
+        saldo_inicial_acumulado: Number(a.saldo_inicial_acumulado),
+        desglose: {
+          billetes: Number(a.billetes_asignados),
+          monedas: Number(a.monedas_asignadas),
+          bancos: Number(a.bancos_asignados),
+        },
+        asignado_por: a.usuarioAsignador,
+        observaciones: a.observaciones,
+      }));
+
+      // Resumen por moneda
+      const resumen: Record<string, { moneda: any; total_asignado: number; cantidad_asignaciones: number }> = {};
+      for (const a of asignaciones) {
+        const key = a.moneda_id;
+        if (!resumen[key]) {
+          resumen[key] = { moneda: a.moneda, total_asignado: 0, cantidad_asignaciones: 0 };
+        }
+        resumen[key].total_asignado += Number(a.cantidad_asignada);
+        resumen[key].cantidad_asignaciones += 1;
+      }
+
+      return res.json({
+        success: true,
+        punto_id: pointId,
+        total: asignaciones.length,
+        asignaciones: resultados,
+        resumen: Object.values(resumen),
+      });
+    } catch (error) {
+      logger.error("Error al obtener historial de asignaciones", {
+        error: error instanceof Error ? error.message : String(error),
+        pointId: req.params.pointId,
+      });
+      return res.status(500).json({
+        success: false,
+        error: "Error interno del servidor",
       });
     }
   }

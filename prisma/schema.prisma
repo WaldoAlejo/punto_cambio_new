@@ -38,6 +38,7 @@ model Usuario {
   permisos                                Permiso[]
   recibos                                 Recibo[]
   saldosAsignados                         SaldoInicial[]                @relation("UsuarioAsignadorSaldo")
+  asignacionesSaldo                       AsignacionSaldo[]             @relation("UsuarioAsignadorAsignacion")
   salidasAprobadas                        SalidaEspontanea[]            @relation("UsuarioAprobadorSalida")
   salidasEspontaneas                      SalidaEspontanea[]
   servicioExternoAsignacionesAsignadas    ServicioExternoAsignacion[]
@@ -85,6 +86,7 @@ model PuntoAtencion {
   recibos                         Recibo[]
   saldos                          Saldo[]
   saldosIniciales                 SaldoInicial[]
+  asignacionesSaldo               AsignacionSaldo[]
   salidasEspontaneas              SalidaEspontanea[]
   servicioExternoAsignaciones     ServicioExternoAsignacion[]
   servicioExternoCierresDiarios   ServicioExternoCierreDiario[]
@@ -122,6 +124,7 @@ model Moneda {
   movimientosSaldo              MovimientoSaldo[]
   saldos                        Saldo[]
   saldosIniciales               SaldoInicial[]
+  asignacionesSaldo             AsignacionSaldo[]
   servicioExternoAsignaciones   ServicioExternoAsignacion[]
   servicioExternoDetallesCierre ServicioExternoDetalleCierre[]
   servicioExternoMovimientos    ServicioExternoMovimiento[]
@@ -169,6 +172,33 @@ model SaldoInicial {
   @@index([punto_atencion_id])
   @@index([moneda_id])
   @@index([activo])
+}
+
+model AsignacionSaldo {
+  id                      String        @id @default(uuid())
+  punto_atencion_id       String
+  moneda_id               String
+  tipo                    TipoAsignacion
+  saldo_anterior          Decimal       @default(0) @db.Decimal(15, 2)
+  cantidad_asignada       Decimal       @default(0) @db.Decimal(15, 2)
+  saldo_nuevo             Decimal       @default(0) @db.Decimal(15, 2)
+  saldo_inicial_acumulado Decimal       @default(0) @db.Decimal(15, 2)
+  billetes_asignados      Decimal       @default(0) @db.Decimal(15, 2)
+  monedas_asignadas       Decimal       @default(0) @db.Decimal(15, 2)
+  bancos_asignados        Decimal       @default(0) @db.Decimal(15, 2)
+  asignado_por            String
+  observaciones           String?
+  fecha                   DateTime      @default(now())
+  created_at              DateTime      @default(now())
+
+  puntoAtencion     PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Cascade)
+  moneda            Moneda        @relation(fields: [moneda_id], references: [id], onDelete: Cascade)
+  usuarioAsignador  Usuario       @relation("UsuarioAsignadorAsignacion", fields: [asignado_por], references: [id])
+
+  @@index([punto_atencion_id])
+  @@index([moneda_id])
+  @@index([fecha])
+  @@index([punto_atencion_id, moneda_id, fecha])
 }
 
 model MovimientoSaldo {
@@ -964,6 +994,11 @@ enum DiaSemana {
   VIERNES
   SABADO
   DOMINGO
+}
+
+enum TipoAsignacion {
+  INICIAL
+  RECARGA
 }
 
 enum EstadoApertura {

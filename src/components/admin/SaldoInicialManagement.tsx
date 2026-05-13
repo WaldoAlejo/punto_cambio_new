@@ -44,6 +44,16 @@ const SaldoInicialManagement = () => {
   const [diaExpandido, setDiaExpandido] = useState<string | null>(null);
   const [vistaActual, setVistaActual] = useState("gestion");
 
+  // Estados para historial de asignaciones
+  const [historialAsignaciones, setHistorialAsignaciones] = useState<any[]>([]);
+  const [historialResumen, setHistorialResumen] = useState<any[]>([]);
+  const [buscandoHistorial, setBuscandoHistorial] = useState(false);
+  const [histFiltros, setHistFiltros] = useState({
+    moneda_id: "",
+    fecha_desde: "",
+    fecha_hasta: "",
+  });
+
   useEffect(() => {
     loadInitialData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -258,6 +268,39 @@ const SaldoInicialManagement = () => {
     }
   };
 
+  const handleCargarHistorial = async () => {
+    if (!selectedPointId) {
+      toast.error("Seleccione un punto de atención");
+      return;
+    }
+
+    setBuscandoHistorial(true);
+    try {
+      const res = await saldoInicialService.getHistorialAsignaciones(
+        selectedPointId,
+        {
+          moneda_id: histFiltros.moneda_id || undefined,
+          from: histFiltros.fecha_desde || undefined,
+          to: histFiltros.fecha_hasta || undefined,
+        }
+      );
+
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        setHistorialAsignaciones(res.asignaciones);
+        setHistorialResumen(res.resumen);
+        if (res.asignaciones.length === 0) {
+          toast.info("No se encontraron asignaciones para este punto");
+        }
+      }
+    } catch (e) {
+      toast.error("Error al cargar historial de asignaciones");
+    } finally {
+      setBuscandoHistorial(false);
+    }
+  };
+
   // Monedas del punto seleccionado
   const monedasDelPuntoSeleccionado = selectedPointId
     ? getMonedasPorPunto(selectedPointId)
@@ -405,9 +448,10 @@ const SaldoInicialManagement = () => {
       {/* Panel de Gestión/Investigación */}
       {selectedPointId && selectedPoint && (
         <Tabs value={vistaActual} onValueChange={setVistaActual} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsList className="grid w-full grid-cols-3 mb-4">
             <TabsTrigger value="gestion">💰 Gestión de Saldos</TabsTrigger>
             <TabsTrigger value="investigacion">🔍 Investigación Diaria</TabsTrigger>
+            <TabsTrigger value="historial">📜 Historial de Asignaciones</TabsTrigger>
           </TabsList>
 
           <TabsContent value="gestion">
@@ -670,6 +714,171 @@ const SaldoInicialManagement = () => {
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="historial">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  📜 Historial de Asignaciones - {selectedPoint.nombre}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Filtros */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <Label className="text-xs">Moneda</Label>
+                    <Select
+                      value={histFiltros.moneda_id}
+                      onValueChange={(v) =>
+                        setHistFiltros((prev) => ({ ...prev, moneda_id: v }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todas las monedas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Todas</SelectItem>
+                        {monedasDelPuntoSeleccionado.map((s) => (
+                          <SelectItem key={s.moneda_id} value={s.moneda_id}>
+                            {s.moneda_nombre} ({s.moneda_codigo})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Desde</Label>
+                    <Input
+                      type="date"
+                      value={histFiltros.fecha_desde}
+                      onChange={(e) =>
+                        setHistFiltros((prev) => ({
+                          ...prev,
+                          fecha_desde: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Hasta</Label>
+                    <Input
+                      type="date"
+                      value={histFiltros.fecha_hasta}
+                      onChange={(e) =>
+                        setHistFiltros((prev) => ({
+                          ...prev,
+                          fecha_hasta: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      onClick={handleCargarHistorial}
+                      disabled={buscandoHistorial}
+                      className="w-full"
+                    >
+                      {buscandoHistorial ? "⏳ Cargando..." : "🔍 Buscar"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Resumen */}
+                {historialResumen.length > 0 && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {historialResumen.map((r) => (
+                      <div
+                        key={r.moneda.id}
+                        className="bg-blue-50 border border-blue-200 rounded-lg p-3"
+                      >
+                        <div className="text-xs text-blue-600 font-medium">
+                          {r.moneda.codigo}
+                        </div>
+                        <div className="text-lg font-bold text-blue-800">
+                          {r.moneda.simbolo}
+                          {r.total_asignado.toLocaleString()}
+                        </div>
+                        <div className="text-xs text-blue-500">
+                          {r.cantidad_asignaciones} asignación
+                          {r.cantidad_asignaciones !== 1 ? "es" : ""}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Tabla */}
+                {historialAsignaciones.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Fecha</th>
+                          <th className="px-3 py-2 text-left">Tipo</th>
+                          <th className="px-3 py-2 text-left">Moneda</th>
+                          <th className="px-3 py-2 text-right">Saldo Ant.</th>
+                          <th className="px-3 py-2 text-right">Asignado</th>
+                          <th className="px-3 py-2 text-right">Saldo Nuevo</th>
+                          <th className="px-3 py-2 text-left">Asignado Por</th>
+                          <th className="px-3 py-2 text-left">Obs.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historialAsignaciones.map((a) => (
+                          <tr key={a.id} className="border-b hover:bg-gray-50">
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              {new Date(a.fecha).toLocaleDateString("es-EC", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span
+                                className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  a.tipo === "INICIAL"
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-blue-100 text-blue-700"
+                                }`}
+                              >
+                                {a.tipo === "INICIAL" ? "🆕 Inicial" : "🔄 Recarga"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              {a.moneda?.codigo} {a.moneda?.simbolo}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              {a.saldo_anterior.toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2 text-right font-semibold text-green-600">
+                              +{a.cantidad_asignada.toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2 text-right font-medium">
+                              {a.saldo_nuevo.toLocaleString()}
+                            </td>
+                            <td className="px-3 py-2">
+                              {a.asignado_por?.nombre || a.asignado_por?.username}
+                            </td>
+                            <td className="px-3 py-2 text-gray-500 max-w-xs truncate">
+                              {a.observaciones || "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-400">
+                    <div className="text-4xl mb-2">📜</div>
+                    <p>No hay asignaciones para mostrar</p>
+                    <p className="text-sm">Seleccione filtros y presione Buscar</p>
                   </div>
                 )}
               </CardContent>
