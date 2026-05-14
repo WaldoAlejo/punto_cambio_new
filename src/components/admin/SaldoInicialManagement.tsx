@@ -464,50 +464,9 @@ const SaldoInicialManagement = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Monedas Disponibles */}
-                {monedasDelPuntoSeleccionado.length > 0 && (
-                  <div>
-                    <Label className="text-sm font-medium text-gray-700 mb-3 block">
-                      💱 Monedas Disponibles ({monedasDelPuntoSeleccionado.length})
-                    </Label>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {monedasDelPuntoSeleccionado.map((saldo) => (
-                        <div
-                          key={saldo.moneda_id}
-                          className={`p-3 border rounded-lg transition-colors ${
-                            selectedCurrency === saldo.moneda_id
-                              ? "bg-blue-100 border-blue-400"
-                              : "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200"
-                          }`}
-                          onClick={() => setSelectedCurrency(saldo.moneda_id)}
-                          style={{ cursor: "pointer" }}
-                        >
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <span className="font-semibold text-blue-800">
-                                {saldo.moneda_codigo}
-                              </span>
-                              <p className="text-xs text-gray-600">
-                                {saldo.moneda_nombre}
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <span className="font-bold text-green-700">
-                                {saldo.moneda_simbolo}
-                                {saldo.saldo_actual.toLocaleString()}
-                              </span>
-                              <p className="text-xs text-gray-500">Saldo actual</p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Formulario de Asignación */}
+                {/* Formulario de Asignación — MOVIDO ARRIBA */}
                 {selectedCurrency && (
-                  <div className="border-t pt-6">
+                  <div className="border border-blue-200 rounded-lg p-6 bg-blue-50/50">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4">
                       ➕ Asignar Nuevo Saldo a {getMonedaInfo(selectedPointId, selectedCurrency)?.moneda_nombre}
                     </h3>
@@ -572,6 +531,47 @@ const SaldoInicialManagement = () => {
                         </p>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Monedas Disponibles — MOVIDO ABAJO DEL FORMULARIO */}
+                {monedasDelPuntoSeleccionado.length > 0 && (
+                  <div>
+                    <Label className="text-sm font-medium text-gray-700 mb-3 block">
+                      💱 Monedas Disponibles ({monedasDelPuntoSeleccionado.length})
+                    </Label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {monedasDelPuntoSeleccionado.map((saldo) => (
+                        <div
+                          key={saldo.moneda_id}
+                          className={`p-3 border rounded-lg transition-colors ${
+                            selectedCurrency === saldo.moneda_id
+                              ? "bg-blue-100 border-blue-400"
+                              : "bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200"
+                          }`}
+                          onClick={() => setSelectedCurrency(saldo.moneda_id)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <span className="font-semibold text-blue-800">
+                                {saldo.moneda_codigo}
+                              </span>
+                              <p className="text-xs text-gray-600">
+                                {saldo.moneda_nombre}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-bold text-green-700">
+                                {saldo.moneda_simbolo}
+                                {saldo.saldo_actual.toLocaleString()}
+                              </span>
+                              <p className="text-xs text-gray-500">Saldo actual</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
