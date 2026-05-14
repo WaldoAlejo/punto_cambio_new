@@ -81,17 +81,27 @@ const ReportesHistoricosAdmin: React.FC = () => {
       icon: <FileSpreadsheet className="h-8 w-8 text-blue-600" />,
       color: "bg-blue-50 border-blue-200",
     },
+    {
+      key: "servientrega-guias",
+      title: "Guías Servientrega",
+      description:
+        "Todo el historial de guías Servientrega generadas en todos los puntos (número de guía, origen, destino, valor, costo, punto de generación, operador).",
+      url: "/reportes/servientrega-guias-historico",
+      filename: `reporte_servientrega_guias_historico_${today}.xlsx`,
+      icon: <FileSpreadsheet className="h-8 w-8 text-purple-600" />,
+      color: "bg-purple-50 border-purple-200",
+    },
   ];
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-2">📊 Reportes Históricos Completos</h1>
       <p className="text-gray-600 mb-8">
         Descarga informes históricos desde el inicio de la aplicación hasta hoy.
         Estos archivos pueden tardar varios segundos en generarse dependiendo del volumen de datos.
       </p>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-3">
         {reports.map((report) => (
           <Card
             key={report.key}
