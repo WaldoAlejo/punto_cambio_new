@@ -17,6 +17,8 @@
     "type-check": "npx prisma generate && tsc --noEmit",
     "seed:clean:dry": "tsx prisma/seed-clean-db.ts",
     "seed:clean": "tsx prisma/seed-clean-db.ts --execute",
+    "db:clean-transactions:dry": "npx tsx scripts/limpieza-completa-transacciones.ts",
+    "db:clean-transactions": "npx tsx scripts/limpieza-completa-transacciones.ts --execute",
     "seed": "npx tsx prisma/seed.ts",
     "seed:admin": "npx tsx prisma/seed-admin.ts",
     "seed:complete": "npx tsx prisma/seed-complete.ts",
