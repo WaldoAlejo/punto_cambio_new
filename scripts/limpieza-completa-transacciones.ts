@@ -8,6 +8,7 @@
  * BORRA todo el historial de transacciones y resetea saldos a cero:
  *   - Cambios de divisa
  *   - Servicios externos (movimientos, asignaciones, saldos, cierres)
+ *     EXCEPTO Servientrega, que se preserva intacto
  *   - Transferencias
  *   - Asignaciones de saldo
  *   - Movimientos de saldo
@@ -21,7 +22,7 @@
  *   - Jornadas
  *   - Monedas
  *   - Todo lo relacionado con Servientrega (guías, remitentes, destinatarios,
- *     saldos, historial, solicitudes, anulaciones)
+ *     saldos, historial, solicitudes, anulaciones, movimientos, asignaciones)
  *
  * SEGURIDAD:
  *   - Por defecto hace DRY-RUN (solo muestra conteos, no borra nada)
@@ -30,7 +31,7 @@
  *   - Usa transacción Prisma: todo o nada
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, ServicioExterno } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -44,10 +45,6 @@ type TableInfo = {
 };
 
 const deleteOrder: TableInfo[] = [
-  // Servicios externos (hijos → padres)
-  { key: "servicioExternoDetalleCierre", label: "ServicioExternoDetalleCierre" },
-  { key: "servicioExternoCierreDiario", label: "ServicioExternoCierreDiario" },
-
   // Cuadre de caja
   { key: "detalleCuadreCaja", label: "DetalleCuadreCaja" },
   { key: "cuadreCaja", label: "CuadreCaja" },
@@ -56,16 +53,11 @@ const deleteOrder: TableInfo[] = [
   { key: "recibo", label: "Recibo" },
   { key: "solicitudSaldo", label: "SolicitudSaldo" },
 
-  // Servicios externos (transacciones)
-  { key: "servicioExternoMovimiento", label: "ServicioExternoMovimiento" },
-  { key: "servicioExternoAsignacion", label: "ServicioExternoAsignacion" },
-  { key: "servicioExternoSaldo", label: "ServicioExternoSaldo" },
-
   // Cambios de divisa y transferencias
   { key: "cambioDivisa", label: "CambioDivisa" },
   { key: "transferencia", label: "Transferencia" },
 
-  // Saldos y movimientos
+  // Saldos y movimientos (generales)
   { key: "movimientoSaldo", label: "MovimientoSaldo" },
   { key: "asignacionSaldo", label: "AsignacionSaldo" },
   { key: "historialSaldo", label: "HistorialSaldo" },
@@ -116,10 +108,27 @@ function parseArgs() {
 
 async function countTargets(): Promise<Record<string, number>> {
   const counts: Record<string, number> = {};
+
+  // Tablas simples (deleteMany sin filtro)
   for (const { key } of deleteOrder) {
     // @ts-expect-error dynamic delegate access
     counts[key] = await prisma[key].count();
   }
+
+  // Tablas de servicios externos (excluyendo SERVIENTREGA)
+  counts["servicioExternoDetalleCierre"] = await prisma.servicioExternoDetalleCierre.count({
+    where: { servicio: { not: ServicioExterno.SERVIENTREGA } },
+  });
+  counts["servicioExternoMovimiento"] = await prisma.servicioExternoMovimiento.count({
+    where: { servicio: { not: ServicioExterno.SERVIENTREGA } },
+  });
+  counts["servicioExternoAsignacion"] = await prisma.servicioExternoAsignacion.count({
+    where: { servicio: { not: ServicioExterno.SERVIENTREGA } },
+  });
+  counts["servicioExternoSaldo"] = await prisma.servicioExternoSaldo.count({
+    where: { servicio: { not: ServicioExterno.SERVIENTREGA } },
+  });
+
   return counts;
 }
 
@@ -129,6 +138,21 @@ async function countPreserved(): Promise<Record<string, number>> {
     // @ts-expect-error dynamic delegate access
     counts[key] = await prisma[key].count();
   }
+
+  // Verificar registros de Servientrega en tablas compartidas
+  counts["__servientrega_en_ServicioExternoSaldo"] = await prisma.servicioExternoSaldo.count({
+    where: { servicio: ServicioExterno.SERVIENTREGA },
+  });
+  counts["__servientrega_en_ServicioExternoAsignacion"] = await prisma.servicioExternoAsignacion.count({
+    where: { servicio: ServicioExterno.SERVIENTREGA },
+  });
+  counts["__servientrega_en_ServicioExternoMovimiento"] = await prisma.servicioExternoMovimiento.count({
+    where: { servicio: ServicioExterno.SERVIENTREGA },
+  });
+  counts["__servientrega_en_ServicioExternoDetalleCierre"] = await prisma.servicioExternoDetalleCierre.count({
+    where: { servicio: ServicioExterno.SERVIENTREGA },
+  });
+
   return counts;
 }
 
@@ -138,6 +162,22 @@ async function countPreserved(): Promise<Record<string, number>> {
 
 async function executeCleanup(verbose: boolean): Promise<void> {
   await prisma.$transaction(async (tx) => {
+    // 1. Servicios externos — BORRAR solo los que NO son SERVIENTREGA
+    const servientregaFilter = { servicio: { not: ServicioExterno.SERVIENTREGA } };
+
+    const r1 = await tx.servicioExternoDetalleCierre.deleteMany({ where: servientregaFilter });
+    if (verbose) console.log(`  [deleted] ServicioExternoDetalleCierre (no-SERVIENTREGA): ${r1.count}`);
+
+    const r2 = await tx.servicioExternoMovimiento.deleteMany({ where: servientregaFilter });
+    if (verbose) console.log(`  [deleted] ServicioExternoMovimiento (no-SERVIENTREGA): ${r2.count}`);
+
+    const r3 = await tx.servicioExternoAsignacion.deleteMany({ where: servientregaFilter });
+    if (verbose) console.log(`  [deleted] ServicioExternoAsignacion (no-SERVIENTREGA): ${r3.count}`);
+
+    const r4 = await tx.servicioExternoSaldo.deleteMany({ where: servientregaFilter });
+    if (verbose) console.log(`  [deleted] ServicioExternoSaldo (no-SERVIENTREGA): ${r4.count}`);
+
+    // 2. Tablas simples (deleteMany sin filtro)
     for (const { key, label } of deleteOrder) {
       // @ts-expect-error dynamic delegate access
       const res = await tx[key].deleteMany();
@@ -172,16 +212,27 @@ async function printDryRun(): Promise<void> {
     const marker = count > 0 ? "⚠️ " : "✅ ";
     console.log(`  ${marker}${label.padEnd(36)} ${count.toString().padStart(6)} filas`);
   }
+  // Mostrar tablas de servicios externos
+  console.log(`  ${targetCounts["servicioExternoDetalleCierre"] > 0 ? "⚠️ " : "✅ "}ServicioExternoDetalleCierre (no-SERVIENTREGA) ${(targetCounts["servicioExternoDetalleCierre"] || 0).toString().padStart(6)} filas`);
+  console.log(`  ${targetCounts["servicioExternoMovimiento"] > 0 ? "⚠️ " : "✅ "}ServicioExternoMovimiento (no-SERVIENTREGA)   ${(targetCounts["servicioExternoMovimiento"] || 0).toString().padStart(6)} filas`);
+  console.log(`  ${targetCounts["servicioExternoAsignacion"] > 0 ? "⚠️ " : "✅ "}ServicioExternoAsignacion (no-SERVIENTREGA)    ${(targetCounts["servicioExternoAsignacion"] || 0).toString().padStart(6)} filas`);
+  console.log(`  ${targetCounts["servicioExternoSaldo"] > 0 ? "⚠️ " : "✅ "}ServicioExternoSaldo (no-SERVIENTREGA)         ${(targetCounts["servicioExternoSaldo"] || 0).toString().padStart(6)} filas`);
   console.log("──────────────────────────────────────────────────────────────────────");
   console.log(`  TOTAL A BORRAR: ${totalToDelete} filas`);
   console.log("");
 
-  console.log("🛡️  TABLAS QUE SE PRESERVAN:");
+  console.log("🛡️  TABLAS Y REGISTROS QUE SE PRESERVAN:");
   console.log("──────────────────────────────────────────────────────────────────────");
   for (const { key, label } of preservedTables) {
     const count = preservedCounts[key] || 0;
     console.log(`  ✅ ${label.padEnd(36)} ${count.toString().padStart(6)} filas`);
   }
+  console.log("──────────────────────────────────────────────────────────────────────");
+  console.log("  (incluyendo registros SERVIENTREGA en tablas compartidas)");
+  console.log(`  ✅ ServicioExternoSaldo (SERVIENTREGA)         ${(preservedCounts["__servientrega_en_ServicioExternoSaldo"] || 0).toString().padStart(6)} filas`);
+  console.log(`  ✅ ServicioExternoAsignacion (SERVIENTREGA)    ${(preservedCounts["__servientrega_en_ServicioExternoAsignacion"] || 0).toString().padStart(6)} filas`);
+  console.log(`  ✅ ServicioExternoMovimiento (SERVIENTREGA)    ${(preservedCounts["__servientrega_en_ServicioExternoMovimiento"] || 0).toString().padStart(6)} filas`);
+  console.log(`  ✅ ServicioExternoDetalleCierre (SERVIENTREGA) ${(preservedCounts["__servientrega_en_ServicioExternoDetalleCierre"] || 0).toString().padStart(6)} filas`);
   console.log("──────────────────────────────────────────────────────────────────────");
   console.log("");
 
@@ -245,10 +296,10 @@ async function main() {
     console.log("🎉 Todas las tablas objetivo quedaron vacías.");
   } else {
     console.log("⚠️  Algunas tablas no quedaron vacías (revisa manualmente):");
-    for (const { key, label } of deleteOrder) {
+    for (const key of Object.keys(afterCounts)) {
       const count = afterCounts[key] || 0;
       if (count > 0) {
-        console.log(`   - ${label}: ${count} filas restantes`);
+        console.log(`   - ${key}: ${count} filas restantes`);
       }
     }
   }
@@ -261,6 +312,11 @@ async function main() {
     const count = preservedCounts[key] || 0;
     console.log(`   ✅ ${label}: ${count} filas`);
   }
+  console.log("   ✅ Registros SERVIENTREGA preservados en tablas compartidas:");
+  console.log(`      - ServicioExternoSaldo:         ${preservedCounts["__servientrega_en_ServicioExternoSaldo"] || 0} filas`);
+  console.log(`      - ServicioExternoAsignacion:    ${preservedCounts["__servientrega_en_ServicioExternoAsignacion"] || 0} filas`);
+  console.log(`      - ServicioExternoMovimiento:    ${preservedCounts["__servientrega_en_ServicioExternoMovimiento"] || 0} filas`);
+  console.log(`      - ServicioExternoDetalleCierre: ${preservedCounts["__servientrega_en_ServicioExternoDetalleCierre"] || 0} filas`);
 }
 
 main()
