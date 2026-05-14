@@ -122,6 +122,9 @@ const ReporteInconsistenciasPage = React.lazy(
 const ReporteAsignaciones = React.lazy(
   () => import("../admin/ReporteAsignaciones")
 );
+const ReportesHistoricosAdmin = React.lazy(
+  () => import("../admin/ReportesHistoricosAdmin")
+);
 
 /** Utils */
 const STORAGE_KEY_VIEW = "pc_active_view";
@@ -160,6 +163,7 @@ const VALID_VIEWS = new Set<string>([
   "validacion-cierre",
   "reporte-inconsistencias",
   "reporte-asignaciones",
+  "reportes-historicos",
 ]);
 
 function getInitialView(
@@ -579,6 +583,11 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         if (!isAdmin && !isAdministrativo)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
         return <ReporteAsignaciones />;
+
+      case "reportes-historicos":
+        if (!isAdmin && !isAdministrativo)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <ReportesHistoricosAdmin />;
 
       default:
         if (isOperador) {

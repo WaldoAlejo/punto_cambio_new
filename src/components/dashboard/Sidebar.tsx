@@ -148,6 +148,7 @@ const Sidebar = ({
         { id: "contabilidad-general", label: "Contabilidad General", color: "text-emerald-600" },
         { id: "contabilidad-por-punto", label: "Control por Punto", color: "text-teal-600" },
         { id: "reporte-asignaciones", label: "Reporte de Asignaciones", color: "text-indigo-600" },
+        { id: "reportes-historicos", label: "Reportes Históricos", color: "text-orange-600" },
         { id: "servientrega-informes", label: "Informes Servientrega", color: "text-purple-600" },
         { id: "reporte-inconsistencias", label: "Inconsistencias", color: "text-red-600" },
       ],

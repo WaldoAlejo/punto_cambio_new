@@ -101,6 +101,8 @@ import inicioJornadaValidadoRoutes from "./routes/inicio-jornada-validado.js";
 import adminAperturasRoutes from "./routes/admin-aperturas.js";
 import validacionCierreRoutes from "./routes/validacion-cierre.js";
 import reportesAsignacionesRoutes from "./routes/reportes-asignaciones.js";
+import reportesCambiosDivisaRoutes from "./routes/reportes-cambios-divisa.js";
+import reportesServiciosExternosRoutes from "./routes/reportes-servicios-externos.js";
 import adminDashboardRoutes from "./routes/admin-dashboard.js";
 
 const app = express();
@@ -383,6 +385,8 @@ app.use("/api/inicio-jornada-validado", inicioJornadaValidadoRoutes);
 app.use("/api/admin-aperturas", adminAperturasRoutes);
 app.use("/api/validacion-cierre", validacionCierreRoutes);
 app.use("/api/reportes/asignaciones", reportesAsignacionesRoutes);
+app.use("/api/reportes/cambios-divisa-historico", reportesCambiosDivisaRoutes);
+app.use("/api/reportes/servicios-externos-historico", reportesServiciosExternosRoutes);
 app.use("/api/admin", adminDashboardRoutes);
 
 // ------- Frontend estático (serve SPA build) -------
