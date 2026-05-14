@@ -104,6 +104,7 @@ import reportesAsignacionesRoutes from "./routes/reportes-asignaciones.js";
 import reportesCambiosDivisaRoutes from "./routes/reportes-cambios-divisa.js";
 import reportesServiciosExternosRoutes from "./routes/reportes-servicios-externos.js";
 import reportesServientregaGuiasRoutes from "./routes/reportes-servientrega-guias.js";
+import reportesAsignacionesTransferenciasRoutes from "./routes/reportes-asignaciones-transferencias.js";
 import adminDashboardRoutes from "./routes/admin-dashboard.js";
 
 const app = express();
@@ -389,6 +390,7 @@ app.use("/api/reportes/asignaciones", reportesAsignacionesRoutes);
 app.use("/api/reportes/cambios-divisa-historico", reportesCambiosDivisaRoutes);
 app.use("/api/reportes/servicios-externos-historico", reportesServiciosExternosRoutes);
 app.use("/api/reportes/servientrega-guias-historico", reportesServientregaGuiasRoutes);
+app.use("/api/reportes/asignaciones-transferencias-historico", reportesAsignacionesTransferenciasRoutes);
 app.use("/api/admin", adminDashboardRoutes);
 
 // ------- Frontend estático (serve SPA build) -------

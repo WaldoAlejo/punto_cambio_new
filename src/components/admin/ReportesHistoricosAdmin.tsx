@@ -91,6 +91,16 @@ const ReportesHistoricosAdmin: React.FC = () => {
       icon: <FileSpreadsheet className="h-8 w-8 text-purple-600" />,
       color: "bg-purple-50 border-purple-200",
     },
+    {
+      key: "asignaciones-transferencias",
+      title: "Asignaciones y Transferencias",
+      description:
+        "Todo el historial de asignaciones de saldo (inicial y recarga por punto/divisa/operador) y transferencias entre puntos con trazabilidad completa (solicitud, aprobación, envío, aceptación, rechazo).",
+      url: "/reportes/asignaciones-transferencias-historico",
+      filename: `reporte_asignaciones_transferencias_historico_${today}.xlsx`,
+      icon: <FileSpreadsheet className="h-8 w-8 text-amber-600" />,
+      color: "bg-amber-50 border-amber-200",
+    },
   ];
 
   return (
