@@ -38,18 +38,44 @@ router.get(
       // ─────────────────────────────────────────────────────────────────────
       const guias = await prisma.servientregaGuia.findMany({
         orderBy: { created_at: "asc" },
-        include: {
-          puntoAtencion: { select: { id: true, nombre: true, ciudad: true } },
-          usuario: { select: { id: true, nombre: true, username: true } },
-          remitente: { select: { id: true, nombre: true, cedula: true, direccion: true, telefono: true } },
-          destinatario: { select: { id: true, nombre: true, cedula: true, direccion: true, ciudad: true, provincia: true, pais: true, telefono: true } },
-        } as any,
       });
+
+      // ─────────────────────────────────────────────────────────────────────
+      // 2. Cargar datos relacionales por IDs (evita problemas con include)
+      // ─────────────────────────────────────────────────────────────────────
+      const puntoIds = [...new Set(guias.map((g) => g.punto_atencion_id).filter(Boolean))];
+      const usuarioIds = [...new Set(guias.map((g) => g.usuario_id).filter(Boolean))];
+      const remitenteIds = [...new Set(guias.map((g) => g.remitente_id).filter(Boolean))];
+      const destinatarioIds = [...new Set(guias.map((g) => g.destinatario_id).filter(Boolean))];
+
+      const [puntos, usuarios, remitentes, destinatarios] = await Promise.all([
+        prisma.puntoAtencion.findMany({
+          where: { id: { in: puntoIds as string[] } },
+          select: { id: true, nombre: true, ciudad: true },
+        }),
+        prisma.usuario.findMany({
+          where: { id: { in: usuarioIds as string[] } },
+          select: { id: true, nombre: true, username: true },
+        }),
+        prisma.servientregaRemitente.findMany({
+          where: { id: { in: remitenteIds as string[] } },
+          select: { id: true, nombre: true, cedula: true, direccion: true, telefono: true },
+        }),
+        prisma.servientregaDestinatario.findMany({
+          where: { id: { in: destinatarioIds as string[] } },
+          select: { id: true, nombre: true, cedula: true, direccion: true, ciudad: true, provincia: true, pais: true, telefono: true },
+        }),
+      ]);
+
+      const puntoMap = new Map(puntos.map((p) => [p.id, p]));
+      const usuarioMap = new Map(usuarios.map((u) => [u.id, u]));
+      const remitenteMap = new Map(remitentes.map((r) => [r.id, r]));
+      const destinatarioMap = new Map(destinatarios.map((d) => [d.id, d]));
 
       logger.info(`📥 Guías Servientrega cargadas: ${guias.length}`);
 
       // ─────────────────────────────────────────────────────────────────────
-      // 2. Construir Excel
+      // 3. Construir Excel
       // ─────────────────────────────────────────────────────────────────────
       const workbook = new ExcelJS.Workbook();
 
@@ -79,35 +105,40 @@ router.get(
         { header: "Saldo Descontado", key: "saldo_descontado", width: 16 },
       ];
 
-      guias.forEach((g: any) => {
+      guias.forEach((g) => {
+        const punto = g.punto_atencion_id ? puntoMap.get(g.punto_atencion_id) : null;
+        const usuario = g.usuario_id ? usuarioMap.get(g.usuario_id) : null;
+        const remitente = g.remitente_id ? remitenteMap.get(g.remitente_id) : null;
+        const destinatario = g.destinatario_id ? destinatarioMap.get(g.destinatario_id) : null;
+
         ws.addRow({
           fecha: format(new Date(g.created_at), "dd/MM/yyyy HH:mm", { locale: es }),
-          punto: g.puntoAtencion?.nombre || "N/A",
-          ciudad_punto: g.puntoAtencion?.ciudad || "N/A",
+          punto: punto?.nombre || "N/A",
+          ciudad_punto: punto?.ciudad || "N/A",
           numero_guia: g.numero_guia,
           proceso: g.proceso,
           estado: g.estado,
           valor_declarado: parseFloat(g.valor_declarado?.toString() || "0"),
           costo_envio: parseFloat(g.costo_envio?.toString() || "0"),
           agencia: g.agencia_nombre || g.agencia_codigo || "N/A",
-          operador: g.usuario?.nombre || g.usuario?.username || "N/A",
-          remitente: g.remitente?.nombre || "N/A",
-          cedula_remitente: g.remitente?.cedula || "N/A",
-          dir_remitente: g.remitente?.direccion || "N/A",
-          tel_remitente: g.remitente?.telefono || "N/A",
-          destinatario: g.destinatario?.nombre || "N/A",
-          cedula_destinatario: g.destinatario?.cedula || "N/A",
-          dir_destinatario: g.destinatario?.direccion || "N/A",
-          ciudad_destinatario: g.destinatario?.ciudad || "N/A",
-          provincia_destinatario: g.destinatario?.provincia || "N/A",
-          pais_destinatario: g.destinatario?.pais || "N/A",
-          tel_destinatario: g.destinatario?.telefono || "N/A",
+          operador: usuario?.nombre || usuario?.username || "N/A",
+          remitente: remitente?.nombre || "N/A",
+          cedula_remitente: remitente?.cedula || "N/A",
+          dir_remitente: remitente?.direccion || "N/A",
+          tel_remitente: remitente?.telefono || "N/A",
+          destinatario: destinatario?.nombre || "N/A",
+          cedula_destinatario: destinatario?.cedula || "N/A",
+          dir_destinatario: destinatario?.direccion || "N/A",
+          ciudad_destinatario: destinatario?.ciudad || "N/A",
+          provincia_destinatario: destinatario?.provincia || "N/A",
+          pais_destinatario: destinatario?.pais || "N/A",
+          tel_destinatario: destinatario?.telefono || "N/A",
           saldo_descontado: g.saldo_descontado ? "SÍ" : "NO",
         });
       });
 
       // ─────────────────────────────────────────────────────────────────────
-      // 3. Estilizar encabezados
+      // 4. Estilizar encabezados
       // ─────────────────────────────────────────────────────────────────────
       ws.getRow(1).font = { bold: true };
       ws.getRow(1).fill = {
@@ -117,7 +148,7 @@ router.get(
       };
 
       // ─────────────────────────────────────────────────────────────────────
-      // 4. Enviar respuesta
+      // 5. Enviar respuesta
       // ─────────────────────────────────────────────────────────────────────
       const fechaActual = format(new Date(), "yyyy-MM-dd");
       const fileName = `reporte_servientrega_guias_historico_${fechaActual}.xlsx`;
