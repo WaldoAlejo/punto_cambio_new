@@ -66,7 +66,7 @@ const ReportesHistoricosAdmin: React.FC = () => {
       title: "Cambios de Divisa + Asignaciones",
       description:
         "Todo el historial de cambios de divisa (moneda origen, destino, tasa, montos, punto, operador) y asignaciones de saldo desde el inicio de la aplicación.",
-      url: "/api/reportes/cambios-divisa-historico",
+      url: "/reportes/cambios-divisa-historico",
       filename: `reporte_cambios_divisa_historico_${today}.xlsx`,
       icon: <FileSpreadsheet className="h-8 w-8 text-emerald-600" />,
       color: "bg-emerald-50 border-emerald-200",
