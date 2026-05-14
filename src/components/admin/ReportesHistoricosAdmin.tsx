@@ -76,7 +76,7 @@ const ReportesHistoricosAdmin: React.FC = () => {
       title: "Servicios Externos",
       description:
         "Todo el historial de movimientos (ingresos/egresos por punto y servicio) y asignaciones de servicios externos con saldos desde el inicio de la aplicación.",
-      url: "/api/reportes/servicios-externos-historico",
+      url: "/reportes/servicios-externos-historico",
       filename: `reporte_servicios_externos_historico_${today}.xlsx`,
       icon: <FileSpreadsheet className="h-8 w-8 text-blue-600" />,
       color: "bg-blue-50 border-blue-200",
