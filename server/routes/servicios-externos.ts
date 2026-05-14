@@ -601,13 +601,21 @@ router.post(
           });
 
           if (saldoServicio) {
+            // 🛡️ FIX: Usar operaciones atómicas (increment) para evitar
+            // race conditions cuando dos operadores crean movimientos
+            // concurrentemente para el mismo servicio/punto.
+            const deltaCantidad = round2(finalNormalized.total - normalizedCurrent.total);
+            const deltaBilletes = round2(finalNormalized.billetes - normalizedCurrent.billetes);
+            const deltaMonedas = round2(finalNormalized.monedas - normalizedCurrent.monedas);
+            const deltaBancos = round2(finalNormalized.bancos - normalizedCurrent.bancos);
+
             await tx.servicioExternoSaldo.update({
               where: { id: saldoServicio.id },
               data: {
-                cantidad: finalNormalized.total,
-                billetes: finalNormalized.billetes,
-                monedas_fisicas: finalNormalized.monedas,
-                bancos: finalNormalized.bancos,
+                cantidad: { increment: deltaCantidad },
+                billetes: { increment: deltaBilletes },
+                monedas_fisicas: { increment: deltaMonedas },
+                bancos: { increment: deltaBancos },
                 updated_at: new Date(),
               },
             });
