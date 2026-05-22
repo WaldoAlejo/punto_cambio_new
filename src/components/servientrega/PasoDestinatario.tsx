@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, MapPin, CheckCircle2, User, Search, X, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Destinatario } from "@/types/servientrega";
-import { validarIdentificacion } from "@/utils/identificacion";
+import { TipoIdentificacion, validarIdentificacionPorTipo } from "@/utils/identificacion";
 import ModalRetiroOficina from "./ModalRetiroOficina";
 
 interface Pais {
@@ -143,9 +143,26 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
   const [cargandoCiudades, setCargandoCiudades] = useState(true);
   const [loading, setLoading] = useState(false);
 
+  const [tipoIdentificacion, setTipoIdentificacion] = useState<TipoIdentificacion>('cedula');
+
   const [cedulaQuery, setCedulaQuery] = useState("");
   const [cedulaResultados, setCedulaResultados] = useState<Destinatario[]>([]);
   const [buscandoCedula, setBuscandoCedula] = useState(false);
+
+  const PLACEHOLDER_POR_TIPO: Record<TipoIdentificacion, string> = {
+    cedula: "Número de cédula",
+    ruc: "Número de RUC",
+    extranjera: "Documento extranjero",
+    pasaporte: "Número de pasaporte",
+  };
+
+  const detectarTipoId = (id: string): TipoIdentificacion => {
+    const s = (id || "").trim();
+    if (!s || !/^\d+$/.test(s)) return 'pasaporte';
+    if (s.length === 10) return 'cedula';
+    if (s.length === 13) return 'ruc';
+    return 'pasaporte';
+  };
 
   const [retiroEnOficina, setRetiroEnOficina] = useState(false);
   const [modalRetiroAbierto, setModalRetiroAbierto] = useState(false);
@@ -240,16 +257,18 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     setForm({ ...form, [e.target.name]: e.target.value.trimStart() });
 
   const seleccionarDestinatario = (dest: Destinatario) => {
+    const id = dest.cedula || dest.identificacion || "";
     const ciu = clean(dest.ciudad || "");
     const prov = clean(dest.provincia || "");
     const match = ciudadesCanon.find((c) => clean(c.ciudad) === ciu && clean(c.provincia) === prov) || null;
 
     setForm({
-      identificacion: dest.cedula || dest.identificacion || "",
+      identificacion: id,
       nombre: dest.nombre || "", telefono: dest.telefono || "", email: dest.email || "",
       direccion: dest.direccion || "", ciudad: match ? match.ciudad : "", provincia: match ? match.provincia : "",
       codigo_postal: dest.codigo_postal || "", pais: dest.pais || form.pais, codpais: Number.isFinite(dest.codpais) ? dest.codpais : form.codpais,
     });
+    setTipoIdentificacion(detectarTipoId(id));
     setDireccionCompleta(dest.direccion || "");
     setCedulaResultados([]);
     setCedulaQuery("");
@@ -260,7 +279,7 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
     if (!form.identificacion || !form.nombre || !form.telefono || !form.pais) {
       toast.error("Completa todos los campos."); return;
     }
-    if (form.codpais === 63 && !validarIdentificacion(form.identificacion)) {
+    if (form.codpais === 63 && (tipoIdentificacion === 'cedula' || tipoIdentificacion === 'ruc') && !validarIdentificacionPorTipo(form.identificacion, tipoIdentificacion)) {
       toast.error("Identificación inválida."); return;
     }
     if (!retiroEnOficina && (!form.ciudad || !form.provincia)) {
@@ -332,15 +351,32 @@ export default function PasoDestinatario({ onNext }: PasoDestinatarioProps) {
           />
         </div>
 
-        {/* Identificación con búsqueda */}
+        {/* Tipo de identificación + campo con búsqueda */}
         <div className="relative">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-            <Input name="identificacion" placeholder="Cédula o Pasaporte" value={form.identificacion}
-              onChange={(e) => { const v = e.target.value.trimStart(); setForm((p) => ({ ...p, identificacion: v })); setCedulaQuery(v); }}
-              className="pl-8 h-9 text-sm" />
+          <div className="flex gap-2">
+            <select
+              value={tipoIdentificacion}
+              onChange={(e) => {
+                setTipoIdentificacion(e.target.value as TipoIdentificacion);
+                setForm(prev => ({ ...prev, identificacion: "" }));
+                setCedulaQuery("");
+                setCedulaResultados([]);
+              }}
+              className="h-9 px-2 text-xs border rounded-md bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shrink-0 cursor-pointer min-w-[130px]"
+            >
+              <option value="cedula">Cédula</option>
+              <option value="ruc">RUC</option>
+              <option value="extranjera">C. Extranjera</option>
+              <option value="pasaporte">Pasaporte</option>
+            </select>
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+              <Input name="identificacion" placeholder={PLACEHOLDER_POR_TIPO[tipoIdentificacion]} value={form.identificacion}
+                onChange={(e) => { const v = e.target.value.trimStart(); setForm((p) => ({ ...p, identificacion: v })); setCedulaQuery(v); }}
+                className="pl-8 h-9 text-sm" />
+              {buscandoCedula && <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-gray-400" />}
+            </div>
           </div>
-          {buscandoCedula && <Loader2 className="absolute right-2 top-2 h-4 w-4 animate-spin text-gray-400" />}
           {cedulaResultados.length > 0 && (
             <div className="absolute bg-white border rounded-md shadow-md w-full max-h-32 overflow-y-auto z-10 mt-1">
               {cedulaResultados.slice(0, 3).map((d, i) => (

@@ -2,6 +2,58 @@
  * Utilidades para validación de identificación ecuatoriana (Cédula y RUC)
  */
 
+export type TipoIdentificacion = 'cedula' | 'ruc' | 'extranjera' | 'pasaporte';
+
+export function validarIdentificacionPorTipo(id: string, tipo: TipoIdentificacion): boolean {
+  const cleanId = (id || "").trim();
+  if (!cleanId) return false;
+
+  if (tipo === 'extranjera' || tipo === 'pasaporte') {
+    return cleanId.length >= 4 && /^[A-Za-z0-9\-\s]{4,30}$/.test(cleanId);
+  }
+
+  if (!/^\d+$/.test(cleanId)) return false;
+
+  if (tipo === 'cedula') {
+    if (cleanId.length !== 10) return false;
+    const provincia = parseInt(cleanId.substring(0, 2), 10);
+    if (provincia < 1 || (provincia > 24 && provincia !== 30)) return false;
+    const tercerDigito = parseInt(cleanId[2], 10);
+    if (tercerDigito >= 6) return false;
+    const d10 = parseInt(cleanId[9], 10);
+    const coef = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+    let suma = 0;
+    for (let i = 0; i < 9; i++) {
+      let val = parseInt(cleanId[i], 10) * coef[i];
+      if (val >= 10) val -= 9;
+      suma += val;
+    }
+    return (10 - (suma % 10)) % 10 === d10;
+  }
+
+  if (tipo === 'ruc') {
+    if (cleanId.length !== 13) return false;
+    const provincia = parseInt(cleanId.substring(0, 2), 10);
+    if (provincia < 1 || (provincia > 24 && provincia !== 30)) return false;
+    if (parseInt(cleanId.substring(10), 10) === 0) return false;
+    const tercerDigito = parseInt(cleanId[2], 10);
+    if (tercerDigito < 6) {
+      const d10 = parseInt(cleanId[9], 10);
+      const coef = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+      let suma = 0;
+      for (let i = 0; i < 9; i++) {
+        let val = parseInt(cleanId[i], 10) * coef[i];
+        if (val >= 10) val -= 9;
+        suma += val;
+      }
+      return (10 - (suma % 10)) % 10 === d10;
+    }
+    return tercerDigito === 6 || tercerDigito === 9;
+  }
+
+  return false;
+}
+
 /**
  * Valida una identificación ecuatoriana (Cédula, RUC Persona Natural, RUC Sociedad Privada, RUC Entidad Pública)
  * También permite pasaportes (mínimo 6 caracteres alfanuméricos)
