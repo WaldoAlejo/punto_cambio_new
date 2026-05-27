@@ -290,7 +290,7 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
 router.post(
   "/",
   authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]),
   validate(scheduleSchema),
   async (req, res) => {
     try {

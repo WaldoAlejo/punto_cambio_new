@@ -236,7 +236,14 @@ const OperatorTimeManagement = ({
         </TabsList>
 
         <TabsContent value="tracker">
-          <AutoTimeTracker user={user} selectedPoint={selectedPoint} />
+          <div className="space-y-4">
+            <AutoTimeTracker user={user} selectedPoint={selectedPoint} />
+            <TimeTracker
+              user={user}
+              selectedPoint={selectedPoint}
+              spontaneousExits={spontaneousExits}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="lunch">

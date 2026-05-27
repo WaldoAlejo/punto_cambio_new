@@ -10,6 +10,8 @@ import {
   UtensilsCrossed,
   ArrowRight,
   MapPin,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -25,6 +27,13 @@ interface TimeTrackerProps {
 
 type EstadoFrontend = "NO_INICIADO" | "TRABAJANDO" | "ALMUERZO" | "FINALIZADO";
 
+interface UbicacionRegistrada {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  direccion?: string;
+}
+
 interface JornadaEstadoBackend {
   id?: string;
   fecha_inicio?: string;
@@ -32,16 +41,8 @@ interface JornadaEstadoBackend {
   fecha_regreso?: string;
   fecha_salida?: string;
   estado: string;
-  ubicacion_inicio?: {
-    lat: number;
-    lng: number;
-    direccion?: string;
-  } | null;
-  ubicacion_salida?: {
-    lat: number;
-    lng: number;
-    direccion?: string;
-  } | null;
+  ubicacion_inicio?: UbicacionRegistrada | null;
+  ubicacion_salida?: UbicacionRegistrada | null;
 }
 
 interface JornadaEstado extends Omit<JornadaEstadoBackend, "estado"> {
@@ -65,16 +66,8 @@ interface JornadaPayload {
   fecha_almuerzo?: string;
   fecha_regreso?: string;
   fecha_salida?: string;
-  ubicacion_inicio?: {
-    lat: number;
-    lng: number;
-    direccion?: string;
-  } | null;
-  ubicacion_salida?: {
-    lat: number;
-    lng: number;
-    direccion?: string;
-  } | null;
+  ubicacion_inicio?: UbicacionRegistrada | null;
+  ubicacion_salida?: UbicacionRegistrada | null;
 }
 
 function mapEstadoJornada(estado: string): EstadoFrontend {
@@ -91,6 +84,54 @@ function mapEstadoJornada(estado: string): EstadoFrontend {
   }
 }
 
+/** Reverse geocoding via OpenStreetMap Nominatim */
+async function obtenerDireccion(lat: number, lng: number): Promise<string> {
+  try {
+    const resp = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+      { headers: { "Accept-Language": "es" } }
+    );
+    if (resp.ok) {
+      const data = await resp.json() as { display_name?: string };
+      if (data.display_name) return data.display_name;
+    }
+  } catch {
+    // fallback a coordenadas
+  }
+  return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+}
+
+/** Tarjeta que muestra la ubicación registrada */
+const UbicacionCard = ({ ubicacion, titulo }: { ubicacion: UbicacionRegistrada; titulo: string }) => {
+  const mapsUrl = `https://www.google.com/maps?q=${ubicacion.lat},${ubicacion.lng}`;
+  return (
+    <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1">
+      <div className="flex items-center gap-2">
+        <MapPin className="h-4 w-4 text-green-600 flex-shrink-0" />
+        <span className="text-sm font-semibold text-green-800">{titulo}</span>
+        <a
+          href={mapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto text-green-600 hover:text-green-800"
+          title="Ver en Google Maps"
+        >
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      </div>
+      {ubicacion.direccion && (
+        <p className="text-xs text-green-700 leading-tight pl-6">{ubicacion.direccion}</p>
+      )}
+      <p className="text-xs text-gray-500 pl-6 font-mono">
+        {ubicacion.lat.toFixed(6)}, {ubicacion.lng.toFixed(6)}
+        {ubicacion.accuracy != null && (
+          <span className="ml-2 text-gray-400">± {Math.round(ubicacion.accuracy)} m</span>
+        )}
+      </p>
+    </div>
+  );
+};
+
 const TimeTracker = ({
   user,
   selectedPoint,
@@ -102,6 +143,7 @@ const TimeTracker = ({
   });
   const [tiempoActual, setTiempoActual] = useState(new Date());
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -130,31 +172,42 @@ const TimeTracker = ({
     cargarJornadaActual();
   }, [user.id, selectedPoint?.id]);
 
-  const getLocation = (): Promise<{
-    lat: number;
-    lng: number;
-    direccion?: string;
-  }> => {
+  /**
+   * Obtiene la ubicación del dispositivo. OBLIGATORIA para timbrar.
+   * Incluye reverse geocoding para obtener dirección legible.
+   */
+  const getLocation = (): Promise<UbicacionRegistrada> => {
     return new Promise((resolve, reject) => {
       if (!("geolocation" in navigator)) {
-        reject(new Error("Geolocalización no soportada"));
+        reject(new Error("Geolocalización no disponible en este dispositivo"));
         return;
       }
       setIsGettingLocation(true);
+      setLocationError(null);
+
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           setIsGettingLocation(false);
-          resolve({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            direccion: "Ubicación de trabajo",
-          });
+          const { latitude, longitude, accuracy } = position.coords;
+          const direccion = await obtenerDireccion(latitude, longitude);
+          resolve({ lat: latitude, lng: longitude, accuracy, direccion });
         },
-        () => {
+        (err) => {
           setIsGettingLocation(false);
-          reject(new Error("Error al obtener ubicación"));
+          let msg: string;
+          if (err.code === 1) {
+            msg =
+              "Debes permitir el acceso a tu ubicación para timbrar. Activa la geolocalización en la configuración de tu navegador o dispositivo.";
+          } else if (err.code === 2) {
+            msg =
+              "No se pudo obtener tu ubicación. Asegúrate de tener señal GPS o conexión a internet.";
+          } else {
+            msg = "Tiempo de espera agotado al obtener la ubicación. Intenta de nuevo.";
+          }
+          setLocationError(msg);
+          reject(new Error(msg));
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     });
   };
@@ -183,32 +236,34 @@ const TimeTracker = ({
   };
 
   const iniciarJornada = async () => {
+    // Geolocalización OBLIGATORIA como evidencia de presencia
+    let ubicacion: UbicacionRegistrada;
     try {
-      let ubicacion: { lat: number; lng: number; direccion?: string } | null;
-      try {
-        ubicacion = await getLocation();
-      } catch {
-        ubicacion = null;
-      }
-      const ahora = new Date().toISOString();
+      ubicacion = await getLocation();
+    } catch (geoError) {
+      const msg =
+        geoError instanceof Error
+          ? geoError.message
+          : "No se pudo obtener la ubicación";
+      toast.error(msg);
+      return;
+    }
 
-      // No enviar ubicacion_inicio cuando sea null para pasar validación Zod
+    try {
+      const ahora = new Date().toISOString();
       const payload: JornadaPayload = {
         usuario_id: user.id,
         punto_atencion_id: selectedPoint?.id,
         fecha_inicio: ahora,
-        ...(ubicacion ? { ubicacion_inicio: ubicacion } : {}),
+        ubicacion_inicio: ubicacion,
       };
 
       await guardarJornadaBackend(payload);
-
       toast.success(
-        `✅ Jornada iniciada a las ${formatearHora(ahora)}${
-          ubicacion ? " con ubicación" : ""
-        }`
+        `Jornada iniciada a las ${formatearHora(ahora)} — ${ubicacion.direccion ?? "ubicación registrada"}`
       );
     } catch {
-      // El error ya fue manejado en guardarJornadaBackend
+      // Manejado en guardarJornadaBackend
     }
   };
 
@@ -221,9 +276,9 @@ const TimeTracker = ({
         punto_atencion_id: selectedPoint?.id,
         fecha_almuerzo: ahora,
       });
-      toast.success(`🍽️ Salida a almuerzo a las ${formatearHora(ahora)}`);
+      toast.success(`Salida a almuerzo a las ${formatearHora(ahora)}`);
     } catch {
-      // Error manejado en guardarJornadaBackend
+      // Manejado arriba
     }
   };
 
@@ -236,16 +291,15 @@ const TimeTracker = ({
         punto_atencion_id: selectedPoint?.id,
         fecha_regreso: ahora,
       });
-      toast.success(`🔄 Regreso de almuerzo a las ${formatearHora(ahora)}`);
+      toast.success(`Regreso de almuerzo a las ${formatearHora(ahora)}`);
     } catch {
-      // Error manejado en guardarJornadaBackend
+      // Manejado arriba
     }
   };
 
   const handleFinalizarJornada = async () => {
     if (jornadaActual.estado !== "TRABAJANDO") return;
 
-    // Intentar finalizar la jornada - el backend decidirá si necesita cierre
     try {
       const ahora = new Date().toISOString();
       await guardarJornadaBackend({
@@ -253,7 +307,7 @@ const TimeTracker = ({
         punto_atencion_id: selectedPoint?.id,
         fecha_salida: ahora,
       });
-      toast.success(`✅ Jornada finalizada a las ${formatearHora(ahora)}`);
+      toast.success(`Jornada finalizada a las ${formatearHora(ahora)}`);
     } catch (error: unknown) {
       const message =
         error instanceof Error
@@ -263,7 +317,6 @@ const TimeTracker = ({
             ? String((error as Record<string, unknown>).message)
             : ""
           : "";
-      // Si el backend requiere cierre, redirigir al cierre diario
       if (
         message.includes("cierre de caja diario") ||
         message.includes("cierre diario")
@@ -284,7 +337,6 @@ const TimeTracker = ({
           }
         );
       }
-      // Error manejado en guardarJornadaBackend para otros casos
     }
   };
 
@@ -408,12 +460,31 @@ const TimeTracker = ({
                 {calcularTiempoSalidasEspontaneas()}
               </span>
             </div>
+
+            {/* Ubicación de inicio */}
             {jornadaActual.ubicacion_inicio && (
-              <div className="flex gap-2 text-sm text-gray-600">
-                <MapPin className="h-4 w-4" />
-                <span>Ubicación registrada</span>
-              </div>
+              <UbicacionCard
+                ubicacion={jornadaActual.ubicacion_inicio as UbicacionRegistrada}
+                titulo="Ubicación al ingresar"
+              />
             )}
+
+            {/* Ubicación de salida */}
+            {jornadaActual.ubicacion_salida && (
+              <UbicacionCard
+                ubicacion={jornadaActual.ubicacion_salida as UbicacionRegistrada}
+                titulo="Ubicación al salir"
+              />
+            )}
+
+            {/* Aviso si no hay ubicación registrada (jornada activa sin geo) */}
+            {jornadaActual.estado === "TRABAJANDO" &&
+              !jornadaActual.ubicacion_inicio && (
+                <div className="flex items-start gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>Sin ubicación registrada en el ingreso.</span>
+                </div>
+              )}
           </CardContent>
         </Card>
 
@@ -422,6 +493,24 @@ const TimeTracker = ({
             <CardTitle>Acciones</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Aviso de geolocalización obligatoria */}
+            {jornadaActual.estado === "NO_INICIADO" && (
+              <div className="flex items-start gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded p-2">
+                <MapPin className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span>
+                  Se requiere tu ubicación para registrar el ingreso. Asegúrate de tener activada la geolocalización.
+                </span>
+              </div>
+            )}
+
+            {/* Error de geolocalización */}
+            {locationError && (
+              <div className="flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                <span>{locationError}</span>
+              </div>
+            )}
+
             <Button
               onClick={iniciarJornada}
               disabled={
