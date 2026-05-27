@@ -417,10 +417,8 @@ const TimeTracker = ({
           "Para finalizar su jornada debe realizar primero el cierre de caja diario.",
           async () => {
             try {
-              const url = new URL(window.location.href);
-              url.searchParams.set("view", "daily-close");
-              window.history.pushState({}, "", url.toString());
-              window.dispatchEvent(new Event("popstate"));
+              localStorage.setItem("pc_active_view", "daily-close");
+              window.dispatchEvent(new CustomEvent("pc:navigate", { detail: { view: "daily-close" } }));
             } catch { /* no-op */ }
             toast.info("Vaya a Cierre Diario para finalizar su jornada.");
           }

@@ -5,7 +5,7 @@ import React, {
   useCallback,
   Suspense,
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import { Unauthorized } from "../ui/unauthorized";
@@ -168,10 +168,8 @@ const VALID_VIEWS = new Set<string>([
 
 function getInitialView(
   user: User,
-  selectedPoint: PuntoAtencion | null,
-  viewParam?: string | null
+  selectedPoint: PuntoAtencion | null
 ): string {
-  if (viewParam && VALID_VIEWS.has(viewParam)) return viewParam;
   const saved = localStorage.getItem(STORAGE_KEY_VIEW);
   if (saved && VALID_VIEWS.has(saved)) return saved;
 
@@ -193,72 +191,47 @@ interface DashboardProps {
 
 const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-
   const requiresPoint = useMemo(
     () => user.rol === "OPERADOR" || user.rol === "ADMINISTRATIVO",
     [user.rol]
   );
 
-  /** Estado principal sincronizado con ?view */
   const [activeView, setActiveView] = useState<string>(() =>
-    getInitialView(user, selectedPoint, searchParams.get("view"))
+    getInitialView(user, selectedPoint)
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [openingStatus, setOpeningStatus] = useState<AperturaEstadoActual | null>(null);
   const [checkingOpeningStatus, setCheckingOpeningStatus] = useState(false);
 
-  /** Helpers para query params */
-  const setQueryParam = useCallback(
-    (key: string, value?: string | null) => {
-      const params = new URLSearchParams(searchParams);
-      if (value === undefined || value === null || value === "")
-        params.delete(key);
-      else params.set(key, value);
-      setSearchParams(params);
-    },
-    [searchParams, setSearchParams]
-  );
-
-  /** VIEW -> URL y localStorage */
+  /** VIEW -> localStorage (URL siempre limpia) */
   useEffect(() => {
     if (!activeView || !VALID_VIEWS.has(activeView)) return;
     localStorage.setItem(STORAGE_KEY_VIEW, activeView);
-    if (searchParams.get("view") !== activeView)
-      setQueryParam("view", activeView);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeView]);
 
-  /** Back/forward: URL -> VIEW (only when URL changes) */
+  /** Sync de selectedPoint -> localStorage (URL siempre limpia) */
   useEffect(() => {
-    const qp = searchParams.get("view");
-    if (qp && VALID_VIEWS.has(qp)) {
-      setActiveView((prev) => (prev !== qp ? qp : prev));
-    }
-  }, [searchParams]);
-
-  /** Sync de selectedPoint -> URL & localStorage (sin reload) */
-  useEffect(() => {
-    const urlPoint = searchParams.get("point");
     const selectedId = selectedPoint?.id || null;
-
     if (selectedId) localStorage.setItem(STORAGE_KEY_POINT, selectedId);
     else localStorage.removeItem(STORAGE_KEY_POINT);
+  }, [selectedPoint]);
 
-    if ((selectedId || "") !== (urlPoint || ""))
-      setQueryParam("point", selectedId || null);
-  }, [selectedPoint, searchParams, setQueryParam]);
-
-  /** Llegó ?point=... diferente: guarda en LS y, si hace falta punto, ve al selector */
+  /** Limpieza única: eliminar ?view= y ?point= que quedaron de versión anterior */
   useEffect(() => {
-    const urlPoint = searchParams.get("point");
-    const selectedId = selectedPoint?.id || null;
-    if (urlPoint && urlPoint !== selectedId) {
-      localStorage.setItem(STORAGE_KEY_POINT, urlPoint);
-      if (requiresPoint && !selectedPoint)
-        navigate("/seleccionar-punto", { replace: false });
+    if (window.location.search) {
+      window.history.replaceState(null, "", window.location.pathname);
     }
-  }, [searchParams, selectedPoint, navigate, requiresPoint]);
+  }, []);
+
+  /** Escuchar navegación programática desde otros componentes (ej. TimeTracker) */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const view = (e as CustomEvent<{ view: string }>).detail?.view;
+      if (view && VALID_VIEWS.has(view)) setActiveView(view);
+    };
+    window.addEventListener("pc:navigate", handler);
+    return () => window.removeEventListener("pc:navigate", handler);
+  }, []);
 
   /** Si operador/administrativo no tiene punto, forzar selector */
   useEffect(() => {
@@ -595,16 +568,12 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
             return (
               <BalanceDashboard user={user} selectedPoint={selectedPoint} />
             );
-          const urlPoint = searchParams.get("point") || undefined;
           return (
             <PointSelector
               user={user}
-              defaultSelectedPointId={urlPoint}
+              defaultSelectedPointId={localStorage.getItem(STORAGE_KEY_POINT) || undefined}
               onPointSelected={(point) => {
-                // Persistir y reflejar en URL
                 localStorage.setItem(STORAGE_KEY_POINT, point.id);
-                setQueryParam("point", point.id);
-                // Emitir evento para que el provider global haga el setSelectedPoint
                 emitPointSelected(point);
               }}
             />
@@ -748,8 +717,6 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
     isConcesion,
     user,
     selectedPoint,
-    searchParams,
-    setQueryParam,
     handleViewChange,
   ]);
 
