@@ -216,8 +216,8 @@ app.use(
       "http://35.185.49.39:3001",
       "http://35.185.49.39:8080",
       "http://35.185.49.39",
-      "https://puntocambio.duckdns.org", // dominio gratuito DuckDNS con HTTPS
-      "http://puntocambio.duckdns.org",
+      "https://puntocambio.ddns.net", // dominio No-IP con HTTPS
+      "http://puntocambio.ddns.net",
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
