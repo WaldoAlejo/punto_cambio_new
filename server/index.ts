@@ -231,6 +231,8 @@ app.use(
       "Accept",
       "X-Client-Time",
       "x-client-time",
+      "Idempotency-Key",
+      "idempotency-key",
     ],
     exposedHeaders: [
       "Content-Length",
