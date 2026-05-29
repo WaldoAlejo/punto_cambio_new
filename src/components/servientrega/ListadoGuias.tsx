@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import axiosInstance from "@/services/axiosInstance";
-import { format, isToday, parseISO, subDays } from "date-fns";
+import { format, parseISO, subDays } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -347,31 +347,30 @@ export default function ListadoGuias() {
                                 {loadingPdfId === guia.id ? "Cargando..." : "PDF"}
                               </Button>
 
-                              {guia.estado === "ACTIVA" &&
-                                isToday(parseISO(guia.created_at || "")) && (
-                                  <>
-                                    {user?.rol === "ADMIN" ||
-                                    user?.rol === "SUPER_USUARIO" ? (
-                                      <Button
-                                        onClick={() => handleAnularDirecto(guia)}
-                                        variant="destructive"
-                                        size="sm"
-                                        className="h-7 px-2 text-xs"
-                                      >
-                                        Anular
-                                      </Button>
-                                    ) : (
-                                      <Button
-                                        onClick={() => handleSolicitarAnulacion(guia)}
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-7 px-2 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
-                                      >
-                                        Solicitar
-                                      </Button>
-                                    )}
-                                  </>
-                                )}
+                              {guia.estado === "ACTIVA" && (
+                                <>
+                                  {user?.rol === "ADMIN" ||
+                                  user?.rol === "SUPER_USUARIO" ? (
+                                    <Button
+                                      onClick={() => handleAnularDirecto(guia)}
+                                      variant="destructive"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs"
+                                    >
+                                      Anular
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      onClick={() => handleSolicitarAnulacion(guia)}
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 px-2 text-xs border-orange-300 text-orange-700 hover:bg-orange-50"
+                                    >
+                                      Solicitar
+                                    </Button>
+                                  )}
+                                </>
+                              )}
 
                               {guia.estado === "PENDIENTE_ANULACION" && (
                                 <span className="text-xs text-yellow-600 font-medium">
@@ -384,13 +383,6 @@ export default function ListadoGuias() {
                                   Anulada
                                 </span>
                               )}
-
-                              {guia.estado === "ACTIVA" &&
-                                !isToday(parseISO(guia.created_at || "")) && (
-                                  <span className="text-xs text-gray-500">
-                                    Cerrada
-                                  </span>
-                                )}
 
                               <Button
                                 variant="ghost"
