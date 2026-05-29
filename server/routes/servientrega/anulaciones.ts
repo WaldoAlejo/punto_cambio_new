@@ -191,165 +191,127 @@ router.put(
       const estado =
         String(accion).toUpperCase() === "APROBAR" ? "APROBADA" : "RECHAZADA";
 
-      // 🔒 FLUJO ATÓMICO: Primero validar y anular en API externa, LUEGO actualizar todo en una transacción
-      if (estado === "APROBADA") {
-        try {
-          // 1. Obtener la solicitud actual para tener el numero_guia
-          const solicitudActual = await dbService.obtenerSolicitudAnulacion(id);
-          if (!solicitudActual) {
-            return res.status(404).json({
-              success: false,
-              error: "Solicitud no encontrada",
-            });
-          }
+      // 1. Obtener la solicitud y la guía en ambos casos
+      const solicitudActual = await dbService.obtenerSolicitudAnulacion(id);
+      if (!solicitudActual) {
+        return res.status(404).json({ success: false, error: "Solicitud no encontrada" });
+      }
 
-          // 2. Obtener datos de la guía (costo_envio, punto_atencion_id)
-          const guia = await prisma.servientregaGuia.findUnique({
-            where: { numero_guia: solicitudActual.numero_guia },
-            select: {
-              id: true,
-              costo_envio: true,
-              punto_atencion_id: true,
-              numero_guia: true,
-            },
+      const guia = await prisma.servientregaGuia.findUnique({
+        where: { numero_guia: solicitudActual.numero_guia },
+        select: { id: true, costo_envio: true, punto_atencion_id: true, numero_guia: true },
+      });
+
+      if (!guia) {
+        return res.status(404).json({
+          success: false,
+          error: "Guía no encontrada",
+          message: `No se encontró la guía ${solicitudActual.numero_guia} en el sistema`,
+        });
+      }
+
+      /** Revierte la guía a ACTIVA y marca la solicitud como RECHAZADA (atómico) */
+      const rechazarConReversion = async (motivo: string) => {
+        await prisma.$transaction(async (tx) => {
+          await tx.servientregaGuia.updateMany({
+            where: { numero_guia: guia.numero_guia },
+            data: { estado: "ACTIVA", updated_at: new Date() },
           });
-
-          if (!guia) {
-            return res.status(404).json({
-              success: false,
-              error: "Guía no encontrada",
-              message: `No se encontró la guía ${solicitudActual.numero_guia} en el sistema`,
-            });
-          }
-
-          if (!guia.punto_atencion_id) {
-            return res.status(400).json({
-              success: false,
-              error: "Punto de atención no asignado",
-              message: `La guía ${guia.numero_guia} no tiene punto de atención asignado`,
-            });
-          }
-
-          // 3. ✅ PRIMERO intentar anular en Servientrega API (CRÍTICO — fuera de tx, irreversible)
-          console.log("🔄 Intentando anular guía en Servientrega API...", {
-            numero_guia: guia.numero_guia,
-            solicitud_id: id,
-          });
-
-          await procesarAnulacionServientrega(guia.numero_guia);
-
-          console.log("✅ Anulación exitosa en Servientrega API");
-
-          // 🔍 Buscar el movimiento original ANTES de la transacción (lectura libre)
-          let movimientoOriginal = null;
-          if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
-            movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
-              where: {
-                numero_referencia: guia.numero_guia,
-                servicio: "SERVIENTREGA",
-                tipo_movimiento: "INGRESO",
-              },
-              orderBy: { fecha: "desc" },
-            });
-          }
-
-          const billetes = movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : 0;
-          const monedas = movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : 0;
-          const bancos = movimientoOriginal?.bancos ? Number(movimientoOriginal.bancos) : 0;
-
-          // 4. 🔒 TRANSACCIÓN ATÓMICA: anular guía + revertir ingreso + actualizar solicitud
-          const puntoAtencionId = guia.punto_atencion_id!;
-
-          const { resultadoReversal, solicitudActualizada } = await prisma.$transaction(async (tx) => {
-            // Anular guía en BD
-            await dbService.anularGuia(guia.numero_guia, tx);
-
-            let resultadoReversal = null;
-
-            // Revertir saldos (si aplica)
-            if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
-              resultadoReversal = await dbService.revertirIngresoServicioExterno(
-                puntoAtencionId,
-                Number(guia.costo_envio),
-                guia.numero_guia,
-                billetes,
-                monedas,
-                bancos,
-                tx
-              );
-            }
-
-            // Actualizar solicitud como APROBADA
-            const solicitudActualizada = await dbService.actualizarSolicitudAnulacion(
-              id,
-              {
-                estado: "APROBADA",
-                respondido_por: usuario?.id || "SYSTEM",
-                respondido_por_nombre: usuario?.nombre || "Sistema",
-                observaciones_respuesta: observaciones || "",
-                fecha_respuesta: new Date(),
-              },
-              tx
-            );
-
-            return { resultadoReversal, solicitudActualizada };
-          }, { maxWait: 10000, timeout: 15000 });
-
-          if (resultadoReversal) {
-            console.log(
-              "✅ Ingreso de servicio externo revertido exitosamente:",
-              {
-                numero_guia: guia.numero_guia,
-                monto: Number(guia.costo_envio),
-                billetes,
-                monedas,
-                bancos,
-                saldoServicioAnterior: resultadoReversal.saldoServicio.anterior,
-                saldoServicioNuevo: resultadoReversal.saldoServicio.nuevo,
-                saldoGeneralAnterior: resultadoReversal.saldoGeneral.anterior,
-                saldoGeneralNuevo: resultadoReversal.saldoGeneral.nuevo,
-              }
-            );
-          }
-
-          return res.json({
-            success: true,
-            message: `Solicitud aprobada y guía anulada exitosamente en Servientrega`,
-            data: solicitudActualizada,
-          });
-        } catch (apiError) {
-          // ❌ Si falla la API de Servientrega, NO aprobar la solicitud
-          console.error(
-            "❌ Error en API Servientrega al anular guía:",
-            apiError
-          );
-
-          return res.status(500).json({
-            success: false,
-            error: "Error en API Servientrega",
-            message:
-              "No se pudo anular la guía en Servientrega. La solicitud permanece PENDIENTE.",
-            detalles:
-              apiError instanceof Error ? apiError.message : String(apiError),
-          });
-        }
-      } else {
-        // Si es rechazo, simplemente actualizar
-        const solicitudActualizada =
           await dbService.actualizarSolicitudAnulacion(id, {
             estado: "RECHAZADA",
             respondido_por: usuario?.id || "SYSTEM",
             respondido_por_nombre: usuario?.nombre || "Sistema",
-            observaciones_respuesta: observaciones || "",
-            fecha_respuesta: new Date(), // UTC - la UI muestra en zona horaria local
-          });
+            observaciones_respuesta: motivo,
+            fecha_respuesta: new Date(),
+          }, tx);
+        });
+      };
 
-        return res.json({
-          success: true,
-          message: `Solicitud rechazada exitosamente`,
-          data: solicitudActualizada,
+      if (estado === "RECHAZADA") {
+        // Admin decidió rechazar: revertir guía a ACTIVA y marcar solicitud RECHAZADA
+        await rechazarConReversion(observaciones || "Solicitud rechazada por el administrador");
+        const solicitudActualizada = await dbService.obtenerSolicitudAnulacion(id);
+        return res.json({ success: true, message: "Solicitud rechazada y guía restaurada a ACTIVA", data: solicitudActualizada });
+      }
+
+      // APROBAR: validar punto_atencion_id antes de llamar a la API
+      if (!guia.punto_atencion_id) {
+        return res.status(400).json({
+          success: false,
+          error: "Punto de atención no asignado",
+          message: `La guía ${guia.numero_guia} no tiene punto de atención asignado`,
         });
       }
+
+      // 2. ✅ PRIMERO llamar a Servientrega API — si rechaza, revertir todo sin tocar saldos
+      console.log("🔄 Intentando anular guía en Servientrega API...", { numero_guia: guia.numero_guia, solicitud_id: id });
+
+      try {
+        await procesarAnulacionServientrega(guia.numero_guia);
+      } catch (apiError) {
+        console.error("❌ Servientrega rechazó la anulación:", apiError);
+        const motivoRechazo = `Rechazada automáticamente — Servientrega no autorizó la anulación: ${apiError instanceof Error ? apiError.message : String(apiError)}`;
+        await rechazarConReversion(motivoRechazo);
+        return res.status(422).json({
+          success: false,
+          error: "Servientrega rechazó la anulación",
+          message: "La guía ha sido restaurada al estado ACTIVA. Servientrega no autorizó la anulación.",
+          detalles: apiError instanceof Error ? apiError.message : String(apiError),
+        });
+      }
+
+      console.log("✅ Anulación exitosa en Servientrega API");
+
+      // 3. Buscar desglose del movimiento original (fuera de la tx, lectura libre)
+      let movimientoOriginal = null;
+      if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
+        movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
+          where: { numero_referencia: guia.numero_guia, servicio: "SERVIENTREGA", tipo_movimiento: "INGRESO" },
+          orderBy: { fecha: "desc" },
+        });
+      }
+
+      const billetes = movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : 0;
+      const monedas = movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : 0;
+      const bancos = movimientoOriginal?.bancos ? Number(movimientoOriginal.bancos) : 0;
+      const puntoAtencionId = guia.punto_atencion_id!;
+
+      // 4. 🔒 TRANSACCIÓN ATÓMICA: anular guía + revertir saldo + aprobar solicitud
+      const { resultadoReversal, solicitudActualizada } = await prisma.$transaction(async (tx) => {
+        await dbService.anularGuia(guia.numero_guia, tx);
+
+        let resultadoReversal = null;
+        if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
+          resultadoReversal = await dbService.revertirIngresoServicioExterno(
+            puntoAtencionId, Number(guia.costo_envio), guia.numero_guia, billetes, monedas, bancos, tx
+          );
+        }
+
+        const solicitudActualizada = await dbService.actualizarSolicitudAnulacion(id, {
+          estado: "APROBADA",
+          respondido_por: usuario?.id || "SYSTEM",
+          respondido_por_nombre: usuario?.nombre || "Sistema",
+          observaciones_respuesta: observaciones || "",
+          fecha_respuesta: new Date(),
+        }, tx);
+
+        return { resultadoReversal, solicitudActualizada };
+      }, { maxWait: 10000, timeout: 15000 });
+
+      if (resultadoReversal) {
+        console.log("✅ Saldo revertido:", {
+          numero_guia: guia.numero_guia,
+          monto: Number(guia.costo_envio),
+          saldoServicio: `${resultadoReversal.saldoServicio.anterior} → ${resultadoReversal.saldoServicio.nuevo}`,
+          saldoGeneral: `${resultadoReversal.saldoGeneral.anterior} → ${resultadoReversal.saldoGeneral.nuevo}`,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Solicitud aprobada y guía anulada exitosamente en Servientrega",
+        data: solicitudActualizada,
+      });
     } catch (error) {
       console.error("❌ Error al responder solicitud:", error);
       return sendError(res, 500, error);
@@ -416,118 +378,125 @@ router.post(
       const estado =
         String(accion).toUpperCase() === "APROBAR" ? "APROBADA" : "RECHAZADA";
 
-      const solicitudActualizada = await dbService.actualizarSolicitudAnulacion(
-        solicitud_id,
-        {
-          estado,
+      // 1. Obtener la solicitud y la guía
+      const solicitudActual = await dbService.obtenerSolicitudAnulacion(solicitud_id);
+      if (!solicitudActual) {
+        return res.status(404).json({ success: false, error: "Solicitud no encontrada" });
+      }
+
+      const guia = await prisma.servientregaGuia.findUnique({
+        where: { numero_guia: solicitudActual.numero_guia },
+        select: { id: true, costo_envio: true, punto_atencion_id: true, numero_guia: true },
+      });
+
+      if (!guia) {
+        return res.status(404).json({
+          success: false,
+          error: "Guía no encontrada",
+          message: `No se encontró la guía ${solicitudActual.numero_guia}`,
+        });
+      }
+
+      /** Revierte la guía a ACTIVA y marca la solicitud como RECHAZADA (atómico) */
+      const rechazarConReversion = async (motivo: string) => {
+        await prisma.$transaction(async (tx) => {
+          await tx.servientregaGuia.updateMany({
+            where: { numero_guia: guia.numero_guia },
+            data: { estado: "ACTIVA", updated_at: new Date() },
+          });
+          await dbService.actualizarSolicitudAnulacion(solicitud_id, {
+            estado: "RECHAZADA",
+            respondido_por: usuario?.id || "SYSTEM",
+            respondido_por_nombre: usuario?.nombre || "Sistema",
+            observaciones_respuesta: motivo,
+            fecha_respuesta: new Date(),
+          }, tx);
+        });
+      };
+
+      if (estado === "RECHAZADA") {
+        await rechazarConReversion(comentario || "Solicitud rechazada por el administrador");
+        const solicitudActualizada = await dbService.obtenerSolicitudAnulacion(solicitud_id);
+        return res.json({ success: true, message: "Solicitud rechazada y guía restaurada a ACTIVA", data: solicitudActualizada });
+      }
+
+      // APROBAR: validar punto_atencion_id
+      if (!guia.punto_atencion_id) {
+        return res.status(400).json({
+          success: false,
+          error: "Punto de atención no asignado",
+          message: `La guía ${guia.numero_guia} no tiene punto de atención asignado`,
+        });
+      }
+
+      // 2. ✅ PRIMERO llamar a Servientrega API
+      console.log("🔄 Intentando anular guía en Servientrega API...", { numero_guia: guia.numero_guia });
+
+      try {
+        await procesarAnulacionServientrega(guia.numero_guia);
+      } catch (apiError) {
+        console.error("❌ Servientrega rechazó la anulación:", apiError);
+        const motivo = `Rechazada automáticamente — Servientrega no autorizó la anulación: ${apiError instanceof Error ? apiError.message : String(apiError)}`;
+        await rechazarConReversion(motivo);
+        return res.status(422).json({
+          success: false,
+          error: "Servientrega rechazó la anulación",
+          message: "La guía ha sido restaurada al estado ACTIVA. Servientrega no autorizó la anulación.",
+          detalles: apiError instanceof Error ? apiError.message : String(apiError),
+        });
+      }
+
+      console.log("✅ Anulación exitosa en Servientrega API");
+
+      // 3. Buscar desglose original (lectura libre antes de la tx)
+      let movimientoOriginal = null;
+      if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
+        movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
+          where: { numero_referencia: guia.numero_guia, servicio: "SERVIENTREGA", tipo_movimiento: "INGRESO" },
+          orderBy: { fecha: "desc" },
+          select: { billetes: true, monedas_fisicas: true, bancos: true },
+        });
+      }
+
+      const billetes = movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : 0;
+      const monedas = movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : 0;
+      const bancos = movimientoOriginal?.bancos ? Number(movimientoOriginal.bancos) : 0;
+      const puntoAtencionId = guia.punto_atencion_id!;
+
+      // 4. 🔒 TRANSACCIÓN ATÓMICA: anular guía + revertir saldo + aprobar solicitud
+      const { resultadoReversal, solicitudActualizada } = await prisma.$transaction(async (tx) => {
+        await dbService.anularGuia(guia.numero_guia, tx);
+
+        let resultadoReversal = null;
+        if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
+          resultadoReversal = await dbService.revertirIngresoServicioExterno(
+            puntoAtencionId, Number(guia.costo_envio), guia.numero_guia, billetes, monedas, bancos, tx
+          );
+        }
+
+        const solicitudActualizada = await dbService.actualizarSolicitudAnulacion(solicitud_id, {
+          estado: "APROBADA",
           respondido_por: usuario?.id || "SYSTEM",
           respondido_por_nombre: usuario?.nombre || "Sistema",
           observaciones_respuesta: comentario || "",
-          fecha_respuesta: new Date(), // UTC - la UI muestra en zona horaria local
-        }
-      );
+          fecha_respuesta: new Date(),
+        }, tx);
 
-      if (estado === "APROBADA") {
-        try {
-          // 1. Obtener datos de la guía (costo_envio, punto_atencion_id)
-          const guia = await prisma.servientregaGuia.findUnique({
-            where: { numero_guia: solicitudActualizada.numero_guia },
-            select: {
-              id: true,
-              costo_envio: true,
-              punto_atencion_id: true,
-            },
-          });
+        return { resultadoReversal, solicitudActualizada };
+      }, { maxWait: 10000, timeout: 15000 });
 
-          if (!guia) {
-            throw new Error(
-              `Guía no encontrada: ${solicitudActualizada.numero_guia}`
-            );
-          }
-
-          if (!guia.punto_atencion_id) {
-            throw new Error(
-              `La guía no tiene punto_atencion_id asignado: ${solicitudActualizada.numero_guia}`
-            );
-          }
-
-          // 2. Procesar anulación en Servientrega API
-          await procesarAnulacionServientrega(solicitudActualizada.numero_guia);
-          await dbService.anularGuia(solicitudActualizada.numero_guia);
-
-          // 3. Revertir los balances (restar del Saldo USD general, sumar al ServientregaSaldo)
-          if (guia.costo_envio && guia.costo_envio.toNumber() > 0) {
-            console.log(
-              "💰 Revirtiendo ingreso de servicio externo por anulación de guía..."
-            );
-            try {
-              // Obtener el movimiento original para recuperar billetes, monedas y bancos
-              const movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
-                where: {
-                  numero_referencia: solicitudActualizada.numero_guia,
-                  servicio: "SERVIENTREGA",
-                  tipo_movimiento: "INGRESO",
-                },
-                select: {
-                  billetes: true,
-                  monedas_fisicas: true,
-                  bancos: true,
-                },
-              });
-
-              const resultadoReversal =
-                await dbService.revertirIngresoServicioExterno(
-                  guia.punto_atencion_id,
-                  Number(guia.costo_envio),
-                  solicitudActualizada.numero_guia,
-                  movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : undefined,
-                  movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : undefined,
-                  movimientoOriginal?.bancos ? Number(movimientoOriginal.bancos) : undefined
-                );
-
-              console.log(
-                "✅ Ingreso de servicio externo revertido exitosamente:",
-                {
-                  numero_guia: solicitudActualizada.numero_guia,
-                  monto: Number(guia.costo_envio),
-                  saldoServicioAnterior:
-                    resultadoReversal.saldoServicio.anterior,
-                  saldoServicioNuevo: resultadoReversal.saldoServicio.nuevo,
-                  saldoGeneralAnterior: resultadoReversal.saldoGeneral.anterior,
-                  saldoGeneralNuevo: resultadoReversal.saldoGeneral.nuevo,
-                }
-              );
-            } catch (reversalError) {
-              console.error(
-                "⚠️ Error al revertir ingreso de servicio externo:",
-                reversalError
-              );
-              // Registrar el error pero no fallar completamente
-              await dbService.actualizarSolicitudAnulacion(solicitud_id, {
-                observaciones_respuesta: `${
-                  comentario || ""
-                }\n\n⚠️ Aviso: Anulación exitosa en Servientrega, pero hubo un error al revertir los movimientos de balance: ${
-                  reversalError instanceof Error
-                    ? reversalError.message
-                    : String(reversalError)
-                }`,
-              });
-            }
-          }
-        } catch (apiError) {
-          await dbService.actualizarSolicitudAnulacion(solicitud_id, {
-            observaciones_respuesta: `${
-              comentario || ""
-            }\n\nError en API Servientrega: ${
-              apiError instanceof Error ? apiError.message : String(apiError)
-            }`,
-          });
-        }
+      if (resultadoReversal) {
+        console.log("✅ Saldo revertido:", {
+          numero_guia: guia.numero_guia,
+          monto: Number(guia.costo_envio),
+          saldoServicio: `${resultadoReversal.saldoServicio.anterior} → ${resultadoReversal.saldoServicio.nuevo}`,
+          saldoGeneral: `${resultadoReversal.saldoGeneral.anterior} → ${resultadoReversal.saldoGeneral.nuevo}`,
+        });
       }
 
       return res.json({
         success: true,
-        message: `Solicitud ${estado.toLowerCase()} exitosamente`,
+        message: "Solicitud aprobada y guía anulada exitosamente en Servientrega",
         data: solicitudActualizada,
       });
     } catch (error) {
