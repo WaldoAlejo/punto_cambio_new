@@ -99,6 +99,11 @@ export interface Guia {
   // Ciudad destino
   ciudad_destino?: string;
   provincia_destino?: string;
+  // Remitente
+  remitente_nombre?: string;
+  remitente_cedula?: string;
+  remitente_telefono?: string;
+  remitente_direccion?: string;
   // Destinatario
   destinatario_nombre?: string;
   destinatario_telefono?: string;

@@ -727,6 +727,7 @@ export const ServientregaInformes = ({
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Guía</th>
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Fecha</th>
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Punto</th>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Remitente</th>
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Destinatario</th>
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Destino</th>
                         <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Valor Cobrado</th>
@@ -753,6 +754,12 @@ export const ServientregaInformes = ({
                               </td>
                               <td className="px-3 py-2 whitespace-nowrap text-gray-700">
                                 {guia.punto_atencion_nombre || "N/A"}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                                <div>{guia.remitente_nombre || "N/A"}</div>
+                                {guia.remitente_cedula && guia.remitente_cedula !== "N/A" && (
+                                  <div className="text-xs text-gray-500">{guia.remitente_cedula}</div>
+                                )}
                               </td>
                               <td className="px-3 py-2 whitespace-nowrap text-gray-700">
                                 {guia.destinatario_nombre || "N/A"}
@@ -797,8 +804,20 @@ export const ServientregaInformes = ({
                             </tr>
                             {isExpanded && (
                               <tr className="bg-gray-50/50">
-                                <td colSpan={8} className="px-3 py-3">
+                                <td colSpan={9} className="px-3 py-3">
                                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-sm text-gray-700">
+                                    <p>
+                                      <span className="font-medium text-gray-900">Remitente:</span>{" "}
+                                      {guia.remitente_nombre || "N/A"}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium text-gray-900">Cédula remitente:</span>{" "}
+                                      {guia.remitente_cedula || "N/A"}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium text-gray-900">Teléfono remitente:</span>{" "}
+                                      {guia.remitente_telefono || "N/A"}
+                                    </p>
                                     <p>
                                       <span className="font-medium text-gray-900">Usuario:</span>{" "}
                                       {guia.usuario_nombre || "N/A"}

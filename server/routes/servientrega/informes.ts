@@ -170,6 +170,11 @@ router.get(
         // Ciudad de destino (del destinatario)
         ciudad_destino: guia.destinatario?.ciudad || "N/A",
         provincia_destino: guia.destinatario?.provincia || "N/A",
+        // Remitente
+        remitente_nombre: guia.remitente?.nombre || "N/A",
+        remitente_cedula: guia.remitente?.cedula || "N/A",
+        remitente_telefono: guia.remitente?.telefono || "N/A",
+        remitente_direccion: guia.remitente?.direccion || "N/A",
         // Destinatario
         destinatario_nombre: guia.destinatario?.nombre || "N/A",
         destinatario_telefono: guia.destinatario?.telefono || "N/A",
@@ -330,6 +335,9 @@ router.get(
         { header: "Agencia Nombre", key: "agencia_nombre", width: 25 },
         { header: "Ciudad Origen", key: "ciudad_origen", width: 20 },
         { header: "Provincia Origen", key: "provincia_origen", width: 20 },
+        { header: "Remitente", key: "remitente_nombre", width: 30 },
+        { header: "Cédula Remitente", key: "remitente_cedula", width: 15 },
+        { header: "Teléfono Remitente", key: "remitente_telefono", width: 18 },
         { header: "Ciudad Destino", key: "ciudad_destino", width: 20 },
         { header: "Provincia Destino", key: "provincia_destino", width: 20 },
         { header: "Destinatario", key: "destinatario_nombre", width: 30 },
@@ -358,6 +366,9 @@ router.get(
           agencia_nombre: guia.agencia_nombre || guia.punto_atencion?.servientrega_agencia_nombre || "N/A",
           ciudad_origen: guia.punto_atencion?.ciudad || "N/A",
           provincia_origen: guia.punto_atencion?.provincia || "N/A",
+          remitente_nombre: guia.remitente?.nombre || "N/A",
+          remitente_cedula: guia.remitente?.cedula || "N/A",
+          remitente_telefono: guia.remitente?.telefono || "N/A",
           ciudad_destino: guia.destinatario?.ciudad || "N/A",
           provincia_destino: guia.destinatario?.provincia || "N/A",
           destinatario_nombre: guia.destinatario?.nombre || "N/A",
