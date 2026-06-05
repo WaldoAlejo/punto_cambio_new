@@ -159,7 +159,7 @@ export class ServientregaDBService {
     });
   }
 
-  async guardarRemitente(data: RemitenteData) {
+  async guardarRemitente(data: RemitenteData, tx?: Prisma.TransactionClient) {
     const sanitizedData = this.sanitizeRemitenteData(data);
     const cedula = sanitizedData.cedula;
     const nombre = sanitizedData.nombre;
@@ -169,7 +169,8 @@ export class ServientregaDBService {
       throw new Error("Cedula, nombre y direccion son requeridos para guardar remitente");
     }
 
-    const resultado = await prisma.servientregaRemitente.upsert({
+    const client = tx || prisma;
+    const resultado = await client.servientregaRemitente.upsert({
       where: { 
         cedula_nombre_direccion: { cedula, nombre, direccion }
       },
@@ -263,7 +264,7 @@ export class ServientregaDBService {
     });
   }
 
-  async guardarDestinatario(data: DestinatarioData) {
+  async guardarDestinatario(data: DestinatarioData, tx?: Prisma.TransactionClient) {
     const sanitizedData = this.sanitizeDestinatarioData(data);
     const cedula = sanitizedData.cedula;
     const nombre = sanitizedData.nombre;
@@ -273,7 +274,8 @@ export class ServientregaDBService {
       throw new Error("Cedula, nombre y direccion son requeridos para guardar destinatario");
     }
 
-    const resultado = await prisma.servientregaDestinatario.upsert({
+    const client = tx || prisma;
+    const resultado = await client.servientregaDestinatario.upsert({
       where: { 
         cedula_nombre_direccion: { cedula, nombre, direccion }
       },
@@ -606,11 +608,23 @@ export class ServientregaDBService {
         throw new Error("No hay saldo asignado para Servientrega en este punto de atención");
       }
 
-      const saldoAnterior = Number(saldoServicio.cantidad || 0);
-      const saldoBancos = Number(saldoServicio.bancos || 0);
+      // 🔒 BLOQUEAR FILA con SELECT FOR UPDATE para evitar race conditions
+      // entre requests paralelos que descuentan del mismo saldo
+      await transaction.$queryRawUnsafe(
+        `SELECT id FROM "ServicioExternoSaldo" WHERE id = $1 FOR UPDATE`,
+        saldoServicio.id
+      );
+
+      // Releer datos frescos ahora que la fila está bloqueada
+      const saldoServicioFresh = await transaction.servicioExternoSaldo.findUnique({
+        where: { id: saldoServicio.id },
+      });
+
+      const saldoAnterior = Number(saldoServicioFresh?.cantidad || 0);
+      const saldoBancos = Number(saldoServicioFresh?.bancos || 0);
       const saldoEfectivo = Math.max(0, saldoAnterior - saldoBancos);
-      let billetesActuales = Number(saldoServicio.billetes || 0);
-      let monedasActuales = Number(saldoServicio.monedas_fisicas || 0);
+      let billetesActuales = Number(saldoServicioFresh?.billetes || 0);
+      let monedasActuales = Number(saldoServicioFresh?.monedas_fisicas || 0);
 
       // Si el desglose físico quedó desincronizado, usar todo el efectivo como billetes.
       if (Math.abs(billetesActuales + monedasActuales - saldoEfectivo) > 0.01) {

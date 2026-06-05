@@ -1051,7 +1051,9 @@ router.post("/generar-guia",
           destinatarioCedula: destinatario?.cedula,
         });
 
-        // Guardar remitente y capturar su ID
+        // Guardar remitente y capturar su ID (fuera de la tx principal por seguridad)
+        // Nota: si la tx principal falla, el remitente puede quedar huérfano,
+        // pero es preferible a que un error de remitente aborte la generación de guía
         if (remitente?.cedula && remitente?.nombre) {
           try {
             logger.debug("Guardando remitente", { remitenteCedula: remitente.cedula });
@@ -1338,33 +1340,44 @@ router.post("/anular-guia",
           },
         });
 
-        // Anular la guía en BD
-        await dbService.anularGuia(guia);
+        // Buscar desglose del movimiento original para reversión exacta
+        let movimientoOriginal = null;
+        if (guiaInfo?.costo_envio && guiaInfo.costo_envio.toNumber() > 0) {
+          movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
+            where: {
+              numero_referencia: guia,
+              servicio: "SERVIENTREGA",
+              tipo_movimiento: "INGRESO",
+            },
+            orderBy: { fecha: "desc" },
+          });
+        }
 
-        // Devolver saldo si la guía se anula el mismo día y tiene punto de atención
-        if (guiaInfo?.punto_atencion_id && guiaInfo?.costo_envio) {
-          const hoy = new Date();
-          const fechaGuia = new Date(guiaInfo.created_at);
+        const billetes = movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : (guiaInfo?.costo_envio ? Number(guiaInfo.costo_envio) : 0);
+        const monedas = movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : 0;
+        const bancos = movimientoOriginal?.bancos ? Number(movimientoOriginal.bancos) : 0;
 
-          // Verificar si es el mismo día (comparar año, mes y día)
-          const esMismoDia =
-            hoy.getFullYear() === fechaGuia.getFullYear() &&
-            hoy.getMonth() === fechaGuia.getMonth() &&
-            hoy.getDate() === fechaGuia.getDate();
+        // 🔒 TRANSACCIÓN ATÓMICA: anular guía + revertir saldo + revertir caja
+        await prisma.$transaction(async (tx) => {
+          await dbService.anularGuia(guia, tx);
 
-          if (esMismoDia) {
-            await dbService.devolverSaldo(
+          if (guiaInfo?.punto_atencion_id && guiaInfo?.costo_envio) {
+            await dbService.revertirIngresoServicioExterno(
               guiaInfo.punto_atencion_id,
-              Number(guiaInfo.costo_envio)
+              Number(guiaInfo.costo_envio),
+              guia,
+              billetes,
+              monedas,
+              bancos,
+              tx
             );
-            logger.info("Saldo devuelto", {
+            logger.info("Saldo y caja revertidos por anulación", {
               monto: guiaInfo.costo_envio,
               puntoId: guiaInfo.punto_atencion_id,
+              guia,
             });
-          } else {
-            logger.warn("La guía no se anula el mismo día, no se devuelve saldo");
           }
-        }
+        });
       } catch (dbError) {
         logger.error("Error al actualizar guía en BD", { error: dbError });
       }
