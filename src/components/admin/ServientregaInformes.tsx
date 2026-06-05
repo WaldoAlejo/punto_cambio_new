@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { format, parseISO, subDays } from "date-fns";
 import { todayGyeDateOnly } from "@/utils/timezone";
-import { Download, Eye, FileText, BarChart3, RefreshCw, Wallet, History, CreditCard, ChevronDown, ChevronUp } from "lucide-react";
+import { Download, Eye, FileText, BarChart3, RefreshCw, Wallet, History, CreditCard, ChevronDown, ChevronUp, TrendingDown } from "lucide-react";
 import { Loading } from "@/components/ui/loading";
 import { Guia } from "@/types/servientrega";
 import axiosInstance from "@/services/axiosInstance";
@@ -133,7 +133,7 @@ export const ServientregaInformes = ({
     v === "PENDIENTE_ANULACION";
 
   const hoy = new Date(todayGyeDateOnly() + "T00:00:00");
-  const [activeTab, setActiveTab] = useState<"guias" | "saldos">("guias");
+  const [activeTab, setActiveTab] = useState<"guias" | "saldos" | "saldo-detalle">("guias");
   
   // Estado para informe de guías
   const [guias, setGuias] = useState<Guia[]>([]);
@@ -156,6 +156,10 @@ export const ServientregaInformes = ({
   // Estado para informe de saldos
   const [saldosData, setSaldosData] = useState<SaldosRecargasData | null>(null);
   const [loadingSaldos, setLoadingSaldos] = useState(false);
+
+  // Estado para informe de saldo detalle
+  const [saldoDetalleData, setSaldoDetalleData] = useState<any>(null);
+  const [loadingSaldoDetalle, setLoadingSaldoDetalle] = useState(false);
 
   const desdeRef = useRef(desde);
   const hastaRef = useRef(hasta);
@@ -385,6 +389,77 @@ export const ServientregaInformes = ({
     }
   };
 
+  // Fetch saldo detalle
+  const fetchSaldoDetalle = useCallback(async () => {
+    setLoadingSaldoDetalle(true);
+    try {
+      const response = await axiosInstance.get(
+        "/servientrega/informes/saldo-detalle",
+        {
+          params: {
+            desde: desdeRef.current,
+            hasta: hastaRef.current,
+            punto_atencion_id:
+              filtroPuntoRef.current === "TODOS"
+                ? undefined
+                : filtroPuntoRef.current,
+          },
+        }
+      );
+      if (response.data?.data) {
+        setSaldoDetalleData(response.data.data);
+      }
+    } catch (err: unknown) {
+      console.error("Error al cargar saldo detalle:", err);
+      toast.error("No se pudieron cargar los datos de saldo detalle");
+    } finally {
+      setLoadingSaldoDetalle(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "saldo-detalle") {
+      fetchSaldoDetalle();
+    }
+  }, [activeTab, fetchSaldoDetalle]);
+
+  const handleExportarSaldoDetalleExcel = async () => {
+    try {
+      const response = await axiosInstance.get(
+        "/servientrega/informes/exportar-saldo-detalle",
+        {
+          params: {
+            desde: desdeRef.current,
+            hasta: hastaRef.current,
+            punto_atencion_id:
+              filtroPuntoRef.current === "TODOS"
+                ? undefined
+                : filtroPuntoRef.current,
+          },
+          responseType: "blob",
+        }
+      );
+
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const fechaActual = format(new Date(), "yyyy-MM-dd");
+      link.download = `informe_saldo_detalle_servientrega_${fechaActual}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("✅ Informe de saldo detalle exportado exitosamente");
+    } catch (err: unknown) {
+      console.error("Error al exportar saldo detalle:", err);
+      toast.error("Error al exportar el informe de saldo detalle");
+    }
+  };
+
   const abrirPDF = (base64: string) => {
     try {
       const pdfURL = `data:application/pdf;base64,${base64}`;
@@ -550,10 +625,18 @@ export const ServientregaInformes = ({
             <Wallet className="w-4 h-4 mr-2" />
             Saldos y Recargas
           </Button>
+          <Button
+            variant={activeTab === "saldo-detalle" ? "default" : "outline"}
+            onClick={() => setActiveTab("saldo-detalle")}
+            className={activeTab === "saldo-detalle" ? "bg-blue-600" : ""}
+          >
+            <TrendingDown className="w-4 h-4 mr-2" />
+            Detalle de Saldos
+          </Button>
         </div>
       </div>
 
-      {activeTab === "guias" ? (
+      {activeTab === "guias" && (
         <>
           {/* Estadísticas generales */}
           {estadisticas && (
@@ -932,7 +1015,8 @@ export const ServientregaInformes = ({
               </Card>
             )}
         </>
-      ) : (
+      )}
+      {activeTab === "saldos" && (
         /* Tab de Saldos y Recargas */
         <>
           {/* Botón exportar */}
@@ -1242,6 +1326,204 @@ export const ServientregaInformes = ({
               <Button onClick={fetchSaldosRecargas} variant="outline">
                 Reintentar
               </Button>
+            </div>
+          )}
+        </>
+      )}
+      {activeTab === "saldo-detalle" && (
+        <>
+          {/* Filtros y exportar */}
+          <div className="flex flex-wrap gap-3 mb-4 items-end">
+            <div className="flex-1 min-w-[140px]">
+              <Label className="text-xs">Desde</Label>
+              <Input
+                type="date"
+                value={desde}
+                onChange={(e) => setDesde(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="flex-1 min-w-[140px]">
+              <Label className="text-xs">Hasta</Label>
+              <Input
+                type="date"
+                value={hasta}
+                onChange={(e) => setHasta(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="flex-1 min-w-[180px]">
+              <Label className="text-xs">Punto de Atención</Label>
+              <select
+                value={filtroPunto}
+                onChange={(e) => setFiltroPunto(e.target.value)}
+                className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+              >
+                <option value="TODOS">Todos los puntos</option>
+                {puntosFiltro.map((punto) => (
+                  <option key={punto.id} value={punto.id}>
+                    {punto.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={fetchSaldoDetalle} className="h-8 text-sm">
+                Buscar
+              </Button>
+              <Button
+                onClick={handleExportarSaldoDetalleExcel}
+                className="h-8 text-sm bg-green-600 hover:bg-green-700"
+                disabled={loadingSaldoDetalle}
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Excel
+              </Button>
+            </div>
+          </div>
+
+          {loadingSaldoDetalle ? (
+            <Loading text="Cargando saldo detalle..." className="py-8" />
+          ) : saldoDetalleData?.grupos?.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              No se encontraron guías en el período seleccionado.
+            </p>
+          ) : (
+            <div className="space-y-6">
+              {/* Resumen */}
+              {saldoDetalleData?.resumen && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Total Guías</p>
+                          <p className="text-2xl font-bold">{saldoDetalleData.resumen.total_guias}</p>
+                        </div>
+                        <FileText className="h-8 w-8 text-blue-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Total Costo</p>
+                          <p className="text-2xl font-bold text-red-600">
+                            ${saldoDetalleData.resumen.total_costo.toLocaleString()}
+                          </p>
+                        </div>
+                        <CreditCard className="h-8 w-8 text-red-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-gray-600">Operadores</p>
+                          <p className="text-2xl font-bold text-green-600">
+                            {saldoDetalleData.resumen.total_operadores}
+                          </p>
+                        </div>
+                        <BarChart3 className="h-8 w-8 text-green-600" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {/* Tablas agrupadas por usuario */}
+              {saldoDetalleData?.grupos?.map((grupo: any) => (
+                <Card key={grupo.usuario_id}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center justify-between">
+                      <span>
+                        {grupo.usuario_nombre}{" "}
+                        <span className="text-sm text-gray-500">
+                          ({grupo.cantidad_guias} guías)
+                        </span>
+                      </span>
+                      <span className="text-sm font-normal text-gray-600">
+                        {grupo.punto_nombre}
+                      </span>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {/* Fila de subtotales */}
+                    <div className="grid grid-cols-4 gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <p className="text-xs text-gray-500">Saldo Actual Punto</p>
+                        <p className="text-lg font-bold text-blue-700">
+                          ${grupo.saldo_actual_punto.toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Total Costo Guías</p>
+                        <p className="text-lg font-bold text-red-700">
+                          ${grupo.total_costo_guias.toLocaleString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Último Saldo Nuevo</p>
+                        <p className="text-lg font-bold text-green-700">
+                          {grupo.ultimo_saldo_nuevo !== null
+                            ? `$${grupo.ultimo_saldo_nuevo.toLocaleString()}`
+                            : "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Guías</p>
+                        <p className="text-lg font-bold">{grupo.cantidad_guias}</p>
+                      </div>
+                    </div>
+
+                    {/* Tabla de guías */}
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm border rounded-lg overflow-hidden">
+                        <thead className="bg-gray-50 text-gray-700">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Fecha</th>
+                            <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Guía</th>
+                            <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Costo Guía</th>
+                            <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Estado Anterior</th>
+                            <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Estado Nuevo</th>
+                            <th className="px-3 py-2 text-center font-medium whitespace-nowrap">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {grupo.guias.map((guia: any) => (
+                            <tr key={guia.id} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                                {guia.fecha}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
+                                {guia.numero_guia}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-red-700">
+                                ${guia.costo_envio.toLocaleString()}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-right text-gray-700">
+                                {guia.saldo_anterior !== null
+                                  ? `$${guia.saldo_anterior.toLocaleString()}`
+                                  : "N/A"}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-right text-gray-700">
+                                {guia.saldo_nuevo !== null
+                                  ? `$${guia.saldo_nuevo.toLocaleString()}`
+                                  : "N/A"}
+                              </td>
+                              <td className="px-3 py-2 whitespace-nowrap text-center">
+                                {getEstadoBadge(guia.estado)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </>

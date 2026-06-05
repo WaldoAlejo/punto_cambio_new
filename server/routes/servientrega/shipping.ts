@@ -1186,6 +1186,17 @@ router.post("/generar-guia",
               );
             }
 
+            // 2b️⃣ Guardar saldo anterior/nuevo en la guía para el informe
+            if (guiaGuardadaTx?.id && descuentoResult) {
+              await tx.servientregaGuia.update({
+                where: { id: guiaGuardadaTx.id },
+                data: {
+                  saldo_anterior: descuentoResult.saldoAnterior,
+                  saldo_nuevo: descuentoResult.nuevoSaldo,
+                },
+              });
+            }
+
             // 3️⃣ Registrar ingreso en caja general (solo si se descontó saldo)
             let ingresoResult = null;
             if (descuentoResult && punto_atencion_id_captado && valorTotalGuia > 0) {

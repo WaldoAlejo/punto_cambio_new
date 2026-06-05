@@ -6,6 +6,7 @@ import ExcelJS from "exceljs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Prisma, ServicioExterno } from "@prisma/client";
+import { gyeDayRangeUtcFromDateOnly } from "../../utils/timezone.js";
 
 const router = express.Router();
 const dbService = new ServientregaDBService();
@@ -840,6 +841,372 @@ router.get(
       res.end();
     } catch (error) {
       console.error("❌ Error al exportar informe de saldos:", error);
+      res.status(500).json({
+        error: "Error interno del servidor",
+        message: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+);
+
+// GET /api/servientrega/informes/saldo-detalle
+// Informe detallado de saldos por guía, agrupado por usuario
+router.get(
+  "/informes/saldo-detalle",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO", "OPERADOR", "CONCESION"]),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { desde, hasta, punto_atencion_id, usuario_id } = req.query;
+      const rol = req.user?.rol;
+
+      console.log("📊 Obteniendo informe de saldo detalle:", {
+        desde,
+        hasta,
+        punto_atencion_id,
+        usuario_id,
+        rol,
+      });
+
+      // Construir where base
+      const where: Prisma.ServientregaGuiaWhereInput = {};
+
+      // Filtro de fechas
+      if (desde || hasta) {
+        const createdAt: Prisma.DateTimeFilter = {};
+        if (desde) {
+          const { gte: desdeDate } = gyeDayRangeUtcFromDateOnly(desde as string);
+          createdAt.gte = desdeDate;
+        }
+        if (hasta) {
+          const { lt: hastaDate } = gyeDayRangeUtcFromDateOnly(hasta as string);
+          createdAt.lte = hastaDate;
+        }
+        where.created_at = createdAt;
+      }
+
+      // Filtro por punto
+      if (punto_atencion_id && punto_atencion_id !== "TODOS") {
+        where.punto_atencion_id = punto_atencion_id as string;
+      }
+
+      // Filtro por usuario
+      if (usuario_id && usuario_id !== "TODOS") {
+        where.usuario_id = usuario_id as string;
+      }
+
+      // Restricción por rol
+      if (rol === "OPERADOR" || rol === "CONCESION") {
+        where.punto_atencion_id = req.user?.punto_atencion_id || "__NO_ACCESS__";
+      }
+
+      // Obtener guías con sus relaciones
+      const guias = await prisma.servientregaGuia.findMany({
+        where,
+        select: {
+          id: true,
+          numero_guia: true,
+          created_at: true,
+          costo_envio: true,
+          saldo_anterior: true,
+          saldo_nuevo: true,
+          estado: true,
+          usuario: {
+            select: {
+              id: true,
+              nombre: true,
+              username: true,
+            },
+          },
+          punto_atencion: {
+            select: {
+              id: true,
+              nombre: true,
+            },
+          },
+        },
+        orderBy: [{ usuario_id: "asc" }, { created_at: "asc" }],
+      });
+
+      // Obtener saldos actuales de ServicioExternoSaldo por punto
+      const usdId = await ensureUsdMonedaId();
+      const saldosActuales = await prisma.servicioExternoSaldo.findMany({
+        where: {
+          servicio: ServicioExterno.SERVIENTREGA,
+          moneda_id: usdId,
+        },
+        select: {
+          punto_atencion_id: true,
+          cantidad: true,
+        },
+      });
+      const saldoPorPunto = new Map(
+        saldosActuales.map((s) => [
+          s.punto_atencion_id,
+          parseFloat(s.cantidad.toString()),
+        ])
+      );
+
+      // Agrupar por usuario
+      const gruposMap = new Map<
+        string,
+        {
+          usuario_id: string;
+          usuario_nombre: string;
+          punto_id: string;
+          punto_nombre: string;
+          guias: Array<{
+            id: string;
+            fecha: string;
+            numero_guia: string;
+            costo_envio: number;
+            saldo_anterior: number | null;
+            saldo_nuevo: number | null;
+            estado: string;
+          }>;
+        }
+      >();
+
+      for (const guia of guias) {
+        const uid = guia.usuario?.id || "SIN_USUARIO";
+        const nombre = guia.usuario?.nombre || guia.usuario?.username || "Sin usuario";
+        const pid = guia.punto_atencion?.id || "SIN_PUNTO";
+        const pnombre = guia.punto_atencion?.nombre || "Sin punto";
+
+        if (!gruposMap.has(uid)) {
+          gruposMap.set(uid, {
+            usuario_id: uid,
+            usuario_nombre: nombre,
+            punto_id: pid,
+            punto_nombre: pnombre,
+            guias: [],
+          });
+        }
+
+        const grupo = gruposMap.get(uid)!;
+        grupo.guias.push({
+          id: guia.id,
+          fecha: format(new Date(guia.created_at), "dd/MM/yyyy HH:mm", { locale: es }),
+          numero_guia: guia.numero_guia,
+          costo_envio: parseFloat(guia.costo_envio?.toString() || "0"),
+          saldo_anterior: guia.saldo_anterior ? parseFloat(guia.saldo_anterior.toString()) : null,
+          saldo_nuevo: guia.saldo_nuevo ? parseFloat(guia.saldo_nuevo.toString()) : null,
+          estado: guia.estado,
+        });
+      }
+
+      const grupos = Array.from(gruposMap.values()).map((g) => {
+        const cantidad = g.guias.length;
+        const totalCosto = g.guias.reduce((sum, gui) => sum + gui.costo_envio, 0);
+        const saldoActualPunto = saldoPorPunto.get(g.punto_id) || 0;
+        const ultimoSaldoNuevo =
+          g.guias.length > 0 ? g.guias[g.guias.length - 1].saldo_nuevo : null;
+
+        return {
+          ...g,
+          cantidad_guias: cantidad,
+          total_costo_guias: totalCosto,
+          saldo_actual_punto: saldoActualPunto,
+          ultimo_saldo_nuevo: ultimoSaldoNuevo,
+        };
+      });
+
+      // Resumen global
+      const totalGuias = guias.length;
+      const totalCostoGlobal = grupos.reduce((s, g) => s + g.total_costo_guias, 0);
+
+      res.json({
+        success: true,
+        data: {
+          grupos,
+          resumen: {
+            total_guias: totalGuias,
+            total_costo: totalCostoGlobal,
+            total_operadores: grupos.length,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("❌ Error al obtener informe de saldo detalle:", error);
+      res.status(500).json({
+        error: "Error interno del servidor",
+        message: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+);
+
+// GET /api/servientrega/informes/exportar-saldo-detalle
+// Exportar informe detallado de saldos a Excel
+router.get(
+  "/informes/exportar-saldo-detalle",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO", "OPERADOR", "CONCESION"]),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { desde, hasta, punto_atencion_id, usuario_id } = req.query;
+      const rol = req.user?.rol;
+
+      // Construir where base (misma lógica que saldo-detalle)
+      const where: Prisma.ServientregaGuiaWhereInput = {};
+      if (desde || hasta) {
+        const createdAt: Prisma.DateTimeFilter = {};
+        if (desde) {
+          const { gte: desdeDate } = gyeDayRangeUtcFromDateOnly(desde as string);
+          createdAt.gte = desdeDate;
+        }
+        if (hasta) {
+          const { lt: hastaDate } = gyeDayRangeUtcFromDateOnly(hasta as string);
+          createdAt.lte = hastaDate;
+        }
+        where.created_at = createdAt;
+      }
+      if (punto_atencion_id && punto_atencion_id !== "TODOS") {
+        where.punto_atencion_id = punto_atencion_id as string;
+      }
+      if (usuario_id && usuario_id !== "TODOS") {
+        where.usuario_id = usuario_id as string;
+      }
+      if (rol === "OPERADOR" || rol === "CONCESION") {
+        where.punto_atencion_id = req.user?.punto_atencion_id || "__NO_ACCESS__";
+      }
+
+      const guias = await prisma.servientregaGuia.findMany({
+        where,
+        select: {
+          id: true,
+          numero_guia: true,
+          created_at: true,
+          costo_envio: true,
+          saldo_anterior: true,
+          saldo_nuevo: true,
+          estado: true,
+          usuario: { select: { id: true, nombre: true, username: true } },
+          punto_atencion: { select: { id: true, nombre: true } },
+        },
+        orderBy: [{ usuario_id: "asc" }, { created_at: "asc" }],
+      });
+
+      // Crear Excel
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Saldo Detalle Servientrega");
+
+      // Columnas
+      worksheet.columns = [
+        { header: "Fecha", key: "fecha", width: 20 },
+        { header: "Usuario", key: "usuario", width: 28 },
+        { header: "Guía", key: "guia", width: 18 },
+        { header: "Saldo Actual", key: "saldo_actual", width: 16 },
+        { header: "Costo Guía", key: "costo", width: 14 },
+        { header: "Estado Anterior", key: "estado_anterior", width: 16 },
+        { header: "Estado Nuevo", key: "estado_nuevo", width: 16 },
+        { header: "Punto de Atención", key: "punto", width: 25 },
+        { header: "Estado Guía", key: "estado_guia", width: 14 },
+      ];
+
+      // Agrupar por usuario para insertar filas de subtotal
+      const grupos = new Map<string, typeof guias>();
+      for (const g of guias) {
+        const uid = g.usuario?.id || "SIN_USUARIO";
+        if (!grupos.has(uid)) grupos.set(uid, []);
+        grupos.get(uid)!.push(g);
+      }
+
+      let rowIndex = 2; // después del header
+
+      for (const [, grupoGuias] of grupos) {
+        const usuarioNombre =
+          grupoGuias[0]?.usuario?.nombre ||
+          grupoGuias[0]?.usuario?.username ||
+          "Sin usuario";
+        const puntoNombre = grupoGuias[0]?.punto_atencion?.nombre || "Sin punto";
+
+        // Calcular subtotales del grupo
+        const totalCosto = grupoGuias.reduce(
+          (s, g) => s + parseFloat(g.costo_envio?.toString() || "0"),
+          0
+        );
+        const ultimoSaldoNuevo =
+          grupoGuias[grupoGuias.length - 1]?.saldo_nuevo;
+        const saldoSubtotal = ultimoSaldoNuevo
+          ? parseFloat(ultimoSaldoNuevo.toString())
+          : null;
+
+        // Fila de encabezado de grupo
+        const grupoRow = worksheet.addRow({
+          fecha: "",
+          usuario: `${usuarioNombre} (${grupoGuias.length})`,
+          guia: "",
+          saldo_actual: saldoSubtotal ?? 0,
+          costo: totalCosto,
+          estado_anterior: null,
+          estado_nuevo: null,
+          punto: puntoNombre,
+          estado_guia: "",
+        });
+        grupoRow.font = { bold: true };
+        grupoRow.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFE0E0E0" },
+        };
+        rowIndex++;
+
+        // Filas de detalle
+        for (const guia of grupoGuias) {
+          worksheet.addRow({
+            fecha: format(new Date(guia.created_at), "dd/MM/yyyy HH:mm", { locale: es }),
+            usuario: usuarioNombre,
+            guia: guia.numero_guia,
+            saldo_actual: parseFloat(guia.saldo_nuevo?.toString() || "0"),
+            costo: parseFloat(guia.costo_envio?.toString() || "0"),
+            estado_anterior: guia.saldo_anterior
+              ? parseFloat(guia.saldo_anterior.toString())
+              : null,
+            estado_nuevo: guia.saldo_nuevo
+              ? parseFloat(guia.saldo_nuevo.toString())
+              : null,
+            punto: puntoNombre,
+            estado_guia: guia.estado,
+          });
+          rowIndex++;
+        }
+
+        // Fila en blanco entre grupos
+        worksheet.addRow({});
+        rowIndex++;
+      }
+
+      // Estilizar encabezado
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE6E6FA" },
+      };
+
+      // Formato numérico para columnas de saldo
+      for (let i = 2; i <= rowIndex; i++) {
+        const row = worksheet.getRow(i);
+        [4, 5, 6, 7].forEach((col) => {
+          const cell = row.getCell(col);
+          if (typeof cell.value === "number") {
+            cell.numFmt = '#,##0.00';
+          }
+        });
+      }
+
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      const fileName = `informe_saldo_detalle_servientrega_${desde || "todo"}_${hasta || "todo"}.xlsx`;
+      res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
+
+      await workbook.xlsx.write(res);
+      res.end();
+    } catch (error) {
+      console.error("❌ Error al exportar saldo detalle:", error);
       res.status(500).json({
         error: "Error interno del servidor",
         message: error instanceof Error ? error.message : "Error desconocido",
