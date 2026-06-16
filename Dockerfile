@@ -1,5 +1,5 @@
 # Etapa 1: Build
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 # Instalar openssl y cliente de PostgreSQL (necesario para prisma)
 RUN apk add --no-cache openssl postgresql-client
@@ -13,13 +13,14 @@ COPY tsconfig*.json ./
 COPY . .
 
 # Instalar todas las dependencias (incluye dev)
+RUN chown -R node:node /app
 RUN npm install
 
 # Compilar TypeScript
 RUN npm run build
 
 # Etapa 2: Producción
-FROM node:18-alpine
+FROM node:20-alpine
 
 RUN apk add --no-cache openssl postgresql-client
 
@@ -32,6 +33,7 @@ RUN addgroup -g 1001 -S nodejs && \
 # Copiar solo lo necesario desde build
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist-server ./dist-server
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/.env .env
 
@@ -43,4 +45,5 @@ USER nodejs
 EXPOSE 3001
 ENV PORT=3001
 
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist-server/server/index.js"]
+
