@@ -213,9 +213,9 @@ app.use(
       "http://localhost:3000",
       "http://localhost:3001",
       "http://localhost:8080",
-      "http://35.185.49.39:3001",
-      "http://35.185.49.39:8080",
-      "http://35.185.49.39",
+      "http://34.74.167.38:3001",
+      "http://34.74.167.38:8080",
+      "http://34.74.167.38",
       "https://puntocambio.ddns.net", // dominio No-IP con HTTPS
       "http://puntocambio.ddns.net",
     ],
