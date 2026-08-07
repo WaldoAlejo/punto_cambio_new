@@ -597,6 +597,7 @@ model ServientregaGuia {
   saldo_descontado  Boolean                   @default(false)
   saldo_anterior    Decimal?                  @db.Decimal(15, 2)
   saldo_nuevo       Decimal?                  @db.Decimal(15, 2)
+  valor_seguro      Decimal?                  @default(0) @db.Decimal(15, 2)
   destinatario      ServientregaDestinatario? @relation(fields: [destinatario_id], references: [id])
   punto_atencion    PuntoAtencion?            @relation(fields: [punto_atencion_id], references: [id])
   remitente         ServientregaRemitente?    @relation(fields: [remitente_id], references: [id])

@@ -203,6 +203,158 @@ router.get(
   }
 );
 
+// GET /api/servientrega/informes/guias-seguro
+// Informe exclusivo de guías generadas CON seguro (valor_seguro > 0)
+router.get(
+  "/informes/guias-seguro",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO", "OPERADOR", "CONCESION"]),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { desde, hasta, punto_atencion_id: puntoQuery } = req.query;
+      const rol = req.user?.rol;
+
+      let punto_atencion_id: string | undefined = puntoQuery as string | undefined;
+      if (rol === "OPERADOR" || rol === "CONCESION") {
+        punto_atencion_id = req.user?.punto_atencion_id || punto_atencion_id;
+      }
+
+      const guias = await dbService.obtenerGuiasConFiltros({
+        desde: desde as string,
+        hasta: hasta as string,
+        punto_atencion_id: punto_atencion_id as string,
+        soloConSeguro: true,
+      });
+
+      const guiasTransformadas = guias.map((guia) => ({
+        id: guia.id,
+        numero_guia: guia.numero_guia,
+        created_at: guia.created_at,
+        fecha_creacion: guia.created_at,
+        estado: guia.estado,
+        punto_atencion_id: guia.punto_atencion_id || "",
+        punto_atencion_nombre: guia.punto_atencion?.nombre || "N/A",
+        ciudad_destino: guia.destinatario?.ciudad || "N/A",
+        provincia_destino: guia.destinatario?.provincia || "N/A",
+        remitente_nombre: guia.remitente?.nombre || "N/A",
+        remitente_cedula: guia.remitente?.cedula || "N/A",
+        destinatario_nombre: guia.destinatario?.nombre || "N/A",
+        valor_declarado: parseFloat(guia.valor_declarado?.toString() || "0"),
+        valor_seguro: parseFloat(guia.valor_seguro?.toString() || "0"),
+        costo_envio: parseFloat(guia.costo_envio?.toString() || "0"),
+        usuario_nombre: guia.usuario?.nombre || "N/A",
+      }));
+
+      const totalGuias = guiasTransformadas.length;
+      const totalValorSeguro = guiasTransformadas.reduce(
+        (acc, g) => acc + g.valor_seguro,
+        0
+      );
+
+      res.json({
+        success: true,
+        data: guiasTransformadas,
+        resumen: {
+          total_guias: totalGuias,
+          total_valor_seguro: totalValorSeguro,
+        },
+      });
+    } catch (error) {
+      console.error("❌ Error al obtener informe de guías con seguro:", error);
+      res.status(500).json({
+        error: "Error interno del servidor",
+        message: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+);
+
+// GET /api/servientrega/informes/exportar-guias-seguro
+// Exportar a Excel el informe exclusivo de guías con seguro
+router.get(
+  "/informes/exportar-guias-seguro",
+  authenticateToken,
+  requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO", "OPERADOR", "CONCESION"]),
+  async (req: express.Request, res: express.Response) => {
+    try {
+      const { desde, hasta, punto_atencion_id: puntoQuery } = req.query;
+      const rol = req.user?.rol;
+
+      let punto_atencion_id: string | undefined = puntoQuery as string | undefined;
+      if (rol === "OPERADOR" || rol === "CONCESION") {
+        punto_atencion_id = req.user?.punto_atencion_id || punto_atencion_id;
+      }
+
+      const guias = await dbService.obtenerGuiasConFiltros({
+        desde: desde as string,
+        hasta: hasta as string,
+        punto_atencion_id: punto_atencion_id as string,
+        soloConSeguro: true,
+      });
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Guias con Seguro");
+
+      worksheet.columns = [
+        { header: "Número de Guía", key: "numero_guia", width: 18 },
+        { header: "Fecha Creación", key: "fecha_creacion", width: 20 },
+        { header: "Estado", key: "estado", width: 15 },
+        { header: "Punto de Atención", key: "punto_atencion", width: 25 },
+        { header: "Remitente", key: "remitente_nombre", width: 30 },
+        { header: "Destinatario", key: "destinatario_nombre", width: 30 },
+        { header: "Ciudad Destino", key: "ciudad_destino", width: 20 },
+        { header: "Valor Declarado", key: "valor_declarado", width: 16 },
+        { header: "Valor Seguro", key: "valor_seguro", width: 16 },
+        { header: "Costo Envío", key: "costo_envio", width: 15 },
+        { header: "Usuario", key: "usuario_nombre", width: 25 },
+      ];
+
+      guias.forEach((guia) => {
+        worksheet.addRow({
+          numero_guia: guia.numero_guia,
+          fecha_creacion: format(new Date(guia.created_at), "dd/MM/yyyy HH:mm", {
+            locale: es,
+          }),
+          estado: guia.estado,
+          punto_atencion: guia.punto_atencion?.nombre || "N/A",
+          remitente_nombre: guia.remitente?.nombre || "N/A",
+          destinatario_nombre: guia.destinatario?.nombre || "N/A",
+          ciudad_destino: guia.destinatario?.ciudad || "N/A",
+          valor_declarado: parseFloat(guia.valor_declarado?.toString() || "0"),
+          valor_seguro: parseFloat(guia.valor_seguro?.toString() || "0"),
+          costo_envio: parseFloat(guia.costo_envio?.toString() || "0"),
+          usuario_nombre: guia.usuario?.nombre || "N/A",
+        });
+      });
+
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFE6E6FA" },
+      };
+
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=informe_guias_con_seguro_${desde || "todo"}_${hasta || "todo"}.xlsx`
+      );
+
+      await workbook.xlsx.write(res);
+      res.end();
+    } catch (error) {
+      console.error("❌ Error al exportar informe de guías con seguro:", error);
+      res.status(500).json({
+        error: "Error interno del servidor",
+        message: error instanceof Error ? error.message : "Error desconocido",
+      });
+    }
+  }
+);
+
 // GET /api/servientrega/informes/guias/:id/pdf
 router.get(
   "/informes/guias/:id/pdf",

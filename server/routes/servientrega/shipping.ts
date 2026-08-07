@@ -1127,6 +1127,7 @@ router.post("/generar-guia",
           usuario_id: req.user?.id || undefined, // 👈 IMPORTANTE: Guardar usuario_id para rastrabilidad
           costo_envio: valorTotalGuia > 0 ? Number(valorTotalGuia) : undefined,
           valor_declarado: Number(req.body?.valor_declarado || 0), // Informativo, NO se descuenta
+          valor_seguro: Number(payload?.valor_asegurado || 0),     // Monto asegurado de la guía
           agencia_codigo: agencia_codigo,      // ✅ Código de agencia Servientrega del punto
           agencia_nombre: agencia_nombre,      // ✅ Nombre de agencia Servientrega del punto
         };

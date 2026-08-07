@@ -110,6 +110,7 @@ export interface Guia {
   destinatario_direccion?: string;
   // Valores
   valor_declarado?: number;
+  valor_seguro?: number; // Monto asegurado de la guía (0 = sin seguro)
   costo_envio?: number;
   valor_cobrado?: number; // Valor que se cobró por la guía
   motivo_anulacion?: string;

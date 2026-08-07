@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { format, parseISO, subDays } from "date-fns";
 import { todayGyeDateOnly } from "@/utils/timezone";
-import { Download, Eye, FileText, BarChart3, RefreshCw, Wallet, History, CreditCard, ChevronDown, ChevronUp, TrendingDown } from "lucide-react";
+import { Download, Eye, FileText, BarChart3, RefreshCw, Wallet, History, CreditCard, ChevronDown, ChevronUp, TrendingDown, ShieldCheck } from "lucide-react";
 import { Loading } from "@/components/ui/loading";
 import { Guia } from "@/types/servientrega";
 import axiosInstance from "@/services/axiosInstance";
@@ -133,7 +133,9 @@ export const ServientregaInformes = ({
     v === "PENDIENTE_ANULACION";
 
   const hoy = new Date(todayGyeDateOnly() + "T00:00:00");
-  const [activeTab, setActiveTab] = useState<"guias" | "saldos" | "saldo-detalle">("guias");
+  const [activeTab, setActiveTab] = useState<
+    "guias" | "saldos" | "saldo-detalle" | "guias-seguro"
+  >("guias");
   
   // Estado para informe de guías
   const [guias, setGuias] = useState<Guia[]>([]);
@@ -160,6 +162,14 @@ export const ServientregaInformes = ({
   // Estado para informe de saldo detalle
   const [saldoDetalleData, setSaldoDetalleData] = useState<any>(null);
   const [loadingSaldoDetalle, setLoadingSaldoDetalle] = useState(false);
+
+  // Estado para informe de guías con seguro
+  const [guiasSeguro, setGuiasSeguro] = useState<Guia[]>([]);
+  const [resumenSeguro, setResumenSeguro] = useState<{
+    total_guias: number;
+    total_valor_seguro: number;
+  } | null>(null);
+  const [loadingGuiasSeguro, setLoadingGuiasSeguro] = useState(false);
 
   const desdeRef = useRef(desde);
   const hastaRef = useRef(hasta);
@@ -423,6 +433,74 @@ export const ServientregaInformes = ({
     }
   }, [activeTab, fetchSaldoDetalle]);
 
+  // Fetch guías con seguro
+  const fetchGuiasSeguro = useCallback(async () => {
+    setLoadingGuiasSeguro(true);
+    try {
+      const response = await axiosInstance.get<{
+        data: Guia[];
+        success: boolean;
+        resumen: { total_guias: number; total_valor_seguro: number };
+      }>("/servientrega/informes/guias-seguro", {
+        params: {
+          desde: desdeRef.current,
+          hasta: hastaRef.current,
+          punto_atencion_id:
+            filtroPuntoRef.current === "TODOS" ? undefined : filtroPuntoRef.current,
+        },
+      });
+      setGuiasSeguro(Array.isArray(response.data?.data) ? response.data.data : []);
+      setResumenSeguro(response.data?.resumen || null);
+    } catch (err: unknown) {
+      console.error("Error al cargar guías con seguro:", err);
+      toast.error("No se pudieron cargar las guías con seguro");
+      setGuiasSeguro([]);
+      setResumenSeguro(null);
+    } finally {
+      setLoadingGuiasSeguro(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "guias-seguro") {
+      fetchGuiasSeguro();
+    }
+  }, [activeTab, fetchGuiasSeguro]);
+
+  const handleExportarGuiasSeguroExcel = async () => {
+    try {
+      const response = await axiosInstance.get(
+        "/servientrega/informes/exportar-guias-seguro",
+        {
+          params: {
+            desde: desdeRef.current,
+            hasta: hastaRef.current,
+            punto_atencion_id:
+              filtroPuntoRef.current === "TODOS" ? undefined : filtroPuntoRef.current,
+          },
+          responseType: "blob",
+        }
+      );
+
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `informe_guias_con_seguro_${desde}_${hasta}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success("✅ Informe de guías con seguro exportado exitosamente");
+    } catch (err: unknown) {
+      console.error("Error al exportar guías con seguro:", err);
+      toast.error("Error al exportar el informe de guías con seguro");
+    }
+  };
+
   const handleExportarSaldoDetalleExcel = async () => {
     try {
       const response = await axiosInstance.get(
@@ -632,6 +710,14 @@ export const ServientregaInformes = ({
           >
             <TrendingDown className="w-4 h-4 mr-2" />
             Detalle de Saldos
+          </Button>
+          <Button
+            variant={activeTab === "guias-seguro" ? "default" : "outline"}
+            onClick={() => setActiveTab("guias-seguro")}
+            className={activeTab === "guias-seguro" ? "bg-blue-600" : ""}
+          >
+            <ShieldCheck className="w-4 h-4 mr-2" />
+            Guías con Seguro
           </Button>
         </div>
       </div>
@@ -1526,6 +1612,162 @@ export const ServientregaInformes = ({
               ))}
             </div>
           )}
+        </>
+      )}
+      {activeTab === "guias-seguro" && (
+        <>
+          {/* Filtros y exportar */}
+          <div className="flex flex-wrap gap-3 mb-4 items-end">
+            <div className="flex-1 min-w-[140px]">
+              <Label className="text-xs">Desde</Label>
+              <Input
+                type="date"
+                value={desde}
+                onChange={(e) => setDesde(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="flex-1 min-w-[140px]">
+              <Label className="text-xs">Hasta</Label>
+              <Input
+                type="date"
+                value={hasta}
+                onChange={(e) => setHasta(e.target.value)}
+                className="h-8 text-sm"
+              />
+            </div>
+            <div className="flex-1 min-w-[180px]">
+              <Label className="text-xs">Punto de Atención</Label>
+              <select
+                value={filtroPunto}
+                onChange={(e) => setFiltroPunto(e.target.value)}
+                className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+              >
+                <option value="TODOS">Todos los puntos</option>
+                {puntosFiltro.map((punto) => (
+                  <option key={punto.id} value={punto.id}>
+                    {punto.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={fetchGuiasSeguro} className="h-8 text-sm">
+                Buscar
+              </Button>
+              <Button
+                onClick={handleExportarGuiasSeguroExcel}
+                className="h-8 text-sm bg-green-600 hover:bg-green-700"
+                disabled={loadingGuiasSeguro || guiasSeguro.length === 0}
+              >
+                <Download className="w-4 h-4 mr-1" />
+                Excel
+              </Button>
+            </div>
+          </div>
+
+          {/* Resumen */}
+          {resumenSeguro && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        Guías con Seguro
+                      </p>
+                      <p className="text-2xl font-bold">
+                        {resumenSeguro.total_guias}
+                      </p>
+                    </div>
+                    <ShieldCheck className="h-8 w-8 text-blue-600" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        Total Valor Asegurado
+                      </p>
+                      <p className="text-2xl font-bold text-green-600">
+                        ${resumenSeguro.total_valor_seguro.toLocaleString()}
+                      </p>
+                    </div>
+                    <CreditCard className="h-8 w-8 text-green-600" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Guías Generadas con Seguro</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingGuiasSeguro ? (
+                <Loading text="Cargando guías con seguro..." className="py-8" />
+              ) : guiasSeguro.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  No se encontraron guías con seguro en el período y punto seleccionados.
+                </p>
+              ) : (
+                <div className="overflow-x-auto -mx-2 px-2">
+                  <table className="min-w-full text-sm border rounded-lg overflow-hidden">
+                    <thead className="bg-gray-50 text-gray-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Guía</th>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Fecha</th>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Punto</th>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Remitente</th>
+                        <th className="px-3 py-2 text-left font-medium whitespace-nowrap">Destinatario</th>
+                        <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Valor Declarado</th>
+                        <th className="px-3 py-2 text-right font-medium whitespace-nowrap">Valor Seguro</th>
+                        <th className="px-3 py-2 text-center font-medium whitespace-nowrap">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {guiasSeguro.map((guia) => (
+                        <tr key={guia.id} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 whitespace-nowrap font-medium text-gray-900">
+                            {guia.numero_guia}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-gray-600">
+                            {format(
+                              parseISO(
+                                guia.fecha_creacion || guia.created_at || new Date().toISOString()
+                              ),
+                              "dd/MM/yyyy HH:mm"
+                            )}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                            {guia.punto_atencion_nombre || "N/A"}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                            {guia.remitente_nombre || "N/A"}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                            {guia.destinatario_nombre || "N/A"}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right text-gray-700">
+                            ${(guia.valor_declarado || 0).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-right font-medium text-blue-700">
+                            ${(guia.valor_seguro || 0).toLocaleString()}
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap text-center">
+                            {getEstadoBadge(guia.estado)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </>
       )}
     </div>

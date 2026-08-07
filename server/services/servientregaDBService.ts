@@ -39,6 +39,7 @@ export interface GuiaData {
   usuario_id?: string;
   costo_envio?: number;
   valor_declarado?: number;
+  valor_seguro?: number;      // Monto asegurado de la guía (0 o ausente = sin seguro)
   agencia_codigo?: string;    // Código de agencia Servientrega del punto de atención
   agencia_nombre?: string;    // Nombre de agencia Servientrega del punto de atención
 }
@@ -356,7 +357,8 @@ export class ServientregaDBService {
     if (data.usuario_id) cleanData.usuario_id = data.usuario_id;
     if (typeof data.costo_envio === "number") cleanData.costo_envio = new Prisma.Decimal(data.costo_envio);
     if (typeof data.valor_declarado === "number") cleanData.valor_declarado = new Prisma.Decimal(data.valor_declarado);
-    
+    if (typeof data.valor_seguro === "number") cleanData.valor_seguro = new Prisma.Decimal(data.valor_seguro);
+
     // ✅ NUEVO: Guardar información de la agencia Servientrega
     if (data.agencia_codigo) cleanData.agencia_codigo = data.agencia_codigo;
     if (data.agencia_nombre) cleanData.agencia_nombre = data.agencia_nombre;
@@ -972,6 +974,7 @@ export class ServientregaDBService {
     estado?: string;
     punto_atencion_id?: string;
     usuario_id?: string;
+    soloConSeguro?: boolean;
   }) {
     const where: Prisma.ServientregaGuiaWhereInput = {};
 
@@ -1011,6 +1014,11 @@ export class ServientregaDBService {
       where.punto_atencion_id = filtros.punto_atencion_id;
     }
 
+    // Filtro exclusivo: solo guías con seguro (valor_seguro > 0)
+    if (filtros.soloConSeguro) {
+      where.valor_seguro = { gt: 0 };
+    }
+
     log("🔍 [obtenerGuiasConFiltros] WHERE clause:", JSON.stringify(where, null, 2));
 
     const guias = await prisma.servientregaGuia.findMany({
@@ -1025,6 +1033,7 @@ export class ServientregaDBService {
         agencia_codigo: true,
         agencia_nombre: true,
         valor_declarado: true,
+        valor_seguro: true,
         costo_envio: true,
         remitente: true,
         destinatario: true,
