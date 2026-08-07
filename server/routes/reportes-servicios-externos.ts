@@ -14,17 +14,20 @@
  */
 
 import express from "express";
+import { Prisma } from "@prisma/client";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import ExcelJS from "exceljs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { gyeDayRangeUtcFromDateOnly } from "../utils/timezone.js";
 
 const router = express.Router();
 
 /* ============================
  * GET /api/reportes/servicios-externos-historico
+ * Query params opcionales: desde, hasta (YYYY-MM-DD), punto_atencion_id
  * ============================ */
 router.get(
   "/",
@@ -33,14 +36,35 @@ router.get(
   async (req: express.Request, res: express.Response) => {
     const startTime = Date.now();
     try {
+      const { desde, hasta, punto_atencion_id } = req.query;
+
+      const fecha: Prisma.DateTimeFilter = {};
+      if (typeof desde === "string" && desde) {
+        fecha.gte = gyeDayRangeUtcFromDateOnly(desde).gte;
+      }
+      if (typeof hasta === "string" && hasta) {
+        fecha.lte = gyeDayRangeUtcFromDateOnly(hasta).lt;
+      }
+      const puntoFiltro =
+        typeof punto_atencion_id === "string" && punto_atencion_id
+          ? punto_atencion_id
+          : undefined;
+
       logger.info("📊 Iniciando generación de reporte histórico de servicios externos", {
         user_id: (req.user as any)?.id,
+        desde,
+        hasta,
+        punto_atencion_id: puntoFiltro,
       });
 
       // ─────────────────────────────────────────────────────────────────────
-      // 1. Obtener Movimientos de Servicios Externos (histórico completo)
+      // 1. Obtener Movimientos de Servicios Externos (filtrado por fecha/punto)
       // ─────────────────────────────────────────────────────────────────────
       const movimientos = await prisma.servicioExternoMovimiento.findMany({
+        where: {
+          ...(Object.keys(fecha).length > 0 ? { fecha } : {}),
+          ...(puntoFiltro ? { punto_atencion_id: puntoFiltro } : {}),
+        },
         orderBy: { fecha: "asc" },
         include: {
           puntoAtencion: { select: { id: true, nombre: true } },
@@ -52,9 +76,13 @@ router.get(
       logger.info(`📥 Movimientos de servicios externos cargados: ${movimientos.length}`);
 
       // ─────────────────────────────────────────────────────────────────────
-      // 2. Obtener Asignaciones de Servicios Externos (histórico completo)
+      // 2. Obtener Asignaciones de Servicios Externos (filtrado por fecha/punto)
       // ─────────────────────────────────────────────────────────────────────
       const asignaciones = await prisma.servicioExternoAsignacion.findMany({
+        where: {
+          ...(Object.keys(fecha).length > 0 ? { fecha } : {}),
+          ...(puntoFiltro ? { punto_atencion_id: puntoFiltro } : {}),
+        },
         orderBy: { fecha: "asc" },
         include: {
           puntoAtencion: { select: { id: true, nombre: true } },
@@ -156,7 +184,8 @@ router.get(
       // 5. Enviar respuesta
       // ─────────────────────────────────────────────────────────────────────
       const fechaActual = format(new Date(), "yyyy-MM-dd");
-      const fileName = `reporte_servicios_externos_historico_${fechaActual}.xlsx`;
+      const rango = desde || hasta ? `_${desde || "inicio"}_a_${hasta || fechaActual}` : "";
+      const fileName = `reporte_servicios_externos_historico${rango}.xlsx`;
 
       res.setHeader(
         "Content-Type",

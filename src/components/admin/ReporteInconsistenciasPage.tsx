@@ -6,6 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -15,6 +22,10 @@ import {
 } from "@/components/ui/table";
 import { AlertCircle, RefreshCw, AlertTriangle, Download } from "lucide-react";
 import axiosInstance from "@/services/axiosInstance";
+import { pointService } from "@/services/pointService";
+import type { PuntoAtencion } from "@/types";
+
+const ALL_POINTS = "__ALL__";
 
 interface Inconsistencia {
   punto_id: string;
@@ -41,13 +52,25 @@ export default function ReporteInconsistenciasPage() {
   const [inconsistencias, setInconsistencias] = useState<Inconsistencia[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [points, setPoints] = useState<PuntoAtencion[]>([]);
+  const [puntoAtencionId, setPuntoAtencionId] = useState<string>(ALL_POINTS);
+
+  useEffect(() => {
+    pointService.getAllPointsForAdmin().then((res) => {
+      if (!res.error) setPoints(res.points || []);
+    });
+  }, []);
 
   const consultar = async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await axiosInstance.get("/validacion-cierre/reporte-inconsistencias", {
-        params: { desde, hasta }
+        params: {
+          desde,
+          hasta,
+          punto_atencion_id: puntoAtencionId !== ALL_POINTS ? puntoAtencionId : undefined,
+        }
       });
       
       if (response.data?.success) {
@@ -127,7 +150,7 @@ export default function ReporteInconsistenciasPage() {
       {/* Filtros */}
       <Card>
         <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="space-y-2">
               <Label htmlFor="desde">Desde</Label>
               <Input
@@ -145,6 +168,22 @@ export default function ReporteInconsistenciasPage() {
                 value={hasta}
                 onChange={(e) => setHasta(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Punto de Atención</Label>
+              <Select value={puntoAtencionId} onValueChange={setPuntoAtencionId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos los puntos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_POINTS}>Todos los puntos</SelectItem>
+                  {points.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex items-end">
               <Button

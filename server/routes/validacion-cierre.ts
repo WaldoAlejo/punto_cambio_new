@@ -196,19 +196,27 @@ router.get("/comparacion", authenticateToken, requireRole(["ADMIN", "SUPER_USUAR
  */
 router.get("/reporte-inconsistencias", authenticateToken, requireRole(["ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   try {
-    const { desde, hasta } = req.query;
-    
-    const fechaDesde = desde && typeof desde === "string" 
+    const { desde, hasta, punto_atencion_id } = req.query;
+
+    const fechaDesde = desde && typeof desde === "string"
       ? new Date(`${desde}T00:00:00.000Z`)
       : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 días atrás
-      
+
     const fechaHasta = hasta && typeof hasta === "string"
       ? new Date(`${hasta}T23:59:59.999Z`)
       : new Date();
 
-    // Obtener todos los puntos
+    const puntoFiltro =
+      typeof punto_atencion_id === "string" && punto_atencion_id
+        ? punto_atencion_id
+        : undefined;
+
+    // Obtener puntos (todos, o solo el seleccionado si se envía punto_atencion_id)
     const puntos = await prisma.puntoAtencion.findMany({
-      where: { activo: true },
+      where: {
+        activo: true,
+        ...(puntoFiltro ? { id: puntoFiltro } : {}),
+      },
       select: { id: true, nombre: true }
     });
 

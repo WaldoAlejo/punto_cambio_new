@@ -10,17 +10,20 @@
  */
 
 import express from "express";
+import { Prisma } from "@prisma/client";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import ExcelJS from "exceljs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { gyeDayRangeUtcFromDateOnly } from "../utils/timezone.js";
 
 const router = express.Router();
 
 /* ============================
  * GET /api/reportes/servientrega-guias-historico
+ * Query params opcionales: desde, hasta (YYYY-MM-DD), punto_atencion_id
  * ============================ */
 router.get(
   "/",
@@ -29,14 +32,35 @@ router.get(
   async (req: express.Request, res: express.Response) => {
     const startTime = Date.now();
     try {
+      const { desde, hasta, punto_atencion_id } = req.query;
+
+      const createdAt: Prisma.DateTimeFilter = {};
+      if (typeof desde === "string" && desde) {
+        createdAt.gte = gyeDayRangeUtcFromDateOnly(desde).gte;
+      }
+      if (typeof hasta === "string" && hasta) {
+        createdAt.lte = gyeDayRangeUtcFromDateOnly(hasta).lt;
+      }
+      const puntoFiltro =
+        typeof punto_atencion_id === "string" && punto_atencion_id
+          ? punto_atencion_id
+          : undefined;
+
       logger.info("📊 Iniciando generación de reporte histórico de guías Servientrega", {
         user_id: (req.user as any)?.id,
+        desde,
+        hasta,
+        punto_atencion_id: puntoFiltro,
       });
 
       // ─────────────────────────────────────────────────────────────────────
-      // 1. Obtener Guías Servientrega (histórico completo)
+      // 1. Obtener Guías Servientrega (filtrado por fecha/punto si se envía)
       // ─────────────────────────────────────────────────────────────────────
       const guias = await prisma.servientregaGuia.findMany({
+        where: {
+          ...(Object.keys(createdAt).length > 0 ? { created_at: createdAt } : {}),
+          ...(puntoFiltro ? { punto_atencion_id: puntoFiltro } : {}),
+        },
         orderBy: { created_at: "asc" },
       });
 
@@ -151,7 +175,8 @@ router.get(
       // 5. Enviar respuesta
       // ─────────────────────────────────────────────────────────────────────
       const fechaActual = format(new Date(), "yyyy-MM-dd");
-      const fileName = `reporte_servientrega_guias_historico_${fechaActual}.xlsx`;
+      const rango = desde || hasta ? `_${desde || "inicio"}_a_${hasta || fechaActual}` : "";
+      const fileName = `reporte_servientrega_guias_historico${rango}.xlsx`;
 
       res.setHeader(
         "Content-Type",

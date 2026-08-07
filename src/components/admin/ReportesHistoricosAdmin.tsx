@@ -1,10 +1,22 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Download, FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { pointService } from "@/services/pointService";
+import type { PuntoAtencion } from "@/types";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+const ALL_POINTS = "__ALL__";
 
 async function downloadFile(url: string, filename: string): Promise<void> {
   const token = localStorage.getItem("authToken");
@@ -36,13 +48,32 @@ async function downloadFile(url: string, filename: string): Promise<void> {
 
 const ReportesHistoricosAdmin: React.FC = () => {
   const [downloading, setDownloading] = useState<Record<string, boolean>>({});
+  const [points, setPoints] = useState<PuntoAtencion[]>([]);
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+  const [puntoAtencionId, setPuntoAtencionId] = useState<string>(ALL_POINTS);
+
+  useEffect(() => {
+    pointService.getAllPointsForAdmin().then((res) => {
+      if (!res.error) setPoints(res.points || []);
+    });
+  }, []);
+
+  const buildFilteredUrl = (baseUrl: string) => {
+    const params = new URLSearchParams();
+    if (desde) params.set("desde", desde);
+    if (hasta) params.set("hasta", hasta);
+    if (puntoAtencionId !== ALL_POINTS) params.set("punto_atencion_id", puntoAtencionId);
+    const query = params.toString();
+    return query ? `${baseUrl}?${query}` : baseUrl;
+  };
 
   const handleDownload = async (key: string, url: string, filename: string) => {
     if (downloading[key]) return;
 
     setDownloading((prev) => ({ ...prev, [key]: true }));
     try {
-      await downloadFile(url, filename);
+      await downloadFile(buildFilteredUrl(url), filename);
       toast({
         title: "✅ Descarga completada",
         description: filename,
@@ -59,15 +90,16 @@ const ReportesHistoricosAdmin: React.FC = () => {
   };
 
   const today = new Date().toISOString().slice(0, 10);
+  const rangoArchivo = desde || hasta ? `${desde || "inicio"}_a_${hasta || today}` : today;
 
   const reports = [
     {
       key: "cambios-divisa",
       title: "Cambios de Divisa + Asignaciones",
       description:
-        "Todo el historial de cambios de divisa (moneda origen, destino, tasa, montos, punto, operador) y asignaciones de saldo desde el inicio de la aplicación.",
+        "Historial de cambios de divisa (moneda origen, destino, tasa, montos, punto, operador) y asignaciones de saldo, filtrable por punto de atención y rango de fechas.",
       url: "/reportes/cambios-divisa-historico",
-      filename: `reporte_cambios_divisa_historico_${today}.xlsx`,
+      filename: `reporte_cambios_divisa_historico_${rangoArchivo}.xlsx`,
       icon: <FileSpreadsheet className="h-8 w-8 text-emerald-600" />,
       color: "bg-emerald-50 border-emerald-200",
     },
@@ -75,9 +107,9 @@ const ReportesHistoricosAdmin: React.FC = () => {
       key: "servicios-externos",
       title: "Servicios Externos",
       description:
-        "Todo el historial de movimientos (ingresos/egresos por punto y servicio) y asignaciones de servicios externos con saldos desde el inicio de la aplicación.",
+        "Historial de movimientos (ingresos/egresos por punto y servicio) y asignaciones de servicios externos con saldos, filtrable por punto de atención y rango de fechas.",
       url: "/reportes/servicios-externos-historico",
-      filename: `reporte_servicios_externos_historico_${today}.xlsx`,
+      filename: `reporte_servicios_externos_historico_${rangoArchivo}.xlsx`,
       icon: <FileSpreadsheet className="h-8 w-8 text-blue-600" />,
       color: "bg-blue-50 border-blue-200",
     },
@@ -85,9 +117,9 @@ const ReportesHistoricosAdmin: React.FC = () => {
       key: "servientrega-guias",
       title: "Guías Servientrega",
       description:
-        "Todo el historial de guías Servientrega generadas en todos los puntos (número de guía, origen, destino, valor, costo, punto de generación, operador).",
+        "Historial de guías Servientrega generadas (número de guía, origen, destino, valor, costo, punto de generación, operador), filtrable por punto de atención y rango de fechas.",
       url: "/reportes/servientrega-guias-historico",
-      filename: `reporte_servientrega_guias_historico_${today}.xlsx`,
+      filename: `reporte_servientrega_guias_historico_${rangoArchivo}.xlsx`,
       icon: <FileSpreadsheet className="h-8 w-8 text-purple-600" />,
       color: "bg-purple-50 border-purple-200",
     },
@@ -95,9 +127,9 @@ const ReportesHistoricosAdmin: React.FC = () => {
       key: "asignaciones-transferencias",
       title: "Asignaciones y Transferencias",
       description:
-        "Todo el historial de asignaciones de saldo (inicial y recarga por punto/divisa/operador) y transferencias entre puntos con trazabilidad completa (solicitud, aprobación, envío, aceptación, rechazo).",
+        "Historial de asignaciones de saldo (inicial y recarga por punto/divisa/operador) y transferencias entre puntos con trazabilidad completa, filtrable por punto de atención y rango de fechas.",
       url: "/reportes/asignaciones-transferencias-historico",
-      filename: `reporte_asignaciones_transferencias_historico_${today}.xlsx`,
+      filename: `reporte_asignaciones_transferencias_historico_${rangoArchivo}.xlsx`,
       icon: <FileSpreadsheet className="h-8 w-8 text-amber-600" />,
       color: "bg-amber-50 border-amber-200",
     },
@@ -107,9 +139,54 @@ const ReportesHistoricosAdmin: React.FC = () => {
     <div className="p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-2">📊 Reportes Históricos Completos</h1>
       <p className="text-gray-600 mb-8">
-        Descarga informes históricos desde el inicio de la aplicación hasta hoy.
+        Descarga informes históricos filtrando por punto de atención y rango de fechas.
+        Si no seleccionas filtros, se descarga todo el historial desde el inicio de la aplicación.
         Estos archivos pueden tardar varios segundos en generarse dependiendo del volumen de datos.
       </p>
+
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Filtros</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="reportes-historicos-desde">Desde</Label>
+              <Input
+                id="reportes-historicos-desde"
+                type="date"
+                value={desde}
+                onChange={(e) => setDesde(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reportes-historicos-hasta">Hasta</Label>
+              <Input
+                id="reportes-historicos-hasta"
+                type="date"
+                value={hasta}
+                onChange={(e) => setHasta(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Punto de Atención</Label>
+              <Select value={puntoAtencionId} onValueChange={setPuntoAtencionId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos los puntos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_POINTS}>Todos los puntos</SelectItem>
+                  {points.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-3">
         {reports.map((report) => (

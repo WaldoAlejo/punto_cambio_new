@@ -14,12 +14,14 @@
  */
 
 import express from "express";
+import { Prisma } from "@prisma/client";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import ExcelJS from "exceljs";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { gyeDayRangeUtcFromDateOnly } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -65,14 +67,36 @@ router.get(
   async (req: express.Request, res: express.Response) => {
     const startTime = Date.now();
     try {
+      const { desde, hasta, punto_atencion_id } = req.query;
+
+      const fecha: Prisma.DateTimeFilter = {};
+      if (typeof desde === "string" && desde) {
+        fecha.gte = gyeDayRangeUtcFromDateOnly(desde).gte;
+      }
+      if (typeof hasta === "string" && hasta) {
+        fecha.lte = gyeDayRangeUtcFromDateOnly(hasta).lt;
+      }
+      const puntoFiltro =
+        typeof punto_atencion_id === "string" && punto_atencion_id
+          ? punto_atencion_id
+          : undefined;
+      const tieneFecha = Object.keys(fecha).length > 0;
+
       logger.info("📊 Iniciando generación de reporte histórico de asignaciones y transferencias", {
         user_id: (req.user as any)?.id,
+        desde,
+        hasta,
+        punto_atencion_id: puntoFiltro,
       });
 
       /* ─────────────────────────────────────────────────────────────────
-         1. Cargar Asignaciones de Saldo
+         1. Cargar Asignaciones de Saldo (filtrado por fecha/punto si se envía)
          ───────────────────────────────────────────────────────────────── */
       const asignaciones = await prisma.asignacionSaldo.findMany({
+        where: {
+          ...(tieneFecha ? { fecha } : {}),
+          ...(puntoFiltro ? { punto_atencion_id: puntoFiltro } : {}),
+        },
         orderBy: { fecha: "asc" },
       });
 
@@ -100,9 +124,16 @@ router.get(
       const asigUsuarioMap = new Map(asigUsuarios.map((u) => [u.id, u]));
 
       /* ─────────────────────────────────────────────────────────────────
-         2. Cargar Transferencias
+         2. Cargar Transferencias (filtrado por fecha si se envía; por punto
+         si el punto participa como origen o destino de la transferencia)
          ───────────────────────────────────────────────────────────────── */
       const transferencias = await prisma.transferencia.findMany({
+        where: {
+          ...(tieneFecha ? { fecha } : {}),
+          ...(puntoFiltro
+            ? { OR: [{ origen_id: puntoFiltro }, { destino_id: puntoFiltro }] }
+            : {}),
+        },
         orderBy: { fecha: "asc" },
       });
 
@@ -270,7 +301,8 @@ router.get(
          4. Enviar respuesta
          ───────────────────────────────────────────────────────────────── */
       const fechaActual = format(new Date(), "yyyy-MM-dd");
-      const fileName = `reporte_asignaciones_transferencias_historico_${fechaActual}.xlsx`;
+      const rango = desde || hasta ? `_${desde || "inicio"}_a_${hasta || fechaActual}` : "";
+      const fileName = `reporte_asignaciones_transferencias_historico${rango}.xlsx`;
 
       res.setHeader(
         "Content-Type",
