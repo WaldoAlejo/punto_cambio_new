@@ -3080,17 +3080,20 @@ router.delete(
             ? num(saldoOrigen?.bancos)
             : 0;
 
-        // FIX: Usar divisas_entregadas_total como fallback si usd_recibido_efectivo es 0
-        // Esto corrige el problema de anulación cuando la moneda origen no es USD
+        // Fallback SOLO para registros legacy donde ni usd_recibido_efectivo ni
+        // usd_recibido_transfer quedaron guardados (ambos en 0/null): en ese caso
+        // asumimos que todo fue efectivo. Si el registro sí tiene bancos > 0
+        // (metodo_pago_origen = BANCO/MIXTO), respetamos ese dato y NO debitamos
+        // efectivo que nunca llegó a recibirse en caja.
         const sumOrigenTotal = num(
           cambio.divisas_entregadas_total || cambio.monto_origen
         );
         const ingresoEfRaw = num(cambio.usd_recibido_efectivo, 0);
-        const ingresoBk = num(cambio.usd_recibido_transfer, 0);
-        
-        // Si usd_recibido_efectivo es 0 pero hay un valor en divisas_entregadas_total,
-        // usamos ese valor para la reversión
-        const ingresoEf = ingresoEfRaw > 0 ? ingresoEfRaw : sumOrigenTotal;
+        const ingresoBkRaw = num(cambio.usd_recibido_transfer, 0);
+        const sumaOrigenCampos = round2(ingresoEfRaw + ingresoBkRaw);
+
+        const ingresoEf = sumaOrigenCampos > 0 ? ingresoEfRaw : sumOrigenTotal;
+        const ingresoBk = sumaOrigenCampos > 0 ? ingresoBkRaw : 0;
 
         const nuevoEf = Math.max(0, round2(anteriorEf - ingresoEf));
         const nuevoBk = Math.max(0, round2(anteriorBk - ingresoBk));
@@ -3174,9 +3177,12 @@ router.delete(
         const sumDestTotal = num(
           cambio.divisas_recibidas_total || cambio.monto_destino
         );
+        const sumaDestCampos = round2(egEf + egBk);
 
-        // Si hubo egreso en efectivo, regresamos efectivo físico y su breakdown
-        const devolverEf = egEf > 0 ? egEf : sumDestTotal;
+        // Fallback SOLO para registros legacy sin desglose efectivo/bancos (ambos en 0).
+        // Si el registro sí tiene bancos > 0 (entrega por transferencia), respetamos
+        // ese dato y no acreditamos efectivo que nunca salió de caja.
+        const devolverEf = sumaDestCampos > 0 ? egEf : sumDestTotal;
         const nuevoEfDest = round2(antEf + devolverEf);
         const nuevoBkDest = round2(antBk + egBk);
 
