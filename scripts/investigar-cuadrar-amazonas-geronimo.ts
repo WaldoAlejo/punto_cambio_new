@@ -15,13 +15,25 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 const APPLY = process.argv.includes("--apply");
 
-function hoyRangoUTC() {
-  const now = new Date();
-  const inicio = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+// Ecuador (America/Guayaquil) es UTC-5 todo el año, sin horario de verano.
+const OFFSET_ECUADOR_HORAS = 5;
+
+function hoyRangoEcuador() {
+  const nowUtc = new Date();
+  const nowEcuador = new Date(nowUtc.getTime() - OFFSET_ECUADOR_HORAS * 3600 * 1000);
+  const inicioEcuadorComoUtc = new Date(
+    Date.UTC(
+      nowEcuador.getUTCFullYear(),
+      nowEcuador.getUTCMonth(),
+      nowEcuador.getUTCDate()
+    )
   );
-  const fin = new Date(inicio);
-  fin.setUTCDate(fin.getUTCDate() + 1);
+  // inicioEcuadorComoUtc representa 00:00 hora Ecuador, expresado como si fuera UTC;
+  // sumamos el offset para obtener el instante UTC real.
+  const inicio = new Date(
+    inicioEcuadorComoUtc.getTime() + OFFSET_ECUADOR_HORAS * 3600 * 1000
+  );
+  const fin = new Date(inicio.getTime() + 24 * 3600 * 1000);
   return { inicio, fin };
 }
 
@@ -31,17 +43,34 @@ async function main() {
   console.log(APPLY ? "MODO: APLICAR CORRECCIÓN" : "MODO: SOLO DIAGNÓSTICO (dry-run)");
   console.log("=".repeat(100));
 
-  const punto = await prisma.puntoAtencion.findFirst({
+  const candidatos = await prisma.puntoAtencion.findMany({
     where: { nombre: { contains: "AMAZONAS", mode: "insensitive" } },
   });
 
-  if (!punto) {
-    console.error("No se encontró un punto de atención que contenga 'AMAZONAS'.");
+  if (candidatos.length === 0) {
+    console.error("No se encontró ningún punto de atención que contenga 'AMAZONAS'.");
     return;
   }
-  console.log(`\nPunto: ${punto.nombre} (ID: ${punto.id})\n`);
 
-  const { inicio, fin } = hoyRangoUTC();
+  console.log(`\nPuntos encontrados con 'AMAZONAS' en el nombre: ${candidatos.length}`);
+  for (const c of candidatos) console.log(`  - ${c.nombre} (ID: ${c.id})`);
+
+  const punto =
+    candidatos.find((c) => c.nombre.toUpperCase().includes("GERONIMO")) ??
+    candidatos.find((c) => c.nombre.toUpperCase().includes("GERÓNIMO"));
+
+  if (!punto) {
+    console.error(
+      "\nNinguno de los puntos encontrados contiene 'GERONIMO' en el nombre. Revisa la lista de arriba y ajusta el filtro del script."
+    );
+    return;
+  }
+  console.log(`\nUsando punto: ${punto.nombre} (ID: ${punto.id})\n`);
+
+  const { inicio, fin } = hoyRangoEcuador();
+  console.log(
+    `Rango de "hoy" (hora Ecuador, UTC-5): ${inicio.toISOString()} a ${fin.toISOString()}\n`
+  );
 
   const movimientosHoy = await prisma.movimientoSaldo.findMany({
     where: { punto_atencion_id: punto.id, fecha: { gte: inicio, lt: fin } },
