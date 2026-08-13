@@ -65,12 +65,14 @@ async function main() {
   for (const c of candidatos) console.log(`  - ${c.nombre} (ID: ${c.id})`);
 
   const punto =
+    candidatos.find((c) => c.nombre.toUpperCase().includes("JERONIMO")) ??
+    candidatos.find((c) => c.nombre.toUpperCase().includes("JERÓNIMO")) ??
     candidatos.find((c) => c.nombre.toUpperCase().includes("GERONIMO")) ??
     candidatos.find((c) => c.nombre.toUpperCase().includes("GERÓNIMO"));
 
   if (!punto) {
     console.error(
-      "\nNinguno de los puntos encontrados contiene 'GERONIMO' en el nombre. Revisa la lista de arriba y ajusta el filtro del script."
+      "\nNinguno de los puntos encontrados contiene 'JERONIMO'/'GERONIMO' en el nombre. Revisa la lista de arriba y ajusta el filtro del script."
     );
     return;
   }
