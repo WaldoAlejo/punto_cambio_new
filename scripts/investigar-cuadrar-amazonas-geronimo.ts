@@ -183,6 +183,43 @@ async function main() {
     } else {
       console.log("  ✅ Saldo consistente con el último movimiento registrado.");
     }
+
+    // Chequeo aparte: cantidad debe ser igual a billetes + monedas_fisicas.
+    // Un bug detectado en la reversión de anulaciones podía recuperar `cantidad`
+    // sin recuperar `billetes`/`monedas_fisicas` en la misma proporción.
+    const saldoDbActualizado = await prisma.saldo.findUnique({
+      where: {
+        punto_atencion_id_moneda_id: { punto_atencion_id: punto.id, moneda_id: saldo.moneda_id },
+      },
+    });
+    if (saldoDbActualizado) {
+      const cantidadFinal = Number(saldoDbActualizado.cantidad);
+      const desglose = round2(
+        Number(saldoDbActualizado.billetes) + Number(saldoDbActualizado.monedas_fisicas)
+      );
+      const diferenciaDesglose = round2(cantidadFinal - desglose);
+      if (Math.abs(diferenciaDesglose) > 0.01) {
+        console.log(
+          `  ⚠️  DESGLOSE NO CUADRA: cantidad=${cantidadFinal.toFixed(2)} vs billetes+monedas=${desglose.toFixed(
+            2
+          )} (diferencia ${diferenciaDesglose > 0 ? "+" : ""}${diferenciaDesglose.toFixed(2)} en billetes/monedas faltante)`
+        );
+        if (APPLY) {
+          const nuevosBilletesDesglose = round2(
+            Number(saldoDbActualizado.billetes) + diferenciaDesglose
+          );
+          await prisma.saldo.update({
+            where: {
+              punto_atencion_id_moneda_id: { punto_atencion_id: punto.id, moneda_id: saldo.moneda_id },
+            },
+            data: { billetes: nuevosBilletesDesglose, updated_at: new Date() },
+          });
+          console.log(`  ✅ Desglose corregido. Nuevo billetes: ${nuevosBilletesDesglose.toFixed(2)}`);
+        } else {
+          console.log(`  ℹ️  Ejecuta con --apply para corregir el desglose de este punto/moneda.`);
+        }
+      }
+    }
   }
 
   console.log("\n" + "=".repeat(100));
