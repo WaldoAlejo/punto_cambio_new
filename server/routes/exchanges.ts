@@ -3186,11 +3186,15 @@ router.delete(
         const nuevoEfDest = round2(antEf + devolverEf);
         const nuevoBkDest = round2(antBk + egBk);
 
-        // ⚠️ Solo recuperar billetes/monedas si originalmente hubo efectivo
+        // ⚠️ Solo recuperar billetes/monedas si el monto que se está devolviendo a
+        // caja es efectivo. Usamos devolverEf (ya incluye el fallback legacy), no
+        // egEf crudo: si el fallback decidió tratar el monto como efectivo para
+        // `cantidad`, el desglose de billetes/monedas debe seguir la misma decisión
+        // o queda desincronizado de `cantidad` (cantidad se recupera pero billetes no).
         const sumarBilletes =
-          egEf > 0 ? round2(num(cambio.divisas_recibidas_billetes)) : 0;
+          devolverEf > 0 ? round2(num(cambio.divisas_recibidas_billetes)) : 0;
         const sumarMonedas =
-          egEf > 0 ? round2(num(cambio.divisas_recibidas_monedas)) : 0;
+          devolverEf > 0 ? round2(num(cambio.divisas_recibidas_monedas)) : 0;
 
         const nuevoBilDest = round2(
           num(saldoDestino?.billetes) + sumarBilletes
