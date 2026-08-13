@@ -100,89 +100,88 @@ async function main() {
     );
   }
 
-  // Para la RECONCILIACIÓN no basta con los movimientos del día objetivo: si ya
-  // pasaron días desde entonces, el saldo actual en DB incluye también los
-  // movimientos posteriores. Por eso recalculamos desde el inicio del día
-  // objetivo hasta AHORA, y comparamos ese total contra el saldo actual.
-  const movimientosDesdeInicio = await prisma.movimientoSaldo.findMany({
-    where: { punto_atencion_id: punto.id, fecha: { gte: inicio } },
+  // Reconciliación robusta: en vez de re-sumar movimiento por movimiento (frágil,
+  // depende de listar TODOS los tipos posibles: INGRESO/EGRESO/AJUSTE/
+  // TRANSFERENCIA_ENTRANTE/etc.), comparamos el saldo actual contra el
+  // `saldo_nuevo` del ÚLTIMO movimiento registrado para cada moneda: ese campo
+  // ya es la foto de "cuánto debería haber" según el propio libro de movimientos.
+  const saldosDelPunto = await prisma.saldo.findMany({
+    where: { punto_atencion_id: punto.id },
     include: { moneda: true },
-    orderBy: { fecha: "asc" },
   });
-
-  const porMoneda = new Map<string, { moneda: any; movimientos: typeof movimientosDesdeInicio }>();
-  for (const m of movimientosDesdeInicio) {
-    if (!porMoneda.has(m.moneda_id)) {
-      porMoneda.set(m.moneda_id, { moneda: m.moneda, movimientos: [] as any });
-    }
-    porMoneda.get(m.moneda_id)!.movimientos.push(m);
-  }
 
   console.log("\n" + "=".repeat(100));
   console.log(
-    "COMPARACIÓN: saldo recalculado (desde inicio del día objetivo hasta ahora) vs saldo actual en tabla Saldo"
+    "COMPARACIÓN: saldo_nuevo del último movimiento registrado vs saldo actual en tabla Saldo"
   );
   console.log("=".repeat(100));
 
-  for (const [monedaId, { moneda, movimientos }] of porMoneda) {
-    const saldoInicialDia = Number(movimientos[0].saldo_anterior);
-    let saldoCalculado = saldoInicialDia;
-    for (const m of movimientos) {
-      const monto = Number(m.monto);
-      if (m.tipo_movimiento === "INGRESO") saldoCalculado += monto;
-      else if (m.tipo_movimiento === "EGRESO") saldoCalculado -= monto;
-      else if (m.tipo_movimiento === "AJUSTE") saldoCalculado += monto; // ya viene con signo
-    }
-
-    const saldoActual = await prisma.saldo.findUnique({
-      where: {
-        punto_atencion_id_moneda_id: {
-          punto_atencion_id: punto.id,
-          moneda_id: monedaId,
-        },
-      },
+  for (const saldo of saldosDelPunto) {
+    const ultimoMovimiento = await prisma.movimientoSaldo.findFirst({
+      where: { punto_atencion_id: punto.id, moneda_id: saldo.moneda_id },
+      orderBy: { fecha: "desc" },
     });
 
-    console.log(`\n--- ${moneda.codigo} (${moneda.nombre}) ---`);
-    console.log(`  Saldo al inicio del día objetivo: ${saldoInicialDia.toFixed(2)}`);
-    console.log(`  Saldo recalculado (efectivo) desde entonces hasta ahora: ${saldoCalculado.toFixed(2)}`);
-    console.log(`  Saldo actual en tabla Saldo (cantidad): ${Number(saldoActual?.cantidad ?? 0).toFixed(2)}`);
-    console.log(`  Billetes actuales: ${Number(saldoActual?.billetes ?? 0).toFixed(2)} | Monedas físicas: ${Number(saldoActual?.monedas_fisicas ?? 0).toFixed(2)} | Bancos: ${Number(saldoActual?.bancos ?? 0).toFixed(2)}`);
+    console.log(`\n--- ${saldo.moneda.codigo} (${saldo.moneda.nombre}) ---`);
 
-    const diferencia = round2(saldoCalculado - Number(saldoActual?.cantidad ?? 0));
+    if (!ultimoMovimiento) {
+      console.log("  Sin movimientos registrados para esta moneda, se omite.");
+      continue;
+    }
+
+    const saldoEsperado = Number(ultimoMovimiento.saldo_nuevo);
+    const saldoDb = Number(saldo.cantidad);
+
+    console.log(
+      `  Último movimiento: [${ultimoMovimiento.fecha.toISOString()}] ${
+        ultimoMovimiento.tipo_movimiento
+      } | saldo_nuevo=${saldoEsperado.toFixed(2)} | ${ultimoMovimiento.descripcion}`
+    );
+    console.log(`  Saldo actual en tabla Saldo (cantidad): ${saldoDb.toFixed(2)}`);
+    console.log(
+      `  Billetes: ${Number(saldo.billetes).toFixed(2)} | Monedas físicas: ${Number(
+        saldo.monedas_fisicas
+      ).toFixed(2)} | Bancos: ${Number(saldo.bancos).toFixed(2)}`
+    );
+
+    const diferencia = round2(saldoEsperado - saldoDb);
     if (Math.abs(diferencia) > 0.01) {
-      console.log(`  ⚠️  DIFERENCIA DETECTADA: ${diferencia > 0 ? "+" : ""}${diferencia.toFixed(2)} (saldo en DB está ${diferencia > 0 ? "por debajo" : "por encima"} de lo que indican los movimientos registrados)`);
+      console.log(
+        `  ⚠️  DIFERENCIA DETECTADA: ${diferencia > 0 ? "+" : ""}${diferencia.toFixed(
+          2
+        )} (saldo en DB está ${diferencia > 0 ? "por debajo" : "por encima"} de lo que indica el último movimiento)`
+      );
 
-      if (APPLY && saldoActual) {
+      if (APPLY) {
         const usuarioId = await getUsuarioCorreccionId();
-        const nuevaCantidad = round2(Number(saldoActual.cantidad) + diferencia);
-        const nuevosBilletes = round2(Number(saldoActual.billetes) + diferencia);
+        const nuevaCantidad = round2(saldoDb + diferencia);
+        const nuevosBilletes = round2(Number(saldo.billetes) + diferencia);
         await prisma.saldo.update({
           where: {
-            punto_atencion_id_moneda_id: { punto_atencion_id: punto.id, moneda_id: monedaId },
+            punto_atencion_id_moneda_id: { punto_atencion_id: punto.id, moneda_id: saldo.moneda_id },
           },
           data: { cantidad: nuevaCantidad, billetes: nuevosBilletes, updated_at: new Date() },
         });
         await prisma.movimientoSaldo.create({
           data: {
             punto_atencion_id: punto.id,
-            moneda_id: monedaId,
+            moneda_id: saldo.moneda_id,
             tipo_movimiento: "AJUSTE",
             monto: diferencia,
-            saldo_anterior: Number(saldoActual.cantidad),
+            saldo_anterior: saldoDb,
             saldo_nuevo: nuevaCantidad,
             usuario_id: usuarioId,
             tipo_referencia: "CORRECCION_MANUAL",
             descripcion:
-              "Corrección: reverso de anulación había debitado efectivo de una transacción pagada por transferencia bancaria (bug en DELETE /exchanges/:id)",
+              "Corrección: saldo en tabla Saldo no coincidía con el saldo_nuevo del último MovimientoSaldo registrado",
           },
         });
         console.log(`  ✅ Corregido. Nuevo saldo: ${nuevaCantidad.toFixed(2)}`);
-      } else if (!APPLY) {
+      } else {
         console.log(`  ℹ️  Ejecuta con --apply para corregir automáticamente este punto/moneda.`);
       }
     } else {
-      console.log(`  ✅ Saldo consistente con los movimientos de hoy, no requiere ajuste.`);
+      console.log("  ✅ Saldo consistente con el último movimiento registrado.");
     }
   }
 
