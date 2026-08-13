@@ -7,7 +7,9 @@
  * banco, dejando el saldo en efectivo por debajo del real.
  *
  * Modo por defecto: SOLO DIAGNÓSTICO (no escribe nada).
- * Para aplicar la corrección: `npx ts-node scripts/investigar-cuadrar-amazonas-geronimo.ts --apply`
+ * Por defecto usa el día de hoy (hora Ecuador). Para apuntar a otro día:
+ *   npx tsx scripts/investigar-cuadrar-amazonas-geronimo.ts --fecha=2026-08-12
+ * Para aplicar la corrección, agregar además: --apply
  */
 
 import { PrismaClient } from "@prisma/client";
@@ -18,21 +20,28 @@ const APPLY = process.argv.includes("--apply");
 // Ecuador (America/Guayaquil) es UTC-5 todo el año, sin horario de verano.
 const OFFSET_ECUADOR_HORAS = 5;
 
-function hoyRangoEcuador() {
-  const nowUtc = new Date();
-  const nowEcuador = new Date(nowUtc.getTime() - OFFSET_ECUADOR_HORAS * 3600 * 1000);
-  const inicioEcuadorComoUtc = new Date(
-    Date.UTC(
-      nowEcuador.getUTCFullYear(),
-      nowEcuador.getUTCMonth(),
-      nowEcuador.getUTCDate()
-    )
-  );
-  // inicioEcuadorComoUtc representa 00:00 hora Ecuador, expresado como si fuera UTC;
+function rangoDiaEcuador() {
+  const argFecha = process.argv.find((a) => a.startsWith("--fecha="));
+
+  let year: number, month: number, day: number;
+  if (argFecha) {
+    const valor = argFecha.split("=")[1]; // formato YYYY-MM-DD
+    const [y, m, d] = valor.split("-").map(Number);
+    year = y;
+    month = m - 1;
+    day = d;
+  } else {
+    const nowUtc = new Date();
+    const nowEcuador = new Date(nowUtc.getTime() - OFFSET_ECUADOR_HORAS * 3600 * 1000);
+    year = nowEcuador.getUTCFullYear();
+    month = nowEcuador.getUTCMonth();
+    day = nowEcuador.getUTCDate();
+  }
+
+  const inicioComoUtc = new Date(Date.UTC(year, month, day));
+  // inicioComoUtc representa 00:00 hora Ecuador, expresado como si fuera UTC;
   // sumamos el offset para obtener el instante UTC real.
-  const inicio = new Date(
-    inicioEcuadorComoUtc.getTime() + OFFSET_ECUADOR_HORAS * 3600 * 1000
-  );
+  const inicio = new Date(inicioComoUtc.getTime() + OFFSET_ECUADOR_HORAS * 3600 * 1000);
   const fin = new Date(inicio.getTime() + 24 * 3600 * 1000);
   return { inicio, fin };
 }
@@ -67,19 +76,19 @@ async function main() {
   }
   console.log(`\nUsando punto: ${punto.nombre} (ID: ${punto.id})\n`);
 
-  const { inicio, fin } = hoyRangoEcuador();
+  const { inicio, fin } = rangoDiaEcuador();
   console.log(
-    `Rango de "hoy" (hora Ecuador, UTC-5): ${inicio.toISOString()} a ${fin.toISOString()}\n`
+    `Rango de día analizado (hora Ecuador, UTC-5): ${inicio.toISOString()} a ${fin.toISOString()}\n`
   );
 
-  const movimientosHoy = await prisma.movimientoSaldo.findMany({
+  const movimientosDia = await prisma.movimientoSaldo.findMany({
     where: { punto_atencion_id: punto.id, fecha: { gte: inicio, lt: fin } },
     include: { moneda: true },
     orderBy: { fecha: "asc" },
   });
 
-  console.log(`Movimientos de hoy: ${movimientosHoy.length}`);
-  for (const m of movimientosHoy) {
+  console.log(`Movimientos del día analizado: ${movimientosDia.length}`);
+  for (const m of movimientosDia) {
     console.log(
       `  [${m.fecha.toISOString()}] ${m.moneda.codigo} | ${m.tipo_movimiento} | monto=${Number(
         m.monto
@@ -89,9 +98,18 @@ async function main() {
     );
   }
 
-  // Agrupar por moneda para recalcular el saldo del día
-  const porMoneda = new Map<string, { moneda: any; movimientos: typeof movimientosHoy }>();
-  for (const m of movimientosHoy) {
+  // Para la RECONCILIACIÓN no basta con los movimientos del día objetivo: si ya
+  // pasaron días desde entonces, el saldo actual en DB incluye también los
+  // movimientos posteriores. Por eso recalculamos desde el inicio del día
+  // objetivo hasta AHORA, y comparamos ese total contra el saldo actual.
+  const movimientosDesdeInicio = await prisma.movimientoSaldo.findMany({
+    where: { punto_atencion_id: punto.id, fecha: { gte: inicio } },
+    include: { moneda: true },
+    orderBy: { fecha: "asc" },
+  });
+
+  const porMoneda = new Map<string, { moneda: any; movimientos: typeof movimientosDesdeInicio }>();
+  for (const m of movimientosDesdeInicio) {
     if (!porMoneda.has(m.moneda_id)) {
       porMoneda.set(m.moneda_id, { moneda: m.moneda, movimientos: [] as any });
     }
@@ -99,7 +117,9 @@ async function main() {
   }
 
   console.log("\n" + "=".repeat(100));
-  console.log("COMPARACIÓN: saldo recalculado desde movimientos vs saldo actual en tabla Saldo");
+  console.log(
+    "COMPARACIÓN: saldo recalculado (desde inicio del día objetivo hasta ahora) vs saldo actual en tabla Saldo"
+  );
   console.log("=".repeat(100));
 
   for (const [monedaId, { moneda, movimientos }] of porMoneda) {
@@ -122,14 +142,14 @@ async function main() {
     });
 
     console.log(`\n--- ${moneda.codigo} (${moneda.nombre}) ---`);
-    console.log(`  Saldo al inicio del día: ${saldoInicialDia.toFixed(2)}`);
-    console.log(`  Saldo recalculado (efectivo) desde movimientos: ${saldoCalculado.toFixed(2)}`);
+    console.log(`  Saldo al inicio del día objetivo: ${saldoInicialDia.toFixed(2)}`);
+    console.log(`  Saldo recalculado (efectivo) desde entonces hasta ahora: ${saldoCalculado.toFixed(2)}`);
     console.log(`  Saldo actual en tabla Saldo (cantidad): ${Number(saldoActual?.cantidad ?? 0).toFixed(2)}`);
     console.log(`  Billetes actuales: ${Number(saldoActual?.billetes ?? 0).toFixed(2)} | Monedas físicas: ${Number(saldoActual?.monedas_fisicas ?? 0).toFixed(2)} | Bancos: ${Number(saldoActual?.bancos ?? 0).toFixed(2)}`);
 
     const diferencia = round2(saldoCalculado - Number(saldoActual?.cantidad ?? 0));
     if (Math.abs(diferencia) > 0.01) {
-      console.log(`  ⚠️  DIFERENCIA DETECTADA: ${diferencia > 0 ? "+" : ""}${diferencia.toFixed(2)} (saldo en DB está ${diferencia > 0 ? "por debajo" : "por encima"} de lo que indican los movimientos de hoy)`);
+      console.log(`  ⚠️  DIFERENCIA DETECTADA: ${diferencia > 0 ? "+" : ""}${diferencia.toFixed(2)} (saldo en DB está ${diferencia > 0 ? "por debajo" : "por encima"} de lo que indican los movimientos registrados)`);
 
       if (APPLY && saldoActual) {
         const usuarioId = await getUsuarioCorreccionId();
