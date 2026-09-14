@@ -975,6 +975,74 @@ try {
       await verify(1000);
     });
   }
+  for (const scenario of ['parcial', 'completado', 'abono posterior', 'sustitucion', 'sin evidencia', 'evidencia alterada', 'concurrente', 'fallo recibo']) {
+    await check(`Anulacion con evidencia: ${scenario}`, async () => {
+      const p = await prisma.puntoAtencion.create({ data: { nombre: `ANULACION ${scenario}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+      for (const m of [usd, eur]) await prisma.saldo.create({ data: {
+        punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, bancos: 25,
+        billetes: scenario === 'sustitucion' && m.id === usd.id ? 0 : 500,
+        monedas_fisicas: scenario === 'sustitucion' && m.id === usd.id ? 1000 : 500,
+      } });
+      const balancesSnapshot = () => prisma.saldo.findMany({ where: { punto_atencion_id: p.id }, orderBy: { moneda_id: 'asc' },
+        select: { moneda_id: true, cantidad: true, billetes: true, monedas_fisicas: true, bancos: true } });
+      const initial = JSON.stringify(await balancesSnapshot());
+      const later = scenario === 'abono posterior';
+      const created = await post('/exchanges', { ...exchange, punto_atencion_id: p.id,
+        monto_origen: 10, monto_destino: 10, tasa_cambio_billetes: 1, tasa_cambio_monedas: 1,
+        divisas_entregadas_billetes: 5, divisas_entregadas_monedas: 5, divisas_entregadas_total: 10,
+        divisas_recibidas_billetes: 5, divisas_recibidas_monedas: 5, divisas_recibidas_total: 10,
+        ...(later ? { saldo_pendiente: 10 } : { abono_inicial_monto: 5.01, saldo_pendiente: 4.99 }),
+      }, randomUUID(), origin.token);
+      ok(created); const id = created.body.exchange.id;
+      if (later) {
+        const response = await fetch(`${base}/exchanges/${id}/register-partial-payment`, {
+          method: 'PATCH', headers: { Authorization: `Bearer ${origin.token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ abono_inicial_monto: 5.01 }),
+        }); assert.equal(response.status, 200);
+      }
+      if (scenario === 'completado') assert.equal((await patchExchange(id, 'complete-partial', origin.token)).status, 200);
+      if (scenario === 'sin evidencia' || scenario === 'evidencia alterada') {
+        const receipt = await prisma.recibo.findFirst({ where: { referencia_id: id } });
+        const data = receipt.datos_operacion;
+        if (scenario === 'sin evidencia') delete data.cash_delta_v1;
+        else { data.cash_delta_v1[0].total += 1; data.cash_delta_v1[0].bills += 1; }
+        await prisma.recibo.update({ where: { id: receipt.id }, data: { datos_operacion: data } });
+      }
+      const snapshot = async () => JSON.stringify({ balances: await balancesSnapshot(),
+        exchange: await prisma.cambioDivisa.findUnique({ where: { id } }),
+        receipts: await prisma.recibo.findMany({ where: { referencia_id: id }, orderBy: { id: 'asc' } }),
+        movements: await prisma.movimientoSaldo.findMany({ where: { referencia_id: id }, orderBy: { id: 'asc' } }),
+      });
+      const before = await snapshot();
+      const remove = () => fetch(`${base}/exchanges/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${origin.token}` }, signal: AbortSignal.timeout(20000) });
+      let response;
+      if (scenario === 'concurrente') {
+        const responses = await raceBalance(p, [remove, remove]);
+        assert.deepEqual(responses.map(r => r.status).sort(), [200, 404]);
+        response = responses.find(r => r.status === 200);
+      } else if (scenario === 'fallo recibo') {
+        await pool.query(`CREATE FUNCTION reject_reversal_receipt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.referencia_id = '${id}' THEN RAISE EXCEPTION 'Fallo ficticio al borrar recibo'; END IF; RETURN OLD; END $$`);
+        await pool.query('CREATE TRIGGER reject_reversal_receipt BEFORE DELETE ON "Recibo" FOR EACH ROW EXECUTE FUNCTION reject_reversal_receipt()');
+        try { response = await remove(); } finally {
+          await pool.query('DROP TRIGGER reject_reversal_receipt ON "Recibo"');
+          await pool.query('DROP FUNCTION reject_reversal_receipt()');
+        }
+      } else response = await remove();
+      if (scenario === 'sin evidencia' || scenario === 'evidencia alterada') {
+        assert.equal(response.status, 409); assert.equal(await snapshot(), before);
+      } else if (scenario === 'fallo recibo') {
+        assert.equal(response.status, 500); assert.equal(await snapshot(), before);
+      } else {
+        assert.equal(response.status, 200, await response.text());
+        assert.equal(JSON.stringify(await balancesSnapshot()), initial);
+        assert.equal(await prisma.cambioDivisa.count({ where: { id } }), 0);
+        assert.equal(await prisma.recibo.count({ where: { referencia_id: id } }), 0);
+        const movements = await prisma.movimientoSaldo.findMany({ where: { referencia_id: id } });
+        for (const m of [usd, eur]) assert.equal(movements.filter(row => row.moneda_id === m.id)
+          .reduce((sum, row) => sum + Math.round(Number(row.monto) * 100), 0), 0);
+      }
+    });
+  }
   if (browserMode) {
     await prisma.usuario.create({ data: { username: 'navegador_local', nombre: 'Administrador ficticio navegador',
       password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'ADMIN', punto_atencion_id: permissionPoint.id } });

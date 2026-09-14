@@ -11,6 +11,7 @@ import { lockTransferBalance as lockBalance } from "../utils/transferBalance.js"
 import { assertOperationalSession, OperationalConflict } from "../utils/operationalConflict.js";
 import { remainingPartialCash } from "../utils/partialCashSettlement.js";
 import { splitCash } from "../utils/cashBreakdown.js";
+import { cashSnapshot, attachCashEvidence, cashReversalEvidence } from "../utils/exchangeCashEvidence.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
@@ -732,6 +733,8 @@ router.post(
           await lockBalance(tx, punto_atencion_id, currencyId);
         }
         await assertOperationalSession(tx, req.user, punto_atencion_id);
+        const cashBefore = metodo_pago_origen === "EFECTIVO" && metodo_entrega === "efectivo"
+          ? await cashSnapshot(tx, punto_atencion_id, [moneda_origen_id, moneda_destino_id]) : null;
         // Preparar tasas para almacenamiento: si no se requieren (no hay monto), guardar 0
         const tasaBilletesToStore = requiereTasaBilletes
           ? roundN(num(tasa_cambio_billetes), 3)
@@ -1248,6 +1251,7 @@ router.post(
           );
         }
 
+        if (cashBefore) await attachCashEvidence(tx, numeroRecibo, punto_atencion_id, cashBefore);
         return cambio;
       });
 
@@ -1578,6 +1582,8 @@ router.patch(
           await lockBalance(tx, cambio.punto_atencion_id, currencyId);
         }
         await assertOperationalSession(tx, req.user, cambio.punto_atencion_id);
+        const cashBefore = cambio.metodo_pago_origen === "EFECTIVO" && cambio.metodo_entrega === "efectivo"
+          ? await cashSnapshot(tx, cambio.punto_atencion_id, [cambio.moneda_origen_id, cambio.moneda_destino_id]) : null;
 
         const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
 
@@ -1893,6 +1899,7 @@ router.patch(
           },
         });
 
+        if (cashBefore && updated.numero_recibo_completar) await attachCashEvidence(tx, updated.numero_recibo_completar, cambio.punto_atencion_id, cashBefore);
         return updated;
       });
       if (!updated) return;
@@ -1991,6 +1998,8 @@ async function completePendingExchange(req: AuthenticatedRequest, res: express.R
           await lockBalance(tx, cambio.punto_atencion_id, currencyId);
         }
         await assertOperationalSession(tx, req.user, cambio.punto_atencion_id);
+        const cashBefore = cambio.metodo_pago_origen === "EFECTIVO" && cambio.metodo_entrega === "efectivo"
+          ? await cashSnapshot(tx, cambio.punto_atencion_id, [cambio.moneda_origen_id, cambio.moneda_destino_id]) : null;
 
         if (partialOnly && num(cambio.saldo_pendiente) <= 0) {
           res.status(400).json({ success: false, error: "Este cambio no tiene saldo pendiente" });
@@ -2364,6 +2373,7 @@ async function completePendingExchange(req: AuthenticatedRequest, res: express.R
           },
         });
 
+        if (cashBefore && updated.numero_recibo_completar) await attachCashEvidence(tx, updated.numero_recibo_completar, cambio.punto_atencion_id, cashBefore);
         return updated;
       });
       if (!updated) return;
@@ -3066,6 +3076,7 @@ router.delete(
         for (const currencyId of [...new Set([cambio.moneda_origen_id, cambio.moneda_destino_id])].sort()) {
           await lockBalance(tx, cambio.punto_atencion_id, currencyId);
         }
+        const evidence = await cashReversalEvidence(tx, cambio);
         // Revertir ORIGEN (había INGRESO efectivo y/o bancos según metodo_pago_origen)
         const saldoOrigen = await getSaldo(
           tx,
@@ -3090,15 +3101,15 @@ router.delete(
         const ingresoBkRaw = num(cambio.usd_recibido_transfer, 0);
         const sumaOrigenCampos = round2(ingresoEfRaw + ingresoBkRaw);
 
-        const ingresoEf = sumaOrigenCampos > 0 ? ingresoEfRaw : sumOrigenTotal;
-        const ingresoBk = sumaOrigenCampos > 0 ? ingresoBkRaw : 0;
+        const ingresoEf = evidence ? evidence.origin.total / 100 : sumaOrigenCampos > 0 ? ingresoEfRaw : sumOrigenTotal;
+        const ingresoBk = evidence ? 0 : sumaOrigenCampos > 0 ? ingresoBkRaw : 0;
 
         const nuevoEf = round2(anteriorEf - ingresoEf);
         const nuevoBk = round2(anteriorBk - ingresoBk);
         const nuevoBil = round2(num(saldoOrigen?.billetes) -
-          (ingresoEf > 0 ? num(cambio.divisas_entregadas_billetes) : 0));
+          (evidence ? evidence.origin.bills / 100 : ingresoEf > 0 ? num(cambio.divisas_entregadas_billetes) : 0));
         const nuevoMon = round2(num(saldoOrigen?.monedas_fisicas) -
-          (ingresoEf > 0 ? num(cambio.divisas_entregadas_monedas) : 0));
+          (evidence ? evidence.origin.coins / 100 : ingresoEf > 0 ? num(cambio.divisas_entregadas_monedas) : 0));
         if (nuevoEf < 0 || nuevoBil < 0 || nuevoMon < 0) {
           res.status(409).json({ success: false, error: "Saldo fisico insuficiente para revertir el cambio" });
           return false;
@@ -3163,7 +3174,7 @@ router.delete(
             : 0;
 
         const egEf = num(cambio.usd_entregado_efectivo, 0);
-        const egBk = num(cambio.usd_entregado_transfer, 0);
+        const egBk = evidence ? 0 : num(cambio.usd_entregado_transfer, 0);
         const sumDestTotal = num(
           cambio.divisas_recibidas_total || cambio.monto_destino
         );
@@ -3172,7 +3183,7 @@ router.delete(
         // Fallback SOLO para registros legacy sin desglose efectivo/bancos (ambos en 0).
         // Si el registro sí tiene bancos > 0 (entrega por transferencia), respetamos
         // ese dato y no acreditamos efectivo que nunca salió de caja.
-        const devolverEf = sumaDestCampos > 0 ? egEf : sumDestTotal;
+        const devolverEf = evidence ? -evidence.destination.total / 100 : sumaDestCampos > 0 ? egEf : sumDestTotal;
         const nuevoEfDest = round2(antEf + devolverEf);
         const nuevoBkDest = round2(antBk + egBk);
 
@@ -3182,9 +3193,9 @@ router.delete(
         // `cantidad`, el desglose de billetes/monedas debe seguir la misma decisión
         // o queda desincronizado de `cantidad` (cantidad se recupera pero billetes no).
         const sumarBilletes =
-          devolverEf > 0 ? round2(num(cambio.divisas_recibidas_billetes)) : 0;
+          evidence ? -evidence.destination.bills / 100 : devolverEf > 0 ? round2(num(cambio.divisas_recibidas_billetes)) : 0;
         const sumarMonedas =
-          devolverEf > 0 ? round2(num(cambio.divisas_recibidas_monedas)) : 0;
+          evidence ? -evidence.destination.coins / 100 : devolverEf > 0 ? round2(num(cambio.divisas_recibidas_monedas)) : 0;
 
         const nuevoBilDest = round2(
           num(saldoDestino?.billetes) + sumarBilletes
@@ -3264,6 +3275,10 @@ router.delete(
       });
       res.json({ success: true });
     } catch (error) {
+      if (error instanceof OperationalConflict) {
+        res.status(409).json({ success: false, error: error.message });
+        return;
+      }
       logger.error("Error eliminando cambio de divisa", {
         error: error instanceof Error ? error.message : String(error),
       });
