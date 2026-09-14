@@ -2,6 +2,14 @@
 
 Estado: revisión en curso. No se ha hecho push, despliegue ni escritura en la base remota. No equivale a autorizar el despliegue de todos los cambios acumulados.
 
+## Avance: ventas y entrega en otras monedas
+
+Se corrigió el egreso cuando la moneda destino no es USD: antes siempre descontaba caja, incluso al seleccionar transferencia; ahora respeta efectivo, banco o el desglose mixto validado. Los nuevos registros conservan el total recibido en moneda destino, usando el mismo importe que se contabiliza. Esto permite liquidar correctamente aunque un cliente anterior envíe en ese campo el equivalente USD. Los nombres heredados `usd_entregado_*` representan el desglose en moneda destino; no se convierten importes mixtos por suposición. No se modifican registros históricos.
+
+Evidencia: [224 pruebas de integración correctas](INTEGRACION_LOCAL_VENTAS_MONEDAS.json) y TypeScript backend correcto. La matriz incluye COMPRA EUR→USD, VENTA USD→EUR y COMPRA GBP→EUR, siete combinaciones de vías, operaciones completas y abonos liquidados por `cerrar`, `completar` y `complete-partial`. Comprueba saldo físico, bancos, movimientos firmados, recibos y estado; las solicitudes concurrentes de cierre se prueban en los pares con USD. Para destino no USD también se envía deliberadamente un total heredado distinto del importe nativo y se verifica su normalización. Incluye doce rechazos de desgloses inválidos en compra/venta sin escrituras contables.
+
+Se retiró el reparto de respaldo 50/50. El cálculo compartido con recontabilización rechaza desgloses incompatibles con 409; no se ejecutaron recontabilizaciones históricas ni se certifica ese flujo completo. Continúan pendientes los reversos bancarios/mixtos, toda la casuística de sustitución física, pantallas y comprobaciones de despliegue/respaldo. Las referencias anteriores a VENTA/otros pares pendientes quedan acotadas por esta matriz, que no cubre todas las monedas, tasas ni clientes posibles. PostgreSQL temporal detenido al finalizar; sin push ni cambios remotos.
+
 ## Avance: creación bancaria y mixta
 
 **Actualización: liquidación bancaria/mixta verificada para los escenarios descritos abajo.** Las tres rutas (`cerrar`, `completar`, `complete-partial`) calculan ahora el restante de cuatro componentes: ingreso caja/bancos y egreso caja/bancos. Contrastan cada componente con los movimientos vinculados, sus signos, punto, moneda y diferencia entre saldo anterior/nuevo. Admiten historial proporcional al abono o ya contabilizado completamente; en este último caso no vuelven a tocar saldos ni movimientos. Se retiraron los cálculos porcentuales duplicados de los controladores.

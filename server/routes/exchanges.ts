@@ -116,17 +116,24 @@ function calcularCantidadCaja(data: {
 }
 
 function calcularEgresoDestino(params: {
-  isDestinoUSD: boolean;
   metodoEntrega?: string | null;
   totalDestino: number;
   usdEntregadoEfectivo?: number | null;
   usdEntregadoTransfer?: number | null;
 }) {
-  if (!params.isDestinoUSD) {
+  if (params.metodoEntrega === "efectivo") {
     return {
       egresoEf: round2(params.totalDestino),
       egresoBk: 0,
     };
+  }
+
+  if (params.metodoEntrega === "transferencia") {
+    return { egresoEf: 0, egresoBk: round2(params.totalDestino) };
+  }
+  if (params.metodoEntrega !== "mixto" ||
+      round2(num(params.usdEntregadoEfectivo) + num(params.usdEntregadoTransfer)) !== round2(params.totalDestino)) {
+    throw new OperationalConflict("El desglose de entrega requiere revision contable.");
   }
 
   return {
@@ -555,7 +562,7 @@ router.post(
           ? num(divisas_entregadas_total)
           : entregadas_total_calc;
 
-      const divisas_recibidas_total_final =
+      let divisas_recibidas_total_final =
         num(divisas_recibidas_total) > 0
           ? num(divisas_recibidas_total)
           : recibidas_total_calc;
@@ -628,8 +635,13 @@ router.post(
           "",
       };
 
-      // Normalizar campos USD por método de entrega (solo para reportes; el CUADRE es solo EFECTIVO)
-      if (isUSDByCode(monedaDestino.codigo)) {
+      // The legacy usd_* field names hold amounts in the destination currency.
+      // New records keep the delivered total in destination currency, matching
+      // the amount posted to its balance (including legacy UI totals in USD).
+      if (!isUSDByCode(monedaDestino.codigo)) {
+        divisas_recibidas_total_final = round2(monto_destino_final);
+      }
+      {
         if (metodo_entrega === "efectivo") {
           usd_entregado_efectivo = divisas_recibidas_total_final;
           usd_entregado_transfer = 0;
@@ -1049,39 +1061,12 @@ router.post(
             ? num(saldoDestino?.bancos)
             : 0;
 
-        const isDestinoUSD = isUSDByCode(cambio.monedaDestino?.codigo);
-        // FIX: Usar monto_destino_final en lugar de divisas_recibidas_total_final
-        // cuando la moneda destino NO es USD. divisas_recibidas_total puede venir
-        // con el valor en USD desde el frontend, pero necesitamos el monto en la
-        // moneda destino para calcular correctamente el egreso.
-        const totalDestinoEgreso = isDestinoUSD
-          ? round2(divisas_recibidas_total_final)
-          : round2(monto_destino_final);
-        
         let { egresoEf, egresoBk } = calcularEgresoDestino({
-          isDestinoUSD,
           metodoEntrega: metodo_entrega,
-          totalDestino: totalDestinoEgreso,
+          totalDestino: round2(divisas_recibidas_total_final),
           usdEntregadoEfectivo: num(usd_entregado_efectivo),
           usdEntregadoTransfer: num(usd_entregado_transfer),
         });
-
-        if (
-          isDestinoUSD &&
-          round2(egresoEf + egresoBk) !== round2(divisas_recibidas_total_final)
-        ) {
-          const tot = round2(divisas_recibidas_total_final);
-          if (metodo_entrega === "efectivo") {
-            egresoEf = tot;
-            egresoBk = 0;
-          } else if (metodo_entrega === "transferencia") {
-            egresoEf = 0;
-            egresoBk = tot;
-          } else {
-            egresoEf = round2(tot / 2);
-            egresoBk = round2(tot - egresoEf);
-          }
-        }
 
         // ✅ APLICAR PORCENTAJE al egreso también
         egresoEf = round2(egresoEf * porcentajeActualizacion);
@@ -2861,12 +2846,10 @@ router.post(
       }
 
       // Reconstruir egresos/ingresos coherentes con métodos
-      const isDestinoUSD = isUSDByCode(cambio.monedaDestino?.codigo);
       const totDestino = num(
         cambio.divisas_recibidas_total || cambio.monto_destino
       );
       const { egresoEf, egresoBk } = calcularEgresoDestino({
-        isDestinoUSD,
         metodoEntrega: cambio.metodo_entrega,
         totalDestino: totDestino,
         usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo),
@@ -2973,6 +2956,10 @@ router.post(
           success: false,
           ...(typeof data === "object" ? data : { error: String(data) }),
         });
+        return;
+      }
+      if (error instanceof OperationalConflict) {
+        res.status(409).json({ success: false, error: error.message });
         return;
       }
       logger.error("Error al recontabilizar cambio", {
