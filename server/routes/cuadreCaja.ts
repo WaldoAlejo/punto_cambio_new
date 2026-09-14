@@ -1,6 +1,6 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import prisma from "../lib/prisma.js";
+import prisma, { type Prisma } from "../lib/prisma.js";
 import { pool } from "../lib/database.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
@@ -40,6 +40,19 @@ async function actualizarSaldoFisicoYLogico(
 }
 
 const router = express.Router();
+
+class CuadreStateConflict extends Error {}
+
+async function writeOpenDetail<T>(id: string, write: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  return prisma.$transaction(async tx => {
+    const rows = await tx.$queryRaw<Array<{ estado: string }>>`
+      SELECT estado FROM "CuadreCaja" WHERE id = ${id} FOR UPDATE`;
+    if (rows[0]?.estado !== 'ABIERTO') {
+      throw new CuadreStateConflict('El cuadre cambió de estado mientras se consultaba. Actualiza la pantalla para ver el cierre guardado.');
+    }
+    return write(tx);
+  });
+}
 
 interface UsuarioAutenticado {
   id: string;
@@ -634,7 +647,7 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
         let detalle: DetalleCuadreCaja;
         if (!detalleExistente) {
           const detalleId = randomUUID();
-          detalle = (await prisma.detalleCuadreCaja.create({
+          detalle = (await writeOpenDetail(cuadre.id, tx => tx.detalleCuadreCaja.create({
             data: {
               id: detalleId,
               cuadre_id: cuadre.id,
@@ -649,7 +662,7 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
               bancos_teorico: bancosTeorico,
               conteo_bancos: conteoBancos,
             },
-          })) as any;
+          }))) as any;
           logger.info(`✅ Detalle creado para ${moneda.codigo}`, {
             saldo_apertura: saldoApertura,
             saldo_cierre_teorico: saldoCierreTeórico,
@@ -660,7 +673,7 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
         } else {
           // Solo actualizar campos calculados (teórico, movimientos).
           // NUNCA pisar conteo_fisico, billetes, monedas, bancos del operador.
-          detalle = (await prisma.detalleCuadreCaja.update({
+          detalle = (await writeOpenDetail(cuadre.id, tx => tx.detalleCuadreCaja.update({
             where: { id: detalleExistente.id },
             data: {
               saldo_apertura: saldoApertura,
@@ -672,7 +685,7 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
                 diferencia_bancos: Number((conteoBancos - bancosTeorico).toFixed(2)),
               } : {}),
             },
-          })) as any;
+          }))) as any;
           logger.info(`✅ Detalle actualizado para ${moneda.codigo}`, {
             saldo_apertura: saldoApertura,
             saldo_cierre_teorico: saldoCierreTeórico,
@@ -689,6 +702,7 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
         detalle.moneda = moneda;
         detalles.push(detalle);
       } catch (monedaError) {
+        if (monedaError instanceof CuadreStateConflict) throw monedaError;
         logger.error(`❌ Error procesando moneda ${moneda.codigo}`, {
           error: monedaError instanceof Error ? monedaError.message : String(monedaError),
           stack: monedaError instanceof Error ? monedaError.stack : undefined,
@@ -771,6 +785,9 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    if (error instanceof CuadreStateConflict) {
+      return res.status(409).json({ success: false, error: errorMessage });
+    }
     const errorStack = error instanceof Error ? error.stack : undefined;
     
     logger.error("❌ Error en GET /cuadre-caja", {

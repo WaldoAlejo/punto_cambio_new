@@ -138,3 +138,11 @@ Suite actual: **56 comprobaciones aprobadas**. La fixture crea un CERRADO de dos
 [Fallo inicial: cierre vacío](INTEGRACION_LOCAL_HISTORICO_ANTES.json). [Resultado corregido](INTEGRACION_LOCAL_HISTORICO_CORREGIDO.json). La nueva respuesta histórica conserva los campos persistidos; ingresos/egresos por moneda siguen sumándose de movimientos del día, no son campos de snapshot. TypeScript correcto y ESLint conserva cuatro errores/tres advertencias previos. Servicios temporales detenidos, sin producción.
 
 No incluye consulta de un ABIERTO que se cierra durante la misma petición, ni normalización de fechas heredadas. La rama operativa sin cierre guardado conserva sus escrituras existentes.
+
+## Ampliación: GET abierto que espera mientras se cierra
+
+Suite actual: **57 comprobaciones aprobadas**. Un punto ficticio tiene saldo actual 1005 y un cuadre ABIERTO. La prueba bloquea cabecera y detalle, inicia el GET real y espera que alcance una escritura. La transacción de fixture cambia a CERRADO y guarda valores históricos deliberadamente distintos (teórico 120, conteo 119) antes de liberar el bloqueo. Es una simulación controlada de la persistencia final, no una ejecución concurrente del endpoint completo de cierre.
+
+Antes la consulta respondía 200 después de esperar: [evidencia previa](INTEGRACION_LOCAL_LECTURA_CIERRE_ANTES.json). Después responde 409, conserva íntegramente el detalle guardado y la recarga devuelve el cierre con teórico 120: [evidencia posterior](INTEGRACION_LOCAL_LECTURA_CIERRE_CORREGIDA.json). Cada escritura del GET verifica ABIERTO bajo bloqueo de cabecera dentro de su propia transacción. Se evita ocultar ese conflicto en la captura de errores por moneda.
+
+TypeScript correcto; ESLint mantiene cuatro errores y tres advertencias previos. Servicios temporales detenidos, sin producción. No certifica una instantánea consistente de toda la respuesta ni el resto de rutas de conteo.

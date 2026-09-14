@@ -630,6 +630,44 @@ try {
       } finally { await prisma.moneda.update({ where: { id: usd.id }, data: { activo: true } }); }
     });
   });
+  await check('GET iniciado con cuadre abierto no modifica detalles si se cierra mientras espera', async () => {
+    const p = await prisma.puntoAtencion.create({ data: { nombre: 'LECTURA EN CIERRE', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+    await prisma.saldoInicial.create({ data: { punto_atencion_id: p.id, moneda_id: usd.id, cantidad_inicial: 1000, asignado_por: origin.userId } });
+    await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: usd.id, cantidad: 1005, billetes: 1005, bancos: 25 } });
+    const template = await prisma.movimientoSaldo.findFirst();
+    await prisma.movimientoSaldo.create({ data: { ...template, id: randomUUID(), punto_atencion_id: p.id,
+      moneda_id: usd.id, fecha: new Date(), monto: 5, saldo_anterior: 1000, saldo_nuevo: 1005 } });
+    const c = await prisma.cuadreCaja.create({ data: { punto_atencion_id: p.id, usuario_id: origin.userId, fecha: dayStart, estado: 'ABIERTO',
+      detalles: { create: { moneda_id: usd.id, saldo_apertura: 1000, saldo_cierre: 1005, conteo_fisico: 1005, billetes: 1005 } } }, include: { detalles: true } });
+    const blocker = new Client({ connectionString: url }); await blocker.connect();
+    let request, response, expected;
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT id FROM "CuadreCaja" WHERE id=$1 FOR UPDATE', [c.id]);
+      await blocker.query('SELECT id FROM "DetalleCuadreCaja" WHERE cuadre_id=$1 FOR UPDATE', [c.id]);
+      request = fetch(`${base}/cuadre-caja?pointId=${p.id}`, { headers: { Authorization: `Bearer ${origin.token}` }, signal: AbortSignal.timeout(20000) });
+      const deadline = Date.now() + 10000; let waiting = 0;
+      while (Date.now() < deadline) {
+        waiting = (await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock'")).rows[0].n;
+        if (waiting) break;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      assert.ok(waiting, 'El GET debe alcanzar la escritura antes del cierre simulado');
+      // Simulate the final transaction of a closer while the GET has an old snapshot.
+      await blocker.query('UPDATE "CuadreCaja" SET estado=\'CERRADO\', fecha_cierre=now() WHERE id=$1', [c.id]);
+      await blocker.query('UPDATE "DetalleCuadreCaja" SET saldo_apertura=100, saldo_cierre=120, conteo_fisico=119, diferencia=-1 WHERE cuadre_id=$1', [c.id]);
+      expected = (await blocker.query('SELECT to_jsonb(d) AS data FROM "DetalleCuadreCaja" d WHERE cuadre_id=$1', [c.id])).rows;
+      await blocker.query('COMMIT');
+    } finally {
+      await blocker.query('ROLLBACK'); await blocker.end();
+      if (request) response = await request;
+    }
+    assert.equal(response.status, 409);
+    const after = (await pool.query('SELECT to_jsonb(d) AS data FROM "DetalleCuadreCaja" d WHERE cuadre_id=$1', [c.id])).rows;
+    assert.deepEqual(after, expected);
+    const reread = await fetch(`${base}/cuadre-caja?pointId=${p.id}`, { headers: { Authorization: `Bearer ${origin.token}` } });
+    assert.equal(reread.status, 200); assert.equal((await reread.json()).data.detalles[0].saldo_cierre, 120);
+  });
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);
