@@ -1,6 +1,7 @@
 import express from "express";
 import { randomUUID } from "crypto";
-import prisma, { type Prisma } from "../lib/prisma.js";
+import prisma from "../lib/prisma.js";
+import { writeOpenDetail, CuadreStateConflict } from "../utils/openCuadre.js";
 import { pool } from "../lib/database.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
@@ -40,19 +41,6 @@ async function actualizarSaldoFisicoYLogico(
 }
 
 const router = express.Router();
-
-class CuadreStateConflict extends Error {}
-
-async function writeOpenDetail<T>(id: string, write: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
-  return prisma.$transaction(async tx => {
-    const rows = await tx.$queryRaw<Array<{ estado: string }>>`
-      SELECT estado FROM "CuadreCaja" WHERE id = ${id} FOR UPDATE`;
-    if (rows[0]?.estado !== 'ABIERTO') {
-      throw new CuadreStateConflict('El cuadre cambió de estado mientras se consultaba. Actualiza la pantalla para ver el cierre guardado.');
-    }
-    return write(tx);
-  });
-}
 
 interface UsuarioAutenticado {
   id: string;

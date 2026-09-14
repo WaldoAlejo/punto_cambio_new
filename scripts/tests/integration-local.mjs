@@ -85,6 +85,7 @@ try {
     ['/api/exchanges', '../../server/routes/exchanges.ts'],
     ['/api/guardar-cierre', '../../server/routes/guardar-cierre.ts'],
     ['/api/cuadre-caja', '../../server/routes/cuadreCaja.ts'],
+    ['/api/cuadre-caja', '../../server/routes/cuadre-caja-conteo.ts'],
     ['/api/transfers', '../../server/routes/transfers.ts'],
     ['/api/transfer-approvals', '../../server/routes/transfer-approvals.ts'],
   ]) app.use(mount, (await import(module)).default);
@@ -212,7 +213,7 @@ try {
       return body.data;
     };
     const first = await getReport();
-    await prisma.detalleCuadreCaja.updateMany({ where: { cuadre_id: first.cuadre_id, moneda_id: usd.id }, data: { conteo_bancos: 23 } });
+    ok(await post('/cuadre-caja/conteo-fisico', { cuadre_id: first.cuadre_id, moneda_id: usd.id, billetes: 890, monedas_fisicas: 0, conteo_bancos: 23 }));
     // Simulate a bank balance change after the operator saved the count.
     await prisma.saldo.update({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: point.id, moneda_id: usd.id } }, data: { bancos: 30 } });
     try {
@@ -630,8 +631,9 @@ try {
       } finally { await prisma.moneda.update({ where: { id: usd.id }, data: { activo: true } }); }
     });
   });
-  await check('GET iniciado con cuadre abierto no modifica detalles si se cierra mientras espera', async () => {
-    const p = await prisma.puntoAtencion.create({ data: { nombre: 'LECTURA EN CIERRE', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+  for (const requestKind of ['GET', 'conteo']) {
+  await check(`${requestKind} iniciado con cuadre abierto no modifica detalles si se cierra mientras espera`, async () => {
+    const p = await prisma.puntoAtencion.create({ data: { nombre: `LECTURA EN CIERRE ${requestKind}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
     await prisma.saldoInicial.create({ data: { punto_atencion_id: p.id, moneda_id: usd.id, cantidad_inicial: 1000, asignado_por: origin.userId } });
     await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: usd.id, cantidad: 1005, billetes: 1005, bancos: 25 } });
     const template = await prisma.movimientoSaldo.findFirst();
@@ -639,13 +641,20 @@ try {
       moneda_id: usd.id, fecha: new Date(), monto: 5, saldo_anterior: 1000, saldo_nuevo: 1005 } });
     const c = await prisma.cuadreCaja.create({ data: { punto_atencion_id: p.id, usuario_id: origin.userId, fecha: dayStart, estado: 'ABIERTO',
       detalles: { create: { moneda_id: usd.id, saldo_apertura: 1000, saldo_cierre: 1005, conteo_fisico: 1005, billetes: 1005 } } }, include: { detalles: true } });
+    const counter = await prisma.usuario.create({ data: { username: `contador_${requestKind}`, nombre: 'Contador ficticio',
+      password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'OPERADOR', punto_atencion_id: p.id } });
+    await prisma.jornada.create({ data: { usuario_id: counter.id, punto_atencion_id: p.id, fecha_inicio: morning, estado: 'ACTIVO' } });
+    const login = await post('/auth/login', { username: counter.username, password: 'PruebaLocal_123!' }); ok(login);
+    const countBody = { cuadre_id: c.id, moneda_id: usd.id, billetes: 700, monedas_fisicas: 3, conteo_bancos: 8 };
     const blocker = new Client({ connectionString: url }); await blocker.connect();
     let request, response, expected;
     try {
       await blocker.query('BEGIN');
       await blocker.query('SELECT id FROM "CuadreCaja" WHERE id=$1 FOR UPDATE', [c.id]);
       await blocker.query('SELECT id FROM "DetalleCuadreCaja" WHERE cuadre_id=$1 FOR UPDATE', [c.id]);
-      request = fetch(`${base}/cuadre-caja?pointId=${p.id}`, { headers: { Authorization: `Bearer ${origin.token}` }, signal: AbortSignal.timeout(20000) });
+      request = requestKind === 'GET'
+        ? fetch(`${base}/cuadre-caja?pointId=${p.id}`, { headers: { Authorization: `Bearer ${origin.token}` }, signal: AbortSignal.timeout(20000) })
+        : post('/cuadre-caja/conteo-fisico', countBody, undefined, login.body.token);
       const deadline = Date.now() + 10000; let waiting = 0;
       while (Date.now() < deadline) {
         waiting = (await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock'")).rows[0].n;
@@ -667,7 +676,11 @@ try {
     assert.deepEqual(after, expected);
     const reread = await fetch(`${base}/cuadre-caja?pointId=${p.id}`, { headers: { Authorization: `Bearer ${origin.token}` } });
     assert.equal(reread.status, 200); assert.equal((await reread.json()).data.detalles[0].saldo_cierre, 120);
+    if (requestKind === 'conteo') {
+      assert.equal((await post('/cuadre-caja/conteo-fisico', countBody, undefined, login.body.token)).status, 404);
+    }
   });
+  }
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

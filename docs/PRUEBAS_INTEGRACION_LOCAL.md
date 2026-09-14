@@ -146,3 +146,11 @@ Suite actual: **57 comprobaciones aprobadas**. Un punto ficticio tiene saldo act
 Antes la consulta respondía 200 después de esperar: [evidencia previa](INTEGRACION_LOCAL_LECTURA_CIERRE_ANTES.json). Después responde 409, conserva íntegramente el detalle guardado y la recarga devuelve el cierre con teórico 120: [evidencia posterior](INTEGRACION_LOCAL_LECTURA_CIERRE_CORREGIDA.json). Cada escritura del GET verifica ABIERTO bajo bloqueo de cabecera dentro de su propia transacción. Se evita ocultar ese conflicto en la captura de errores por moneda.
 
 TypeScript correcto; ESLint mantiene cuatro errores y tres advertencias previos. Servicios temporales detenidos, sin producción. No certifica una instantánea consistente de toda la respuesta ni el resto de rutas de conteo.
+
+## Ampliación: guardado real de conteos
+
+Suite actual: **58 comprobaciones aprobadas**. Monta `/cuadre-caja/conteo-fisico` y sustituye la preparación directa del conteo bancario por el POST real. La actualización fallaba con 500 por un `updated_at` inexistente en el modelo: [evidencia previa](INTEGRACION_LOCAL_CONTEO_ANTES.json). Se corrigió el payload y se comparte `writeOpenDetail` entre reporte y conteo.
+
+La carrera de cierre se repite con un operador ficticio que guarda su conteo: después de que la transacción SQL de fixture cierre el cuadre, exige 409, detalles intactos y recarga histórica correcta. Un nuevo POST contra ese cierre devuelve 404. [Evidencia posterior](INTEGRACION_LOCAL_CONTEO_CORREGIDO.json). TypeScript correcto; cuatro errores de lint eliminados del guardado, quedan hallazgos anteriores. Servicios temporales detenidos y sin producción.
+
+No certifica la rama que crea el primer detalle ni todos los endpoints de validación/auditoría. La carrera usa una transacción SQL de fixture como cierre final, no el endpoint de cierre completo.

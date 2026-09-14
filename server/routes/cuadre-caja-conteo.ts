@@ -12,7 +12,8 @@
 
 import express from "express";
 import { randomUUID } from "crypto";
-import prisma from "../lib/prisma.js";
+import prisma, { Prisma } from "../lib/prisma.js";
+import { writeOpenDetail, CuadreStateConflict } from "../utils/openCuadre.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
@@ -102,8 +103,9 @@ router.post("/conteo-fisico", authenticateToken, requireRole(["OPERADOR", "ADMIN
     // Calcular conteo físico total
     const conteoFisicoTotal = Number((billetes + monedas_fisicas).toFixed(2));
 
-    // Obtener el detalle actual para calcular la diferencia
-    const detalleResult = await prisma.detalleCuadreCaja.findFirst({
+    const { saldoCierre, diferencia, diferenciaBancos, requiereAlerta } = await writeOpenDetail(cuadre_id, async tx => {
+    // Leer el teórico y guardar el conteo bajo el mismo bloqueo de cabecera.
+    const detalleResult = await tx.detalleCuadreCaja.findFirst({
       where: { cuadre_id, moneda_id },
     });
 
@@ -126,7 +128,7 @@ router.post("/conteo-fisico", authenticateToken, requireRole(["OPERADOR", "ADMIN
     // Guardar o actualizar el detalle
     if (!detalleResult) {
       // Crear nuevo detalle
-      await prisma.detalleCuadreCaja.create({
+      await tx.detalleCuadreCaja.create({
         data: {
           id: randomUUID(),
           cuadre_id,
@@ -141,28 +143,30 @@ router.post("/conteo-fisico", authenticateToken, requireRole(["OPERADOR", "ADMIN
           conteo_bancos,
           diferencia_bancos: diferenciaBancos,
           observaciones_detalle: observaciones || null,
-          desglose_denominaciones: desgloseJSON ? JSON.parse(desgloseJSON) as any : null as any,
+          desglose_denominaciones: desgloseJSON ? JSON.parse(desgloseJSON) as Prisma.InputJsonValue : Prisma.DbNull,
         },
       });
     } else {
       // Actualizar detalle existente
-      const updateData: any = {
+      const updateData: Prisma.DetalleCuadreCajaUpdateInput = {
         conteo_fisico: conteoFisicoTotal,
         diferencia,
         billetes,
         monedas_fisicas,
         conteo_bancos,
         diferencia_bancos: diferenciaBancos,
-        updated_at: new Date(),
       };
       if (observaciones !== undefined) updateData.observaciones_detalle = observaciones || null;
-      if (desgloseJSON !== null) updateData.desglose_denominaciones = JSON.parse(desgloseJSON) as any;
+      if (desgloseJSON !== null) updateData.desglose_denominaciones = JSON.parse(desgloseJSON) as Prisma.InputJsonValue;
 
-      await prisma.detalleCuadreCaja.update({
+      await tx.detalleCuadreCaja.update({
         where: { id: detalleResult.id },
         data: updateData,
       });
     }
+
+    return { saldoCierre, diferencia, diferenciaBancos, requiereAlerta };
+    });
 
     // NOTA: El conteo físico intermedio NO actualiza la tabla Saldo.
     // Saldo.cantidad debe mantenerse como el último saldo teórico reconciliado
@@ -210,6 +214,9 @@ router.post("/conteo-fisico", authenticateToken, requireRole(["OPERADOR", "ADMIN
     });
 
   } catch (error) {
+    if (error instanceof CuadreStateConflict) {
+      return res.status(409).json({ success: false, error: error.message });
+    }
     logger.error("❌ Error guardando conteo físico", {
       error: error instanceof Error ? error.message : String(error),
       usuario_id: usuario.id,
