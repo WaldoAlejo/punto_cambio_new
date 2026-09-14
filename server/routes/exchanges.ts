@@ -10,6 +10,7 @@ import prisma from "../lib/prisma.js";
 import { lockTransferBalance as lockBalance } from "../utils/transferBalance.js";
 import { assertOperationalSession, OperationalConflict } from "../utils/operationalConflict.js";
 import { remainingPartialCash } from "../utils/partialCashSettlement.js";
+import { splitCash } from "../utils/cashBreakdown.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
@@ -958,8 +959,7 @@ router.post(
               num(divisas_entregadas_monedas) / totalEntregado;
 
             // Aplicar proporción al ingreso efectivo para mantener coherencia
-            ingresoBil = round2(ingresoEf * proporcionBilletes);
-            ingresoMon = round2(ingresoEf * proporcionMonedas);
+            ({ bills: ingresoBil, coins: ingresoMon } = splitCash(ingresoEf, proporcionBilletes, proporcionMonedas));
 
             // Ajustar por diferencias de redondeo: asegurar que billetes + monedas = total
             const diferencia = ingresoEf - (ingresoBil + ingresoMon);
@@ -1127,8 +1127,7 @@ router.post(
               const proporcionBilletesDeseada = billetesDeseados / totalDeseado;
               const proporcionMonedasDeseada = monedasDeseadas / totalDeseado;
 
-              billetesEgreso = round2(egresoEf * proporcionBilletesDeseada);
-              monedasEgreso = round2(egresoEf * proporcionMonedasDeseada);
+              ({ bills: billetesEgreso, coins: monedasEgreso } = splitCash(egresoEf, proporcionBilletesDeseada, proporcionMonedasDeseada));
 
               // Si no tenemos suficientes billetes, usar monedas
               if (billetesEgreso > billetesDisponibles) {
@@ -1649,8 +1648,7 @@ router.patch(
               const proporcionMonedas =
                 num(cambio.divisas_entregadas_monedas) / totalEntregado;
 
-              ingresoBilRestante = round2(ingresoEfRestante * proporcionBilletes);
-              ingresoMonRestante = round2(ingresoEfRestante * proporcionMonedas);
+              ({ bills: ingresoBilRestante, coins: ingresoMonRestante } = splitCash(ingresoEfRestante, proporcionBilletes, proporcionMonedas));
 
               // Ajustar por diferencias de redondeo
               const diferencia =
@@ -1694,12 +1692,7 @@ router.patch(
               const proporcionMonedas =
                 num(cambio.divisas_recibidas_monedas) / totalRecibido;
 
-              billetesEgresoRestante = round2(
-                egresoEfRestante * proporcionBilletes
-              );
-              monedasEgresoRestante = round2(
-                egresoEfRestante * proporcionMonedas
-              );
+              ({ bills: billetesEgresoRestante, coins: monedasEgresoRestante } = splitCash(egresoEfRestante, proporcionBilletes, proporcionMonedas));
 
               // Ajustar por diferencias de redondeo
               const diferencia =
@@ -2075,8 +2068,7 @@ async function completePendingExchange(req: AuthenticatedRequest, res: express.R
               const proporcionMonedas =
                 num(cambio.divisas_entregadas_monedas) / totalEntregado;
 
-              ingresoBilRestante = round2(ingresoEfRestante * proporcionBilletes);
-              ingresoMonRestante = round2(ingresoEfRestante * proporcionMonedas);
+              ({ bills: ingresoBilRestante, coins: ingresoMonRestante } = splitCash(ingresoEfRestante, proporcionBilletes, proporcionMonedas));
 
               // Ajustar por diferencias de redondeo
               const diferencia =
@@ -2120,12 +2112,7 @@ async function completePendingExchange(req: AuthenticatedRequest, res: express.R
               const proporcionMonedas =
                 num(cambio.divisas_recibidas_monedas) / totalRecibido;
 
-              billetesEgresoRestante = round2(
-                egresoEfRestante * proporcionBilletes
-              );
-              monedasEgresoRestante = round2(
-                egresoEfRestante * proporcionMonedas
-              );
+              ({ bills: billetesEgresoRestante, coins: monedasEgresoRestante } = splitCash(egresoEfRestante, proporcionBilletes, proporcionMonedas));
 
               // Ajustar por diferencias de redondeo
               const diferencia =

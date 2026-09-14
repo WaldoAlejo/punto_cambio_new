@@ -948,6 +948,33 @@ try {
     assert.equal((await prisma.cambioDivisa.findUnique({ where: { id: record.id } })).estado, 'PENDIENTE');
     assert.equal((await patchExchange(record.id, 'complete-partial', readerLogin.body.token)).status, 403);
   });
+  for (const action of ['cerrar', 'completar', 'complete-partial']) {
+    await check(`Abono con centavos ${action}: efectivo coincide con billetes y monedas en cada paso`, async () => {
+      const p = await prisma.puntoAtencion.create({ data: { nombre: `CENTAVOS ${action}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+      for (const m of [usd, eur]) await prisma.saldo.create({ data: {
+        punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, billetes: 500, monedas_fisicas: 500, bancos: 25,
+      } });
+      const created = await post('/exchanges', { ...exchange, punto_atencion_id: p.id,
+        monto_origen: 10, monto_destino: 10, tasa_cambio_billetes: 1, tasa_cambio_monedas: 1,
+        divisas_entregadas_billetes: 5, divisas_entregadas_monedas: 5, divisas_entregadas_total: 10,
+        divisas_recibidas_billetes: 5, divisas_recibidas_monedas: 5, divisas_recibidas_total: 10,
+        abono_inicial_monto: 5.01, saldo_pendiente: 4.99,
+      }, randomUUID(), origin.token);
+      ok(created);
+      const verify = async (amount) => {
+        for (const [m, sign] of [[eur, 1], [usd, -1]]) {
+          const saldo = await prisma.saldo.findUnique({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: m.id } } });
+          assert.equal(Math.round(Number(saldo.cantidad) * 100), 100000 + sign * amount);
+          assert.equal(Math.round(Number(saldo.billetes) * 100) + Math.round(Number(saldo.monedas_fisicas) * 100), Math.round(Number(saldo.cantidad) * 100));
+          assert.equal(Number(saldo.bancos), 25);
+        }
+      };
+      await verify(501);
+      const completed = await patchExchange(created.body.exchange.id, action, origin.token);
+      assert.equal(completed.status, 200, JSON.stringify(completed.body));
+      await verify(1000);
+    });
+  }
   if (browserMode) {
     await prisma.usuario.create({ data: { username: 'navegador_local', nombre: 'Administrador ficticio navegador',
       password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'ADMIN', punto_atencion_id: permissionPoint.id } });

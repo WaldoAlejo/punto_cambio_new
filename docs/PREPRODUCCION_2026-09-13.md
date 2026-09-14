@@ -4,6 +4,10 @@ Estado: revisión en curso. No se ha hecho push, despliegue ni escritura en la b
 
 ## Avance: liquidación de parciales en efectivo
 
+Actualización de redondeo: creación y liquidación usan un reparto en centavos enteros para que billetes + monedas coincidan con el efectivo. Se redondea billetes y se asigna el resto a monedas, evitando redondear ambos componentes por separado. Verificación: [117 pruebas de integración correctas](INTEGRACION_LOCAL_REDONDEO_ABONOS.json), 3 pruebas unitarias de reparto y TypeScript backend correcto. El flujo de una operación de 10,00 con abono de 5,01 conserva la igualdad del desglose al crear y completar por `cerrar`, `completar` y `complete-partial`, manteniendo bancos intactos. La prueba unitaria recorre 1.002 importes y seis repartos, además de entradas inválidas. Ejecutar con `node --import tsx --test scripts/tests/cash-breakdown.test.ts`.
+
+La corrección no redistribuye saldos históricos ni reconstruye denominaciones efectivamente entregadas. Sigue pendiente verificar toda la política de sustitución de billetes/monedas cuando no existe el desglose solicitado, y su reverso en operaciones parciales.
+
 `cerrar` y `completar` contrastan ahora los movimientos vinculados al cambio antes de liquidar un abono en efectivo. Si ambas monedas ya están contabilizadas por completo, solo completan el estado y el recibo, sin tocar saldos ni duplicar movimientos. Si el historial coincide con el abono proporcional, registran la diferencia exacta del total en centavos. Historial ausente, incompatible, con reversos o con movimientos bancarios devuelve 409 para revisión; no se reconstruye por suposición.
 
 `complete-partial` comparte ahora el proceso transaccional de `completar`, manteniendo acceso exclusivo ADMIN/SUPER_USUARIO y requisito de saldo pendiente. Deja de limitarse a cambiar el estado. El cierre administrativo de parciales bancarios o mixtos devuelve 409 hasta validar esas vías; las otras rutas bancarias conservan su comportamiento anterior y siguen pendientes de revisión.
