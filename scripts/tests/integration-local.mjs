@@ -487,6 +487,30 @@ try {
     const moves = await prisma.movimientoSaldo.findMany({ where: { punto_atencion_id: emptyPoint.id }, orderBy: { saldo_anterior: 'asc' } });
     assert.deepEqual(moves.map(m => [Number(m.saldo_anterior), Number(m.saldo_nuevo)]), [[0, 10], [10, 20]]);
   });
+  await check('Cambio y transferencia simultaneos conservan ambos egresos', async () => {
+    const before = await balance(destination), otherBefore = await balance(origin);
+    const eurBefore = Number((await prisma.saldo.findFirst({ where: { punto_atencion_id: destination.id, moneda_id: eur.id } })).cantidad);
+    const responses = await raceBalance(destination, [
+      () => post('/exchanges', { ...exchange, punto_atencion_id: destination.id }, randomUUID(), destination.token),
+      () => post('/transfers', { ...transferBody, origen_id: destination.id, destino_id: origin.id, monto: 10 }, randomUUID(), destination.token),
+    ]);
+    responses.forEach(ok);
+    assert.equal(await balance(destination), before - 120);
+    assert.equal(await balance(origin), otherBefore);
+    assert.equal(Number((await prisma.saldo.findFirst({ where: { punto_atencion_id: destination.id, moneda_id: eur.id } })).cantidad), eurBefore + 100);
+  });
+  await check('Dos cambios simultaneos conservan ambas monedas y sus movimientos', async () => {
+    const before = await balance(destination);
+    const eurBefore = Number((await prisma.saldo.findFirst({ where: { punto_atencion_id: destination.id, moneda_id: eur.id } })).cantidad);
+    const changesBefore = await prisma.cambioDivisa.count();
+    const movesBefore = await prisma.movimientoSaldo.count();
+    const responses = await raceBalance(destination, [0, 1].map(() => () => post('/exchanges', { ...exchange, punto_atencion_id: destination.id }, randomUUID(), destination.token)));
+    responses.forEach(ok);
+    assert.equal(await balance(destination), before - 220);
+    assert.equal(Number((await prisma.saldo.findFirst({ where: { punto_atencion_id: destination.id, moneda_id: eur.id } })).cantidad), eurBefore + 200);
+    assert.equal(await prisma.cambioDivisa.count(), changesBefore + 2);
+    assert.equal(await prisma.movimientoSaldo.count(), movesBefore + 4);
+  });
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

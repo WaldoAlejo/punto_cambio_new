@@ -7,6 +7,7 @@ import {
   TipoViaTransferencia,
 } from "@prisma/client";
 import prisma from "../lib/prisma.js";
+import { lockTransferBalance as lockBalance } from "../utils/transferBalance.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
@@ -722,6 +723,11 @@ router.post(
 
       // ========= Transacción atómica =========
       const exchange = await prisma.$transaction(async (tx) => {
+        // Compartir los bloqueos con transferencias y adquirir ambas monedas
+        // en orden estable antes de leer saldos o registrar movimientos.
+        for (const currencyId of [...new Set([moneda_origen_id, moneda_destino_id])].sort()) {
+          await lockBalance(tx, punto_atencion_id, currencyId);
+        }
         // Preparar tasas para almacenamiento: si no se requieren (no hay monto), guardar 0
         const tasaBilletesToStore = requiereTasaBilletes
           ? roundN(num(tasa_cambio_billetes), 3)

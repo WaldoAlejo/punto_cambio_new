@@ -2,7 +2,8 @@ import type { Prisma } from "../lib/prisma.js";
 
 export class InsufficientTransferBalance extends Error {}
 
-// Serialize transfer balance calculations, including the first credit when no
+// Shared by transfers and exchange creation. Serialize balance calculations,
+// including the first credit when no
 // Saldo row exists yet. Both locks are released on commit or rollback.
 export async function lockTransferBalance(
   tx: Prisma.TransactionClient,

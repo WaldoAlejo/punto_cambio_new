@@ -192,3 +192,11 @@ Se reprodujo pérdida de actualización: dos envíos de 10 registraron éxito, p
 Evidencia: [Antes](INTEGRACION_LOCAL_SALDO_CONCURRENTE_ANTES.json), [después](INTEGRACION_LOCAL_SALDO_CONCURRENTE_CORREGIDO.json). TypeScript correcto; ESLint sin errores, cuatro advertencias preexistentes. Entorno temporal detenido, sin acceso a producción ni despliegue.
 
 Límites: los demás módulos todavía no participan del bloqueo consultivo. Falta probar transferencias simultáneas con cambios, cierres, ajustes y aprobaciones históricas; vías BANCO/MIXTO y cargas superiores a dos solicitudes. No se certifica concurrencia global del sistema.
+
+## Seguimiento: creación de cambios concurrente con transferencias
+
+Se reprodujo pérdida de actualización entre una compra de 100 EUR por 110 USD y un envío de 10 USD: ambas solicitudes terminaron correctamente, pero el saldo USD quedó 10 por encima del esperado. `POST /exchanges` ahora adquiere los mismos bloqueos transaccionales que transferencias para las dos monedas, ordenadas por identificador antes de cualquier lectura de saldo. El orden común evita invertir la adquisición de bloqueos entre cambios. Se conserva la clave de bloqueo existente para coordinar ambos módulos.
+
+**49 pruebas aprobadas**: las 47 anteriores, cambio simultáneo con transferencia y dos cambios simultáneos sobre las mismas monedas. Se comprueban los descuentos USD, ingresos EUR, bancos/desglose USD y cantidad de cambios/movimientos. Evidencia: [Antes](INTEGRACION_LOCAL_CAMBIOS_CONCURRENTES_ANTES.json), [después](INTEGRACION_LOCAL_CAMBIOS_CONCURRENTES_CORREGIDOS.json).
+
+TypeScript backend correcto; ESLint de los archivos afectados sin errores, con una advertencia preexistente de import sin uso. Entorno temporal detenido. Sin consultas a producción, migraciones ni despliegue. Alcance probado: creación de compras completas en efectivo. Pendientes: cierres simultáneos, abonos, anulaciones, ajustes, cambio con fondos insuficientes en carrera, ventas en sentido inverso y operaciones bancarias/mixtas.

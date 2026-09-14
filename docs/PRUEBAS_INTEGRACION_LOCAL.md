@@ -106,3 +106,11 @@ Suite actual: **47 pruebas aprobadas**. Se añaden dos envíos con fondos sufici
 Antes se perdía uno de los descuentos de 10: [resultado previo](INTEGRACION_LOCAL_SALDO_CONCURRENTE_ANTES.json). La corrección coordina el acceso por punto/moneda dentro de las transacciones existentes; la solicitud sin fondos responde 400 y no persiste transferencia ni movimiento. [Resultado posterior](INTEGRACION_LOCAL_SALDO_CONCURRENTE_CORREGIDO.json). TypeScript correcto, ESLint sin errores y cuatro advertencias previas. Servicios temporales detenidos.
 
 El bloqueo consultivo también evita la carrera al crear el primer saldo. La prueba de primera recepción comprueba una fila de saldo por 20 y movimientos consecutivos 0→10→20. Quedan fuera la interacción concurrente con otros módulos, BANCO/MIXTO y pruebas de carga; no se modificó producción.
+
+## Ampliación: cambios simultáneos y transferencias
+
+Suite actual: **49 comprobaciones aprobadas**. Se añade una compra de 100 EUR por 110 USD simultánea con un envío de 10 USD desde el mismo punto, y dos compras simultáneas. Se reutiliza la barrera sobre Saldo para forzar la competencia. Antes de corregir, la primera carrera dejó el saldo USD 10 por encima de lo esperado: [evidencia previa](INTEGRACION_LOCAL_CAMBIOS_CONCURRENTES_ANTES.json).
+
+La creación de cambios adquiere el bloqueo compartido para ambas monedas en orden de identificador. Después las dos carreras pasan: [evidencia posterior](INTEGRACION_LOCAL_CAMBIOS_CONCURRENTES_CORREGIDOS.json). Se verifican ambos egresos, los ingresos EUR, bancos y desglose USD, y dos cambios/cuatro movimientos en el segundo caso. TypeScript correcto y ESLint sin errores (una advertencia previa). Servicios temporales detenidos.
+
+No certifica cierres, abonos, anulaciones, ventas en sentido inverso ni efectivo insuficiente en una carrera de cambios. Se mantienen pendientes las interacciones con los demás escritores de saldo y vías bancarias/mixtas.
