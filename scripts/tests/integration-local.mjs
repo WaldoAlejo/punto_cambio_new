@@ -771,8 +771,8 @@ try {
     }
   }
   await prisma.usuario.update({ where: { id: origin.userId }, data: { rol: 'ADMIN' } });
-  for (const action of ['cerrar', 'completar']) {
-    for (const scenario of ['concurrente', 'saldo insuficiente', 'fallo recibo']) {
+  for (const action of ['cerrar', 'completar', 'complete-partial']) {
+    for (const scenario of ['concurrente', 'saldo insuficiente', 'fallo recibo', 'contabilizado completo', 'sin historial', 'historial incompatible']) {
       await check(`Cambio ${action}: abono ${scenario} conserva atomicidad`, async () => {
         const p = await prisma.puntoAtencion.create({ data: { nombre: `ABONO ${action} ${scenario}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
         for (const moneda of [usd, eur]) await prisma.saldo.create({ data: {
@@ -786,6 +786,17 @@ try {
           divisas_recibidas_total: 110, divisas_recibidas_billetes: 110,
           usd_entregado_efectivo: 110, usd_entregado_transfer: 0,
         } });
+        if (scenario !== 'sin historial') {
+          for (const [currency, amount] of [[eur, scenario === 'contabilizado completo' ? 100 : scenario === 'historial incompatible' ? 49 : 50],
+            [usd, scenario === 'contabilizado completo' ? -110 : -55]]) {
+            await prisma.movimientoSaldo.create({ data: {
+              punto_atencion_id: p.id, moneda_id: currency.id, usuario_id: origin.userId,
+              referencia_id: record.id, tipo_referencia: 'CAMBIO_DIVISA',
+              tipo_movimiento: amount > 0 ? 'INGRESO' : 'EGRESO', monto: amount,
+              saldo_anterior: 1000 - amount, saldo_nuevo: 1000, descripcion: 'Cambio ficticio (CAJA)',
+            } });
+          }
+        }
         const snapshot = async () => JSON.stringify({
           cambio: await prisma.cambioDivisa.findUnique({ where: { id: record.id } }),
           saldos: await prisma.saldo.findMany({ where: { punto_atencion_id: p.id }, orderBy: { id: 'asc' } }),
@@ -808,11 +819,18 @@ try {
             const eurBalance = await prisma.saldo.findUnique({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: eur.id } } });
             assert.equal(Number(eurBalance.cantidad), 1050);
             assert.equal(Number(eurBalance.billetes), 1050);
-            assert.equal(await prisma.movimientoSaldo.count({ where: { referencia_id: record.id } }), 2);
+            assert.equal(await prisma.movimientoSaldo.count({ where: { referencia_id: record.id } }), 4);
             assert.equal(await prisma.recibo.count({ where: { referencia_id: record.id } }), 1);
+          } else if (scenario === 'contabilizado completo') {
+            const result = await patchExchange(record.id, action, origin.token);
+            assert.equal(result.status, 200, JSON.stringify(result.body));
+            const beforeData = JSON.parse(before); const afterData = JSON.parse(await snapshot());
+            assert.deepEqual(afterData.saldos, beforeData.saldos);
+            assert.equal(afterData.movimientos, 2); assert.equal(afterData.recibos, 1);
+            assert.equal(afterData.cambio.estado, 'COMPLETADO');
           } else {
             const result = await patchExchange(record.id, action, origin.token);
-            assert.equal(result.status, scenario === 'saldo insuficiente' ? 400 : 500);
+            assert.equal(result.status, scenario === 'saldo insuficiente' ? 400 : scenario === 'fallo recibo' ? 500 : 409);
             assert.equal(await snapshot(), before);
           }
         } finally {
@@ -893,6 +911,43 @@ try {
       }
     });
   }
+  for (const action of ['cerrar', 'completar', 'complete-partial']) {
+    for (const initialPayment of [false, true]) {
+    await check(`Flujo API ${action}: abono ${initialPayment ? 'en creacion' : 'posterior'} contabiliza exactamente el total`, async () => {
+      const p = await prisma.puntoAtencion.create({ data: { nombre: `FLUJO REAL ${action} ${initialPayment}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+      for (const m of [usd, eur]) await prisma.saldo.create({ data: {
+        punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, billetes: 1000, bancos: 25,
+      } });
+      const created = await post('/exchanges', { ...exchange, punto_atencion_id: p.id,
+        saldo_pendiente: initialPayment ? 55 : 110, ...(initialPayment ? { abono_inicial_monto: 55 } : {}),
+      }, randomUUID(), origin.token);
+      ok(created); const id = created.body.exchange.id;
+      const snapshot = async () => JSON.stringify({
+        saldos: await prisma.saldo.findMany({ where: { punto_atencion_id: p.id }, orderBy: { id: 'asc' } }),
+        movimientos: await prisma.movimientoSaldo.findMany({ where: { referencia_id: id }, orderBy: { id: 'asc' } }),
+      });
+      const before = await snapshot();
+      if (!initialPayment) assert.equal((await patchExchange(id, 'register-partial-payment', origin.token)).status, 200);
+      const result = await patchExchange(id, action, origin.token);
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      if (!initialPayment) assert.equal(await snapshot(), before);
+      const actual = JSON.parse(await snapshot());
+      for (const [currencyId, expected, net] of [[usd.id, 890, -110], [eur.id, 1100, 100]]) {
+        const saldo = actual.saldos.find(s => s.moneda_id === currencyId);
+        assert.equal(Number(saldo.cantidad), expected); assert.equal(Number(saldo.billetes), expected);
+        assert.equal(actual.movimientos.filter(m => m.moneda_id === currencyId).reduce((sum, m) => sum + Number(m.monto), 0), net);
+      }
+      assert.equal((await prisma.cambioDivisa.findUnique({ where: { id } })).estado, 'COMPLETADO');
+    });
+    }
+  }
+  await check('Cierre administrativo parcial bancario requiere revision sin modificar estado', async () => {
+    const record = await pendingFixture(permissionPoint.id);
+    await prisma.cambioDivisa.update({ where: { id: record.id }, data: { saldo_pendiente: 55, metodo_entrega: 'transferencia' } });
+    assert.equal((await patchExchange(record.id, 'complete-partial', origin.token)).status, 409);
+    assert.equal((await prisma.cambioDivisa.findUnique({ where: { id: record.id } })).estado, 'PENDIENTE');
+    assert.equal((await patchExchange(record.id, 'complete-partial', readerLogin.body.token)).status, 403);
+  });
   if (browserMode) {
     await prisma.usuario.create({ data: { username: 'navegador_local', nombre: 'Administrador ficticio navegador',
       password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'ADMIN', punto_atencion_id: permissionPoint.id } });

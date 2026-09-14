@@ -2,6 +2,14 @@
 
 Estado: revisión en curso. No se ha hecho push, despliegue ni escritura en la base remota. No equivale a autorizar el despliegue de todos los cambios acumulados.
 
+## Avance: liquidación de parciales en efectivo
+
+`cerrar` y `completar` contrastan ahora los movimientos vinculados al cambio antes de liquidar un abono en efectivo. Si ambas monedas ya están contabilizadas por completo, solo completan el estado y el recibo, sin tocar saldos ni duplicar movimientos. Si el historial coincide con el abono proporcional, registran la diferencia exacta del total en centavos. Historial ausente, incompatible, con reversos o con movimientos bancarios devuelve 409 para revisión; no se reconstruye por suposición.
+
+`complete-partial` comparte ahora el proceso transaccional de `completar`, manteniendo acceso exclusivo ADMIN/SUPER_USUARIO y requisito de saldo pendiente. Deja de limitarse a cambiar el estado. El cierre administrativo de parciales bancarios o mixtos devuelve 409 hasta validar esas vías; las otras rutas bancarias conservan su comportamiento anterior y siguen pendientes de revisión.
+
+Evidencia: [114 pruebas de integración correctas](INTEGRACION_LOCAL_PARCIALES_EFECTIVO.json) y TypeScript backend correcto. Incluye los tres endpoints, creación real con abono inicial y registro posterior, movimientos/saldos finales, doble solicitud, fallo de recibo con rollback e historial insuficiente. El alcance comprobado utiliza efectivo con desglose en billetes. Quedan pendientes la distribución fina billetes/monedas con redondeos, BANCO/MIXTO, cambios de vía al completar y reversos de parciales. No se cambiaron registros remotos ni el esquema.
+
 ## Contraste de la base indicada por el usuario
 
 Consultas agregadas en transacciones READ ONLY, con tiempos máximos de 10–15 segundos. Primera consulta en REPEATABLE READ. Conexión TLS hasta el pooler confirmada; conexiones cerradas. No se utilizaron endpoints HTTP de reportes que escriben datos. Credenciales fuera del repositorio.

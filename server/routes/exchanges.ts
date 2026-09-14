@@ -9,6 +9,7 @@ import {
 import prisma from "../lib/prisma.js";
 import { lockTransferBalance as lockBalance } from "../utils/transferBalance.js";
 import { assertOperationalSession, OperationalConflict } from "../utils/operationalConflict.js";
+import { remainingPartialCash } from "../utils/partialCashSettlement.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
@@ -1581,7 +1582,8 @@ router.patch(
 
         const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
 
-        if (huboAbonoInicial) {
+        const cashRemaining = huboAbonoInicial ? await remainingPartialCash(tx, cambio) : null;
+        if (huboAbonoInicial && (!cashRemaining || cashRemaining.ingresoEf > 0 || cashRemaining.egresoEf > 0)) {
           // Calcular el porcentaje restante que falta actualizar
           const montoTotal = num(cambio.monto_destino);
           const montoAbonado = num(cambio.abono_inicial_monto);
@@ -1625,7 +1627,7 @@ router.patch(
               ? num(cambio.divisas_entregadas_total)
               : 0;
 
-          const ingresoEfRestante = round2(
+          const ingresoEfRestante = cashRemaining?.ingresoEf ?? round2(
             usdRecibidoEfectivo * porcentajeRestante
           );
           const ingresoBkRestante = round2(
@@ -1674,7 +1676,7 @@ router.patch(
             usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo) * porcentajeRestante,
             usdEntregadoTransfer: num(cambio.usd_entregado_transfer) * porcentajeRestante,
           });
-          const egresoEfRestante = destinoRestante.egresoEf;
+          const egresoEfRestante = cashRemaining?.egresoEf ?? destinoRestante.egresoEf;
           const egresoBkRestante = destinoRestante.egresoBk;
 
           // Calcular billetes y monedas de egreso manteniendo proporción
@@ -1924,11 +1926,7 @@ router.patch(
 
 /* ========================= Completar: setear entrega + COMPLETADO ========================= */
 
-router.patch(
-  "/:id/completar",
-  authenticateToken,
-  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
-  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
+async function completePendingExchange(req: AuthenticatedRequest, res: express.Response, partialOnly = false): Promise<void> {
     const { id } = req.params;
     const {
       metodo_entrega,
@@ -2001,9 +1999,17 @@ router.patch(
         }
         await assertOperationalSession(tx, req.user, cambio.punto_atencion_id);
 
+        if (partialOnly && num(cambio.saldo_pendiente) <= 0) {
+          res.status(400).json({ success: false, error: "Este cambio no tiene saldo pendiente" });
+          return;
+        }
+        if (partialOnly && (cambio.metodo_pago_origen !== "EFECTIVO" || cambio.metodo_entrega !== "efectivo")) {
+          throw new OperationalConflict("El cierre administrativo de parciales por banco o mixtos requiere revision contable.");
+        }
         const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
 
-        if (huboAbonoInicial) {
+        const cashRemaining = huboAbonoInicial ? await remainingPartialCash(tx, cambio) : null;
+        if (huboAbonoInicial && (!cashRemaining || cashRemaining.ingresoEf > 0 || cashRemaining.egresoEf > 0)) {
           // Calcular el porcentaje restante que falta actualizar
           const montoTotal = num(cambio.monto_destino);
           const montoAbonado = num(cambio.abono_inicial_monto);
@@ -2047,7 +2053,7 @@ router.patch(
               ? num(cambio.divisas_entregadas_total)
               : 0;
 
-          const ingresoEfRestante = round2(
+          const ingresoEfRestante = cashRemaining?.ingresoEf ?? round2(
             usdRecibidoEfectivo * porcentajeRestante
           );
           const ingresoBkRestante = round2(
@@ -2096,7 +2102,7 @@ router.patch(
             usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo) * porcentajeRestante,
             usdEntregadoTransfer: num(cambio.usd_entregado_transfer) * porcentajeRestante,
           });
-          const egresoEfRestante = destinoRestante.egresoEf;
+          const egresoEfRestante = cashRemaining?.egresoEf ?? destinoRestante.egresoEf;
           const egresoBkRestante = destinoRestante.egresoBk;
 
           // Calcular billetes y monedas de egreso manteniendo proporción
@@ -2392,7 +2398,13 @@ router.patch(
         .status(500)
         .json({ error: "Error interno al completar cambio", success: false });
     }
-  }
+}
+
+router.patch(
+  "/:id/completar",
+  authenticateToken,
+  requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]),
+  (req: AuthenticatedRequest, res: express.Response) => completePendingExchange(req, res)
 );
 
 /* ========================= Pendientes / Parciales / Abonos ========================= */
@@ -2596,108 +2608,7 @@ router.patch(
   "/:id/complete-partial",
   authenticateToken,
   requireRole(["ADMIN", "SUPER_USUARIO"]),
-  async (req: AuthenticatedRequest, res: express.Response): Promise<void> => {
-    try {
-      const { id } = req.params;
-      const userId = req.user?.id;
-      if (!userId) {
-        res.status(401).json({ success: false, error: "Usuario no autenticado" });
-        return;
-      }
-      const isAdmin =
-        req.user?.rol === "ADMIN" || req.user?.rol === "SUPER_USUARIO";
-      if (!isAdmin) {
-        res.status(403).json({ success: false, error: "Solo administradores" });
-        return;
-      }
-
-      const exchange = await prisma.cambioDivisa.findUnique({
-        where: { id },
-        select: {
-          id: true,
-          estado: true,
-          monto_destino: true,
-          saldo_pendiente: true,
-          monedaDestino: { select: { codigo: true, simbolo: true } },
-        },
-      });
-      if (!exchange) {
-        res.status(404).json({ success: false, error: "Cambio no encontrado" });
-        return;
-      }
-      if (exchange.estado !== EstadoTransaccion.PENDIENTE) {
-        res.status(409).json({ success: false, error: "El cambio ya no esta pendiente" });
-        return;
-      }
-      const sp = Number(exchange.saldo_pendiente || 0);
-      if (!(sp > 0)) {
-        res.status(400).json({
-          success: false,
-          error: "Este cambio no tiene saldo pendiente",
-        });
-        return;
-      }
-
-      const updated = await prisma.cambioDivisa.update({
-        where: { id, estado: EstadoTransaccion.PENDIENTE },
-        data: {
-          saldo_pendiente: 0,
-          fecha_completado: new Date(), // UTC - la UI muestra en zona horaria local
-          estado: EstadoTransaccion.COMPLETADO,
-        },
-        select: {
-          id: true,
-          fecha: true,
-          tipo_operacion: true,
-          estado: true,
-          monto_origen: true,
-          monto_destino: true,
-          tasa_cambio_billetes: true,
-          tasa_cambio_monedas: true,
-          observacion: true,
-          numero_recibo: true,
-          numero_recibo_abono: true,
-          numero_recibo_completar: true,
-          cliente: true,
-          divisas_entregadas_total: true,
-          divisas_entregadas_billetes: true,
-          divisas_entregadas_monedas: true,
-          divisas_recibidas_total: true,
-          divisas_recibidas_billetes: true,
-          divisas_recibidas_monedas: true,
-          saldo_pendiente: true,
-          abono_inicial_monto: true,
-          abono_inicial_fecha: true,
-          fecha_completado: true,
-          monedaOrigen: {
-            select: { id: true, nombre: true, codigo: true, simbolo: true },
-          },
-          monedaDestino: {
-            select: { id: true, nombre: true, codigo: true, simbolo: true },
-          },
-          usuario: { select: { id: true, nombre: true, username: true } },
-          puntoAtencion: { select: { id: true, nombre: true } },
-        },
-      });
-
-      res.json({
-        success: true,
-        exchange: updated,
-        message: `Cambio parcial completado.`,
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
-        res.status(409).json({ success: false, error: "El cambio ya no esta pendiente. Actualiza la pantalla." });
-        return;
-      }
-      logger.error("Error completing partial exchange", {
-        error: error instanceof Error ? error.message : "Unknown",
-      });
-      res
-        .status(500)
-        .json({ success: false, error: "Error interno del servidor" });
-    }
-  }
+  (req: AuthenticatedRequest, res: express.Response) => completePendingExchange(req, res, true)
 );
 
 router.patch(
