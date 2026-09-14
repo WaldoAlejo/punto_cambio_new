@@ -581,7 +581,9 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
           conteoFísico = Number(detalleExistente.conteo_fisico);
           billetes = Number(detalleExistente.billetes);
           monedasFísicas = Number(detalleExistente.monedas_fisicas);
-          bancosTeorico = Number(detalleExistente.bancos_teorico);
+          bancosTeorico = cuadre.estado === 'ABIERTO'
+            ? Number(saldoFísico?.bancos ?? 0)
+            : Number(detalleExistente.bancos_teorico);
           conteoBancos = Number(detalleExistente.conteo_bancos);
         } else {
           // Si no hay detalle guardado por el operador, usar el teórico reconciliado
@@ -633,6 +635,10 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
               saldo_cierre: saldoCierreTeórico,
               diferencia,
               movimientos_periodo: movimientosPeriodo.length,
+              ...(cuadre.estado === 'ABIERTO' ? {
+                bancos_teorico: bancosTeorico,
+                diferencia_bancos: Number((conteoBancos - bancosTeorico).toFixed(2)),
+              } : {}),
             },
           })) as any;
           logger.info(`✅ Detalle actualizado para ${moneda.codigo}`, {

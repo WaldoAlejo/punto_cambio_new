@@ -122,3 +122,11 @@ Suite actual: **53 pruebas aprobadas**. Cuatro puntos ficticios independientes p
 Antes se aceptaban envío y cierre con saldo teórico anterior al envío: [resultado previo](INTEGRACION_LOCAL_CIERRE_CONCURRENTE_ANTES.json). Después el cierre bloquea saldos y rechaza teoría desactualizada; las operaciones revalidan la sesión al obtener los bloqueos: [resultado posterior](INTEGRACION_LOCAL_CIERRE_CONCURRENTE_CORREGIDO.json). Las pruebas previas de conteos con diferencias continúan pasando. TypeScript correcto y ESLint sin errores (cuatro advertencias previas). Servicios temporales detenidos.
 
 La comprobación de saldo teórico puede rechazar también discrepancias preexistentes entre el reporte y Saldo. Falta contrastar esos reportes antes de desplegar. No se certifica concurrencia con recepción/devolución de transferencias, otros operadores o administradores, cierres sin detalles ni rutas de abonos/anulaciones/ajustes.
+
+## Ampliación: reporte real y bancos teóricos
+
+Suite actual: **54 comprobaciones aprobadas**. Monta `/cuadre-caja` y consulta el reporte después de la compra de 100 EUR por 110 USD. Guarda un conteo bancario ficticio de 23, cambia Saldo.bancos de 25 a 30 y exige que otra consulta devuelva teórico 30, conteo 23 y diferencia persistida -7. La fixture restaura bancos a 25; antes del cierre exacto contrasta los valores del reporte USD=890, EUR=1100 y bancos=25.
+
+Antes devolvía teórico 25: [evidencia previa](INTEGRACION_LOCAL_REPORTE_BANCOS_ANTES.json). Después actualiza únicamente el teórico bancario y su diferencia en cuadres abiertos, conservando el conteo: [evidencia posterior](INTEGRACION_LOCAL_REPORTE_BANCOS_CORREGIDO.json). No se prueba un flujo bancario real: el cambio de bancos es preparación explícita de la fixture local.
+
+TypeScript correcto. ESLint del archivo conserva cuatro errores y tres advertencias preexistentes, comprobados contra HEAD; no es un lint limpio. Entorno temporal detenido y sin producción. El GET real tiene efectos de escritura sobre cuadres; solo se ejecutó en la base ficticia. Pendientes históricos y escenarios adicionales indicados en el mapa técnico.

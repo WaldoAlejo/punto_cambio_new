@@ -84,6 +84,7 @@ try {
     ['/api/apertura-caja', '../../server/routes/apertura-caja.ts'],
     ['/api/exchanges', '../../server/routes/exchanges.ts'],
     ['/api/guardar-cierre', '../../server/routes/guardar-cierre.ts'],
+    ['/api/cuadre-caja', '../../server/routes/cuadreCaja.ts'],
     ['/api/transfers', '../../server/routes/transfers.ts'],
     ['/api/transfer-approvals', '../../server/routes/transfer-approvals.ts'],
   ]) app.use(mount, (await import(module)).default);
@@ -204,7 +205,36 @@ try {
     ok(await post('/exchanges', exchange, key));
     assert.equal(await prisma.cambioDivisa.count(), 1);
   });
+  await check('Reporte actualiza bancos teoricos sin pisar el conteo guardado', async () => {
+    const getReport = async () => {
+      const res = await fetch(base + '/cuadre-caja', { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) });
+      assert.equal(res.status, 200); const body = await res.json(); assert.equal(body.success, true);
+      return body.data;
+    };
+    const first = await getReport();
+    await prisma.detalleCuadreCaja.updateMany({ where: { cuadre_id: first.cuadre_id, moneda_id: usd.id }, data: { conteo_bancos: 23 } });
+    // Simulate a bank balance change after the operator saved the count.
+    await prisma.saldo.update({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: point.id, moneda_id: usd.id } }, data: { bancos: 30 } });
+    try {
+      const report = await getReport();
+      const detail = report.detalles.find(d => d.moneda_id === usd.id);
+      assert.equal(detail.saldo_cierre, 890);
+      assert.equal(detail.bancos_teorico, 30);
+      assert.equal(detail.conteo_bancos, 23);
+      const stored = await prisma.detalleCuadreCaja.findFirst({ where: { cuadre_id: report.cuadre_id, moneda_id: usd.id } });
+      assert.equal(Number(stored.diferencia_bancos), -7);
+    } finally {
+      await prisma.saldo.update({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: point.id, moneda_id: usd.id } }, data: { bancos: 25 } });
+    }
+  });
   await check('Cierre exacto conserva saldo y finaliza jornada', async () => {
+    const res = await fetch(base + '/cuadre-caja', { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20000) });
+    assert.equal(res.status, 200);
+    const report = await res.json();
+    for (const [m, expected] of [[usd, 890], [eur, 1100]]) {
+      const d = report.data.detalles.find(d => d.moneda_id === m.id);
+      assert.equal(d.saldo_cierre, expected); assert.equal(d.bancos_teorico, 25);
+    }
     ok(await post('/guardar-cierre', { tipo_cierre: 'CERRADO', detalles: [[usd, 890], [eur, 1100]].map(([m, amount]) => ({
       moneda_id: m.id, saldo_apertura: 1000, saldo_cierre: amount, conteo_fisico: amount,
       billetes: amount, monedas: 0, bancos_teorico: 25, conteo_bancos: 25,
