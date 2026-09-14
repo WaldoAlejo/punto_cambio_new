@@ -2,6 +2,14 @@
 
 Estado: revisión en curso. No se ha hecho push, despliegue ni escritura en la base remota. No equivale a autorizar el despliegue de todos los cambios acumulados.
 
+## Avance: configuración de despliegue revisada localmente
+
+Se corrigieron tres defectos de la configuración Docker/nginx del repositorio: el healthcheck dependía de `curl` aunque la imagen no lo instalaba; la imagen incorporaba `.env`; y nginx no enviaba `/` ni los recursos del frontend al Express que los sirve. Ahora el healthcheck usa Node con timeout de cinco segundos, el contexto excluye archivos `.env*` y dependencias/artefactos locales, y nginx envía el frontend al backend. La imagen declara `NODE_ENV=production` y `TZ=America/Guayaquil`. `VITE_API_URL` se proporciona como argumento de compilación, con `/api` por defecto; las credenciales se suministran al arrancar el contenedor mediante las variables de Compose, no dentro de la imagen.
+
+Verificación efectuada: compilación aislada de frontend y backend; existencia de `server/index.js` compilado y coherencia de esa ruta con PM2/Docker; prueba del healthcheck con respuestas HTTP 200, 503 y servidor detenido. El healthcheck solo comprueba disponibilidad HTTP, no integridad contable ni respaldo. Se revisó estáticamente la configuración; **Docker no está disponible en este equipo**, por lo que quedan sin ejecutar build/arranque de imagen, `docker compose config` y validación de sintaxis nginx en su runtime. Tampoco se ha comprobado la configuración efectiva del servidor productivo.
+
+Antes de publicar: validar la imagen en un entorno separado, variables requeridas y URL pública de API, HTTPS/certificados, comprobación de rutas SPA/API, versión efectiva/TZ de PM2 o contenedor y respaldo restaurable con procedimiento de reversión. El archivo nginx actual tiene HTTPS comentado: no se certifica TLS. No se ejecutó `npm run deploy` (incluye `prisma db push`), migraciones ni escrituras remotas. No hubo push. Este avance no declara lista la aplicación completa para producción.
+
 ## Avance: redondeo mixto y pantalla de parciales
 
 El abono proporcional conserva ahora el total en centavos entre caja y banco: 5,01 sobre dos componentes iguales registra 2,51 + 2,50, en lugar de 2,51 + 2,51. El cálculo usa enteros y cociente redondeado exacto; la liquidación admite el nuevo reparto y también el reparto anterior cuando todo el historial coincide, descontando siempre lo realmente registrado. No modifica abonos históricos.

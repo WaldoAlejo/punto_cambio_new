@@ -6,6 +6,9 @@ RUN apk add --no-cache openssl postgresql-client
 
 WORKDIR /app
 
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=$VITE_API_URL
+
 # Copiar todo para instalación y compilación
 COPY package*.json ./
 COPY package-server.json ./
@@ -35,7 +38,7 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist-server ./dist-server
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/.env .env
+COPY --from=builder /app/scripts/healthcheck.mjs ./scripts/healthcheck.mjs
 
 # Crear logs
 RUN mkdir -p logs && chown nodejs:nodejs logs
@@ -44,6 +47,8 @@ USER nodejs
 
 EXPOSE 3001
 ENV PORT=3001
+ENV NODE_ENV=production
+ENV TZ=America/Guayaquil
 
 CMD ["node", "dist-server/server/index.js"]
 
