@@ -120,6 +120,10 @@ router.post(
         });
       }
 
+    }
+
+    // Permitir diferencias con el saldo esperado no permite un desglose inconsistente.
+    if (detalles.length > 0) {
       // Validar que billetes + monedas_fisicas = conteo_fisico
       const breakdownInvalidos = detalles.filter((d) => {
         const conteoFisico = asNumber(d.conteo_fisico);

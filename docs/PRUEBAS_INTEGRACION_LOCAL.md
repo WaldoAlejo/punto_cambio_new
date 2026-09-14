@@ -74,3 +74,11 @@ Validación posterior: **16 de 16 comprobaciones aprobadas, código de salida 0*
 La sección `diagnostics` del resultado conserva la consulta con parámetros `Date` como control negativo: devuelve 0, mientras los límites UTC devuelven 1. Esto es intencional; las peticiones HTTP ejecutan el middleware corregido y pasan.
 
 El PostgreSQL temporal y Express se detuvieron al finalizar. No se desplegó la corrección ni se ejecutó ninguna consulta contra producción. Se mantiene pendiente contrastar el tipo real de columna de producción antes del despliegue y completar los escenarios adicionales descritos arriba.
+
+## Ampliación: incidencia de apertura y diferencias de cierre
+
+El mismo comando de integración ahora ejecuta 26 comprobaciones. Los casos nuevos utilizan dos puntos ficticios independientes para cierre CERRADO y PARCIAL, con faltante de 100 USD y sobrante de 10 EUR. Comprueban bloqueo sin incidencia, apertura con incidencia pendiente de aprobación conservando saldos, rechazo sin `allowMismatch`, rechazo de desglose inconsistente incluso con ese indicador y persistencia del cierre válido.
+
+Antes de corregir, la petición con total 900 y billetes 950 se aceptaba: [resultado previo](INTEGRACION_LOCAL_DESGLOSE_ANTES.json). La validación del desglose se separó de la tolerancia contable. Después, los rechazos mantienen saldos, cuadre/detalles, movimientos, jornada y usuario sin cambios; el cierre definitivo genera ajustes -100 USD y +10 EUR, mientras el parcial conserva los saldos y no genera ajustes. Ambos completan la jornada y liberan al usuario según las reglas existentes. [Resultado: 26 aprobadas](INTEGRACION_LOCAL_CAJA_CORREGIDA.json).
+
+TypeScript backend y ESLint de la ruta correctos. No se probaron diferencias bancarias ni operaciones simultáneas. Se detuvieron los servicios temporales y no se accedió a producción.

@@ -214,6 +214,70 @@ try {
       assert.equal(Number(saldo.cantidad), expected); assert.equal(Number(saldo.bancos), 25);
     }
   });
+  // Independent points keep discrepancy scenarios separate from the exact-close baseline.
+  for (const tipo of ['CERRADO', 'PARCIAL']) {
+    const p = await prisma.puntoAtencion.create({ data: { nombre: `PRUEBA ${tipo}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+    await prisma.usuario.update({ where: { id: user.id }, data: { punto_atencion_id: p.id } });
+    const j = await prisma.jornada.create({ data: { usuario_id: user.id, punto_atencion_id: p.id, fecha_inicio: morning, estado: 'ACTIVO' } });
+    for (const m of currencies) {
+      await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, billetes: 1000, bancos: 25 } });
+      await prisma.saldoInicial.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad_inicial: 1000, asignado_por: user.id } });
+    }
+    const initiated = await post('/apertura-caja/iniciar', { jornada_id: j.id });
+    ok(initiated);
+    const aid = initiated.body.apertura.id;
+    ok(await post('/apertura-caja/conteo', { apertura_id: aid, conteos: currencies.map(m => ({
+      moneda_id: m.id, billetes: [{ denominacion: 100, cantidad: m.id === usd.id ? 9 : 10 }], monedas: [], total: m.id === usd.id ? 900 : 1000,
+    })) }));
+    await check(`${tipo}: apertura descuadrada exige incidencia`, async () => {
+      assert.equal((await post('/apertura-caja/confirmar', { apertura_id: aid })).status, 400);
+      assert.notEqual((await prisma.aperturaCaja.findUnique({ where: { id: aid } })).estado, 'ABIERTA');
+    });
+    await check(`${tipo}: apertura con incidencia conserva saldos y requiere revision`, async () => {
+      const result = await post('/apertura-caja/confirmar', { apertura_id: aid, incidencia_apertura: {
+        motivo: 'Faltante de prueba', detalle: 'Datos ficticios: faltan 100 USD', monedas_afectadas: ['USD'],
+      } });
+      ok(result);
+      assert.equal(result.body.apertura_abierta_con_incidencia, true);
+      const opened = await prisma.aperturaCaja.findUnique({ where: { id: aid } });
+      assert.equal(opened.estado, 'ABIERTA'); assert.equal(opened.requiere_aprobacion, true);
+      assert.equal(Number((await prisma.saldo.findFirst({ where: { punto_atencion_id: p.id, moneda_id: usd.id } })).cantidad), 1000);
+    });
+    const detalles = currencies.map(m => ({ moneda_id: m.id, saldo_apertura: 1000, saldo_cierre: 1000,
+      conteo_fisico: m.id === usd.id ? 900 : 1010, billetes: m.id === usd.id ? 900 : 1010, monedas: 0,
+      bancos_teorico: 25, conteo_bancos: 25 }));
+    const snapshot = async () => JSON.stringify(await Promise.all([
+      prisma.saldo.findMany({ where: { punto_atencion_id: p.id }, orderBy: { moneda_id: 'asc' } }),
+      prisma.cuadreCaja.findMany({ where: { punto_atencion_id: p.id }, include: { detalles: true } }),
+      prisma.movimientoSaldo.findMany({ where: { punto_atencion_id: p.id } }),
+      prisma.jornada.findUnique({ where: { id: j.id } }),
+      prisma.usuario.findUnique({ where: { id: user.id } }),
+    ]));
+    await check(`${tipo}: diferencia sin autorizacion rechazada sin escrituras contables`, async () => {
+      const before = await snapshot();
+      assert.equal((await post('/guardar-cierre', { tipo_cierre: tipo, detalles })).status, 400);
+      assert.equal(await snapshot(), before);
+    });
+    await check(`${tipo}: allowMismatch no admite desglose inconsistente`, async () => {
+      const before = await snapshot();
+      const invalid = detalles.map(d => ({ ...d, billetes: d.billetes + 50 }));
+      assert.equal((await post('/guardar-cierre', { tipo_cierre: tipo, allowMismatch: true, detalles: invalid })).status, 400);
+      assert.equal(await snapshot(), before);
+    });
+    await check(`${tipo}: diferencia aceptada respeta saldos y movimientos`, async () => {
+      ok(await post('/guardar-cierre', { tipo_cierre: tipo, allowMismatch: true, detalles }, randomUUID()));
+      for (const d of detalles) {
+        const saldo = await prisma.saldo.findFirst({ where: { punto_atencion_id: p.id, moneda_id: d.moneda_id } });
+        assert.equal(Number(saldo.cantidad), tipo === 'CERRADO' ? d.conteo_fisico : 1000);
+        assert.equal(Number(saldo.billetes), Number(saldo.cantidad)); assert.equal(Number(saldo.bancos), 25);
+        const moves = await prisma.movimientoSaldo.findMany({ where: { punto_atencion_id: p.id, moneda_id: d.moneda_id, descripcion: { contains: 'AJUSTE CIERRE' } } });
+        assert.equal(moves.length, tipo === 'CERRADO' ? 1 : 0);
+        if (tipo === 'CERRADO') assert.equal(Number(moves[0].monto), d.conteo_fisico - 1000);
+      }
+      assert.equal((await prisma.jornada.findUnique({ where: { id: j.id } })).estado, 'COMPLETADO');
+      assert.equal((await prisma.usuario.findUnique({ where: { id: user.id } })).punto_atencion_id, null);
+    });
+  }
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

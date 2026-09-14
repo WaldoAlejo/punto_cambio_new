@@ -146,3 +146,19 @@ Se confirmó acceso a la base `punto_cambio` indicada por el usuario. Se consult
 - Se confirmó la existencia de `Jornada.estado`, `Jornada.usuario_id`, `Usuario.rol` y `Usuario.punto_atencion_id`.
 - Esto confirma el tipo de columna relevante para la corrección de autenticación. Sigue pendiente verificar la zona horaria efectiva del proceso backend desplegado y la convención de escritura de fechas; la zona de la sesión PostgreSQL no acredita la del proceso Node.js.
 - No se consultaron registros de clientes ni operaciones, no se modificaron datos ni se desplegó código.
+
+## Seguimiento: ruta de arranque del backend corregida
+
+Se corrigió `start:server` en `package.json`: ahora ejecuta `node dist-server/server/index.js`. La ruta anterior, `server-dist/index.js`, no corresponde al artefacto generado por la configuración TypeScript actual. El comando queda alineado con PM2, Docker y la verificación de build existente.
+
+Validación local: compilación completa del backend correcta, con salida aislada en `node_modules/.cache/server-entry-check` y archivo incremental separado. Se confirmó que genera `server/index.js`, que npm/PM2/Docker apuntan a la misma ruta relativa y que `node --check` acepta la sintaxis de la entrada compilada. `git diff --check` correcto. No se ejecutó el backend, no se cargaron sus variables de entorno ni se consultó PostgreSQL. Esta comprobación no certifica el arranque completo ni sus integraciones.
+
+No se cambiaron dependencias ni el lockfile. Cambio local incluido en el siguiente commit de correcciones de caja; pendiente de despliegue.
+
+## Seguimiento: aperturas con incidencia y cierres con diferencias
+
+Se reprodujo un defecto en `/guardar-cierre`: `allowMismatch: true` omitía tanto la tolerancia frente al saldo esperado como la validación de que billetes más monedas sumen el conteo físico. Un cierre con conteo USD 900 y billetes 950 respondió 200. Se separaron ambas comprobaciones: permitir diferencias contables ya no permite un desglose inconsistente, tanto en cierre definitivo como parcial.
+
+Suite ampliada: **26 comprobaciones aprobadas** en PostgreSQL temporal con datos ficticios. Se verificaron aperturas que exigen incidencia, apertura con incidencia pendiente de revisión sin alterar saldos, rechazos sin escrituras contables, faltante USD de 100 y sobrante EUR de 10. El cierre definitivo ajusta saldo y registra un movimiento por moneda; el parcial conserva saldos y no registra ajustes. Ambos finalizan jornada y liberan el punto, conforme al comportamiento actual.
+
+TypeScript backend, ESLint de la ruta y revisión de espacios correctos. Evidencia anterior: [Fallo de desglose](INTEGRACION_LOCAL_DESGLOSE_ANTES.json). Evidencia posterior: [Caja corregida](INTEGRACION_LOCAL_CAJA_CORREGIDA.json). Entorno temporal detenido; sin consultas ni escrituras en producción. Pendientes: concurrencia, transferencias, diferencias bancarias y validación de las pantallas contra el backend aislado.
