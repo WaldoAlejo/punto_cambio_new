@@ -82,3 +82,11 @@ El mismo comando de integración ahora ejecuta 26 comprobaciones. Los casos nuev
 Antes de corregir, la petición con total 900 y billetes 950 se aceptaba: [resultado previo](INTEGRACION_LOCAL_DESGLOSE_ANTES.json). La validación del desglose se separó de la tolerancia contable. Después, los rechazos mantienen saldos, cuadre/detalles, movimientos, jornada y usuario sin cambios; el cierre definitivo genera ajustes -100 USD y +10 EUR, mientras el parcial conserva los saldos y no genera ajustes. Ambos completan la jornada y liberan al usuario según las reglas existentes. [Resultado: 26 aprobadas](INTEGRACION_LOCAL_CAJA_CORREGIDA.json).
 
 TypeScript backend y ESLint de la ruta correctos. No se probaron diferencias bancarias ni operaciones simultáneas. Se detuvieron los servicios temporales y no se accedió a producción.
+
+## Ampliación: transferencias y permisos de origen
+
+El lanzador monta también las rutas reales `/transfers` y `/transfer-approvals`. Crea dos operadores con jornadas, aperturas por API y saldos ficticios de 1000 por moneda y 25 en bancos. Prueba envío de 100 USD en efectivo, idempotencia de creación, permisos de recepción, aceptación, rechazo y repetición secuencial. Comprueba efectivo, desglose, bancos y movimientos con signos opuestos. Añade rechazo de origen ajeno/omitido para operador, origen ajeno para concesión y conservación del acceso administrativo con punto principal.
+
+La prueba de origen ajeno falló antes de la corrección: [resultado previo](INTEGRACION_LOCAL_TRANSFER_ANTES.json). Tras validar el origen contra el punto asignado, **37 pruebas pasan**: [resultado posterior](INTEGRACION_LOCAL_TRANSFER_CORREGIDA.json). TypeScript correcto; ESLint del controlador sin errores, con tres advertencias previas. PostgreSQL y Express detenidos.
+
+Alcance: EFECTIVO con billetes y operaciones secuenciales. No incluye concurrencia, monedas físicas en el envío, BANCO/MIXTO, cancelación desde origen ni aprobaciones históricas PENDIENTE. Los permisos administrativos se prueban cambiando el rol del usuario ficticio en la base local; el middleware consulta ese rol en cada solicitud.

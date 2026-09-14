@@ -84,6 +84,8 @@ try {
     ['/api/apertura-caja', '../../server/routes/apertura-caja.ts'],
     ['/api/exchanges', '../../server/routes/exchanges.ts'],
     ['/api/guardar-cierre', '../../server/routes/guardar-cierre.ts'],
+    ['/api/transfers', '../../server/routes/transfers.ts'],
+    ['/api/transfer-approvals', '../../server/routes/transfer-approvals.ts'],
   ]) app.use(mount, (await import(module)).default);
   server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   const base = `http://127.0.0.1:${server.address().port}/api`;
@@ -102,9 +104,9 @@ try {
   }
   const [usd, eur] = currencies;
   let token;
-  async function post(route, body, key) {
+  async function post(route, body, key, authToken = token) {
     const res = await fetch(base + route, { method: 'POST', headers: {
-      'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      'Content-Type': 'application/json', ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(key ? { 'Idempotency-Key': key } : {}),
     }, body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
     return { status: res.status, body: await res.json() };
@@ -276,6 +278,90 @@ try {
       }
       assert.equal((await prisma.jornada.findUnique({ where: { id: j.id } })).estado, 'COMPLETADO');
       assert.equal((await prisma.usuario.findUnique({ where: { id: user.id } })).punto_atencion_id, null);
+    });
+  }
+  const transferPoints = [];
+  for (const label of ['ORIGEN', 'DESTINO']) {
+    const p = await prisma.puntoAtencion.create({ data: { nombre: `TRANSFER ${label}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+    const u = await prisma.usuario.create({ data: { username: `transfer_${label}`, nombre: label,
+      password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'OPERADOR', punto_atencion_id: p.id } });
+    const j = await prisma.jornada.create({ data: { usuario_id: u.id, punto_atencion_id: p.id, fecha_inicio: morning, estado: 'ACTIVO' } });
+    for (const m of currencies) {
+      await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, billetes: 1000, bancos: 25 } });
+      await prisma.saldoInicial.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad_inicial: 1000, asignado_por: u.id } });
+    }
+    const login = await post('/auth/login', { username: u.username, password: 'PruebaLocal_123!' }); ok(login);
+    const t = login.body.token;
+    const opening = await post('/apertura-caja/iniciar', { jornada_id: j.id }, undefined, t); ok(opening);
+    const aid = opening.body.apertura.id;
+    ok(await post('/apertura-caja/conteo', { apertura_id: aid, conteos: currencies.map(m => ({
+      moneda_id: m.id, billetes: [{ denominacion: 100, cantidad: 10 }], monedas: [], total: 1000,
+    })) }, undefined, t));
+    ok(await post('/apertura-caja/confirmar', { apertura_id: aid }, undefined, t));
+    transferPoints.push({ id: p.id, token: t, userId: u.id });
+  }
+  const [origin, destination] = transferPoints;
+  const transferBody = { origen_id: origin.id, destino_id: destination.id, moneda_id: usd.id, monto: 100,
+    tipo_transferencia: 'ENTRE_PUNTOS', via: 'EFECTIVO' };
+  const balance = async (p) => {
+    const s = await prisma.saldo.findFirst({ where: { punto_atencion_id: p.id, moneda_id: usd.id } });
+    assert.equal(Number(s.bancos), 25); assert.equal(Number(s.cantidad), Number(s.billetes) + Number(s.monedas_fisicas));
+    return Number(s.cantidad);
+  };
+  for (const action of ['accept', 'reject']) {
+    let tid;
+    const initialOrigin = await balance(origin), initialDestination = await balance(destination);
+    const transferKey = randomUUID();
+    await check(`Transfer ${action}: envio descuenta solo origen e idempotencia`, async () => {
+      const result = await post('/transfers', transferBody, transferKey, origin.token); ok(result);
+      tid = result.body.transfer.id;
+      assert.equal(result.body.transfer.estado, 'EN_TRANSITO');
+      ok(await post('/transfers', transferBody, transferKey, origin.token));
+      assert.equal(await balance(origin), initialOrigin - 100); assert.equal(await balance(destination), initialDestination);
+      const moves = await prisma.movimientoSaldo.findMany({ where: { referencia_id: tid } });
+      assert.equal(moves.length, 1); assert.equal(Number(moves[0].monto), -100);
+    });
+    await check(`Transfer ${action}: origen no puede resolver por destino`, async () => {
+      assert.equal((await post(`/transfer-approvals/${tid}/${action}`, {}, undefined, origin.token)).status, 403);
+      assert.equal((await prisma.transferencia.findUnique({ where: { id: tid } })).estado, 'EN_TRANSITO');
+      assert.equal(await balance(origin), initialOrigin - 100); assert.equal(await balance(destination), initialDestination);
+    });
+    await check(`Transfer ${action}: destino resuelve una sola vez`, async () => {
+      ok(await post(`/transfer-approvals/${tid}/${action}`, {}, undefined, destination.token));
+      assert.equal((await prisma.transferencia.findUnique({ where: { id: tid } })).estado, action === 'accept' ? 'COMPLETADO' : 'CANCELADO');
+      assert.equal((await post(`/transfer-approvals/${tid}/${action}`, {}, undefined, destination.token)).status, 400);
+      assert.equal(await balance(origin), initialOrigin - (action === 'accept' ? 100 : 0));
+      assert.equal(await balance(destination), initialDestination + (action === 'accept' ? 100 : 0));
+      const moves = await prisma.movimientoSaldo.findMany({ where: { referencia_id: tid } });
+      assert.equal(moves.length, 2); assert.equal(moves.reduce((sum, m) => sum + Number(m.monto), 0), 0);
+    });
+  }
+  await check('Transfer: operador no puede descontar otro punto', async () => {
+    const before = [await balance(origin), await balance(destination), await prisma.transferencia.count(), await prisma.movimientoSaldo.count()];
+    const result = await post('/transfers', { ...transferBody, origen_id: destination.id, destino_id: origin.id }, undefined, origin.token);
+    assert.equal(result.status, 403);
+    assert.deepEqual([await balance(origin), await balance(destination), await prisma.transferencia.count(), await prisma.movimientoSaldo.count()], before);
+  });
+  await check('Transfer: operador no puede omitir origen', async () => {
+    const before = await prisma.transferencia.count();
+    for (const origen_id of [null, undefined]) {
+      assert.equal((await post('/transfers', { ...transferBody, origen_id }, undefined, origin.token)).status, 403);
+    }
+    assert.equal(await prisma.transferencia.count(), before);
+  });
+  await check('Transfer: concesion no puede descontar otro punto', async () => {
+    await prisma.usuario.update({ where: { id: origin.userId }, data: { rol: 'CONCESION' } });
+    const before = await balance(destination);
+    assert.equal((await post('/transfers', { ...transferBody, origen_id: destination.id, destino_id: origin.id }, undefined, origin.token)).status, 403);
+    assert.equal(await balance(destination), before);
+  });
+  for (const rol of ['ADMIN', 'SUPER_USUARIO']) {
+    await check(`Transfer: ${rol} conserva envio desde otro punto`, async () => {
+      await prisma.puntoAtencion.update({ where: { id: origin.id }, data: { es_principal: true } });
+      await prisma.usuario.update({ where: { id: origin.userId }, data: { rol } });
+      const before = await balance(destination);
+      ok(await post('/transfers', { ...transferBody, origen_id: destination.id, destino_id: origin.id }, randomUUID(), origin.token));
+      assert.equal(await balance(destination), before - 100);
     });
   }
 } catch (error) {

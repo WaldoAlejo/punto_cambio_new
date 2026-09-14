@@ -55,6 +55,20 @@ const controller = {
         monto_banco,
       } = req.body;
 
+      // Los usuarios operativos solo pueden disponer del saldo de su punto.
+      if (
+        req.user.rol !== "ADMIN" &&
+        req.user.rol !== "SUPER_USUARIO" &&
+        (!req.user.punto_atencion_id || origen_id !== req.user.punto_atencion_id)
+      ) {
+        res.status(403).json({
+          error: "Solo puedes enviar transferencias desde tu punto de atención asignado",
+          success: false,
+          timestamp: new Date().toISOString(),
+        });
+        return;
+      }
+
       logger.info("=== CREAR TRANSFERENCIA EN SERVIDOR ===", {
         usuarioId: req.user?.id,
         datosRecibidos: { ...req.body },
