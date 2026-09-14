@@ -73,6 +73,7 @@ try {
   try {
     await db.query(schemaSql);
     await db.query(await fs.readFile(path.join(root, 'scripts/migrations/2026-09-14-staged-opening.sql'), 'utf8'));
+    await db.query(await fs.readFile(path.join(root, 'scripts/migrations/2026-09-14-metal-purchases-checks.sql'), 'utf8'));
   } finally { await db.end(); }
   for (const key of Object.keys(process.env)) delete process.env[key];
   Object.assign(process.env, cleanEnv);
@@ -86,13 +87,15 @@ try {
     res.setHeader('Content-Security-Policy', "connect-src 'self'");
     next();
   });
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
   for (const [mount, module] of [
     ['/api/auth', '../../server/routes/auth.ts'],
     ['/api/points', '../../server/routes/points.ts'],
     ['/api/schedules', '../../server/routes/schedules.ts'],
     ['/api/apertura-caja', '../../server/routes/apertura-caja.ts'],
     ['/api/exchanges', '../../server/routes/exchanges.ts'],
+    ['/api/metal-purchases', '../../server/routes/metal-purchases.ts'],
+    ['/api/contabilidad-diaria', '../../server/routes/contabilidad-diaria.ts'],
     ['/api/guardar-cierre', '../../server/routes/guardar-cierre.ts'],
     ['/api/cuadre-caja', '../../server/routes/cuadreCaja.ts'],
     ['/api/cuadre-caja', '../../server/routes/cuadre-caja-conteo.ts'],
@@ -1376,6 +1379,7 @@ try {
     ok(await closeStaged());
     assert.equal((await prisma.jornada.findUniqueOrThrow({ where: { id: j.id } })).estado, 'COMPLETADO');
   });
+  await (await import('./metal-purchases-integration.mjs')).testMetalPurchases({ prisma, pool, base, post, ok, check, usd, eur, bcrypt, browserMode });
   if (browserMode) {
     const browserPoint = await prisma.puntoAtencion.create({ data: { nombre: '000 PRUEBA ETAPAS', direccion: 'Solo local', ciudad: 'Quito', provincia: 'Pichincha' } });
     await prisma.usuario.create({ data: { username: 'navegador_etapas', nombre: 'Operador etapas navegador',

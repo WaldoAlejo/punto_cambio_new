@@ -61,6 +61,7 @@ const Sidebar = ({
   };
 
   const menuItems: MenuItem[] = [
+    { id: "metal-purchases", label: "Compra de oro y plata", color: "text-amber-700", roles: ["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"] },
     {
       id: "exchanges",
       label: "Cambio de Divisas",

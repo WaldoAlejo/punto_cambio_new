@@ -1,6 +1,6 @@
 # Propuesta: compra de oro y plata
 
-Estado: diseño revisado contra el repositorio y referencias públicas. No implementado ni desplegado.
+Estado: primera versión implementada y probada localmente. Pendiente de despliegue y habilitación explícita de puntos. Ver [implementación, pruebas y despliegue](COMPRA_METALES_IMPLEMENTACION_2026-09-14.md). El resto de este documento conserva la propuesta de referencia; el documento de implementación detalla las decisiones y límites de la versión entregada.
 
 ## Alcance confirmado
 

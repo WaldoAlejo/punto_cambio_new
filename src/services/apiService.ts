@@ -155,7 +155,7 @@ class ApiService {
 
   async post<T>(endpoint: string, data: unknown, idempotencyKey?: string): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
-    console.warn(`[API] POST ${cleanEndpoint}`, data);
+    console.warn(`[API] POST ${cleanEndpoint}`, cleanEndpoint.startsWith("/metal-purchases") ? "[datos privados]" : data);
 
     const res = await this.fetchWithBackoff(
       `${API_BASE_URL}${cleanEndpoint}`,
@@ -172,7 +172,7 @@ class ApiService {
 
   async put<T>(endpoint: string, data: unknown, idempotencyKey?: string): Promise<T> {
     const cleanEndpoint = this.clean(endpoint);
-    console.warn(`[API] PUT ${cleanEndpoint}`, data);
+    console.warn(`[API] PUT ${cleanEndpoint}`, cleanEndpoint.startsWith("/metal-purchases") ? "[datos privados]" : data);
 
     const res = await this.fetchWithBackoff(
       `${API_BASE_URL}${cleanEndpoint}`,

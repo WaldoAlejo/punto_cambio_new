@@ -267,3 +267,10 @@ Implementada para nuevas aperturas: USD/EUR y divisas con actividad reciente del
 Validación: **270 casos de integración**, 12 regresiones frontend/autenticación, TypeScript frontend/backend y compilación Vite local correctos. Navegador: selección, conteo obligatorio, menú bloqueado antes de confirmar, apertura confirmada y conteo posterior de GBP dejando CHF pendiente. PostgreSQL temporal detenido.
 
 [Reglas, evidencia y orden de despliegue](APERTURA_POR_ETAPAS_2026-09-14.md). **Pendiente en AWS:** instalar primero la protección SQL específica y después activar backend/frontend; no basta un reinicio. Sin modificaciones a producción en esta revisión.
+## Compra de oro y plata — implementación local 2026-09-14
+
+Módulo implementado con precio negociado por gramo, pesos/pureza, recepción identificada, efectivo/transferencia, recibo, consultas y reverso documentado durante la jornada abierta. Reutiliza caja/bancos y apertura por etapas. Ningún punto se habilita automáticamente.
+
+Validación final: 303 pruebas de integración y 12 regresiones frontend/auth correctas; TypeScript, ESLint del módulo y builds aislados correctos. Piloto en navegador con compras ficticias de oro en efectivo y plata por transferencia, impresión, reverso y recuperación de respuesta perdida sin duplicación.
+
+Guía: [COMPRA_METALES_IMPLEMENTACION_2026-09-14.md](COMPRA_METALES_IMPLEMENTACION_2026-09-14.md). Pendientes operativos: push del usuario, respaldo vigente, migración SQL aditiva en AWS, build/reinicio y habilitación explícita de los puntos directos. No se ejecutó esta migración ni se crearon compras en producción.

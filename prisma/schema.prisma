@@ -8,6 +8,9 @@ datasource db {
 }
 
 model Usuario {
+  comprasMetales CompraMetal[]
+  eventosMetales EventoCompraMetal[]
+  configuracionesMetales ConfiguracionCompraMetal[]
   id                                      String                        @id @default(uuid())
   username                                String                        @unique
   password                                String
@@ -57,6 +60,8 @@ model Usuario {
 }
 
 model PuntoAtencion {
+  comprasMetales CompraMetal[]
+  configuracionMetales ConfiguracionCompraMetal?
   id                              String                        @id @default(uuid())
   nombre                          String                        @unique
   direccion                       String
@@ -106,6 +111,7 @@ model PuntoAtencion {
 }
 
 model Moneda {
+  comprasMetales CompraMetal[]
   id                            String                         @id @default(uuid())
   nombre                        String
   simbolo                       String
@@ -372,6 +378,7 @@ model SolicitudSaldo {
 }
 
 model Jornada {
+  comprasMetales CompraMetal[]
   id                 String        @id @default(uuid())
   usuario_id         String
   punto_atencion_id  String
@@ -1015,4 +1022,81 @@ enum EstadoApertura {
   RESUELTO
   ABIERTA
   RECHAZADO
+}
+
+// Payments are immutable fields of the purchase; each line identifies one received envelope.
+model ConfiguracionCompraMetal {
+  punto_atencion_id String @id
+  habilitado Boolean @default(false)
+  actualizado_por String
+  updated_at DateTime @updatedAt
+  punto PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
+  usuario Usuario @relation(fields: [actualizado_por], references: [id], onDelete: Restrict)
+}
+
+model CompraMetal {
+  id String @id @default(uuid())
+  numero String @unique
+  punto_atencion_id String
+  usuario_id String
+  jornada_id String
+  moneda_id String
+  clave_operacion String
+  solicitud_hash String
+  estado String @default("PAGADA")
+  fecha DateTime @default(now())
+  vendedor Json
+  punto_nombre String
+  operador_nombre String
+  moneda_codigo String
+  medio_pago String
+  total Decimal @db.Decimal(15, 2)
+  billetes Decimal @default(0) @db.Decimal(15, 2)
+  monedas Decimal @default(0) @db.Decimal(15, 2)
+  banco String?
+  referencia String?
+  comprobante String?
+  punto PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  jornada Jornada @relation(fields: [jornada_id], references: [id], onDelete: Restrict)
+  moneda Moneda @relation(fields: [moneda_id], references: [id], onDelete: Restrict)
+  detalles DetalleCompraMetal[]
+  eventos EventoCompraMetal[]
+  @@unique([usuario_id, clave_operacion])
+  @@index([punto_atencion_id, fecha])
+  @@index([fecha])
+}
+
+model DetalleCompraMetal {
+  id String @id @default(uuid())
+  compra_id String
+  codigo_pieza String @unique
+  metal String
+  descripcion String
+  piezas Int
+  peso_bruto Decimal @db.Decimal(13, 3)
+  deducciones Decimal @db.Decimal(13, 3)
+  peso_neto Decimal @db.Decimal(13, 3)
+  pureza_declarada String
+  pureza Decimal @db.Decimal(7, 3)
+  gramos_finos Decimal @db.Decimal(16, 6)
+  metodo String
+  observaciones String
+  precio_gramo Decimal @db.Decimal(16, 6)
+  subtotal Decimal @db.Decimal(15, 2)
+  foto String?
+  compra CompraMetal @relation(fields: [compra_id], references: [id], onDelete: Restrict)
+  @@index([compra_id])
+}
+
+model EventoCompraMetal {
+  id String @id @default(uuid())
+  compra_id String?
+  usuario_id String
+  fecha DateTime @default(now())
+  accion String
+  evidencia Json
+  compra CompraMetal? @relation(fields: [compra_id], references: [id], onDelete: Restrict)
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  @@index([compra_id])
 }

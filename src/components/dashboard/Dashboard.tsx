@@ -20,6 +20,7 @@ import { aperturaCajaService, AperturaEstadoActual } from "@/services/aperturaCa
 import { toast } from "@/hooks/use-toast";
 
 /** Lazy imports */
+const MetalPurchases = React.lazy(() => import("../metals/MetalPurchases"));
 const ExchangeManagement = React.lazy(
   () => import("../exchange/ExchangeManagement")
 );
@@ -131,6 +132,7 @@ const STORAGE_KEY_VIEW = "pc_active_view";
 const STORAGE_KEY_POINT = "pc_selected_point_id";
 
 const VALID_VIEWS = new Set<string>([
+  "metal-purchases",
   "dashboard",
   "exchanges",
   "pending-exchanges",
@@ -335,6 +337,9 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
 
   const renderContent = useCallback(() => {
     switch (activeView) {
+      case "metal-purchases":
+        if (!isOperador && !isAdmin && !isAdministrativo) return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <MetalPurchases key={`${user.id}:${selectedPoint?.id || "none"}`} user={user} selectedPoint={selectedPoint} />;
       case "exchanges":
         if (!isOperador && !isAdmin)
           return (
