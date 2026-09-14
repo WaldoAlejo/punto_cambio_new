@@ -40,6 +40,32 @@ function exchangeHook(point, getExchangesByPoint) {
   return { hook: useExchangeData(point), state, effects };
 }
 
+test('completion omits absent breakdown and preserves explicitly supplied amounts', async () => {
+  const requests = [];
+  const { exchangeService } = loadSource('src/services/exchangeService.ts', {
+    './apiService': {
+      ApiError: class extends Error {},
+      apiService: { patch: async (route, body) => {
+        requests.push({ route, body: JSON.parse(JSON.stringify(body)) });
+        return { success: true, exchange: { id: 'pending-1' } };
+      } },
+    },
+    '../utils/idempotency': { generateIdempotencyKey: () => 'unused' },
+  });
+  const result = await exchangeService.completeExchange('pending-1', { metodoEntrega: 'efectivo' });
+  assert.equal(result.error, null);
+  assert.equal(requests[0].route, '/exchanges/pending-1/completar');
+  for (const field of ['billetes', 'monedas', 'total']) {
+    assert.equal(Object.hasOwn(requests[0].body, `divisas_recibidas_${field}`), false);
+  }
+  await exchangeService.completeExchange('pending-1', {
+    metodoEntrega: 'efectivo', divisasRecibidas: { billetes: 110, monedas: 0, total: 110 },
+  });
+  assert.equal(requests[1].body.divisas_recibidas_billetes, 110);
+  assert.equal(requests[1].body.divisas_recibidas_monedas, 0);
+  assert.equal(requests[1].body.divisas_recibidas_total, 110);
+});
+
 test('exchange reload forwards the selected point and date filters and updates history', async () => {
   const calls = [];
   const exchanges = [{ id: 'exchange-1' }];

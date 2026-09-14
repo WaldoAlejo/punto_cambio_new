@@ -29,6 +29,8 @@ Evidencia: [antes](INTEGRACION_LOCAL_FECHA_APERTURA_ANTES.json), [después](INTE
 
 ## Pendientes de liberación
 
+Frontend: completar un cambio sin indicar desglose ahora omite esos campos en la petición, conservando los importes guardados; los ceros explícitos siguen enviándose. Las 6 regresiones frontend pasan. La compilación aislada Vite pasó (aviso de datos Browserslist antiguos y bundle grande de reportes; no se actualizaron dependencias automáticamente).
+
 `complete-partial` y `register-partial-payment` condicionan la escritura a estado PENDIENTE: si una cancelación gana mientras esperan el bloqueo, responden 409 sin reactivar el cambio. [93 pruebas correctas](INTEGRACION_LOCAL_ESTADOS_ABONOS.json). La comprobación de fondos en cerrar/completar se limita al efectivo y su desglose; se conserva la regla existente de bancos como registro sin límite de saldo.
 
 **Hallazgo contable aún abierto:** POST `/exchanges` contabiliza el 100% si no hay abono, incluso con estado PENDIENTE. Registrar un abono posteriormente cambia solo los metadatos, mientras cerrar/completar calcula otro movimiento proporcional. Por otra parte, `complete-partial` marca completado sin movimientos, aunque su pantalla anuncia actualización contable. No es seguro unificar estos flujos aplicando ciegamente el porcentaje restante a registros históricos: primero debe distinguirse lo ya contabilizado. También sigue pendiente el reverso de parciales al eliminar un cambio. Estos casos impiden declarar lista la liberación completa.

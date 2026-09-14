@@ -394,10 +394,10 @@ export const exchangeService = {
             : null
           : null,
         divisas_recibidas_billetes:
-          deliveryDetails.divisasRecibidas?.billetes ?? 0,
+          deliveryDetails.divisasRecibidas?.billetes,
         divisas_recibidas_monedas:
-          deliveryDetails.divisasRecibidas?.monedas ?? 0,
-        divisas_recibidas_total: deliveryDetails.divisasRecibidas?.total ?? 0,
+          deliveryDetails.divisasRecibidas?.monedas,
+        divisas_recibidas_total: deliveryDetails.divisasRecibidas?.total,
       };
 
       const response = await apiService.patch<ExchangeResponse>(
