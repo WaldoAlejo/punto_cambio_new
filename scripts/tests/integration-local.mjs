@@ -805,6 +805,36 @@ try {
       });
     }
   }
+  for (const action of ['complete-partial', 'register-partial-payment']) {
+    await check(`Cambio ${action}: no revive estado cambiado mientras espera`, async () => {
+      const record = await pendingFixture(permissionPoint.id);
+      await prisma.cambioDivisa.update({ where: { id: record.id }, data: { saldo_pendiente: 55 } });
+      const blocker = new Client({ connectionString: url }); await blocker.connect();
+      let request, response;
+      try {
+        await blocker.query('BEGIN');
+        await blocker.query('SELECT id FROM "CambioDivisa" WHERE id=$1 FOR UPDATE', [record.id]);
+        request = patchExchange(record.id, action, origin.token);
+        const deadline = Date.now() + 10000; let waiting = 0;
+        while (Date.now() < deadline) {
+          waiting = (await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock'")).rows[0].n;
+          if (waiting) break;
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+        assert.ok(waiting, 'La solicitud debe alcanzar la escritura bloqueada');
+        await blocker.query('UPDATE "CambioDivisa" SET estado=\'CANCELADO\' WHERE id=$1', [record.id]);
+        await blocker.query('COMMIT');
+      } finally {
+        await blocker.query('ROLLBACK'); await blocker.end();
+        if (request) response = await request;
+      }
+      assert.equal(response.status, 409);
+      const after = await prisma.cambioDivisa.findUnique({ where: { id: record.id } });
+      assert.equal(after.estado, 'CANCELADO'); assert.equal(Number(after.saldo_pendiente), 55);
+      assert.equal(after.abono_inicial_monto, null);
+      assert.equal((await patchExchange(record.id, action, origin.token)).status, 409);
+    });
+  }
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

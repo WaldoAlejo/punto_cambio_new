@@ -29,6 +29,10 @@ Evidencia: [antes](INTEGRACION_LOCAL_FECHA_APERTURA_ANTES.json), [después](INTE
 
 ## Pendientes de liberación
 
+`complete-partial` y `register-partial-payment` condicionan la escritura a estado PENDIENTE: si una cancelación gana mientras esperan el bloqueo, responden 409 sin reactivar el cambio. [93 pruebas correctas](INTEGRACION_LOCAL_ESTADOS_ABONOS.json). La comprobación de fondos en cerrar/completar se limita al efectivo y su desglose; se conserva la regla existente de bancos como registro sin límite de saldo.
+
+**Hallazgo contable aún abierto:** POST `/exchanges` contabiliza el 100% si no hay abono, incluso con estado PENDIENTE. Registrar un abono posteriormente cambia solo los metadatos, mientras cerrar/completar calcula otro movimiento proporcional. Por otra parte, `complete-partial` marca completado sin movimientos, aunque su pantalla anuncia actualización contable. No es seguro unificar estos flujos aplicando ciegamente el porcentaje restante a registros históricos: primero debe distinguirse lo ya contabilizado. También sigue pendiente el reverso de parciales al eliminar un cambio. Estos casos impiden declarar lista la liberación completa.
+
 `cerrar` y `completar` ahora bloquean el cambio y ambas monedas, vuelven a verificar la jornada y guardan saldos, movimientos, estado y recibo en una transacción. Rechazan saldo/desglose insuficiente. Pruebas de doble solicitud y fallo deliberado del recibo confirman una sola contabilización y rollback completo: [91 pruebas correctas](INTEGRACION_LOCAL_ABONOS_ATOMICOS.json). Se conserva por ahora la fórmula existente de reparto del abono; no certifica la correcta clasificación histórica ni todos los métodos de pago.
 
 Permisos de `cerrar`, `completar` y `register-partial-payment` corregidos: operador limitado a su punto, cambios cancelados rechazados con 409, alcance ADMIN/SUPER_USUARIO conservado. Verificación aislada: 85 pruebas correctas y TypeScript backend correcto; [resultados](INTEGRACION_LOCAL_PERMISOS_CAMBIOS.json). Estas pruebas de permisos no certifican todavía la contabilidad de abonos ni su concurrencia.

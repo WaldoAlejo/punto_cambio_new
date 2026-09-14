@@ -1722,7 +1722,6 @@ router.patch(
 
           // Actualizar saldos en transacción
           if (num(saldoDestino.cantidad) < egresoEfRestante ||
-              num(saldoDestino.bancos) < egresoBkRestante ||
               num(saldoDestino.billetes) < billetesEgresoRestante ||
               num(saldoDestino.monedas_fisicas) < monedasEgresoRestante) {
             res.status(400).json({ success: false, error: "Saldo insuficiente para completar el cambio" });
@@ -2145,7 +2144,6 @@ router.patch(
 
           // Actualizar saldos en transacción
           if (num(saldoDestino.cantidad) < egresoEfRestante ||
-              num(saldoDestino.bancos) < egresoBkRestante ||
               num(saldoDestino.billetes) < billetesEgresoRestante ||
               num(saldoDestino.monedas_fisicas) < monedasEgresoRestante) {
             res.status(400).json({ success: false, error: "Saldo insuficiente para completar el cambio" });
@@ -2627,6 +2625,10 @@ router.patch(
         res.status(404).json({ success: false, error: "Cambio no encontrado" });
         return;
       }
+      if (exchange.estado !== EstadoTransaccion.PENDIENTE) {
+        res.status(409).json({ success: false, error: "El cambio ya no esta pendiente" });
+        return;
+      }
       const sp = Number(exchange.saldo_pendiente || 0);
       if (!(sp > 0)) {
         res.status(400).json({
@@ -2637,7 +2639,7 @@ router.patch(
       }
 
       const updated = await prisma.cambioDivisa.update({
-        where: { id },
+        where: { id, estado: EstadoTransaccion.PENDIENTE },
         data: {
           saldo_pendiente: 0,
           fecha_completado: new Date(), // UTC - la UI muestra en zona horaria local
@@ -2684,6 +2686,10 @@ router.patch(
         message: `Cambio parcial completado.`,
       });
     } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        res.status(409).json({ success: false, error: "El cambio ya no esta pendiente. Actualiza la pantalla." });
+        return;
+      }
       logger.error("Error completing partial exchange", {
         error: error instanceof Error ? error.message : "Unknown",
       });
@@ -2746,7 +2752,7 @@ router.patch(
       const saldoPendiente = round2(montoDestino - abonoMonto);
 
       const updated = await prisma.cambioDivisa.update({
-        where: { id },
+        where: { id, estado: EstadoTransaccion.PENDIENTE },
         data: {
           abono_inicial_monto: round2(abonoMonto),
           abono_inicial_fecha: abono_inicial_fecha
@@ -2804,6 +2810,10 @@ router.patch(
         )}`,
       });
     } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+        res.status(409).json({ success: false, error: "El cambio ya no esta pendiente. Actualiza la pantalla." });
+        return;
+      }
       logger.error("Error registering partial payment", {
         error: error instanceof Error ? error.message : "Unknown",
       });
