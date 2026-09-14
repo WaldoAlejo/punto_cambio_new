@@ -43,9 +43,9 @@ export interface UbicacionRegistrada {
 interface JornadaEstadoBackend {
   id?: string;
   fecha_inicio?: string;
-  fecha_almuerzo?: string;
-  fecha_regreso?: string;
-  fecha_salida?: string;
+  fecha_almuerzo?: string | null;
+  fecha_regreso?: string | null;
+  fecha_salida?: string | null;
   estado: string;
   ubicacion_inicio?: UbicacionRegistrada | null;
   ubicacion_salida?: UbicacionRegistrada | null;
@@ -174,9 +174,9 @@ const UbicacionCard = ({
         <span className="text-sm font-semibold text-green-800">{titulo}</span>
         <span className="ml-auto flex items-center gap-1">
           {dispositivo === "MOVIL" ? (
-            <Smartphone className="h-3.5 w-3.5 text-green-500" title="Dispositivo móvil" />
+            <span title="Dispositivo móvil"><Smartphone className="h-3.5 w-3.5 text-green-500" aria-label="Dispositivo móvil" /></span>
           ) : (
-            <Monitor className="h-3.5 w-3.5 text-green-500" title="Computadora" />
+            <span title="Computadora"><Monitor className="h-3.5 w-3.5 text-green-500" aria-label="Computadora" /></span>
           )}
           {mapsUrl && (
             <a

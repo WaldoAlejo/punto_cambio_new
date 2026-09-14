@@ -48,7 +48,7 @@ import {
 } from "lucide-react";
 // import ExternalServicesClose from "./ExternalServicesClose"; // Ya no se requiere cierre separado
 import { contabilidadDiariaService } from "../../services/contabilidadDiariaService";
-import cuatreCajaService from "@/services/cuatreCajaService";
+import cuatreCajaService, { type CuadreResponse, type DetalleCuadreResumen } from "@/services/cuatreCajaService";
 import { todayGyeDateOnly } from "@/utils/timezone";
 
 type JsonRecord = Record<string, unknown>;
@@ -334,6 +334,7 @@ interface ResumenUsuarioRef {
 interface ResumenMonedaRef {
   codigo?: string;
   nombre?: string;
+  simbolo?: string;
 }
 
 interface ResumenSaldoPrincipal {
@@ -409,39 +410,12 @@ interface DailyCloseProps {
   selectedPoint: PuntoAtencion | null;
 }
 
-interface CuadreDetalle {
-  moneda_id: string;
-  codigo: string;
-  nombre: string;
-  simbolo: string;
-  saldo_apertura: number;
-  saldo_cierre: number;
-  bancos_teorico?: number;
-  conteo_bancos?: number;
-  conteo_fisico: number;
-  billetes: number;
-  monedas: number;
-  ingresos_periodo: number;
-  egresos_periodo: number;
-  movimientos_periodo: number;
-  desglose_denominaciones?: DesgloseDenominacion[];
-}
+type CuadreDetalle = DetalleCuadreResumen;
 
 const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
   const navigate = useNavigate();
   const { logout } = useAuth();
-  const [cuadreData, setCuadreData] = useState<{
-    detalles: CuadreDetalle[];
-    observaciones: string;
-    cuadre_id?: string;
-    periodo_inicio?: string;
-    totales?: {
-      cambios: number | { cantidad: number };
-      servicios_externos?: number | { cantidad: number };
-      transferencias_entrada: number | { cantidad: number };
-      transferencias_salida: number | { cantidad: number };
-    };
-  } | null>(null);
+  const [cuadreData, setCuadreData] = useState<CuadreResponse["data"] | null>(null);
   const [userAdjustments, setUserAdjustments] = useState<{
     [key: string]: { bills: string; coins: string; banks: string; note?: string };
   }>({});
@@ -868,7 +842,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
     try {
       // 1. Validar saldos solo si hay detalles de divisas
       const tieneDetalles = (cuadreData?.detalles?.length ?? 0) > 0;
-      if (tieneDetalles) {
+      if (tieneDetalles && cuadreData) {
         const incompleteBalances = cuadreData?.detalles?.some(
           (detalle) =>
             userAdjustments[detalle.moneda_id]?.bills === undefined ||
@@ -890,7 +864,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
         }
 
         // Validación estricta con tolerancia
-        const invalidBalances = cuadreData?.detalles?.filter((detalle) => {
+        const invalidBalances = cuadreData.detalles.filter((detalle) => {
           const { total } = calculateBreakdownTotals(detalle.moneda_id);
           const diff = Math.abs(total - detalle.saldo_cierre);
           const tol = detalle.codigo === "USD" ? 1.0 : 0.01;

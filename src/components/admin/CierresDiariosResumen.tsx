@@ -487,7 +487,7 @@ const CierresDiariosResumen = () => {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
         </Alert>
-        <Button onClick={fetchResumen} className="mt-4">
+        <Button onClick={() => fetchResumen()} className="mt-4">
           <RefreshCw className="mr-2 h-4 w-4" />
           Reintentar
         </Button>

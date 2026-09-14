@@ -41,6 +41,7 @@ export interface DashboardStats {
 
 export interface AdminDashboardResponse {
   success: boolean;
+  error?: string;
   stats: DashboardStats;
   cierresRecientes: CierreReciente[];
   actividad: ActividadHora[];

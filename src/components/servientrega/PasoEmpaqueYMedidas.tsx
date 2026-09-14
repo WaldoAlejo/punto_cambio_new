@@ -27,7 +27,6 @@ interface EmpaqueApi {
 }
 
 export default function PasoEmpaqueYMedidas({
-  nombre_producto,
   esDocumento,
   paisDestino,
   esInternacional: _esInternacional,

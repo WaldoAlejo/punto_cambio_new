@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Loader2, Wallet, Calculator, Package, User, MapPin, Box } from "lucide-react";
-import TarifaModal from "./TarifaModal";
+import TarifaModal, { type TarifaServientrega } from "./TarifaModal";
 
-interface Remitente { identificacion?: string; nombre?: string; direccion?: string; telefono?: string; email?: string; ciudad?: string; provincia?: string; }
+interface Remitente { identificacion?: string; nombre?: string; direccion?: string; telefono?: string; email?: string; ciudad?: string; provincia?: string; pais?: string; }
 interface Destinatario extends Remitente { codpais?: number; pais?: string; }
 interface Medidas { alto: number; ancho: number; largo: number; peso: number; valor_declarado: number; valor_seguro?: number; }
 interface FormDataGuia {
@@ -40,7 +40,7 @@ const calcPesoVol = ({ alto = 0, ancho = 0, largo = 0 }: Partial<Medidas>) => {
 export default function PasoResumen({ formData, onBack, onConfirm }: PasoResumenProps) {
   const { remitente, destinatario, medidas, punto_atencion_id } = formData;
   const [tarifa, setTarifa] = useState<TarifaResponseUI | null>(null);
-  const [tarifaCruda, setTarifaCruda] = useState<unknown>(null);
+  const [tarifaCruda, setTarifaCruda] = useState<TarifaServientrega | null>(null);
   const [loadingTarifa, setLoadingTarifa] = useState(false);
   const [saldo, setSaldo] = useState<{ disponible: number; estado: "OK" | "SALDO_BAJO" | "ERROR"; mensaje?: string } | null>(null);
   const [loadingSaldo, setLoadingSaldo] = useState(false);
@@ -92,9 +92,9 @@ export default function PasoResumen({ formData, onBack, onConfirm }: PasoResumen
       if (formData.requiere_empaque) payload.empaque = "AISLANTE DE HUMEDAD";
       if (isIntl) { payload.pais_ori = remitente?.pais || "ECUADOR"; payload.pais_des = destinatario?.pais || "ECUADOR"; payload.codigo_postal_ori = "170150"; payload.codigo_postal_des = "110111"; }
 
-      const res = await axiosInstance.post("/servientrega/tarifa", payload);
+      const res = await axiosInstance.post<TarifaServientrega | TarifaServientrega[] | null>("/servientrega/tarifa", payload);
       const raw = Array.isArray(res.data) ? res.data[0] : res.data;
-      setTarifaCruda(raw);
+      setTarifaCruda(raw ?? null);
       if (!raw || raw.flete === undefined) { toast.error("No se pudo calcular tarifa."); setTarifa(null); return; }
 
       setTarifa({
@@ -212,8 +212,8 @@ export default function PasoResumen({ formData, onBack, onConfirm }: PasoResumen
               <div className="space-y-1">
                 <div className="flex justify-between text-xs"><span className="text-gray-500">Flete</span><span>${tarifa.flete.toFixed(2)}</span></div>
                 {tarifa.valor_empaque > 0 && <div className="flex justify-between text-xs"><span className="text-gray-500">Empaque</span><span>${tarifa.valor_empaque.toFixed(2)}</span></div>}
-                {tarifa.seguro > 0 && <div className="flex justify-between text-xs"><span className="text-gray-500">Seguro</span><span>${tarifa.seguro.toFixed(2)}</span></div>}
-                {tarifa.tiva > 0 && <div className="flex justify-between text-xs"><span className="text-gray-500">IVA</span><span>${tarifa.tiva.toFixed(2)}</span></div>}
+                {tarifa.seguro !== undefined && tarifa.seguro > 0 && <div className="flex justify-between text-xs"><span className="text-gray-500">Seguro</span><span>${tarifa.seguro.toFixed(2)}</span></div>}
+                {tarifa.tiva !== undefined && tarifa.tiva > 0 && <div className="flex justify-between text-xs"><span className="text-gray-500">IVA</span><span>${tarifa.tiva.toFixed(2)}</span></div>}
               </div>
               <Separator className="my-2" />
               <div className="flex justify-between items-center">

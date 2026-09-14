@@ -1,0 +1,58 @@
+{
+  "runDir": "C:\\Users\\oswal\\AppData\\Local\\Temp\\pc-integration-P2xxAA",
+  "results": [
+    {
+      "name": "Login con usuario ficticio",
+      "passed": true
+    },
+    {
+      "name": "Jornada 19:30 GYE mantiene punto en autenticacion",
+      "passed": false,
+      "error": "La autenticacion ignora el punto pese a existir jornada activa del mismo dia GYE\n+ actual - expected\n\n+ null\n- '6bfd6423-2ba2-48e5-96ce-2486b08e1b0a'\n"
+    },
+    {
+      "name": "Cambio bloqueado antes de apertura",
+      "passed": true
+    },
+    {
+      "name": "Iniciar apertura",
+      "passed": true
+    },
+    {
+      "name": "Apertura bloqueada sin conteos obligatorios",
+      "passed": true
+    },
+    {
+      "name": "Guardar conteos USD y EUR y confirmar apertura",
+      "passed": true
+    },
+    {
+      "name": "Comprar 100 EUR por 110 USD y verificar saldos",
+      "passed": true
+    },
+    {
+      "name": "Reintento idempotente no duplica cambio",
+      "passed": true
+    },
+    {
+      "name": "Cierre exacto conserva saldo y finaliza jornada",
+      "passed": true
+    }
+  ],
+  "diagnostics": {
+    "evening": {
+      "storedUtc": "2026-09-14T00:30:00.000Z",
+      "expectedRangeUtc": [
+        "2026-09-13T05:00:00.000Z",
+        "2026-09-14T05:00:00.000Z"
+      ],
+      "dateParameters": {
+        "start": "2026-09-13 00:00:00",
+        "end": "2026-09-14 00:00:00"
+      },
+      "matchesWithDate": 0,
+      "matchesWithUtcText": 1
+    }
+  },
+  "databaseStopped": true
+}

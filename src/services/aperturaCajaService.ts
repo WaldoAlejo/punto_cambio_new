@@ -240,6 +240,12 @@ export const aperturaCajaService = {
           diferencias: DiferenciaMoneda[];
           cuadrado: boolean;
           puede_abrir: boolean;
+          puede_abrir_con_incidencia?: boolean;
+          monedas_obligatorias?: string[];
+          monedas_obligatorias_guardadas?: string[];
+          monedas_obligatorias_cuadradas?: string[];
+          monedas_obligatorias_descuadradas?: string[];
+          monedas_obligatorias_pendientes?: string[];
           message?: string;
         }> | ApiFail
       >("/apertura-caja/conteo", {
@@ -341,11 +347,17 @@ export const aperturaCajaService = {
     apertura: AperturaCaja | null;
     error: string | null;
     apertura_abierta_con_incidencia?: boolean;
+    con_diferencia?: boolean;
     message?: string;
   }> {
     try {
       const response = await apiService.post<
-        ApiOk<{ apertura: AperturaCaja; message?: string }> | ApiFail
+        ApiOk<{
+          apertura: AperturaCaja;
+          message?: string;
+          apertura_abierta_con_incidencia?: boolean;
+          con_diferencia?: boolean;
+        }> | ApiFail
       >("/apertura-caja/confirmar", { apertura_id, incidencia_apertura });
 
       if (response.success) {
@@ -353,6 +365,7 @@ export const aperturaCajaService = {
           apertura: response.apertura,
           error: null,
           apertura_abierta_con_incidencia: response.apertura_abierta_con_incidencia,
+          con_diferencia: response.con_diferencia,
           message: response.message,
         };
       } else {

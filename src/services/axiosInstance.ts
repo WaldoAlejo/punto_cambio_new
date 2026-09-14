@@ -78,21 +78,14 @@ axiosInstance.interceptors.request.use(
     const token = getToken();
     if (token) {
       // Solo usar Authorization; no forzar Content-Type salvo que haya body
-      const headers =
-        config.headers && typeof config.headers === "object"
-          ? (config.headers as Record<string, unknown>)
-          : ({} as Record<string, unknown>);
-      headers["Authorization"] = `Bearer ${token}`;
-      config.headers = headers;
+      config.headers.set("Authorization", `Bearer ${token}`);
     }
 
     // Evitar enviar Content-Type si no hay body (GET/DELETE)
     const hasBody = !!config.data;
     if (!hasBody) {
       if (config.headers) {
-        const headers = config.headers as Record<string, unknown>;
-        delete headers["Content-Type"];
-        delete headers["content-type"];
+        config.headers.delete("Content-Type");
       }
     }
 

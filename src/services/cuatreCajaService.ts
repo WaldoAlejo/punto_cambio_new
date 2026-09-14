@@ -26,6 +26,9 @@ export interface DetalleCuadreResumen {
   simbolo: string;
   saldo_apertura: number;
   saldo_cierre: number; // saldo teórico
+  conteo_fisico: number;
+  billetes: number;
+  monedas: number;
   bancos_teorico?: number;
   conteo_bancos?: number;
   ingresos_periodo: number;
@@ -51,9 +54,10 @@ export interface CuadreResponse {
     cuadre_id?: UUID;
     periodo_inicio?: string | Date;
     totales?: {
-      cambios?: { cantidad: number; ingresos?: number; egresos?: number };
-      transferencias_entrada?: { cantidad: number; monto?: number };
-      transferencias_salida?: { cantidad: number; monto?: number };
+      servicios_externos?: number | { cantidad: number };
+      cambios?: number | { cantidad: number; ingresos?: number; egresos?: number };
+      transferencias_entrada?: number | { cantidad: number; monto?: number };
+      transferencias_salida?: number | { cantidad: number; monto?: number };
     };
   };
 }

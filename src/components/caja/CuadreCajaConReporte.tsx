@@ -56,7 +56,7 @@ function n2(v?: unknown): string {
 }
 
 export default function CuadreCajaConReporte({ pointId }: Props) {
-  const { user } = useAuth();
+  const { user, selectedPoint } = useAuth();
   const [fecha, setFecha] = useState<string>(
     new Date().toISOString().slice(0, 10)
   );
@@ -68,7 +68,6 @@ export default function CuadreCajaConReporte({ pointId }: Props) {
     loading,
     saving,
     error,
-    cuadre,
     estado,
     diferencias,
     puedeCerrar,
@@ -101,7 +100,7 @@ export default function CuadreCajaConReporte({ pointId }: Props) {
   });
 
   const hayConteosVacios = estado.detalles.some((d) => {
-    return d.conteo_fisico === 0 && d.movimientos_periodo > 0;
+    return d.conteo_fisico === 0 && (d.movimientos_periodo ?? 0) > 0;
   });
 
   const handleValidarYCerrar = async () => {
@@ -589,7 +588,7 @@ export default function CuadreCajaConReporte({ pointId }: Props) {
           onConfirm={handleConfirmarCierre}
           detalles={getReporteParaImpresion()}
           observaciones={estado.observaciones}
-          puntoNombre={cuadre?.punto?.nombre || pointId || "Punto de Atención"}
+          puntoNombre={(!pointId || selectedPoint?.id === pointId ? selectedPoint?.nombre : undefined) || pointId || "Punto de Atención"}
           operadorNombre={user?.nombre || user?.username || "Operador"}
           loading={saving}
         />

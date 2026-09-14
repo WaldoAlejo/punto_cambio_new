@@ -84,7 +84,7 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
 
   const sortedData = useMemo(() => {
     const data = [...filteredData];
-    const getTime = (v?: string) => (v ? new Date(v).getTime() : 0);
+    const getTime = (v?: string | null) => (v ? new Date(v).getTime() : 0);
     data.sort((a, b) => {
       let comp = 0;
       switch (sortKey) {
@@ -158,8 +158,8 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
             fecha_almuerzo: schedule.fecha_almuerzo,
             fecha_regreso: schedule.fecha_regreso,
             fecha_salida: schedule.fecha_salida,
-            ubicacion_inicio: schedule.ubicacion_inicio,
-            ubicacion_salida: schedule.ubicacion_salida,
+            ubicacion_inicio: schedule.ubicacion_inicio ?? undefined,
+            ubicacion_salida: schedule.ubicacion_salida ?? undefined,
             estado: schedule.estado,
             usuario: {
               id: schedule.usuario.id,
@@ -213,7 +213,7 @@ const ActivePointsReport = ({ user: _user }: ActivePointsReportProps) => {
     };
   }, [loadActiveSchedules, fromDate, toDate, onlyActive]);
 
-  const formatTime = (dateString?: string) => {
+  const formatTime = (dateString?: string | null) => {
     if (!dateString) return "No registrado";
     return new Date(dateString).toLocaleTimeString("es-ES", {
       hour: "2-digit",

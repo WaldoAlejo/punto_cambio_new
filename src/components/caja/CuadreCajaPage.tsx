@@ -15,6 +15,10 @@ function n2(v?: unknown) {
 
 type Props = { pointId?: string };
 
+function cantidadMovimientos(value?: number | { cantidad: number }): number {
+  return typeof value === "number" ? value : value?.cantidad ?? 0;
+}
+
 export default function CuadreCajaPage({ pointId }: Props) {
   const [fecha, setFecha] = React.useState<string>(
     new Date().toISOString().slice(0, 10)
@@ -639,19 +643,11 @@ export default function CuadreCajaPage({ pointId }: Props) {
             { style: { fontSize: 12, color: "#6b7280" } },
             cuadre?.totales
               ? `Cambios: ${
-                  typeof cuadre.totales.cambios?.cantidad === "number"
-                    ? cuadre.totales.cambios.cantidad
-                    : 0
+                  cantidadMovimientos(cuadre.totales.cambios)
                 } · Transf. In: ${
-                  typeof cuadre.totales.transferencias_entrada?.cantidad ===
-                  "number"
-                    ? cuadre.totales.transferencias_entrada.cantidad
-                    : 0
+                  cantidadMovimientos(cuadre.totales.transferencias_entrada)
                 } · Transf. Out: ${
-                  typeof cuadre.totales.transferencias_salida?.cantidad ===
-                  "number"
-                    ? cuadre.totales.transferencias_salida.cantidad
-                    : 0
+                  cantidadMovimientos(cuadre.totales.transferencias_salida)
                 }`
               : null
           ),

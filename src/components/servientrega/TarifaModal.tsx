@@ -27,7 +27,7 @@ import {
 
 type NumStr = number | string | null | undefined;
 
-interface TarifaServientrega {
+export interface TarifaServientrega {
   flete?: NumStr;
   valor_declarado?: NumStr;
   tiempo?: string;
@@ -36,6 +36,8 @@ interface TarifaServientrega {
   total_empaque?: NumStr;
   trayecto?: string;
   prima?: NumStr;
+  seguro?: NumStr;
+  peso_vol?: NumStr;
   peso?: NumStr;
   volumen?: NumStr;
   peso_cobrar?: NumStr;

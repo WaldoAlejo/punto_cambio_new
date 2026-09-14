@@ -6,7 +6,7 @@ import { CambioDivisa, User, PuntoAtencion } from "../../types";
 import { exchangeService } from "../../services/exchangeService";
 import { ReceiptService } from "../../services/receiptService";
 import { movimientosContablesService } from "../../services/movimientosContablesService";
-import DeliveryDetailsForm from "./DeliveryDetailsForm";
+import DeliveryDetailsForm, { type DeliveryDetailsPayload } from "./DeliveryDetailsForm";
 
 interface CompletePaymentFormProps {
   exchange: CambioDivisa;
@@ -61,7 +61,7 @@ const CompletePaymentForm = ({
   const saldoPendiente = Number(exchange.saldo_pendiente ?? 0);
   const codigoMonedaDestino = exchange.monedaDestino?.codigo || "";
 
-  const handleDeliveryDetailsSubmit = (details: DeliveryDetails) => {
+  const handleDeliveryDetailsSubmit = (details: DeliveryDetailsPayload) => {
     // Blindaje mínimo aquí (DeliveryDetailsForm ya valida, pero reforzamos)
     if (
       details.metodoEntrega === "transferencia" &&
@@ -71,7 +71,11 @@ const CompletePaymentForm = ({
       toast.error("Debe indicar número y banco para la transferencia.");
       return;
     }
-    setDeliveryDetails(details);
+    setDeliveryDetails({
+      ...details,
+      transferenciaNumero: details.transferenciaNumero ?? undefined,
+      transferenciaBanco: details.transferenciaBanco ?? undefined,
+    });
     setStep("confirm");
   };
 

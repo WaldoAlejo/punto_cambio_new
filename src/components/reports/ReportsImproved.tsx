@@ -23,7 +23,7 @@ import type { User, Usuario } from "../../types";
 import { userService } from "@/services/userService";
 import { pointService } from "@/services/pointService";
 import { currencyService } from "@/services/currencyService";
-import { exportToExcel } from "@/utils/exportToExcel";
+import { exportToExcel, toExcelRows } from "@/utils/exportToExcel";
 import { formatGyeTime, formatGyeDate, todayGyeDateOnly } from "@/utils/timezone";
 import {
   Loader2,
@@ -419,7 +419,7 @@ const ReportsImproved: React.FC<ReportsProps> = ({ user: _user }) => {
 
     try {
       exportToExcel(
-        reportData,
+        toExcelRows(reportData),
         fullFileName,
         undefined,
         undefined,

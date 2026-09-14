@@ -163,9 +163,11 @@ export const authenticateToken: RequestHandler = async (
       if (user.rol === "OPERADOR") {
         const { gte: hoy, lt: manana } = gyeDayRangeUtcFromDate(new Date());
 
+        // Prisma guarda DateTime como timestamp sin zona en UTC. Enviar texto UTC
+        // evita que pg serialice los Date con la hora local del proceso.
         const jornadaQuery = await pool.query(
           'SELECT id FROM "Jornada" WHERE usuario_id = $1 AND fecha_inicio >= $2 AND fecha_inicio < $3 AND (estado = $4 OR estado = $5) LIMIT 1',
-          [user.id, hoy, manana, "ACTIVO", "ALMUERZO"]
+          [user.id, hoy.toISOString(), manana.toISOString(), "ACTIVO", "ALMUERZO"]
         );
         const jornadaHoy = (jornadaQuery.rows && jornadaQuery.rows[0]) || null;
 

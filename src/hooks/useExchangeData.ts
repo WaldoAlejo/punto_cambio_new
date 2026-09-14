@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Moneda, PuntoAtencion, CambioDivisa } from "../types";
 import { currencyService } from "../services/currencyService";
 import { exchangeService } from "../services/exchangeService";
@@ -8,6 +8,27 @@ export const useExchangeData = (selectedPoint: PuntoAtencion | null) => {
   const [exchanges, setExchanges] = useState<CambioDivisa[]>([]);
   const [isLoadingCurrencies, setIsLoadingCurrencies] = useState(true);
   const [error, setError] = useState<string | null>(null); // NUEVO
+
+  const loadExchanges = useCallback(async (opts?: {
+    date?: string;
+    from?: string;
+    to?: string;
+  }) => {
+    try {
+      setError(null);
+      if (selectedPoint) {
+        const { exchanges } = await exchangeService.getExchangesByPoint(
+          selectedPoint.id,
+          opts
+        );
+        setExchanges(exchanges);
+      }
+    } catch (err) {
+      console.error("Error loading exchanges", err);
+      setExchanges([]);
+      setError("Error al cargar el historial de cambios.");
+    }
+  }, [selectedPoint]);
 
   useEffect(() => {
     const loadCurrencies = async () => {
@@ -29,27 +50,6 @@ export const useExchangeData = (selectedPoint: PuntoAtencion | null) => {
       }
     };
 
-    const loadExchanges = async (opts?: {
-      date?: string;
-      from?: string;
-      to?: string;
-    }) => {
-      try {
-        setError(null); // limpia error previo
-        if (selectedPoint) {
-          const { exchanges } = await exchangeService.getExchangesByPoint(
-            selectedPoint.id,
-            opts
-          );
-          setExchanges(exchanges);
-        }
-      } catch (err) {
-        console.error("Error loading exchanges", err);
-        setExchanges([]);
-        setError("Error al cargar el historial de cambios.");
-      }
-    };
-
     if (selectedPoint) {
       loadCurrencies();
       loadExchanges();
@@ -59,7 +59,7 @@ export const useExchangeData = (selectedPoint: PuntoAtencion | null) => {
       setExchanges([]);
       setError(null);
     }
-  }, [selectedPoint]);
+  }, [selectedPoint, loadExchanges]);
 
   const addExchange = (nuevo: CambioDivisa) => {
     setExchanges((prev) => [nuevo, ...prev]);

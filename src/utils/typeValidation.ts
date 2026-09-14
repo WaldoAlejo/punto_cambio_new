@@ -33,16 +33,16 @@ export function validateAndTransformUser(data: unknown): Usuario | null {
   }
 
   // Validar rol
-  const validRoles = [
+  const validRoles: Usuario["rol"][] = [
     "SUPER_USUARIO",
     "ADMIN",
     "OPERADOR",
     "CONCESION",
     "ADMINISTRATIVO",
   ];
-  const rol = data["rol"];
-  if (typeof rol !== "string" || !validRoles.includes(rol)) {
-    console.error(`Rol inválido: ${String(rol)}`);
+  const rol = validRoles.find((role) => role === data["rol"]);
+  if (!rol) {
+    console.error(`Rol inválido: ${String(data["rol"])}`);
     return null;
   }
 
@@ -106,8 +106,8 @@ export function validateAndTransformPuntoAtencion(
     codigo_postal:
       typeof codigoPostalRaw === "string" && codigoPostalRaw
         ? codigoPostalRaw
-        : null,
-    telefono: typeof telefonoRaw === "string" && telefonoRaw ? telefonoRaw : null,
+        : undefined,
+    telefono: typeof telefonoRaw === "string" && telefonoRaw ? telefonoRaw : undefined,
     activo: Boolean(data["activo"]),
     es_principal: Boolean(data["es_principal"] || false),
     created_at: String(data.created_at),

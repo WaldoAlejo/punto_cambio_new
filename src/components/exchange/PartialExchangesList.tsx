@@ -26,16 +26,16 @@ export interface PartialExchange {
   tasa_cambio_monedas: number | null;
 
   // Campo string "Nombre Apellido"
-  cliente: string | null;
+  cliente?: string | null;
 
   // Totales y parciales
-  abono_inicial_monto: number | null;
-  abono_inicial_fecha: string | null; // ISO
-  saldo_pendiente: number | null;
+  abono_inicial_monto?: number | null;
+  abono_inicial_fecha?: string | null; // ISO
+  saldo_pendiente?: number | null;
 
   // Relacionadas
-  monedaOrigen: { id: string; nombre: string; codigo: string; simbolo: string };
-  monedaDestino: {
+  monedaOrigen?: { id: string; nombre: string; codigo: string; simbolo: string };
+  monedaDestino?: {
     id: string;
     nombre: string;
     codigo: string;

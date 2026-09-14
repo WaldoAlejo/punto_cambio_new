@@ -181,7 +181,10 @@ const BalanceDashboard = ({ user, selectedPoint }: BalanceDashboardProps) => {
     if (!selectedPoint) return;
     setLoadingBalanceCompleto(true);
     try {
-      const data = await apiService.get(
+      const data = await apiService.get<
+        | { success: true; data: BalanceCompletoData }
+        | { success: false; error?: string }
+      >(
         `/balance-completo/punto/${selectedPoint.id}`
       );
       if (data.success) {

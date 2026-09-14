@@ -7,6 +7,18 @@ export type ExcelRow = Record<
   string | number | boolean | Date | null | undefined
 >;
 
+// Preserve scalar values; nested report data must become text in a cell.
+export const toExcelRows = (rows: Record<string, unknown>[]): ExcelRow[] =>
+  rows.map((row) => Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [
+      key,
+      value == null || value instanceof Date ||
+      typeof value === "string" || typeof value === "number" || typeof value === "boolean"
+        ? value
+        : JSON.stringify(value),
+    ])
+  ));
+
 // Small helper to prettify headers: "punto_origen" -> "Punto origen", "montoTotal" -> "Monto total"
 const prettifyHeader = (key: string): string => {
   if (!key) return key;
