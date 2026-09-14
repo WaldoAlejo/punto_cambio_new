@@ -1,3 +1,6 @@
+import { openingCurrencies, requiredOpeningCurrencies } from "../utils/stagedOpening.js";
+import { lockTransferBalance } from "../utils/transferBalance.js";
+import { OperationalConflict } from "../utils/operationalConflict.js";
 import express, { Request, Response } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { Prisma, EstadoApertura, ServicioExterno } from "@prisma/client";
@@ -292,48 +295,6 @@ function validarDiferencias(
   return { diferencias, cuadrado };
 }
 
-// Helper para obtener monedas con movimiento en el día anterior
-async function getMonedasConMovimiento(
-  puntoAtencionId: string,
-  fechaDesde: Date
-): Promise<Set<string>> {
-  const monedasConMovimiento = new Set<string>();
-
-  // Buscar movimientos de saldo desde la fecha indicada
-  const movimientos = await prisma.movimientoSaldo.findMany({
-    where: {
-      punto_atencion_id: puntoAtencionId,
-      fecha: {
-        gte: fechaDesde,
-      },
-      // Excluir movimientos de apertura/cierre que no son transacciones reales
-      tipo_movimiento: {
-        notIn: ["SALDO_INICIAL"],
-      },
-    },
-    select: {
-      moneda_id: true,
-    },
-    distinct: ["moneda_id"],
-  });
-
-  movimientos.forEach((m) => monedasConMovimiento.add(m.moneda_id));
-
-  return monedasConMovimiento;
-}
-
-// Helper para verificar si existe un arqueo completo previo
-async function tieneArqueoCompleto(puntoAtencionId: string): Promise<boolean> {
-  const arqueoCompleto = await prisma.arqueoCajaHistorico.findFirst({
-    where: {
-      punto_atencion_id: puntoAtencionId,
-      tipo_arqueo: "COMPLETO",
-    },
-  });
-
-  return !!arqueoCompleto;
-}
-
 // ======================= POST: Iniciar apertura de caja =======================
 router.post(
   "/iniciar",
@@ -420,60 +381,40 @@ router.post(
       }
 
       // Verificar si existe un arqueo completo previo
-      const existeArqueoCompleto = await tieneArqueoCompleto(jornada.punto_atencion_id);
+      const guards = await prisma.$queryRaw<Array<{ ready: boolean }>>`SELECT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'staged_opening_cash_guard'
+          AND tgrelid = '"Saldo"'::regclass AND tgenabled IN ('O', 'A')
+          AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'staged_opening_close_guard'
+            AND tgrelid = '"Jornada"'::regclass AND tgenabled IN ('O', 'A'))
+      ) AS ready`;
+      if (!guards[0]?.ready) return res.status(503).json({ success: false,
+        error: "Falta instalar la protección de apertura por etapas. Contacta al administrador." });
 
       // Calcular saldos dinámicamente desde MovimientoSaldo
       let saldoEsperado = await Promise.all(
         monedas.map((moneda) => buildSaldoEsperadoMoneda(moneda, jornada.punto_atencion_id))
       );
 
-      // Si ya existe un arqueo completo, filtrar solo las monedas con movimiento
-      let tipoArqueo: "COMPLETO" | "PARCIAL" = "COMPLETO";
-      let monedasExcluidas: any[] = [];
-
-      if (existeArqueoCompleto) {
-        // Calcular inicio del día anterior en zona Ecuador
-        const ayerStr = todayGyeDateOnly(new Date(Date.now() - 24 * 60 * 60 * 1000));
-        const { gte: ayerInicio } = gyeDayRangeUtcFromDateOnly(ayerStr);
-
-        const monedasConMovimiento = await getMonedasConMovimiento(
-          jornada.punto_atencion_id,
-          ayerInicio
-        );
-
-        // Filtrar monedas
-        const monedasFiltradas = saldoEsperado.filter((s) => {
-          if (MONEDAS_APERTURA_OBLIGATORIAS.includes(String(s.codigo || "").toUpperCase() as (typeof MONEDAS_APERTURA_OBLIGATORIAS)[number])) {
-            return true;
-          }
-
-          const tieneMovimiento = monedasConMovimiento.has(s.moneda_id);
-          const tieneSaldo = s.cantidad > 0;
-          
-          if (!tieneMovimiento && !tieneSaldo) {
-            monedasExcluidas.push({
-              moneda_id: s.moneda_id,
-              codigo: s.codigo,
-              razon: "SIN_MOVIMIENTO",
-            });
-            return false;
-          }
-          return true;
-        });
-
-        // Si hay monedas filtradas, usarlas; si no, mantener todas (caso extremo)
-        if (monedasFiltradas.length > 0) {
-          saldoEsperado = monedasFiltradas;
-          tipoArqueo = "PARCIAL";
-        }
-      }
-
-      const saldoConObligatorias = await ensureMonedasObligatoriasEnSaldoEsperado(
-        saldoEsperado,
-        monedas,
-        jornada.punto_atencion_id
-      );
-      saldoEsperado = saldoConObligatorias.saldoEsperado;
+      // Freeze the priority list for this opening, using the last completed
+      // shift at the point (including movements after it, before this shift).
+      const anterior = await prisma.jornada.findFirst({ where: {
+        punto_atencion_id: jornada.punto_atencion_id, id: { not: jornada.id },
+        fecha_inicio: { lt: jornada.fecha_inicio }, estado: "COMPLETADO",
+      }, orderBy: { fecha_inicio: "desc" } });
+      const movimientos = await prisma.movimientoSaldo.findMany({ where: {
+        punto_atencion_id: jornada.punto_atencion_id,
+        fecha: { ...(anterior ? { gte: anterior.fecha_inicio } : {}), lt: jornada.fecha_inicio },
+        tipo_movimiento: { not: "SALDO_INICIAL" },
+      }, select: { moneda_id: true, descripcion: true } });
+      const recientes = new Set(movimientos.filter(m => {
+        const desc = m.descripcion || "";
+        return !/\bbancos?\b/i.test(desc) || desc.toLowerCase().includes("(caja)");
+      }).map(m => m.moneda_id));
+      saldoEsperado = saldoEsperado.map(s => ({ ...s, apertura_por_etapas: true,
+        obligatoria_inicio: ["USD", "EUR"].includes(s.codigo) || recientes.has(s.moneda_id),
+      }));
+      const tipoArqueo = "PARCIAL";
+      const monedasExcluidas: unknown[] = [];
 
       // Obtener saldos de servicios externos
       const serviciosExternosSaldos = await prisma.servicioExternoSaldo.findMany({
@@ -536,11 +477,9 @@ router.post(
           saldos_servicios_externos: saldosServiciosExternos,
           tipo_arqueo: tipoArqueo,
           monedas_excluidas: monedasExcluidas,
-          requiere_arqueo_completo: !existeArqueoCompleto,
+          requiere_arqueo_completo: false,
         },
-        message: tipoArqueo === "COMPLETO"
-          ? "Proceso de apertura iniciado. Debes realizar un conteo COMPLETO de todas las divisas (primer arqueo)."
-          : `Proceso de apertura iniciado. Arqueo PARCIAL: solo se muestran ${saldoEsperado.length} moneda(s) con movimiento.`,
+        message: "Cuenta primero las divisas obligatorias. Las restantes quedan pendientes hasta su conteo.",
       });
     } catch (error) {
       logger.error("Error al iniciar apertura de caja", {
@@ -554,6 +493,68 @@ router.post(
     }
   }
 );
+
+// Count a deferred currency without reopening or overwriting verified counts.
+router.post("/conteo-pendiente", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO"]), async (req, res) => {
+  try {
+    const { apertura_id, moneda_id, billetes, monedas, saldo_esperado } = req.body;
+    const breakdown = [billetes, monedas];
+    if (!apertura_id || !moneda_id || !Number.isFinite(saldo_esperado) || breakdown.some(items =>
+      !Array.isArray(items) || items.some(d => !Number.isFinite(d.denominacion) || d.denominacion <= 0 ||
+        !Number.isSafeInteger(d.cantidad) || d.cantidad < 0))) {
+      return res.status(400).json({ success: false, error: "Conteo o saldo esperado inválido." });
+    }
+    const apertura = await prisma.$transaction(async tx => {
+      const initial = await tx.aperturaCaja.findFirst({ where: { id: apertura_id, usuario_id: req.user!.id } });
+      if (!initial) throw new OperationalConflict("Apertura no encontrada.");
+      await lockTransferBalance(tx, initial.punto_atencion_id, moneda_id);
+      await tx.$queryRaw`SELECT id FROM "AperturaCaja" WHERE id = ${apertura_id} FOR UPDATE`;
+      const current = await tx.aperturaCaja.findUniqueOrThrow({ where: { id: apertura_id }, include: { jornada: true } });
+      const expected = openingCurrencies(current.saldo_esperado);
+      if (current.estado !== "ABIERTA" || current.jornada.fecha_salida || !["ACTIVO", "ALMUERZO"].includes(current.jornada.estado) ||
+          !expected.some(c => c.apertura_por_etapas)) throw new OperationalConflict("La apertura no admite conteos pendientes.");
+      const item = expected.find(c => c.moneda_id === moneda_id);
+      const previous = Array.isArray(current.conteo_fisico) ? current.conteo_fisico as unknown as ConteoMoneda[] : [];
+      if (!item || previous.some(c => c.moneda_id === moneda_id)) throw new OperationalConflict("Divisa inexistente o ya contada. Actualiza la pantalla.");
+      const saldo = await tx.saldo.findUnique({ where: { punto_atencion_id_moneda_id: {
+        punto_atencion_id: current.punto_atencion_id, moneda_id,
+      } } });
+      const real = Number(saldo?.cantidad ?? 0);
+      if (Math.abs(real - saldo_esperado) >= 0.005) throw new OperationalConflict("El saldo cambió. Actualiza el conteo antes de guardarlo.");
+      const total = calcularTotalDesglose(billetes, monedas);
+      if (!Number.isFinite(total) || Math.abs(total - real) > Number(item.codigo === "USD" ? current.tolerancia_usd : current.tolerancia_otras)) {
+        throw new OperationalConflict("El conteo no cuadra con el saldo físico esperado. Revisa el desglose antes de habilitar esta divisa.");
+      }
+      const count = { moneda_id, billetes, monedas, total, contado_en: new Date().toISOString(), contado_por: req.user!.id };
+      const result = await tx.aperturaCaja.update({ where: { id: apertura_id }, data: {
+        saldo_esperado: expected.map(c => c.moneda_id === moneda_id ? { ...c, cantidad: real } : c) as Prisma.InputJsonValue,
+        conteo_fisico: [...previous, count] as unknown as Prisma.InputJsonValue,
+      } });
+      const range = gyeDayRangeUtcFromDateOnly(todayGyeDateOnly(current.jornada.fecha_inicio));
+      const cuadre = await tx.cuadreCaja.findFirst({ where: { punto_atencion_id: current.punto_atencion_id, fecha: range, estado: "ABIERTO" } });
+      if (cuadre) {
+        await tx.$queryRaw`SELECT id FROM "CuadreCaja" WHERE id = ${cuadre.id} FOR UPDATE`;
+        const stillOpen = await tx.cuadreCaja.findUniqueOrThrow({ where: { id: cuadre.id } });
+        if (stillOpen.estado !== "ABIERTO") throw new OperationalConflict("El cuadre ya fue cerrado.");
+        const data = { saldo_apertura: total, saldo_cierre: real, conteo_fisico: total, diferencia: total - real,
+          billetes: calcularTotalDesglose(billetes, []), monedas_fisicas: calcularTotalDesglose([], monedas) };
+        await tx.detalleCuadreCaja.upsert({ where: { cuadre_id_moneda_id: { cuadre_id: cuadre.id, moneda_id } },
+          create: { cuadre_id: cuadre.id, moneda_id, ...data }, update: data });
+      }
+      await tx.arqueoCajaHistorico.create({ data: {
+        apertura_id, punto_atencion_id: current.punto_atencion_id, usuario_id: req.user!.id,
+        fecha: current.fecha, tipo_arqueo: "PARCIAL", monedas_arqueadas: [{ ...item, cantidad: real }] as Prisma.InputJsonValue,
+        conteo_fisico: [count] as Prisma.InputJsonValue, observaciones: "Conteo posterior de divisa pendiente",
+      } });
+      return result;
+    });
+    return res.json({ success: true, apertura });
+  } catch (error) {
+    if (error instanceof OperationalConflict) return res.status(409).json({ success: false, error: error.message });
+    logger.error("Error guardando conteo pendiente", { error: String(error) });
+    return res.status(500).json({ success: false, error: "No se pudo guardar el conteo pendiente." });
+  }
+});
 
 // ======================= POST: Guardar conteo físico =======================
 router.post(
@@ -610,6 +611,13 @@ router.post(
       // Parsear saldo esperado
       const saldoEsperado = (apertura.saldo_esperado as any[]) || [];
 
+      if (new Set(conteos.map(c => c.moneda_id)).size !== conteos.length || conteos.some(c =>
+        !saldoEsperado.some(s => s.moneda_id === c.moneda_id) ||
+        [c.billetes || [], c.monedas || []].some(items => !Array.isArray(items) || items.some(d =>
+          !Number.isFinite(d.denominacion) || d.denominacion <= 0 || !Number.isSafeInteger(d.cantidad) || d.cantidad < 0)))) {
+        return res.status(400).json({ success: false, error: "Conteos duplicados, divisa desconocida o desglose inválido." });
+      }
+
       // Validar y calcular totales de cada conteo
       const conteosValidados: ConteoMoneda[] = conteos.map((c: ConteoMoneda) => {
         const totalCalculado = calcularTotalDesglose(c.billetes || [], c.monedas || []);
@@ -618,6 +626,11 @@ router.post(
           total: totalCalculado,
         };
       });
+
+      if (openingCurrencies(apertura.saldo_esperado).some(c => c.apertura_por_etapas) && conteosValidados.some(c => {
+        const s = saldoEsperado.find(s => s.moneda_id === c.moneda_id);
+        return !s.obligatoria_inicio && Math.abs(c.total - Number(s.cantidad)) > Number(apertura.tolerancia_otras);
+      })) return res.status(400).json({ success: false, error: "Las divisas opcionales contadas deben cuadrar; puedes dejarlas pendientes y contarlas después." });
 
       const estadoObligatorias = getEstadoMonedasObligatorias({
         saldo_esperado: saldoEsperado,
@@ -635,7 +648,7 @@ router.post(
           success: false,
           error: `Debes guardar el cuadre obligatorio de ${estadoObligatorias.pendientes_guardado.join(" y ")} antes de continuar.`,
           code: "APERTURA_OBLIGATORIA_INCOMPLETA",
-          monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+          monedas_obligatorias: requiredOpeningCurrencies(apertura.saldo_esperado),
           monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
           monedas_obligatorias_cuadradas: estadoObligatorias.cuadradas,
           monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
@@ -645,7 +658,7 @@ router.post(
 
       // Calcular diferencias
       const { diferencias, cuadrado } = validarDiferencias(
-        saldoEsperado.map((s) => ({
+        saldoEsperado.filter(s => conteosValidados.some(c => c.moneda_id === s.moneda_id)).map((s) => ({
           moneda_id: s.moneda_id,
           codigo: s.codigo,
           cantidad: Number(s.cantidad),
@@ -688,8 +701,7 @@ router.post(
       });
 
       // Registrar arqueo histórico
-      const existeArqueoCompleto = await tieneArqueoCompleto(apertura.punto_atencion_id);
-      const tipoArqueo = existeArqueoCompleto ? "PARCIAL" : "COMPLETO";
+      const tipoArqueo = saldoEsperado.every(s => conteosValidados.some(c => c.moneda_id === s.moneda_id)) ? "COMPLETO" : "PARCIAL";
 
       await prisma.arqueoCajaHistorico.create({
         data: {
@@ -698,7 +710,7 @@ router.post(
           usuario_id: usuario_id!,
           fecha: apertura.fecha,
           tipo_arqueo: tipoArqueo,
-          monedas_arqueadas: saldoEsperado.map((s) => ({
+          monedas_arqueadas: saldoEsperado.filter(s => conteosValidados.some(c => c.moneda_id === s.moneda_id)).map((s) => ({
             moneda_id: s.moneda_id,
             codigo: s.codigo,
             nombre: s.nombre,
@@ -729,7 +741,7 @@ router.post(
           estadoObligatorias.descuadradas.length === 0 || Boolean(incidenciaApertura),
         puede_abrir_con_incidencia: Boolean(incidenciaApertura),
         tipo_arqueo: tipoArqueo,
-        monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+        monedas_obligatorias: requiredOpeningCurrencies(apertura.saldo_esperado),
         monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
         monedas_obligatorias_cuadradas: estadoObligatorias.cuadradas,
         monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
@@ -738,7 +750,7 @@ router.post(
           estadoObligatorias.descuadradas.length > 0 && incidenciaApertura
             ? `Incidencia registrada para ${estadoObligatorias.descuadradas.join(", ")}. Puedes confirmar la apertura y el administrador deberá revisarla.`
             : estadoObligatorias.descuadradas.length > 0
-            ? `USD y EUR deben quedar cuadrados antes de confirmar la apertura. Descuadradas: ${estadoObligatorias.descuadradas.join(", ")}.`
+            ? `Las divisas obligatorias deben quedar cuadradas antes de confirmar la apertura. Descuadradas: ${estadoObligatorias.descuadradas.join(", ")}.`
             : cuadrado
             ? `Todo cuadrado. Arqueo ${tipoArqueo} registrado. Puedes confirmar la apertura.`
             : `Hay diferencias registradas en otras divisas (Arqueo ${tipoArqueo}). USD y EUR ya están cuadrados, puedes confirmar la apertura.`,
@@ -802,7 +814,7 @@ router.post(
           success: false,
           error: `No puedes confirmar la apertura sin guardar ${estadoObligatorias.pendientes_guardado.join(" y ")}.`,
           code: "APERTURA_OBLIGATORIA_INCOMPLETA",
-          monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+          monedas_obligatorias: requiredOpeningCurrencies(apertura.saldo_esperado),
           monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
           monedas_obligatorias_cuadradas: estadoObligatorias.cuadradas,
           monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
@@ -816,7 +828,7 @@ router.post(
             success: false,
             error: `No puedes confirmar la apertura hasta cuadrar ${estadoObligatorias.descuadradas.join(" y ")} o registrar una incidencia de apertura.`,
             code: "APERTURA_OBLIGATORIA_INCOMPLETA",
-            monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+            monedas_obligatorias: requiredOpeningCurrencies(apertura.saldo_esperado),
             monedas_obligatorias_guardadas: estadoObligatorias.guardadas,
             monedas_obligatorias_cuadradas: estadoObligatorias.cuadradas,
             monedas_obligatorias_descuadradas: estadoObligatorias.descuadradas,
@@ -874,6 +886,7 @@ router.post(
 
         for (const saldo of saldoEsperado) {
           const conteo = conteoFisico.find((c: any) => c.moneda_id === saldo.moneda_id);
+          if (!conteo && openingCurrencies(apertura.saldo_esperado).some(c => c.apertura_por_etapas)) continue;
           const conteoTotal = conteo ? conteo.total : 0;
           const diferencia = Number((conteoTotal - saldo.cantidad).toFixed(2));
 

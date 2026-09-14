@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { apiService } from "@/services/apiService";
 import { useAuth } from "@/hooks/useAuth";
 import { scheduleService } from "@/services/scheduleService";
 import { Button } from "@/components/ui/button";
@@ -257,7 +258,7 @@ export default function AperturaCaja({
   jornadaId: propJornadaId,
   onAperturaCompletada,
   onAperturaActualizada,
-  monedasObligatorias = ["USD", "EUR"],
+  monedasObligatorias: monedasObligatoriasIniciales = ["USD", "EUR"],
   bloquearHastaGuardarObligatorias = false,
 }: Props) {
   const { user } = useAuth();
@@ -267,6 +268,10 @@ export default function AperturaCaja({
   const [aperturaId, setAperturaId] = useState<string | null>(null);
   const [estado, setEstado] = useState<string>("PENDIENTE");
   const [saldoEsperado, setSaldoEsperado] = useState<any[]>([]);
+  const monedasObligatorias = [...new Set([...monedasObligatoriasIniciales,
+    ...saldoEsperado.filter(s => s.obligatoria_inicio).map(s => String(s.codigo).toUpperCase())])];
+  const porEtapas = saldoEsperado.some(s => s.apertura_por_etapas);
+  const [monedasContadas, setMonedasContadas] = useState<string[]>([]);
   const [conteos, setConteos] = useState<ConteoForm[]>([]);
   const [diferencias, setDiferencias] = useState<DiferenciaMoneda[]>([]);
   const [observaciones, setObservaciones] = useState("");
@@ -354,13 +359,14 @@ export default function AperturaCaja({
       if (result.apertura) {
         setAperturaId(result.apertura.id);
         setEstado(result.apertura.estado);
+        setMonedasContadas((result.apertura.conteo_fisico || []).map(c => c.moneda_id));
           const saldoEsperadoActual = result.apertura.saldo_esperado || [];
           setSaldoEsperado(saldoEsperadoActual);
         setTipoArqueo(result.apertura.tipo_arqueo || null);
         setMonedasExcluidas(result.apertura.monedas_excluidas || []);
         setRequiereArqueoCompleto(result.apertura.requiere_arqueo_completo || false);
           const estadoMonedas = getEstadoMonedasObligatorias(
-              monedasObligatorias,
+              [...new Set([...monedasObligatoriasIniciales, ...saldoEsperadoActual.filter(s => s.obligatoria_inicio).map(s => s.codigo)])],
               saldoEsperadoActual,
               (result.apertura.conteo_fisico as Array<{ moneda_id: string; total?: number; billetes?: BilleteInput[]; monedas?: MonedaInput[] }>) || []
             );
@@ -517,7 +523,7 @@ export default function AperturaCaja({
       setError(null);
 
       // Preparar datos para enviar
-      const conteosData: ConteoMoneda[] = conteos.map((c) => ({
+      const conteosData: ConteoMoneda[] = conteos.filter(c => !porEtapas || monedasObligatorias.includes(c.codigo)).map((c) => ({
         moneda_id: c.moneda_id,
         billetes: c.billetes.filter((b) => b.cantidad > 0),
         monedas: c.monedas.filter((m) => m.cantidad > 0),
@@ -597,6 +603,22 @@ export default function AperturaCaja({
     }
   };
 
+  const guardarPendiente = async (conteo: ConteoForm) => {
+    setSaving(true);
+    try {
+      const esperado = saldoEsperado.find(s => s.moneda_id === conteo.moneda_id);
+      await apiService.post("/apertura-caja/conteo-pendiente", {
+        apertura_id: aperturaId, moneda_id: conteo.moneda_id,
+        billetes: conteo.billetes, monedas: conteo.monedas, saldo_esperado: Number(esperado.cantidad),
+      });
+      await iniciarApertura();
+      onAperturaActualizada?.();
+      toast({ title: `${conteo.codigo}: conteo guardado` });
+    } catch (e) {
+      toast({ title: "No se pudo guardar", description: e instanceof Error ? e.message : "Revisa el conteo", variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
   const confirmarApertura = async () => {
     try {
       setSaving(true);
@@ -615,6 +637,7 @@ export default function AperturaCaja({
       }
 
       setEstado("ABIERTA");
+      await iniciarApertura();
       setPuedeAbrir(true);
       setConDiferenciaPendiente(Boolean(result.apertura_abierta_con_incidencia) || cuadrado === false);
       onAperturaActualizada?.();
@@ -671,7 +694,7 @@ export default function AperturaCaja({
                 Apertura Completada
               </h3>
               <p className="text-green-700">
-                Tu jornada ha sido iniciada correctamente. Puedes comenzar a operar.
+                Puedes operar con las divisas verificadas. Completa las pendientes antes de utilizarlas.
               </p>
               {conDiferenciaPendiente && (
                 <p className="text-amber-700 mt-2 text-sm">
@@ -680,6 +703,22 @@ export default function AperturaCaja({
               )}
             </div>
           </div>
+          {porEtapas && conteos.map((c, monedaIdx) => monedasContadas.includes(c.moneda_id) ? null : (
+            <div key={c.moneda_id} className="mt-4 rounded border bg-white p-4">
+              <h4 className="font-semibold">{c.codigo}: pendiente de conteo</h4>
+              <p>Saldo esperado: {formatMoney(Number(saldoEsperado.find(s => s.moneda_id === c.moneda_id)?.cantidad || 0))}</p>
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                {c.billetes.map((b, i) => <label key={`b${b.denominacion}`} className="text-sm">Billetes de {b.denominacion}
+                  <Input type="number" min="0" step="1" value={b.cantidad} disabled={saving} onChange={e => updateBillete(monedaIdx, i, e.target.value)} />
+                </label>)}
+                {c.monedas.map((m, i) => <label key={`m${m.denominacion}`} className="text-sm">Monedas de {m.denominacion}
+                  <Input type="number" min="0" step="1" value={m.cantidad} disabled={saving} onChange={e => updateMoneda(monedaIdx, i, e.target.value)} />
+                </label>)}
+              </div>
+              <p className="my-2">Total contado: {formatMoney(calcularTotalConteo(c.billetes, c.monedas))}</p>
+              <Button disabled={saving} onClick={() => guardarPendiente(c)}>Confirmar conteo de {c.codigo}</Button>
+            </div>
+          ))}
         </CardContent>
       </Card>
     );
@@ -763,7 +802,7 @@ export default function AperturaCaja({
 
       <Alert className="bg-amber-50 border-amber-300">
         <AlertCircle className="h-4 w-4 text-amber-700" />
-        <AlertTitle className="text-amber-900">USD y EUR son obligatorios</AlertTitle>
+        <AlertTitle className="text-amber-900">Divisas obligatorias al inicio</AlertTitle>
         <AlertDescription className="text-amber-800 space-y-2">
           <p>
             Debes dejar cuadrados {monedasObligatorias.join(" y ")} para habilitar la operación.
@@ -841,8 +880,8 @@ export default function AperturaCaja({
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-amber-700">
-                  Se muestran solo las divisas que tuvieron movimiento en el último día.
-                  Las divisas sin movimiento quedan registradas con su saldo histórico.
+                  Cuenta USD, EUR y las divisas con movimientos de efectivo desde la última jornada del punto.
+                  Las demás quedan pendientes; podrás contarlas después de confirmar la apertura.
                 </p>
                 {monedasExcluidas.length > 0 && (
                   <div className="mt-2">
@@ -873,7 +912,7 @@ export default function AperturaCaja({
           <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
             <li>Cuenta físicamente todo el efectivo que tienes en caja</li>
             <li>Ingresa la cantidad de billetes y monedas por denominación</li>
-            <li>USD y EUR son obligatorios, aunque el resto de divisas sea parcial</li>
+            <li>Cuenta {monedasObligatorias.join(", ")} y confirma la apertura. Las otras divisas se cuentan después, antes de utilizarlas.</li>
             <li>Valida los saldos de los servicios externos en sus páginas web</li>
             <li>Guarda el conteo para registrar los cuadres obligatorios</li>
             <li>Confirma la apertura para iniciar tu jornada y habilitar operaciones</li>
@@ -883,6 +922,7 @@ export default function AperturaCaja({
 
       {/* Formularios de conteo por moneda */}
       {conteos.map((conteo, monedaIdx) => {
+        if (porEtapas && !monedasObligatorias.includes(conteo.codigo)) return null;
         const saldoEsperadoMoneda = saldoEsperado.find(
           (s) => s.moneda_id === conteo.moneda_id
         );

@@ -260,3 +260,10 @@ Se reprodujo que dos operadores podían seleccionar simultáneamente el mismo pu
 La suite local pasa **267 pruebas**, incluidas las carreras de dos operadores por un punto y de un operador por dos puntos. El recorrido por API comprueba que el login no cree jornada, que el punto ocupado desaparezca de la lista del otro operador y que un cambio se rechace antes de abrir, antes de contar y antes de confirmar. Tras contar USD/EUR y confirmar la apertura, el cambio se registra con el saldo físico esperado y conserva el saldo bancario. TypeScript backend correcto. PostgreSQL temporal detenido al finalizar.
 
 Evidencia: [reproducción](INTEGRACION_LOCAL_SELECCION_ANTES.json) y [resultado corregido](INTEGRACION_LOCAL_SELECCION_CORREGIDA.json). Estas pruebas usan datos ficticios locales. No prueban todo el recorrido visual ni todas las operaciones posteriores a la apertura. La exclusión cubre esta ruta de creación; quedan por revisar otros mecanismos de reasignación. Cambios pendientes de push y despliegue; no se modificó producción durante esta revisión.
+## Apertura por etapas (2026-09-14)
+
+Implementada para nuevas aperturas: USD/EUR y divisas con actividad reciente del punto antes de iniciar; las restantes quedan pendientes y no pueden mover efectivo hasta contarlas. Conteo posterior independiente, conservación del historial, bloqueo del menú hasta confirmar apertura y cierre condicionado a completar divisas con existencia física. Se conservan las incidencias registradas, incluidas las aprobadas.
+
+Validación: **270 casos de integración**, 12 regresiones frontend/autenticación, TypeScript frontend/backend y compilación Vite local correctos. Navegador: selección, conteo obligatorio, menú bloqueado antes de confirmar, apertura confirmada y conteo posterior de GBP dejando CHF pendiente. PostgreSQL temporal detenido.
+
+[Reglas, evidencia y orden de despliegue](APERTURA_POR_ETAPAS_2026-09-14.md). **Pendiente en AWS:** instalar primero la protección SQL específica y después activar backend/frontend; no basta un reinicio. Sin modificaciones a producción en esta revisión.

@@ -1,5 +1,6 @@
 import { EstadoApertura, EstadoJornada } from "@prisma/client";
 import prisma from "../lib/prisma.js";
+import { requiredOpeningCurrencies } from "./stagedOpening.js";
 
 export const MONEDAS_APERTURA_OBLIGATORIAS = ["USD", "EUR"] as const;
 const INCIDENCIA_APERTURA_PREFIX = "[INCIDENCIA_APERTURA]";
@@ -228,7 +229,7 @@ export function getEstadoMonedasObligatorias(apertura: Pick<AperturaConJson, "sa
   const descuadradas = new Set<string>();
   const pendientesGuardado = new Set<string>();
 
-  for (const codigo of MONEDAS_APERTURA_OBLIGATORIAS) {
+  for (const codigo of requiredOpeningCurrencies(apertura?.saldo_esperado)) {
     const esperado = esperadoPorCodigo.get(codigo);
     if (!esperado || !esperado.moneda_id) {
       pendientesGuardado.add(codigo);
@@ -254,7 +255,7 @@ export function getEstadoMonedasObligatorias(apertura: Pick<AperturaConJson, "sa
     }
   }
 
-  const pendientes = MONEDAS_APERTURA_OBLIGATORIAS.filter(
+  const pendientes = requiredOpeningCurrencies(apertura?.saldo_esperado).filter(
     (codigo) => pendientesGuardado.has(codigo) || descuadradas.has(codigo)
   );
 
@@ -407,7 +408,7 @@ export async function obtenerEstadoAperturaOperativa(
       requiere_apertura: true,
       requiere_confirmacion: apertura.estado !== EstadoApertura.EN_CONTEO,
       requiere_cuadre_obligatorio: true,
-      monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+      monedas_obligatorias: requiredOpeningCurrencies(apertura.saldo_esperado),
       monedas_obligatorias_guardadas: guardadas,
       monedas_obligatorias_cuadradas: cuadradas,
       monedas_obligatorias_descuadradas: descuadradas,
@@ -426,7 +427,7 @@ export async function obtenerEstadoAperturaOperativa(
       requiere_apertura: true,
       requiere_confirmacion: false,
       requiere_cuadre_obligatorio: true,
-      monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+      monedas_obligatorias: requiredOpeningCurrencies(apertura.saldo_esperado),
       monedas_obligatorias_guardadas: guardadas,
       monedas_obligatorias_cuadradas: cuadradas,
       monedas_obligatorias_descuadradas: descuadradas,
@@ -434,7 +435,7 @@ export async function obtenerEstadoAperturaOperativa(
       jornada,
       apertura,
       code: "APERTURA_OBLIGATORIA_INCOMPLETA",
-      error: `USD y EUR deben quedar cuadrados antes de habilitar operaciones. Descuadradas: ${descuadradas.join(", ")}.`,
+      error: `Las divisas obligatorias deben quedar cuadradas antes de habilitar operaciones. Descuadradas: ${descuadradas.join(", ")}.`,
     };
   }
 
@@ -445,7 +446,7 @@ export async function obtenerEstadoAperturaOperativa(
       requiere_apertura: true,
       requiere_confirmacion: false,
       requiere_cuadre_obligatorio: false,
-      monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+      monedas_obligatorias: requiredOpeningCurrencies(apertura.saldo_esperado),
       monedas_obligatorias_guardadas: guardadas,
       monedas_obligatorias_cuadradas: cuadradas,
       monedas_obligatorias_descuadradas: descuadradas,
@@ -464,7 +465,7 @@ export async function obtenerEstadoAperturaOperativa(
       requiere_apertura: false,
       requiere_confirmacion: true,
       requiere_cuadre_obligatorio: false,
-      monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+      monedas_obligatorias: requiredOpeningCurrencies(apertura.saldo_esperado),
       monedas_obligatorias_guardadas: guardadas,
       monedas_obligatorias_cuadradas: cuadradas,
       monedas_obligatorias_descuadradas: descuadradas,
@@ -482,7 +483,7 @@ export async function obtenerEstadoAperturaOperativa(
     requiere_apertura: false,
     requiere_confirmacion: false,
     requiere_cuadre_obligatorio: false,
-    monedas_obligatorias: [...MONEDAS_APERTURA_OBLIGATORIAS],
+    monedas_obligatorias: requiredOpeningCurrencies(apertura.saldo_esperado),
     monedas_obligatorias_guardadas: guardadas,
     monedas_obligatorias_cuadradas: cuadradas,
     monedas_obligatorias_descuadradas: descuadradas,

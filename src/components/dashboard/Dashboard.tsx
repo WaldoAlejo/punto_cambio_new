@@ -277,7 +277,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
     return Boolean(
       isOperador &&
         selectedPoint &&
-        openingStatus?.requiere_cuadre_obligatorio
+        openingStatus?.puede_operar !== true
     );
   }, [isOperador, selectedPoint, openingStatus]);
 
@@ -734,7 +734,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
           allowedViews: ["apertura-caja"],
           message:
             openingStatus?.error ||
-            "Debes guardar el cuadre obligatorio de USD y EUR antes de habilitar el resto del sistema.",
+            "Debes completar el conteo obligatorio y confirmar la apertura antes de operar.",
         }}
       />
 

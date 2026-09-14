@@ -1,3 +1,4 @@
+import { isPendingCurrencyError } from "../utils/stagedOpening.js";
 import express from "express";
 import type { Request, Response } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
@@ -123,6 +124,10 @@ router.get(
 
       res.json({ success: true, movimientos: payload });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error al obtener movimientos contables (Prisma):", error);
       res.status(500).json({
         success: false,
@@ -183,6 +188,10 @@ router.post(
           : `Saldo insuficiente. Disponible: ${saldo_actual}, Requerido: ${montoReq}`,
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error al validar saldo (Prisma):", error);
       res.status(500).json({
         success: false,
@@ -426,6 +435,10 @@ router.post(
         message: "Movimientos contables procesados exitosamente",
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error al procesar movimientos contables (Prisma):", error);
       res.status(500).json({
         success: false,

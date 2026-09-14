@@ -702,6 +702,10 @@ router.post(
       });
 
       // Si es un error de punto ocupado (race condition dentro de la transacción), devolver 409
+      if (msg.includes("PENDING_CURRENCY_COUNT")) {
+        res.status(409).json({ success: false, error: "Completa las divisas pendientes en Apertura de Caja antes de finalizar la jornada." });
+        return;
+      }
       if (msg.includes("ya tiene una jornada activa")) {
         res.status(409).json({
           success: false,

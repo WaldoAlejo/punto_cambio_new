@@ -5,6 +5,7 @@ import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { idempotency } from "../middleware/idempotency.js";
 import logger from "../utils/logger.js";
 import { lockTransferBalance as lockBalance } from "../utils/transferBalance.js";
+import { assertCurrencyCounted } from "../utils/stagedOpening.js";
 import { assertOperationalSession, OperationalConflict } from "../utils/operationalConflict.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 import {
@@ -154,9 +155,11 @@ router.post(
 
     // Transacción para mantener consistencia entre header y detalles
     const result = await prisma.$transaction(async (tx) => {
-      const currencies = await tx.saldo.findMany({ where: { punto_atencion_id: puntoAtencionId }, select: { moneda_id: true } });
+      const currencies = await tx.saldo.findMany({ where: { punto_atencion_id: puntoAtencionId }, select: { moneda_id: true, cantidad: true } });
       for (const currencyId of [...new Set([...currencies.map(s => s.moneda_id), ...detalles.map(d => d.moneda_id)])].sort()) {
         await lockBalance(tx, puntoAtencionId, currencyId);
+        const currentBalance = await tx.saldo.findUnique({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: puntoAtencionId, moneda_id: currencyId } } });
+        if (Number(currentBalance?.cantidad ?? 0) !== 0) await assertCurrencyCounted(tx, puntoAtencionId, currencyId);
       }
       await assertOperationalSession(tx, req.user, puntoAtencionId);
       // Acknowledging a physical difference must not authorize stale theoretical balances.

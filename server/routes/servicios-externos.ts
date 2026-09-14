@@ -1,3 +1,4 @@
+import { isPendingCurrencyError } from "../utils/stagedOpening.js";
 import express, { Request, Response, NextFunction } from "express";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
@@ -870,6 +871,10 @@ router.post(
 
       res.status(201).json({ success: true, movimiento });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error creando movimiento de servicios externos:", error);
       res.status(500).json({
         success: false,
@@ -1120,6 +1125,10 @@ router.delete(
 
       res.json({ success: true });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       res.status(500).json({ success: false, error: (error as Error).message });
     }
   }
@@ -1136,6 +1145,10 @@ router.get("/ayuda", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER
       nota: "INGRESO = Entra dinero al punto (cliente paga) | EGRESO = Sale dinero del punto (pago/salida)",
     });
   } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
     res.status(500).json({ success: false, error: "Error obteniendo ayuda" });
   }
 });
@@ -1237,6 +1250,10 @@ router.post(
         },
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : "Error de validación",
@@ -1367,6 +1384,10 @@ router.post(
 
       res.json({ success: true, resultado });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error asignando saldo servicio externo:", error);
       res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Error desconocido" });
     }
@@ -1417,6 +1438,10 @@ router.get(
 
       res.json({ success: true, saldos: result });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error obteniendo saldos servicios externos:", error);
       res.status(500).json({ success: false, message: "Error obteniendo saldos" });
     }
@@ -1445,6 +1470,10 @@ router.get(
 
       res.json({ success: true, saldos: mapped });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error obteniendo saldos por punto:", error);
       res.status(500).json({ success: false, message: "Error obteniendo saldos por punto" });
     }
@@ -1479,6 +1508,10 @@ router.get(
 
       res.json({ success: true, historial: mapped });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error historial asignaciones:", error);
       res.status(500).json({ success: false, message: "Error obteniendo historial" });
     }
@@ -1540,6 +1573,10 @@ router.get(
 
       res.json({ success: true, movimientos: formatted });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error listando movimientos admin:", error);
       res.status(500).json({ success: false, message: "Error listando movimientos" });
     }
@@ -1640,6 +1677,10 @@ router.get(
         saldos_asignados: saldosAsignados,
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error obteniendo saldos asignados:", error);
       res.status(500).json({ success: false, message: "Error obteniendo saldos asignados" });
     }
@@ -1811,6 +1852,10 @@ router.get(
         nota: "Saldo inicial = Saldo final del día anterior (si hay cierre) o Saldo actual - Movimientos de hoy",
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error obteniendo saldo inicial diario:", error);
       res.status(500).json({
         success: false,
@@ -2000,6 +2045,10 @@ router.get(
         dias: resultados,
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       console.error("Error en investigacion-saldos:", error);
       res.status(500).json({
         success: false,

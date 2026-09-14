@@ -27,6 +27,8 @@ export interface DiferenciaMoneda {
 }
 
 export interface SaldoEsperado {
+  apertura_por_etapas?: boolean;
+  obligatoria_inicio?: boolean;
   moneda_id: string;
   codigo: string;
   nombre: string;

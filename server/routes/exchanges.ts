@@ -1,3 +1,4 @@
+import { isPendingCurrencyError } from "../utils/stagedOpening.js";
 // server/routes/exchanges.ts
 import express from "express";
 import {
@@ -1255,6 +1256,10 @@ router.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       if (error instanceof OperationalConflict) {
         res.status(409).json({ success: false, error: error.message });
         return;
@@ -1504,6 +1509,10 @@ router.get(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       logger.error("Error al obtener cambios de divisa", {
         error: error instanceof Error ? error.message : "Unknown",
       });
@@ -1861,6 +1870,10 @@ router.patch(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       if (error instanceof OperationalConflict) {
         res.status(409).json({ success: false, error: error.message });
         return;
@@ -2306,6 +2319,10 @@ async function completePendingExchange(req: AuthenticatedRequest, res: express.R
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       if (error instanceof OperationalConflict) {
         res.status(409).json({ success: false, error: error.message });
         return;
@@ -2411,6 +2428,10 @@ router.get(
 
       res.json({ success: true, exchanges: exchangesWithDatosCliente });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       logger.error("Error fetching pending exchanges", {
         error: error instanceof Error ? error.message : "Unknown",
       });
@@ -2515,6 +2536,10 @@ router.get(
 
       res.json({ success: true, exchanges: exchangesWithDatosCliente });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       logger.error("Error fetching partial exchanges", {
         error: error instanceof Error ? error.message : "Unknown",
       });
@@ -2640,6 +2665,10 @@ router.patch(
         )}`,
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
         res.status(409).json({ success: false, error: "El cambio ya no esta pendiente. Actualiza la pantalla." });
         return;
@@ -2790,6 +2819,10 @@ router.get(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       logger.error("Error al buscar clientes", {
         error: error instanceof Error ? error.message : "Unknown",
       });
@@ -2941,6 +2974,10 @@ router.post(
 
       res.status(200).json({ success: true, result: response.data });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       if (axios.isAxiosError(error)) {
         const status = error.response?.status || 500;
         const data = error.response?.data || { error: error.message };
@@ -3199,6 +3236,10 @@ router.delete(
       });
       res.json({ success: true });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       if (error instanceof OperationalConflict) {
         res.status(409).json({ success: false, error: error.message });
         return;
@@ -3284,6 +3325,10 @@ router.get(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       logger.error("Error en auditoría de cambios", {
         error: error instanceof Error ? error.message : "Unknown",
       });

@@ -1,3 +1,4 @@
+import { isPendingCurrencyError } from "../utils/stagedOpening.js";
 import express from "express";
 import logger from "../utils/logger.js";
 import { nowEcuador } from "../utils/timezone.js";
@@ -352,6 +353,10 @@ const controller = {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       if (error instanceof InsufficientTransferBalance) {
         res.status(400).json({ success: false, error: error.message });
         return;
@@ -427,6 +432,10 @@ const controller = {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       logger.error("Error al obtener transferencias", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
@@ -645,6 +654,10 @@ const controller = {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       if (error instanceof TransferStateConflict) {
         res.status(409).json({ success: false, error: error.message });
         return;

@@ -1,3 +1,4 @@
+import { isPendingCurrencyError } from "../utils/stagedOpening.js";
 import express from "express";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
@@ -115,6 +116,10 @@ router.get(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       logger.error("Error al obtener transferencias pendientes", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
@@ -526,6 +531,10 @@ router.patch(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       logger.error("Error al aprobar transferencia", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
@@ -639,6 +648,10 @@ router.patch(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       logger.error("Error al rechazar transferencia", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
@@ -859,6 +872,10 @@ router.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       if (error instanceof TransferStateConflict) {
         res.status(409).json({ success: false, error: error.message });
         return;
@@ -1081,6 +1098,10 @@ router.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (isPendingCurrencyError(error)) {
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa el conteo de la divisa en Apertura de Caja antes de mover efectivo." });
+        return;
+      }
       if (error instanceof TransferStateConflict) {
         res.status(409).json({ success: false, error: error.message });
         return;
