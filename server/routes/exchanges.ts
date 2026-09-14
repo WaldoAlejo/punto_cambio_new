@@ -316,15 +316,15 @@ const exchangeSchema = z.object({
   metodo_entrega: z
     .enum(["efectivo", "transferencia", "mixto"])
     .default("efectivo"),
-  usd_entregado_efectivo: z.number().optional().nullable(),
-  usd_entregado_transfer: z.number().optional().nullable(),
+  usd_entregado_efectivo: z.number().nonnegative().optional().nullable(),
+  usd_entregado_transfer: z.number().nonnegative().optional().nullable(),
 
   // ORIGEN: método de pago del cliente
   metodo_pago_origen: z
     .nativeEnum(TipoViaTransferencia)
     .default(TipoViaTransferencia.EFECTIVO), // EFECTIVO | BANCO | MIXTO
-  usd_recibido_efectivo: z.number().optional().nullable(),
-  usd_recibido_transfer: z.number().optional().nullable(),
+  usd_recibido_efectivo: z.number().nonnegative().optional().nullable(),
+  usd_recibido_transfer: z.number().nonnegative().optional().nullable(),
 
   observacion: z.string().optional(),
   transferencia_numero: z.string().optional().nullable(),
@@ -645,9 +645,8 @@ router.post(
               (usd_entregado_efectivo || 0) + (usd_entregado_transfer || 0)
             ) !== round2(tot)
           ) {
-            // fallback prudente
-            usd_entregado_efectivo = round2(tot / 2);
-            usd_entregado_transfer = round2(tot - usd_entregado_efectivo);
+            res.status(400).json({ success: false, error: "El desglose mixto de entrega debe sumar el importe total" });
+            return;
           }
         }
       }
@@ -670,8 +669,8 @@ router.post(
             (usd_recibido_efectivo || 0) + (usd_recibido_transfer || 0)
           ) !== round2(tot)
         ) {
-          usd_recibido_efectivo = round2(tot / 2);
-          usd_recibido_transfer = round2(tot - usd_recibido_efectivo);
+          res.status(400).json({ success: false, error: "El desglose mixto recibido debe sumar el importe total" });
+          return;
         }
       }
 
@@ -1233,9 +1232,9 @@ router.post(
           });
         }
 
-        // ✅ VALIDACIÓN CRÍTICA: Asegurar que SIEMPRE se registren exactamente 2 movimientos
-        // Un cambio de divisa DEBE tener exactamente 2 movimientos: 1 ingreso (origen) + 1 egreso (destino)
-        // Si no es así, es un bug grave que debe investigarse. NUNCA auto-crear movimientos.
+        // Each nonzero cash/bank component requires its own movement.
+        const movimientosEsperados = [ingresoEf, ingresoBk, egresoEf, egresoBk]
+          .filter(amount => amount > 0).length;
         const movimientosCreados = await tx.movimientoSaldo.count({
           where: {
             tipo_referencia: 'EXCHANGE',
@@ -1243,9 +1242,10 @@ router.post(
           }
         });
 
-        if (movimientosCreados !== 2) {
+        if (movimientosCreados !== movimientosEsperados ||
+            ingresoEf + ingresoBk <= 0 || egresoEf + egresoBk <= 0) {
           throw new Error(
-            `INTEGRITY_ERROR: Cambio ${cambio.id} (${numeroRecibo}) tiene ${movimientosCreados} movimientos, se esperaban exactamente 2. ` +
+            `INTEGRITY_ERROR: Cambio ${cambio.id} (${numeroRecibo}) tiene ${movimientosCreados} movimientos, se esperaban ${movimientosEsperados} segun los componentes de caja y bancos. ` +
             `Revisar consistencia de saldos para monedas ${moneda_origen_id} y ${moneda_destino_id}. ` +
             `NO se debe auto-crear movimientos — reportar al administrador del sistema.`
           );

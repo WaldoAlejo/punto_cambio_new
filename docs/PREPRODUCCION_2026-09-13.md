@@ -2,6 +2,16 @@
 
 Estado: revisión en curso. No se ha hecho push, despliegue ni escritura en la base remota. No equivale a autorizar el despliegue de todos los cambios acumulados.
 
+## Avance: creación bancaria y mixta
+
+Se reprodujo un error 500 al crear un pago MIXTO válido: la validación exigía dos movimientos aunque correspondían tres o cuatro. Ahora exige un movimiento por cada componente positivo de caja/bancos en origen/destino y mantiene la comprobación de que ambas monedas tengan importe contabilizado. No se crean movimientos artificiales para satisfacer el conteo.
+
+Los cuatro campos de desglose bancario/efectivo rechazan negativos. Para MIXTO, la suma debe coincidir con el total; se eliminó el reparto automático 50/50 ante importes omitidos o inconsistentes. Esas solicitudes devuelven 400 antes de registrar saldos, cambio, movimientos o recibo.
+
+Evidencia: [fallo reproducido](INTEGRACION_LOCAL_MIXTOS_ANTES.json), [141 pruebas correctas](INTEGRACION_LOCAL_CREACION_MIXTOS.json) y TypeScript backend correcto. La matriz prueba COMPRA EUR→USD completa y con abono inicial para BANCO/efectivo, EFECTIVO/transferencia, MIXTO/efectivo, EFECTIVO/mixto y MIXTO/mixto. Verifica total de movimientos, signos, saldo anterior/nuevo y separación caja/bancos; conserva la regla actual de bancos sin límite de saldo. Incluye seis rechazos de desgloses inválidos sin escrituras contables.
+
+**Límite de esta corrección:** aún falta validar liquidación y reverso bancario/mixto, VENTA y otros pares. Hasta resolver la liquidación, `cerrar`, `completar` y `complete-partial` rechazan con 409 los abonos bancarios/mixtos, conservando los datos; antes solo el cierre administrativo tenía esa protección. Las pruebas comprueban los tres rechazos en cada combinación parcial. Crear estos abonos correctamente no significa que su ciclo completo esté listo para producción. No hubo cambios remotos ni de esquema.
+
 ## Avance: liquidación de parciales en efectivo
 
 Actualización de anulaciones: los nuevos recibos de creación y liquidación en efectivo guardan `cash_delta_v1`, con variaciones reales del saldo, billetes y monedas en centavos enteros. Se obtiene dentro de la misma transacción, después de adquirir los bloqueos, y se verifica que total = billetes + monedas. Esto registra también las sustituciones de billetes por monedas realizadas por el sistema; no supone que el desglose solicitado fuera el entregado.

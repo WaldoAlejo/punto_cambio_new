@@ -6,7 +6,9 @@ const cents = (value: { toString(): string } | number) => Math.round(Number(valu
 // The caller holds the exchange row and both balance locks. Legacy records may
 // already contain the entire cash movement even when their status is PENDIENTE.
 export async function remainingPartialCash(tx: Prisma.TransactionClient, cambio: CambioDivisa) {
-  if (cambio.metodo_pago_origen !== "EFECTIVO" || cambio.metodo_entrega !== "efectivo") return null;
+  if (cambio.metodo_pago_origen !== "EFECTIVO" || cambio.metodo_entrega !== "efectivo") {
+    throw new OperationalConflict("La liquidacion de abonos por banco o mixtos requiere revision contable antes de completar el cambio.");
+  }
   const originTotal = cents(cambio.divisas_entregadas_total);
   const destinationTotal = cents(cambio.divisas_recibidas_total);
   const total = cents(cambio.monto_destino);
