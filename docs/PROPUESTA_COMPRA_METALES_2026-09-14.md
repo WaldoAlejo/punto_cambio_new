@@ -6,7 +6,9 @@ Estado: diseño revisado contra el repositorio y referencias públicas. No imple
 
 Solo compras. El operador ingresa el precio negociado por gramo; no se impone un precio mínimo comercial. No se añaden precios máximos, autorizaciones por margen ni cotizaciones automáticas sin una regla empresarial expresa. Los valores deben ser positivos, finitos y representables: esto es validación de datos, no una tarifa mínima.
 
-Quedan por concretar los medios de pago habilitados y la lista de puntos directos. El modelo PuntoAtencion tiene activo/es_principal, pero no identifica expresamente propiedad o concesión. Se propone una habilitación explícita por punto, desactivada inicialmente. No deducir elegibilidad a partir de es_principal o del rol del usuario.
+Medios de pago confirmados: efectivo o transferencia bancaria, siguiendo el tratamiento actual de cambios de divisas. Efectivo será la selección inicial porque será el medio predominante. No se introduce control de cuentas bancarias ni validación de disponibilidad bancaria. En esta etapa cada compra usa una sola vía; no se amplía el alcance a pagos mixtos o abonos.
+
+Queda por concretar la lista de puntos directos. El modelo PuntoAtencion tiene activo/es_principal, pero no identifica expresamente propiedad o concesión. Se propone una habilitación explícita por punto, desactivada inicialmente. No deducir elegibilidad a partir de es_principal o del rol del usuario.
 
 No se incluyen ventas, traslados ni fundición. Cada compra sí debe dejar identificadas las piezas recibidas y su ubicación inicial para conciliar adquisición física y pago.
 
@@ -52,14 +54,18 @@ Crear entidades propias, no representar gramos de metal como saldos monetarios d
 | CompraMetal | Punto, jornada, operador, vendedor, estado, moneda de pago, total y versión |
 | DetalleCompraMetal | Metal, pureza, pesos, precio por gramo, subtotal y evidencia de prueba |
 | PiezaMetalRecibida | Identificador de pieza/sobre, detalle de origen, ubicación inicial y costo de adquisición |
-| PagoCompraMetal | Importe, vía, referencia y estado de pago; estructura preparada para las vías que se confirmen |
+| PagoCompraMetal | Importe, vía EFECTIVO/TRANSFERENCIA, banco y referencia declarados, comprobante adjunto opcional y responsable del registro |
 | EventoCompraMetal | Historial de acciones, reversos y responsables |
 
 Reutilizar autenticación, jornada, apertura operativa, permisos, idempotencia y bloqueos de saldo existentes. Añadir referencia explícita COMPRA_METAL a los movimientos y revisar sus filtros de reportes; una etiqueta nueva no garantiza que todos los reportes actuales la incluyan.
 
 En pago en efectivo: exigir apertura habilitada y conteo de la moneda de pago, comprobar suficiencia y desglose, restar exclusivamente caja. Compra, piezas, movimiento y comprobante deben confirmarse en una transacción. Una impresión fallida permite reimprimir sin repetir el pago. Un doble clic o reintento no duplica la compra.
 
-Si se habilitan transferencias: descontar el registro bancario únicamente con evidencia de pago confirmado. No usar una transacción SQL como garantía de atomicidad de una transferencia externa. Una respuesta bancaria incierta queda pendiente de conciliación; no reenviar dinero automáticamente. Un pago mixto debe sumar exactamente el total y conservar ambos componentes.
+En transferencia: replicar el egreso de destino de `server/routes/exchanges.ts`. Exigir nombre del banco y número de referencia, con imagen de comprobante opcional como en la ruta actual. El operador registra una transferencia realizada por fuera de la aplicación: guardar los datos no ejecuta ni verifica un pago bancario. No integrar API bancaria, cuentas, conciliación automática ni consulta de fondos en esta etapa.
+
+Registrar el egreso en `Saldo.bancos` de la moneda de pago y el punto, junto con el movimiento de referencia COMPRA_METAL y su descripción bancaria compatible con los reportes existentes. Este valor puede quedar negativo: representa el registro acumulado del sistema, no la disponibilidad real de una cuenta. Mantener intactos `Saldo.cantidad`, `billetes` y `monedas_fisicas`. No rechazar una compra por transferencia por falta de saldo físico ni por el valor del registro bancario; conservar los requisitos de jornada y apertura existentes.
+
+En pantalla, cambiar de efectivo a transferencia oculta el desglose físico y solicita banco/referencia. Volver a efectivo limpia los datos bancarios para evitar enviarlos por accidente. El recibo indica la vía usada; la suma total de compras y sus desgloses efectivo/bancario deben coincidir. El precio por gramo y el total de compra no cambian al elegir el medio de pago.
 
 En anulación: distinguir cancelar un borrador de devolver una compra pagada. Exigir devolución identificada de piezas y evidencia del dinero recuperado; conservar historial. No acreditar caja ni simular una devolución bancaria solo por pulsar «anular».
 
@@ -77,4 +83,4 @@ El comprobante interno del sistema no se presenta como documento tributario auto
 
 Introducir esquema, cálculo y API detrás de habilitación por punto; después formulario, comprobante e integración de caja; finalmente piloto local y despliegue controlado. Migraciones aditivas, sin transformar saldos de divisas existentes. Ningún punto se habilita automáticamente.
 
-Probar: oro/plata, distintas purezas en una compra, descuentos de peso, peso neto inválido, precisión de gramos y precios, redondeo de varias líneas, pureza inconclusa, precio libre válido, punto no habilitado, jornada ausente, apertura pendiente, efectivo insuficiente, desglose inconsistente, doble confirmación, fallo al persistir recibo, reverso autorizado y reportes sin duplicaciones. Los casos bancarios dependen de confirmar ese medio de pago. El piloto debe comprobar también identificación física de piezas y reimpresión.
+Probar: oro/plata, distintas purezas en una compra, descuentos de peso, peso neto inválido, precisión de gramos y precios, redondeo de varias líneas, pureza inconclusa, precio libre válido, punto no habilitado, jornada ausente, apertura pendiente, efectivo insuficiente, desglose inconsistente, doble confirmación, fallo al persistir recibo, reverso autorizado y reportes sin duplicaciones. Para transferencia: banco/referencia obligatorios, comprobante opcional, pago con caja física en cero, registro bancario negativo permitido, efectivo/desglose intactos y ausencia de duplicación en reintentos. El piloto debe comprobar también cambio de vía en el formulario, identificación física de piezas y reimpresión.
