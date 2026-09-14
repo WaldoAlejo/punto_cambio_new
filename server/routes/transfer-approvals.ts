@@ -1,3 +1,4 @@
+import { readPostedTransferCash } from "../utils/transferCashDetail.js";
 import { isPendingCurrencyError } from "../utils/stagedOpening.js";
 import express from "express";
 import prisma from "../lib/prisma.js";
@@ -790,9 +791,9 @@ router.post(
 
         // 3. Calcular el ingreso según la vía de transferencia
         let billetesIngreso = 0;
-        const monedasIngreso = 0;
+        let monedasIngreso = 0;
 
-        // Para transferencias EFECTIVO, todo va a billetes
+        // Compatibilidad con transferencias antiguas sin desglose contabilizado.
         // Para BANCO y MIXTO, asumimos que todo es efectivo por ahora
         // TODO: Agregar campos monto_efectivo y monto_banco al schema si se necesita mayor detalle
         if (transfer.via === "EFECTIVO" || transfer.via === "MIXTO") {
@@ -801,6 +802,8 @@ router.post(
         // Para BANCO, no se afectan billetes/monedas físicas
         // El monto se registra solo en cantidad total
 
+        const postedDetail = await readPostedTransferCash(tx, transfer.id, monto);
+        if (postedDetail) { billetesIngreso = postedDetail.billetes; monedasIngreso = postedDetail.monedas; }
         const saldoNuevoDestino = saldoAnterior + monto;
         const billetesNuevoDestino = billetesAnterior + billetesIngreso;
         const monedasNuevaDestino = monedasAnterior + monedasIngreso;
@@ -1024,13 +1027,15 @@ router.post(
 
         // 3. Devolver el dinero al punto origen
         let billetesDevolucion = 0;
-        const monedasDevolucion = 0;
+        let monedasDevolucion = 0;
 
-        // Para transferencias EFECTIVO, devolvemos a billetes
+        // Compatibilidad histórica; el comprobante nuevo conserva el desglose real.
         if (transfer.via === "EFECTIVO" || transfer.via === "MIXTO") {
           billetesDevolucion = monto;
         }
 
+        const postedDetail = await readPostedTransferCash(tx, transfer.id, monto);
+        if (postedDetail) { billetesDevolucion = postedDetail.billetes; monedasDevolucion = postedDetail.monedas; }
         const saldoNuevoOrigen = saldoAnteriorOrigen + monto;
         const billetesNuevoOrigen = billetesAnteriorOrigen + billetesDevolucion;
         const monedasNuevaOrigen = monedasAnteriorOrigen + monedasDevolucion;

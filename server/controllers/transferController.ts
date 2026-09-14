@@ -1,3 +1,4 @@
+import { transferCashDetail, readPostedTransferCash, type TransferCashDetail } from "../utils/transferCashDetail.js";
 import { isPendingCurrencyError } from "../utils/stagedOpening.js";
 import express from "express";
 import logger from "../utils/logger.js";
@@ -136,6 +137,8 @@ const controller = {
 
       // Crear transferencia
       const numeroRecibo = transferCreationService.generateReceiptNumber();
+      const requestedCash = via === "EFECTIVO" && detalle_divisas !== undefined ? transferCashDetail(detalle_divisas, Number(monto)) : null;
+      let postedCash: TransferCashDetail | null = null;
 
       // ✅ NUEVO FLUJO: Transferencias directas sin aprobación del admin
       // Al crear la transferencia:
@@ -194,35 +197,18 @@ const controller = {
 
           const saldoNuevoOrigen = saldoAnteriorOrigen - Number(monto);
 
-          // Distribuir el egreso entre billetes y monedas físicas
           const totalFisico = billetesAnterior + monedasAnterior;
-          let billetesEgreso = 0;
-          let monedasEgreso = 0;
-
-          if (totalFisico > 0) {
-            const proporcionBilletes = billetesAnterior / totalFisico;
-            billetesEgreso = Math.min(
-              billetesAnterior,
-              Number(monto) * proporcionBilletes
-            );
-            monedasEgreso = Number(monto) - billetesEgreso;
-
-            if (monedasEgreso > monedasAnterior) {
-              monedasEgreso = monedasAnterior;
-              billetesEgreso = Number(monto) - monedasEgreso;
-            }
-          } else {
-            billetesEgreso = Number(monto);
+          const fallbackBills = totalFisico > 0
+            ? Math.min(billetesAnterior, Number((Number(monto) * billetesAnterior / totalFisico).toFixed(2)))
+            : Number(monto);
+          const detail = requestedCash || transferCashDetail({ billetes: fallbackBills,
+            monedas: Number((Number(monto) - fallbackBills).toFixed(2)), total: Number(monto) }, Number(monto));
+          if (detail.billetes > billetesAnterior || detail.monedas > monedasAnterior) {
+            throw new InsufficientTransferBalance("No hay suficientes billetes o monedas físicas para el desglose solicitado.");
           }
-
-          const billetesNuevoOrigen = Math.max(
-            0,
-            billetesAnterior - billetesEgreso
-          );
-          const monedasNuevaOrigen = Math.max(
-            0,
-            monedasAnterior - monedasEgreso
-          );
+          if (via === "EFECTIVO") postedCash = detail;
+          const billetesNuevoOrigen = Number((billetesAnterior - detail.billetes).toFixed(2));
+          const monedasNuevaOrigen = Number((monedasAnterior - detail.monedas).toFixed(2));
 
           // Actualizar saldo del origen
           await tx.saldo.upsert({
@@ -266,62 +252,23 @@ const controller = {
           );
         }
 
+        // El comprobante y su desglose se guardan junto con el descuento.
+        await transferCreationService.createReceipt({
+          numero_recibo: numeroRecibo,
+          usuario_id: userId,
+          punto_atencion_id: destino_id,
+          transferencia: transfer,
+          detalle_divisas: postedCash || detalle_divisas,
+          desglose_contabilizado_v1: postedCash,
+          responsable_movilizacion,
+          tipo_transferencia,
+          monto,
+          via: via as TipoViaTransferencia,
+          monto_efectivo,
+          monto_banco,
+        }, tx);
+
         return transfer;
-      });
-
-      // ⚠️ IMPORTANTE: NO CONTABILIZAR AL CREAR
-      // La contabilización se realiza SOLO cuando la transferencia es APROBADA
-      // en el endpoint de transfer-approvals.ts
-      // Esto evita la duplicación de movimientos de saldo.
-      //
-      // ANTES: Se contabilizaba aquí al crear (PENDIENTE) y luego al aprobar (APROBADO)
-      // AHORA: Solo se contabiliza al aprobar (APROBADO)
-      //
-      // Si en el futuro se necesita contabilizar al crear (para transferencias sin aprobación),
-      // se debe eliminar la contabilización del endpoint de aprobación.
-
-      // ❌ CÓDIGO DESHABILITADO - Causaba duplicación
-      // // Contabilizar SALIDA del ORIGEN (si existe origen_id)
-      // if (origen_id) {
-      //   await transferCreationService.contabilizarSalidaOrigen({
-      //     origen_id,
-      //     moneda_id,
-      //     usuario_id: req.user.id,
-      //     transferencia: newTransfer,
-      //     numero_recibo: numeroRecibo,
-      //     via: via as TipoViaTransferencia,
-      //     monto,
-      //     monto_efectivo,
-      //     monto_banco,
-      //   });
-      // }
-      //
-      // // Contabilizar ENTRADA en el DESTINO (efectivo y/o banco)
-      // await transferCreationService.contabilizarEntradaDestino({
-      //   destino_id,
-      //   moneda_id,
-      //   usuario_id: req.user.id,
-      //   transferencia: newTransfer,
-      //   numero_recibo: numeroRecibo,
-      //   via: via as TipoViaTransferencia,
-      //   monto,
-      //   monto_efectivo,
-      //   monto_banco,
-      // });
-
-      // Recibo
-      await transferCreationService.createReceipt({
-        numero_recibo: numeroRecibo,
-        usuario_id: req.user.id,
-        punto_atencion_id: destino_id,
-        transferencia: newTransfer,
-        detalle_divisas,
-        responsable_movilizacion,
-        tipo_transferencia,
-        monto,
-        via: via as TipoViaTransferencia,
-        monto_efectivo,
-        monto_banco,
       });
 
       const formattedTransfer = {
@@ -330,7 +277,7 @@ const controller = {
         monto: parseFloat(newTransfer.monto.toString()),
         fecha: newTransfer.fecha.toISOString(),
         fecha_aprobacion: newTransfer.fecha_aprobacion?.toISOString() || null,
-        detalle_divisas: detalle_divisas || null,
+        detalle_divisas: postedCash || detalle_divisas || null,
         responsable_movilizacion: responsable_movilizacion || null,
       };
 
@@ -543,7 +490,11 @@ const controller = {
         let billetesDevolucion = 0;
         let monedasDevolucion = 0;
 
-        if (transfer.via === "EFECTIVO" || transfer.via === "MIXTO") {
+        const postedDetail = await readPostedTransferCash(tx, transfer.id, monto);
+        if (postedDetail) {
+          billetesDevolucion = postedDetail.billetes;
+          monedasDevolucion = postedDetail.monedas;
+        } else if (transfer.via === "EFECTIVO" || transfer.via === "MIXTO") {
           const movimientoOriginal = await tx.movimientoSaldo.findFirst({
             where: {
               referencia_id: transfer.id,

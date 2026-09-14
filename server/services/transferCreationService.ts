@@ -544,15 +544,16 @@ export const transferCreationService = {
     punto_atencion_id: string;
     transferencia: Transferencia;
     detalle_divisas?: object;
+    desglose_contabilizado_v1?: object | null;
     responsable_movilizacion?: object;
     tipo_transferencia: TipoTransferencia;
     monto: number;
     via: TipoViaTransferencia;
     monto_efectivo?: number;
     monto_banco?: number;
-  }) {
+  }, tx?: Prisma.TransactionClient) {
     try {
-      await prisma.recibo.create({
+      await (tx || prisma).recibo.create({
         data: {
           numero_recibo: data.numero_recibo,
           tipo_operacion: "TRANSFERENCIA",
@@ -561,6 +562,7 @@ export const transferCreationService = {
           punto_atencion_id: data.punto_atencion_id,
           datos_operacion: {
             transferencia: data.transferencia,
+            desglose_contabilizado_v1: data.desglose_contabilizado_v1 || null,
             detalle_divisas: data.detalle_divisas || null,
             responsable_movilizacion: data.responsable_movilizacion || null,
             tipo_transferencia: data.tipo_transferencia,
@@ -574,6 +576,7 @@ export const transferCreationService = {
       });
       logger.info("Recibo registrado exitosamente");
     } catch (reciboError) {
+      if (tx) throw reciboError;
       logger.warn("Error registrando recibo (no crítico)", {
         error: reciboError,
       });

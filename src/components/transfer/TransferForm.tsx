@@ -50,6 +50,8 @@ const TransferForm = ({
   const [destinationPointId, setDestinationPointId] = useState("");
   const [currencyId, setCurrencyId] = useState("");
   const [amount, setAmount] = useState("");
+  const [cashKind, setCashKind] = useState("BILLETES");
+  const [coinAmount, setCoinAmount] = useState("0");
   const [description, setDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [availablePoints, setAvailablePoints] = useState<PuntoAtencion[]>([]);
@@ -165,6 +167,12 @@ const TransferForm = ({
     }
 
     try {
+      const total = Number(amount);
+      const coins = cashKind === "MONEDAS" ? total : cashKind === "COMBINADO" ? Number(coinAmount) : 0;
+      if (![total, coins].every(value => Number.isFinite(value) && Number(value.toFixed(2)) === value) || coins < 0 || coins > total) {
+        toast.error("Revisa el importe en monedas: debe tener hasta dos decimales y no superar el total.");
+        return;
+      }
       setIsLoading(true);
 
       const transferData = {
@@ -172,6 +180,7 @@ const TransferForm = ({
         destino_id: destinationPointId,
         moneda_id: currencyId,
         monto: parseFloat(amount),
+        detalle_divisas: { billetes: Number((total - coins).toFixed(2)), monedas: coins, total },
         descripcion: description.trim(),
         tipo_transferencia: TIPO_TRANSFERENCIA_ENTRE_PUNTOS,
         solicitado_por: user.id,
@@ -194,6 +203,8 @@ const TransferForm = ({
       setDestinationPointId("");
       setCurrencyId("");
       setAmount("");
+      setCashKind("BILLETES");
+      setCoinAmount("0");
       setDescription("");
       setCurrencySearch("");
       onTransferCreated();
@@ -399,6 +410,22 @@ const TransferForm = ({
             </div>
           </div>
 
+          <div className="space-y-2 rounded-md border p-3">
+            <Label htmlFor="cash-kind">Efectivo que se entrega</Label>
+            <select id="cash-kind" className="w-full rounded-md border bg-background p-2" value={cashKind}
+              disabled={isLoading} onChange={e => { setCashKind(e.target.value); setCoinAmount("0"); }}>
+              <option value="BILLETES">Solo billetes</option>
+              <option value="MONEDAS">Solo monedas físicas</option>
+              <option value="COMBINADO">Billetes y monedas físicas</option>
+            </select>
+            {cashKind === "COMBINADO" && <div>
+              <Label htmlFor="coin-amount">Importe en monedas físicas</Label>
+              <Input id="coin-amount" type="number" min="0" max={amount || "0"} step="0.01" required
+                disabled={isLoading} value={coinAmount} onChange={e => setCoinAmount(e.target.value)} />
+            </div>}
+            <p className="text-sm">Billetes: {Math.max(0, Number(amount || 0) - (cashKind === "MONEDAS" ? Number(amount || 0) : cashKind === "COMBINADO" ? Number(coinAmount || 0) : 0)).toFixed(2)} · Monedas físicas: {(cashKind === "MONEDAS" ? Number(amount || 0) : cashKind === "COMBINADO" ? Number(coinAmount || 0) : 0).toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground">Este desglose se descontará del origen y se conservará al recibir o devolver la transferencia.</p>
+          </div>
           {/* Descripción */}
           <div className="space-y-1">
             <Label htmlFor="description" className="text-xs sm:text-sm font-medium">

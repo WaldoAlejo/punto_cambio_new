@@ -400,6 +400,52 @@ try {
     assert.equal(Number(s.bancos), 25); assert.equal(Number(s.cantidad), Number(s.billetes) + Number(s.monedas_fisicas));
     return Number(s.cantidad);
   };
+  for (const detail of [{ billetes: 0, monedas: 50.25, total: 50.25 }, { billetes: 12.1, monedas: 38.15, total: 50.25 }]) {
+    for (const action of ['accept', 'reject', 'cancel']) await check('Desglose transferencia ' + detail.billetes + '/' + detail.monedas + ': ' + action, async () => {
+      for (const p of [origin, destination]) await prisma.saldo.update({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: usd.id } }, data: { cantidad: 1000, billetes: 800, monedas_fisicas: 200 } });
+      const key = randomUUID();
+      const body = { ...transferBody, monto: detail.total, detalle_divisas: detail };
+      const created = await post('/transfers', body, key, origin.token); ok(created);
+      ok(await post('/transfers', body, key, origin.token));
+      const id = created.body.transfer.id;
+      const read = p => prisma.saldo.findUniqueOrThrow({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: usd.id } } });
+      const sent = await read(origin);
+      assert.equal(Number(sent.billetes), +(800 - detail.billetes).toFixed(2));
+      assert.equal(Number(sent.monedas_fisicas), +(200 - detail.monedas).toFixed(2));
+      const receipt = await prisma.recibo.findFirstOrThrow({ where: { referencia_id: id } });
+      assert.deepEqual(receipt.datos_operacion.desglose_contabilizado_v1, detail);
+      const pending = await fetch(base + '/transfers/pending-acceptance', { headers: { Authorization: `Bearer ${destination.token}` }, signal: AbortSignal.timeout(20000) });
+      assert.equal(pending.status, 200);
+      assert.deepEqual((await pending.json()).transfers.find(t => t.id === id).detalle_divisas, detail);
+      // Change the origin proportions while the transfer is in transit: return must use the posted evidence.
+      await prisma.saldo.update({ where: { id: sent.id }, data: { billetes: { decrement: 100 }, monedas_fisicas: { increment: 100 } } });
+      ok(await post(action === 'cancel' ? '/transfers/' + id + '/cancel' : '/transfer-approvals/' + id + '/' + action, {}, undefined, action === 'cancel' ? origin.token : destination.token));
+      const source = await read(origin), target = await read(destination);
+      assert.equal(Number(source.billetes), action === 'accept' ? +(700 - detail.billetes).toFixed(2) : 700);
+      assert.equal(Number(source.monedas_fisicas), action === 'accept' ? +(300 - detail.monedas).toFixed(2) : 300);
+      assert.equal(Number(target.billetes), action === 'accept' ? +(800 + detail.billetes).toFixed(2) : 800);
+      assert.equal(Number(target.monedas_fisicas), action === 'accept' ? +(200 + detail.monedas).toFixed(2) : 200);
+      assert.equal(Number(source.bancos), 25); assert.equal(Number(target.bancos), 25);
+    });
+  }
+  for (const detail of [{ billetes: 0, monedas: 500, total: 500 }, { billetes: 0, monedas: 10, total: 50 }, { billetes: 0, monedas: 50.001, total: 50.001 }]) await check('Desglose invalido o monedas insuficientes: ' + JSON.stringify(detail), async () => {
+    const before = await prisma.saldo.findMany({ where: { punto_atencion_id: origin.id }, orderBy: { id: 'asc' } });
+    const count = await prisma.transferencia.count();
+    assert.equal((await post('/transfers', { ...transferBody, monto: detail.total, detalle_divisas: detail }, randomUUID(), origin.token)).status, 400);
+    assert.equal(await prisma.transferencia.count(), count);
+    assert.deepEqual(await prisma.saldo.findMany({ where: { punto_atencion_id: origin.id }, orderBy: { id: 'asc' } }), before);
+  });
+  await check('Transferencia: fallo de recibo revierte saldo y transferencia', async () => {
+    const before = await prisma.saldo.findMany({ where: { punto_atencion_id: origin.id } });
+    const count = await prisma.transferencia.count();
+    await pool.query(`CREATE FUNCTION fail_transfer_receipt() RETURNS trigger LANGUAGE plpgsql AS $body$ BEGIN IF NEW.tipo_operacion='TRANSFERENCIA' THEN RAISE EXCEPTION 'synthetic receipt failure'; END IF; RETURN NEW; END $body$; CREATE TRIGGER fail_transfer_receipt BEFORE INSERT ON "Recibo" FOR EACH ROW EXECUTE FUNCTION fail_transfer_receipt();`);
+    try {
+      assert.equal((await post('/transfers', { ...transferBody, monto: 10, detalle_divisas: { billetes: 0, monedas: 10, total: 10 } }, randomUUID(), origin.token)).status, 500);
+      assert.equal(await prisma.transferencia.count(), count);
+      assert.deepEqual(await prisma.saldo.findMany({ where: { punto_atencion_id: origin.id } }), before);
+    } finally { await pool.query('DROP TRIGGER fail_transfer_receipt ON "Recibo"; DROP FUNCTION fail_transfer_receipt();'); }
+  });
+  for (const p of [origin, destination]) await prisma.saldo.update({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: usd.id } }, data: { cantidad: 1000, billetes: 1000, monedas_fisicas: 0 } });
   for (const action of ['accept', 'reject']) {
     let tid;
     const initialOrigin = await balance(origin), initialDestination = await balance(destination);

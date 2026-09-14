@@ -10,6 +10,7 @@ import transferController from "../controllers/transferController.js";
 import prisma from "../lib/prisma.js";
 import logger from "../utils/logger.js";
 import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
+import { transferCashDetail } from "../utils/transferCashDetail.js";
 
 const router = express.Router();
 
@@ -57,7 +58,7 @@ const createTransferSchema = z.object({
 
   descripcion: z.string().optional().nullable(),
 
-  // opcional: detalle físico para soporte de remisión (no afecta lógica)
+  // Desglose físico: se valida y contabiliza para transferencias EFECTIVO.
   detalle_divisas: z
     .object({
       billetes: z.number().min(0),
@@ -176,9 +177,23 @@ router.get("/pending-acceptance", authenticateToken, requireRole(["OPERADOR", "C
       orderBy: { fecha: "desc" },
     });
 
+    const receipts = pendingTransfers.length ? await prisma.recibo.findMany({
+      where: { tipo_operacion: "TRANSFERENCIA", referencia_id: { in: pendingTransfers.map(t => t.id) } },
+      select: { referencia_id: true, datos_operacion: true },
+    }) : [];
+    const postedDetails = new Map<string, unknown>();
+    for (const receipt of receipts) {
+      const data = receipt.datos_operacion as Record<string, unknown>;
+      if (data?.desglose_contabilizado_v1 != null && receipt.referencia_id) {
+        if (postedDetails.has(receipt.referencia_id)) throw new Error("Evidencia de desglose duplicada.");
+        postedDetails.set(receipt.referencia_id, data.desglose_contabilizado_v1);
+      }
+    }
     const formattedTransfers = pendingTransfers.map((transfer) => ({
       ...transfer,
       monto: parseFloat(transfer.monto.toString()),
+      detalle_divisas: postedDetails.has(transfer.id)
+        ? transferCashDetail(postedDetails.get(transfer.id), Number(transfer.monto)) : null,
       fecha: transfer.fecha.toISOString(),
       fecha_envio: transfer.fecha_envio?.toISOString() || null,
     }));
