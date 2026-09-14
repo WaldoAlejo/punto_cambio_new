@@ -25,7 +25,7 @@ Son datos de `AperturaCaja.saldo_esperado`, no valores inferidos de la pantalla.
 
 ## Operaciones del 28 de agosto
 
-Horas locales de Ecuador:
+Horas UTC almacenadas en PostgreSQL (restar cinco horas para Ecuador):
 
 | Hora | Operación | Movimiento EUR | Saldo registrado |
 |---|---|---:|---:|
@@ -67,7 +67,7 @@ La cadena registrada hasta el 31 de agosto es:
 
 Sustituir únicamente el reverso incorrecto por 48,38 da **317,49 EUR**. Es una reconstrucción contable bajo ese supuesto, no una orden de ajuste ni un conteo físico validado. No sería correcto sumar automáticamente 48,48 a billetes: mezcla una diferencia de desglose con un exceso en el total.
 
-El 1 de septiembre se registró una compra de 200 EUR a las 18:56 y una venta completada de 300 EUR a las 21:01. El intento rechazado no tiene un movimiento de saldo que permita fecharlo directamente.
+El 1 de septiembre se registró una compra de 200 EUR a las 18:56 UTC y una venta completada de 300 EUR a las 21:01 UTC. El intento rechazado no tiene un movimiento de saldo que permita fecharlo directamente.
 
 ## Límites y siguiente corrección
 
@@ -78,3 +78,5 @@ La falta de sincronización de la apertura explica la persistencia y el bloqueo,
 Antes de una reparación, reconstruir los componentes desde la referencia documentada, contrastarlos con operaciones posteriores y con el conteo físico vigente; registrar por separado la corrección del total y la del desglose. No aplicar una actualización global de saldos ni repetir la venta anulada.
 
 Evidencia de consulta local (fuera de Git): `node_modules/.cache/audit-bosque/window-2026-08-17.json` y `reversal.json`. No contienen credenciales.
+
+Corrección de presentación horaria del 14/09: el cliente `pg` en Windows interpretó inicialmente los campos `timestamp without time zone` como hora local. Se contrastaron las marcas con `fecha::text` en SQL; las horas de operaciones de este informe son UTC, no hora de Ecuador como se indicó inicialmente. Los importes y las referencias no cambian. Ver `RECONSTRUCCION_EUR_BOSQUE_2026-09-14.md` para el ajuste aplicado posteriormente.
