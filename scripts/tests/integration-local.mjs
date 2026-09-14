@@ -86,6 +86,8 @@ try {
   app.use(express.json());
   for (const [mount, module] of [
     ['/api/auth', '../../server/routes/auth.ts'],
+    ['/api/points', '../../server/routes/points.ts'],
+    ['/api/schedules', '../../server/routes/schedules.ts'],
     ['/api/apertura-caja', '../../server/routes/apertura-caja.ts'],
     ['/api/exchanges', '../../server/routes/exchanges.ts'],
     ['/api/guardar-cierre', '../../server/routes/guardar-cierre.ts'],
@@ -96,8 +98,6 @@ try {
   ]) app.use(mount, (await import(module)).default);
   if (browserMode) {
     for (const [mount, module] of [
-      ['/api/points', '../../server/routes/points.ts'],
-      ['/api/schedules', '../../server/routes/schedules.ts'],
       ['/api/users', '../../server/routes/users.ts'],
       ['/api/currencies', '../../server/routes/currencies.ts'],
       ['/api/admin', '../../server/routes/admin-dashboard.ts'],
@@ -1225,6 +1225,73 @@ try {
       if (scenario === 'ya contabilizado') assert.equal(after.estado, 'COMPLETADO');
       else assert.equal(JSON.stringify(after), beforeExchange);
       assert.equal(await prisma.recibo.count({ where: { referencia_id: id } }), scenario === 'ya contabilizado' ? 2 : 1);
+    });
+  }
+  for (const sameUser of [false, true]) {
+    await check(`Seleccion simultanea: ${sameUser ? 'un operador y dos puntos' : 'dos operadores y un punto'}`, async () => {
+      const p = await prisma.puntoAtencion.create({ data: { nombre: `SELECCION ${sameUser}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+      const p2 = sameUser ? await prisma.puntoAtencion.create({ data: { nombre: 'SELECCION alternativa', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } }) : p;
+      const people = [];
+      for (let i = 0; i < (sameUser ? 1 : 2); i++) {
+        const u = await prisma.usuario.create({ data: { username: `select_${sameUser}_${i}`, nombre: 'Operador seleccion ficticio',
+          password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'OPERADOR' } });
+        const login = await post('/auth/login', { username: u.username, password: 'PruebaLocal_123!' }); ok(login);
+        assert.equal(login.body.hasActiveJornada, false);
+        assert.equal(await prisma.jornada.count({ where: { usuario_id: u.id } }), 0);
+        people.push({ ...u, token: login.body.token });
+      }
+      const freePoints = async t => {
+        const res = await fetch(base + '/points', { headers: { Authorization: `Bearer ${t}` } });
+        assert.equal(res.status, 200); return (await res.json()).points;
+      };
+      for (const u of people) assert.ok((await freePoints(u.token)).some(row => row.id === p.id));
+      const blocker = new Client({ connectionString: url }); await blocker.connect();
+      let requests;
+      try {
+        await blocker.query('BEGIN');
+        await blocker.query(sameUser ? 'SELECT id FROM "Usuario" WHERE id=$1 FOR UPDATE' : 'SELECT id FROM "PuntoAtencion" WHERE id=$1 FOR UPDATE', [sameUser ? people[0].id : p.id]);
+        requests = [p, p2].map((target, i) => {
+          const u = people[sameUser ? 0 : i];
+          return post('/schedules', { usuario_id: u.id, punto_atencion_id: target.id, fecha_inicio: new Date().toISOString() }, undefined, u.token);
+        });
+        let waiting = 0;
+        for (let attempt = 0; attempt < 150 && waiting < 2; attempt++) {
+          const result = await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock'");
+          waiting = result.rows[0].n;
+          if (waiting < 2) await new Promise(resolve => setTimeout(resolve, 30));
+        }
+        assert.ok(waiting >= 2, 'Ambas selecciones deben coincidir antes de liberar el bloqueo');
+      } finally { await blocker.query('ROLLBACK'); await blocker.end(); }
+      const responses = await Promise.all(requests);
+      assert.deepEqual(responses.map(r => r.status).sort(), [201, 409], JSON.stringify(responses));
+      const schedules = await prisma.jornada.findMany({ where: { usuario_id: { in: people.map(u => u.id) } } });
+      assert.equal(schedules.length, 1);
+      const started = schedules[0];
+      const winner = people.find(u => u.id === started.usuario_id);
+      assert.equal((await prisma.usuario.findUnique({ where: { id: winner.id } })).punto_atencion_id, started.punto_atencion_id);
+      if (sameUser) return;
+      const loser = people.find(u => u.id !== winner.id);
+      assert.equal((await prisma.usuario.findUnique({ where: { id: loser.id } })).punto_atencion_id, null);
+      assert.ok(!(await freePoints(loser.token)).some(row => row.id === p.id));
+      for (const m of currencies) {
+        await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, billetes: 1000, bancos: 25 } });
+        await prisma.saldoInicial.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad_inicial: 1000, asignado_por: winner.id } });
+      }
+      const payload = { ...exchange, punto_atencion_id: p.id };
+      assert.equal((await post('/exchanges', payload, randomUUID(), winner.token)).status, 403);
+      const opened = await post('/apertura-caja/iniciar', { jornada_id: started.id }, undefined, winner.token); ok(opened);
+      const aid = opened.body.apertura.id;
+      assert.equal((await post('/apertura-caja/confirmar', { apertura_id: aid }, undefined, winner.token)).status, 400);
+      assert.equal((await post('/exchanges', payload, randomUUID(), winner.token)).status, 403);
+      ok(await post('/apertura-caja/conteo', { apertura_id: aid, conteos: currencies.map(m => ({
+        moneda_id: m.id, billetes: [{ denominacion: 100, cantidad: 10 }], monedas: [], total: 1000,
+      })) }, undefined, winner.token));
+      assert.equal((await post('/exchanges', payload, randomUUID(), winner.token)).status, 403);
+      ok(await post('/apertura-caja/confirmar', { apertura_id: aid }, undefined, winner.token));
+      ok(await post('/exchanges', payload, randomUUID(), winner.token));
+      const saldo = await prisma.saldo.findUnique({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: usd.id } } });
+      assert.equal(Number(saldo.cantidad), 890);
+      assert.equal(Number(saldo.bancos), 25);
     });
   }
   if (browserMode) {

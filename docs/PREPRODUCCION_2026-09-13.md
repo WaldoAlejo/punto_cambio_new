@@ -134,3 +134,11 @@ Permisos de `cerrar`, `completar` y `register-partial-payment` corregidos: opera
 - Zona horaria efectiva y revisión exacta desplegada, respaldo y reversión del despliegue.
 
 No ejecutar `npm run deploy` como verificación: el script incluye `prisma db push`. Las comprobaciones locales no requieren modificar el esquema remoto.
+
+## Selección de punto y apertura: concurrencia (2026-09-14)
+
+Se reprodujo que dos operadores podían seleccionar simultáneamente el mismo punto: ambas solicitudes devolvían 201 y creaban jornadas. La creación ahora bloquea las filas del usuario y del punto dentro de la transacción, vuelve a comprobar jornada y ocupación, y devuelve 409 al competidor. También impide iniciar otra jornada en un punto diferente cuando el usuario ya tiene una activa. Se conservan las reglas existentes de roles privilegiados.
+
+La suite local pasa **267 pruebas**, incluidas las carreras de dos operadores por un punto y de un operador por dos puntos. El recorrido por API comprueba que el login no cree jornada, que el punto ocupado desaparezca de la lista del otro operador y que un cambio se rechace antes de abrir, antes de contar y antes de confirmar. Tras contar USD/EUR y confirmar la apertura, el cambio se registra con el saldo físico esperado y conserva el saldo bancario. TypeScript backend correcto. PostgreSQL temporal detenido al finalizar.
+
+Evidencia: [reproducción](INTEGRACION_LOCAL_SELECCION_ANTES.json) y [resultado corregido](INTEGRACION_LOCAL_SELECCION_CORREGIDA.json). Estas pruebas usan datos ficticios locales. No prueban todo el recorrido visual ni todas las operaciones posteriores a la apertura. La exclusión cubre esta ruta de creación; quedan por revisar otros mecanismos de reasignación. Cambios pendientes de push y despliegue; no se modificó producción durante esta revisión.

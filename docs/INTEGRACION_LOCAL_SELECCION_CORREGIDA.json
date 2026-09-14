@@ -1,0 +1,1089 @@
+{
+  "runDir": "C:\\Users\\oswal\\AppData\\Local\\Temp\\pc-integration-MVI4Rf",
+  "results": [
+    {
+      "name": "Login con usuario ficticio",
+      "passed": true
+    },
+    {
+      "name": "Jornada 19:30 GYE mantiene punto en autenticacion",
+      "passed": true
+    },
+    {
+      "name": "Instante anterior al dia GYE excluido",
+      "passed": true
+    },
+    {
+      "name": "Medianoche inicial GYE incluida",
+      "passed": true
+    },
+    {
+      "name": "Ultimo milisegundo del dia GYE incluido",
+      "passed": true
+    },
+    {
+      "name": "Medianoche del dia siguiente excluida",
+      "passed": true
+    },
+    {
+      "name": "Jornada en almuerzo reconocida",
+      "passed": true
+    },
+    {
+      "name": "Jornada completada no habilita punto",
+      "passed": true
+    },
+    {
+      "name": "Jornada cancelada no habilita punto",
+      "passed": true
+    },
+    {
+      "name": "Login antigua sin salida: informa jornada vigente sin escribir registros",
+      "passed": true
+    },
+    {
+      "name": "Login completada sin salida: informa jornada vigente sin escribir registros",
+      "passed": true
+    },
+    {
+      "name": "Login cancelada sin salida: informa jornada vigente sin escribir registros",
+      "passed": true
+    },
+    {
+      "name": "Login activa: informa jornada vigente sin escribir registros",
+      "passed": true
+    },
+    {
+      "name": "Login almuerzo: informa jornada vigente sin escribir registros",
+      "passed": true
+    },
+    {
+      "name": "Login activa con salida: informa jornada vigente sin escribir registros",
+      "passed": true
+    },
+    {
+      "name": "Cambio bloqueado antes de apertura",
+      "passed": true
+    },
+    {
+      "name": "Iniciar apertura",
+      "passed": true
+    },
+    {
+      "name": "Apertura bloqueada sin conteos obligatorios",
+      "passed": true
+    },
+    {
+      "name": "Guardar conteos USD y EUR y confirmar apertura",
+      "passed": true
+    },
+    {
+      "name": "Comprar 100 EUR por 110 USD y verificar saldos",
+      "passed": true
+    },
+    {
+      "name": "Reintento idempotente no duplica cambio",
+      "passed": true
+    },
+    {
+      "name": "Reporte actualiza bancos teoricos sin pisar el conteo guardado",
+      "passed": true
+    },
+    {
+      "name": "Cierre exacto conserva saldo y finaliza jornada",
+      "passed": true
+    },
+    {
+      "name": "CERRADO: apertura descuadrada exige incidencia",
+      "passed": true
+    },
+    {
+      "name": "CERRADO: apertura con incidencia conserva saldos y requiere revision",
+      "passed": true
+    },
+    {
+      "name": "CERRADO: diferencia sin autorizacion rechazada sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "CERRADO: allowMismatch no admite desglose inconsistente",
+      "passed": true
+    },
+    {
+      "name": "CERRADO: diferencia aceptada respeta saldos y movimientos",
+      "passed": true
+    },
+    {
+      "name": "PARCIAL: apertura descuadrada exige incidencia",
+      "passed": true
+    },
+    {
+      "name": "PARCIAL: apertura con incidencia conserva saldos y requiere revision",
+      "passed": true
+    },
+    {
+      "name": "PARCIAL: diferencia sin autorizacion rechazada sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "PARCIAL: allowMismatch no admite desglose inconsistente",
+      "passed": true
+    },
+    {
+      "name": "PARCIAL: diferencia aceptada respeta saldos y movimientos",
+      "passed": true
+    },
+    {
+      "name": "Transfer accept: envio descuenta solo origen e idempotencia",
+      "passed": true
+    },
+    {
+      "name": "Transfer accept: origen no puede resolver por destino",
+      "passed": true
+    },
+    {
+      "name": "Transfer accept: destino resuelve una sola vez",
+      "passed": true
+    },
+    {
+      "name": "Transfer reject: envio descuenta solo origen e idempotencia",
+      "passed": true
+    },
+    {
+      "name": "Transfer reject: origen no puede resolver por destino",
+      "passed": true
+    },
+    {
+      "name": "Transfer reject: destino resuelve una sola vez",
+      "passed": true
+    },
+    {
+      "name": "Transfer: operador no puede descontar otro punto",
+      "passed": true
+    },
+    {
+      "name": "Transfer: operador no puede omitir origen",
+      "passed": true
+    },
+    {
+      "name": "Transfer: concesion no puede descontar otro punto",
+      "passed": true
+    },
+    {
+      "name": "Transfer: ADMIN conserva envio desde otro punto",
+      "passed": true
+    },
+    {
+      "name": "Transfer: SUPER_USUARIO conserva envio desde otro punto",
+      "passed": true
+    },
+    {
+      "name": "Transfer concurrente: accept / accept solo resuelve una vez",
+      "passed": true
+    },
+    {
+      "name": "Transfer concurrente: reject / reject solo resuelve una vez",
+      "passed": true
+    },
+    {
+      "name": "Transfer concurrente: accept / reject solo resuelve una vez",
+      "passed": true
+    },
+    {
+      "name": "Transfer concurrente: accept / cancel solo resuelve una vez",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: envios con fondos suficientes",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: envios con fondos insuficientes para ambos",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: accept de dos transferencias distintas",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: reject de dos transferencias distintas",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: cancel de dos transferencias distintas",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: dos primeras recepciones crean un solo saldo completo",
+      "passed": true
+    },
+    {
+      "name": "Cambio y transferencia simultaneos conservan ambos egresos",
+      "passed": true
+    },
+    {
+      "name": "Dos cambios simultaneos conservan ambas monedas y sus movimientos",
+      "passed": true
+    },
+    {
+      "name": "Cierre concurrente con transfer: primero operacion",
+      "passed": true
+    },
+    {
+      "name": "Cierre concurrente con transfer: primero cierre",
+      "passed": true
+    },
+    {
+      "name": "Cierre concurrente con exchange: primero operacion",
+      "passed": true
+    },
+    {
+      "name": "Cierre concurrente con exchange: primero cierre",
+      "passed": true
+    },
+    {
+      "name": "Cierre historico con movimientos y moneda inactiva no se recalcula",
+      "passed": true
+    },
+    {
+      "name": "Consultar cierre historico sin movimientos conserva snapshot y fecha",
+      "passed": true
+    },
+    {
+      "name": "GET iniciado con cuadre abierto no modifica detalles si se cierra mientras espera",
+      "passed": true
+    },
+    {
+      "name": "conteo iniciado con cuadre abierto no modifica detalles si se cierra mientras espera",
+      "passed": true
+    },
+    {
+      "name": "Permisos detalles: operador consulta su punto y rechaza otro",
+      "passed": true
+    },
+    {
+      "name": "Permisos detalles: conserva alcance de ADMIN",
+      "passed": true
+    },
+    {
+      "name": "Permisos detalles: conserva alcance de SUPER_USUARIO",
+      "passed": true
+    },
+    {
+      "name": "Permisos detalles: conserva alcance de ADMINISTRATIVO",
+      "passed": true
+    },
+    {
+      "name": "Permisos validar: operador consulta su punto y rechaza otro",
+      "passed": true
+    },
+    {
+      "name": "Permisos validar: conserva alcance de ADMIN",
+      "passed": true
+    },
+    {
+      "name": "Permisos validar: conserva alcance de SUPER_USUARIO",
+      "passed": true
+    },
+    {
+      "name": "Permisos validar: conserva alcance de ADMINISTRATIVO",
+      "passed": true
+    },
+    {
+      "name": "Permisos auditoria: operador consulta su punto y rechaza otro",
+      "passed": true
+    },
+    {
+      "name": "Permisos auditoria: conserva alcance de ADMIN",
+      "passed": true
+    },
+    {
+      "name": "Permisos auditoria: conserva alcance de SUPER_USUARIO",
+      "passed": true
+    },
+    {
+      "name": "Permisos auditoria: conserva alcance de ADMINISTRATIVO",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: rechaza otro punto sin alterar datos",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: rechaza cancelado sin alterar datos",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: conserva acceso permitido de OPERADOR",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: conserva acceso permitido de ADMIN",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: conserva acceso permitido de SUPER_USUARIO",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: rechaza otro punto sin alterar datos",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: rechaza cancelado sin alterar datos",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: conserva acceso permitido de OPERADOR",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: conserva acceso permitido de ADMIN",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: conserva acceso permitido de SUPER_USUARIO",
+      "passed": true
+    },
+    {
+      "name": "Cambio register-partial-payment: rechaza otro punto sin alterar datos",
+      "passed": true
+    },
+    {
+      "name": "Cambio register-partial-payment: rechaza cancelado sin alterar datos",
+      "passed": true
+    },
+    {
+      "name": "Cambio register-partial-payment: conserva acceso permitido de OPERADOR",
+      "passed": true
+    },
+    {
+      "name": "Cambio register-partial-payment: conserva acceso permitido de ADMIN",
+      "passed": true
+    },
+    {
+      "name": "Cambio register-partial-payment: conserva acceso permitido de SUPER_USUARIO",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: abono concurrente conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: abono saldo insuficiente conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: abono fallo recibo conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: abono contabilizado completo conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: abono sin historial conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio cerrar: abono historial incompatible conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: abono concurrente conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: abono saldo insuficiente conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: abono fallo recibo conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: abono contabilizado completo conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: abono sin historial conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio completar: abono historial incompatible conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio complete-partial: abono concurrente conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio complete-partial: abono saldo insuficiente conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio complete-partial: abono fallo recibo conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio complete-partial: abono contabilizado completo conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio complete-partial: abono sin historial conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio complete-partial: abono historial incompatible conserva atomicidad",
+      "passed": true
+    },
+    {
+      "name": "Cambio complete-partial: no revive estado cambiado mientras espera",
+      "passed": true
+    },
+    {
+      "name": "Cambio register-partial-payment: no revive estado cambiado mientras espera",
+      "passed": true
+    },
+    {
+      "name": "Eliminar cambio completado: concurrente conserva saldos y reverso",
+      "passed": true
+    },
+    {
+      "name": "Eliminar cambio completado: saldo insuficiente conserva saldos y reverso",
+      "passed": true
+    },
+    {
+      "name": "Flujo API cerrar: abono posterior contabiliza exactamente el total",
+      "passed": true
+    },
+    {
+      "name": "Flujo API cerrar: abono en creacion contabiliza exactamente el total",
+      "passed": true
+    },
+    {
+      "name": "Flujo API completar: abono posterior contabiliza exactamente el total",
+      "passed": true
+    },
+    {
+      "name": "Flujo API completar: abono en creacion contabiliza exactamente el total",
+      "passed": true
+    },
+    {
+      "name": "Flujo API complete-partial: abono posterior contabiliza exactamente el total",
+      "passed": true
+    },
+    {
+      "name": "Flujo API complete-partial: abono en creacion contabiliza exactamente el total",
+      "passed": true
+    },
+    {
+      "name": "Cierre administrativo parcial bancario requiere revision sin modificar estado",
+      "passed": true
+    },
+    {
+      "name": "Abono con centavos cerrar: efectivo coincide con billetes y monedas en cada paso",
+      "passed": true
+    },
+    {
+      "name": "Abono con centavos completar: efectivo coincide con billetes y monedas en cada paso",
+      "passed": true
+    },
+    {
+      "name": "Abono con centavos complete-partial: efectivo coincide con billetes y monedas en cada paso",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia efectivo: parcial",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia efectivo: completado",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia efectivo: cerrar",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia efectivo: completar",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia efectivo: abono posterior",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia efectivo: sustitucion",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia efectivo: sin evidencia",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia efectivo: evidencia alterada",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia efectivo: concurrente",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia efectivo: fallo recibo",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: parcial",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: completado",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: cerrar",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: completar",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: abono posterior",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: sustitucion",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: sin evidencia",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: completo sin evidencia",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: evidencia alterada",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: historial ambiguo",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: concurrente",
+      "passed": true
+    },
+    {
+      "name": "Anulacion con evidencia mixta: fallo recibo",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/efectivo completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/efectivo sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/efectivo cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/efectivo completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/efectivo complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: BANCO/efectivo completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: BANCO/efectivo sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: BANCO/efectivo cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: BANCO/efectivo completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: BANCO/efectivo complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: BANCO/transferencia completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: BANCO/transferencia sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: BANCO/transferencia cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: BANCO/transferencia completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: BANCO/transferencia complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/transferencia completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/transferencia sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/transferencia cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/transferencia completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/transferencia complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: MIXTO/efectivo completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: MIXTO/efectivo sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: MIXTO/efectivo cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: MIXTO/efectivo completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: MIXTO/efectivo complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/mixto completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/mixto sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/mixto cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/mixto completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: EFECTIVO/mixto complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: MIXTO/mixto completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: MIXTO/mixto sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: MIXTO/mixto cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: MIXTO/mixto completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA EUR/USD: MIXTO/mixto complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/efectivo completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/efectivo sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/efectivo cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/efectivo completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/efectivo complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: BANCO/efectivo completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: BANCO/efectivo sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: BANCO/efectivo cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: BANCO/efectivo completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: BANCO/efectivo complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: BANCO/transferencia completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: BANCO/transferencia sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: BANCO/transferencia cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: BANCO/transferencia completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: BANCO/transferencia complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/transferencia completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/transferencia sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/transferencia cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/transferencia completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/transferencia complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: MIXTO/efectivo completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: MIXTO/efectivo sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: MIXTO/efectivo cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: MIXTO/efectivo completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: MIXTO/efectivo complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/mixto completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/mixto sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/mixto cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/mixto completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: EFECTIVO/mixto complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: MIXTO/mixto completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: MIXTO/mixto sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: MIXTO/mixto cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: MIXTO/mixto completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "VENTA USD/EUR: MIXTO/mixto complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/efectivo completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/efectivo sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/efectivo cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/efectivo completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/efectivo complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: BANCO/efectivo completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: BANCO/efectivo sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: BANCO/efectivo cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: BANCO/efectivo completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: BANCO/efectivo complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: BANCO/transferencia completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: BANCO/transferencia sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: BANCO/transferencia cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: BANCO/transferencia completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: BANCO/transferencia complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/transferencia completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/transferencia sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/transferencia cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/transferencia completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/transferencia complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: MIXTO/efectivo completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: MIXTO/efectivo sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: MIXTO/efectivo cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: MIXTO/efectivo completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: MIXTO/efectivo complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/mixto completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/mixto sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/mixto cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/mixto completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: EFECTIVO/mixto complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: MIXTO/mixto completo conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: MIXTO/mixto sin liquidar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: MIXTO/mixto cerrar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: MIXTO/mixto completar conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "COMPRA GBP/EUR: MIXTO/mixto complete-partial conserva y revierte caja y bancos",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto COMPRA EUR/USD origen negativo: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto COMPRA EUR/USD origen suma incorrecta: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto COMPRA EUR/USD origen omitido: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto COMPRA EUR/USD destino negativo: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto COMPRA EUR/USD destino suma incorrecta: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto COMPRA EUR/USD destino omitido: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto VENTA USD/EUR origen negativo: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto VENTA USD/EUR origen suma incorrecta: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto VENTA USD/EUR origen omitido: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto VENTA USD/EUR destino negativo: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto VENTA USD/EUR destino suma incorrecta: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Desglose mixto VENTA USD/EUR destino omitido: rechaza sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "Liquidacion mixta: ya contabilizado",
+      "passed": true
+    },
+    {
+      "name": "Liquidacion mixta: historial ambiguo",
+      "passed": true
+    },
+    {
+      "name": "Liquidacion mixta: cambio de via",
+      "passed": true
+    },
+    {
+      "name": "Seleccion simultanea: dos operadores y un punto",
+      "passed": true
+    },
+    {
+      "name": "Seleccion simultanea: un operador y dos puntos",
+      "passed": true
+    }
+  ],
+  "diagnostics": {
+    "evening": {
+      "storedUtc": "2026-09-15T00:30:00.000Z",
+      "expectedRangeUtc": [
+        "2026-09-14T05:00:00.000Z",
+        "2026-09-15T05:00:00.000Z"
+      ],
+      "dateParameters": {
+        "start": "2026-09-14 00:00:00",
+        "end": "2026-09-15 00:00:00"
+      },
+      "matchesWithDate": 0,
+      "matchesWithUtcText": 1
+    }
+  },
+  "databaseStopped": true
+}

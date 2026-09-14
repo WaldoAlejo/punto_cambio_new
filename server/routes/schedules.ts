@@ -376,6 +376,11 @@ router.post(
         },
       });
 
+      if (fecha_inicio && existingSchedule && existingSchedule.punto_atencion_id !== punto_atencion_id) {
+        res.status(409).json({ success: false, error: "El usuario ya tiene una jornada activa en otro punto." });
+        return;
+      }
+
       // 2) Si NO hay jornada previa del usuario (vamos a CREAR) y el rol NO es privilegiado,
       // validar que el punto NO esté ocupado por otra jornada ACTIVO/ALMUERZO hoy.
       if (!existingSchedule && !esPrivilegiado) {
@@ -583,6 +588,17 @@ router.post(
         // CREATE nueva jornada
         // 🔒 TRANSACCIÓN ATÓMICA: verificar punto libre + crear jornada + asignar punto
         schedule = await prisma.$transaction(async (tx) => {
+          // Serialize both competing operators at one point and competing
+          // requests from one operator at different points. Re-read after locks.
+          await tx.$queryRaw`SELECT id FROM "Usuario" WHERE id = ${usuario_id} FOR UPDATE`;
+          await tx.$queryRaw`SELECT id FROM "PuntoAtencion" WHERE id = ${punto_atencion_id} FOR UPDATE`;
+          const jornadaConcurrente = await tx.jornada.findFirst({ where: {
+            usuario_id, fecha_inicio: { gte: hoyGte, lt: hoyLt },
+            estado: { in: [EstadoJornada.ACTIVO, EstadoJornada.ALMUERZO] },
+          }, select: { id: true } });
+          if (jornadaConcurrente) {
+            throw new Error("El usuario ya tiene una jornada activa. Actualiza la pantalla antes de seleccionar un punto.");
+          }
           // Re-verificar que el punto NO esté ocupado DENTRO de la transacción
           if (!esPrivilegiado) {
             const puntoOcupado = await tx.jornada.findFirst({
