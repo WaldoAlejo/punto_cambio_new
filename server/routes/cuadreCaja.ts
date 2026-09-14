@@ -235,6 +235,34 @@ async function calcularSaldoApertura(
   }
 }
 
+async function closedSnapshot(id: string, start: Date, end: Date) {
+  const closed = await prisma.cuadreCaja.findUniqueOrThrow({ where: { id }, include: {
+    detalles: { include: { moneda: true }, orderBy: { moneda_id: 'asc' } },
+  } });
+  const movements = await prisma.movimientoSaldo.findMany({ where: {
+    punto_atencion_id: closed.punto_atencion_id, fecha: { gte: start, lt: end },
+  }, select: { moneda_id: true, monto: true } });
+  return { success: true, data: {
+    cuadre_id: closed.id, periodo_inicio: start.toISOString(), observaciones: closed.observaciones || '',
+    detalles: closed.detalles.map(d => {
+      const period = movements.filter(m => m.moneda_id === d.moneda_id);
+      let desglose = d.desglose_denominaciones;
+      if (typeof desglose === 'string') {
+        try { desglose = JSON.parse(desglose); } catch { desglose = null; }
+      }
+      return {
+        moneda_id: d.moneda_id, codigo: d.moneda.codigo, nombre: d.moneda.nombre, simbolo: d.moneda.simbolo,
+        saldo_apertura: Number(d.saldo_apertura), saldo_cierre: Number(d.saldo_cierre),
+        conteo_fisico: Number(d.conteo_fisico), billetes: Number(d.billetes), monedas: Number(d.monedas_fisicas),
+        bancos_teorico: Number(d.bancos_teorico), conteo_bancos: Number(d.conteo_bancos),
+        ingresos_periodo: period.reduce((sum, m) => sum + Math.max(0, Number(m.monto)), 0),
+        egresos_periodo: period.reduce((sum, m) => sum + Math.max(0, -Number(m.monto)), 0),
+        movimientos_periodo: d.movimientos_periodo, desglose_denominaciones: desglose,
+      };
+    }),
+  } };
+}
+
 router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUARIO", "ADMINISTRATIVO"]), async (req, res) => {
   const usuario = req.user as any;
   
@@ -282,6 +310,13 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
     
     const fechaInicioDia = gte;
     const fechaFinDia = lt;
+
+    // Un cierre guardado se consulta incluso si sus movimientos ya no existen.
+    // No debe entrar en el cálculo ni en las escrituras del cuadre abierto.
+    const closed = await prisma.cuadreCaja.findFirst({ where: {
+      punto_atencion_id: puntoAtencionId, estado: 'CERRADO', fecha: { gte: fechaInicioDia, lt: fechaFinDia },
+    }, orderBy: { fecha_cierre: 'desc' }, select: { id: true } });
+    if (closed) return res.status(200).json(await closedSnapshot(closed.id, fechaInicioDia, fechaFinDia));
     
     logger.info("🔍 GET /cuadre-caja iniciado", {
       usuario_id: usuario.id,
@@ -390,20 +425,17 @@ router.get("/", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SUPER_USUA
 
     // Obtener o crear cuadre abierto del día
     let cuadre = await prisma.cuadreCaja.findFirst({
-      where: { punto_atencion_id: puntoAtencionId, fecha: { gte: fechaInicioDia }, estado: 'ABIERTO' },
+      where: { punto_atencion_id: puntoAtencionId, fecha: { gte: fechaInicioDia, lt: fechaFinDia }, estado: 'ABIERTO' },
     });
     if (!cuadre) {
       // Si no hay ABIERTO, verificar si ya existe uno CERRADO para el mismo día
       const cuadreCerrado = await prisma.cuadreCaja.findFirst({
-        where: { punto_atencion_id: puntoAtencionId, fecha: { gte: fechaInicioDia }, estado: 'CERRADO' },
+        where: { punto_atencion_id: puntoAtencionId, fecha: { gte: fechaInicioDia, lt: fechaFinDia }, estado: 'CERRADO' },
         orderBy: { fecha_cierre: 'desc' },
       });
 
       if (cuadreCerrado) {
-        cuadre = cuadreCerrado;
-        logger.info("ℹ️ Usando cuadre CERRADO existente para el día", {
-          cuadre_id: cuadre.id,
-        });
+        return res.status(200).json(await closedSnapshot(cuadreCerrado.id, fechaInicioDia, fechaFinDia));
       } else {
         const cuadreId = randomUUID();
         cuadre = await prisma.cuadreCaja.create({

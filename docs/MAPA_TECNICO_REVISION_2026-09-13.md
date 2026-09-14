@@ -218,3 +218,13 @@ La suite ahora monta `GET /cuadre-caja` real. Se reprodujo un teórico bancario 
 Para cuadres ABIERTO con detalle existente, el GET ahora actualiza `bancos_teorico` desde Saldo y recalcula `diferencia_bancos`. Conserva el conteo bancario del operador. No se amplía esta actualización a cuadres cerrados. **54 pruebas aprobadas**: teórico 30, conteo 23, diferencia -7, y contraste del reporte USD/EUR con los valores enviados al cierre exacto. La variación bancaria se simula mediante una escritura explícita de fixture; no certifica una operación bancaria real.
 
 Evidencia: [Antes](INTEGRACION_LOCAL_REPORTE_BANCOS_ANTES.json), [después](INTEGRACION_LOCAL_REPORTE_BANCOS_CORREGIDO.json). TypeScript backend correcto; ESLint comparado con HEAD conserva cuatro errores de `any` y tres advertencias preexistentes, sin hallazgos nuevos. PostgreSQL y Express temporales detenidos; sin producción ni despliegue. Sigue pendiente contrastar reportes y saldos históricos reales, preservar íntegramente reportes cerrados y probar escritores de saldo aún no coordinados. El GET existente puede crear/actualizar cuadres; no debe utilizarse como consulta de solo lectura en producción.
+
+## Seguimiento: consulta de cierres históricos guardados
+
+Se reprodujo un cierre histórico existente que se devolvía vacío por no tener movimientos disponibles del día. La ruta además podía reutilizar su cálculo/escrituras del cuadre abierto para un cierre guardado y buscaba cuadres sin límite superior de fecha.
+
+Ahora busca primero un CERRADO dentro del día solicitado y devuelve sus detalles persistidos mediante una ruta de lectura, antes del conteo de movimientos y del cálculo actual. Incluye monedas desactivadas. Se añade el límite superior a las búsquedas de ABIERTO/CERRADO. El fallback que encuentra un cierre también usa la respuesta histórica sin escrituras.
+
+**56 pruebas aprobadas**: cierre histórico sin movimientos, existencia simultánea de un abierto posterior, saldo actual distinto, movimientos presentes y moneda desactivada. Se comparan cabeceras/detalles antes y después de consultar: no cambian. [Antes](INTEGRACION_LOCAL_HISTORICO_ANTES.json), [después](INTEGRACION_LOCAL_HISTORICO_CORREGIDO.json). TypeScript correcto; ESLint conserva cuatro errores y tres advertencias previos. Servicios temporales detenidos, sin producción ni despliegue.
+
+Límites: ingresos/egresos por moneda siguen derivados de los movimientos disponibles del día, porque no se guardan como campos de DetalleCuadreCaja; no se presentan como snapshot inmutable. No se certifica consulta concurrente mientras otro proceso cierra un ABIERTO ni se corrigen fechas históricas almacenadas con otra convención. Consultar días sin un cierre guardado sigue utilizando la ruta operativa con escrituras.

@@ -591,6 +591,45 @@ try {
     assert.equal(u.punto_atencion_id, sent ? destination.id : null);
   });
   }
+  await check('Consultar cierre historico sin movimientos conserva snapshot y fecha', async () => {
+    const historicalDate = new Date(dayStart.getTime() - 2 * 86400000);
+    const historyPoint = await prisma.puntoAtencion.create({ data: { nombre: 'HISTORICO', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+    const closed = await prisma.cuadreCaja.create({ data: { punto_atencion_id: historyPoint.id, usuario_id: origin.userId,
+      fecha: historicalDate, fecha_cierre: historicalDate, estado: 'CERRADO', observaciones: 'Cierre ficticio conservado',
+      detalles: { create: { moneda_id: usd.id, saldo_apertura: 100, saldo_cierre: 120, conteo_fisico: 119,
+        billetes: 119, monedas_fisicas: 0, bancos_teorico: 15, conteo_bancos: 14, diferencia: -1,
+        diferencia_bancos: -1, movimientos_periodo: 1 } } } });
+    await prisma.saldo.create({ data: { punto_atencion_id: historyPoint.id, moneda_id: usd.id, cantidad: 500, billetes: 500, bancos: 50 } });
+    // A later open report must not be selected when requesting an earlier date.
+    await prisma.cuadreCaja.create({ data: { punto_atencion_id: historyPoint.id, usuario_id: origin.userId, fecha: dayStart, estado: 'ABIERTO' } });
+    const snapshot = () => prisma.cuadreCaja.findMany({ where: { punto_atencion_id: historyPoint.id }, include: { detalles: true }, orderBy: { fecha: 'asc' } });
+    const before = JSON.stringify(await snapshot());
+    const date = historicalDate.toISOString().slice(0, 10);
+    const res = await fetch(`${base}/cuadre-caja?pointId=${historyPoint.id}&fecha=${date}`, { headers: { Authorization: `Bearer ${origin.token}` }, signal: AbortSignal.timeout(20000) });
+    assert.equal(res.status, 200); const report = (await res.json()).data;
+    assert.equal(report.cuadre_id, closed.id);
+    assert.equal(report.detalles.length, 1);
+    const d = report.detalles[0];
+    assert.equal(d.saldo_cierre, 120); assert.equal(d.conteo_fisico, 119);
+    assert.equal(d.bancos_teorico, 15); assert.equal(d.conteo_bancos, 14);
+    assert.equal(d.movimientos_periodo, 1);
+    assert.equal(JSON.stringify(await snapshot()), before);
+    await check('Cierre historico con movimientos y moneda inactiva no se recalcula', async () => {
+      const template = await prisma.movimientoSaldo.findFirst();
+      await prisma.movimientoSaldo.create({ data: { ...template, id: randomUUID(), punto_atencion_id: historyPoint.id,
+        moneda_id: usd.id, fecha: new Date(historicalDate.getTime() + 3600000), monto: 300,
+        saldo_anterior: 200, saldo_nuevo: 500 } });
+      await prisma.moneda.update({ where: { id: usd.id }, data: { activo: false } });
+      try {
+        const next = await fetch(`${base}/cuadre-caja?pointId=${historyPoint.id}&fecha=${date}`, { headers: { Authorization: `Bearer ${origin.token}` }, signal: AbortSignal.timeout(20000) });
+        assert.equal(next.status, 200);
+        const data = (await next.json()).data;
+        assert.equal(data.cuadre_id, closed.id); assert.equal(data.detalles.length, 1);
+        assert.equal(data.detalles[0].saldo_cierre, 120); assert.equal(data.detalles[0].bancos_teorico, 15);
+        assert.equal(JSON.stringify(await snapshot()), before);
+      } finally { await prisma.moneda.update({ where: { id: usd.id }, data: { activo: true } }); }
+    });
+  });
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

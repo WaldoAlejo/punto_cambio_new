@@ -1,0 +1,242 @@
+{
+  "runDir": "C:\\Users\\oswal\\AppData\\Local\\Temp\\pc-integration-MukrlJ",
+  "results": [
+    {
+      "name": "Login con usuario ficticio",
+      "passed": true
+    },
+    {
+      "name": "Jornada 19:30 GYE mantiene punto en autenticacion",
+      "passed": true
+    },
+    {
+      "name": "Instante anterior al dia GYE excluido",
+      "passed": true
+    },
+    {
+      "name": "Medianoche inicial GYE incluida",
+      "passed": true
+    },
+    {
+      "name": "Ultimo milisegundo del dia GYE incluido",
+      "passed": true
+    },
+    {
+      "name": "Medianoche del dia siguiente excluida",
+      "passed": true
+    },
+    {
+      "name": "Jornada en almuerzo reconocida",
+      "passed": true
+    },
+    {
+      "name": "Jornada completada no habilita punto",
+      "passed": true
+    },
+    {
+      "name": "Jornada cancelada no habilita punto",
+      "passed": true
+    },
+    {
+      "name": "Cambio bloqueado antes de apertura",
+      "passed": true
+    },
+    {
+      "name": "Iniciar apertura",
+      "passed": true
+    },
+    {
+      "name": "Apertura bloqueada sin conteos obligatorios",
+      "passed": true
+    },
+    {
+      "name": "Guardar conteos USD y EUR y confirmar apertura",
+      "passed": true
+    },
+    {
+      "name": "Comprar 100 EUR por 110 USD y verificar saldos",
+      "passed": true
+    },
+    {
+      "name": "Reintento idempotente no duplica cambio",
+      "passed": true
+    },
+    {
+      "name": "Reporte actualiza bancos teoricos sin pisar el conteo guardado",
+      "passed": true
+    },
+    {
+      "name": "Cierre exacto conserva saldo y finaliza jornada",
+      "passed": true
+    },
+    {
+      "name": "CERRADO: apertura descuadrada exige incidencia",
+      "passed": true
+    },
+    {
+      "name": "CERRADO: apertura con incidencia conserva saldos y requiere revision",
+      "passed": true
+    },
+    {
+      "name": "CERRADO: diferencia sin autorizacion rechazada sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "CERRADO: allowMismatch no admite desglose inconsistente",
+      "passed": true
+    },
+    {
+      "name": "CERRADO: diferencia aceptada respeta saldos y movimientos",
+      "passed": true
+    },
+    {
+      "name": "PARCIAL: apertura descuadrada exige incidencia",
+      "passed": true
+    },
+    {
+      "name": "PARCIAL: apertura con incidencia conserva saldos y requiere revision",
+      "passed": true
+    },
+    {
+      "name": "PARCIAL: diferencia sin autorizacion rechazada sin escrituras contables",
+      "passed": true
+    },
+    {
+      "name": "PARCIAL: allowMismatch no admite desglose inconsistente",
+      "passed": true
+    },
+    {
+      "name": "PARCIAL: diferencia aceptada respeta saldos y movimientos",
+      "passed": true
+    },
+    {
+      "name": "Transfer accept: envio descuenta solo origen e idempotencia",
+      "passed": true
+    },
+    {
+      "name": "Transfer accept: origen no puede resolver por destino",
+      "passed": true
+    },
+    {
+      "name": "Transfer accept: destino resuelve una sola vez",
+      "passed": true
+    },
+    {
+      "name": "Transfer reject: envio descuenta solo origen e idempotencia",
+      "passed": true
+    },
+    {
+      "name": "Transfer reject: origen no puede resolver por destino",
+      "passed": true
+    },
+    {
+      "name": "Transfer reject: destino resuelve una sola vez",
+      "passed": true
+    },
+    {
+      "name": "Transfer: operador no puede descontar otro punto",
+      "passed": true
+    },
+    {
+      "name": "Transfer: operador no puede omitir origen",
+      "passed": true
+    },
+    {
+      "name": "Transfer: concesion no puede descontar otro punto",
+      "passed": true
+    },
+    {
+      "name": "Transfer: ADMIN conserva envio desde otro punto",
+      "passed": true
+    },
+    {
+      "name": "Transfer: SUPER_USUARIO conserva envio desde otro punto",
+      "passed": true
+    },
+    {
+      "name": "Transfer concurrente: accept / accept solo resuelve una vez",
+      "passed": true
+    },
+    {
+      "name": "Transfer concurrente: reject / reject solo resuelve una vez",
+      "passed": true
+    },
+    {
+      "name": "Transfer concurrente: accept / reject solo resuelve una vez",
+      "passed": true
+    },
+    {
+      "name": "Transfer concurrente: accept / cancel solo resuelve una vez",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: envios con fondos suficientes",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: envios con fondos insuficientes para ambos",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: accept de dos transferencias distintas",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: reject de dos transferencias distintas",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: cancel de dos transferencias distintas",
+      "passed": true
+    },
+    {
+      "name": "Saldo concurrente: dos primeras recepciones crean un solo saldo completo",
+      "passed": true
+    },
+    {
+      "name": "Cambio y transferencia simultaneos conservan ambos egresos",
+      "passed": true
+    },
+    {
+      "name": "Dos cambios simultaneos conservan ambas monedas y sus movimientos",
+      "passed": true
+    },
+    {
+      "name": "Cierre concurrente con transfer: primero operacion",
+      "passed": true
+    },
+    {
+      "name": "Cierre concurrente con transfer: primero cierre",
+      "passed": true
+    },
+    {
+      "name": "Cierre concurrente con exchange: primero operacion",
+      "passed": true
+    },
+    {
+      "name": "Cierre concurrente con exchange: primero cierre",
+      "passed": true
+    },
+    {
+      "name": "Consultar cierre historico sin movimientos conserva snapshot y fecha",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ undefined\n- '85455917-bc0d-42bb-a269-f1b1a6fd9c6b'\n"
+    }
+  ],
+  "diagnostics": {
+    "evening": {
+      "storedUtc": "2026-09-14T00:30:00.000Z",
+      "expectedRangeUtc": [
+        "2026-09-13T05:00:00.000Z",
+        "2026-09-14T05:00:00.000Z"
+      ],
+      "dateParameters": {
+        "start": "2026-09-13 00:00:00",
+        "end": "2026-09-14 00:00:00"
+      },
+      "matchesWithDate": 0,
+      "matchesWithUtcText": 1
+    }
+  },
+  "databaseStopped": true
+}

@@ -130,3 +130,11 @@ Suite actual: **54 comprobaciones aprobadas**. Monta `/cuadre-caja` y consulta e
 Antes devolvía teórico 25: [evidencia previa](INTEGRACION_LOCAL_REPORTE_BANCOS_ANTES.json). Después actualiza únicamente el teórico bancario y su diferencia en cuadres abiertos, conservando el conteo: [evidencia posterior](INTEGRACION_LOCAL_REPORTE_BANCOS_CORREGIDO.json). No se prueba un flujo bancario real: el cambio de bancos es preparación explícita de la fixture local.
 
 TypeScript correcto. ESLint del archivo conserva cuatro errores y tres advertencias preexistentes, comprobados contra HEAD; no es un lint limpio. Entorno temporal detenido y sin producción. El GET real tiene efectos de escritura sobre cuadres; solo se ejecutó en la base ficticia. Pendientes históricos y escenarios adicionales indicados en el mapa técnico.
+
+## Ampliación: preservación de cierres históricos
+
+Suite actual: **56 comprobaciones aprobadas**. La fixture crea un CERRADO de dos días atrás con efectivo teórico 120, conteo 119, bancos teóricos 15 y conteo bancario 14; el saldo actual es 500/50 y existe un ABIERTO posterior. La consulta histórica debe devolver el cierre solicitado incluso sin movimientos del día y conservar íntegramente cabecera/detalles. Después se añade un movimiento ficticio y se desactiva la moneda; el cierre sigue visible con los mismos valores, sin escrituras sobre el cuadre.
+
+[Fallo inicial: cierre vacío](INTEGRACION_LOCAL_HISTORICO_ANTES.json). [Resultado corregido](INTEGRACION_LOCAL_HISTORICO_CORREGIDO.json). La nueva respuesta histórica conserva los campos persistidos; ingresos/egresos por moneda siguen sumándose de movimientos del día, no son campos de snapshot. TypeScript correcto y ESLint conserva cuatro errores/tres advertencias previos. Servicios temporales detenidos, sin producción.
+
+No incluye consulta de un ABIERTO que se cierra durante la misma petición, ni normalización de fechas heredadas. La rama operativa sin cierre guardado conserva sus escrituras existentes.
