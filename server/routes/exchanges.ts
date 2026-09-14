@@ -744,8 +744,7 @@ router.post(
           await lockBalance(tx, punto_atencion_id, currencyId);
         }
         await assertOperationalSession(tx, req.user, punto_atencion_id);
-        const cashBefore = metodo_pago_origen === "EFECTIVO" && metodo_entrega === "efectivo"
-          ? await cashSnapshot(tx, punto_atencion_id, [moneda_origen_id, moneda_destino_id]) : null;
+        const cashBefore = await cashSnapshot(tx, punto_atencion_id, [moneda_origen_id, moneda_destino_id]);
         // Preparar tasas para almacenamiento: si no se requieren (no hay monto), guardar 0
         const tasaBilletesToStore = requiereTasaBilletes
           ? roundN(num(tasa_cambio_billetes), 3)
@@ -1567,8 +1566,7 @@ router.patch(
           await lockBalance(tx, cambio.punto_atencion_id, currencyId);
         }
         await assertOperationalSession(tx, req.user, cambio.punto_atencion_id);
-        const cashBefore = cambio.metodo_pago_origen === "EFECTIVO" && cambio.metodo_entrega === "efectivo"
-          ? await cashSnapshot(tx, cambio.punto_atencion_id, [cambio.moneda_origen_id, cambio.moneda_destino_id]) : null;
+        const cashBefore = await cashSnapshot(tx, cambio.punto_atencion_id, [cambio.moneda_origen_id, cambio.moneda_destino_id]);
 
         const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
 
@@ -1952,8 +1950,7 @@ async function completePendingExchange(req: AuthenticatedRequest, res: express.R
           await lockBalance(tx, cambio.punto_atencion_id, currencyId);
         }
         await assertOperationalSession(tx, req.user, cambio.punto_atencion_id);
-        const cashBefore = cambio.metodo_pago_origen === "EFECTIVO" && cambio.metodo_entrega === "efectivo"
-          ? await cashSnapshot(tx, cambio.punto_atencion_id, [cambio.moneda_origen_id, cambio.moneda_destino_id]) : null;
+        const cashBefore = await cashSnapshot(tx, cambio.punto_atencion_id, [cambio.moneda_origen_id, cambio.moneda_destino_id]);
 
         if (partialOnly && num(cambio.saldo_pendiente) <= 0) {
           res.status(400).json({ success: false, error: "Este cambio no tiene saldo pendiente" });
@@ -3030,7 +3027,7 @@ router.delete(
         const sumaOrigenCampos = round2(ingresoEfRaw + ingresoBkRaw);
 
         const ingresoEf = evidence ? evidence.origin.total / 100 : sumaOrigenCampos > 0 ? ingresoEfRaw : sumOrigenTotal;
-        const ingresoBk = evidence ? 0 : sumaOrigenCampos > 0 ? ingresoBkRaw : 0;
+        const ingresoBk = evidence ? evidence.origin.bank / 100 : sumaOrigenCampos > 0 ? ingresoBkRaw : 0;
 
         const nuevoEf = round2(anteriorEf - ingresoEf);
         const nuevoBk = round2(anteriorBk - ingresoBk);
@@ -3102,7 +3099,7 @@ router.delete(
             : 0;
 
         const egEf = num(cambio.usd_entregado_efectivo, 0);
-        const egBk = evidence ? 0 : num(cambio.usd_entregado_transfer, 0);
+        const egBk = evidence ? -evidence.destination.bank / 100 : num(cambio.usd_entregado_transfer, 0);
         const sumDestTotal = num(
           cambio.divisas_recibidas_total || cambio.monto_destino
         );
@@ -3147,7 +3144,7 @@ router.delete(
         );
 
         // Ajuste por EFECTIVO (si hubo egreso en efectivo originalmente)
-        await logMovimientoSaldo(tx, {
+        if (devolverEf > 0) await logMovimientoSaldo(tx, {
           punto_atencion_id: cambio.punto_atencion_id,
           moneda_id: cambio.moneda_destino_id,
           tipo_movimiento: "AJUSTE",

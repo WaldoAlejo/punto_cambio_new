@@ -2,6 +2,14 @@
 
 Estado: revisión en curso. No se ha hecho push, despliegue ni escritura en la base remota. No equivale a autorizar el despliegue de todos los cambios acumulados.
 
+## Avance: reversos bancarios y mixtos con evidencia
+
+Los nuevos recibos de creación y liquidación guardan `balance_delta_v2`: variaciones reales firmadas de caja, billetes, monedas y bancos, en centavos y dentro de la misma transacción. Se mantiene `cash_delta_v1` para compatibilidad con la evidencia de efectivo existente. La anulación bancaria/mixta valida moneda, punto, signo, desglose y coincidencia con cada componente del historial antes de revertir lo realmente contabilizado. Evita registrar ajustes de efectivo con importe cero en entregas exclusivamente bancarias.
+
+Evidencia: [255 pruebas de integración correctas](INTEGRACION_LOCAL_REVERSOS_MIXTOS.json), TypeScript backend y tres pruebas unitarias de reparto correctas. La matriz de tres pares y siete combinaciones de vías ahora verifica también anulación completa, parcial pendiente y parcial liquidado por las tres rutas: recupera caja/bancos iniciales y deja neto cero en movimientos por moneda y vía. Casos adicionales mixtos: abono posterior, sustitución física, evidencia ausente/alterada, historial ambiguo, dos anulaciones concurrentes y rollback si falla borrar el recibo.
+
+**Compatibilidad histórica:** las anulaciones bancarias/mixtas sin evidencia suficiente devuelven 409, incluso en operaciones completas; ya no se infieren desde los campos del formulario. No se generó evidencia retrospectiva ni se modificaron datos históricos. El tratamiento anterior de completos históricos exclusivamente en efectivo permanece pendiente de revisión. Bancos conserva su regla de saldo negativo permitido. Estas pruebas certifican la inversión de importes registrados, no toda la política de redondeo: falta revisar el reparto proporcional entre caja y banco en abonos con fracciones de centavo (por ejemplo 5,01 dividido entre dos componentes iguales). También quedan pendientes pantallas, sustitución física en otros escenarios y validación de despliegue/respaldo. Sin push ni cambios remotos; base temporal detenida al finalizar.
+
 ## Avance: ventas y entrega en otras monedas
 
 Se corrigió el egreso cuando la moneda destino no es USD: antes siempre descontaba caja, incluso al seleccionar transferencia; ahora respeta efectivo, banco o el desglose mixto validado. Los nuevos registros conservan el total recibido en moneda destino, usando el mismo importe que se contabiliza. Esto permite liquidar correctamente aunque un cliente anterior envíe en ese campo el equivalente USD. Los nombres heredados `usd_entregado_*` representan el desglose en moneda destino; no se convierten importes mixtos por suposición. No se modifican registros históricos.

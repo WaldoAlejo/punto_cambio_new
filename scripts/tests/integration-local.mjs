@@ -975,9 +975,11 @@ try {
       await verify(1000);
     });
   }
-  for (const scenario of ['parcial', 'completado', 'abono posterior', 'sustitucion', 'sin evidencia', 'evidencia alterada', 'concurrente', 'fallo recibo']) {
-    await check(`Anulacion con evidencia: ${scenario}`, async () => {
-      const p = await prisma.puntoAtencion.create({ data: { nombre: `ANULACION ${scenario}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+  for (const mixed of [false, true]) {
+  for (const scenario of ['parcial', 'completado', 'abono posterior', 'sustitucion', 'sin evidencia', 'completo sin evidencia', 'evidencia alterada', 'historial ambiguo', 'concurrente', 'fallo recibo']) {
+    if (!mixed && ['historial ambiguo', 'completo sin evidencia'].includes(scenario)) continue;
+    await check(`Anulacion con evidencia ${mixed ? 'mixta' : 'efectivo'}: ${scenario}`, async () => {
+      const p = await prisma.puntoAtencion.create({ data: { nombre: `ANULACION ${mixed} ${scenario}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
       for (const m of [usd, eur]) await prisma.saldo.create({ data: {
         punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, bancos: 25,
         billetes: scenario === 'sustitucion' && m.id === usd.id ? 0 : 500,
@@ -991,7 +993,9 @@ try {
         monto_origen: 10, monto_destino: 10, tasa_cambio_billetes: 1, tasa_cambio_monedas: 1,
         divisas_entregadas_billetes: 5, divisas_entregadas_monedas: 5, divisas_entregadas_total: 10,
         divisas_recibidas_billetes: 5, divisas_recibidas_monedas: 5, divisas_recibidas_total: 10,
-        ...(later ? { saldo_pendiente: 10 } : { abono_inicial_monto: 5.01, saldo_pendiente: 4.99 }),
+        ...(scenario === 'completo sin evidencia' ? {} : later ? { saldo_pendiente: 10 } : { abono_inicial_monto: 5.01, saldo_pendiente: 4.99 }),
+        ...(mixed ? { metodo_pago_origen: 'MIXTO', metodo_entrega: 'mixto',
+          usd_recibido_efectivo: 5, usd_recibido_transfer: 5, usd_entregado_efectivo: 5, usd_entregado_transfer: 5 } : {}),
       }, randomUUID(), origin.token);
       ok(created); const id = created.body.exchange.id;
       if (later) {
@@ -1001,12 +1005,18 @@ try {
         }); assert.equal(response.status, 200);
       }
       if (scenario === 'completado') assert.equal((await patchExchange(id, 'complete-partial', origin.token)).status, 200);
-      if (scenario === 'sin evidencia' || scenario === 'evidencia alterada') {
+      if (scenario === 'sin evidencia' || scenario === 'completo sin evidencia' || scenario === 'evidencia alterada') {
         const receipt = await prisma.recibo.findFirst({ where: { referencia_id: id } });
         const data = receipt.datos_operacion;
-        if (scenario === 'sin evidencia') delete data.cash_delta_v1;
-        else { data.cash_delta_v1[0].total += 1; data.cash_delta_v1[0].bills += 1; }
+        const key = mixed ? 'balance_delta_v2' : 'cash_delta_v1';
+        if (scenario === 'sin evidencia' || scenario === 'completo sin evidencia') delete data[key];
+        else if (mixed) data[key][0].bank += 1;
+        else { data[key][0].total += 1; data[key][0].bills += 1; }
         await prisma.recibo.update({ where: { id: receipt.id }, data: { datos_operacion: data } });
+      }
+      if (scenario === 'historial ambiguo') {
+        const movement = await prisma.movimientoSaldo.findFirst({ where: { referencia_id: id } });
+        await prisma.movimientoSaldo.update({ where: { id: movement.id }, data: { descripcion: 'Efectivo y bancos sin clasificacion' } });
       }
       const snapshot = async () => JSON.stringify({ balances: await balancesSnapshot(),
         exchange: await prisma.cambioDivisa.findUnique({ where: { id } }),
@@ -1028,7 +1038,7 @@ try {
           await pool.query('DROP FUNCTION reject_reversal_receipt()');
         }
       } else response = await remove();
-      if (scenario === 'sin evidencia' || scenario === 'evidencia alterada') {
+      if (scenario === 'sin evidencia' || scenario === 'completo sin evidencia' || scenario === 'evidencia alterada' || scenario === 'historial ambiguo') {
         assert.equal(response.status, 409); assert.equal(await snapshot(), before);
       } else if (scenario === 'fallo recibo') {
         assert.equal(response.status, 500); assert.equal(await snapshot(), before);
@@ -1043,12 +1053,13 @@ try {
       }
     });
   }
+  }
   const gbp = await prisma.moneda.create({ data: { codigo: 'GBP', nombre: 'Libra ficticia', simbolo: 'GBP', comportamiento_compra: 'MULTIPLICA', comportamiento_venta: 'DIVIDE' } });
   for (const [sourceCurrency, destinationCurrency, operation] of [[eur, usd, 'COMPRA'], [usd, eur, 'VENTA'], [gbp, eur, 'COMPRA']]) {
   for (const [sourceMethod, deliveryMethod] of [['EFECTIVO', 'efectivo'], ['BANCO', 'efectivo'], ['BANCO', 'transferencia'], ['EFECTIVO', 'transferencia'], ['MIXTO', 'efectivo'], ['EFECTIVO', 'mixto'], ['MIXTO', 'mixto']]) {
     for (const partial of [false, true]) {
-    for (const settlementAction of partial ? ['cerrar', 'completar', 'complete-partial'] : [null]) {
-      await check(`${operation} ${sourceCurrency.codigo}/${destinationCurrency.codigo}: ${sourceMethod}/${deliveryMethod} ${partial ? settlementAction : 'completo'} conserva caja y bancos`, async () => {
+    for (const settlementAction of partial ? ['sin liquidar', 'cerrar', 'completar', 'complete-partial'] : [null]) {
+      await check(`${operation} ${sourceCurrency.codigo}/${destinationCurrency.codigo}: ${sourceMethod}/${deliveryMethod} ${partial ? settlementAction : 'completo'} conserva y revierte caja y bancos`, async () => {
         const p = await prisma.puntoAtencion.create({ data: { nombre: `VIAS ${sourceCurrency.codigo} ${destinationCurrency.codigo} ${sourceMethod} ${deliveryMethod} ${partial} ${settlementAction}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
         for (const m of [sourceCurrency, destinationCurrency]) await prisma.saldo.create({ data: {
           punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, billetes: 1000, bancos: 25,
@@ -1083,7 +1094,7 @@ try {
           assert.equal(rows.filter(row => !/\bbancos?\b/i.test(row.descripcion)).reduce((sum, row) => sum + Number(row.monto), 0), cashDelta);
           for (const row of rows) assert.equal(Number(row.saldo_nuevo) - Number(row.saldo_anterior), Number(row.monto));
         }
-        if (partial) {
+        if (partial && settlementAction !== 'sin liquidar') {
           if (settlementAction === 'cerrar' && [sourceCurrency.codigo, destinationCurrency.codigo].includes('USD')) {
             const responses = await raceBalance(p, [
               () => patchExchange(id, settlementAction, origin.token),
@@ -1106,6 +1117,20 @@ try {
           }
           assert.equal(await prisma.recibo.count({ where: { referencia_id: id } }), 2);
           assert.equal((await prisma.cambioDivisa.findUnique({ where: { id } })).estado, 'COMPLETADO');
+        }
+        const removed = await fetch(`${base}/exchanges/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${origin.token}` } });
+        assert.equal(removed.status, 200, await removed.text());
+        assert.equal(await prisma.cambioDivisa.count({ where: { id } }), 0);
+        assert.equal(await prisma.recibo.count({ where: { referencia_id: id } }), 0);
+        const reversed = await prisma.movimientoSaldo.findMany({ where: { referencia_id: id } });
+        for (const m of [sourceCurrency, destinationCurrency]) {
+          const saldo = await prisma.saldo.findUnique({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: m.id } } });
+          assert.equal(Number(saldo.cantidad), 1000);
+          assert.equal(Number(saldo.billetes), 1000);
+          assert.equal(Number(saldo.monedas_fisicas), 0);
+          assert.equal(Number(saldo.bancos), 25);
+          for (const bank of [false, true]) assert.equal(reversed.filter(row => row.moneda_id === m.id && /\bbancos?\b/i.test(row.descripcion) === bank)
+            .reduce((sum, row) => sum + Math.round(Number(row.monto) * 100), 0), 0);
         }
       });
     }
