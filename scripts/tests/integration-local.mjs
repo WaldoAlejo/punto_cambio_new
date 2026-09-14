@@ -681,6 +681,34 @@ try {
     }
   });
   }
+  const permissionPoint = await prisma.puntoAtencion.create({ data: { nombre: 'PERMISOS CUADRE', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+  const reader = await prisma.usuario.create({ data: { username: 'lector_cuadre', nombre: 'Lector ficticio', password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'OPERADOR', punto_atencion_id: permissionPoint.id } });
+  await prisma.jornada.create({ data: { usuario_id: reader.id, punto_atencion_id: permissionPoint.id, fecha_inicio: morning, estado: 'ACTIVO' } });
+  const readerLogin = await post('/auth/login', { username: reader.username, password: 'PruebaLocal_123!' }); ok(readerLogin);
+  const ownReport = await prisma.cuadreCaja.create({ data: { usuario_id: reader.id, punto_atencion_id: permissionPoint.id, fecha: dayStart, estado: 'ABIERTO', detalles: { create: { moneda_id: usd.id, saldo_apertura: 100, saldo_cierre: 100, conteo_fisico: 100, billetes: 100 } } } });
+  const otherReport = await prisma.cuadreCaja.findFirst({ where: { punto_atencion_id: origin.id } });
+  async function permissionRequest(endpoint, report, pointId, authToken) {
+    if (endpoint === 'validar') return post('/cuadre-caja/validar', { cuadre_id: report.id }, undefined, authToken);
+    const route = endpoint === 'detalles' ? `/cuadre-caja/detalles/${report.id}` : `/cuadre-caja/movimientos-auditoria?punto_atencion_id=${pointId}`;
+    const res = await fetch(base + route, { headers: { Authorization: `Bearer ${authToken}` }, signal: AbortSignal.timeout(20000) });
+    return { status: res.status, body: await res.json() };
+  }
+  for (const endpoint of ['detalles', 'validar', 'auditoria']) {
+    await check(`Permisos ${endpoint}: operador consulta su punto y rechaza otro`, async () => {
+      ok(await permissionRequest(endpoint, ownReport, permissionPoint.id, readerLogin.body.token));
+      const denied = await permissionRequest(endpoint, otherReport, origin.id, readerLogin.body.token);
+      assert.equal(denied.status, 403);
+      assert.equal(denied.body.success, false); assert.equal(denied.body.data, undefined);
+    });
+    for (const rol of ['ADMIN', 'SUPER_USUARIO', 'ADMINISTRATIVO']) {
+      await check(`Permisos ${endpoint}: conserva alcance de ${rol}`, async () => {
+        await prisma.usuario.update({ where: { id: origin.userId }, data: { rol } });
+        const result = await permissionRequest(endpoint, ownReport, permissionPoint.id, origin.token);
+        if (rol === 'ADMINISTRATIVO' && endpoint === 'validar') assert.equal(result.status, 403);
+        else ok(result);
+      });
+    }
+  }
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

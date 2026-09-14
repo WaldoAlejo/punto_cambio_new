@@ -154,3 +154,9 @@ Suite actual: **58 comprobaciones aprobadas**. Monta `/cuadre-caja/conteo-fisico
 La carrera de cierre se repite con un operador ficticio que guarda su conteo: después de que la transacción SQL de fixture cierre el cuadre, exige 409, detalles intactos y recarga histórica correcta. Un nuevo POST contra ese cierre devuelve 404. [Evidencia posterior](INTEGRACION_LOCAL_CONTEO_CORREGIDO.json). TypeScript correcto; cuatro errores de lint eliminados del guardado, quedan hallazgos anteriores. Servicios temporales detenidos y sin producción.
 
 No certifica la rama que crea el primer detalle ni todos los endpoints de validación/auditoría. La carrera usa una transacción SQL de fixture como cierre final, no el endpoint de cierre completo.
+
+## Ampliación: permisos de detalles, validación y auditoría
+
+Suite actual: **70 comprobaciones aprobadas**. Se crea un operador con punto/jornada y cuadre propios y se consulta además un cuadre ajeno. En `/detalles/:id`, `/validar` y `/movimientos-auditoria`, el acceso propio pasa y el ajeno devuelve 403 sin `data`. ADMIN/SUPER_USUARIO mantienen acceso entre puntos; ADMINISTRATIVO puede consultar detalles/auditoría y continúa rechazado en validación por la lista de roles existente.
+
+[Fallo previo en detalles](INTEGRACION_LOCAL_PERMISOS_CUADRE_ANTES.json): respondía 200 al operador de otro punto. [Resultado corregido](INTEGRACION_LOCAL_PERMISOS_CUADRE_CORREGIDOS.json). Se verifica la cabecera antes de leer detalles y el punto antes de leer movimientos. TypeScript correcto; ESLint conserva un error y una advertencia previos. Entorno temporal detenido, sin producción. Alcance limitado a estas tres rutas; no es una auditoría completa de autorización.

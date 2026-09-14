@@ -22,6 +22,19 @@ import { z } from "zod";
 
 const router = express.Router();
 
+function canReadPoint(user: express.Request['user'], pointId: string): boolean {
+  return Boolean(user && (
+    ['ADMIN', 'SUPER_USUARIO', 'ADMINISTRATIVO'].includes(user.rol) ||
+    (user.punto_atencion_id && user.punto_atencion_id === pointId)
+  ));
+}
+
+async function cuadreAccessStatus(id: string, user: express.Request['user']): Promise<403 | 404 | null> {
+  const cuadre = await prisma.cuadreCaja.findUnique({ where: { id }, select: { punto_atencion_id: true } });
+  if (!cuadre) return 404;
+  return canReadPoint(user, cuadre.punto_atencion_id) ? null : 403;
+}
+
 // Umbral de alerta para diferencias ($10)
 const UMBRAL_DIFERENCIA_ALERTA = 10;
 
@@ -246,6 +259,10 @@ router.get("/movimientos-auditoria", authenticateToken, requireRole(["OPERADOR",
         success: false,
         error: "Se requiere punto de atención",
       });
+    }
+
+    if (!canReadPoint(req.user, puntoAtencionId)) {
+      return res.status(403).json({ success: false, error: "No tiene permisos para consultar este punto de atención" });
     }
 
     logger.info("🔍 Obteniendo movimientos para auditoría", {
@@ -573,6 +590,10 @@ router.post("/validar", authenticateToken, requireRole(["OPERADOR", "ADMIN", "SU
   
   try {
     const { cuadre_id, forzar = false } = req.body;
+    const accessStatus = await cuadreAccessStatus(cuadre_id, req.user);
+    if (accessStatus) {
+      return res.status(accessStatus).json({ success: false, error: accessStatus === 404 ? "Cuadre no encontrado" : "No tiene permisos para consultar este cuadre" });
+    }
 
     logger.info("🔍 Validando cuadre antes de cierre", {
       cuadre_id,
@@ -731,6 +752,10 @@ router.get("/detalles/:cuadreId", authenticateToken, requireRole(["OPERADOR", "A
   
   try {
     const { cuadreId } = req.params;
+    const accessStatus = await cuadreAccessStatus(cuadreId, req.user);
+    if (accessStatus) {
+      return res.status(accessStatus).json({ success: false, error: accessStatus === 404 ? "Cuadre no encontrado" : "No tiene permisos para consultar este cuadre" });
+    }
 
     const detallesResult = await prisma.detalleCuadreCaja.findMany({
       where: { cuadre_id: cuadreId },
