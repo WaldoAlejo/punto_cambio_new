@@ -90,3 +90,11 @@ El lanzador monta también las rutas reales `/transfers` y `/transfer-approvals`
 La prueba de origen ajeno falló antes de la corrección: [resultado previo](INTEGRACION_LOCAL_TRANSFER_ANTES.json). Tras validar el origen contra el punto asignado, **37 pruebas pasan**: [resultado posterior](INTEGRACION_LOCAL_TRANSFER_CORREGIDA.json). TypeScript correcto; ESLint del controlador sin errores, con tres advertencias previas. PostgreSQL y Express detenidos.
 
 Alcance: EFECTIVO con billetes y operaciones secuenciales. No incluye concurrencia, monedas físicas en el envío, BANCO/MIXTO, cancelación desde origen ni aprobaciones históricas PENDIENTE. Los permisos administrativos se prueban cambiando el rol del usuario ficticio en la base local; el middleware consulta ese rol en cada solicitud.
+
+## Ampliación: resolución simultánea de una transferencia
+
+Suite actual: **41 comprobaciones aprobadas**. Se añaden accept/accept, reject/reject, accept/reject y accept/cancel. Una conexión local mantiene un bloqueo de fila y la prueba consulta `pg_stat_activity` hasta observar las dos solicitudes esperando, con límite de 10 segundos. Después libera el bloqueo y exige un único éxito y un 409, saldos correctos y dos movimientos con suma cero. La conexión de bloqueo se revierte y cierra incluso si falla la prueba.
+
+Antes: dos aceptaciones respondieron 200 ([evidencia](INTEGRACION_LOCAL_CONCURRENCIA_ANTES.json)). Después: las cuatro carreras pasan ([evidencia](INTEGRACION_LOCAL_CONCURRENCIA_CORREGIDA.json)). El helper de estado se ejecuta dentro de la misma transacción que los movimientos; el fallo de la escritura condicionada aborta la solicitud perdedora. TypeScript correcto y ESLint sin errores (cuatro advertencias previas). Entorno temporal detenido, sin producción.
+
+Pendiente: envíos simultáneos o resoluciones de transferencias diferentes que comparten un saldo. Estas pruebas protegen contra la resolución duplicada de una misma transferencia, no certifican la concurrencia de todo el libro contable.

@@ -364,6 +364,45 @@ try {
       assert.equal(await balance(destination), before - 100);
     });
   }
+  for (const actions of [['accept', 'accept'], ['reject', 'reject'], ['accept', 'reject'], ['accept', 'cancel']]) {
+    await check(`Transfer concurrente: ${actions.join(' / ')} solo resuelve una vez`, async () => {
+      const beforeOrigin = await balance(origin), beforeDestination = await balance(destination);
+      const created = await post('/transfers', transferBody, randomUUID(), origin.token); ok(created);
+      const tid = created.body.transfer.id;
+      // Force both requests to reach the state write after reading EN_TRANSITO.
+      const blocker = new Client({ connectionString: url });
+      await blocker.connect();
+      let requests = [];
+      let responses;
+      try {
+        await blocker.query('BEGIN');
+        await blocker.query('SELECT id FROM "Transferencia" WHERE id=$1 FOR UPDATE', [tid]);
+        requests = actions.map(action => post(action === 'cancel' ? `/transfers/${tid}/cancel` : `/transfer-approvals/${tid}/${action}`,
+          {}, undefined, action === 'cancel' ? origin.token : destination.token));
+        const deadline = Date.now() + 10000;
+        let waiting = 0;
+        while (Date.now() < deadline) {
+          const locks = await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%Transferencia%'");
+          waiting = locks.rows[0].n;
+          if (waiting >= 2) break;
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+        assert.ok(waiting >= 2, 'Ambas solicitudes deben competir por la misma transferencia');
+      } finally {
+        await blocker.query('ROLLBACK'); await blocker.end();
+        responses = await Promise.all(requests);
+      }
+      assert.equal(responses.filter(r => r.status >= 200 && r.status < 300).length, 1, JSON.stringify(responses.map(r => r.status)));
+      assert.ok(responses.some(r => r.status === 409), 'La solicitud que pierde la carrera debe recibir 409');
+      const transfer = await prisma.transferencia.findUnique({ where: { id: tid } });
+      const accepted = transfer.estado === 'COMPLETADO';
+      assert.ok(accepted || transfer.estado === 'CANCELADO');
+      assert.equal(await balance(origin), beforeOrigin - (accepted ? 100 : 0));
+      assert.equal(await balance(destination), beforeDestination + (accepted ? 100 : 0));
+      const moves = await prisma.movimientoSaldo.findMany({ where: { referencia_id: tid } });
+      assert.equal(moves.length, 2); assert.equal(moves.reduce((sum, m) => sum + Number(m.monto), 0), 0);
+    });
+  }
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

@@ -5,6 +5,7 @@ import { transferValidationService } from "../services/transferValidationService
 import transferCreationService from "../services/transferCreationService.js";
 import prisma from "../lib/prisma.js";
 import { TipoViaTransferencia } from "@prisma/client";
+import { claimTransferInTransit, TransferStateConflict } from "../utils/transferState.js";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento,
@@ -491,6 +492,7 @@ const controller = {
       const usuarioId = req.user.id;
 
       await prisma.$transaction(async (tx) => {
+        await claimTransferInTransit(tx, transfer.id, "CANCELADO");
         await tx.transferencia.update({
           where: { id: transfer.id },
           data: {
@@ -630,6 +632,10 @@ const controller = {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (error instanceof TransferStateConflict) {
+        res.status(409).json({ success: false, error: error.message });
+        return;
+      }
       logger.error("Error al cancelar transferencia", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,

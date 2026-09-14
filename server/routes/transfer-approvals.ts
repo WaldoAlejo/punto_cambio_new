@@ -11,6 +11,7 @@ import {
   TipoReferencia,
 } from "../services/movimientoSaldoService.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
+import { claimTransferInTransit, TransferStateConflict } from "../utils/transferState.js";
 
 const router = express.Router();
 
@@ -739,6 +740,7 @@ router.post(
         const destinoId = transfer.destino_id;
 
         // 1. Actualizar el estado de la transferencia
+        await claimTransferInTransit(tx, transferId, "COMPLETADO");
         const updated = await tx.transferencia.update({
           where: { id: transferId },
           data: {
@@ -855,6 +857,10 @@ router.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (error instanceof TransferStateConflict) {
+        res.status(409).json({ success: false, error: error.message });
+        return;
+      }
       logger.error("Error al aceptar transferencia", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
@@ -960,6 +966,7 @@ router.post(
         }
 
         // 1. Actualizar el estado de la transferencia a CANCELADO
+        await claimTransferInTransit(tx, transferId, "CANCELADO");
         const updated = await tx.transferencia.update({
           where: { id: transferId },
           data: {
@@ -1071,6 +1078,10 @@ router.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (error instanceof TransferStateConflict) {
+        res.status(409).json({ success: false, error: error.message });
+        return;
+      }
       logger.error("Error al rechazar transferencia", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,

@@ -172,3 +172,13 @@ Resultado: **37 pruebas aprobadas** en PostgreSQL temporal. Transferencias EFECT
 Evidencia: [Antes](INTEGRACION_LOCAL_TRANSFER_ANTES.json), [después](INTEGRACION_LOCAL_TRANSFER_CORREGIDA.json). TypeScript backend correcto; ESLint del controlador: cero errores y tres advertencias preexistentes de variables/import sin uso. No se accedió a producción; servicios temporales detenidos.
 
 Pendientes específicos: concurrencia de envíos/aceptaciones/rechazos/cancelaciones; conservación del desglose cuando hay monedas físicas; vías BANCO/MIXTO; cancelación desde origen y rutas históricas de aprobación PENDIENTE. La lectura detectó validaciones de estado previas a la transacción y tratamiento incompleto de BANCO/MIXTO, que requieren pruebas propias antes de corregir. Los 37 casos no certifican estos escenarios.
+
+## Seguimiento: resolución concurrente de una transferencia
+
+Se reprodujeron dos aceptaciones simultáneas de la misma transferencia con respuestas 200/200. Se añadió `claimTransferInTransit`: una escritura condicionada por `estado=EN_TRANSITO` dentro de la transacción obtiene el derecho a resolverla. Aceptación, rechazo y cancelación usan esta comprobación antes de afectar saldos. Si otra solicitud ya resolvió la transferencia, se revierte la transacción y se responde 409. Las comprobaciones previas de permisos y respuestas 400 a reintentos secuenciales se conservan.
+
+**41 pruebas aprobadas**. Cuatro carreras controladas en PostgreSQL real: accept/accept, reject/reject, accept/reject y accept/cancel. La prueba mantiene bloqueada la fila y espera que ambas peticiones compitan por ella antes de liberar el bloqueo; no depende únicamente de lanzar dos promesas. Se verifica una respuesta exitosa y un 409, estado final, efectivo de ambos puntos, bancos y exactamente dos movimientos compensados por transferencia, incluido el envío.
+
+Evidencia: [Antes](INTEGRACION_LOCAL_CONCURRENCIA_ANTES.json), [después](INTEGRACION_LOCAL_CONCURRENCIA_CORREGIDA.json). TypeScript backend correcto; ESLint de los tres archivos: cero errores, cuatro advertencias preexistentes. Servicios temporales detenidos. No hubo acceso a producción ni despliegue.
+
+Alcance: resolver la misma transferencia EN_TRANSITO. Aún falta la competencia entre transferencias distintas que comparten saldo, envíos simultáneos con fondos limitados, interacción con cambios/cierres y vías BANCO/MIXTO. No se afirma seguridad completa frente a concurrencia.
