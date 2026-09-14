@@ -4,6 +4,8 @@ import prisma, { Prisma } from "../lib/prisma.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { idempotency } from "../middleware/idempotency.js";
 import logger from "../utils/logger.js";
+import { lockTransferBalance as lockBalance } from "../utils/transferBalance.js";
+import { assertOperationalSession, OperationalConflict } from "../utils/operationalConflict.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 import {
   registrarMovimientoSaldo,
@@ -152,6 +154,21 @@ router.post(
 
     // Transacción para mantener consistencia entre header y detalles
     const result = await prisma.$transaction(async (tx) => {
+      const currencies = await tx.saldo.findMany({ where: { punto_atencion_id: puntoAtencionId }, select: { moneda_id: true } });
+      for (const currencyId of [...new Set([...currencies.map(s => s.moneda_id), ...detalles.map(d => d.moneda_id)])].sort()) {
+        await lockBalance(tx, puntoAtencionId, currencyId);
+      }
+      await assertOperationalSession(tx, req.user, puntoAtencionId);
+      // Acknowledging a physical difference must not authorize stale theoretical balances.
+      for (const detalle of detalles) {
+        const saldo = await tx.saldo.findUnique({ where: { punto_atencion_id_moneda_id: {
+          punto_atencion_id: puntoAtencionId, moneda_id: detalle.moneda_id,
+        } } });
+        if (Math.abs(Number(saldo?.cantidad ?? 0) - asNumber(detalle.saldo_cierre)) >= 0.005 ||
+          (detalle.bancos_teorico !== undefined && Math.abs(Number(saldo?.bancos ?? 0) - asNumber(detalle.bancos_teorico)) >= 0.005)) {
+          throw new OperationalConflict("El saldo cambió o no coincide con el cuadre consultado. Actualiza el cuadre y revisa los conteos antes de cerrar.");
+        }
+      }
       // ═════════════════════════════════════════════════════════════════
       // VALIDACIÓN ATÓMICA: evitar cierre duplicado del mismo día
       // ═════════════════════════════════════════════════════════════════
@@ -416,6 +433,10 @@ router.post(
       punto_liberado: result.puntoLiberado,
     });
   } catch (error) {
+    if (error instanceof OperationalConflict) {
+      res.status(409).json({ success: false, error: error.message });
+      return;
+    }
     logger.error("Error al guardar el cuadre de caja", {
       error: error instanceof Error ? error.message : "Unknown",
       stack: error instanceof Error ? error.stack : undefined,

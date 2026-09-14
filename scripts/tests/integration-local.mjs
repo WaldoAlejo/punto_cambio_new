@@ -404,7 +404,7 @@ try {
     });
   }
   // Hold the shared balance until both independent transactions reach a lock.
-  async function raceBalance(p, operations, missing = false) {
+  async function raceBalance(p, operations, missing = false, ordered = false) {
     const blocker = new Client({ connectionString: url });
     await blocker.connect();
     let pending = [];
@@ -416,7 +416,20 @@ try {
       } else {
         await blocker.query('SELECT id FROM "Saldo" WHERE punto_atencion_id=$1 AND moneda_id=$2 FOR UPDATE', [p.id, usd.id]);
       }
-      pending = operations.map(fn => fn());
+      if (ordered) {
+        pending = [operations[0]()];
+        const firstDeadline = Date.now() + 10000;
+        let firstWaiting = 0;
+        while (Date.now() < firstDeadline) {
+          firstWaiting = (await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock'")).rows[0].n;
+          if (firstWaiting >= 1) break;
+          await new Promise(resolve => setTimeout(resolve, 25));
+        }
+        assert.ok(firstWaiting >= 1, 'La primera solicitud debe adquirir turno antes de lanzar la segunda');
+        pending.push(...operations.slice(1).map(fn => fn()));
+      } else {
+        pending = operations.map(fn => fn());
+      }
       const deadline = Date.now() + 10000;
       let waiting = 0;
       while (Date.now() < deadline) {
@@ -511,6 +524,43 @@ try {
     assert.equal(await prisma.cambioDivisa.count(), changesBefore + 2);
     assert.equal(await prisma.movimientoSaldo.count(), movesBefore + 4);
   });
+  for (const kind of ['transfer', 'exchange']) for (const closeFirst of [false, true]) {
+  await check(`Cierre concurrente con ${kind}: primero ${closeFirst ? 'cierre' : 'operacion'}`, async () => {
+    const p = await prisma.puntoAtencion.create({ data: { nombre: `CIERRE ${kind} ${closeFirst}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+    const destination = { ...transferPoints[1], id: p.id };
+    await prisma.usuario.update({ where: { id: destination.userId }, data: { punto_atencion_id: p.id } });
+    const j = await prisma.jornada.create({ data: { usuario_id: destination.userId, punto_atencion_id: p.id, fecha_inicio: morning, estado: 'ACTIVO' } });
+    for (const m of currencies) {
+      await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, billetes: 1000, bancos: 25 } });
+      await prisma.saldoInicial.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad_inicial: 1000, asignado_por: destination.userId } });
+    }
+    const started = await post('/apertura-caja/iniciar', { jornada_id: j.id }, undefined, destination.token); ok(started);
+    const aid = started.body.apertura.id;
+    ok(await post('/apertura-caja/conteo', { apertura_id: aid, conteos: currencies.map(m => ({ moneda_id: m.id,
+      billetes: [{ denominacion: 100, cantidad: 10 }], monedas: [], total: 1000 })) }, undefined, destination.token));
+    ok(await post('/apertura-caja/confirmar', { apertura_id: aid }, undefined, destination.token));
+    const before = await balance(destination);
+    const eurAmount = Number((await prisma.saldo.findFirst({ where: { punto_atencion_id: destination.id, moneda_id: eur.id } })).cantidad);
+    const detalles = [[usd, before], [eur, eurAmount]].map(([m, amount]) => ({
+      moneda_id: m.id, saldo_apertura: 1000, saldo_cierre: amount, conteo_fisico: amount,
+      billetes: amount, monedas: 0, bancos_teorico: 25, conteo_bancos: 25,
+    }));
+    const operation = kind === 'transfer'
+      ? () => post('/transfers', { ...transferBody, origen_id: destination.id, destino_id: origin.id, monto: 10 }, randomUUID(), destination.token)
+      : () => post('/exchanges', { ...exchange, punto_atencion_id: destination.id }, randomUUID(), destination.token);
+    const close = () => post('/guardar-cierre', { tipo_cierre: 'CERRADO', detalles }, randomUUID(), destination.token);
+    const responses = await raceBalance(destination, closeFirst ? [close, operation] : [operation, close], false, true);
+    assert.equal(responses.filter(r => r.status >= 200 && r.status < 300).length, 1, JSON.stringify(responses.map(r => r.status)));
+    assert.ok(responses.some(r => r.status === 409));
+    ok(responses[0]); assert.equal(responses[1].status, 409);
+    const sent = !closeFirst;
+    assert.equal(await balance(destination), before - (sent ? (kind === 'transfer' ? 10 : 110) : 0));
+    assert.equal(Number((await prisma.saldo.findFirst({ where: { punto_atencion_id: p.id, moneda_id: eur.id } })).cantidad), eurAmount + (sent && kind === 'exchange' ? 100 : 0));
+    assert.equal((await prisma.jornada.findUnique({ where: { id: j.id } })).estado, closeFirst ? 'COMPLETADO' : 'ACTIVO');
+    const u = await prisma.usuario.findUnique({ where: { id: destination.userId } });
+    assert.equal(u.punto_atencion_id, sent ? destination.id : null);
+  });
+  }
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

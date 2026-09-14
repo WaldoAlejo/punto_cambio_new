@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { lockTransferBalance as lockBalance } from "../utils/transferBalance.js";
+import { assertOperationalSession, OperationalConflict } from "../utils/operationalConflict.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
@@ -728,6 +729,7 @@ router.post(
         for (const currencyId of [...new Set([moneda_origen_id, moneda_destino_id])].sort()) {
           await lockBalance(tx, punto_atencion_id, currencyId);
         }
+        await assertOperationalSession(tx, req.user, punto_atencion_id);
         // Preparar tasas para almacenamiento: si no se requieren (no hay monto), guardar 0
         const tasaBilletesToStore = requiereTasaBilletes
           ? roundN(num(tasa_cambio_billetes), 3)
@@ -1266,6 +1268,10 @@ router.post(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (error instanceof OperationalConflict) {
+        res.status(409).json({ success: false, error: error.message });
+        return;
+      }
       logger.error("Error al crear cambio de divisa", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,

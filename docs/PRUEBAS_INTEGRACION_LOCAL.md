@@ -114,3 +114,11 @@ Suite actual: **49 comprobaciones aprobadas**. Se añade una compra de 100 EUR p
 La creación de cambios adquiere el bloqueo compartido para ambas monedas en orden de identificador. Después las dos carreras pasan: [evidencia posterior](INTEGRACION_LOCAL_CAMBIOS_CONCURRENTES_CORREGIDOS.json). Se verifican ambos egresos, los ingresos EUR, bancos y desglose USD, y dos cambios/cuatro movimientos en el segundo caso. TypeScript correcto y ESLint sin errores (una advertencia previa). Servicios temporales detenidos.
 
 No certifica cierres, abonos, anulaciones, ventas en sentido inverso ni efectivo insuficiente en una carrera de cambios. Se mantienen pendientes las interacciones con los demás escritores de saldo y vías bancarias/mixtas.
+
+## Ampliación: cierre concurrente con operación del mismo operador
+
+Suite actual: **53 pruebas aprobadas**. Cuatro puntos ficticios independientes prueban cierre/envío y cierre/compra, primero operación y primero cierre. La barrera espera a la primera transacción antes de lanzar la segunda y después espera a ambas antes de liberar el saldo. Exige un éxito seguido de un 409 y verifica saldos USD/EUR, jornada y asignación del usuario.
+
+Antes se aceptaban envío y cierre con saldo teórico anterior al envío: [resultado previo](INTEGRACION_LOCAL_CIERRE_CONCURRENTE_ANTES.json). Después el cierre bloquea saldos y rechaza teoría desactualizada; las operaciones revalidan la sesión al obtener los bloqueos: [resultado posterior](INTEGRACION_LOCAL_CIERRE_CONCURRENTE_CORREGIDO.json). Las pruebas previas de conteos con diferencias continúan pasando. TypeScript correcto y ESLint sin errores (cuatro advertencias previas). Servicios temporales detenidos.
+
+La comprobación de saldo teórico puede rechazar también discrepancias preexistentes entre el reporte y Saldo. Falta contrastar esos reportes antes de desplegar. No se certifica concurrencia con recepción/devolución de transferencias, otros operadores o administradores, cierres sin detalles ni rutas de abonos/anulaciones/ajustes.

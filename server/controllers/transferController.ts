@@ -7,6 +7,7 @@ import prisma from "../lib/prisma.js";
 import { TipoViaTransferencia } from "@prisma/client";
 import { claimTransferInTransit, TransferStateConflict } from "../utils/transferState.js";
 import { lockTransferBalance, InsufficientTransferBalance } from "../utils/transferBalance.js";
+import { assertOperationalSession, OperationalConflict } from "../utils/operationalConflict.js";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento,
@@ -166,6 +167,7 @@ const controller = {
         // 2. Si hay punto origen, descontar del saldo inmediatamente
         if (origen_id) {
           await lockTransferBalance(tx, origen_id, moneda_id);
+          await assertOperationalSession(tx, req.user, origen_id);
           // Obtener saldo anterior
           const saldoOrigen = await tx.saldo.findUnique({
             where: {
@@ -352,6 +354,10 @@ const controller = {
     } catch (error) {
       if (error instanceof InsufficientTransferBalance) {
         res.status(400).json({ success: false, error: error.message });
+        return;
+      }
+      if (error instanceof OperationalConflict) {
+        res.status(409).json({ success: false, error: error.message });
         return;
       }
       logger.error("Error al crear transferencia", {
