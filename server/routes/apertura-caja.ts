@@ -847,13 +847,11 @@ router.post(
       // ═════════════════════════════════════════════════════════════════
       // Verificar si ya existe un cuadre para hoy
       const fechaHoy = todayGyeDateOnly();
+      const rangoCuadre = gyeDayRangeUtcFromDateOnly(fechaHoy);
       const cuadreExistente = await prisma.cuadreCaja.findFirst({
         where: {
           punto_atencion_id: apertura.punto_atencion_id,
-          fecha: {
-            gte: new Date(fechaHoy + "T00:00:00.000Z"),
-            lt: new Date(fechaHoy + "T23:59:59.999Z"),
-          },
+          fecha: rangoCuadre,
         },
       });
 
@@ -863,7 +861,7 @@ router.post(
         cuadreCaja = await prisma.cuadreCaja.create({
           data: {
             estado: "ABIERTO",
-            fecha: new Date(fechaHoy + "T00:00:00.000Z"),
+            fecha: rangoCuadre.gte,
             punto_atencion_id: apertura.punto_atencion_id,
             usuario_id: usuario_id!,
             observaciones: `Cuadre creado automáticamente desde apertura de caja (${apertura_id})`,

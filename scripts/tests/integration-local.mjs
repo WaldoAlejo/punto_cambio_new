@@ -213,6 +213,7 @@ try {
       return body.data;
     };
     const first = await getReport();
+    assert.equal(await prisma.cuadreCaja.count({ where: { punto_atencion_id: point.id } }), 1, 'El reporte debe reutilizar el cuadre creado en la apertura');
     ok(await post('/cuadre-caja/conteo-fisico', { cuadre_id: first.cuadre_id, moneda_id: usd.id, billetes: 890, monedas_fisicas: 0, conteo_bancos: 23 }));
     // Simulate a bank balance change after the operator saved the count.
     await prisma.saldo.update({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: point.id, moneda_id: usd.id } }, data: { bancos: 30 } });

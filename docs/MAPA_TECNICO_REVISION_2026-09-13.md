@@ -1,5 +1,7 @@
 # Punto Cambio: mapa técnico y diagnóstico inicial
 
+Estado de preparación y contraste remoto actualizado: [Revisión para producción](PREPRODUCCION_2026-09-13.md).
+
 Fecha de revisión: 2026-09-13. Revisión del código local, esquema Prisma y configuración de ejecución. No se modificó código de la aplicación ni información de la base de datos. Este documento no certifica una auditoría exhaustiva ni pruebas funcionales completas.
 
 ## Arquitectura y navegación
