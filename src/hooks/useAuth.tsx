@@ -32,18 +32,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   );
 
   useEffect(() => {
-    const storedPoint = localStorage.getItem("puntoAtencionSeleccionado");
-    if (storedPoint) {
-      try {
-        const parsedPoint: PuntoAtencion = JSON.parse(storedPoint);
-        setSelectedPointState(parsedPoint);
-      } catch {
-        localStorage.removeItem("puntoAtencionSeleccionado");
-      }
-    }
-  }, []);
-
-  useEffect(() => {
     if (selectedPoint) {
       localStorage.setItem(
         "puntoAtencionSeleccionado",
@@ -59,9 +47,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const { user: verifiedUser, valid } = await authService.verifyToken();
         if (valid && verifiedUser) {
-          setUser(verifiedUser);
-
-          const storedPoint = localStorage.getItem("puntoAtencionSeleccionado");
           const forcePointSelection =
             (typeof window !== "undefined" && sessionStorage.getItem("pc_force_point_select") === "1") || false;
           if (forcePointSelection) {
@@ -93,23 +78,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             // para asegurar que tengamos los datos más actualizados (incluyendo campos de Servientrega)
             if (!forcePointSelection) {
               try {
-                const res = await scheduleService.getActiveSchedule();
-                if (res?.schedule?.puntoAtencion) {
-                  setSelectedPointState(
-                    res.schedule.puntoAtencion as PuntoAtencion
-                  );
-                }
+                const res = await scheduleService.getActiveSchedule({ force: true });
+                setSelectedPointState(res?.schedule?.puntoAtencion as PuntoAtencion || null);
               } catch (error) {
                 console.error("Error al cargar jornada activa:", error);
-                // Si falla, usar el punto almacenado como fallback
-                if (storedPoint) {
-                  try {
-                    const parsedPoint: PuntoAtencion = JSON.parse(storedPoint);
-                    setSelectedPointState(parsedPoint);
-                  } catch {
-                    localStorage.removeItem("puntoAtencionSeleccionado");
-                  }
-                }
+                setSelectedPointState(null);
               }
             }
           } else if (verifiedUser.rol === "CONCESION") {
@@ -124,6 +97,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               }
             }
           }
+          // Publish the session only after resolving its authoritative point.
+          setUser(verifiedUser);
         } else {
           authService.removeStoredToken();
         }
@@ -138,6 +113,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (username: string, password: string) => {
+    setSelectedPointState(null);
+    localStorage.removeItem("puntoAtencionSeleccionado");
+    localStorage.removeItem("pc_selected_point_id");
     try {
       const {
         user: loggedUser,
@@ -146,7 +124,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       } = await authService.login({ username, password });
 
       if (loggedUser && token) {
-        setUser(loggedUser);
         const forcePointSelection =
           (typeof window !== "undefined" && sessionStorage.getItem("pc_force_point_select") === "1") || false;
         if (forcePointSelection) {
@@ -174,10 +151,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         } else if (loggedUser.rol === "OPERADOR") {
           // Para operadores, usar la lógica existente de jornada activa
           if (!forcePointSelection) {
-            const res = await scheduleService.getActiveSchedule();
-            if (res?.schedule?.puntoAtencion) {
-              setSelectedPointState(res.schedule.puntoAtencion as PuntoAtencion);
-            }
+            const res = await scheduleService.getActiveSchedule({ force: true });
+            setSelectedPointState(res?.schedule?.puntoAtencion as PuntoAtencion || null);
           }
         } else if (loggedUser.rol === "CONCESION") {
           // Para concesión, usar el punto asignado en su perfil si existe
@@ -192,6 +167,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         }
 
+        setUser(loggedUser);
         return { success: true };
       } else {
         return { success: false, error: error || "Error de autenticación" };

@@ -6,6 +6,7 @@ import logger from "../utils/logger.js";
 import { generateToken, authenticateToken } from "../middleware/auth.js";
 import { validate } from "../middleware/validation.js";
 import { loginSchema, type LoginRequest } from "../schemas/validation.js";
+import { gyeDayRangeUtcFromDate } from "../utils/timezone.js";
 
 const router = express.Router();
 
@@ -146,11 +147,15 @@ router.post(
       // Buscar si tiene jornada activa (solo para OPERADOR)
       let jornadaActiva = null;
       if (user.rol === "OPERADOR") {
+        const { gte, lt } = gyeDayRangeUtcFromDate(new Date());
         jornadaActiva = await prisma.jornada.findFirst({
           where: {
             usuario_id: user.id,
             fecha_salida: null,
+            fecha_inicio: { gte, lt },
+            estado: { in: ["ACTIVO", "ALMUERZO"] },
           },
+          orderBy: { fecha_inicio: "desc" },
           select: {
             id: true,
             punto_atencion_id: true,

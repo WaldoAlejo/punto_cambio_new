@@ -188,6 +188,28 @@ try {
     } catch { process.exitCode = 1; }
   }
   await prisma.jornada.update({ where: { id: jornada.id }, data: { fecha_inicio: morning, estado: 'ACTIVO' } });
+  for (const [scenario, state, date, exitDate, active] of [
+    ['antigua sin salida', 'ACTIVO', new Date(dayStart.getTime() - 86400000), null, false],
+    ['completada sin salida', 'COMPLETADO', morning, null, false],
+    ['cancelada sin salida', 'CANCELADO', morning, null, false],
+    ['activa', 'ACTIVO', morning, null, true],
+    ['almuerzo', 'ALMUERZO', morning, null, true],
+    ['activa con salida', 'ACTIVO', morning, morning, false],
+  ]) {
+    await check(`Login ${scenario}: informa jornada vigente sin escribir registros`, async () => {
+      const u = await prisma.usuario.create({ data: { username: `login_${randomUUID().replaceAll('-', '').slice(0, 16)}`, nombre: 'Operador ficticio login',
+        password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'OPERADOR', punto_atencion_id: active ? point.id : null } });
+      await prisma.jornada.create({ data: { usuario_id: u.id, punto_atencion_id: point.id, fecha_inicio: date, estado: state, fecha_salida: exitDate } });
+      const snapshot = async () => JSON.stringify({ user: await prisma.usuario.findUnique({ where: { id: u.id } }),
+        schedules: await prisma.jornada.findMany({ where: { usuario_id: u.id } }) });
+      const before = await snapshot();
+      const response = await post('/auth/login', { username: u.username, password: 'PruebaLocal_123!' });
+      ok(response);
+      assert.equal(response.body.hasActiveJornada, active);
+      assert.equal(response.body.user.punto_atencion_id, active ? point.id : null);
+      assert.equal(await snapshot(), before);
+    });
+  }
   const exchange = { moneda_origen_id: eur.id, moneda_destino_id: usd.id, monto_origen: 100, monto_destino: 110,
     tasa_cambio_billetes: 1.1, tasa_cambio_monedas: 1.1, tipo_operacion: 'COMPRA', punto_atencion_id: point.id,
     datos_cliente: { nombre: 'Cliente', apellido: 'Ficticio', cedula: '0000000000' },

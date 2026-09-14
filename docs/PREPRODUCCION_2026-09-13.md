@@ -2,6 +2,18 @@
 
 Estado: revisión en curso. No se ha hecho push, despliegue ni escritura en la base remota. No equivale a autorizar el despliegue de todos los cambios acumulados.
 
+## Incidencia posterior a activación: punto antiguo sin jornada vigente
+
+El usuario activó en AWS el backend compilado hasta `995194b`, mediante sustitución de `dist-server` y reinicio de PM2. Reportó estado online, NODE_ENV production, TZ America/Guayaquil y HTTP 200 locales en `/health` y `/`. Conservó backend anterior y respaldo PostgreSQL 18.6 cuyo índice y lectura completa con pg_restore fueron correctos; no se probó restauración completa ni copia fuera de la VM. Estas comprobaciones no certifican todos los flujos autenticados.
+
+Durante la revisión autenticada se observaron respuestas 400/403 de punto ausente mientras el frontend mostraba el punto guardado y saldo 0,00. La consulta de solo lectura aportada por el usuario mostró perfil sin punto y las cinco jornadas más recientes completadas, la última del 11 de septiembre. El saldo mostrado tras una consulta rechazada no es evidencia de saldo cero. No se deben abrir/cerrar jornadas ni asignar puntos manualmente para ocultar esta discrepancia.
+
+Corrección local: AuthProvider deja de restaurar un punto desde almacenamiento sin validarlo. Login y recarga resuelven primero el punto confirmado por la jornada activa, con consulta forzada; ausencia o error no recupera la selección antigua. Al iniciar sesión se limpia la selección anterior. Además, el login backend limita la jornada informada al día de Ecuador, ACTIVO/ALMUERZO y sin salida, en lugar de aceptar cualquier jornada histórica sin salida. No se modifican jornadas o asignaciones almacenadas.
+
+Evidencia: [265 pruebas de integración correctas](INTEGRACION_LOCAL_SESION_PUNTO.json), 12 regresiones frontend, TypeScript frontend/backend y compilación frontend correctos. Las seis nuevas pruebas de login cubren jornada antigua, completada/cancelada sin salida, activa, almuerzo y activa con salida; comprueban respuesta y ausencia de escrituras en usuario/jornadas. Seis regresiones de AuthProvider cubren selección obsoleta, ausencia/error y jornada vigente. En navegador local, un operador con jornada completada y punto obsoleto guardado llegó a selección tanto al entrar como al recargar, con almacenamiento de punto vacío y sin dashboard. [Captura](PRUEBA_NAVEGADOR_SIN_JORNADA.png). No se seleccionó punto ni se creó jornada en esa prueba visual.
+
+Esta corrección requiere un nuevo push y actualización controlada; no quedó incluida en el backend ya activado por el usuario. No se realizaron modificaciones remotas desde el agente.
+
 ## Avance: configuración de despliegue revisada localmente
 
 Se corrigieron tres defectos de la configuración Docker/nginx del repositorio: el healthcheck dependía de `curl` aunque la imagen no lo instalaba; la imagen incorporaba `.env`; y nginx no enviaba `/` ni los recursos del frontend al Express que los sirve. Ahora el healthcheck usa Node con timeout de cinco segundos, el contexto excluye archivos `.env*` y dependencias/artefactos locales, y nginx envía el frontend al backend. La imagen declara `NODE_ENV=production` y `TZ=America/Guayaquil`. `VITE_API_URL` se proporciona como argumento de compilación, con `/api` por defecto; las credenciales se suministran al arrancar el contenedor mediante las variables de Compose, no dentro de la imagen.
