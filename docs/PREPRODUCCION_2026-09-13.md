@@ -29,6 +29,8 @@ Evidencia: [antes](INTEGRACION_LOCAL_FECHA_APERTURA_ANTES.json), [después](INTE
 
 ## Pendientes de liberación
 
+Anulación: la eliminación bloquea ahora el cambio y ambas monedas antes de leer los saldos. Si el efectivo o su desglose no alcanzan para el reverso, devuelve 409 y conserva los datos, en lugar de recortar a cero y registrar un movimiento diferente. Bancos conserva aritmética exacta sin límite de saldo. Dos eliminaciones simultáneas dejan un solo reverso; la segunda obtiene 404. [95 pruebas correctas](INTEGRACION_LOCAL_REVERSO_SEGURO.json). Esto cubre la atomicidad y suficiencia del reverso de cambios completos; sigue abierta la fórmula de reverso para parciales/históricos.
+
 Frontend: completar un cambio sin indicar desglose ahora omite esos campos en la petición, conservando los importes guardados; los ceros explícitos siguen enviándose. Las 6 regresiones frontend pasan. La compilación aislada Vite pasó (aviso de datos Browserslist antiguos y bundle grande de reportes; no se actualizaron dependencias automáticamente).
 
 `complete-partial` y `register-partial-payment` condicionan la escritura a estado PENDIENTE: si una cancelación gana mientras esperan el bloqueo, responden 409 sin reactivar el cambio. [93 pruebas correctas](INTEGRACION_LOCAL_ESTADOS_ABONOS.json). La comprobación de fondos en cerrar/completar se limita al efectivo y su desglose; se conserva la regla existente de bancos como registro sin límite de saldo.

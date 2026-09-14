@@ -835,6 +835,45 @@ try {
       assert.equal((await patchExchange(record.id, action, origin.token)).status, 409);
     });
   }
+  for (const scenario of ['concurrente', 'saldo insuficiente']) {
+    await check(`Eliminar cambio completado: ${scenario} conserva saldos y reverso`, async () => {
+      const p = await prisma.puntoAtencion.create({ data: { nombre: `REVERSO ${scenario}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+      for (const moneda of [usd, eur]) await prisma.saldo.create({ data: {
+        punto_atencion_id: p.id, moneda_id: moneda.id,
+        cantidad: scenario === 'saldo insuficiente' ? 1 : 1000,
+        billetes: scenario === 'saldo insuficiente' ? 1 : 1000, bancos: 25,
+      } });
+      const record = await pendingFixture(p.id, 'COMPLETADO');
+      await prisma.cambioDivisa.update({ where: { id: record.id }, data: {
+        divisas_entregadas_total: 100, divisas_entregadas_billetes: 100,
+        divisas_recibidas_total: 110, divisas_recibidas_billetes: 110,
+        usd_entregado_efectivo: 110, usd_recibido_efectivo: 100,
+      } });
+      const remove = () => fetch(`${base}/exchanges/${record.id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${origin.token}` }, signal: AbortSignal.timeout(20000),
+      });
+      if (scenario === 'concurrente') {
+        const responses = await raceBalance(p, [remove, remove]);
+        assert.deepEqual(responses.map(r => r.status).sort(), [200, 404]);
+        assert.equal(await balance(p), 1110);
+        const eurSaldo = await prisma.saldo.findUnique({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: eur.id } } });
+        assert.equal(Number(eurSaldo.cantidad), 900); assert.equal(Number(eurSaldo.billetes), 900);
+        assert.equal(await prisma.cambioDivisa.count({ where: { id: record.id } }), 0);
+        const movements = await prisma.movimientoSaldo.findMany({ where: { referencia_id: record.id } });
+        assert.equal(movements.length, 2);
+        for (const m of movements) assert.equal(Number(m.saldo_nuevo) - Number(m.saldo_anterior), Number(m.monto));
+      } else {
+        const snapshot = async () => JSON.stringify({
+          cambio: await prisma.cambioDivisa.findUnique({ where: { id: record.id } }),
+          saldos: await prisma.saldo.findMany({ where: { punto_atencion_id: p.id }, orderBy: { id: 'asc' } }),
+          movimientos: await prisma.movimientoSaldo.count({ where: { referencia_id: record.id } }),
+        });
+        const before = await snapshot();
+        assert.equal((await remove()).status, 409);
+        assert.equal(await snapshot(), before);
+      }
+    });
+  }
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

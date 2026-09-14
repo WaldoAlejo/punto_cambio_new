@@ -3151,19 +3151,23 @@ router.delete(
         return;
       }
 
-      const cambio = await prisma.cambioDivisa.findUnique({
-        where: { id },
-        include: { monedaOrigen: true, monedaDestino: true },
-      });
-      if (!cambio) {
-        res.status(404).json({ success: false, error: "Cambio no encontrado" });
-        return;
-      }
+      const deleted = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "CambioDivisa" WHERE id = ${id} FOR UPDATE`;
+        const cambio = await tx.cambioDivisa.findUnique({
+          where: { id },
+          include: { monedaOrigen: true, monedaDestino: true },
+        });
+        if (!cambio) {
+          res.status(404).json({ success: false, error: "Cambio no encontrado" });
+          return;
+        }
 
-      // Los administradores pueden eliminar cambios de cualquier fecha
-      // (Restricción de día actual eliminada para permitir correcciones de errores)
+        // Los administradores pueden eliminar cambios de cualquier fecha
+        // (Restricción de día actual eliminada para permitir correcciones de errores)
 
-      await prisma.$transaction(async (tx) => {
+        for (const currencyId of [...new Set([cambio.moneda_origen_id, cambio.moneda_destino_id])].sort()) {
+          await lockBalance(tx, cambio.punto_atencion_id, currencyId);
+        }
         // Revertir ORIGEN (había INGRESO efectivo y/o bancos según metodo_pago_origen)
         const saldoOrigen = await getSaldo(
           tx,
@@ -3191,24 +3195,16 @@ router.delete(
         const ingresoEf = sumaOrigenCampos > 0 ? ingresoEfRaw : sumOrigenTotal;
         const ingresoBk = sumaOrigenCampos > 0 ? ingresoBkRaw : 0;
 
-        const nuevoEf = Math.max(0, round2(anteriorEf - ingresoEf));
-        const nuevoBk = Math.max(0, round2(anteriorBk - ingresoBk));
-
-        // Billetes/monedas físicos solo si hubo ingresoEf
-        const nuevoBil = Math.max(
-          0,
-          round2(
-            num(saldoOrigen?.billetes) -
-              (ingresoEf > 0 ? num(cambio.divisas_entregadas_billetes) : 0)
-          )
-        );
-        const nuevoMon = Math.max(
-          0,
-          round2(
-            num(saldoOrigen?.monedas_fisicas) -
-              (ingresoEf > 0 ? num(cambio.divisas_entregadas_monedas) : 0)
-          )
-        );
+        const nuevoEf = round2(anteriorEf - ingresoEf);
+        const nuevoBk = round2(anteriorBk - ingresoBk);
+        const nuevoBil = round2(num(saldoOrigen?.billetes) -
+          (ingresoEf > 0 ? num(cambio.divisas_entregadas_billetes) : 0));
+        const nuevoMon = round2(num(saldoOrigen?.monedas_fisicas) -
+          (ingresoEf > 0 ? num(cambio.divisas_entregadas_monedas) : 0));
+        if (nuevoEf < 0 || nuevoBil < 0 || nuevoMon < 0) {
+          res.status(409).json({ success: false, error: "Saldo fisico insuficiente para revertir el cambio" });
+          return false;
+        }
 
         await upsertSaldoEfectivoYBancos(
           tx,
@@ -3360,7 +3356,9 @@ router.delete(
 
         // Borrar cambio
         await tx.cambioDivisa.delete({ where: { id: cambio.id } });
+        return true;
       });
+      if (!deleted) return;
 
       logger.info("Cambio de divisa eliminado por admin", {
         cambio_id: id,
