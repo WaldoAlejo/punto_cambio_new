@@ -13,6 +13,7 @@ import { Client } from 'pg';
 
 const exec = promisify(execFile);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const browserMode = process.argv.includes('--browser');
 const bin = path.join(root, 'node_modules/.cache/pg-sandbox-runtime/node_modules/@embedded-postgres/windows-x64/native/bin');
 await fs.access(path.join(bin, 'initdb.exe'));
 const runDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pc-integration-'));
@@ -78,6 +79,10 @@ try {
   prisma = (await import('../../server/lib/prisma.ts')).default;
   pool = (await import('../../server/lib/database.ts')).pool;
   const app = express();
+  app.use((_req, res, next) => {
+    res.setHeader('Content-Security-Policy', "connect-src 'self'");
+    next();
+  });
   app.use(express.json());
   for (const [mount, module] of [
     ['/api/auth', '../../server/routes/auth.ts'],
@@ -89,7 +94,21 @@ try {
     ['/api/transfers', '../../server/routes/transfers.ts'],
     ['/api/transfer-approvals', '../../server/routes/transfer-approvals.ts'],
   ]) app.use(mount, (await import(module)).default);
-  server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+  if (browserMode) {
+    for (const [mount, module] of [
+      ['/api/points', '../../server/routes/points.ts'],
+      ['/api/schedules', '../../server/routes/schedules.ts'],
+    ]) app.use(mount, (await import(module)).default);
+    app.use('/api', (_req, res) => res.status(404).json({ success: false, error: 'Ruta no incluida en esta prueba aislada' }));
+    const assets = path.join(root, 'node_modules/.cache/frontend-check');
+    await fs.access(path.join(assets, 'index.html'));
+    app.use(express.static(assets));
+    app.get('*', (_req, res) => res.sendFile(path.join(assets, 'index.html')));
+  }
+  server = await new Promise((resolve, reject) => {
+    const s = app.listen(browserMode ? 4173 : 0, '127.0.0.1', () => resolve(s));
+    s.once('error', reject);
+  });
   const base = `http://127.0.0.1:${server.address().port}/api`;
   const point = await prisma.puntoAtencion.create({ data: { nombre: 'PRUEBA LOCAL', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
   const user = await prisma.usuario.create({ data: { username: 'prueba_local', nombre: 'Operador ficticio',
@@ -873,6 +892,16 @@ try {
         assert.equal(await snapshot(), before);
       }
     });
+  }
+  if (browserMode) {
+    await prisma.usuario.create({ data: { username: 'navegador_local', nombre: 'Administrador ficticio navegador',
+      password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'ADMIN', punto_atencion_id: permissionPoint.id } });
+    console.log(JSON.stringify({ browserUrl: 'http://127.0.0.1:4173', finishFile: path.join(runDir, 'finish-browser') }));
+    const deadline = Date.now() + 10 * 60 * 1000;
+    while (Date.now() < deadline) {
+      try { await fs.access(path.join(runDir, 'finish-browser')); break; } catch { /* wait for local QA */ }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   }
 } catch (error) {
   process.exitCode = 1;
