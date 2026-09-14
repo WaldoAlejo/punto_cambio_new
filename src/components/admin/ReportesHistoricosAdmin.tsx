@@ -94,6 +94,16 @@ const ReportesHistoricosAdmin: React.FC = () => {
 
   const reports = [
     {
+      key: "saldos-por-punto",
+      title: "Saldos por Punto de Atención",
+      description:
+        "Excel con saldos actuales por punto y divisa (billetes, monedas, bancos y diferencias) y cuadres históricos de apertura, cierre y conteo. Las fechas filtran solo los cuadres; la hoja actual muestra el saldo al generar el archivo.",
+      url: "/reportes/saldos-por-punto",
+      filename: `reporte_saldos_por_punto_${rangoArchivo}.xlsx`,
+      icon: <FileSpreadsheet className="h-8 w-8 text-teal-600" />,
+      color: "bg-teal-50 border-teal-200",
+    },
+    {
       key: "cambios-divisa",
       title: "Cambios de Divisa + Asignaciones",
       description:

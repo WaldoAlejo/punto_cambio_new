@@ -91,6 +91,7 @@ try {
   for (const [mount, module] of [
     ['/api/auth', '../../server/routes/auth.ts'],
     ['/api/points', '../../server/routes/points.ts'],
+    ['/api/reportes/saldos-por-punto', '../../server/routes/reportes-saldos-puntos.ts'],
     ['/api/schedules', '../../server/routes/schedules.ts'],
     ['/api/apertura-caja', '../../server/routes/apertura-caja.ts'],
     ['/api/exchanges', '../../server/routes/exchanges.ts'],
@@ -393,6 +394,60 @@ try {
     transferPoints.push({ id: p.id, token: t, userId: u.id });
   }
   const [origin, destination] = transferPoints;
+  // Report fixtures are isolated from operational points and intentionally include an inconsistent breakdown.
+  const reportPoint = await prisma.puntoAtencion.create({ data: { nombre: '=PUNTO REPORTE', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha', activo: false } });
+  const reportPrincipal = await prisma.puntoAtencion.create({ data: { nombre: 'PRINCIPAL REPORTES', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha', es_principal: true } });
+  const reportAdmin = await prisma.usuario.create({ data: { username: 'report_admin', nombre: 'Admin reportes', password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'ADMIN', punto_atencion_id: reportPrincipal.id } });
+  const reportLogin = await post('/auth/login', { username: reportAdmin.username, password: 'PruebaLocal_123!' }); ok(reportLogin);
+  const reportToken = reportLogin.body.token;
+  await prisma.saldo.create({ data: { punto_atencion_id: reportPoint.id, moneda_id: usd.id, cantidad: 12.34, billetes: 10, monedas_fisicas: 1, bancos: 8.88, updated_at: new Date('2026-09-10T12:00:00Z') } });
+  for (const date of ['2026-08-30T05:00:00Z', '2026-08-31T04:59:59Z', '2026-08-31T05:00:00Z']) {
+    await prisma.cuadreCaja.create({ data: { punto_atencion_id: reportPoint.id, usuario_id: reportAdmin.id, fecha: new Date(date), estado: 'ABIERTO', detalles: { create: { moneda_id: usd.id, saldo_apertura: 10, saldo_cierre: 12.34, conteo_fisico: 11, billetes: 10, monedas_fisicas: 1, diferencia: -1.34, bancos_teorico: 8.88 } } } });
+  }
+  const reportRoute = '/reportes/saldos-por-punto';
+  const reportFetch = (query = '', auth = reportToken) => fetch(base + reportRoute + query, { headers: auth ? { Authorization: `Bearer ${auth}` } : {}, signal: AbortSignal.timeout(30000) });
+  await check('Saldos por punto: Excel filtra historico por dia Ecuador y mantiene actuales, bancos y diferencias', async () => {
+    const before = await prisma.saldo.findMany({ where: { punto_atencion_id: reportPoint.id } });
+    const response = await reportFetch(`?punto_atencion_id=${reportPoint.id}&desde=2026-08-30&hasta=2026-08-30`);
+    assert.equal(response.status, 200); assert.match(response.headers.get('content-type'), /spreadsheetml/);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    const ExcelJS = (await import('exceljs')).default; const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(await response.arrayBuffer()));
+    assert.equal(wb.worksheets.length, 3);
+    const current = wb.worksheets[0], history = wb.worksheets[1];
+    assert.equal(current.rowCount, 2); assert.equal(current.getCell('A2').value, '=PUNTO REPORTE');
+    assert.equal(current.getCell('D2').value, 12.34); assert.equal(current.getCell('G2').value, 11);
+    assert.equal(current.getCell('H2').value, 1.34); assert.equal(current.getCell('I2').value, 8.88);
+    assert.equal(current.getCell('B2').value, 'No');
+    assert.equal(history.rowCount, 3); assert.equal(history.getCell('A2').value, '2026-08-30 00:00:00');
+    assert.equal(history.getCell('A3').value, '2026-08-30 23:59:59');
+    assert.equal(history.getCell('J2').value, -1.34); assert.equal(history.getCell('D2').value, 'ABIERTO');
+    assert.notEqual(history.getCell('P2').value, history.getCell('P3').value);
+    assert.deepEqual(await prisma.saldo.findMany({ where: { punto_atencion_id: reportPoint.id } }), before);
+  });
+  await check('Saldos por punto: sin filtros incluye varios puntos y conserva todas las fechas', async () => {
+    const response = await reportFetch(); assert.equal(response.status, 200);
+    const ExcelJS = (await import('exceljs')).default; const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(await response.arrayBuffer()));
+    assert.ok(wb.worksheets[0].rowCount > 2); assert.ok(wb.worksheets[1].rowCount > 3);
+  });
+  await check('Saldos por punto: valida fechas, rango, UUID y punto inexistente', async () => {
+    for (const q of ['?desde=2026-02-30', '?desde=2026-09-03&hasta=2026-09-01', '?hasta=texto', '?punto_atencion_id=otro', '?desde=2026-08-01&desde=2026-08-02']) assert.equal((await reportFetch(q)).status, 400);
+    assert.equal((await reportFetch('?punto_atencion_id=' + randomUUID())).status, 404);
+  });
+  await check('Saldos por punto: no permite operadores ni solicitudes anonimas', async () => {
+    assert.equal((await reportFetch('', origin.token)).status, 403);
+    assert.equal((await reportFetch('', null)).status, 401);
+  });
+  await check('Saldos por punto: administrativo y super usuario pueden exportar', async () => {
+    for (const rol of ['ADMINISTRATIVO', 'SUPER_USUARIO']) {
+      await prisma.usuario.update({ where: { id: reportAdmin.id }, data: { rol } });
+      const response = await reportFetch(`?punto_atencion_id=${reportPoint.id}&desde=2026-08-30&hasta=2026-08-30`);
+      assert.equal(response.status, 200); await response.arrayBuffer();
+    }
+  });
+  await prisma.usuario.update({ where: { id: reportAdmin.id }, data: { rol: 'ADMINISTRATIVO', punto_atencion_id: null } });
+  await prisma.puntoAtencion.delete({ where: { id: reportPrincipal.id } });
   const transferBody = { origen_id: origin.id, destino_id: destination.id, moneda_id: usd.id, monto: 100,
     tipo_transferencia: 'ENTRE_PUNTOS', via: 'EFECTIVO' };
   const balance = async (p) => {
