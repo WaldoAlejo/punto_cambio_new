@@ -403,6 +403,90 @@ try {
       assert.equal(moves.length, 2); assert.equal(moves.reduce((sum, m) => sum + Number(m.monto), 0), 0);
     });
   }
+  // Hold the shared balance until both independent transactions reach a lock.
+  async function raceBalance(p, operations, missing = false) {
+    const blocker = new Client({ connectionString: url });
+    await blocker.connect();
+    let pending = [];
+    let responses;
+    try {
+      await blocker.query('BEGIN');
+      if (missing) {
+        await blocker.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`transfer-balance:${p.id}:${usd.id}`]);
+      } else {
+        await blocker.query('SELECT id FROM "Saldo" WHERE punto_atencion_id=$1 AND moneda_id=$2 FOR UPDATE', [p.id, usd.id]);
+      }
+      pending = operations.map(fn => fn());
+      const deadline = Date.now() + 10000;
+      let waiting = 0;
+      while (Date.now() < deadline) {
+        waiting = (await pool.query("SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock'")).rows[0].n;
+        if (waiting >= 2) break;
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      assert.ok(waiting >= 2, 'Dos operaciones deben competir por el saldo');
+    } finally {
+      await blocker.query('ROLLBACK'); await blocker.end();
+      responses = await Promise.all(pending);
+    }
+    return responses;
+  }
+  for (const limited of [false, true]) {
+    await check(`Saldo concurrente: envios con fondos ${limited ? 'insuficientes para ambos' : 'suficientes'}`, async () => {
+      const before = await balance(origin), destBefore = await balance(destination);
+      const amount = limited ? Math.ceil(before * 0.75) : 10;
+      const countBefore = await prisma.transferencia.count();
+      const movesBefore = await prisma.movimientoSaldo.count();
+      const responses = await raceBalance(origin, [0, 1].map(() => () => post('/transfers', { ...transferBody, monto: amount }, randomUUID(), origin.token)));
+      const successes = responses.filter(r => r.status === 201);
+      assert.equal(successes.length, limited ? 1 : 2, JSON.stringify(responses.map(r => r.status)));
+      if (limited) assert.ok(responses.some(r => r.status === 400), 'Saldo insuficiente debe responder 400');
+      assert.equal(await balance(origin), before - amount * successes.length);
+      assert.equal(await balance(destination), destBefore);
+      assert.equal(await prisma.transferencia.count(), countBefore + successes.length);
+      assert.equal(await prisma.movimientoSaldo.count(), movesBefore + successes.length);
+      const ids = successes.map(r => r.body.transfer.id);
+      const moves = await prisma.movimientoSaldo.findMany({ where: { referencia_id: { in: ids } }, orderBy: { saldo_anterior: 'desc' } });
+      assert.equal(Number(moves[0].saldo_anterior), before);
+      if (moves.length === 2) assert.equal(Number(moves[1].saldo_anterior), Number(moves[0].saldo_nuevo));
+    });
+  }
+  for (const action of ['accept', 'reject', 'cancel']) {
+    await check(`Saldo concurrente: ${action} de dos transferencias distintas`, async () => {
+      const beforeOrigin = await balance(origin), beforeDestination = await balance(destination);
+      const ids = [];
+      for (let i = 0; i < 2; i++) {
+        const created = await post('/transfers', { ...transferBody, monto: 10 }, randomUUID(), origin.token); ok(created);
+        ids.push(created.body.transfer.id);
+      }
+      const responses = await raceBalance(action === 'accept' ? destination : origin, ids.map(id => () => post(
+        action === 'cancel' ? `/transfers/${id}/cancel` : `/transfer-approvals/${id}/${action}`, {}, undefined,
+        action === 'cancel' ? origin.token : destination.token)));
+      responses.forEach(ok);
+      assert.equal(await balance(origin), beforeOrigin - (action === 'accept' ? 20 : 0));
+      assert.equal(await balance(destination), beforeDestination + (action === 'accept' ? 20 : 0));
+      for (const id of ids) {
+        const moves = await prisma.movimientoSaldo.findMany({ where: { referencia_id: id } });
+        assert.equal(moves.length, 2); assert.equal(moves.reduce((sum, m) => sum + Number(m.monto), 0), 0);
+      }
+    });
+  }
+  await check('Saldo concurrente: dos primeras recepciones crean un solo saldo completo', async () => {
+    const emptyPoint = await prisma.puntoAtencion.create({ data: { nombre: 'DESTINO SIN SALDO', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+    const ids = [];
+    for (let i = 0; i < 2; i++) {
+      const created = await post('/transfers', { ...transferBody, destino_id: emptyPoint.id, monto: 10 }, randomUUID(), origin.token); ok(created);
+      ids.push(created.body.transfer.id);
+    }
+    assert.equal(await prisma.saldo.count({ where: { punto_atencion_id: emptyPoint.id } }), 0);
+    const responses = await raceBalance(emptyPoint, ids.map(id => () => post(`/transfer-approvals/${id}/accept`, {}, undefined, origin.token)), true);
+    responses.forEach(ok);
+    const rows = await prisma.saldo.findMany({ where: { punto_atencion_id: emptyPoint.id } });
+    assert.equal(rows.length, 1); assert.equal(Number(rows[0].cantidad), 20);
+    assert.equal(Number(rows[0].billetes), 20); assert.equal(Number(rows[0].bancos), 0);
+    const moves = await prisma.movimientoSaldo.findMany({ where: { punto_atencion_id: emptyPoint.id }, orderBy: { saldo_anterior: 'asc' } });
+    assert.deepEqual(moves.map(m => [Number(m.saldo_anterior), Number(m.saldo_nuevo)]), [[0, 10], [10, 20]]);
+  });
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

@@ -182,3 +182,13 @@ Se reprodujeron dos aceptaciones simultáneas de la misma transferencia con resp
 Evidencia: [Antes](INTEGRACION_LOCAL_CONCURRENCIA_ANTES.json), [después](INTEGRACION_LOCAL_CONCURRENCIA_CORREGIDA.json). TypeScript backend correcto; ESLint de los tres archivos: cero errores, cuatro advertencias preexistentes. Servicios temporales detenidos. No hubo acceso a producción ni despliegue.
 
 Alcance: resolver la misma transferencia EN_TRANSITO. Aún falta la competencia entre transferencias distintas que comparten saldo, envíos simultáneos con fondos limitados, interacción con cambios/cierres y vías BANCO/MIXTO. No se afirma seguridad completa frente a concurrencia.
+
+## Seguimiento: transferencias distintas sobre el mismo saldo
+
+Se reprodujo pérdida de actualización: dos envíos de 10 registraron éxito, pero el saldo bajó solo 10 (690 en lugar de 680). Ahora envío, aceptación, rechazo y cancelación adquieren un bloqueo transaccional por punto/moneda antes de leer y calcular el saldo. Un bloqueo consultivo coordina transferencias incluso si no existe fila de Saldo; un bloqueo de fila `FOR NO KEY UPDATE` protege el registro existente mientras se calcula y escribe. Ambos se liberan al confirmar o revertir la transacción. No requiere migraciones. Saldo insuficiente responde 400 y revierte la creación de transferencia y sus movimientos.
+
+**47 pruebas aprobadas** en PostgreSQL temporal: las 41 anteriores más envíos simultáneos con fondos suficientes/insuficientes, aceptación/rechazo/cancelación de dos transferencias distintas y dos primeras recepciones sin saldo previo. Se verifican saldos, bancos, desglose, cantidad de transferencias/movimientos y continuidad del saldo anterior/nuevo en los casos de envío y primera recepción.
+
+Evidencia: [Antes](INTEGRACION_LOCAL_SALDO_CONCURRENTE_ANTES.json), [después](INTEGRACION_LOCAL_SALDO_CONCURRENTE_CORREGIDO.json). TypeScript correcto; ESLint sin errores, cuatro advertencias preexistentes. Entorno temporal detenido, sin acceso a producción ni despliegue.
+
+Límites: los demás módulos todavía no participan del bloqueo consultivo. Falta probar transferencias simultáneas con cambios, cierres, ajustes y aprobaciones históricas; vías BANCO/MIXTO y cargas superiores a dos solicitudes. No se certifica concurrencia global del sistema.

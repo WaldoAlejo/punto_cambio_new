@@ -98,3 +98,11 @@ Suite actual: **41 comprobaciones aprobadas**. Se añaden accept/accept, reject/
 Antes: dos aceptaciones respondieron 200 ([evidencia](INTEGRACION_LOCAL_CONCURRENCIA_ANTES.json)). Después: las cuatro carreras pasan ([evidencia](INTEGRACION_LOCAL_CONCURRENCIA_CORREGIDA.json)). El helper de estado se ejecuta dentro de la misma transacción que los movimientos; el fallo de la escritura condicionada aborta la solicitud perdedora. TypeScript correcto y ESLint sin errores (cuatro advertencias previas). Entorno temporal detenido, sin producción.
 
 Pendiente: envíos simultáneos o resoluciones de transferencias diferentes que comparten un saldo. Estas pruebas protegen contra la resolución duplicada de una misma transferencia, no certifican la concurrencia de todo el libro contable.
+
+## Ampliación: competencia por saldo entre transferencias distintas
+
+Suite actual: **47 pruebas aprobadas**. Se añaden dos envíos con fondos suficientes, dos con fondos que alcanzan para uno, dos aceptaciones, dos rechazos, dos cancelaciones y dos primeras recepciones sin Saldo existente. Se usa una barrera de bloqueo de fila (o consultivo en el caso sin fila) y se espera observar dos transacciones bloqueadas antes de liberarla.
+
+Antes se perdía uno de los descuentos de 10: [resultado previo](INTEGRACION_LOCAL_SALDO_CONCURRENTE_ANTES.json). La corrección coordina el acceso por punto/moneda dentro de las transacciones existentes; la solicitud sin fondos responde 400 y no persiste transferencia ni movimiento. [Resultado posterior](INTEGRACION_LOCAL_SALDO_CONCURRENTE_CORREGIDO.json). TypeScript correcto, ESLint sin errores y cuatro advertencias previas. Servicios temporales detenidos.
+
+El bloqueo consultivo también evita la carrera al crear el primer saldo. La prueba de primera recepción comprueba una fila de saldo por 20 y movimientos consecutivos 0→10→20. Quedan fuera la interacción concurrente con otros módulos, BANCO/MIXTO y pruebas de carga; no se modificó producción.

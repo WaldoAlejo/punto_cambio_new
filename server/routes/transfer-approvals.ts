@@ -12,6 +12,7 @@ import {
 } from "../services/movimientoSaldoService.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 import { claimTransferInTransit, TransferStateConflict } from "../utils/transferState.js";
+import { lockTransferBalance } from "../utils/transferBalance.js";
 
 const router = express.Router();
 
@@ -758,6 +759,7 @@ router.post(
         });
 
         // 2. Obtener o crear el saldo del punto destino
+        await lockTransferBalance(tx, destinoId, monedaId);
         const saldoDestino = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
@@ -983,6 +985,7 @@ router.post(
         });
 
         // 2. Obtener el saldo actual del punto origen
+        await lockTransferBalance(tx, origenId, monedaId);
         const saldoOrigen = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {

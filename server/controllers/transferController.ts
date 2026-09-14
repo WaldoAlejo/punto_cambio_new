@@ -6,6 +6,7 @@ import transferCreationService from "../services/transferCreationService.js";
 import prisma from "../lib/prisma.js";
 import { TipoViaTransferencia } from "@prisma/client";
 import { claimTransferInTransit, TransferStateConflict } from "../utils/transferState.js";
+import { lockTransferBalance, InsufficientTransferBalance } from "../utils/transferBalance.js";
 import {
   registrarMovimientoSaldo,
   TipoMovimiento,
@@ -164,6 +165,7 @@ const controller = {
 
         // 2. Si hay punto origen, descontar del saldo inmediatamente
         if (origen_id) {
+          await lockTransferBalance(tx, origen_id, moneda_id);
           // Obtener saldo anterior
           const saldoOrigen = await tx.saldo.findUnique({
             where: {
@@ -180,7 +182,7 @@ const controller = {
 
           // Validar saldo suficiente
           if (saldoAnteriorOrigen < Number(monto)) {
-            throw new Error(
+            throw new InsufficientTransferBalance(
               `Saldo insuficiente en punto origen. Saldo actual: ${saldoAnteriorOrigen.toFixed(
                 2
               )}, requerido: ${Number(monto).toFixed(2)}`
@@ -348,6 +350,10 @@ const controller = {
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (error instanceof InsufficientTransferBalance) {
+        res.status(400).json({ success: false, error: error.message });
+        return;
+      }
       logger.error("Error al crear transferencia", {
         error: error instanceof Error ? error.message : "Unknown error",
         stack: error instanceof Error ? error.stack : undefined,
@@ -505,6 +511,7 @@ const controller = {
 
         if (!transfer.origen_id) return;
 
+        await lockTransferBalance(tx, transfer.origen_id, transfer.moneda_id);
         const saldo = await tx.saldo.findUnique({
           where: {
             punto_atencion_id_moneda_id: {
