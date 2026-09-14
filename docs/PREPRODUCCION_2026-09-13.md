@@ -2,6 +2,16 @@
 
 Estado: revisión en curso. No se ha hecho push, despliegue ni escritura en la base remota. No equivale a autorizar el despliegue de todos los cambios acumulados.
 
+## Avance: redondeo mixto y pantalla de parciales
+
+El abono proporcional conserva ahora el total en centavos entre caja y banco: 5,01 sobre dos componentes iguales registra 2,51 + 2,50, en lugar de 2,51 + 2,51. El cálculo usa enteros y cociente redondeado exacto; la liquidación admite el nuevo reparto y también el reparto anterior cuando todo el historial coincide, descontando siempre lo realmente registrado. No modifica abonos históricos.
+
+Evidencia: [259 pruebas de integración correctas](INTEGRACION_LOCAL_REDONDEO_MIXTO.json), siete pruebas unitarias de reparto/compatibilidad, seis regresiones frontend y TypeScript frontend/backend correctos. Se verifican creación, liquidación por las tres rutas y reverso con abono mixto 5,01. Frontend de prueba y backend compilados en carpetas locales aisladas; estos artefactos no son una entrega para producción.
+
+La revisión de pantalla detectó y corrigió importes 0,00 cuando los Decimal llegaban como texto. También sustituyó el fetch de liquidación que leía la clave incorrecta `token` por el servicio HTTP común que usa `authToken` y la URL configurada. En navegador local se verificaron login, listado, filtro por importe con resultado vacío, limpiar filtro, pestaña de parciales, abrir/cancelar confirmación y recarga. Después de corregir, se liquidó el caso ficticio MIXTO/MIXTO de 100 EUR→110 USD con abono 55: confirmó éxito y desapareció de pendientes. [Captura con importes corregidos](PRUEBA_NAVEGADOR_ABONOS.png). El servidor de pruebas incorpora las rutas reales de usuarios, monedas y dashboard para las lecturas de estas pantallas. No se probaron todas las pantallas, roles, móviles ni proveedores externos.
+
+Base temporal y navegador detenidos al finalizar. Sin push ni cambios en producción. La política completa de sustitución física, los históricos sin evidencia y las comprobaciones del servidor real siguen pendientes.
+
 ## Avance: reversos bancarios y mixtos con evidencia
 
 Los nuevos recibos de creación y liquidación guardan `balance_delta_v2`: variaciones reales firmadas de caja, billetes, monedas y bancos, en centavos y dentro de la misma transacción. Se mantiene `cash_delta_v1` para compatibilidad con la evidencia de efectivo existente. La anulación bancaria/mixta valida moneda, punto, signo, desglose y coincidencia con cada componente del historial antes de revertir lo realmente contabilizado. Evita registrar ajustes de efectivo con importe cero en entregas exclusivamente bancarias.

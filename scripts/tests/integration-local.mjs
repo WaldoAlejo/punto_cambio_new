@@ -98,6 +98,9 @@ try {
     for (const [mount, module] of [
       ['/api/points', '../../server/routes/points.ts'],
       ['/api/schedules', '../../server/routes/schedules.ts'],
+      ['/api/users', '../../server/routes/users.ts'],
+      ['/api/currencies', '../../server/routes/currencies.ts'],
+      ['/api/admin', '../../server/routes/admin-dashboard.ts'],
     ]) app.use(mount, (await import(module)).default);
     app.use('/api', (_req, res) => res.status(404).json({ success: false, error: 'Ruta no incluida en esta prueba aislada' }));
     const assets = path.join(root, 'node_modules/.cache/frontend-check');
@@ -976,7 +979,7 @@ try {
     });
   }
   for (const mixed of [false, true]) {
-  for (const scenario of ['parcial', 'completado', 'abono posterior', 'sustitucion', 'sin evidencia', 'completo sin evidencia', 'evidencia alterada', 'historial ambiguo', 'concurrente', 'fallo recibo']) {
+  for (const scenario of ['parcial', 'completado', 'cerrar', 'completar', 'abono posterior', 'sustitucion', 'sin evidencia', 'completo sin evidencia', 'evidencia alterada', 'historial ambiguo', 'concurrente', 'fallo recibo']) {
     if (!mixed && ['historial ambiguo', 'completo sin evidencia'].includes(scenario)) continue;
     await check(`Anulacion con evidencia ${mixed ? 'mixta' : 'efectivo'}: ${scenario}`, async () => {
       const p = await prisma.puntoAtencion.create({ data: { nombre: `ANULACION ${mixed} ${scenario}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
@@ -1004,7 +1007,12 @@ try {
           body: JSON.stringify({ abono_inicial_monto: 5.01 }),
         }); assert.equal(response.status, 200);
       }
-      if (scenario === 'completado') assert.equal((await patchExchange(id, 'complete-partial', origin.token)).status, 200);
+      if (mixed && !later && scenario !== 'completo sin evidencia') {
+        const posted = await prisma.movimientoSaldo.findMany({ where: { referencia_id: id } });
+        for (const m of [usd, eur]) assert.equal(Math.abs(posted.filter(row => row.moneda_id === m.id)
+          .reduce((sum, row) => sum + Math.round(Number(row.monto) * 100), 0)), 501);
+      }
+      if (['completado', 'cerrar', 'completar'].includes(scenario)) assert.equal((await patchExchange(id, scenario === 'completado' ? 'complete-partial' : scenario, origin.token)).status, 200);
       if (scenario === 'sin evidencia' || scenario === 'completo sin evidencia' || scenario === 'evidencia alterada') {
         const receipt = await prisma.recibo.findFirst({ where: { referencia_id: id } });
         const data = receipt.datos_operacion;

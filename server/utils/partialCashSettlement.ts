@@ -1,5 +1,6 @@
 import type { CambioDivisa, Prisma } from "@prisma/client";
 import { OperationalConflict } from "./operationalConflict.js";
+import { partialPosting } from "./partialPosting.js";
 
 const cents = (value: { toString(): string } | number) => Math.round(Number(value.toString()) * 100);
 
@@ -43,7 +44,12 @@ export async function remainingPartialAmounts(tx: Prisma.TransactionClient, camb
     posted[side + (bank ? 1 : 0)] += Math.abs(amount);
   }
   const fullyPosted = posted.every((amount, i) => amount === expected[i]);
-  const partiallyPosted = posted.every((amount, i) => amount === Math.round(expected[i] * paid / total));
+  const partial = [...partialPosting(expected[0], expected[1], paid, total),
+    ...partialPosting(expected[2], expected[3], paid, total)];
+  // Retain compatibility with verified postings from the former independent
+  // rounding rule. Settlement uses actual ledger amounts, never rewrites them.
+  const partiallyPosted = posted.every((amount, i) => amount === partial[i]) ||
+    posted.every((amount, i) => amount === Math.round(expected[i] * paid / total));
   if (!movements.length || (!fullyPosted && !partiallyPosted)) throw conflict();
   const remaining = expected.map((amount, i) => (amount - posted[i]) / 100);
   return { ingresoEf: remaining[0], ingresoBk: remaining[1], egresoEf: remaining[2], egresoBk: remaining[3] };

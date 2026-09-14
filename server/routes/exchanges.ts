@@ -12,6 +12,7 @@ import { assertOperationalSession, OperationalConflict } from "../utils/operatio
 import { remainingPartialAmounts } from "../utils/partialCashSettlement.js";
 import { splitCash } from "../utils/cashBreakdown.js";
 import { cashSnapshot, attachCashEvidence, cashReversalEvidence } from "../utils/exchangeCashEvidence.js";
+import { partialPosting } from "../utils/partialPosting.js";
 import logger from "../utils/logger.js";
 import { authenticateToken, requireRole } from "../middleware/auth.js";
 import { requireAperturaAprobada } from "../middleware/requireAperturaAprobada.js";
@@ -924,11 +925,15 @@ router.post(
         // ═══════════════════════════════════════════════════════════════════════
 
         // ✅ Calcular porcentaje de actualización según estado
-        const porcentajeActualizacion =
+        const importeAplicado =
           cambio.estado === EstadoTransaccion.PENDIENTE &&
           num(abono_inicial_monto) > 0
-            ? num(abono_inicial_monto) / monto_destino_final
-            : 1.0; // 100% si está completado o no hay abono
+            ? num(abono_inicial_monto)
+            : monto_destino_final;
+        const repartirAbono = (cash: number, bank: number) => partialPosting(
+          Math.round(cash * 100), Math.round(bank * 100),
+          Math.round(importeAplicado * 100), Math.round(monto_destino_final * 100)
+        ).map(amount => amount / 100);
 
         // 3.1 Origen (INGRESO efectivo/bancos según metodo_pago_origen)
         const saldoOrigen = await getSaldo(
@@ -949,12 +954,7 @@ router.post(
             : 0;
 
         // ✅ APLICAR PORCENTAJE: Solo actualizar según el abono inicial si es PENDIENTE
-        const ingresoEf = round2(
-          num(usd_recibido_efectivo) * porcentajeActualizacion
-        );
-        const ingresoBk = round2(
-          num(usd_recibido_transfer) * porcentajeActualizacion
-        );
+        const [ingresoEf, ingresoBk] = repartirAbono(num(usd_recibido_efectivo), num(usd_recibido_transfer));
 
         // breakdown físico solo si entra efectivo (también aplicar porcentaje)
         let ingresoBil = 0;
@@ -1068,8 +1068,7 @@ router.post(
         });
 
         // ✅ APLICAR PORCENTAJE al egreso también
-        egresoEf = round2(egresoEf * porcentajeActualizacion);
-        egresoBk = round2(egresoBk * porcentajeActualizacion);
+        [egresoEf, egresoBk] = repartirAbono(egresoEf, egresoBk);
 
         // Validaciones de EFECTIVO (estrictas al centavo)
         if (destinoAnteriorEf < egresoEf) {

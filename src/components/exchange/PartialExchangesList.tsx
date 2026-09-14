@@ -10,6 +10,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
+import { apiService } from "../../services/apiService";
 import { useConfirmationDialog } from "../../hooks/useConfirmationDialog";
 
 export interface PartialExchange {
@@ -92,10 +93,11 @@ const PartialExchangesList = ({
   };
 
   const formatCurrency = (
-    amount?: number | null,
+    amount?: number | string | null,
     moneda?: { simbolo: string }
   ) => {
-    const n = typeof amount === "number" ? amount : 0;
+    const n = Number(amount ?? 0);
+    if (!Number.isFinite(n)) return "—";
     const sym = moneda?.simbolo ?? "";
     return `${sym}${n.toFixed(2)}`;
   };
@@ -114,22 +116,10 @@ Esta acción marcará el cambio como COMPLETADO y actualizará la contabilidad.`
         try {
           setCompletingId(exchange.id);
 
-          const resp = await fetch(
-            `/api/exchanges/${exchange.id}/complete-partial`,
-            {
-              method: "PATCH",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-              },
-              body: JSON.stringify({
-                // el backend toma el usuario del token; no es necesario enviar más campos
-              }),
-            }
+          const data = await apiService.patch<{ success?: boolean; message?: string; error?: string }>(
+            `/exchanges/${exchange.id}/complete-partial`, {}
           );
-
-          const data = await resp.json().catch(() => ({}));
-          if (!resp.ok || data?.success === false) {
+          if (data?.success === false) {
             throw new Error(data?.error || "Error al completar cambio parcial");
           }
 
