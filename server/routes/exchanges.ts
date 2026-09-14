@@ -1543,346 +1543,365 @@ router.patch(
           .json({ error: "Usuario no autenticado", success: false });
         return;
       }
-      const cambio = await prisma.cambioDivisa.findUnique({
-        where: { id },
-        include: {
-          monedaDestino: {
-            select: { codigo: true },
-          },
-        },
-      });
-      if (!cambio) {
-        res.status(404).json({ error: "Cambio no encontrado", success: false });
-        return;
-      }
-      if (req.user?.rol === "OPERADOR" &&
-          req.user.punto_atencion_id !== cambio.punto_atencion_id) {
-        res.status(403).json({ success: false, error: "No puede modificar cambios de otro punto de atencion" });
-        return;
-      }
-      if (cambio.estado === EstadoTransaccion.CANCELADO) {
-        res.status(409).json({ success: false, error: "El cambio esta cancelado" });
-        return;
-      }
-      if (cambio.estado === EstadoTransaccion.COMPLETADO) {
-        res
-          .status(400)
-          .json({ error: "El cambio ya está completado", success: false });
-        return;
-      }
-
-      // ✅ CRÍTICO: Si hubo abono inicial, actualizar el balance restante
-      const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
-
-      if (huboAbonoInicial) {
-        // Calcular el porcentaje restante que falta actualizar
-        const montoTotal = num(cambio.monto_destino);
-        const montoAbonado = num(cambio.abono_inicial_monto);
-        const montoRestante = montoTotal - montoAbonado;
-        const porcentajeRestante = montoRestante / montoTotal;
-
-        // Obtener saldos actuales
-        const saldoOrigen = await prisma.saldo.findUnique({
-          where: {
-            punto_atencion_id_moneda_id: {
-              punto_atencion_id: cambio.punto_atencion_id,
-              moneda_id: cambio.moneda_origen_id,
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "CambioDivisa" WHERE id = ${id} FOR UPDATE`;
+        const cambio = await tx.cambioDivisa.findUnique({
+          where: { id },
+          include: {
+            monedaDestino: {
+              select: { codigo: true },
             },
           },
         });
-
-        const saldoDestino = await prisma.saldo.findUnique({
-          where: {
-            punto_atencion_id_moneda_id: {
-              punto_atencion_id: cambio.punto_atencion_id,
-              moneda_id: cambio.moneda_destino_id,
-            },
-          },
-        });
-
-        if (!saldoOrigen || !saldoDestino) {
-          res.status(400).json({
-            error: "No se encontraron saldos para las monedas involucradas",
-            success: false,
-          });
+        if (!cambio) {
+          res.status(404).json({ error: "Cambio no encontrado", success: false });
+          return;
+        }
+        if (req.user?.rol === "OPERADOR" &&
+            req.user.punto_atencion_id !== cambio.punto_atencion_id) {
+          res.status(403).json({ success: false, error: "No puede modificar cambios de otro punto de atencion" });
+          return;
+        }
+        if (cambio.estado === EstadoTransaccion.CANCELADO) {
+          res.status(409).json({ success: false, error: "El cambio esta cancelado" });
+          return;
+        }
+        if (cambio.estado === EstadoTransaccion.COMPLETADO) {
+          res
+            .status(400)
+            .json({ error: "El cambio ya está completado", success: false });
           return;
         }
 
-        // Calcular incrementos/decrementos restantes según método de pago
-        const usdRecibidoEfectivo =
-          cambio.metodo_pago_origen === TipoViaTransferencia.EFECTIVO
-            ? num(cambio.divisas_entregadas_total)
-            : 0;
-        const usdRecibidoTransfer =
-          cambio.metodo_pago_origen === TipoViaTransferencia.BANCO
-            ? num(cambio.divisas_entregadas_total)
-            : 0;
-
-        const ingresoEfRestante = round2(
-          usdRecibidoEfectivo * porcentajeRestante
-        );
-        const ingresoBkRestante = round2(
-          usdRecibidoTransfer * porcentajeRestante
-        );
-
-        // Calcular billetes y monedas de ingreso manteniendo proporción
-        let ingresoBilRestante = 0;
-        let ingresoMonRestante = 0;
-
-        if (ingresoEfRestante > 0) {
-          const totalEntregado =
-            num(cambio.divisas_entregadas_billetes) +
-            num(cambio.divisas_entregadas_monedas);
-
-          if (totalEntregado > 0) {
-            const proporcionBilletes =
-              num(cambio.divisas_entregadas_billetes) / totalEntregado;
-            const proporcionMonedas =
-              num(cambio.divisas_entregadas_monedas) / totalEntregado;
-
-            ingresoBilRestante = round2(ingresoEfRestante * proporcionBilletes);
-            ingresoMonRestante = round2(ingresoEfRestante * proporcionMonedas);
-
-            // Ajustar por diferencias de redondeo
-            const diferencia =
-              ingresoEfRestante - (ingresoBilRestante + ingresoMonRestante);
-            if (Math.abs(diferencia) > 0.01) {
-              if (ingresoBilRestante >= ingresoMonRestante) {
-                ingresoBilRestante = round2(ingresoBilRestante + diferencia);
-              } else {
-                ingresoMonRestante = round2(ingresoMonRestante + diferencia);
-              }
-            }
-          } else {
-            ingresoBilRestante = ingresoEfRestante;
-            ingresoMonRestante = 0;
-          }
+        // ✅ CRÍTICO: Si hubo abono inicial, actualizar el balance restante
+        for (const currencyId of [...new Set([cambio.moneda_origen_id, cambio.moneda_destino_id])].sort()) {
+          await lockBalance(tx, cambio.punto_atencion_id, currencyId);
         }
+        await assertOperationalSession(tx, req.user, cambio.punto_atencion_id);
 
-        // Egreso en moneda destino
-        const destinoRestante = calcularEgresoDestino({
-          isDestinoUSD: isUSDByCode(cambio.monedaDestino?.codigo),
-          metodoEntrega: cambio.metodo_entrega,
-          totalDestino: round2(num(cambio.divisas_recibidas_total) * porcentajeRestante),
-          usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo) * porcentajeRestante,
-          usdEntregadoTransfer: num(cambio.usd_entregado_transfer) * porcentajeRestante,
-        });
-        const egresoEfRestante = destinoRestante.egresoEf;
-        const egresoBkRestante = destinoRestante.egresoBk;
+        const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
 
-        // Calcular billetes y monedas de egreso manteniendo proporción
-        let billetesEgresoRestante = 0;
-        let monedasEgresoRestante = 0;
+        if (huboAbonoInicial) {
+          // Calcular el porcentaje restante que falta actualizar
+          const montoTotal = num(cambio.monto_destino);
+          const montoAbonado = num(cambio.abono_inicial_monto);
+          const montoRestante = montoTotal - montoAbonado;
+          const porcentajeRestante = montoRestante / montoTotal;
 
-        if (egresoEfRestante > 0) {
-          const totalRecibido =
-            num(cambio.divisas_recibidas_billetes) +
-            num(cambio.divisas_recibidas_monedas);
-
-          if (totalRecibido > 0) {
-            const proporcionBilletes =
-              num(cambio.divisas_recibidas_billetes) / totalRecibido;
-            const proporcionMonedas =
-              num(cambio.divisas_recibidas_monedas) / totalRecibido;
-
-            billetesEgresoRestante = round2(
-              egresoEfRestante * proporcionBilletes
-            );
-            monedasEgresoRestante = round2(
-              egresoEfRestante * proporcionMonedas
-            );
-
-            // Ajustar por diferencias de redondeo
-            const diferencia =
-              egresoEfRestante -
-              (billetesEgresoRestante + monedasEgresoRestante);
-            if (Math.abs(diferencia) > 0.01) {
-              if (billetesEgresoRestante >= monedasEgresoRestante) {
-                billetesEgresoRestante = round2(
-                  billetesEgresoRestante + diferencia
-                );
-              } else {
-                monedasEgresoRestante = round2(
-                  monedasEgresoRestante + diferencia
-                );
-              }
-            }
-          } else {
-            billetesEgresoRestante = egresoEfRestante;
-            monedasEgresoRestante = 0;
-          }
-        }
-
-        // Actualizar saldos en transacción
-        await prisma.$transaction(async (tx) => {
-          // Actualizar saldo origen (ingreso)
-          await tx.saldo.update({
+          // Obtener saldos actuales
+          const saldoOrigen = await tx.saldo.findUnique({
             where: {
               punto_atencion_id_moneda_id: {
                 punto_atencion_id: cambio.punto_atencion_id,
                 moneda_id: cambio.moneda_origen_id,
               },
             },
-            data: {
-              cantidad: { increment: ingresoEfRestante },
-              bancos: { increment: ingresoBkRestante },
-              billetes: { increment: ingresoBilRestante },
-              monedas_fisicas: { increment: ingresoMonRestante },
-            },
           });
 
-          // Actualizar saldo destino (egreso)
-          await tx.saldo.update({
+          const saldoDestino = await tx.saldo.findUnique({
             where: {
               punto_atencion_id_moneda_id: {
                 punto_atencion_id: cambio.punto_atencion_id,
                 moneda_id: cambio.moneda_destino_id,
               },
             },
-            data: {
-              cantidad: { decrement: egresoEfRestante },
-              bancos: { decrement: egresoBkRestante },
-              billetes: { decrement: billetesEgresoRestante },
-              monedas_fisicas: { decrement: monedasEgresoRestante },
-            },
           });
 
-          // Registrar movimientos de saldo (separando CAJA vs BANCOS)
-          const origenAnteriorEf = num(saldoOrigen.cantidad);
-          const origenAnteriorBk = num(saldoOrigen.bancos);
-          const destinoAnteriorEf = num(saldoDestino.cantidad);
-          const destinoAnteriorBk = num(saldoDestino.bancos);
+          if (!saldoOrigen || !saldoDestino) {
+            res.status(400).json({
+              error: "No se encontraron saldos para las monedas involucradas",
+              success: false,
+            });
+            return;
+          }
+
+          // Calcular incrementos/decrementos restantes según método de pago
+          const usdRecibidoEfectivo =
+            cambio.metodo_pago_origen === TipoViaTransferencia.EFECTIVO
+              ? num(cambio.divisas_entregadas_total)
+              : 0;
+          const usdRecibidoTransfer =
+            cambio.metodo_pago_origen === TipoViaTransferencia.BANCO
+              ? num(cambio.divisas_entregadas_total)
+              : 0;
+
+          const ingresoEfRestante = round2(
+            usdRecibidoEfectivo * porcentajeRestante
+          );
+          const ingresoBkRestante = round2(
+            usdRecibidoTransfer * porcentajeRestante
+          );
+
+          // Calcular billetes y monedas de ingreso manteniendo proporción
+          let ingresoBilRestante = 0;
+          let ingresoMonRestante = 0;
 
           if (ingresoEfRestante > 0) {
-            await registrarMovimientoSaldo(
-              {
-                puntoAtencionId: cambio.punto_atencion_id,
-                monedaId: cambio.moneda_origen_id,
-                tipoMovimiento: TipoMovimiento.INGRESO,
-                monto: round2(ingresoEfRestante),
-                saldoAnterior: round2(origenAnteriorEf),
-                saldoNuevo: round2(origenAnteriorEf + ingresoEfRestante),
-                tipoReferencia: TipoReferencia.EXCHANGE,
-                referenciaId: cambio.id,
-                descripcion: `Cierre de cambio pendiente (ingreso restante caja) - Recibo: ${cambio.numero_recibo}`,
-                saldoBucket: "CAJA",
-                usuarioId: userId,
-              },
-              tx
-            );
+            const totalEntregado =
+              num(cambio.divisas_entregadas_billetes) +
+              num(cambio.divisas_entregadas_monedas);
+
+            if (totalEntregado > 0) {
+              const proporcionBilletes =
+                num(cambio.divisas_entregadas_billetes) / totalEntregado;
+              const proporcionMonedas =
+                num(cambio.divisas_entregadas_monedas) / totalEntregado;
+
+              ingresoBilRestante = round2(ingresoEfRestante * proporcionBilletes);
+              ingresoMonRestante = round2(ingresoEfRestante * proporcionMonedas);
+
+              // Ajustar por diferencias de redondeo
+              const diferencia =
+                ingresoEfRestante - (ingresoBilRestante + ingresoMonRestante);
+              if (Math.abs(diferencia) > 0.01) {
+                if (ingresoBilRestante >= ingresoMonRestante) {
+                  ingresoBilRestante = round2(ingresoBilRestante + diferencia);
+                } else {
+                  ingresoMonRestante = round2(ingresoMonRestante + diferencia);
+                }
+              }
+            } else {
+              ingresoBilRestante = ingresoEfRestante;
+              ingresoMonRestante = 0;
+            }
           }
 
-          if (ingresoBkRestante > 0) {
-            await registrarMovimientoSaldo(
-              {
-                puntoAtencionId: cambio.punto_atencion_id,
-                monedaId: cambio.moneda_origen_id,
-                tipoMovimiento: TipoMovimiento.INGRESO,
-                monto: round2(ingresoBkRestante),
-                saldoAnterior: round2(origenAnteriorBk),
-                saldoNuevo: round2(origenAnteriorBk + ingresoBkRestante),
-                tipoReferencia: TipoReferencia.EXCHANGE,
-                referenciaId: cambio.id,
-                descripcion: `Cierre de cambio pendiente (ingreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
-                saldoBucket: "BANCOS",
-                usuarioId: userId,
-              },
-              tx
-            );
-          }
+          // Egreso en moneda destino
+          const destinoRestante = calcularEgresoDestino({
+            isDestinoUSD: isUSDByCode(cambio.monedaDestino?.codigo),
+            metodoEntrega: cambio.metodo_entrega,
+            totalDestino: round2(num(cambio.divisas_recibidas_total) * porcentajeRestante),
+            usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo) * porcentajeRestante,
+            usdEntregadoTransfer: num(cambio.usd_entregado_transfer) * porcentajeRestante,
+          });
+          const egresoEfRestante = destinoRestante.egresoEf;
+          const egresoBkRestante = destinoRestante.egresoBk;
+
+          // Calcular billetes y monedas de egreso manteniendo proporción
+          let billetesEgresoRestante = 0;
+          let monedasEgresoRestante = 0;
 
           if (egresoEfRestante > 0) {
-            await registrarMovimientoSaldo(
-              {
-                puntoAtencionId: cambio.punto_atencion_id,
-                monedaId: cambio.moneda_destino_id,
-                tipoMovimiento: TipoMovimiento.EGRESO,
-                monto: round2(egresoEfRestante),
-                saldoAnterior: round2(destinoAnteriorEf),
-                saldoNuevo: round2(destinoAnteriorEf - egresoEfRestante),
-                tipoReferencia: TipoReferencia.EXCHANGE,
-                referenciaId: cambio.id,
-                descripcion: `Cierre de cambio pendiente (egreso restante caja) - Recibo: ${cambio.numero_recibo}`,
-                saldoBucket: "CAJA",
-                usuarioId: userId,
-              },
-              tx
-            );
+            const totalRecibido =
+              num(cambio.divisas_recibidas_billetes) +
+              num(cambio.divisas_recibidas_monedas);
+
+            if (totalRecibido > 0) {
+              const proporcionBilletes =
+                num(cambio.divisas_recibidas_billetes) / totalRecibido;
+              const proporcionMonedas =
+                num(cambio.divisas_recibidas_monedas) / totalRecibido;
+
+              billetesEgresoRestante = round2(
+                egresoEfRestante * proporcionBilletes
+              );
+              monedasEgresoRestante = round2(
+                egresoEfRestante * proporcionMonedas
+              );
+
+              // Ajustar por diferencias de redondeo
+              const diferencia =
+                egresoEfRestante -
+                (billetesEgresoRestante + monedasEgresoRestante);
+              if (Math.abs(diferencia) > 0.01) {
+                if (billetesEgresoRestante >= monedasEgresoRestante) {
+                  billetesEgresoRestante = round2(
+                    billetesEgresoRestante + diferencia
+                  );
+                } else {
+                  monedasEgresoRestante = round2(
+                    monedasEgresoRestante + diferencia
+                  );
+                }
+              }
+            } else {
+              billetesEgresoRestante = egresoEfRestante;
+              monedasEgresoRestante = 0;
+            }
           }
 
-          if (egresoBkRestante > 0) {
-            await registrarMovimientoSaldo(
-              {
-                puntoAtencionId: cambio.punto_atencion_id,
-                monedaId: cambio.moneda_destino_id,
-                tipoMovimiento: TipoMovimiento.EGRESO,
-                monto: round2(egresoBkRestante),
-                saldoAnterior: round2(destinoAnteriorBk),
-                saldoNuevo: round2(destinoAnteriorBk - egresoBkRestante),
-                tipoReferencia: TipoReferencia.EXCHANGE,
-                referenciaId: cambio.id,
-                descripcion: `Cierre de cambio pendiente (egreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
-                saldoBucket: "BANCOS",
-                usuarioId: userId,
-              },
-              tx
-            );
+          // Actualizar saldos en transacción
+          if (num(saldoDestino.cantidad) < egresoEfRestante ||
+              num(saldoDestino.bancos) < egresoBkRestante ||
+              num(saldoDestino.billetes) < billetesEgresoRestante ||
+              num(saldoDestino.monedas_fisicas) < monedasEgresoRestante) {
+            res.status(400).json({ success: false, error: "Saldo insuficiente para completar el cambio" });
+            return;
           }
+
+          {
+            // Actualizar saldo origen (ingreso)
+            await tx.saldo.update({
+              where: {
+                punto_atencion_id_moneda_id: {
+                  punto_atencion_id: cambio.punto_atencion_id,
+                  moneda_id: cambio.moneda_origen_id,
+                },
+              },
+              data: {
+                cantidad: { increment: ingresoEfRestante },
+                bancos: { increment: ingresoBkRestante },
+                billetes: { increment: ingresoBilRestante },
+                monedas_fisicas: { increment: ingresoMonRestante },
+              },
+            });
+
+            // Actualizar saldo destino (egreso)
+            await tx.saldo.update({
+              where: {
+                punto_atencion_id_moneda_id: {
+                  punto_atencion_id: cambio.punto_atencion_id,
+                  moneda_id: cambio.moneda_destino_id,
+                },
+              },
+              data: {
+                cantidad: { decrement: egresoEfRestante },
+                bancos: { decrement: egresoBkRestante },
+                billetes: { decrement: billetesEgresoRestante },
+                monedas_fisicas: { decrement: monedasEgresoRestante },
+              },
+            });
+
+            // Registrar movimientos de saldo (separando CAJA vs BANCOS)
+            const origenAnteriorEf = num(saldoOrigen.cantidad);
+            const origenAnteriorBk = num(saldoOrigen.bancos);
+            const destinoAnteriorEf = num(saldoDestino.cantidad);
+            const destinoAnteriorBk = num(saldoDestino.bancos);
+
+            if (ingresoEfRestante > 0) {
+              await registrarMovimientoSaldo(
+                {
+                  puntoAtencionId: cambio.punto_atencion_id,
+                  monedaId: cambio.moneda_origen_id,
+                  tipoMovimiento: TipoMovimiento.INGRESO,
+                  monto: round2(ingresoEfRestante),
+                  saldoAnterior: round2(origenAnteriorEf),
+                  saldoNuevo: round2(origenAnteriorEf + ingresoEfRestante),
+                  tipoReferencia: TipoReferencia.EXCHANGE,
+                  referenciaId: cambio.id,
+                  descripcion: `Cierre de cambio pendiente (ingreso restante caja) - Recibo: ${cambio.numero_recibo}`,
+                  saldoBucket: "CAJA",
+                  usuarioId: userId,
+                },
+                tx
+              );
+            }
+
+            if (ingresoBkRestante > 0) {
+              await registrarMovimientoSaldo(
+                {
+                  puntoAtencionId: cambio.punto_atencion_id,
+                  monedaId: cambio.moneda_origen_id,
+                  tipoMovimiento: TipoMovimiento.INGRESO,
+                  monto: round2(ingresoBkRestante),
+                  saldoAnterior: round2(origenAnteriorBk),
+                  saldoNuevo: round2(origenAnteriorBk + ingresoBkRestante),
+                  tipoReferencia: TipoReferencia.EXCHANGE,
+                  referenciaId: cambio.id,
+                  descripcion: `Cierre de cambio pendiente (ingreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
+                  saldoBucket: "BANCOS",
+                  usuarioId: userId,
+                },
+                tx
+              );
+            }
+
+            if (egresoEfRestante > 0) {
+              await registrarMovimientoSaldo(
+                {
+                  puntoAtencionId: cambio.punto_atencion_id,
+                  monedaId: cambio.moneda_destino_id,
+                  tipoMovimiento: TipoMovimiento.EGRESO,
+                  monto: round2(egresoEfRestante),
+                  saldoAnterior: round2(destinoAnteriorEf),
+                  saldoNuevo: round2(destinoAnteriorEf - egresoEfRestante),
+                  tipoReferencia: TipoReferencia.EXCHANGE,
+                  referenciaId: cambio.id,
+                  descripcion: `Cierre de cambio pendiente (egreso restante caja) - Recibo: ${cambio.numero_recibo}`,
+                  saldoBucket: "CAJA",
+                  usuarioId: userId,
+                },
+                tx
+              );
+            }
+
+            if (egresoBkRestante > 0) {
+              await registrarMovimientoSaldo(
+                {
+                  puntoAtencionId: cambio.punto_atencion_id,
+                  monedaId: cambio.moneda_destino_id,
+                  tipoMovimiento: TipoMovimiento.EGRESO,
+                  monto: round2(egresoBkRestante),
+                  saldoAnterior: round2(destinoAnteriorBk),
+                  saldoNuevo: round2(destinoAnteriorBk - egresoBkRestante),
+                  tipoReferencia: TipoReferencia.EXCHANGE,
+                  referenciaId: cambio.id,
+                  descripcion: `Cierre de cambio pendiente (egreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
+                  saldoBucket: "BANCOS",
+                  usuarioId: userId,
+                },
+                tx
+              );
+            }
+          }
+        }
+
+        const numeroReciboCierre = `CIERRE-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 6)}`;
+        const updated = await tx.cambioDivisa.update({
+          where: { id },
+          data: {
+            estado: EstadoTransaccion.COMPLETADO,
+            numero_recibo_completar: numeroReciboCierre,
+            fecha_completado: new Date(), // UTC - la UI muestra en zona horaria local
+            saldo_pendiente: 0,
+          },
+          select: {
+            id: true,
+            fecha: true,
+            tipo_operacion: true,
+            estado: true,
+            monto_origen: true,
+            monto_destino: true,
+            tasa_cambio_billetes: true,
+            tasa_cambio_monedas: true,
+            observacion: true,
+            numero_recibo: true,
+            numero_recibo_abono: true,
+            numero_recibo_completar: true,
+            cliente: true,
+            divisas_entregadas_total: true,
+            divisas_recibidas_total: true,
+            saldo_pendiente: true,
+            abono_inicial_monto: true,
+            abono_inicial_fecha: true,
+            fecha_completado: true,
+            monedaOrigen: {
+              select: { id: true, nombre: true, codigo: true, simbolo: true },
+            },
+            monedaDestino: {
+              select: { id: true, nombre: true, codigo: true, simbolo: true },
+            },
+            usuario: { select: { id: true, nombre: true, username: true } },
+            puntoAtencion: { select: { id: true, nombre: true } },
+          },
         });
-      }
 
-      const numeroReciboCierre = `CIERRE-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 6)}`;
-      const updated = await prisma.cambioDivisa.update({
-        where: { id },
-        data: {
-          estado: EstadoTransaccion.COMPLETADO,
-          numero_recibo_completar: numeroReciboCierre,
-          fecha_completado: new Date(), // UTC - la UI muestra en zona horaria local
-          saldo_pendiente: 0,
-        },
-        select: {
-          id: true,
-          fecha: true,
-          tipo_operacion: true,
-          estado: true,
-          monto_origen: true,
-          monto_destino: true,
-          tasa_cambio_billetes: true,
-          tasa_cambio_monedas: true,
-          observacion: true,
-          numero_recibo: true,
-          numero_recibo_abono: true,
-          numero_recibo_completar: true,
-          cliente: true,
-          divisas_entregadas_total: true,
-          divisas_recibidas_total: true,
-          saldo_pendiente: true,
-          abono_inicial_monto: true,
-          abono_inicial_fecha: true,
-          fecha_completado: true,
-          monedaOrigen: {
-            select: { id: true, nombre: true, codigo: true, simbolo: true },
+        await tx.recibo.create({
+          data: {
+            numero_recibo: numeroReciboCierre,
+            tipo_operacion: "CAMBIO_DIVISA",
+            referencia_id: updated.id,
+            usuario_id: userId,
+            punto_atencion_id: cambio.punto_atencion_id,
+            datos_operacion: updated,
           },
-          monedaDestino: {
-            select: { id: true, nombre: true, codigo: true, simbolo: true },
-          },
-          usuario: { select: { id: true, nombre: true, username: true } },
-          puntoAtencion: { select: { id: true, nombre: true } },
-        },
-      });
+        });
 
-      await prisma.recibo.create({
-        data: {
-          numero_recibo: numeroReciboCierre,
-          tipo_operacion: "CAMBIO_DIVISA",
-          referencia_id: updated.id,
-          usuario_id: userId,
-          punto_atencion_id: cambio.punto_atencion_id,
-          datos_operacion: updated,
-        },
+        return updated;
       });
+      if (!updated) return;
 
       res.status(200).json({
         exchange: updated,
@@ -1890,6 +1909,10 @@ router.patch(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (error instanceof OperationalConflict) {
+        res.status(409).json({ success: false, error: error.message });
+        return;
+      }
       logger.error("Error al cerrar cambio de divisa", {
         error: error instanceof Error ? error.message : "Unknown",
       });
@@ -1926,197 +1949,70 @@ router.patch(
         return;
       }
 
-      const cambio = await prisma.cambioDivisa.findUnique({
-        where: { id },
-        include: {
-          monedaDestino: {
-            select: { codigo: true },
-          },
-        },
-      });
-      if (!cambio) {
-        res.status(404).json({ error: "Cambio no encontrado", success: false });
-        return;
-      }
-      if (req.user?.rol === "OPERADOR" &&
-          req.user.punto_atencion_id !== cambio.punto_atencion_id) {
-        res.status(403).json({ success: false, error: "No puede modificar cambios de otro punto de atencion" });
-        return;
-      }
-      if (cambio.estado === EstadoTransaccion.CANCELADO) {
-        res.status(409).json({ success: false, error: "El cambio esta cancelado" });
-        return;
-      }
-      if (cambio.estado === EstadoTransaccion.COMPLETADO) {
-        res
-          .status(400)
-          .json({ error: "El cambio ya está completado", success: false });
-        return;
-      }
-
-      if (metodo_entrega === "transferencia") {
-        if (!transferencia_banco || !String(transferencia_banco).trim()) {
-          res.status(400).json({
-            success: false,
-            error: "Banco requerido para transferencia",
-          });
-          return;
-        }
-        if (!transferencia_numero || !String(transferencia_numero).trim()) {
-          res.status(400).json({
-            success: false,
-            error: "Número de referencia requerido para transferencia",
-          });
-          return;
-        }
-      }
-
-      // ✅ CRÍTICO: Si hubo abono inicial, actualizar el balance restante
-      const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
-
-      if (huboAbonoInicial) {
-        // Calcular el porcentaje restante que falta actualizar
-        const montoTotal = num(cambio.monto_destino);
-        const montoAbonado = num(cambio.abono_inicial_monto);
-        const montoRestante = montoTotal - montoAbonado;
-        const porcentajeRestante = montoRestante / montoTotal;
-
-        // Obtener saldos actuales
-        const saldoOrigen = await prisma.saldo.findUnique({
-          where: {
-            punto_atencion_id_moneda_id: {
-              punto_atencion_id: cambio.punto_atencion_id,
-              moneda_id: cambio.moneda_origen_id,
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "CambioDivisa" WHERE id = ${id} FOR UPDATE`;
+        const cambio = await tx.cambioDivisa.findUnique({
+          where: { id },
+          include: {
+            monedaDestino: {
+              select: { codigo: true },
             },
           },
         });
-
-        const saldoDestino = await prisma.saldo.findUnique({
-          where: {
-            punto_atencion_id_moneda_id: {
-              punto_atencion_id: cambio.punto_atencion_id,
-              moneda_id: cambio.moneda_destino_id,
-            },
-          },
-        });
-
-        if (!saldoOrigen || !saldoDestino) {
-          res.status(400).json({
-            error: "No se encontraron saldos para las monedas involucradas",
-            success: false,
-          });
+        if (!cambio) {
+          res.status(404).json({ error: "Cambio no encontrado", success: false });
+          return;
+        }
+        if (req.user?.rol === "OPERADOR" &&
+            req.user.punto_atencion_id !== cambio.punto_atencion_id) {
+          res.status(403).json({ success: false, error: "No puede modificar cambios de otro punto de atencion" });
+          return;
+        }
+        if (cambio.estado === EstadoTransaccion.CANCELADO) {
+          res.status(409).json({ success: false, error: "El cambio esta cancelado" });
+          return;
+        }
+        if (cambio.estado === EstadoTransaccion.COMPLETADO) {
+          res
+            .status(400)
+            .json({ error: "El cambio ya está completado", success: false });
           return;
         }
 
-        // Calcular incrementos/decrementos restantes según método de pago
-        const usdRecibidoEfectivo =
-          cambio.metodo_pago_origen === TipoViaTransferencia.EFECTIVO
-            ? num(cambio.divisas_entregadas_total)
-            : 0;
-        const usdRecibidoTransfer =
-          cambio.metodo_pago_origen === TipoViaTransferencia.BANCO
-            ? num(cambio.divisas_entregadas_total)
-            : 0;
-
-        const ingresoEfRestante = round2(
-          usdRecibidoEfectivo * porcentajeRestante
-        );
-        const ingresoBkRestante = round2(
-          usdRecibidoTransfer * porcentajeRestante
-        );
-
-        // Calcular billetes y monedas de ingreso manteniendo proporción
-        let ingresoBilRestante = 0;
-        let ingresoMonRestante = 0;
-
-        if (ingresoEfRestante > 0) {
-          const totalEntregado =
-            num(cambio.divisas_entregadas_billetes) +
-            num(cambio.divisas_entregadas_monedas);
-
-          if (totalEntregado > 0) {
-            const proporcionBilletes =
-              num(cambio.divisas_entregadas_billetes) / totalEntregado;
-            const proporcionMonedas =
-              num(cambio.divisas_entregadas_monedas) / totalEntregado;
-
-            ingresoBilRestante = round2(ingresoEfRestante * proporcionBilletes);
-            ingresoMonRestante = round2(ingresoEfRestante * proporcionMonedas);
-
-            // Ajustar por diferencias de redondeo
-            const diferencia =
-              ingresoEfRestante - (ingresoBilRestante + ingresoMonRestante);
-            if (Math.abs(diferencia) > 0.01) {
-              if (ingresoBilRestante >= ingresoMonRestante) {
-                ingresoBilRestante = round2(ingresoBilRestante + diferencia);
-              } else {
-                ingresoMonRestante = round2(ingresoMonRestante + diferencia);
-              }
-            }
-          } else {
-            ingresoBilRestante = ingresoEfRestante;
-            ingresoMonRestante = 0;
+        if (metodo_entrega === "transferencia") {
+          if (!transferencia_banco || !String(transferencia_banco).trim()) {
+            res.status(400).json({
+              success: false,
+              error: "Banco requerido para transferencia",
+            });
+            return;
+          }
+          if (!transferencia_numero || !String(transferencia_numero).trim()) {
+            res.status(400).json({
+              success: false,
+              error: "Número de referencia requerido para transferencia",
+            });
+            return;
           }
         }
 
-        // Egreso en moneda destino
-        const destinoRestante = calcularEgresoDestino({
-          isDestinoUSD: isUSDByCode(cambio.monedaDestino?.codigo),
-          metodoEntrega: cambio.metodo_entrega,
-          totalDestino: round2(num(cambio.divisas_recibidas_total) * porcentajeRestante),
-          usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo) * porcentajeRestante,
-          usdEntregadoTransfer: num(cambio.usd_entregado_transfer) * porcentajeRestante,
-        });
-        const egresoEfRestante = destinoRestante.egresoEf;
-        const egresoBkRestante = destinoRestante.egresoBk;
-
-        // Calcular billetes y monedas de egreso manteniendo proporción
-        let billetesEgresoRestante = 0;
-        let monedasEgresoRestante = 0;
-
-        if (egresoEfRestante > 0) {
-          const totalRecibido =
-            num(cambio.divisas_recibidas_billetes) +
-            num(cambio.divisas_recibidas_monedas);
-
-          if (totalRecibido > 0) {
-            const proporcionBilletes =
-              num(cambio.divisas_recibidas_billetes) / totalRecibido;
-            const proporcionMonedas =
-              num(cambio.divisas_recibidas_monedas) / totalRecibido;
-
-            billetesEgresoRestante = round2(
-              egresoEfRestante * proporcionBilletes
-            );
-            monedasEgresoRestante = round2(
-              egresoEfRestante * proporcionMonedas
-            );
-
-            // Ajustar por diferencias de redondeo
-            const diferencia =
-              egresoEfRestante -
-              (billetesEgresoRestante + monedasEgresoRestante);
-            if (Math.abs(diferencia) > 0.01) {
-              if (billetesEgresoRestante >= monedasEgresoRestante) {
-                billetesEgresoRestante = round2(
-                  billetesEgresoRestante + diferencia
-                );
-              } else {
-                monedasEgresoRestante = round2(
-                  monedasEgresoRestante + diferencia
-                );
-              }
-            }
-          } else {
-            billetesEgresoRestante = egresoEfRestante;
-            monedasEgresoRestante = 0;
-          }
+        // ✅ CRÍTICO: Si hubo abono inicial, actualizar el balance restante
+        for (const currencyId of [...new Set([cambio.moneda_origen_id, cambio.moneda_destino_id])].sort()) {
+          await lockBalance(tx, cambio.punto_atencion_id, currencyId);
         }
+        await assertOperationalSession(tx, req.user, cambio.punto_atencion_id);
 
-        // Actualizar saldos en transacción
-        await prisma.$transaction(async (tx) => {
-          // 1) Actualizar saldo origen (ingreso del monto restante)
-          const existingSaldoOrigen = await tx.saldo.findUnique({
+        const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
+
+        if (huboAbonoInicial) {
+          // Calcular el porcentaje restante que falta actualizar
+          const montoTotal = num(cambio.monto_destino);
+          const montoAbonado = num(cambio.abono_inicial_monto);
+          const montoRestante = montoTotal - montoAbonado;
+          const porcentajeRestante = montoRestante / montoTotal;
+
+          // Obtener saldos actuales
+          const saldoOrigen = await tx.saldo.findUnique({
             where: {
               punto_atencion_id_moneda_id: {
                 punto_atencion_id: cambio.punto_atencion_id,
@@ -2125,215 +2021,361 @@ router.patch(
             },
           });
 
-          const origenAnteriorEf = num(existingSaldoOrigen?.cantidad);
-          const origenAnteriorBk = num(existingSaldoOrigen?.bancos);
-          const origenNuevoEf = round2(origenAnteriorEf + ingresoEfRestante);
-          const origenNuevoBk = round2(origenAnteriorBk + ingresoBkRestante);
-          const origenNuevoBil = round2(num(existingSaldoOrigen?.billetes) + ingresoBilRestante);
-          const origenNuevoMon = round2(num(existingSaldoOrigen?.monedas_fisicas) + ingresoMonRestante);
-
-          await tx.saldo.update({
+          const saldoDestino = await tx.saldo.findUnique({
             where: {
               punto_atencion_id_moneda_id: {
                 punto_atencion_id: cambio.punto_atencion_id,
-                moneda_id: cambio.moneda_origen_id,
+                moneda_id: cambio.moneda_destino_id,
               },
-            },
-            data: {
-              cantidad: origenNuevoEf,
-              bancos: origenNuevoBk,
-              billetes: origenNuevoBil,
-              monedas_fisicas: origenNuevoMon,
             },
           });
 
-          // Registrar movimiento origen (separado CAJA/BANCOS)
+          if (!saldoOrigen || !saldoDestino) {
+            res.status(400).json({
+              error: "No se encontraron saldos para las monedas involucradas",
+              success: false,
+            });
+            return;
+          }
+
+          // Calcular incrementos/decrementos restantes según método de pago
+          const usdRecibidoEfectivo =
+            cambio.metodo_pago_origen === TipoViaTransferencia.EFECTIVO
+              ? num(cambio.divisas_entregadas_total)
+              : 0;
+          const usdRecibidoTransfer =
+            cambio.metodo_pago_origen === TipoViaTransferencia.BANCO
+              ? num(cambio.divisas_entregadas_total)
+              : 0;
+
+          const ingresoEfRestante = round2(
+            usdRecibidoEfectivo * porcentajeRestante
+          );
+          const ingresoBkRestante = round2(
+            usdRecibidoTransfer * porcentajeRestante
+          );
+
+          // Calcular billetes y monedas de ingreso manteniendo proporción
+          let ingresoBilRestante = 0;
+          let ingresoMonRestante = 0;
+
           if (ingresoEfRestante > 0) {
-            await registrarMovimientoSaldo(
-              {
-                puntoAtencionId: cambio.punto_atencion_id,
-                monedaId: cambio.moneda_origen_id,
-                tipoMovimiento: TipoMovimiento.INGRESO,
-                monto: round2(ingresoEfRestante),
-                saldoAnterior: round2(origenAnteriorEf),
-                saldoNuevo: round2(origenNuevoEf),
-                tipoReferencia: TipoReferencia.EXCHANGE,
-                referenciaId: cambio.id,
-                descripcion: `Completar cambio pendiente (ingreso restante caja) - Recibo: ${cambio.numero_recibo}`,
-                saldoBucket: "CAJA",
-                usuarioId: userId,
-              },
-              tx
-            );
-          }
-          if (ingresoBkRestante > 0) {
-            await registrarMovimientoSaldo(
-              {
-                puntoAtencionId: cambio.punto_atencion_id,
-                monedaId: cambio.moneda_origen_id,
-                tipoMovimiento: TipoMovimiento.INGRESO,
-                monto: round2(ingresoBkRestante),
-                saldoAnterior: round2(origenAnteriorBk),
-                saldoNuevo: round2(origenNuevoBk),
-                tipoReferencia: TipoReferencia.EXCHANGE,
-                referenciaId: cambio.id,
-                descripcion: `Completar cambio pendiente (ingreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
-                saldoBucket: "BANCOS",
-                usuarioId: userId,
-              },
-              tx
-            );
+            const totalEntregado =
+              num(cambio.divisas_entregadas_billetes) +
+              num(cambio.divisas_entregadas_monedas);
+
+            if (totalEntregado > 0) {
+              const proporcionBilletes =
+                num(cambio.divisas_entregadas_billetes) / totalEntregado;
+              const proporcionMonedas =
+                num(cambio.divisas_entregadas_monedas) / totalEntregado;
+
+              ingresoBilRestante = round2(ingresoEfRestante * proporcionBilletes);
+              ingresoMonRestante = round2(ingresoEfRestante * proporcionMonedas);
+
+              // Ajustar por diferencias de redondeo
+              const diferencia =
+                ingresoEfRestante - (ingresoBilRestante + ingresoMonRestante);
+              if (Math.abs(diferencia) > 0.01) {
+                if (ingresoBilRestante >= ingresoMonRestante) {
+                  ingresoBilRestante = round2(ingresoBilRestante + diferencia);
+                } else {
+                  ingresoMonRestante = round2(ingresoMonRestante + diferencia);
+                }
+              }
+            } else {
+              ingresoBilRestante = ingresoEfRestante;
+              ingresoMonRestante = 0;
+            }
           }
 
-          // 2) Actualizar saldo destino (egreso del monto restante)
-          const existingSaldoDestino = await tx.saldo.findUnique({
-            where: {
-              punto_atencion_id_moneda_id: {
-                punto_atencion_id: cambio.punto_atencion_id,
-                moneda_id: cambio.moneda_destino_id,
-              },
-            },
+          // Egreso en moneda destino
+          const destinoRestante = calcularEgresoDestino({
+            isDestinoUSD: isUSDByCode(cambio.monedaDestino?.codigo),
+            metodoEntrega: cambio.metodo_entrega,
+            totalDestino: round2(num(cambio.divisas_recibidas_total) * porcentajeRestante),
+            usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo) * porcentajeRestante,
+            usdEntregadoTransfer: num(cambio.usd_entregado_transfer) * porcentajeRestante,
           });
+          const egresoEfRestante = destinoRestante.egresoEf;
+          const egresoBkRestante = destinoRestante.egresoBk;
 
-          const destinoAnteriorEf = num(existingSaldoDestino?.cantidad);
-          const destinoAnteriorBk = num(existingSaldoDestino?.bancos);
-          const destinoNuevoEf = round2(destinoAnteriorEf - egresoEfRestante);
-          const destinoNuevoBk = round2(destinoAnteriorBk - egresoBkRestante);
-          const destinoNuevoBil = round2(num(existingSaldoDestino?.billetes) - billetesEgresoRestante);
-          const destinoNuevoMon = round2(num(existingSaldoDestino?.monedas_fisicas) - monedasEgresoRestante);
+          // Calcular billetes y monedas de egreso manteniendo proporción
+          let billetesEgresoRestante = 0;
+          let monedasEgresoRestante = 0;
 
-          await tx.saldo.update({
-            where: {
-              punto_atencion_id_moneda_id: {
-                punto_atencion_id: cambio.punto_atencion_id,
-                moneda_id: cambio.moneda_destino_id,
-              },
-            },
-            data: {
-              cantidad: destinoNuevoEf,
-              bancos: destinoNuevoBk,
-              billetes: destinoNuevoBil,
-              monedas_fisicas: destinoNuevoMon,
-            },
-          });
-
-          // Registrar movimiento destino (separado CAJA/BANCOS)
           if (egresoEfRestante > 0) {
-            await registrarMovimientoSaldo(
-              {
-                puntoAtencionId: cambio.punto_atencion_id,
-                monedaId: cambio.moneda_destino_id,
-                tipoMovimiento: TipoMovimiento.EGRESO,
-                monto: round2(egresoEfRestante),
-                saldoAnterior: round2(destinoAnteriorEf),
-                saldoNuevo: round2(destinoNuevoEf),
-                tipoReferencia: TipoReferencia.EXCHANGE,
-                referenciaId: cambio.id,
-                descripcion: `Completar cambio pendiente (egreso restante caja) - Recibo: ${cambio.numero_recibo}`,
-                saldoBucket: "CAJA",
-                usuarioId: userId,
-              },
-              tx
-            );
+            const totalRecibido =
+              num(cambio.divisas_recibidas_billetes) +
+              num(cambio.divisas_recibidas_monedas);
+
+            if (totalRecibido > 0) {
+              const proporcionBilletes =
+                num(cambio.divisas_recibidas_billetes) / totalRecibido;
+              const proporcionMonedas =
+                num(cambio.divisas_recibidas_monedas) / totalRecibido;
+
+              billetesEgresoRestante = round2(
+                egresoEfRestante * proporcionBilletes
+              );
+              monedasEgresoRestante = round2(
+                egresoEfRestante * proporcionMonedas
+              );
+
+              // Ajustar por diferencias de redondeo
+              const diferencia =
+                egresoEfRestante -
+                (billetesEgresoRestante + monedasEgresoRestante);
+              if (Math.abs(diferencia) > 0.01) {
+                if (billetesEgresoRestante >= monedasEgresoRestante) {
+                  billetesEgresoRestante = round2(
+                    billetesEgresoRestante + diferencia
+                  );
+                } else {
+                  monedasEgresoRestante = round2(
+                    monedasEgresoRestante + diferencia
+                  );
+                }
+              }
+            } else {
+              billetesEgresoRestante = egresoEfRestante;
+              monedasEgresoRestante = 0;
+            }
           }
-          if (egresoBkRestante > 0) {
-            await registrarMovimientoSaldo(
-              {
-                puntoAtencionId: cambio.punto_atencion_id,
-                monedaId: cambio.moneda_destino_id,
-                tipoMovimiento: TipoMovimiento.EGRESO,
-                monto: round2(egresoBkRestante),
-                saldoAnterior: round2(destinoAnteriorBk),
-                saldoNuevo: round2(destinoNuevoBk),
-                tipoReferencia: TipoReferencia.EXCHANGE,
-                referenciaId: cambio.id,
-                descripcion: `Completar cambio pendiente (egreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
-                saldoBucket: "BANCOS",
-                usuarioId: userId,
-              },
-              tx
-            );
+
+          // Actualizar saldos en transacción
+          if (num(saldoDestino.cantidad) < egresoEfRestante ||
+              num(saldoDestino.bancos) < egresoBkRestante ||
+              num(saldoDestino.billetes) < billetesEgresoRestante ||
+              num(saldoDestino.monedas_fisicas) < monedasEgresoRestante) {
+            res.status(400).json({ success: false, error: "Saldo insuficiente para completar el cambio" });
+            return;
           }
+
+          {
+            // 1) Actualizar saldo origen (ingreso del monto restante)
+            const existingSaldoOrigen = await tx.saldo.findUnique({
+              where: {
+                punto_atencion_id_moneda_id: {
+                  punto_atencion_id: cambio.punto_atencion_id,
+                  moneda_id: cambio.moneda_origen_id,
+                },
+              },
+            });
+
+            const origenAnteriorEf = num(existingSaldoOrigen?.cantidad);
+            const origenAnteriorBk = num(existingSaldoOrigen?.bancos);
+            const origenNuevoEf = round2(origenAnteriorEf + ingresoEfRestante);
+            const origenNuevoBk = round2(origenAnteriorBk + ingresoBkRestante);
+            const origenNuevoBil = round2(num(existingSaldoOrigen?.billetes) + ingresoBilRestante);
+            const origenNuevoMon = round2(num(existingSaldoOrigen?.monedas_fisicas) + ingresoMonRestante);
+
+            await tx.saldo.update({
+              where: {
+                punto_atencion_id_moneda_id: {
+                  punto_atencion_id: cambio.punto_atencion_id,
+                  moneda_id: cambio.moneda_origen_id,
+                },
+              },
+              data: {
+                cantidad: origenNuevoEf,
+                bancos: origenNuevoBk,
+                billetes: origenNuevoBil,
+                monedas_fisicas: origenNuevoMon,
+              },
+            });
+
+            // Registrar movimiento origen (separado CAJA/BANCOS)
+            if (ingresoEfRestante > 0) {
+              await registrarMovimientoSaldo(
+                {
+                  puntoAtencionId: cambio.punto_atencion_id,
+                  monedaId: cambio.moneda_origen_id,
+                  tipoMovimiento: TipoMovimiento.INGRESO,
+                  monto: round2(ingresoEfRestante),
+                  saldoAnterior: round2(origenAnteriorEf),
+                  saldoNuevo: round2(origenNuevoEf),
+                  tipoReferencia: TipoReferencia.EXCHANGE,
+                  referenciaId: cambio.id,
+                  descripcion: `Completar cambio pendiente (ingreso restante caja) - Recibo: ${cambio.numero_recibo}`,
+                  saldoBucket: "CAJA",
+                  usuarioId: userId,
+                },
+                tx
+              );
+            }
+            if (ingresoBkRestante > 0) {
+              await registrarMovimientoSaldo(
+                {
+                  puntoAtencionId: cambio.punto_atencion_id,
+                  monedaId: cambio.moneda_origen_id,
+                  tipoMovimiento: TipoMovimiento.INGRESO,
+                  monto: round2(ingresoBkRestante),
+                  saldoAnterior: round2(origenAnteriorBk),
+                  saldoNuevo: round2(origenNuevoBk),
+                  tipoReferencia: TipoReferencia.EXCHANGE,
+                  referenciaId: cambio.id,
+                  descripcion: `Completar cambio pendiente (ingreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
+                  saldoBucket: "BANCOS",
+                  usuarioId: userId,
+                },
+                tx
+              );
+            }
+
+            // 2) Actualizar saldo destino (egreso del monto restante)
+            const existingSaldoDestino = await tx.saldo.findUnique({
+              where: {
+                punto_atencion_id_moneda_id: {
+                  punto_atencion_id: cambio.punto_atencion_id,
+                  moneda_id: cambio.moneda_destino_id,
+                },
+              },
+            });
+
+            const destinoAnteriorEf = num(existingSaldoDestino?.cantidad);
+            const destinoAnteriorBk = num(existingSaldoDestino?.bancos);
+            const destinoNuevoEf = round2(destinoAnteriorEf - egresoEfRestante);
+            const destinoNuevoBk = round2(destinoAnteriorBk - egresoBkRestante);
+            const destinoNuevoBil = round2(num(existingSaldoDestino?.billetes) - billetesEgresoRestante);
+            const destinoNuevoMon = round2(num(existingSaldoDestino?.monedas_fisicas) - monedasEgresoRestante);
+
+            await tx.saldo.update({
+              where: {
+                punto_atencion_id_moneda_id: {
+                  punto_atencion_id: cambio.punto_atencion_id,
+                  moneda_id: cambio.moneda_destino_id,
+                },
+              },
+              data: {
+                cantidad: destinoNuevoEf,
+                bancos: destinoNuevoBk,
+                billetes: destinoNuevoBil,
+                monedas_fisicas: destinoNuevoMon,
+              },
+            });
+
+            // Registrar movimiento destino (separado CAJA/BANCOS)
+            if (egresoEfRestante > 0) {
+              await registrarMovimientoSaldo(
+                {
+                  puntoAtencionId: cambio.punto_atencion_id,
+                  monedaId: cambio.moneda_destino_id,
+                  tipoMovimiento: TipoMovimiento.EGRESO,
+                  monto: round2(egresoEfRestante),
+                  saldoAnterior: round2(destinoAnteriorEf),
+                  saldoNuevo: round2(destinoNuevoEf),
+                  tipoReferencia: TipoReferencia.EXCHANGE,
+                  referenciaId: cambio.id,
+                  descripcion: `Completar cambio pendiente (egreso restante caja) - Recibo: ${cambio.numero_recibo}`,
+                  saldoBucket: "CAJA",
+                  usuarioId: userId,
+                },
+                tx
+              );
+            }
+            if (egresoBkRestante > 0) {
+              await registrarMovimientoSaldo(
+                {
+                  puntoAtencionId: cambio.punto_atencion_id,
+                  monedaId: cambio.moneda_destino_id,
+                  tipoMovimiento: TipoMovimiento.EGRESO,
+                  monto: round2(egresoBkRestante),
+                  saldoAnterior: round2(destinoAnteriorBk),
+                  saldoNuevo: round2(destinoNuevoBk),
+                  tipoReferencia: TipoReferencia.EXCHANGE,
+                  referenciaId: cambio.id,
+                  descripcion: `Completar cambio pendiente (egreso restante bancos) - Recibo: ${cambio.numero_recibo}`,
+                  saldoBucket: "BANCOS",
+                  usuarioId: userId,
+                },
+                tx
+              );
+            }
+          }
+        }
+
+        const numeroReciboCompletar = `COMP-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 6)}`;
+        const updated = await tx.cambioDivisa.update({
+          where: { id },
+          data: {
+            estado: EstadoTransaccion.COMPLETADO,
+            metodo_entrega: metodo_entrega || cambio.metodo_entrega,
+            transferencia_numero:
+              (metodo_entrega || cambio.metodo_entrega) === "transferencia"
+                ? transferencia_numero || cambio.transferencia_numero
+                : null,
+            transferencia_banco:
+              (metodo_entrega || cambio.metodo_entrega) === "transferencia"
+                ? transferencia_banco || cambio.transferencia_banco
+                : null,
+            transferencia_imagen_url:
+              (metodo_entrega || cambio.metodo_entrega) === "transferencia"
+                ? transferencia_imagen_url || cambio.transferencia_imagen_url
+                : null,
+            divisas_recibidas_billetes:
+              typeof divisas_recibidas_billetes === "number"
+                ? round2(divisas_recibidas_billetes)
+                : cambio.divisas_recibidas_billetes,
+            divisas_recibidas_monedas:
+              typeof divisas_recibidas_monedas === "number"
+                ? round2(divisas_recibidas_monedas)
+                : cambio.divisas_recibidas_monedas,
+            divisas_recibidas_total:
+              typeof divisas_recibidas_total === "number"
+                ? round2(divisas_recibidas_total)
+                : cambio.divisas_recibidas_total,
+            numero_recibo_completar: numeroReciboCompletar,
+            fecha_completado: new Date(), // UTC - la UI muestra en zona horaria local
+            saldo_pendiente: 0,
+          },
+          select: {
+            id: true,
+            fecha: true,
+            tipo_operacion: true,
+            estado: true,
+            monto_origen: true,
+            monto_destino: true,
+            tasa_cambio_billetes: true,
+            tasa_cambio_monedas: true,
+            observacion: true,
+            numero_recibo: true,
+            numero_recibo_abono: true,
+            numero_recibo_completar: true,
+            cliente: true,
+            divisas_entregadas_total: true,
+            divisas_recibidas_total: true,
+            saldo_pendiente: true,
+            abono_inicial_monto: true,
+            abono_inicial_fecha: true,
+            fecha_completado: true,
+            monedaOrigen: {
+              select: { id: true, nombre: true, codigo: true, simbolo: true },
+            },
+            monedaDestino: {
+              select: { id: true, nombre: true, codigo: true, simbolo: true },
+            },
+            usuario: { select: { id: true, nombre: true, username: true } },
+            puntoAtencion: { select: { id: true, nombre: true } },
+          },
         });
-      }
 
-      const numeroReciboCompletar = `COMP-${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 6)}`;
-      const updated = await prisma.cambioDivisa.update({
-        where: { id },
-        data: {
-          estado: EstadoTransaccion.COMPLETADO,
-          metodo_entrega: metodo_entrega || cambio.metodo_entrega,
-          transferencia_numero:
-            (metodo_entrega || cambio.metodo_entrega) === "transferencia"
-              ? transferencia_numero || cambio.transferencia_numero
-              : null,
-          transferencia_banco:
-            (metodo_entrega || cambio.metodo_entrega) === "transferencia"
-              ? transferencia_banco || cambio.transferencia_banco
-              : null,
-          transferencia_imagen_url:
-            (metodo_entrega || cambio.metodo_entrega) === "transferencia"
-              ? transferencia_imagen_url || cambio.transferencia_imagen_url
-              : null,
-          divisas_recibidas_billetes:
-            typeof divisas_recibidas_billetes === "number"
-              ? round2(divisas_recibidas_billetes)
-              : cambio.divisas_recibidas_billetes,
-          divisas_recibidas_monedas:
-            typeof divisas_recibidas_monedas === "number"
-              ? round2(divisas_recibidas_monedas)
-              : cambio.divisas_recibidas_monedas,
-          divisas_recibidas_total:
-            typeof divisas_recibidas_total === "number"
-              ? round2(divisas_recibidas_total)
-              : cambio.divisas_recibidas_total,
-          numero_recibo_completar: numeroReciboCompletar,
-          fecha_completado: new Date(), // UTC - la UI muestra en zona horaria local
-          saldo_pendiente: 0,
-        },
-        select: {
-          id: true,
-          fecha: true,
-          tipo_operacion: true,
-          estado: true,
-          monto_origen: true,
-          monto_destino: true,
-          tasa_cambio_billetes: true,
-          tasa_cambio_monedas: true,
-          observacion: true,
-          numero_recibo: true,
-          numero_recibo_abono: true,
-          numero_recibo_completar: true,
-          cliente: true,
-          divisas_entregadas_total: true,
-          divisas_recibidas_total: true,
-          saldo_pendiente: true,
-          abono_inicial_monto: true,
-          abono_inicial_fecha: true,
-          fecha_completado: true,
-          monedaOrigen: {
-            select: { id: true, nombre: true, codigo: true, simbolo: true },
+        await tx.recibo.create({
+          data: {
+            numero_recibo: numeroReciboCompletar,
+            tipo_operacion: "CAMBIO_DIVISA",
+            referencia_id: updated.id,
+            usuario_id: userId,
+            punto_atencion_id: cambio.punto_atencion_id,
+            datos_operacion: updated,
           },
-          monedaDestino: {
-            select: { id: true, nombre: true, codigo: true, simbolo: true },
-          },
-          usuario: { select: { id: true, nombre: true, username: true } },
-          puntoAtencion: { select: { id: true, nombre: true } },
-        },
-      });
+        });
 
-      await prisma.recibo.create({
-        data: {
-          numero_recibo: numeroReciboCompletar,
-          tipo_operacion: "CAMBIO_DIVISA",
-          referencia_id: updated.id,
-          usuario_id: userId,
-          punto_atencion_id: cambio.punto_atencion_id,
-          datos_operacion: updated,
-        },
+        return updated;
       });
+      if (!updated) return;
 
       res.status(200).json({
         exchange: updated,
@@ -2341,6 +2383,10 @@ router.patch(
         timestamp: new Date().toISOString(),
       });
     } catch (error) {
+      if (error instanceof OperationalConflict) {
+        res.status(409).json({ success: false, error: error.message });
+        return;
+      }
       logger.error("Error al completar cambio de divisa", {
         error: error instanceof Error ? error.message : "Unknown",
       });

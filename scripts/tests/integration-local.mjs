@@ -751,6 +751,60 @@ try {
       });
     }
   }
+  await prisma.usuario.update({ where: { id: origin.userId }, data: { rol: 'ADMIN' } });
+  for (const action of ['cerrar', 'completar']) {
+    for (const scenario of ['concurrente', 'saldo insuficiente', 'fallo recibo']) {
+      await check(`Cambio ${action}: abono ${scenario} conserva atomicidad`, async () => {
+        const p = await prisma.puntoAtencion.create({ data: { nombre: `ABONO ${action} ${scenario}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+        for (const moneda of [usd, eur]) await prisma.saldo.create({ data: {
+          punto_atencion_id: p.id, moneda_id: moneda.id, cantidad: scenario === 'saldo insuficiente' ? 1 : 1000,
+          billetes: scenario === 'saldo insuficiente' ? 1 : 1000, bancos: 25,
+        } });
+        const record = await pendingFixture(p.id);
+        await prisma.cambioDivisa.update({ where: { id: record.id }, data: {
+          abono_inicial_monto: 55, saldo_pendiente: 55,
+          divisas_entregadas_total: 100, divisas_entregadas_billetes: 100,
+          divisas_recibidas_total: 110, divisas_recibidas_billetes: 110,
+          usd_entregado_efectivo: 110, usd_entregado_transfer: 0,
+        } });
+        const snapshot = async () => JSON.stringify({
+          cambio: await prisma.cambioDivisa.findUnique({ where: { id: record.id } }),
+          saldos: await prisma.saldo.findMany({ where: { punto_atencion_id: p.id }, orderBy: { id: 'asc' } }),
+          movimientos: await prisma.movimientoSaldo.count({ where: { referencia_id: record.id } }),
+          recibos: await prisma.recibo.count({ where: { referencia_id: record.id } }),
+        });
+        const before = await snapshot();
+        if (scenario === 'fallo recibo') {
+          await pool.query(`CREATE FUNCTION reject_test_receipt() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.referencia_id = '${record.id}' THEN RAISE EXCEPTION 'Fallo ficticio de recibo'; END IF; RETURN NEW; END $$`);
+          await pool.query('CREATE TRIGGER reject_test_receipt BEFORE INSERT ON "Recibo" FOR EACH ROW EXECUTE FUNCTION reject_test_receipt()');
+        }
+        try {
+          if (scenario === 'concurrente') {
+            const responses = await raceBalance(p, [
+              () => patchExchange(record.id, action, origin.token),
+              () => patchExchange(record.id, action, origin.token),
+            ]);
+            assert.deepEqual(responses.map(r => r.status).sort(), [200, 400]);
+            assert.equal(await balance(p), 945);
+            const eurBalance = await prisma.saldo.findUnique({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: eur.id } } });
+            assert.equal(Number(eurBalance.cantidad), 1050);
+            assert.equal(Number(eurBalance.billetes), 1050);
+            assert.equal(await prisma.movimientoSaldo.count({ where: { referencia_id: record.id } }), 2);
+            assert.equal(await prisma.recibo.count({ where: { referencia_id: record.id } }), 1);
+          } else {
+            const result = await patchExchange(record.id, action, origin.token);
+            assert.equal(result.status, scenario === 'saldo insuficiente' ? 400 : 500);
+            assert.equal(await snapshot(), before);
+          }
+        } finally {
+          if (scenario === 'fallo recibo') {
+            await pool.query('DROP TRIGGER reject_test_receipt ON "Recibo"');
+            await pool.query('DROP FUNCTION reject_test_receipt()');
+          }
+        }
+      });
+    }
+  }
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

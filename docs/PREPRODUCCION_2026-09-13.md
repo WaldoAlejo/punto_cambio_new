@@ -29,6 +29,8 @@ Evidencia: [antes](INTEGRACION_LOCAL_FECHA_APERTURA_ANTES.json), [después](INTE
 
 ## Pendientes de liberación
 
+`cerrar` y `completar` ahora bloquean el cambio y ambas monedas, vuelven a verificar la jornada y guardan saldos, movimientos, estado y recibo en una transacción. Rechazan saldo/desglose insuficiente. Pruebas de doble solicitud y fallo deliberado del recibo confirman una sola contabilización y rollback completo: [91 pruebas correctas](INTEGRACION_LOCAL_ABONOS_ATOMICOS.json). Se conserva por ahora la fórmula existente de reparto del abono; no certifica la correcta clasificación histórica ni todos los métodos de pago.
+
 Permisos de `cerrar`, `completar` y `register-partial-payment` corregidos: operador limitado a su punto, cambios cancelados rechazados con 409, alcance ADMIN/SUPER_USUARIO conservado. Verificación aislada: 85 pruebas correctas y TypeScript backend correcto; [resultados](INTEGRACION_LOCAL_PERMISOS_CAMBIOS.json). Estas pruebas de permisos no certifican todavía la contabilidad de abonos ni su concurrencia.
 
 - Fecha/estado de cuadres históricos y discrepancias de desglose señaladas arriba.
