@@ -9,7 +9,7 @@ import {
 import prisma from "../lib/prisma.js";
 import { lockTransferBalance as lockBalance } from "../utils/transferBalance.js";
 import { assertOperationalSession, OperationalConflict } from "../utils/operationalConflict.js";
-import { remainingPartialCash } from "../utils/partialCashSettlement.js";
+import { remainingPartialAmounts } from "../utils/partialCashSettlement.js";
 import { splitCash } from "../utils/cashBreakdown.js";
 import { cashSnapshot, attachCashEvidence, cashReversalEvidence } from "../utils/exchangeCashEvidence.js";
 import logger from "../utils/logger.js";
@@ -1587,14 +1587,8 @@ router.patch(
 
         const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
 
-        const cashRemaining = huboAbonoInicial ? await remainingPartialCash(tx, cambio) : null;
-        if (huboAbonoInicial && (!cashRemaining || cashRemaining.ingresoEf > 0 || cashRemaining.egresoEf > 0)) {
-          // Calcular el porcentaje restante que falta actualizar
-          const montoTotal = num(cambio.monto_destino);
-          const montoAbonado = num(cambio.abono_inicial_monto);
-          const montoRestante = montoTotal - montoAbonado;
-          const porcentajeRestante = montoRestante / montoTotal;
-
+        const remainingAmounts = huboAbonoInicial ? await remainingPartialAmounts(tx, cambio) : null;
+        if (remainingAmounts && Object.values(remainingAmounts).some(amount => amount > 0)) {
           // Obtener saldos actuales
           const saldoOrigen = await tx.saldo.findUnique({
             where: {
@@ -1622,22 +1616,8 @@ router.patch(
             return;
           }
 
-          // Calcular incrementos/decrementos restantes según método de pago
-          const usdRecibidoEfectivo =
-            cambio.metodo_pago_origen === TipoViaTransferencia.EFECTIVO
-              ? num(cambio.divisas_entregadas_total)
-              : 0;
-          const usdRecibidoTransfer =
-            cambio.metodo_pago_origen === TipoViaTransferencia.BANCO
-              ? num(cambio.divisas_entregadas_total)
-              : 0;
-
-          const ingresoEfRestante = cashRemaining?.ingresoEf ?? round2(
-            usdRecibidoEfectivo * porcentajeRestante
-          );
-          const ingresoBkRestante = round2(
-            usdRecibidoTransfer * porcentajeRestante
-          );
+          const { ingresoEf: ingresoEfRestante, ingresoBk: ingresoBkRestante,
+            egresoEf: egresoEfRestante, egresoBk: egresoBkRestante } = remainingAmounts;
 
           // Calcular billetes y monedas de ingreso manteniendo proporción
           let ingresoBilRestante = 0;
@@ -1671,17 +1651,6 @@ router.patch(
               ingresoMonRestante = 0;
             }
           }
-
-          // Egreso en moneda destino
-          const destinoRestante = calcularEgresoDestino({
-            isDestinoUSD: isUSDByCode(cambio.monedaDestino?.codigo),
-            metodoEntrega: cambio.metodo_entrega,
-            totalDestino: round2(num(cambio.divisas_recibidas_total) * porcentajeRestante),
-            usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo) * porcentajeRestante,
-            usdEntregadoTransfer: num(cambio.usd_entregado_transfer) * porcentajeRestante,
-          });
-          const egresoEfRestante = cashRemaining?.egresoEf ?? destinoRestante.egresoEf;
-          const egresoBkRestante = destinoRestante.egresoBk;
 
           // Calcular billetes y monedas de egreso manteniendo proporción
           let billetesEgresoRestante = 0;
@@ -2005,19 +1974,16 @@ async function completePendingExchange(req: AuthenticatedRequest, res: express.R
           res.status(400).json({ success: false, error: "Este cambio no tiene saldo pendiente" });
           return;
         }
-        if (partialOnly && (cambio.metodo_pago_origen !== "EFECTIVO" || cambio.metodo_entrega !== "efectivo")) {
-          throw new OperationalConflict("El cierre administrativo de parciales por banco o mixtos requiere revision contable.");
+        if (partialOnly && num(cambio.abono_inicial_monto) <= 0) {
+          throw new OperationalConflict("El abono inicial requiere revision antes de liquidar el cambio parcial.");
+        }
+        if (num(cambio.abono_inicial_monto) > 0 && metodo_entrega && metodo_entrega !== cambio.metodo_entrega) {
+          throw new OperationalConflict("Cambiar la via de entrega de un abono requiere revision contable.");
         }
         const huboAbonoInicial = num(cambio.abono_inicial_monto) > 0;
 
-        const cashRemaining = huboAbonoInicial ? await remainingPartialCash(tx, cambio) : null;
-        if (huboAbonoInicial && (!cashRemaining || cashRemaining.ingresoEf > 0 || cashRemaining.egresoEf > 0)) {
-          // Calcular el porcentaje restante que falta actualizar
-          const montoTotal = num(cambio.monto_destino);
-          const montoAbonado = num(cambio.abono_inicial_monto);
-          const montoRestante = montoTotal - montoAbonado;
-          const porcentajeRestante = montoRestante / montoTotal;
-
+        const remainingAmounts = huboAbonoInicial ? await remainingPartialAmounts(tx, cambio) : null;
+        if (remainingAmounts && Object.values(remainingAmounts).some(amount => amount > 0)) {
           // Obtener saldos actuales
           const saldoOrigen = await tx.saldo.findUnique({
             where: {
@@ -2045,22 +2011,8 @@ async function completePendingExchange(req: AuthenticatedRequest, res: express.R
             return;
           }
 
-          // Calcular incrementos/decrementos restantes según método de pago
-          const usdRecibidoEfectivo =
-            cambio.metodo_pago_origen === TipoViaTransferencia.EFECTIVO
-              ? num(cambio.divisas_entregadas_total)
-              : 0;
-          const usdRecibidoTransfer =
-            cambio.metodo_pago_origen === TipoViaTransferencia.BANCO
-              ? num(cambio.divisas_entregadas_total)
-              : 0;
-
-          const ingresoEfRestante = cashRemaining?.ingresoEf ?? round2(
-            usdRecibidoEfectivo * porcentajeRestante
-          );
-          const ingresoBkRestante = round2(
-            usdRecibidoTransfer * porcentajeRestante
-          );
+          const { ingresoEf: ingresoEfRestante, ingresoBk: ingresoBkRestante,
+            egresoEf: egresoEfRestante, egresoBk: egresoBkRestante } = remainingAmounts;
 
           // Calcular billetes y monedas de ingreso manteniendo proporción
           let ingresoBilRestante = 0;
@@ -2094,17 +2046,6 @@ async function completePendingExchange(req: AuthenticatedRequest, res: express.R
               ingresoMonRestante = 0;
             }
           }
-
-          // Egreso en moneda destino
-          const destinoRestante = calcularEgresoDestino({
-            isDestinoUSD: isUSDByCode(cambio.monedaDestino?.codigo),
-            metodoEntrega: cambio.metodo_entrega,
-            totalDestino: round2(num(cambio.divisas_recibidas_total) * porcentajeRestante),
-            usdEntregadoEfectivo: num(cambio.usd_entregado_efectivo) * porcentajeRestante,
-            usdEntregadoTransfer: num(cambio.usd_entregado_transfer) * porcentajeRestante,
-          });
-          const egresoEfRestante = cashRemaining?.egresoEf ?? destinoRestante.egresoEf;
-          const egresoBkRestante = destinoRestante.egresoBk;
 
           // Calcular billetes y monedas de egreso manteniendo proporción
           let billetesEgresoRestante = 0;

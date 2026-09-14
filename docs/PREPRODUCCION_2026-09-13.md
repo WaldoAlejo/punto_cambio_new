@@ -4,6 +4,14 @@ Estado: revisión en curso. No se ha hecho push, despliegue ni escritura en la b
 
 ## Avance: creación bancaria y mixta
 
+**Actualización: liquidación bancaria/mixta verificada para los escenarios descritos abajo.** Las tres rutas (`cerrar`, `completar`, `complete-partial`) calculan ahora el restante de cuatro componentes: ingreso caja/bancos y egreso caja/bancos. Contrastan cada componente con los movimientos vinculados, sus signos, punto, moneda y diferencia entre saldo anterior/nuevo. Admiten historial proporcional al abono o ya contabilizado completamente; en este último caso no vuelven a tocar saldos ni movimientos. Se retiraron los cálculos porcentuales duplicados de los controladores.
+
+El bloqueo general de liquidación bancaria/mixta descrito más abajo queda sustituido por esta validación. Historial ambiguo, componentes incompatibles y cambio de vía de entrega de un abono mantienen respuesta 409 sin escrituras. El cierre administrativo exige un abono inicial verificable. La clasificación bancaria todavía depende de las descripciones existentes: etiquetas ambiguas o sin clasificación en operaciones bancarias requieren revisión, no se infieren.
+
+Evidencia: [158 pruebas de integración correctas](INTEGRACION_LOCAL_LIQUIDACION_MIXTOS.json) y TypeScript backend correcto. Matriz COMPRA EUR→USD con BANCO/efectivo, BANCO/transferencia, EFECTIVO/transferencia, MIXTO/efectivo, EFECTIVO/mixto y MIXTO/mixto; cada parcial se liquida por las tres rutas. Se verifican saldos separados, movimientos, recibos y doble solicitud concurrente de cierre. Casos adicionales: importe mixto ya contabilizado, historial sin clasificación y cambio de vía rechazado. Bancos mantiene su regla existente sin límite de saldo; pruebas locales, sin transferencias reales a proveedores ni cambios remotos.
+
+Siguen pendientes los reversos bancarios/mixtos, VENTA y otros pares, sustitución física en toda la casuística y validación de pantallas. Los parciales bancarios/mixtos todavía no se anulan automáticamente: falta evidencia suficiente de su desglose para el reverso. Esta actualización no certifica la liberación completa.
+
 Se reprodujo un error 500 al crear un pago MIXTO válido: la validación exigía dos movimientos aunque correspondían tres o cuatro. Ahora exige un movimiento por cada componente positivo de caja/bancos en origen/destino y mantiene la comprobación de que ambas monedas tengan importe contabilizado. No se crean movimientos artificiales para satisfacer el conteo.
 
 Los cuatro campos de desglose bancario/efectivo rechazan negativos. Para MIXTO, la suma debe coincidir con el total; se eliminó el reparto automático 50/50 ante importes omitidos o inconsistentes. Esas solicitudes devuelven 400 antes de registrar saldos, cambio, movimientos o recibo.

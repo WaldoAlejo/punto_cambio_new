@@ -740,7 +740,7 @@ try {
   async function patchExchange(id, action, authToken) {
     const response = await fetch(`${base}/exchanges/${id}/${action}`, {
       method: 'PATCH', headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ abono_inicial_monto: 10, metodo_entrega: 'efectivo' }),
+      body: JSON.stringify({ abono_inicial_monto: 10 }),
       signal: AbortSignal.timeout(20000),
     });
     return { status: response.status, body: await response.json() };
@@ -1043,10 +1043,11 @@ try {
       }
     });
   }
-  for (const [sourceMethod, deliveryMethod] of [['BANCO', 'efectivo'], ['EFECTIVO', 'transferencia'], ['MIXTO', 'efectivo'], ['EFECTIVO', 'mixto'], ['MIXTO', 'mixto']]) {
+  for (const [sourceMethod, deliveryMethod] of [['BANCO', 'efectivo'], ['BANCO', 'transferencia'], ['EFECTIVO', 'transferencia'], ['MIXTO', 'efectivo'], ['EFECTIVO', 'mixto'], ['MIXTO', 'mixto']]) {
     for (const partial of [false, true]) {
-      await check(`Crear ${sourceMethod}/${deliveryMethod} ${partial ? 'parcial' : 'completo'} conserva caja y bancos`, async () => {
-        const p = await prisma.puntoAtencion.create({ data: { nombre: `VIAS ${sourceMethod} ${deliveryMethod} ${partial}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+    for (const settlementAction of partial ? ['cerrar', 'completar', 'complete-partial'] : [null]) {
+      await check(`Crear ${sourceMethod}/${deliveryMethod} ${partial ? settlementAction : 'completo'} conserva caja y bancos`, async () => {
+        const p = await prisma.puntoAtencion.create({ data: { nombre: `VIAS ${sourceMethod} ${deliveryMethod} ${partial} ${settlementAction}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
         for (const m of [usd, eur]) await prisma.saldo.create({ data: {
           punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, billetes: 1000, bancos: 25,
         } });
@@ -1077,19 +1078,31 @@ try {
           for (const row of rows) assert.equal(Number(row.saldo_nuevo) - Number(row.saldo_anterior), Number(row.monto));
         }
         if (partial) {
-          const snapshot = async () => JSON.stringify({
-            cambio: await prisma.cambioDivisa.findUnique({ where: { id } }),
-            saldos: await prisma.saldo.findMany({ where: { punto_atencion_id: p.id }, orderBy: { id: 'asc' } }),
-            movimientos: await prisma.movimientoSaldo.findMany({ where: { referencia_id: id }, orderBy: { id: 'asc' } }),
-            recibos: await prisma.recibo.findMany({ where: { referencia_id: id }, orderBy: { id: 'asc' } }),
-          });
-          const before = await snapshot();
-          for (const action of ['cerrar', 'completar', 'complete-partial']) {
-            assert.equal((await patchExchange(id, action, origin.token)).status, 409);
-            assert.equal(await snapshot(), before);
+          if (settlementAction === 'cerrar') {
+            const responses = await raceBalance(p, [
+              () => patchExchange(id, settlementAction, origin.token),
+              () => patchExchange(id, settlementAction, origin.token),
+            ]);
+            assert.deepEqual(responses.map(r => r.status).sort(), [200, 400]);
+          } else {
+            const response = await patchExchange(id, settlementAction, origin.token);
+            assert.equal(response.status, 200, JSON.stringify(response));
           }
+          const posted = await prisma.movimientoSaldo.findMany({ where: { referencia_id: id } });
+          for (const [m, cashDelta, bankDelta] of [[eur, sourceCash * 2, sourceBank * 2], [usd, -destinationCash * 2 || 0, -destinationBank * 2 || 0]]) {
+            const saldo = await prisma.saldo.findUnique({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: m.id } } });
+            assert.equal(Number(saldo.cantidad), 1000 + cashDelta);
+            assert.equal(Number(saldo.billetes), 1000 + cashDelta);
+            assert.equal(Number(saldo.bancos), 25 + bankDelta);
+            const rows = posted.filter(row => row.moneda_id === m.id);
+            assert.equal(rows.filter(row => /\bbancos?\b/i.test(row.descripcion)).reduce((sum, row) => sum + Number(row.monto), 0), bankDelta);
+            assert.equal(rows.filter(row => !/\bbancos?\b/i.test(row.descripcion)).reduce((sum, row) => sum + Number(row.monto), 0), cashDelta);
+          }
+          assert.equal(await prisma.recibo.count({ where: { referencia_id: id } }), 2);
+          assert.equal((await prisma.cambioDivisa.findUnique({ where: { id } })).estado, 'COMPLETADO');
         }
       });
+    }
     }
   }
   for (const side of ['origen', 'destino']) {
@@ -1116,6 +1129,38 @@ try {
         assert.equal(await snapshot(), before);
       });
     }
+  }
+  for (const scenario of ['ya contabilizado', 'historial ambiguo', 'cambio de via']) {
+    await check(`Liquidacion mixta: ${scenario}`, async () => {
+      const p = await prisma.puntoAtencion.create({ data: { nombre: `LIQUIDACION ${scenario}`, direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+      for (const m of [usd, eur]) await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad: 1000, billetes: 1000, bancos: 25 } });
+      const created = await post('/exchanges', { ...exchange, punto_atencion_id: p.id,
+        metodo_pago_origen: 'MIXTO', metodo_entrega: 'mixto',
+        usd_recibido_efectivo: 40, usd_recibido_transfer: 60, usd_entregado_efectivo: 60, usd_entregado_transfer: 50,
+        ...(scenario === 'ya contabilizado' ? { saldo_pendiente: 110 } : { abono_inicial_monto: 55, saldo_pendiente: 55 }),
+      }, randomUUID(), origin.token);
+      ok(created); const id = created.body.exchange.id;
+      if (scenario === 'ya contabilizado') assert.equal((await patchExchange(id, 'register-partial-payment', origin.token)).status, 200);
+      if (scenario === 'historial ambiguo') {
+        const row = await prisma.movimientoSaldo.findFirst({ where: { referencia_id: id } });
+        await prisma.movimientoSaldo.update({ where: { id: row.id }, data: { descripcion: 'Movimiento legado sin clasificacion' } });
+      }
+      const snapshot = async () => JSON.stringify({
+        saldos: await prisma.saldo.findMany({ where: { punto_atencion_id: p.id }, orderBy: { id: 'asc' } }),
+        movimientos: await prisma.movimientoSaldo.findMany({ where: { referencia_id: id }, orderBy: { id: 'asc' } }),
+      });
+      const before = await snapshot();
+      const beforeExchange = JSON.stringify(await prisma.cambioDivisa.findUnique({ where: { id } }));
+      const result = scenario === 'cambio de via'
+        ? await fetch(`${base}/exchanges/${id}/completar`, { method: 'PATCH', headers: { Authorization: `Bearer ${origin.token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ metodo_entrega: 'efectivo' }) })
+        : await patchExchange(id, 'completar', origin.token);
+      assert.equal(result.status, scenario === 'ya contabilizado' ? 200 : 409);
+      assert.equal(await snapshot(), before);
+      const after = await prisma.cambioDivisa.findUnique({ where: { id } });
+      if (scenario === 'ya contabilizado') assert.equal(after.estado, 'COMPLETADO');
+      else assert.equal(JSON.stringify(after), beforeExchange);
+      assert.equal(await prisma.recibo.count({ where: { referencia_id: id } }), scenario === 'ya contabilizado' ? 2 : 1);
+    });
   }
   if (browserMode) {
     await prisma.usuario.create({ data: { username: 'navegador_local', nombre: 'Administrador ficticio navegador',
