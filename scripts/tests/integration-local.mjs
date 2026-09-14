@@ -710,6 +710,47 @@ try {
       });
     }
   }
+  async function pendingFixture(pointId, estado = 'PENDIENTE') {
+    return prisma.cambioDivisa.create({ data: {
+      usuario_id: reader.id, punto_atencion_id: pointId,
+      moneda_origen_id: eur.id, moneda_destino_id: usd.id,
+      monto_origen: 100, monto_destino: 110, tipo_operacion: 'COMPRA',
+      metodo_entrega: 'efectivo', estado,
+    } });
+  }
+  async function patchExchange(id, action, authToken) {
+    const response = await fetch(`${base}/exchanges/${id}/${action}`, {
+      method: 'PATCH', headers: { Authorization: `Bearer ${authToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ abono_inicial_monto: 10, metodo_entrega: 'efectivo' }),
+      signal: AbortSignal.timeout(20000),
+    });
+    return { status: response.status, body: await response.json() };
+  }
+  for (const action of ['cerrar', 'completar', 'register-partial-payment']) {
+    for (const scenario of ['otro punto', 'cancelado']) {
+      await check(`Cambio ${action}: rechaza ${scenario} sin alterar datos`, async () => {
+        const record = await pendingFixture(scenario === 'otro punto' ? origin.id : permissionPoint.id,
+          scenario === 'cancelado' ? 'CANCELADO' : 'PENDIENTE');
+        const snapshot = async () => JSON.stringify({
+          cambio: await prisma.cambioDivisa.findUnique({ where: { id: record.id } }),
+          saldos: await prisma.saldo.findMany({ orderBy: { id: 'asc' } }),
+          movimientos: await prisma.movimientoSaldo.count(),
+        });
+        const before = await snapshot();
+        const result = await patchExchange(record.id, action, readerLogin.body.token);
+        assert.equal(result.status, scenario === 'otro punto' ? 403 : 409);
+        assert.equal(await snapshot(), before);
+      });
+    }
+    for (const rol of ['OPERADOR', 'ADMIN', 'SUPER_USUARIO']) {
+      await check(`Cambio ${action}: conserva acceso permitido de ${rol}`, async () => {
+        await prisma.usuario.update({ where: { id: origin.userId }, data: { rol: rol === 'OPERADOR' ? 'ADMIN' : rol } });
+        const record = await pendingFixture(permissionPoint.id);
+        const result = await patchExchange(record.id, action, rol === 'OPERADOR' ? readerLogin.body.token : origin.token);
+        assert.equal(result.status, 200, JSON.stringify(result.body));
+      });
+    }
+  }
 } catch (error) {
   process.exitCode = 1;
   console.error('Prueba detenida:', error.message);

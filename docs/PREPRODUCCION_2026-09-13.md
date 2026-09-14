@@ -29,6 +29,8 @@ Evidencia: [antes](INTEGRACION_LOCAL_FECHA_APERTURA_ANTES.json), [después](INTE
 
 ## Pendientes de liberación
 
+Permisos de `cerrar`, `completar` y `register-partial-payment` corregidos: operador limitado a su punto, cambios cancelados rechazados con 409, alcance ADMIN/SUPER_USUARIO conservado. Verificación aislada: 85 pruebas correctas y TypeScript backend correcto; [resultados](INTEGRACION_LOCAL_PERMISOS_CAMBIOS.json). Estas pruebas de permisos no certifican todavía la contabilidad de abonos ni su concurrencia.
+
 - Fecha/estado de cuadres históricos y discrepancias de desglose señaladas arriba.
 - Abonos, completar/cerrar cambios pendientes, anulaciones y sus permisos/concurrencia.
 - Vías BANCO/MIXTO y devolución del desglose físico de transferencias.

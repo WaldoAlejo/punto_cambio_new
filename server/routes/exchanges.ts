@@ -1555,6 +1555,15 @@ router.patch(
         res.status(404).json({ error: "Cambio no encontrado", success: false });
         return;
       }
+      if (req.user?.rol === "OPERADOR" &&
+          req.user.punto_atencion_id !== cambio.punto_atencion_id) {
+        res.status(403).json({ success: false, error: "No puede modificar cambios de otro punto de atencion" });
+        return;
+      }
+      if (cambio.estado === EstadoTransaccion.CANCELADO) {
+        res.status(409).json({ success: false, error: "El cambio esta cancelado" });
+        return;
+      }
       if (cambio.estado === EstadoTransaccion.COMPLETADO) {
         res
           .status(400)
@@ -1927,6 +1936,15 @@ router.patch(
       });
       if (!cambio) {
         res.status(404).json({ error: "Cambio no encontrado", success: false });
+        return;
+      }
+      if (req.user?.rol === "OPERADOR" &&
+          req.user.punto_atencion_id !== cambio.punto_atencion_id) {
+        res.status(403).json({ success: false, error: "No puede modificar cambios de otro punto de atencion" });
+        return;
+      }
+      if (cambio.estado === EstadoTransaccion.CANCELADO) {
+        res.status(409).json({ success: false, error: "El cambio esta cancelado" });
         return;
       }
       if (cambio.estado === EstadoTransaccion.COMPLETADO) {
@@ -2645,12 +2663,22 @@ router.patch(
         select: {
           id: true,
           estado: true,
+          punto_atencion_id: true,
           monto_destino: true,
           monedaDestino: { select: { codigo: true, simbolo: true } },
         },
       });
       if (!exchange) {
         res.status(404).json({ success: false, error: "Cambio no encontrado" });
+        return;
+      }
+      if (req.user?.rol === "OPERADOR" &&
+          req.user.punto_atencion_id !== exchange.punto_atencion_id) {
+        res.status(403).json({ success: false, error: "No puede modificar cambios de otro punto de atencion" });
+        return;
+      }
+      if (exchange.estado === EstadoTransaccion.CANCELADO) {
+        res.status(409).json({ success: false, error: "El cambio esta cancelado" });
         return;
       }
       if (exchange.estado === EstadoTransaccion.COMPLETADO) {
