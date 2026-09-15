@@ -168,3 +168,21 @@ test('user transformation preserves every supported role', () => {
     assert.equal(user.rol, rol);
   }
 });
+
+test('custom coin denominations accept cents and reject invalid precision or values', () => {
+  const { parseCoinDenomination } = loadSource('src/utils/countDenominations.ts');
+  for (const [input, expected] of [['0,25', .25], ['0.10', .1], [' 0,01 ', .01], ['1', 1]]) {
+    assert.equal(parseCoinDenomination(input), expected);
+  }
+  for (const input of ['', '0', '-1', '0.001', 'NaN', 'Infinity', '1e2', '1,2.3', '1000000']) {
+    assert.equal(parseCoinDenomination(input), null);
+  }
+});
+test('saved custom denominations survive hydration without duplicates or losing counts', () => {
+  const { mergeCountDenominations } = loadSource('src/utils/countDenominations.ts');
+  const saved = [{ denominacion: .25, cantidad: 3 }, { denominacion: .01, cantidad: 7 }, { denominacion: 1, cantidad: 2 }];
+  const items = mergeCountDenominations([1, .5, .25], saved);
+  assert.deepEqual(items, [{ denominacion: 1, cantidad: 2 }, { denominacion: .5, cantidad: 0 },
+    { denominacion: .25, cantidad: 3 }, { denominacion: .01, cantidad: 7 }]);
+  assert.equal(Math.round(items.reduce((sum, d) => sum + d.denominacion * d.cantidad, 0) * 100), 282);
+});

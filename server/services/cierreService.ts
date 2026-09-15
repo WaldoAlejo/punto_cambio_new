@@ -1,3 +1,4 @@
+import { z } from "zod";
 // server/services/cierreService.ts
 /**
  * Servicio unificado para el proceso de cierre diario
@@ -13,6 +14,12 @@ import {
 } from "./movimientoSaldoService.js";
 import { gyeDayRangeUtcFromDate, nowEcuador } from "../utils/timezone.js";
 import { saldoReconciliationService } from "./saldoReconciliationService.js";
+
+const denominationBreakdownSchema = z.array(z.object({
+  denominacion: z.number().finite().positive(),
+  cantidad: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  tipo: z.enum(["BILLETE", "MONEDA"]),
+})).max(500);
 
 interface DetalleMoneda {
   moneda_id: string;
@@ -32,6 +39,7 @@ interface DetalleMoneda {
   egresos_periodo: number;
   movimientos_periodo: number;
   observaciones_detalle?: string;
+  desglose_denominaciones?: z.infer<typeof denominationBreakdownSchema>;
 }
 
 interface ResultadoCierre {
@@ -407,6 +415,14 @@ class CierreService {
         num_detalles: detalles?.length || 0,
       });
 
+      for (const detalle of detalles) {
+        if (detalle.desglose_denominaciones !== undefined) {
+          const parsed = denominationBreakdownSchema.safeParse(detalle.desglose_denominaciones);
+          if (!parsed.success) return { success: false, error: "El desglose contiene denominaciones o cantidades inválidas.", codigo: "DESGLOSE_INVALIDO" };
+          detalle.desglose_denominaciones = parsed.data;
+        }
+      }
+
       // 1. Validar que sea posible realizar el cierre
       logger.info("📋 Validando cierre posible...");
       const validacion = await this.validarCierrePosible(
@@ -520,6 +536,7 @@ class CierreService {
               ),
               movimientos_periodo: d.movimientos_periodo,
               observaciones_detalle: d.observaciones_detalle || null,
+              ...(d.desglose_denominaciones ? { desglose_denominaciones: d.desglose_denominaciones } : {}),
             })),
           });
 

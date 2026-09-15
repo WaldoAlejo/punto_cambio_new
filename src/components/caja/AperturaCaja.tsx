@@ -1,3 +1,4 @@
+import { AddCoinDenomination } from "./AddCoinDenomination";
 import React, { useState, useEffect } from "react";
 import { apiService } from "@/services/apiService";
 import { useAuth } from "@/hooks/useAuth";
@@ -491,6 +492,12 @@ export default function AperturaCaja({
     });
   };
 
+  const addCoin = (monedaIdx: number, denominacion: number) => {
+    setConteos(prev => prev.map((c, i) => i !== monedaIdx || c.monedas.some(m => m.denominacion === denominacion) ? c : {
+      ...c, monedas: [...c.monedas, { denominacion, cantidad: 0 }].sort((a, b) => b.denominacion - a.denominacion),
+    }));
+  };
+
   const updateMoneda = (monedaIdx: number, denomIdx: number, cantidad: string) => {
     const numCantidad = parseInt(cantidad) || 0;
     setConteos((prev) => {
@@ -715,6 +722,7 @@ export default function AperturaCaja({
                   <Input type="number" min="0" step="1" value={m.cantidad} disabled={saving} onChange={e => updateMoneda(monedaIdx, i, e.target.value)} />
                 </label>)}
               </div>
+              <AddCoinDenomination codigo={c.codigo} existing={c.monedas.map(m => m.denominacion)} disabled={saving} onAdd={d => addCoin(monedaIdx, d)} />
               <p className="my-2">Total contado: {formatMoney(calcularTotalConteo(c.billetes, c.monedas))}</p>
               <Button disabled={saving} onClick={() => guardarPendiente(c)}>Confirmar conteo de {c.codigo}</Button>
             </div>
@@ -1023,6 +1031,8 @@ export default function AperturaCaja({
                   ))}
                 </div>
               </div>
+
+              <AddCoinDenomination codigo={conteo.codigo} existing={conteo.monedas.map(m => m.denominacion)} disabled={saving} onAdd={d => addCoin(monedaIdx, d)} />
 
               {/* Resumen de esta moneda */}
               <div

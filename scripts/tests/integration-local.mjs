@@ -416,6 +416,26 @@ try {
     assert.equal((await prisma.jornada.findUniqueOrThrow({ where: { id: j.id } })).estado, 'COMPLETADO');
     assert.equal((await prisma.usuario.findUniqueOrThrow({ where: { id: u.id } })).punto_atencion_id, null);
   });
+  await check('Cierre Diario: conserva centavos personalizados y rechaza cantidades invalidas', async () => {
+    const p = await prisma.puntoAtencion.create({ data: { nombre: 'CENTAVOS CIERRE', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+    const u = await prisma.usuario.create({ data: { username: 'centavos_cierre', nombre: 'Centavos', password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'OPERADOR', punto_atencion_id: p.id } });
+    const date = new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
+    await prisma.jornada.create({ data: { usuario_id: u.id, punto_atencion_id: p.id, fecha_inicio: new Date(date + 'T05:00:00Z'), estado: 'ACTIVO' } });
+    await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: eur.id, cantidad: 0.82, billetes: 0, monedas_fisicas: 0.82 } });
+    const login = await post('/auth/login', { username: u.username, password: 'PruebaLocal_123!' }); ok(login);
+    const breakdown = [{ denominacion: 0.25, cantidad: 3, tipo: 'MONEDA' }, { denominacion: 0.01, cantidad: 7, tipo: 'MONEDA' }];
+    const detail = { moneda_id: eur.id, codigo: 'EUR', nombre: 'Euro', simbolo: '?', saldo_apertura: 0.82, saldo_cierre: 0.82, saldo_cierre_teorico: 0.82,
+      conteo_fisico: 0.82, billetes: 0, monedas_fisicas: 0.82, diferencia: 0, ingresos_periodo: 0, egresos_periodo: 0, movimientos_periodo: 0, desglose_denominaciones: breakdown };
+    const route = '/contabilidad-diaria/' + p.id + '/' + date + '/cerrar';
+    const invalid = await post(route, { detalles: [{ ...detail, desglose_denominaciones: [{ denominacion: 0.01, cantidad: -1, tipo: 'MONEDA' }] }] }, undefined, login.body.token);
+    assert.equal(invalid.status, 400); assert.equal(invalid.body.codigo, 'DESGLOSE_INVALIDO');
+    assert.equal(await prisma.cierreDiario.count({ where: { punto_atencion_id: p.id } }), 0);
+    const closed = await post(route, { detalles: [detail] }, undefined, login.body.token); ok(closed);
+    const saved = await prisma.detalleCuadreCaja.findFirstOrThrow({ where: { cuadre_id: closed.body.cuadre_id, moneda_id: eur.id } });
+    assert.deepEqual(saved.desglose_denominaciones, breakdown); assert.equal(Number(saved.conteo_fisico), 0.82);
+    const saldo = await prisma.saldo.findUniqueOrThrow({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: eur.id } } });
+    assert.equal(Number(saldo.cantidad), 0.82); assert.equal(Number(saldo.monedas_fisicas), 0.82); assert.equal(Number(saldo.billetes), 0);
+  });
   // Report fixtures are isolated from operational points and intentionally include an inconsistent breakdown.
   const reportPoint = await prisma.puntoAtencion.create({ data: { nombre: '=PUNTO REPORTE', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha', activo: false } });
   const reportPrincipal = await prisma.puntoAtencion.create({ data: { nombre: 'PRINCIPAL REPORTES', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha', es_principal: true } });
@@ -1444,7 +1464,7 @@ try {
       fecha_salida: new Date(prior.getTime() + 3600000), estado: 'COMPLETADO' } });
     for (const m of [usd, eur, gbp, chf]) {
       await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad: m.id === gbp.id ? 1010 : 1000,
-        billetes: m.id === gbp.id ? 1010 : 1000, bancos: 25 } });
+        billetes: m.id === chf.id ? 0 : m.id === gbp.id ? 1010 : 1000, monedas_fisicas: m.id === chf.id ? 1000 : 0, bancos: 25 } });
       await prisma.saldoInicial.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad_inicial: 1000, asignado_por: u.id } });
     }
     for (const [m, description] of [[gbp, 'Transferencia recibida (CAJA)'], [chf, 'Ingreso bancos']]) {
@@ -1459,12 +1479,13 @@ try {
     const init = await post('/apertura-caja/iniciar', { jornada_id: j.id }, undefined, t); ok(init);
     const a = init.body.apertura;
     assert.deepEqual(a.saldo_esperado.filter(c => c.obligatoria_inicio).map(c => c.codigo).sort(), ['EUR', 'GBP', 'USD']);
-    const counts = [usd, eur, gbp].map(m => ({ moneda_id: m.id, billetes: [{ denominacion: 10, cantidad: m.id === gbp.id ? 101 : 100 }], monedas: [] }));
+    const counts = [usd, eur, gbp].map(m => ({ moneda_id: m.id, billetes: [{ denominacion: m.id === eur.id ? 1 : 10, cantidad: m.id === eur.id ? 999 : m.id === gbp.id ? 101 : 100 }], monedas: m.id === eur.id ? [{ denominacion: 0.25, cantidad: 3 }, { denominacion: 0.01, cantidad: 25 }] : [] }));
     assert.equal((await post('/apertura-caja/conteo', { apertura_id: a.id, conteos: counts.slice(0, 2) }, undefined, t)).status, 400);
     ok(await post('/apertura-caja/conteo', { apertura_id: a.id, conteos: counts }, undefined, t));
     ok(await post('/apertura-caja/confirmar', { apertura_id: a.id }, undefined, t));
     const saved = await prisma.aperturaCaja.findUniqueOrThrow({ where: { id: a.id } });
     assert.ok(!saved.conteo_fisico.some(c => c.moneda_id === chf.id));
+    assert.deepEqual(saved.conteo_fisico.find(c => c.moneda_id === eur.id).monedas, counts.find(c => c.moneda_id === eur.id).monedas);
     assert.ok(!saved.diferencias.some(c => c.moneda_id === chf.id));
     const cuadre = await prisma.cuadreCaja.findFirstOrThrow({ where: { punto_atencion_id: p.id } });
     assert.equal(await prisma.detalleCuadreCaja.count({ where: { cuadre_id: cuadre.id, moneda_id: chf.id } }), 0);
@@ -1482,11 +1503,15 @@ try {
       return post('/guardar-cierre', { detalles: balances.map(s => ({ moneda_id: s.moneda_id,
         saldo_apertura: 1000, saldo_cierre: Number(s.cantidad), conteo_fisico: Number(s.cantidad),
         billetes: Number(s.billetes), monedas: Number(s.monedas_fisicas), bancos_teorico: Number(s.bancos), conteo_bancos: Number(s.bancos),
+        desglose_denominaciones: [
+          { denominacion: 1, cantidad: Number(s.billetes), tipo: 'BILLETE' },
+          { denominacion: 0.01, cantidad: Math.round(Number(s.monedas_fisicas) * 100), tipo: 'MONEDA' },
+        ],
       })) }, randomUUID(), t);
     };
     assert.equal((await closeStaged()).status, 409);
     await assert.rejects(pool.query('UPDATE "Jornada" SET estado=\'COMPLETADO\',fecha_salida=now() WHERE id=$1', [j.id]), /PENDING_CURRENCY_COUNT/);
-    const countBody = { apertura_id: a.id, moneda_id: chf.id, saldo_esperado: 1000, billetes: [{ denominacion: 100, cantidad: 10 }], monedas: [] };
+    const countBody = { apertura_id: a.id, moneda_id: chf.id, saldo_esperado: 1000, billetes: [], monedas: [{ denominacion: 0.25, cantidad: 3996 }, { denominacion: 0.01, cantidad: 100 }] };
     assert.equal((await post('/apertura-caja/conteo-pendiente', { ...countBody, saldo_esperado: 999 }, undefined, t)).status, 409);
     assert.equal((await post('/apertura-caja/conteo-pendiente', { ...countBody, billetes: [{ denominacion: 100, cantidad: -10 }] }, undefined, t)).status, 400);
     const simultaneous = await Promise.all([1, 2].map(() => post('/apertura-caja/conteo-pendiente', countBody, undefined, t)));
@@ -1494,12 +1519,15 @@ try {
     const after = await prisma.aperturaCaja.findUniqueOrThrow({ where: { id: a.id } });
     assert.deepEqual(after.conteo_fisico.filter(c => c.moneda_id !== chf.id), saved.conteo_fisico);
     assert.equal(after.estado, 'ABIERTA');
+    assert.deepEqual(after.conteo_fisico.find(c => c.moneda_id === chf.id).monedas, countBody.monedas);
     assert.ok(after.conteo_fisico.find(c => c.moneda_id === chf.id).contado_en);
     assert.equal(Number((await prisma.detalleCuadreCaja.findUniqueOrThrow({ where: { cuadre_id_moneda_id: { cuadre_id: cuadre.id, moneda_id: chf.id } } })).saldo_apertura), 1000);
     await prisma.$transaction(tx => assertCurrencyCounted(tx, p.id, chf.id));
     ok(await post('/exchanges', payload, randomUUID(), t));
     assert.equal(Number((await prisma.saldo.findUniqueOrThrow({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: chf.id } } })).bancos), 26);
     ok(await closeStaged());
+    const closedDetail = await prisma.detalleCuadreCaja.findUniqueOrThrow({ where: { cuadre_id_moneda_id: { cuadre_id: cuadre.id, moneda_id: chf.id } } });
+    assert.deepEqual(closedDetail.desglose_denominaciones.find(d => d.tipo === 'MONEDA'), { denominacion: 0.01, cantidad: 100000, tipo: 'MONEDA' });
     assert.equal((await prisma.jornada.findUniqueOrThrow({ where: { id: j.id } })).estado, 'COMPLETADO');
   });
   await (await import('./metal-purchases-integration.mjs')).testMetalPurchases({ prisma, pool, base, post, ok, check, usd, eur, bcrypt, browserMode });

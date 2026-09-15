@@ -1,3 +1,5 @@
+import { AddCoinDenomination } from "../caja/AddCoinDenomination";
+import { mergeCountDenominations } from "@/utils/countDenominations";
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
@@ -150,20 +152,8 @@ function hydrateDesgloseDenominaciones(
   const denominaciones = getDenominacionesPorMoneda(codigo);
 
   return {
-    bills: denominaciones.billetes.map((denominacion) => ({
-      denominacion,
-      cantidad:
-        desgloseGuardado?.find(
-          (item) => item.denominacion === denominacion && item.tipo === "BILLETE"
-        )?.cantidad || 0,
-    })),
-    coins: denominaciones.monedas.map((denominacion) => ({
-      denominacion,
-      cantidad:
-        desgloseGuardado?.find(
-          (item) => item.denominacion === denominacion && item.tipo === "MONEDA"
-        )?.cantidad || 0,
-    })),
+    bills: mergeCountDenominations(denominaciones.billetes, desgloseGuardado?.filter(item => item.tipo === "BILLETE")),
+    coins: mergeCountDenominations(denominaciones.monedas, desgloseGuardado?.filter(item => item.tipo === "MONEDA")),
   };
 }
 
@@ -898,6 +888,7 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
           moneda_id: detalle.moneda_id,
           saldo_apertura: detalle.saldo_apertura,
           saldo_cierre: detalle.saldo_cierre,
+          saldo_cierre_teorico: detalle.saldo_cierre,
           conteo_fisico: conteo,
           bancos_teorico: Number(detalle.bancos_teorico ?? 0),
           conteo_bancos: banks,
@@ -2016,6 +2007,15 @@ const DailyClose = ({ user, selectedPoint }: DailyCloseProps) => {
                                   </div>
                                 ))}
                               </div>
+                              <AddCoinDenomination codigo={detalle.codigo}
+                                existing={(denominationAdjustments[detalle.moneda_id]?.coins || []).map(m => m.denominacion)}
+                                disabled={closing}
+                                onAdd={denominacion => setDenominationAdjustments(prev => {
+                                  const current = prev[detalle.moneda_id] || hydrateDesgloseDenominaciones(detalle.codigo);
+                                  if (current.coins.some(m => m.denominacion === denominacion)) return prev;
+                                  return { ...prev, [detalle.moneda_id]: { ...current,
+                                    coins: [...current.coins, { denominacion, cantidad: 0 }].sort((a, b) => b.denominacion - a.denominacion) } };
+                                })} />
                             </div>
 
                             <div
