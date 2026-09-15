@@ -88,6 +88,7 @@ export interface AperturaEstadoActual {
 }
 
 export interface AperturaCaja {
+  monedas_del_punto?: string[];
   id: string;
   jornada_id: string;
   usuario_id: string;

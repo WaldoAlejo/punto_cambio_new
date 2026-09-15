@@ -1,3 +1,4 @@
+import { openingPointCurrencyIds } from "../utils/openingPointCurrencies.js";
 import { openingCurrencies, requiredOpeningCurrencies } from "../utils/stagedOpening.js";
 import { lockTransferBalance } from "../utils/transferBalance.js";
 import { OperationalConflict } from "../utils/operationalConflict.js";
@@ -342,6 +343,8 @@ router.post(
         });
       }
 
+      const monedasDelPunto = await openingPointCurrencyIds(jornada.punto_atencion_id);
+
       // Verificar si ya existe una apertura para esta jornada
       const aperturaExistente = await prisma.aperturaCaja.findUnique({
         where: { jornada_id },
@@ -371,6 +374,7 @@ router.post(
           success: true,
           apertura: {
             ...aperturaNormalizada,
+            monedas_del_punto: monedasDelPunto,
             saldo_esperado:
               normalizado.monedasAgregadas.length > 0
                 ? normalizado.saldoEsperado
@@ -474,6 +478,7 @@ router.post(
         apertura: {
           ...apertura,
           saldo_esperado: saldoEsperado,
+          monedas_del_punto: monedasDelPunto,
           saldos_servicios_externos: saldosServiciosExternos,
           tipo_arqueo: tipoArqueo,
           monedas_excluidas: monedasExcluidas,

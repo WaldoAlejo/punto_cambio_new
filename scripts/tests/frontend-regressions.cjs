@@ -186,3 +186,17 @@ test('saved custom denominations survive hydration without duplicates or losing 
     { denominacion: .25, cantidad: 3 }, { denominacion: .01, cantidad: 7 }]);
   assert.equal(Math.round(items.reduce((sum, d) => sum + d.denominacion * d.cantidad, 0) * 100), 282);
 });
+
+test('opening uses full names and filters unused currencies while retaining pending money', () => {
+  const { openingCurrencyName, openingCurrencyVisible } = loadSource('src/utils/openingCurrencyDisplay.ts');
+  const c = { moneda_id: 'ars', codigo: 'ARS', nombre: 'Peso argentino', cantidad: 0 };
+  assert.equal(openingCurrencyName('ARS', [c]), 'Peso argentino');
+  assert.equal(openingCurrencyName('EUR', []), 'Euro');
+  assert.equal(openingCurrencyVisible(c, [], [], [], false), false);
+  assert.equal(openingCurrencyVisible(c, ['ars'], [], [], false), true);
+  assert.equal(openingCurrencyVisible({ ...c, cantidad: 0.01 }, [], [], [], false), true);
+  assert.equal(openingCurrencyVisible(c, [], ['ARS'], [], false), true);
+  assert.equal(openingCurrencyVisible(c, [], [], ['ars'], false), true);
+  assert.equal(openingCurrencyVisible(c, [], [], [], true), true);
+  assert.equal(openingCurrencyVisible(c, null, [], [], false), true);
+});

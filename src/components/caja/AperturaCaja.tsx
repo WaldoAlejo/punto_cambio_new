@@ -1,3 +1,4 @@
+import { openingCurrencyName, openingCurrencyVisible } from "@/utils/openingCurrencyDisplay";
 import { AddCoinDenomination } from "./AddCoinDenomination";
 import React, { useState, useEffect } from "react";
 import { apiService } from "@/services/apiService";
@@ -272,6 +273,13 @@ export default function AperturaCaja({
   const monedasObligatorias = [...new Set([...monedasObligatoriasIniciales,
     ...saldoEsperado.filter(s => s.obligatoria_inicio).map(s => String(s.codigo).toUpperCase())])];
   const porEtapas = saldoEsperado.some(s => s.apertura_por_etapas);
+  const [monedasDelPunto, setMonedasDelPunto] = useState<string[] | null>(null);
+  const [mostrarOtrasDivisas, setMostrarOtrasDivisas] = useState(false);
+  const nombreDivisa = (codigo: string) => openingCurrencyName(codigo, saldoEsperado);
+  const nombresDivisas = (codigos: string[], separador: string) => codigos.map(nombreDivisa).join(separador);
+  const visibleEnPunto = (conteo: ConteoForm) => openingCurrencyVisible(
+    { ...conteo, cantidad: Number(saldoEsperado.find(s => s.moneda_id === conteo.moneda_id)?.cantidad || 0) },
+    monedasDelPunto, monedasObligatorias, monedasContadas, mostrarOtrasDivisas);
   const [monedasContadas, setMonedasContadas] = useState<string[]>([]);
   const [conteos, setConteos] = useState<ConteoForm[]>([]);
   const [diferencias, setDiferencias] = useState<DiferenciaMoneda[]>([]);
@@ -363,6 +371,7 @@ export default function AperturaCaja({
         setMonedasContadas((result.apertura.conteo_fisico || []).map(c => c.moneda_id));
           const saldoEsperadoActual = result.apertura.saldo_esperado || [];
           setSaldoEsperado(saldoEsperadoActual);
+          setMonedasDelPunto(result.apertura.monedas_del_punto ?? null);
         setTipoArqueo(result.apertura.tipo_arqueo || null);
         setMonedasExcluidas(result.apertura.monedas_excluidas || []);
         setRequiereArqueoCompleto(result.apertura.requiere_arqueo_completo || false);
@@ -540,10 +549,10 @@ export default function AperturaCaja({
       const monedasPresentes = new Set(conteos.map((c) => c.codigo.toUpperCase()));
       const monedasPendientes = monedasObligatorias.filter((codigo) => !monedasPresentes.has(codigo));
       if (monedasPendientes.length > 0) {
-        setError(`Faltan las monedas obligatorias: ${monedasPendientes.join(", ")}`);
+        setError(`Faltan las monedas obligatorias: ${nombresDivisas(monedasPendientes, ", ")}`);
         toast({
           title: "Apertura incompleta",
-          description: `Debes registrar ${monedasPendientes.join(" y ")} en la apertura.`,
+          description: `Debes registrar ${nombresDivisas(monedasPendientes, " y ")} en la apertura.`,
           variant: "destructive",
         });
         return;
@@ -599,7 +608,7 @@ export default function AperturaCaja({
             ? result.cuadrado
               ? "¡Conteo guardado!"
               : "Conteo guardado con diferencias"
-            : "USD y EUR siguen descuadrados",
+            : "dólares estadounidenses y euros siguen descuadrados",
         description: result.message || "Revisa el conteo obligatorio antes de continuar.",
       });
     } catch (e) {
@@ -620,7 +629,7 @@ export default function AperturaCaja({
       });
       await iniciarApertura();
       onAperturaActualizada?.();
-      toast({ title: `${conteo.codigo}: conteo guardado` });
+      toast({ title: `${nombreDivisa(conteo.codigo)}: conteo guardado` });
     } catch (e) {
       toast({ title: "No se pudo guardar", description: e instanceof Error ? e.message : "Revisa el conteo", variant: "destructive" });
     } finally { setSaving(false); }
@@ -710,9 +719,13 @@ export default function AperturaCaja({
               )}
             </div>
           </div>
-          {porEtapas && conteos.map((c, monedaIdx) => monedasContadas.includes(c.moneda_id) ? null : (
+          {porEtapas && <Button type="button" variant="outline" className="mt-4" disabled={saving}
+            onClick={() => setMostrarOtrasDivisas(value => !value)}>
+            {mostrarOtrasDivisas ? "Mostrar solo divisas del punto" : "Contar una divisa recibida por primera vez"}
+          </Button>}
+          {porEtapas && conteos.map((c, monedaIdx) => monedasContadas.includes(c.moneda_id) || !visibleEnPunto(c) ? null : (
             <div key={c.moneda_id} className="mt-4 rounded border bg-white p-4">
-              <h4 className="font-semibold">{c.codigo}: pendiente de conteo</h4>
+              <h4 className="font-semibold">{nombreDivisa(c.codigo)}: pendiente de conteo</h4>
               <p>Saldo esperado: {formatMoney(Number(saldoEsperado.find(s => s.moneda_id === c.moneda_id)?.cantidad || 0))}</p>
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                 {c.billetes.map((b, i) => <label key={`b${b.denominacion}`} className="text-sm">Billetes de {b.denominacion}
@@ -722,9 +735,9 @@ export default function AperturaCaja({
                   <Input type="number" min="0" step="1" value={m.cantidad} disabled={saving} onChange={e => updateMoneda(monedaIdx, i, e.target.value)} />
                 </label>)}
               </div>
-              <AddCoinDenomination codigo={c.codigo} existing={c.monedas.map(m => m.denominacion)} disabled={saving} onAdd={d => addCoin(monedaIdx, d)} />
+              <AddCoinDenomination codigo={nombreDivisa(c.codigo)} existing={c.monedas.map(m => m.denominacion)} disabled={saving} onAdd={d => addCoin(monedaIdx, d)} />
               <p className="my-2">Total contado: {formatMoney(calcularTotalConteo(c.billetes, c.monedas))}</p>
-              <Button disabled={saving} onClick={() => guardarPendiente(c)}>Confirmar conteo de {c.codigo}</Button>
+              <Button disabled={saving} onClick={() => guardarPendiente(c)}>Confirmar conteo de {nombreDivisa(c.codigo)}</Button>
             </div>
           ))}
         </CardContent>
@@ -761,8 +774,8 @@ export default function AperturaCaja({
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Correccion obligatoria antes de operar</AlertTitle>
           <AlertDescription>
-            Esta apertura quedo marcada como completada, pero USD/EUR siguen descuadrados.
-            Debes corregir y guardar nuevamente el conteo de {monedasObligatoriasPendientes.join(" y ")}.
+            Esta apertura quedo marcada como completada, pero dólares estadounidenses y euros siguen descuadrados.
+            Debes corregir y guardar nuevamente el conteo de {nombresDivisas(monedasObligatoriasPendientes, " y ")}.
           </AlertDescription>
         </Alert>
       )}
@@ -802,7 +815,7 @@ export default function AperturaCaja({
           <AlertTriangle className="h-4 w-4 text-orange-700" />
           <AlertTitle className="text-orange-900">Apertura con incidencia disponible</AlertTitle>
           <AlertDescription className="text-orange-800">
-            Si el faltante o sobrante de {monedasObligatoriasDescuadradas.join(" y ")} es real,
+            Si el faltante o sobrante de {nombresDivisas(monedasObligatoriasDescuadradas, " y ")} es real,
             puedes registrar la incidencia, guardar el conteo y confirmar la apertura para seguir operando.
           </AlertDescription>
         </Alert>
@@ -813,7 +826,7 @@ export default function AperturaCaja({
         <AlertTitle className="text-amber-900">Divisas obligatorias al inicio</AlertTitle>
         <AlertDescription className="text-amber-800 space-y-2">
           <p>
-            Debes dejar cuadrados {monedasObligatorias.join(" y ")} para habilitar la operación.
+            Debes dejar cuadrados {nombresDivisas(monedasObligatorias, " y ")} para habilitar la operación.
             {bloquearHastaGuardarObligatorias
               ? " Mientras no lo hagas, seguirás bloqueado en esta pantalla."
               : ""}
@@ -841,7 +854,7 @@ export default function AperturaCaja({
           </div>
           {monedasObligatoriasPendientes.length > 0 && (
             <p className="text-sm font-medium">
-              Debes cuadrar: {monedasObligatoriasPendientes.join(", ")}
+              Debes cuadrar: {nombresDivisas(monedasObligatoriasPendientes, ", ")}
             </p>
           )}
         </AlertDescription>
@@ -888,7 +901,7 @@ export default function AperturaCaja({
             ) : (
               <div className="space-y-2">
                 <p className="text-sm text-amber-700">
-                  Cuenta USD, EUR y las divisas con movimientos de efectivo desde la última jornada del punto.
+                  Cuenta dólares estadounidenses, euros y las divisas con movimientos de efectivo desde la última jornada del punto.
                   Las demás quedan pendientes; podrás contarlas después de confirmar la apertura.
                 </p>
                 {monedasExcluidas.length > 0 && (
@@ -899,7 +912,7 @@ export default function AperturaCaja({
                     <div className="flex flex-wrap gap-1">
                       {monedasExcluidas.map((m) => (
                         <Badge key={m.moneda_id} variant="outline" className="text-xs">
-                          {m.codigo}
+                          {nombreDivisa(m.codigo)}
                         </Badge>
                       ))}
                     </div>
@@ -920,7 +933,7 @@ export default function AperturaCaja({
           <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
             <li>Cuenta físicamente todo el efectivo que tienes en caja</li>
             <li>Ingresa la cantidad de billetes y monedas por denominación</li>
-            <li>Cuenta {monedasObligatorias.join(", ")} y confirma la apertura. Las otras divisas se cuentan después, antes de utilizarlas.</li>
+            <li>Cuenta {nombresDivisas(monedasObligatorias, ", ")} y confirma la apertura. Las otras divisas se cuentan después, antes de utilizarlas.</li>
             <li>Valida los saldos de los servicios externos en sus páginas web</li>
             <li>Guarda el conteo para registrar los cuadres obligatorios</li>
             <li>Confirma la apertura para iniciar tu jornada y habilitar operaciones</li>
@@ -948,7 +961,7 @@ export default function AperturaCaja({
                 <div className="flex items-center gap-2">
                   <Coins className="h-5 w-5 text-blue-600" />
                   <CardTitle>
-                    {saldoEsperadoMoneda?.codigo} - {saldoEsperadoMoneda?.nombre}
+                    {saldoEsperadoMoneda?.nombre}
                     {monedasObligatorias.includes(String(saldoEsperadoMoneda?.codigo || "").toUpperCase()) && (
                       <Badge variant="outline" className="ml-2 border-amber-400 text-amber-900">
                         Obligatoria
@@ -1032,7 +1045,7 @@ export default function AperturaCaja({
                 </div>
               </div>
 
-              <AddCoinDenomination codigo={conteo.codigo} existing={conteo.monedas.map(m => m.denominacion)} disabled={saving} onAdd={d => addCoin(monedaIdx, d)} />
+              <AddCoinDenomination codigo={nombreDivisa(conteo.codigo)} existing={conteo.monedas.map(m => m.denominacion)} disabled={saving} onAdd={d => addCoin(monedaIdx, d)} />
 
               {/* Resumen de esta moneda */}
               <div
@@ -1110,7 +1123,7 @@ export default function AperturaCaja({
                           {servicio.servicio_nombre}
                         </div>
                         <div className="text-sm text-gray-500">
-                          Moneda: {servicio.codigo} ({servicio.nombre})
+                          Moneda: {servicio.nombre}
                         </div>
                       </div>
                       <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
@@ -1231,7 +1244,7 @@ export default function AperturaCaja({
                 </div>
 
                 <div className="rounded-lg border border-orange-200 bg-white p-3 text-sm text-orange-900">
-                  Monedas afectadas: {monedasObligatoriasDescuadradas.join(", ")}
+                  Monedas afectadas: {nombresDivisas(monedasObligatoriasDescuadradas, ", ")}
                 </div>
 
                 {!incidenciaCompleta && (
@@ -1293,8 +1306,8 @@ export default function AperturaCaja({
         {!puedeAbrir && monedasObligatoriasPendientes.length > 0 && (
           <div className="w-full text-right text-sm text-red-700 font-medium">
             {abrirConIncidencia && incidenciaCompleta
-              ? `Guarda nuevamente el conteo para registrar la incidencia de ${monedasObligatoriasPendientes.join(" y ")} y habilitar la confirmación.`
-              : `No puedes confirmar la apertura hasta cuadrar ${monedasObligatoriasPendientes.join(" y ")}.`}
+              ? `Guarda nuevamente el conteo para registrar la incidencia de ${nombresDivisas(monedasObligatoriasPendientes, " y ")} y habilitar la confirmación.`
+              : `No puedes confirmar la apertura hasta cuadrar ${nombresDivisas(monedasObligatoriasPendientes, " y ")}.`}
           </div>
         )}
       </div>

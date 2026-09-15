@@ -1476,8 +1476,25 @@ try {
     const t = login.body.token;
     ok(await post('/schedules', { usuario_id: u.id, punto_atencion_id: p.id, fecha_inicio: new Date().toISOString() }, undefined, t));
     const j = await prisma.jornada.findFirstOrThrow({ where: { usuario_id: u.id, estado: 'ACTIVO' } });
+    const unused = await prisma.moneda.create({ data: { codigo: 'ZZQ', nombre: 'Divisa sin actividad', simbolo: 'Q' } });
+    const historical = await prisma.moneda.create({ data: { codigo: 'ZZR', nombre: 'Divisa historica del punto', simbolo: 'R' } });
+    const foreign = await prisma.moneda.create({ data: { codigo: 'ZZS', nombre: 'Divisa de otro punto', simbolo: 'S' } });
+    for (const m of [unused, historical]) await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: m.id, cantidad: 0 } });
+    await prisma.saldoInicial.create({ data: { punto_atencion_id: p.id, moneda_id: unused.id, cantidad_inicial: 0, asignado_por: u.id } });
+    for (const [currency, pointId] of [[historical, p.id], [foreign, origin.id]]) {
+      await prisma.movimientoSaldo.create({ data: { punto_atencion_id: pointId, moneda_id: currency.id, usuario_id: u.id,
+        tipo_movimiento: 'EGRESO', monto: -10, saldo_anterior: 10, saldo_nuevo: 0,
+        fecha: new Date(prior.getTime() - 86400000), descripcion: 'Actividad historica' } });
+    }
     const init = await post('/apertura-caja/iniciar', { jornada_id: j.id }, undefined, t); ok(init);
     const a = init.body.apertura;
+    assert.ok(a.monedas_del_punto.includes(chf.id), 'Incluye existencia aunque no tenga actividad reciente');
+    assert.ok(a.monedas_del_punto.includes(historical.id), 'Conserva historial aunque el saldo actual sea cero');
+    assert.ok(!a.monedas_del_punto.includes(unused.id), 'Una fila de saldo o asignacion cero no constituye actividad');
+    assert.ok(!a.monedas_del_punto.includes(foreign.id), 'No mezcla actividad de otros puntos');
+    const reopened = await post('/apertura-caja/iniciar', { jornada_id: j.id }, undefined, t); ok(reopened);
+    assert.deepEqual(reopened.body.apertura.monedas_del_punto.sort(), [...a.monedas_del_punto].sort());
+
     assert.deepEqual(a.saldo_esperado.filter(c => c.obligatoria_inicio).map(c => c.codigo).sort(), ['EUR', 'GBP', 'USD']);
     const counts = [usd, eur, gbp].map(m => ({ moneda_id: m.id, billetes: [{ denominacion: m.id === eur.id ? 1 : 10, cantidad: m.id === eur.id ? 999 : m.id === gbp.id ? 101 : 100 }], monedas: m.id === eur.id ? [{ denominacion: 0.25, cantidad: 3 }, { denominacion: 0.01, cantidad: 25 }] : [] }));
     assert.equal((await post('/apertura-caja/conteo', { apertura_id: a.id, conteos: counts.slice(0, 2) }, undefined, t)).status, 400);
