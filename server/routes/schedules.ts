@@ -530,6 +530,7 @@ router.post(
               res.status(400).json({
                 success: false,
                 error: "Cierre de caja requerido",
+                code: "CASH_CLOSE_REQUIRED",
                 details:
                   "Debe realizar el cierre de caja diario (cuadre de divisas) antes de finalizar su jornada.",
               });
@@ -703,7 +704,7 @@ router.post(
 
       // Si es un error de punto ocupado (race condition dentro de la transacción), devolver 409
       if (msg.includes("PENDING_CURRENCY_COUNT")) {
-        res.status(409).json({ success: false, error: "Completa las divisas pendientes en Apertura de Caja antes de finalizar la jornada." });
+        res.status(409).json({ success: false, code: "PENDING_CURRENCY_COUNT", error: "Completa las divisas pendientes en Apertura de Caja antes de finalizar la jornada." });
         return;
       }
       if (msg.includes("ya tiene una jornada activa")) {

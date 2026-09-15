@@ -394,6 +394,28 @@ try {
     transferPoints.push({ id: p.id, token: t, userId: u.id });
   }
   const [origin, destination] = transferPoints;
+  await check('Finalizar jornada: informa conteos pendientes y libera punto solo al completar', async () => {
+    const p = await prisma.puntoAtencion.create({ data: { nombre: 'CIERRE JORNADA', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha' } });
+    const u = await prisma.usuario.create({ data: { username: 'cierre_jornada', nombre: 'Prueba cierre', password: await bcrypt.hash('PruebaLocal_123!', 10), rol: 'OPERADOR', punto_atencion_id: p.id } });
+    const date = new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
+    const start = new Date(date + 'T05:00:00Z');
+    const j = await prisma.jornada.create({ data: { usuario_id: u.id, punto_atencion_id: p.id, fecha_inicio: start, estado: 'ACTIVO' } });
+    const login = await post('/auth/login', { username: u.username, password: 'PruebaLocal_123!' }); ok(login);
+    const close = () => post('/schedules', { usuario_id: u.id, punto_atencion_id: p.id, fecha_salida: new Date().toISOString() }, undefined, login.body.token);
+    await prisma.saldo.create({ data: { punto_atencion_id: p.id, moneda_id: eur.id, cantidad: 2, billetes: 0, monedas_fisicas: 2 } });
+    const opening = await prisma.aperturaCaja.create({ data: { jornada_id: j.id, usuario_id: u.id, punto_atencion_id: p.id,
+      fecha: start, estado: 'ABIERTA', saldo_esperado: [{ moneda_id: eur.id, codigo: 'EUR', cantidad: 2, apertura_por_etapas: true }], conteo_fisico: [] } });
+    const missing = await close();
+    assert.equal(missing.status, 409); assert.equal(missing.body.code, 'PENDING_CURRENCY_COUNT');
+    assert.match(missing.body.error, /Apertura de Caja/);
+    const unchanged = await prisma.jornada.findUniqueOrThrow({ where: { id: j.id } });
+    assert.equal(unchanged.estado, 'ACTIVO'); assert.equal(unchanged.fecha_salida, null);
+    assert.equal((await prisma.usuario.findUniqueOrThrow({ where: { id: u.id } })).punto_atencion_id, p.id);
+    await prisma.aperturaCaja.update({ where: { id: opening.id }, data: { conteo_fisico: [{ moneda_id: eur.id, total: 2 }] } });
+    ok(await close());
+    assert.equal((await prisma.jornada.findUniqueOrThrow({ where: { id: j.id } })).estado, 'COMPLETADO');
+    assert.equal((await prisma.usuario.findUniqueOrThrow({ where: { id: u.id } })).punto_atencion_id, null);
+  });
   // Report fixtures are isolated from operational points and intentionally include an inconsistent breakdown.
   const reportPoint = await prisma.puntoAtencion.create({ data: { nombre: '=PUNTO REPORTE', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha', activo: false } });
   const reportPrincipal = await prisma.puntoAtencion.create({ data: { nombre: 'PRINCIPAL REPORTES', direccion: 'Ficticia', ciudad: 'Quito', provincia: 'Pichincha', es_principal: true } });

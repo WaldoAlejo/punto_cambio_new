@@ -21,6 +21,7 @@ import { useConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { User, PuntoAtencion, SalidaEspontanea } from "../../types";
 import { formatGyeTime } from "@/utils/timezone";
 import { scheduleService } from "@/services/scheduleService";
+import { scheduleError } from "@/utils/scheduleError";
 
 interface TimeTrackerProps {
   user: User;
@@ -339,10 +340,11 @@ const TimeTracker = ({
         });
         return response.data.schedule;
       }
-      throw new Error("Error guardando jornada");
-    } catch {
-      toast.error("Error al guardar la jornada en backend");
-      throw new Error("Error guardando jornada");
+      throw scheduleError({ response: { data: response.data } });
+    } catch (error) {
+      const failure = scheduleError(error);
+      toast.error(failure.message);
+      throw failure;
     }
   };
 
@@ -406,21 +408,18 @@ const TimeTracker = ({
       });
       toast.success(`Jornada finalizada a las ${formatearHora(ahora)}`);
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message
-        : typeof error === "object" && error !== null
-          ? String((error as Record<string, unknown>).message ?? "")
-          : "";
-      if (message.includes("cierre de caja diario") || message.includes("cierre diario")) {
+      const failure = scheduleError(error);
+      if (failure.nextView) {
+        const view = failure.nextView;
         showConfirmation(
-          "Cierre requerido",
-          "Para finalizar su jornada debe realizar primero el cierre de caja diario.",
+          view === "daily-close" ? "Cierre requerido" : "Conteos pendientes",
+          failure.message,
           async () => {
             try {
-              localStorage.setItem("pc_active_view", "daily-close");
-              window.dispatchEvent(new CustomEvent("pc:navigate", { detail: { view: "daily-close" } }));
+              localStorage.setItem("pc_active_view", view);
+              window.dispatchEvent(new CustomEvent("pc:navigate", { detail: { view } }));
             } catch { /* no-op */ }
-            toast.info("Vaya a Cierre Diario para finalizar su jornada.");
+            toast.info(view === "daily-close" ? "Completa Cierre Diario y después finaliza tu jornada." : "Completa los conteos pendientes en Apertura de Caja.");
           }
         );
       }

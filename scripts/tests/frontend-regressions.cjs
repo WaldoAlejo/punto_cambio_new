@@ -20,6 +20,28 @@ function loadSource(relativePath, mocks = {}) {
   return module.exports;
 }
 
+test('schedule errors preserve close requirements and navigation through caller catches', () => {
+  const { scheduleError } = loadSource('src/utils/scheduleError.ts');
+  for (const data of [
+    { code: 'CASH_CLOSE_REQUIRED', error: 'Cierre de caja requerido', details: 'Debe realizar el cierre de caja diario antes de finalizar.' },
+    { error: 'Cierre de caja requerido' },
+  ]) {
+    const result = scheduleError({ response: { data } });
+    assert.equal(result.nextView, 'daily-close');
+    assert.equal(result.message, data.details || data.error);
+    assert.equal(scheduleError(result), result);
+  }
+});
+test('schedule errors direct pending counts to opening and retain validation reasons', () => {
+  const { scheduleError } = loadSource('src/utils/scheduleError.ts');
+  const pending = scheduleError({ response: { data: { code: 'PENDING_CURRENCY_COUNT', error: 'Completa las divisas pendientes en Apertura de Caja.' } } });
+  assert.equal(pending.nextView, 'apertura-caja');
+  const validation = scheduleError({ response: { data: { error: 'Validación fallida', detalles: { errores: ['Debe regresar del almuerzo'] } } } });
+  assert.equal(validation.message, 'Debe regresar del almuerzo'); assert.equal(validation.nextView, undefined);
+  const network = scheduleError({ friendlyMessage: 'No hay conexión con el servidor.' });
+  assert.equal(network.message, 'No hay conexión con el servidor.'); assert.equal(network.nextView, undefined);
+});
+
 function exchangeHook(point, getExchangesByPoint) {
   const state = [];
   const effects = [];
