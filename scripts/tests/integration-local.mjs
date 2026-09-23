@@ -497,6 +497,36 @@ try {
     assert.equal(Number(s.bancos), 25); assert.equal(Number(s.cantidad), Number(s.billetes) + Number(s.monedas_fisicas));
     return Number(s.cantidad);
   };
+  for (const [label, stock, detail, accepted] of [
+    ['solo billetes con monedas negativas', { cantidad: 2160.34, billetes: 2162.97, monedas_fisicas: -2.38 }, { billetes: 1200, monedas: 0, total: 1200 }, true],
+    ['solo monedas con billetes negativos', { cantidad: 100, billetes: -2, monedas_fisicas: 102 }, { billetes: 0, monedas: 50, total: 50 }, true],
+    ['monedas solicitadas con stock negativo', { cantidad: 2160.34, billetes: 2162.97, monedas_fisicas: -2.38 }, { billetes: 1199, monedas: 1, total: 1200 }, false],
+    ['billetes insuficientes aunque alcanza el total', { cantidad: 2160.34, billetes: 1000, monedas_fisicas: 1160.34 }, { billetes: 1200, monedas: 0, total: 1200 }, false],
+    ['total insuficiente aunque alcanzan los billetes', { cantidad: 1199, billetes: 1201, monedas_fisicas: -2 }, { billetes: 1200, monedas: 0, total: 1200 }, false],
+  ]) await check('Transferencia: ' + label, async () => {
+    const where = { punto_atencion_id_moneda_id: { punto_atencion_id: origin.id, moneda_id: usd.id } };
+    const before = await prisma.saldo.update({ where, data: stock });
+    const counts = async () => Promise.all([prisma.transferencia.count(), prisma.recibo.count(), prisma.movimientoSaldo.count()]);
+    const beforeCounts = await counts();
+    const result = await post('/transfers', { ...transferBody, monto: detail.total, detalle_divisas: detail }, randomUUID(), origin.token);
+    if (accepted) {
+      ok(result);
+      const sent = await prisma.saldo.findUniqueOrThrow({ where });
+      assert.equal(Number(sent.cantidad), +(stock.cantidad - detail.total).toFixed(2));
+      assert.equal(Number(sent.billetes), +(stock.billetes - detail.billetes).toFixed(2));
+      assert.equal(Number(sent.monedas_fisicas), +(stock.monedas_fisicas - detail.monedas).toFixed(2));
+      assert.equal(Number(sent.bancos), Number(before.bancos));
+      const receipt = await prisma.recibo.findFirstOrThrow({ where: { referencia_id: result.body.transfer.id } });
+      assert.deepEqual(receipt.datos_operacion.desglose_contabilizado_v1, detail);
+      ok(await post('/transfers/' + result.body.transfer.id + '/cancel', {}, undefined, origin.token));
+      const restored = await prisma.saldo.findUniqueOrThrow({ where });
+      for (const field of ['cantidad', 'billetes', 'monedas_fisicas', 'bancos']) assert.equal(Number(restored[field]), Number(before[field]));
+    } else {
+      assert.equal(result.status, 400);
+      assert.deepEqual(await prisma.saldo.findUniqueOrThrow({ where }), before);
+      assert.deepEqual(await counts(), beforeCounts);
+    }
+  });
   for (const detail of [{ billetes: 0, monedas: 50.25, total: 50.25 }, { billetes: 12.1, monedas: 38.15, total: 50.25 }]) {
     for (const action of ['accept', 'reject', 'cancel']) await check('Desglose transferencia ' + detail.billetes + '/' + detail.monedas + ': ' + action, async () => {
       for (const p of [origin, destination]) await prisma.saldo.update({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: usd.id } }, data: { cantidad: 1000, billetes: 800, monedas_fisicas: 200 } });

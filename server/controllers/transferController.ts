@@ -203,7 +203,10 @@ const controller = {
             : Number(monto);
           const detail = requestedCash || transferCashDetail({ billetes: fallbackBills,
             monedas: Number((Number(monto) - fallbackBills).toFixed(2)), total: Number(monto) }, Number(monto));
-          if (detail.billetes > billetesAnterior || detail.monedas > monedasAnterior) {
+          // Un componente no utilizado no debe bloquear la salida por un saldo
+          // histórico negativo. El saldo total y cada componente debitado sí se validan.
+          if ((detail.billetes > 0 && detail.billetes > billetesAnterior) ||
+              (detail.monedas > 0 && detail.monedas > monedasAnterior)) {
             throw new InsufficientTransferBalance("No hay suficientes billetes o monedas físicas para el desglose solicitado.");
           }
           if (via === "EFECTIVO") postedCash = detail;
