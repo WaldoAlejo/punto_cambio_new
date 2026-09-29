@@ -1,4 +1,5 @@
 # Logs
+reports/informe-timbradas-*.xlsx
 logs/
 *.log
 npm-debug.log*

@@ -69,6 +69,7 @@ import transferRoutes from "./routes/transfers.js";
 import transferApprovalRoutes from "./routes/transfer-approvals.js";
 import exchangeRoutes from "./routes/exchanges.js";
 import scheduleRoutes from "./routes/schedules.js";
+import adminMarcacionesRoutes from "./routes/admin-marcaciones.js";
 import scheduleConfigRoutes from "./routes/schedule-config.js";
 import spontaneousExitRoutes from "./routes/spontaneous-exits.js";
 import reportRoutes from "./routes/reports.js";
@@ -354,6 +355,7 @@ app.use("/api/users", relaxedLimiter, userRoutes);
 app.use("/api/points", relaxedLimiter, pointRoutes);
 app.use("/api/transfer-approvals", relaxedLimiter, transferApprovalRoutes);
 app.use("/api/schedules", relaxedLimiter, scheduleRoutes);
+app.use("/api/admin/marcaciones", adminMarcacionesRoutes);
 
 // Resto de rutas
 app.use("/api/auth", authRoutes);

@@ -192,7 +192,8 @@ export const authenticateToken: RequestHandler = async (
         // Permitir accesos administrativos a ciertos endpoints de gestión
         // (reportes, Servientrega y servicios externos) sin exigir punto principal.
         const adminBypassPaths = ["/reports", "/servientrega", "/servicios-externos", "/servicio-externo"];
-        const isBypass = adminBypassPaths.some((p) => req.originalUrl.includes(p));
+        const isMarcacionesReport = req.method === "GET" && /^\/api\/admin\/marcaciones\/?$/.test(req.originalUrl.split("?")[0]);
+        const isBypass = isMarcacionesReport || adminBypassPaths.some((p) => req.originalUrl.includes(p));
 
         if (isBypass) {
           logger.info("Admin acceso especial: saltando verificación de punto principal", {

@@ -159,6 +159,7 @@ const Sidebar = ({
       items: [
         { id: "users", label: "Usuarios", color: "text-blue-600" },
         { id: "admin-time-management", label: "Control de Horarios", color: "text-purple-600" },
+        { id: "marcaciones-report", label: "Marcaciones y ubicación", color: "text-blue-700" },
         { id: "permission-approvals", label: "Aprobación de Permisos", color: "text-pink-700" },
       ],
     },
@@ -239,7 +240,7 @@ const Sidebar = ({
       <aside
         className={`
           fixed top-0 left-0 h-screen bg-white border-r z-50 transition-all duration-300
-          flex flex-col
+          ${isOpen ? "flex" : "hidden lg:flex"} flex-col
           ${isOpen ? "w-64 sm:w-72 lg:w-64" : "w-12 sm:w-14"}
           ${isMobile ? "shadow-xl" : ""}
           lg:relative lg:z-auto
@@ -258,6 +259,7 @@ const Sidebar = ({
             variant="ghost"
             size="sm"
             onClick={onToggle}
+            aria-label={isOpen ? "Cerrar menú" : "Abrir menú"}
             className="p-1 h-8 w-8 ml-2"
           >
             {isOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}

@@ -20,6 +20,7 @@ import { aperturaCajaService, AperturaEstadoActual } from "@/services/aperturaCa
 import { toast } from "@/hooks/use-toast";
 
 /** Lazy imports */
+const MarcacionesReport = React.lazy(() => import("../admin/MarcacionesReport"));
 const MetalPurchases = React.lazy(() => import("../metals/MetalPurchases"));
 const ExchangeManagement = React.lazy(
   () => import("../exchange/ExchangeManagement")
@@ -132,6 +133,7 @@ const STORAGE_KEY_VIEW = "pc_active_view";
 const STORAGE_KEY_POINT = "pc_selected_point_id";
 
 const VALID_VIEWS = new Set<string>([
+  "marcaciones-report",
   "metal-purchases",
   "dashboard",
   "exchanges",
@@ -201,7 +203,7 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
   const [activeView, setActiveView] = useState<string>(() =>
     getInitialView(user, selectedPoint)
   );
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 1024);
   const [openingStatus, setOpeningStatus] = useState<AperturaEstadoActual | null>(null);
   const [checkingOpeningStatus, setCheckingOpeningStatus] = useState(false);
 
@@ -399,6 +401,11 @@ const Dashboard = ({ user, selectedPoint, onLogout }: DashboardProps) => {
         return <ServientregaMain user={user} selectedPoint={selectedPoint} />;
 
       // Admin
+      case "marcaciones-report":
+        if (!isAdmin)
+          return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
+        return <MarcacionesReport />;
+
       case "admin-time-management":
         if (!isAdmin)
           return <Unauthorized onGoBack={() => setActiveView("dashboard")} />;
