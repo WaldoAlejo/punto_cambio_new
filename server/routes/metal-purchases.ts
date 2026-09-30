@@ -8,7 +8,7 @@ import { assertOperationalSession, OperationalConflict } from "../utils/operatio
 import { assertCurrencyCounted, isPendingCurrencyError } from "../utils/stagedOpening.js";
 import { getEstadoMonedasObligatorias, tieneIncidenciaAperturaRegistrada } from "../utils/aperturaCajaRequirements.js";
 import { gyeDayRangeUtcFromDate, gyeDayRangeUtcFromDateOnly } from "../utils/timezone.js";
-import { calculateMetalLines, metalLineSchema, metalPurchaseSchema, validateMetalPayment } from "../utils/metalPurchase.js";
+import { calculateMetalLines, metalLineSchema, metalPurchaseSchema, validateMetalPayment, validateMetalSafety } from "../utils/metalPurchase.js";
 import logger from "../utils/logger.js";
 
 const router = express.Router();
@@ -80,7 +80,7 @@ router.post("/cotizar", wrap(async (req, res) => {
 router.post("/preparar", wrap(async (req, res) => {
   const input = metalPurchaseSchema.parse(req.body);
   const quote = calculation(input.detalles);
-  try { validateMetalPayment(input, quote.total); } catch (e) { fail(400, (e as Error).message); }
+  try { validateMetalSafety(input); validateMetalPayment(input, quote.total); } catch (e) { fail(400, (e as Error).message); }
   res.json({ success: true, ...quote });
 }));
 router.get("/", wrap(async (req, res) => {
@@ -116,7 +116,7 @@ router.post("/", requireRole(["OPERADOR"]), wrap(async (req, res) => {
   const key = z.string().uuid().parse(req.get("Idempotency-Key"));
   const input = metalPurchaseSchema.parse(req.body);
   const quote = calculation(input.detalles);
-  try { validateMetalPayment(input, quote.total); } catch (e) { fail(400, (e as Error).message); }
+  try { validateMetalSafety(input); validateMetalPayment(input, quote.total); } catch (e) { fail(400, (e as Error).message); }
   const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
   const user = userOf(req);
   const result = await prisma.$transaction(async tx => {
@@ -150,7 +150,7 @@ router.post("/", requireRole(["OPERADOR"]), wrap(async (req, res) => {
       moneda_id: input.moneda_id, clave_operacion: key, solicitud_hash: hash, vendedor: input.vendedor,
       punto_nombre: config.punto.nombre, operador_nombre: user.nombre, moneda_codigo: currency.codigo,
       medio_pago: input.medio_pago, total, billetes: bills, monedas: coins, banco: input.banco, referencia: input.referencia, comprobante: input.comprobante,
-      detalles: { create: quote.detalles.map(({ resultado_concluyente: _result, ...line }, i) => ({ ...line, codigo_pieza: `${number}-${i + 1}` })) },
+      detalles: { create: quote.detalles.map(({ resultado_concluyente: _result, ...line }, i) => ({ ...line, evaluacion: { ...line.evaluacion, seguridad: input.seguridad ?? null }, codigo_pieza: `${number}-${i + 1}` })) },
       eventos: { create: { usuario_id: user.id, accion: "COMPRA_PAGADA", evidencia: { saldo_anterior: before.toFixed(2), saldo_nuevo: after.toFixed(2), medio_pago: input.medio_pago } } },
     }, include });
     if (balance) await tx.saldo.update({ where: { id: balance.id }, data: cash ? { cantidad: after, billetes: balance.billetes.minus(bills), monedas_fisicas: balance.monedas_fisicas.minus(coins) } : { bancos: after } });

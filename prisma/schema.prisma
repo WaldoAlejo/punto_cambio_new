@@ -1085,6 +1085,7 @@ model DetalleCompraMetal {
   precio_gramo Decimal @db.Decimal(16, 6)
   subtotal Decimal @db.Decimal(15, 2)
   foto String?
+  evaluacion Json?
   compra CompraMetal @relation(fields: [compra_id], references: [id], onDelete: Restrict)
   @@index([compra_id])
 }

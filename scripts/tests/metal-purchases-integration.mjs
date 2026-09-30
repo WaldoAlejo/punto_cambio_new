@@ -10,7 +10,7 @@ export async function testMetalPurchases({ prisma, pool, base, post, ok, check, 
       await client.query('CREATE SCHEMA metals_migration_test');
       await client.query('SET LOCAL search_path TO metals_migration_test');
       for (const table of ['Usuario', 'PuntoAtencion', 'Moneda', 'Jornada']) await client.query(`CREATE TABLE "${table}" (id TEXT PRIMARY KEY)`);
-      for (const file of ['2026-09-14-metal-purchases.sql', '2026-09-14-metal-purchases-checks.sql']) await client.query(await fs.readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
+      for (const file of ['2026-09-14-metal-purchases.sql', '2026-09-14-metal-purchases-checks.sql', '2026-09-30-metal-evaluation.sql']) await client.query(await fs.readFile(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
       const tables = ['ConfiguracionCompraMetal', 'CompraMetal', 'DetalleCompraMetal', 'EventoCompraMetal'];
       const query = 'SELECT table_name, column_name, data_type, is_nullable, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_schema=$1 AND table_name=ANY($2::text[]) ORDER BY table_name, ordinal_position';
       assert.deepEqual((await client.query(query, ['metals_migration_test', tables])).rows, (await client.query(query, ['public', tables])).rows);
@@ -47,9 +47,12 @@ export async function testMetalPurchases({ prisma, pool, base, post, ok, check, 
   const f = await fixture('METALES PRUEBA CAJA');
   const g = await fixture('METALES PRUEBA BANCOS', 0);
   const pending = await fixture('METALES APERTURA PENDIENTE', 1000, false);
-  const line = { metal: 'ORO', descripcion: 'Anillo ficticio', piezas: 1, peso_bruto: '10', deducciones: '0', pureza_declarada: '18 K', pureza: '750', metodo: 'ACIDO', observaciones: 'Ensayo ficticio local', resultado_concluyente: true, precio_gramo: '60' };
-  const payload = { moneda_id: usd.id, vendedor: { nombre: 'Vendedor ficticio', documento: 'PRUEBA-000', telefono: '0000000000', procedencia: 'Pieza de prueba sin valor comercial' }, detalles: [line], medio_pago: 'EFECTIVO', billetes: '600', monedas: '0' };
-  const bankPayload = { moneda_id: usd.id, vendedor: payload.vendedor, detalles: [line], medio_pago: 'TRANSFERENCIA', banco: 'Banco ficticio', referencia: 'REF-SOLO-LOCAL' };
+  const evaluacion = { tipo_color: 'AMARILLO', sello: '750', sello_con_lupa: true, uniones_revisadas: true, color_uniforme: true, iman: 'NO_ATRAE', piedra: 'MARCA_UNIFORME', lima: 'NO_NECESARIA', acido_usado: '18K', reaccion: 'NINGUNA', intensidad: 'NINGUNA', material: 'NINGUNO' };
+  const silverEvaluation = { ...evaluacion, tipo_color: 'PLATA', sello: '925', acido_usado: '14K', reaccion: 'BLANCO_LECHOSO' };
+  const line = { metal: 'ORO', descripcion: 'Anillo ficticio', piezas: 1, peso_bruto: '10', deducciones: '0', pureza_declarada: '18 K', pureza: '750', metodo: 'ACIDO', observaciones: 'Ensayo ficticio local', resultado_concluyente: true, precio_gramo: '60', evaluacion };
+  const seguridad = { acido_vigente: true, guantes: true };
+  const payload = { seguridad, moneda_id: usd.id, vendedor: { nombre: 'Vendedor ficticio', documento: 'PRUEBA-000', telefono: '0000000000', procedencia: 'Pieza de prueba sin valor comercial' }, detalles: [line], medio_pago: 'EFECTIVO', billetes: '600', monedas: '0' };
+  const bankPayload = { seguridad, moneda_id: usd.id, vendedor: payload.vendedor, detalles: [line], medio_pago: 'TRANSFERENCIA', banco: 'Banco ficticio', referencia: 'REF-SOLO-LOCAL' };
   const balance = fixture => prisma.saldo.findUniqueOrThrow({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: fixture.point.id, moneda_id: usd.id } } });
   const enable = fixture => req(`/metal-purchases/configuracion/${fixture.point.id}`, 'PUT', { habilitado: true, motivo: 'Habilitación de prueba local' }, adminToken);
   await check('Metales: revisión del formulario valida pago sin registrar compra', async () => {
@@ -63,12 +66,35 @@ export async function testMetalPurchases({ prisma, pool, base, post, ok, check, 
     assert.equal(r.body.total, '600.00'); assert.equal(r.body.detalles[0].gramos_finos, '7.500000');
   });
   await check('Metales: redondeo por línea y precisión de peso/precio', async () => {
-    const r = await post('/metal-purchases/cotizar', { detalles: [{ ...line, peso_bruto: '0.001', precio_gramo: '5' }, { ...line, metal: 'PLATA', pureza: '925', peso_bruto: '1.001', deducciones: '0.001', precio_gramo: '0.005' }] }, undefined, f.token); ok(r);
+    const r = await post('/metal-purchases/cotizar', { detalles: [{ ...line, peso_bruto: '0.001', precio_gramo: '5' }, { ...line, metal: 'PLATA', pureza: '925', evaluacion: silverEvaluation, peso_bruto: '1.001', deducciones: '0.001', precio_gramo: '0.005' }] }, undefined, f.token); ok(r);
     assert.equal(r.body.total, '0.02'); assert.equal(r.body.detalles[1].peso_neto, '1.000');
   });
   for (const [label, change] of [['peso neto cero', { deducciones: '10' }], ['pureza fuera de rango', { pureza: '1001' }], ['resultado inconcluso', { resultado_concluyente: false }], ['precio cero', { precio_gramo: '0' }], ['precio negativo', { precio_gramo: '-1' }], ['precisión excedida', { peso_bruto: '1.0001' }], ['valor exponencial', { precio_gramo: '1e2' }]]) {
     await check(`Metales rechaza ${label}`, async () => assert.equal((await post('/metal-purchases/cotizar', { detalles: [{ ...line, ...change }] }, undefined, f.token)).status, 400));
   }
+  for (const [label, change] of [['imán que atrae', { iman: 'ATRAE' }], ['reacción verde', { reaccion: 'VERDE' }], ['reacción dorada (latón)', { reaccion: 'DORADO' }], ['efervescencia', { intensidad: 'EFERVESCENCIA' }], ['color no uniforme', { color_uniforme: false }], ['lima con otro metal', { lima: 'OTRO_METAL' }], ['gold filled', { material: 'GOLD_FILLED' }], ['sello 925 en oro', { sello: 'PLATA_925' }], ['sin sello y sin lima', { sello: 'NINGUNO' }], ['sello sin lupa', { sello_con_lupa: false }], ['ácido sin reacción registrada', { reaccion: 'NO_REALIZADA' }], ['paso omitido', { iman: undefined }]]) {
+    await check(`Metales: reconocimiento rechaza ${label}`, async () => assert.equal((await post('/metal-purchases/cotizar', { detalles: [{ ...line, evaluacion: { ...evaluacion, ...change } }] }, undefined, f.token)).status, 400));
+  }
+  await check('Metales: pureza sobre lo respaldado por sello y reacción exige justificación', async () => {
+    const over = { ...line, pureza: '999' };
+    assert.equal((await post('/metal-purchases/cotizar', { detalles: [over] }, undefined, f.token)).status, 400);
+    const cafe = { ...line, evaluacion: { ...evaluacion, sello: '14K', reaccion: 'CAFE', intensidad: 'BURBUJA' } };
+    assert.equal((await post('/metal-purchases/cotizar', { detalles: [cafe] }, undefined, f.token)).status, 400);
+    ok(await post('/metal-purchases/cotizar', { detalles: [{ ...cafe, pureza: '585' }] }, undefined, f.token));
+    const justified = await post('/metal-purchases/cotizar', { detalles: [{ ...over, evaluacion: { ...evaluacion, justificacion: 'Certificado XRF externo adjunto al sobre' } }] }, undefined, f.token); ok(justified);
+    assert.equal(justified.body.detalles[0].evaluacion.pureza_maxima, 750);
+  });
+  await check('Metales: plata sin reacción (posible acero) se rechaza', async () => {
+    assert.equal((await post('/metal-purchases/cotizar', { detalles: [{ ...line, metal: 'PLATA', pureza: '925', evaluacion: { ...silverEvaluation, reaccion: 'NINGUNA' } }] }, undefined, f.token)).status, 400);
+  });
+  await check('Metales: XRF sin ácido no exige piedra ni reacción', async () => {
+    ok(await post('/metal-purchases/cotizar', { detalles: [{ ...line, metodo: 'XRF', evaluacion: { ...evaluacion, piedra: 'NO_REALIZADA', acido_usado: 'NO_APLICA', reaccion: 'NO_REALIZADA' } }] }, undefined, f.token));
+  });
+  await check('Metales: prueba con ácido exige confirmar ácido vigente y guantes', async () => {
+    const { seguridad: _omit, ...unsafe } = payload;
+    assert.equal((await post('/metal-purchases/preparar', unsafe, undefined, f.token)).status, 400);
+    assert.equal((await post('/metal-purchases/preparar', { ...payload, seguridad: { acido_vigente: true, guantes: false } }, undefined, f.token)).status, 400);
+  });
   await check('Metales: punto deshabilitado por defecto y operador no puede habilitarlo', async () => {
     assert.equal((await post('/metal-purchases', payload, randomUUID(), f.token)).status, 403);
     assert.equal((await req(`/metal-purchases/configuracion/${f.point.id}`, 'PUT', { habilitado: true, motivo: 'Intento prohibido' }, f.token)).status, 403);
@@ -178,6 +204,11 @@ export async function testMetalPurchases({ prisma, pool, base, post, ok, check, 
     assert.equal((await post(`/metal-purchases/${r.body.compra.id}/reversar`, evidence, undefined, adminToken)).status, 409);
     const replay = await post('/metal-purchases', bankPayload, k, g.token); ok(replay); assert.equal(replay.body.compra.id, r.body.compra.id);
     const fresh = await post('/metal-purchases', bankPayload, randomUUID(), g.token); assert.ok([403, 409].includes(fresh.status));
+  });
+  await check('Metales: la compra guarda el reconocimiento y la seguridad por pieza', async () => {
+    const saved = await prisma.detalleCompraMetal.findFirstOrThrow({ where: { compra_id: purchase.id } });
+    assert.equal(saved.evaluacion.reaccion, 'NINGUNA'); assert.equal(saved.evaluacion.resultado, 'APTA');
+    assert.deepEqual(saved.evaluacion.seguridad, seguridad);
   });
   await check('Metales: SQL impide pureza y pago inválidos', async () => {
     await assert.rejects(pool.query('UPDATE "DetalleCompraMetal" SET pureza=1001 WHERE compra_id=$1', [purchase.id]), /DetalleCompraMetal_values_check/);

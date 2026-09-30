@@ -20,6 +20,7 @@
       "@/*": ["./src/*"]
     }
   },
+  "files": ["server/utils/metalEvaluation.ts"],
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"],
   "exclude": ["node_modules", "dist", "server"]
 }

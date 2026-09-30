@@ -8,7 +8,7 @@ import { Client } from 'pg';
 
 const { values } = parseArgs({ options: { 'env-file': { type: 'string' }, execute: { type: 'boolean' }, check: { type: 'boolean' } } });
 if (values.execute && values.check) throw new Error('Elija --execute o --check, no ambos.');
-const files = ['2026-09-14-metal-purchases.sql', '2026-09-14-metal-purchases-checks.sql'];
+const files = ['2026-09-14-metal-purchases.sql', '2026-09-14-metal-purchases-checks.sql', '2026-09-30-metal-evaluation.sql'];
 const sql = (await Promise.all(files.map(file => fs.readFile(fileURLToPath(new URL(`../migrations/${file}`, import.meta.url)), 'utf8')))).join('\n');
 console.log('Migración aditiva:', files.join(', '));
 console.log('SHA-256 del SQL:', createHash('sha256').update(sql).digest('hex'));

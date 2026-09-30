@@ -2,16 +2,31 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiService } from "@/services/apiService";
 import { Button } from "@/components/ui/button";
 import type { User, PuntoAtencion } from "@/types";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { REACTIONS, type Evaluacion } from "../../../server/utils/metalEvaluation";
+import MetalGuide from "./MetalGuide";
+import MetalLineEvaluation from "./MetalLineEvaluation";
+import { blankEvaluation, pendingSteps, verdictOf, type EvaluationDraft } from "./metalGuideData";
 
-type Line = { metal: "ORO" | "PLATA"; descripcion: string; piezas: number; peso_bruto: string; deducciones: string; pureza_declarada: string; pureza: string; metodo: "ACIDO" | "XRF" | "OTRO"; observaciones: string; resultado_concluyente: true; precio_gramo: string; foto?: string };
+type Line = { metal: "ORO" | "PLATA"; descripcion: string; piezas: number; peso_bruto: string; deducciones: string; pureza_declarada: string; pureza: string; metodo: "ACIDO" | "XRF" | "OTRO"; observaciones: string; resultado_concluyente: true; precio_gramo: string; foto?: string; evaluacion: EvaluationDraft };
+type Safety = { acido_vigente: boolean; guantes: boolean };
+type SavedEvaluation = Partial<Evaluacion> & { resultado?: string; avisos?: string[]; pureza_maxima?: number | null; seguridad?: Safety | null };
 type Seller = { nombre: string; documento: string; telefono: string; procedencia: string };
-type Payload = { moneda_id: string; vendedor: Seller; detalles: Line[]; medio_pago: "EFECTIVO" | "TRANSFERENCIA"; billetes?: string; monedas?: string; banco?: string; referencia?: string; comprobante?: string };
+type Payload = { seguridad?: Safety; moneda_id: string; vendedor: Seller; detalles: Line[]; medio_pago: "EFECTIVO" | "TRANSFERENCIA"; billetes?: string; monedas?: string; banco?: string; referencia?: string; comprobante?: string };
 type Quote = { total: string; detalles: (Line & { peso_neto: string; gramos_finos: string; subtotal: string })[] };
-type Purchase = { id: string; numero: string; fecha: string; punto_nombre: string; operador_nombre: string; moneda_codigo: string; estado: string; total: string; medio_pago: string; vendedor: Seller; billetes: string; monedas: string; banco?: string; referencia?: string; comprobante?: string; detalles: (Quote["detalles"][number] & { codigo_pieza: string })[]; eventos: { id: string; accion: string; fecha: string; usuario_id: string; evidencia: Record<string, unknown> }[] };
+type Purchase = { id: string; numero: string; fecha: string; punto_nombre: string; operador_nombre: string; moneda_codigo: string; estado: string; total: string; medio_pago: string; vendedor: Seller; billetes: string; monedas: string; banco?: string; referencia?: string; comprobante?: string; detalles: (Omit<Quote["detalles"][number], "evaluacion"> & { codigo_pieza: string; evaluacion?: SavedEvaluation | null })[]; eventos: { id: string; accion: string; fecha: string; usuario_id: string; evidencia: Record<string, unknown> }[] };
 type Row = Pick<Purchase, "id" | "numero" | "fecha" | "punto_nombre" | "operador_nombre" | "moneda_codigo" | "estado" | "total" | "medio_pago">;
 type Point = { id: string; nombre: string; activo: boolean; configuracionMetales: { habilitado: boolean } | null };
 type Summary = { moneda_codigo: string; medio_pago: string; estado: string; _sum: { total: string }; _count: number };
-const blankLine = (): Line => ({ metal: "ORO", descripcion: "", piezas: 1, peso_bruto: "", deducciones: "0", pureza_declarada: "", pureza: "750", metodo: "ACIDO", observaciones: "", resultado_concluyente: true, precio_gramo: "" });
+const blankLine = (): Line => ({ metal: "ORO", descripcion: "", piezas: 1, peso_bruto: "", deducciones: "0", pureza_declarada: "", pureza: "750", metodo: "ACIDO", observaciones: "", resultado_concluyente: true, precio_gramo: "", evaluacion: blankEvaluation("ORO") });
+const SEAL_LABEL: Record<string, string> = { NINGUNO: "Sin sello", ILEGIBLE: "Ilegible", PLATA_925: "925" };
+function evaluationSummary(e?: SavedEvaluation | null) {
+  if (!e?.reaccion) return null;
+  return [`Sello: ${SEAL_LABEL[e.sello || ""] || e.sello}`, `Imán: ${e.iman === "NO_ATRAE" ? "no atrae" : "atrae"}`,
+    `Piedra: ${e.piedra === "MARCA_UNIFORME" ? "marca uniforme" : e.piedra === "NO_REALIZADA" ? "no realizada" : "otro metal"}`,
+    `Lima: ${e.lima === "NO_NECESARIA" ? "no necesaria" : e.lima === "MISMO_METAL" ? "mismo metal" : "otro metal"}`,
+    `Ácido: ${e.acido_usado === "NO_APLICA" ? "no aplica" : e.acido_usado} · ${REACTIONS[e.reaccion].nombre}`, e.resultado ? `Resultado: ${e.resultado}` : ""].filter(Boolean).join(" · ");
+}
 const emptySeller = (): Seller => ({ nombre: "", documento: "", telefono: "", procedencia: "" });
 const inputClass = "mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:bg-slate-100";
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block text-sm font-medium text-slate-700">{label}{children}</label>; }
@@ -26,6 +41,7 @@ export default function MetalPurchases({ user, selectedPoint }: { user: User; se
   const [enabled, setEnabled] = useState(false), [currencies, setCurrencies] = useState<{ id: string; codigo: string }[]>([]);
   const [currency, setCurrency] = useState(""), [seller, setSeller] = useState<Seller>(emptySeller), [lines, setLines] = useState<Line[]>([blankLine()]);
   const [method, setMethod] = useState<"EFECTIVO" | "TRANSFERENCIA">("EFECTIVO");
+  const [safety, setSafety] = useState<Safety>({ acido_vigente: false, guantes: false });
   const [bills, setBills] = useState(""), [coins, setCoins] = useState("0"), [bank, setBank] = useState(""), [reference, setReference] = useState(""), [proof, setProof] = useState<string>();
   const [review, setReview] = useState<{ payload: Payload; quote: Quote } | null>(null);
   const [calculated, setCalculated] = useState<Quote | null>(null);
@@ -57,7 +73,7 @@ export default function MetalPurchases({ user, selectedPoint }: { user: User; se
     try {
       const saved = sessionStorage.getItem(storageKey);
       if (saved) { const pending = JSON.parse(saved) as { key: string; payload: Payload }; attempt.current = pending; setUncertain(true);
-        setSeller(pending.payload.vendedor); setLines(pending.payload.detalles); setMethod(pending.payload.medio_pago); setBills(pending.payload.billetes || ""); setCoins(pending.payload.monedas || "0"); setBank(pending.payload.banco || ""); setReference(pending.payload.referencia || ""); setProof(pending.payload.comprobante);
+        setSeller(pending.payload.vendedor); setLines(pending.payload.detalles); if (pending.payload.seguridad) setSafety(pending.payload.seguridad); setMethod(pending.payload.medio_pago); setBills(pending.payload.billetes || ""); setCoins(pending.payload.monedas || "0"); setBank(pending.payload.banco || ""); setReference(pending.payload.referencia || ""); setProof(pending.payload.comprobante);
         void apiService.post<Quote>("/metal-purchases/cotizar", { detalles: pending.payload.detalles }).then(quote => active && setReview({ payload: pending.payload, quote })).catch(e => active && setError(e.message)); }
     } catch { setError("No se pudo recuperar el intento pendiente. Consulte el historial antes de registrar otra compra."); setUncertain(true); }
     return () => { active = false; };
@@ -67,10 +83,23 @@ export default function MetalPurchases({ user, selectedPoint }: { user: User; se
     try { await fn(); } catch (e) { setError(e instanceof Error ? e.message : "No se pudo completar la operación."); }
     finally { running.current = false; setBusy(false); }
   }
+  function updateEvaluation(i: number, patch: EvaluationDraft) { setCalculated(null); setLines(current => current.map((line, n) => n === i ? { ...line, evaluacion: { ...line.evaluacion, ...patch } } : line)); }
   function setLine(i: number, data: Partial<Line>) { setCalculated(null); setLines(current => current.map((line, n) => n === i ? { ...line, ...data } : line)); }
+  const usesAcid = lines.some(l => l.metodo === "ACIDO");
+  // Bloquea antes del servidor: cada pieza debe completar el reconocimiento y quedar APTA.
+  function assertEvaluations() {
+    lines.forEach((l, i) => {
+      const pending = pendingSteps(l.evaluacion);
+      if (pending.length) throw new Error(`Pieza ${i + 1}: complete el reconocimiento (${pending.join(", ")}).`);
+      const verdict = verdictOf(l.metal, l.metodo, l.pureza, l.evaluacion);
+      if (verdict && verdict.estado !== "APTA") throw new Error(`Pieza ${i + 1}: ${verdict.motivos.join(" ")}`);
+    });
+  }
   function changeMethod(value: "EFECTIVO" | "TRANSFERENCIA") { setMethod(value); setBills(""); setCoins("0"); setBank(""); setReference(""); setProof(undefined); }
   async function prepare() {
-    const payload: Payload = { moneda_id: currency, vendedor: seller, detalles: lines, medio_pago: method,
+    assertEvaluations();
+    if (usesAcid && !(safety.acido_vigente && safety.guantes)) throw new Error("Confirme que el ácido no está vencido y que usó guantes.");
+    const payload: Payload = { ...(usesAcid ? { seguridad: safety } : {}), moneda_id: currency, vendedor: seller, detalles: lines, medio_pago: method,
       ...(method === "EFECTIVO" ? { billetes: bills, monedas: coins } : { banco: bank, referencia: reference, ...(proof ? { comprobante: proof } : {}) }) };
     const quote = await apiService.post<Quote>("/metal-purchases/preparar", payload);
     setReview({ payload, quote });
@@ -83,11 +112,13 @@ export default function MetalPurchases({ user, selectedPoint }: { user: User; se
     setUncertain(true);
     const result = await apiService.post<{ compra: Purchase }>("/metal-purchases", attempt.current.payload, attempt.current.key);
     setReceipt(result.compra); setReview(null); setUncertain(false); attempt.current = null; retryKey.current = null; sessionStorage.removeItem(storageKey);
-    setSeller(emptySeller()); setLines([blankLine()]); setCalculated(null); changeMethod("EFECTIVO");
+    setSeller(emptySeller()); setLines([blankLine()]); setCalculated(null); changeMethod("EFECTIVO"); setSafety({ acido_vigente: false, guantes: false });
     await refresh();
   }
   return <div className="space-y-6 p-4 md:p-6">
-    <div className="metal-no-print"><h1 className="text-2xl font-semibold">Compra de oro y plata</h1><p className="text-sm text-slate-600">Registre piezas recibidas y el pago negociado. {selectedPoint?.nombre}</p></div>
+    <div className="metal-no-print"><h1 className="text-2xl font-semibold">Compra de oro y plata</h1><p className="text-sm text-slate-600">Registre piezas recibidas y el pago negociado. {selectedPoint?.nombre}</p>
+      <Dialog><DialogTrigger asChild><Button type="button" variant="outline" className="mt-2">Guía visual de reconocimiento de oro y plata</Button></DialogTrigger>
+        <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto"><DialogHeader><DialogTitle>Reconocimiento de oro y plata</DialogTitle><DialogDescription>Pasos, resultados esperados de cada prueba y tabla de quilates, según la capacitación.</DialogDescription></DialogHeader><MetalGuide /></DialogContent></Dialog></div>
     {error && <div role="alert" className="metal-no-print rounded border border-red-300 bg-red-50 p-3 text-red-800">{error}</div>}
     {operator && !enabled && <p className="metal-no-print rounded bg-amber-50 p-4">La compra de metales no está habilitada en este punto. La administración debe habilitarlo expresamente.</p>}
     {uncertain && <div className="metal-no-print rounded border border-amber-400 bg-amber-50 p-4">Hay un intento pendiente de confirmación. Use «Confirmar / recuperar compra» para completar ese mismo intento. No registre un nuevo pago.
@@ -109,19 +140,24 @@ export default function MetalPurchases({ user, selectedPoint }: { user: User; se
         </div><Field label="Procedencia declarada de las piezas"><textarea className={inputClass} required maxLength={1000} value={seller.procedencia} onChange={e => setSeller({ ...seller, procedencia: e.target.value })} /></Field></section>
         {lines.map((line, i) => <section key={i} className="rounded-lg border bg-white p-4"><div className="flex justify-between"><h2 className="font-semibold">Pieza / sobre {i + 1}</h2>{lines.length > 1 && <Button type="button" variant="ghost" onClick={() => { setCalculated(null); setLines(lines.filter((_, n) => n !== i)); }}>Quitar</Button>}</div>
           <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <Field label="Metal"><select className={inputClass} value={line.metal} onChange={e => setLine(i, { metal: e.target.value as Line['metal'], pureza: e.target.value === "ORO" ? "750" : "925" })}><option>ORO</option><option>PLATA</option></select></Field>
+            <Field label="Metal"><select className={inputClass} value={line.metal} onChange={e => { const metal = e.target.value as Line['metal']; setLine(i, { metal, pureza: metal === "ORO" ? "750" : "925", evaluacion: blankEvaluation(metal) }); }}><option>ORO</option><option>PLATA</option></select></Field>
             <Field label="Descripción"><input className={inputClass} required maxLength={300} value={line.descripcion} onChange={e => setLine(i, { descripcion: e.target.value })} /></Field>
             <Field label="Cantidad de piezas homogéneas"><input className={inputClass} type="number" min="1" max="1000" required value={line.piezas} onChange={e => setLine(i, { piezas: Number(e.target.value) })} /></Field>
             {([['peso_bruto', 'Peso bruto (g)', '0.001'], ['deducciones', 'Deducciones: piedras y otros (g)', '0'], ['precio_gramo', 'Precio negociado por gramo de esta pieza', '0.000001']] as const).map(([key, label, min]) => <Field key={key} label={label}><input className={inputClass} type="number" min={min} max="9999999999" step={key === "precio_gramo" ? "0.000001" : "0.001"} required value={line[key]} onChange={e => setLine(i, { [key]: e.target.value })} /></Field>)}
             <Field label="Pureza declarada (opcional)"><input className={inputClass} maxLength={80} placeholder="Ej. sello 18 K / 750" value={line.pureza_declarada} onChange={e => setLine(i, { pureza_declarada: e.target.value })} /></Field>
             <Field label="Pureza evaluada (milésimas)"><input className={inputClass} type="number" min="0.001" max="1000" step="0.001" required value={line.pureza} onChange={e => setLine(i, { pureza: e.target.value })} />{line.metal === "ORO" && <small>Equivalencia aproximada: {(Number(line.pureza) * 24 / 1000).toFixed(2)} K</small>}</Field>
             <Field label="Método de evaluación"><select className={inputClass} value={line.metodo} onChange={e => setLine(i, { metodo: e.target.value as Line['metodo'] })}><option value="ACIDO">Ácido</option><option value="XRF">XRF</option><option value="OTRO">Otro</option></select></Field>
-            <Field label="Resultado y observaciones de la evaluación"><textarea className={inputClass} required maxLength={500} value={line.observaciones} onChange={e => setLine(i, { observaciones: e.target.value })} /></Field>
+            <Field label="Observaciones adicionales (opcional)"><textarea className={inputClass} maxLength={500} value={line.observaciones} onChange={e => setLine(i, { observaciones: e.target.value })} /></Field>
             <Field label="Foto opcional (JPG/PNG, hasta 200 KB)"><input className={inputClass} type="file" accept="image/jpeg,image/png" onChange={e => { const file = e.target.files?.[0]; void work(async () => setLine(i, { foto: await readPhoto(file) })); }} /></Field>
-          </div><label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" required /> La evaluación permite confirmar esta compra; registro su resultado estimado.</label>
+          </div>
+          <MetalLineEvaluation metal={line.metal} metodo={line.metodo} pureza={line.pureza} value={line.evaluacion} onChange={patch => updateEvaluation(i, patch)} onPurity={pureza => setLine(i, { pureza })} />
+          <label className="mt-3 flex items-center gap-2 text-sm"><input type="checkbox" required /> La evaluación permite confirmar esta compra; registro su resultado estimado.</label>
         </section>)}
         {lines.length < 20 && <Button type="button" variant="outline" onClick={() => { setCalculated(null); setLines([...lines, blankLine()]); }}>Agregar pieza / pureza diferente</Button>}
-        <div className="rounded bg-slate-50 p-4"><Button type="button" variant="outline" onClick={() => void work(async () => setCalculated(await apiService.post<Quote>("/metal-purchases/cotizar", { detalles: lines })))}>Calcular total</Button>{calculated && <div className="mt-3"><strong>Total: {currencies.find(c => c.id === currency)?.codigo} {money(calculated.total)}</strong>{calculated.detalles.map((l, i) => <p className="text-sm" key={i}>Pieza {i + 1}: {l.peso_neto} g netos × {l.precio_gramo} = {money(l.subtotal)}</p>)}</div>}</div>
+        {usesAcid && <section className="rounded-lg border border-amber-300 bg-amber-50 p-4"><h2 className="mb-2 font-semibold">Seguridad de la prueba con ácido</h2>
+          <label className="flex gap-2 text-sm"><input type="checkbox" checked={safety.acido_vigente} onChange={e => setSafety({ ...safety, acido_vigente: e.target.checked })} />El ácido no está vencido y tiene las mezclas exactas</label>
+          <label className="flex gap-2 text-sm"><input type="checkbox" checked={safety.guantes} onChange={e => setSafety({ ...safety, guantes: e.target.checked })} />Usé guantes durante la prueba</label></section>}
+        <div className="rounded bg-slate-50 p-4"><Button type="button" variant="outline" onClick={() => void work(async () => { assertEvaluations(); setCalculated(await apiService.post<Quote>("/metal-purchases/cotizar", { detalles: lines })); })}>Calcular total</Button>{calculated && <div className="mt-3"><strong>Total: {currencies.find(c => c.id === currency)?.codigo} {money(calculated.total)}</strong>{calculated.detalles.map((l, i) => <p className="text-sm" key={i}>Pieza {i + 1}: {l.peso_neto} g netos × {l.precio_gramo} = {money(l.subtotal)}</p>)}</div>}</div>
         <section className="rounded-lg border bg-white p-4"><h2 className="mb-3 font-semibold">Pago</h2><div className="grid gap-3 md:grid-cols-3">
           <Field label="Moneda de pago"><select className={inputClass} value={currency} required onChange={e => setCurrency(e.target.value)}>{currencies.map(c => <option key={c.id} value={c.id}>{c.codigo}</option>)}</select></Field>
           <Field label="Medio de pago"><select className={inputClass} value={method} onChange={e => changeMethod(e.target.value as typeof method)}><option value="EFECTIVO">Efectivo</option><option value="TRANSFERENCIA">Transferencia bancaria</option></select></Field>
@@ -134,7 +170,7 @@ export default function MetalPurchases({ user, selectedPoint }: { user: User; se
       </fieldset>
     </form>}
     {review && <section className="metal-no-print rounded-lg border border-blue-200 bg-blue-50 p-5"><h2 className="text-xl font-semibold">Confirmar piezas recibidas y pago</h2><p>{review.payload.vendedor.nombre} · {review.payload.vendedor.documento}</p>
-      <div className="my-3 overflow-auto"><table className="w-full text-left text-sm"><thead><tr>{['Pieza', 'Metal / ley', 'Neto g', 'Precio/g', 'Subtotal'].map(h => <th className="p-2" key={h}>{h}</th>)}</tr></thead><tbody>{review.quote.detalles.map((l, i) => <tr key={i}><td className="p-2">{l.descripcion}</td><td>{l.metal} / {l.pureza}</td><td>{l.peso_neto}</td><td>{l.precio_gramo}</td><td>{money(l.subtotal)}</td></tr>)}</tbody></table></div>
+      <div className="my-3 overflow-auto"><table className="w-full text-left text-sm"><thead><tr>{['Pieza', 'Metal / ley', 'Reconocimiento', 'Neto g', 'Precio/g', 'Subtotal'].map(h => <th className="p-2" key={h}>{h}</th>)}</tr></thead><tbody>{review.quote.detalles.map((l, i) => <tr key={i}><td className="p-2">{l.descripcion}</td><td>{l.metal} / {l.pureza}</td><td className="text-xs">{evaluationSummary(l.evaluacion as SavedEvaluation)}</td><td>{l.peso_neto}</td><td>{l.precio_gramo}</td><td>{money(l.subtotal)}</td></tr>)}</tbody></table></div>
       <p className="text-xl font-bold">{currencies.find(c => c.id === review.payload.moneda_id)?.codigo} {money(review.quote.total)} · {review.payload.medio_pago}</p>
       <p className="my-2 text-sm">{review.payload.medio_pago === "EFECTIVO" ? `Billetes: ${review.payload.billetes}; monedas: ${review.payload.monedas}` : `${review.payload.banco} · Referencia: ${review.payload.referencia}`}</p>
       <div className="flex gap-3"><Button disabled={busy} onClick={() => void work(confirm)}>Confirmar / recuperar compra</Button>{!uncertain && <Button variant="outline" disabled={busy} onClick={() => setReview(null)}>Volver y corregir</Button>}</div>
@@ -148,7 +184,7 @@ export default function MetalPurchases({ user, selectedPoint }: { user: User; se
       {!rows.length && <p className="p-3 text-sm">No hay compras en este filtro.</p>}<div className="mt-3 flex items-center gap-3"><Button variant="outline" disabled={page === 1} onClick={() => setPage(page - 1)}>Anterior</Button><span>Página {page} · {count} compras</span><Button variant="outline" disabled={page * 25 >= count} onClick={() => setPage(page + 1)}>Siguiente</Button></div>
     </section>
     {receipt && <section id="metal-receipt" className="rounded-lg border bg-white p-5"><h2 className="text-xl font-semibold">Comprobante interno de compra de metales</h2><p className="break-all text-sm">{receipt.numero}</p><p>{receipt.estado} · {new Date(receipt.fecha).toLocaleString("es-EC", { timeZone: "America/Guayaquil" })}</p><p>Punto: {receipt.punto_nombre} · Operador/evaluador: {receipt.operador_nombre}</p><p>Vendedor: {receipt.vendedor.nombre} · Documento: {receipt.vendedor.documento} · Tel.: {receipt.vendedor.telefono}</p><p>Procedencia declarada: {receipt.vendedor.procedencia}</p>
-      {receipt.detalles.map(l => <div className="my-3 break-inside-avoid border-t pt-3 text-sm" key={l.codigo_pieza}><strong>{l.descripcion} · {l.metal} · {l.piezas} pieza(s)</strong><p className="break-all">Sobre: {l.codigo_pieza} · Ubicación inicial: {receipt.punto_nombre}</p><p>Bruto {l.peso_bruto} g − deducciones {l.deducciones} g = neto {l.peso_neto} g</p><p>Pureza declarada: {l.pureza_declarada || "No indicada"} · Evaluada: {l.pureza} milésimas · Finos estimados: {l.gramos_finos} g</p><p>Método: {l.metodo} · Evaluación: {l.observaciones}</p><p>Precio por gramo: {l.precio_gramo} · Subtotal: {receipt.moneda_codigo} {money(l.subtotal)}</p>{l.foto && <img src={l.foto} alt={`Pieza ${l.descripcion}`} className="mt-2 max-h-36" />}</div>)}
+      {receipt.detalles.map(l => <div className="my-3 break-inside-avoid border-t pt-3 text-sm" key={l.codigo_pieza}><strong>{l.descripcion} · {l.metal} · {l.piezas} pieza(s)</strong><p className="break-all">Sobre: {l.codigo_pieza} · Ubicación inicial: {receipt.punto_nombre}</p><p>Bruto {l.peso_bruto} g − deducciones {l.deducciones} g = neto {l.peso_neto} g</p><p>Pureza declarada: {l.pureza_declarada || "No indicada"} · Evaluada: {l.pureza} milésimas · Finos estimados: {l.gramos_finos} g</p><p>Método: {l.metodo}{l.observaciones ? ` · Observaciones: ${l.observaciones}` : ""}</p>{evaluationSummary(l.evaluacion) && <p>Reconocimiento: {evaluationSummary(l.evaluacion)}</p>}{l.evaluacion?.justificacion && <p>Justificación de pureza: {l.evaluacion.justificacion}</p>}<p>Precio por gramo: {l.precio_gramo} · Subtotal: {receipt.moneda_codigo} {money(l.subtotal)}</p>{l.foto && <img src={l.foto} alt={`Pieza ${l.descripcion}`} className="mt-2 max-h-36" />}</div>)}
       <p className="text-lg font-bold">Total: {receipt.moneda_codigo} {money(receipt.total)} · {receipt.medio_pago}</p><p>{receipt.medio_pago === "EFECTIVO" ? `Billetes ${receipt.billetes} · Monedas ${receipt.monedas}` : `Banco: ${receipt.banco} · Referencia: ${receipt.referencia}`}</p>{receipt.comprobante && <img src={receipt.comprobante} alt="Comprobante de transferencia" className="max-h-48" />}
       <p className="mt-3 text-xs">Comprobante interno. No constituye documento tributario autorizado ni certificación de pureza.</p>
       {receipt.eventos.map(e => <div key={e.id} className="mt-2 text-xs">{e.accion} · {new Date(e.fecha).toLocaleString("es-EC", { timeZone: "America/Guayaquil" })}{e.accion === "REVERSO" && <p>Motivo: {String(e.evidencia.motivo)} · Devolución: {String(e.evidencia.evidencia_devolucion)} · Dinero: {String(e.evidencia.evidencia_dinero)}</p>}</div>)}
