@@ -74,6 +74,31 @@ export const STEPS = [
   { paso: 7, titulo: "Ácido", texto: "Aplique el ácido sobre la marca. Ácido no vencido y con las mezclas exactas; siempre con guantes. Compare el color con la tabla de quilates." },
 ] as const;
 
+// Prueba de densidad (peso específico): densidad = peso en el aire ÷ (peso en el aire − peso sumergido).
+// Valores de referencia aproximados; varían según la aleación y no sirven para piezas huecas o con piedras.
+export const DENSITY_TABLE = [
+  { material: "Oro 24K", rango: "19,0 – 19,4" }, { material: "Oro 22K", rango: "17,3 – 18,3" },
+  { material: "Oro 18K", rango: "14,8 – 16,9" }, { material: "Oro 14K", rango: "12,9 – 14,6" },
+  { material: "Oro 10K", rango: "11,1 – 12,1" }, { material: "Plata 925", rango: "10,2 – 10,4" },
+  { material: "Cobre", rango: "8,9" }, { material: "Latón / bronce", rango: "8,4 – 8,8" }, { material: "Acero", rango: "7,8 – 8,0" },
+] as const;
+export const DENSITY_MIN_WEIGHT = 5;
+const GOLD_DENSITY_CAPS: [number, number][] = [[18.5, 999], [17.0, 917], [16.0, 833], [14.6, 750], [13.8, 667], [12.8, 585], [11.9, 500], [11.0, 417]];
+export function densityOf(aire: number, sumergido: number): number | null {
+  return aire > 0 && sumergido > 0 && sumergido < aire ? aire / (aire - sumergido) : null;
+}
+export function densityReading(metal: Metal, d: number): { texto: string; pureza_maxima?: number; rechazo?: string } {
+  if (metal === "PLATA") {
+    if (d < 9.8) return { texto: "menor que la plata (posible cobre, latón, níquel o acero)", rechazo: `Densidad ${d.toFixed(2)}: no corresponde a plata. No se compra.` };
+    if (d > 11) return { texto: "mayor que la plata (posible plomo u otro metal)", rechazo: `Densidad ${d.toFixed(2)}: no corresponde a plata. No se compra.` };
+    return { texto: "compatible con plata" };
+  }
+  const cap = GOLD_DENSITY_CAPS.find(([min]) => d >= min);
+  if (!cap) return { texto: "menor que el oro de 10K (posible plata, cobre, latón o acero)", rechazo: `Densidad ${d.toFixed(2)}: no corresponde a oro. No se compra.` };
+  const karat = GOLD_KARATS.find(k => k.pureza === cap[1])?.codigo ?? String(cap[1]);
+  return { texto: `compatible con oro de hasta ${karat}`, pureza_maxima: cap[1] };
+}
+
 export type Evaluacion = {
   tipo_color: "AMARILLO" | "ROJO" | "BLANCO" | "PLATA";
   sello: string; sello_con_lupa: boolean; uniones_revisadas: boolean; color_uniforme: boolean;
@@ -84,6 +109,7 @@ export type Evaluacion = {
   reaccion: Reaccion;
   intensidad: (typeof INTENSITIES)[number]["codigo"];
   material: (typeof MATERIALS)[number]["codigo"];
+  densidad?: { peso_aire: string; peso_agua: string };
   justificacion?: string;
 };
 export const SEAL_NONE = ["NINGUNO", "ILEGIBLE"] as const;
@@ -142,6 +168,19 @@ export function evaluateMetalLine(metal: Metal, metodo: Metodo, pureza: number, 
   } else {
     max = seal ?? 925;
     suggested = max;
+  }
+  if (ev.densidad) {
+    const aire = Number(ev.densidad.peso_aire), d = densityOf(aire, Number(ev.densidad.peso_agua));
+    if (d === null) motivos.push("Prueba de densidad: el peso sumergido debe ser mayor que 0 y menor que el peso en el aire.");
+    else {
+      const reading = densityReading(metal, d), reliable = aire >= DENSITY_MIN_WEIGHT;
+      avisos.push(`Densidad ${d.toFixed(2)} g/cm³: ${reading.texto}${reliable ? "" : ` (orientativa: pieza de menos de ${DENSITY_MIN_WEIGHT} g)`}.`);
+      if (reliable && reading.rechazo) motivos.push(reading.rechazo);
+      if (reliable && reading.pureza_maxima !== undefined && (max === undefined || reading.pureza_maxima < max)) {
+        avisos.push(`La densidad respalda como máximo ${reading.pureza_maxima}.`);
+        max = reading.pureza_maxima; suggested = Math.min(suggested ?? max, max);
+      }
+    }
   }
   if (ev.lima === "NO_NECESARIA" && seal !== undefined && seal < 750 && metal === "ORO") avisos.push("La lima solo se omite en piezas marcadas 750 que ya pasaron la prueba previa.");
   if (!acid && ev.reaccion === "NO_REALIZADA") avisos.push(`Pureza evaluada por ${metodo === "XRF" ? "XRF" : "otro método"}; conserve el resultado.`);

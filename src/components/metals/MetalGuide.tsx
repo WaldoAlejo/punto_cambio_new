@@ -1,7 +1,7 @@
 // Guía visual de reconocimiento de oro y plata, alineada a la capacitación
 // «Reconocimiento de oro» (Rashell Silva) que recibió el personal de Punto Cambio.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GOLD_COLORS, GOLD_KARATS, MATERIALS, REACTIONS, SILVER_GRADES, STEPS, type Reaccion } from "../../../server/utils/metalEvaluation";
+import { DENSITY_TABLE, GOLD_COLORS, GOLD_KARATS, MATERIALS, REACTIONS, SILVER_GRADES, STEPS, type Reaccion } from "../../../server/utils/metalEvaluation";
 import { ALLOYS } from "./metalGuideData";
 import { AlloyBar, FileTest, HallmarkStamp, MagnetTest, PurityBar, ReactionSwatch, SealLocation, WearCheck } from "./MetalIllustrations";
 import MetalPhotoExamples from "./MetalPhotoExamples";
@@ -65,6 +65,8 @@ export default function MetalGuide() {
     <TabsContent value="quilates" className="space-y-4">
       <h3 className="font-semibold">Clasificación del oro según su pureza</h3><KaratTable />
       <h3 className="font-semibold">Reacciones de rechazo</h3><RejectReactions />
+      <h3 className="font-semibold">Prueba de densidad / peso específico</h3>
+      <div className="grid gap-3 rounded-lg border bg-slate-50 p-3 text-sm md:grid-cols-2"><div><p><strong>Densidad = peso en el aire ÷ (peso en el aire − peso sumergido).</strong></p><p className="mt-1">Pese la pieza seca. Luego cuélguela de un hilo dentro de un vaso con agua sobre la balanza, sin tocar fondo ni paredes, y anote el peso sumergido. Confiable desde 5 g; no sirve para piezas huecas o con piedras.</p></div><table className="w-full text-left"><tbody>{DENSITY_TABLE.map(r => <tr key={r.material} className="border-t"><td className="py-0.5">{r.material}</td><td className="text-right font-mono">{r.rango} g/cm³</td></tr>)}</tbody></table></div>
       <h3 className="font-semibold">Fotos reales de la capacitación</h3>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {(["reaccion-18k", "reaccion-oro-blanco", "oro-intacto-cobre-disuelto", "reaccion-14k", "reaccion-14k-lamina", "reaccion-10k", "intensidad", "cobre-reaccion-verde", "cobre-disuelto-azul"] as PhotoKey[]).map(id => <Photo key={id} id={id} />)}
@@ -79,13 +81,14 @@ export default function MetalGuide() {
       <div className="grid gap-3 md:grid-cols-2">
         <Photo id="sello-plata-925" />
         <div className="space-y-2 rounded-lg border p-3 text-sm"><p><strong>Plata:</strong> color blanco, blanda, sello 925 y reacción blanco lechoso.</p>
+          <p className="rounded bg-amber-50 p-2">La capacitación ubica la plata entre los <strong>materiales no comerciales para la compra de oro</strong>: una pieza de plata (aunque esté bañada en oro o tenga color dorado) <strong>nunca se paga como oro</strong>. Punto Cambio la compra solo como <strong>plata</strong>, con su propia ley y precio por gramo.</p>
           <div className="flex items-center gap-3"><ReactionSwatch reaccion="BLANCO_LECHOSO" metal="PLATA" /><span>Reacción esperada: <strong>blanco lechoso</strong></span></div>
           <div className="flex items-center gap-3"><ReactionSwatch reaccion="NINGUNA" metal="PLATA" /><span className="text-red-700">Sin reacción y blanco opaco: posible <strong>acero</strong>. No se compra.</span></div>
           <table className="w-full text-left"><tbody>{SILVER_GRADES.map(g => <tr key={g.codigo} className="border-t"><td className="py-1"><HallmarkStamp text={g.codigo} className="h-7 w-12" /></td><td>{g.nombre}</td><td className="w-24"><PurityBar pureza={g.pureza} metal="PLATA" /></td></tr>)}</tbody></table></div>
       </div>
     </TabsContent>
     <TabsContent value="no" className="space-y-3">
-      <p className="text-sm text-slate-600">Materiales no comerciales: el sistema bloquea la compra cuando se registran.</p>
+      <p className="text-sm text-slate-600">Materiales no comerciales: el sistema bloquea la compra cuando se registran. La plata también es no comercial <strong>como oro</strong>: se registra y se paga solo como plata.</p>
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">{MATERIALS.filter(m => m.codigo !== "NINGUNO").map(m => <div key={m.codigo} className={`rounded-lg border p-3 ${verdictClass.no}`}><h3 className="font-semibold">{m.nombre}</h3><p className="text-sm">{m.descripcion}</p></div>)}</div>
       <div className="grid gap-3 sm:grid-cols-3"><div className={`rounded-lg border p-2 text-center ${verdictClass.no}`}><MagnetTest attracts /></div><div className={`rounded-lg border p-2 text-center ${verdictClass.no}`}><FileTest plated /></div><div className={`rounded-lg border p-2 text-center ${verdictClass.no}`}><WearCheck worn /></div></div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{(["laton-joyas", "laton-banado", "banado-desgastado", "hierro-oxidado", "iman-atrae", "cobre-reaccion-verde"] as PhotoKey[]).map(id => <Photo key={id} id={id} />)}</div>

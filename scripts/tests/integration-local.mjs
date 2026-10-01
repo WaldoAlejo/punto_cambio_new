@@ -74,6 +74,7 @@ try {
     await db.query(schemaSql);
     await db.query(await fs.readFile(path.join(root, 'scripts/migrations/2026-09-14-staged-opening.sql'), 'utf8'));
     await db.query(await fs.readFile(path.join(root, 'scripts/migrations/2026-09-14-metal-purchases-checks.sql'), 'utf8'));
+    await db.query(await fs.readFile(path.join(root, 'scripts/migrations/2026-10-01-metal-orders-checks.sql'), 'utf8'));
   } finally { await db.end(); }
   for (const key of Object.keys(process.env)) delete process.env[key];
   Object.assign(process.env, cleanEnv);

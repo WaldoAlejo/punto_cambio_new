@@ -15,6 +15,7 @@ export const evaluationSchema = z.object({
   iman: z.enum(["NO_ATRAE", "ATRAE"]), piedra: z.enum(["MARCA_UNIFORME", "OTRO_METAL", "NO_REALIZADA"]),
   lima: z.enum(["NO_NECESARIA", "MISMO_METAL", "OTRO_METAL"]), acido_usado: z.enum(["10K", "14K", "18K", "NO_APLICA"]),
   reaccion: z.enum(Object.keys(REACTIONS) as [Reaccion, ...Reaccion[]]), intensidad: codes(INTENSITIES), material: codes(MATERIALS),
+  densidad: z.object({ peso_aire: decimal(3), peso_agua: decimal(3) }).strict().optional(),
   justificacion: z.string().trim().max(500).optional(),
 }).strict();
 export const metalLineSchema = z.object({
@@ -47,12 +48,6 @@ export function calculateMetalLines(lines: z.infer<typeof metalLineSchema>[]) {
   const total = details.reduce((sum, line) => sum.plus(line.subtotal), new Decimal(0));
   if (total.gte("10000000000000")) throw new Error("Total fuera de la precisión monetaria admitida.");
   return { detalles: details, total: total.toFixed(2) };
-}
-// Paso 7 de la capacitación: ácido no vencido y guantes antes de cualquier prueba con ácido.
-export function validateMetalSafety(input: MetalPurchaseInput) {
-  if (input.detalles.some(line => line.metodo === "ACIDO") && !(input.seguridad?.acido_vigente && input.seguridad.guantes)) {
-    throw new Error("Confirme que el ácido no está vencido y que usó guantes durante la prueba.");
-  }
 }
 export function validateMetalPayment(input: MetalPurchaseInput, total: string) {
   if (input.medio_pago === "EFECTIVO") {

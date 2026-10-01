@@ -9,6 +9,7 @@ datasource db {
 
 model Usuario {
   comprasMetales CompraMetal[]
+  ordenesEvaluacionMetal OrdenEvaluacionMetal[]
   eventosMetales EventoCompraMetal[]
   configuracionesMetales ConfiguracionCompraMetal[]
   id                                      String                        @id @default(uuid())
@@ -61,6 +62,7 @@ model Usuario {
 
 model PuntoAtencion {
   comprasMetales CompraMetal[]
+  ordenesEvaluacionMetal OrdenEvaluacionMetal[]
   configuracionMetales ConfiguracionCompraMetal?
   id                              String                        @id @default(uuid())
   nombre                          String                        @unique
@@ -112,6 +114,7 @@ model PuntoAtencion {
 
 model Moneda {
   comprasMetales CompraMetal[]
+  ordenesEvaluacionMetal OrdenEvaluacionMetal[]
   id                            String                         @id @default(uuid())
   nombre                        String
   simbolo                       String
@@ -1056,6 +1059,8 @@ model CompraMetal {
   banco String?
   referencia String?
   comprobante String?
+  orden_id String? @unique
+  orden OrdenEvaluacionMetal? @relation(fields: [orden_id], references: [id], onDelete: Restrict)
   punto PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
   usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
   jornada Jornada @relation(fields: [jornada_id], references: [id], onDelete: Restrict)
@@ -1100,4 +1105,70 @@ model EventoCompraMetal {
   compra CompraMetal? @relation(fields: [compra_id], references: [id], onDelete: Restrict)
   usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
   @@index([compra_id])
+}
+
+// Orden de trabajo «Evaluación de oro»: autorización firmada antes de las pruebas,
+// resultado y oferta; si el cliente acepta se convierte en una CompraMetal.
+model OrdenEvaluacionMetal {
+  id String @id @default(uuid())
+  numero String @unique
+  anio Int
+  secuencia Int
+  punto_atencion_id String
+  usuario_id String
+  clave_operacion String
+  solicitud_hash String
+  estado String @default("PENDIENTE_AUTORIZACION")
+  fecha DateTime @default(now())
+  punto_nombre String
+  asesor_nombre String
+  cliente Json
+  observaciones_cliente String @default("")
+  procesos Json?
+  autorizacion_foto String?
+  autorizada_en DateTime?
+  moneda_id String?
+  oferta_total Decimal? @db.Decimal(15, 2)
+  seguridad Json?
+  resultado_observaciones String @default("")
+  evaluada_en DateTime?
+  cierre Json?
+  cerrada_en DateTime?
+  updated_at DateTime @updatedAt
+  punto PuntoAtencion @relation(fields: [punto_atencion_id], references: [id], onDelete: Restrict)
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Restrict)
+  moneda Moneda? @relation(fields: [moneda_id], references: [id], onDelete: Restrict)
+  joyas JoyaOrdenEvaluacion[]
+  compra CompraMetal?
+  @@unique([anio, secuencia])
+  @@unique([usuario_id, clave_operacion])
+  @@index([punto_atencion_id, fecha])
+  @@index([estado])
+}
+
+model JoyaOrdenEvaluacion {
+  id String @id @default(uuid())
+  orden_id String
+  posicion Int
+  tipo String
+  descripcion String
+  piezas Int @default(1)
+  peso_recibido Decimal @db.Decimal(13, 3)
+  color String
+  estado_conservacion String
+  piedras String @default("")
+  foto_antes String
+  foto_despues String?
+  metal String?
+  metodo String?
+  evaluacion Json?
+  pureza_declarada String @default("")
+  pureza Decimal? @db.Decimal(7, 3)
+  deducciones Decimal? @db.Decimal(13, 3)
+  peso_final Decimal? @db.Decimal(13, 3)
+  precio_gramo Decimal? @db.Decimal(16, 6)
+  subtotal Decimal? @db.Decimal(15, 2)
+  observaciones String @default("")
+  orden OrdenEvaluacionMetal @relation(fields: [orden_id], references: [id], onDelete: Restrict)
+  @@unique([orden_id, posicion])
 }

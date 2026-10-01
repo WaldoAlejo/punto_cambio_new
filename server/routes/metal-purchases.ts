@@ -8,7 +8,9 @@ import { assertOperationalSession, OperationalConflict } from "../utils/operatio
 import { assertCurrencyCounted, isPendingCurrencyError } from "../utils/stagedOpening.js";
 import { getEstadoMonedasObligatorias, tieneIncidenciaAperturaRegistrada } from "../utils/aperturaCajaRequirements.js";
 import { gyeDayRangeUtcFromDate, gyeDayRangeUtcFromDateOnly } from "../utils/timezone.js";
-import { calculateMetalLines, metalLineSchema, metalPurchaseSchema, validateMetalPayment, validateMetalSafety } from "../utils/metalPurchase.js";
+import { calculateMetalLines, metalLineSchema, validateMetalPayment, type MetalPurchaseInput } from "../utils/metalPurchase.js";
+import { authorizeOrderSchema, cancelOrderSchema, createOrderSchema, deriveProcesses, unauthorizedProcesses, evaluateOrderSchema, gyeYear, lineFromJewel, OPEN_STATES, ORDER_STATES, orderPaymentSchema, returnOrderSchema, type OrderPayment, type OrderState } from "../utils/metalOrder.js";
+import type { Evaluacion } from "../utils/metalEvaluation.js";
 import logger from "../utils/logger.js";
 
 const router = express.Router();
@@ -27,7 +29,9 @@ const wrap = (fn: (req: Request, res: Response) => Promise<unknown>): express.Re
     res.status(status).json({ success: false, error: status === 500 ? "No se pudo completar la operación. Consulte el historial antes de reintentar." : (e as Error).message });
   }
 };
-const include = { detalles: { orderBy: { codigo_pieza: "asc" as const } }, eventos: { orderBy: { fecha: "asc" as const } } };
+const include = { detalles: { orderBy: { codigo_pieza: "asc" as const } }, eventos: { orderBy: { fecha: "asc" as const } }, orden: { select: { id: true, numero: true } } };
+const orderInclude = { joyas: { orderBy: { posicion: "asc" as const } }, moneda: { select: { id: true, codigo: true } }, compra: { select: { id: true, numero: true, estado: true } } };
+type OrderWithJewels = Prisma.OrdenEvaluacionMetalGetPayload<{ include: typeof orderInclude }>;
 function scope(req: Request): Prisma.CompraMetalWhereInput {
   if (userOf(req).rol === "OPERADOR") return { punto_atencion_id: userOf(req).punto_atencion_id || "SIN_PUNTO" };
   return {};
@@ -47,6 +51,36 @@ async function opening(tx: Prisma.TransactionClient, jornadaId: string) {
 }
 function calculation(lines: z.infer<typeof metalLineSchema>[]) {
   try { return calculateMetalLines(lines); } catch (e) { return fail(400, (e as Error).message); }
+}
+/** Datos de compra construidos en el servidor desde la orden evaluada: el cliente solo envía el pago. */
+function purchaseFromOrder(order: OrderWithJewels, payment: OrderPayment): MetalPurchaseInput {
+  if (order.estado !== "EVALUADA" || order.compra || !order.moneda_id || !order.oferta_total) fail(409, "La orden debe estar evaluada, con oferta vigente y sin compra previa.");
+  const detalles = order.joyas.map(j => {
+    if (!j.metal || !j.metodo || !j.evaluacion || j.pureza === null || j.deducciones === null || j.precio_gramo === null) return fail(409, "La orden no tiene la evaluación completa de todas las joyas.");
+    return lineFromJewel(j, { metal: j.metal as "ORO" | "PLATA", metodo: j.metodo as "ACIDO" | "XRF" | "OTRO", pureza: j.pureza.toString(), pureza_declarada: j.pureza_declarada, deducciones: j.deducciones.toString(), precio_gramo: j.precio_gramo.toString(), observaciones: j.observaciones, evaluacion: j.evaluacion as Evaluacion, foto_despues: j.foto_despues });
+  });
+  const { orden_id: _order, ...pay } = payment;
+  return { ...pay, moneda_id: order.moneda_id as string, vendedor: order.cliente as MetalPurchaseInput["vendedor"], detalles, ...(order.seguridad ? { seguridad: order.seguridad as MetalPurchaseInput["seguridad"] } : {}) };
+}
+function orderScope(req: Request): Prisma.OrdenEvaluacionMetalWhereInput {
+  if (userOf(req).rol === "OPERADOR") return { punto_atencion_id: userOf(req).punto_atencion_id || "SIN_PUNTO" };
+  return {};
+}
+async function activeJornada(tx: Prisma.TransactionClient, userId: string, pointId: string) {
+  const { gte, lt } = gyeDayRangeUtcFromDate(new Date());
+  return tx.jornada.findFirst({ where: { usuario_id: userId, punto_atencion_id: pointId, estado: "ACTIVO", fecha_salida: null, fecha_inicio: { gte, lt } } });
+}
+/** Cambia una orden bajo bloqueo, solo desde los estados permitidos y por un operador de su mismo punto. */
+async function mutateOrder(req: Request, allowed: OrderState[], fn: (tx: Prisma.TransactionClient, order: OrderWithJewels) => Promise<void>) {
+  const id = z.string().uuid().parse(req.params.id), user = userOf(req);
+  return prisma.$transaction(async tx => {
+    await advisory(tx, `metal-order:${id}`);
+    const order = await tx.ordenEvaluacionMetal.findUnique({ where: { id }, include: orderInclude });
+    if (!order || order.punto_atencion_id !== user.punto_atencion_id) fail(404, "Orden no encontrada en su punto.");
+    if (!allowed.includes(order.estado as OrderState)) fail(409, `La orden está ${order.estado.replace(/_/g, " ").toLowerCase()} y no admite esta acción.`);
+    await fn(tx, order);
+    return tx.ordenEvaluacionMetal.findUniqueOrThrow({ where: { id }, include: orderInclude });
+  }, { timeout: 20000 });
 }
 
 router.get("/contexto", wrap(async (req, res) => {
@@ -78,10 +112,117 @@ router.post("/cotizar", wrap(async (req, res) => {
   res.json({ success: true, ...calculation(lines) });
 }));
 router.post("/preparar", wrap(async (req, res) => {
-  const input = metalPurchaseSchema.parse(req.body);
+  const payment = orderPaymentSchema.parse(req.body);
+  const order = await prisma.ordenEvaluacionMetal.findFirst({ where: { id: payment.orden_id, ...orderScope(req) }, include: orderInclude });
+  if (!order) fail(404, "Orden no encontrada.");
+  const input = purchaseFromOrder(order, payment);
   const quote = calculation(input.detalles);
-  try { validateMetalSafety(input); validateMetalPayment(input, quote.total); } catch (e) { fail(400, (e as Error).message); }
-  res.json({ success: true, ...quote });
+  try { validateMetalPayment(input, quote.total); } catch (e) { fail(400, (e as Error).message); }
+  res.json({ success: true, ...quote, moneda_codigo: order.moneda?.codigo, orden: { id: order.id, numero: order.numero, cliente: order.cliente } });
+}));
+// ===== Órdenes de trabajo «Evaluación de oro» =====
+// Flujo: PENDIENTE_AUTORIZACION (imprimir y firmar) → AUTORIZADA (foto firmada) → EVALUADA (pruebas y oferta)
+// → COMPRADA (pago) | DEVUELTA (cliente no acepta). Una orden sin firmar puede ANULARSE.
+router.post("/ordenes", requireRole(["OPERADOR"]), wrap(async (req, res) => {
+  const key = z.string().uuid().parse(req.get("Idempotency-Key"));
+  const input = createOrderSchema.parse(req.body);
+  const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  const user = userOf(req);
+  const result = await prisma.$transaction(async tx => {
+    await advisory(tx, `metal-order-request:${user.id}:${key}`);
+    const previous = await tx.ordenEvaluacionMetal.findUnique({ where: { usuario_id_clave_operacion: { usuario_id: user.id, clave_operacion: key } }, include: orderInclude });
+    if (previous) { if (previous.solicitud_hash !== hash) fail(409, "Este intento ya se usó con otros datos. Consulte las órdenes."); return previous; }
+    const pointId = user.punto_atencion_id || fail(403, "Seleccione un punto de atención.");
+    const config = await tx.configuracionCompraMetal.findUnique({ where: { punto_atencion_id: pointId }, include: { punto: true } });
+    if (!config?.habilitado || !config.punto.activo) fail(403, "La compra de metales no está habilitada en este punto.");
+    if (!await activeJornada(tx, user.id, pointId)) fail(409, "Inicie su jornada (fuera de almuerzo) antes de recibir joyas.");
+    // Consecutivo global por año, sin huecos por concurrencia.
+    const year = gyeYear();
+    await advisory(tx, `metal-order-seq:${year}`);
+    const last = await tx.ordenEvaluacionMetal.aggregate({ where: { anio: year }, _max: { secuencia: true } });
+    const seq = (last._max.secuencia ?? 0) + 1, numero = `OE-${year}-${String(seq).padStart(6, "0")}`;
+    const order = await tx.ordenEvaluacionMetal.create({ data: {
+      numero, anio: year, secuencia: seq, punto_atencion_id: pointId, usuario_id: user.id, clave_operacion: key, solicitud_hash: hash,
+      punto_nombre: config.punto.nombre, asesor_nombre: user.nombre, cliente: input.cliente, observaciones_cliente: input.observaciones_cliente,
+      procesos: { autorizados: input.procesos, otros: input.otros_procesos },
+      joyas: { create: input.joyas.map((j, i) => ({ ...j, posicion: i + 1 })) },
+    }, include: orderInclude });
+    await tx.eventoCompraMetal.create({ data: { usuario_id: user.id, accion: "ORDEN_CREADA", evidencia: { orden_id: order.id, numero, joyas: input.joyas.length } } });
+    return order;
+  }, { timeout: 20000 });
+  res.status(201).json({ success: true, orden: result });
+}));
+router.get("/ordenes", wrap(async (req, res) => {
+  const date = z.string().date();
+  const query = z.object({ estado: z.enum(["ABIERTAS", ...ORDER_STATES]).optional(), desde: date.optional(), hasta: date.optional(), buscar: z.string().trim().max(100).optional(),
+    punto_id: z.string().uuid().optional(), pagina: z.coerce.number().int().min(1).max(100000).default(1) }).parse(req.query);
+  if (query.desde && query.hasta && query.desde > query.hasta) fail(400, "El rango de fechas está invertido.");
+  const where: Prisma.OrdenEvaluacionMetalWhereInput = { ...orderScope(req), ...(query.punto_id && userOf(req).rol !== "OPERADOR" ? { punto_atencion_id: query.punto_id } : {}) };
+  if (query.estado) where.estado = query.estado === "ABIERTAS" ? { in: OPEN_STATES } : query.estado;
+  if (query.buscar) where.OR = [{ numero: { contains: query.buscar, mode: "insensitive" } }, { cliente: { path: ["nombre"], string_contains: query.buscar } }, { cliente: { path: ["documento"], string_contains: query.buscar } }];
+  if (query.desde || query.hasta) where.fecha = { ...(query.desde ? { gte: gyeDayRangeUtcFromDateOnly(query.desde).gte } : {}), ...(query.hasta ? { lt: gyeDayRangeUtcFromDateOnly(query.hasta).lt } : {}) };
+  const [ordenes, cantidad] = await prisma.$transaction([
+    prisma.ordenEvaluacionMetal.findMany({ where, select: { id: true, numero: true, fecha: true, estado: true, punto_nombre: true, asesor_nombre: true, cliente: true, oferta_total: true, moneda: { select: { codigo: true } }, _count: { select: { joyas: true } } }, orderBy: [{ fecha: "desc" }, { id: "desc" }], skip: (query.pagina - 1) * 25, take: 25 }),
+    prisma.ordenEvaluacionMetal.count({ where }),
+  ]);
+  res.json({ success: true, ordenes, cantidad, pagina: query.pagina });
+}));
+router.get("/ordenes/:id", wrap(async (req, res) => {
+  const orden = await prisma.ordenEvaluacionMetal.findFirst({ where: { id: z.string().uuid().parse(req.params.id), ...orderScope(req) }, include: orderInclude });
+  if (!orden) fail(404, "Orden no encontrada.");
+  res.json({ success: true, orden });
+}));
+router.post("/ordenes/:id/autorizar", requireRole(["OPERADOR"]), wrap(async (req, res) => {
+  const input = authorizeOrderSchema.parse(req.body);
+  const orden = await mutateOrder(req, ["PENDIENTE_AUTORIZACION"], async (tx, order) => {
+    await tx.ordenEvaluacionMetal.update({ where: { id: order.id }, data: { estado: "AUTORIZADA", autorizacion_foto: input.foto_autorizacion, autorizada_en: new Date() } });
+    await tx.eventoCompraMetal.create({ data: { usuario_id: userOf(req).id, accion: "ORDEN_AUTORIZADA", evidencia: { orden_id: order.id, numero: order.numero } } });
+  });
+  res.json({ success: true, orden });
+}));
+router.post("/ordenes/:id/evaluar", requireRole(["OPERADOR"]), wrap(async (req, res) => {
+  const input = evaluateOrderSchema.parse(req.body);
+  const orden = await mutateOrder(req, ["AUTORIZADA", "EVALUADA"], async (tx, order) => {
+    const byId = new Map(input.joyas.map(j => [j.id, j]));
+    if (byId.size !== input.joyas.length || order.joyas.length !== input.joyas.length || order.joyas.some(j => !byId.has(j.id))) fail(400, "Evalúe exactamente las joyas recibidas en la orden.");
+    if (input.joyas.some(j => j.metodo === "ACIDO") && !(input.seguridad?.acido_vigente && input.seguridad.guantes)) fail(400, "Confirme que el ácido no está vencido y que usó guantes durante la prueba.");
+    const currency = await tx.moneda.findUnique({ where: { id: input.moneda_id } });
+    if (!currency?.activo) fail(400, "Moneda de la oferta inactiva o inexistente.");
+    const authorized = (order.procesos as { autorizados?: string[]; otros?: string } | null) ?? {};
+    const done = deriveProcesses(input.joyas, input.otros_procesos);
+    const missing = unauthorizedProcesses(done.realizados, authorized.autorizados ?? []);
+    if (missing.length) fail(400, `El cliente no autorizó: ${missing.join(", ")}. Solo pueden hacerse las pruebas marcadas en la orden firmada; si necesita otra, devuelva las joyas y abra una nueva orden.`);
+    const quote = calculation(order.joyas.map(j => lineFromJewel(j, byId.get(j.id) as (typeof input.joyas)[number])));
+    for (const [i, stored] of order.joyas.entries()) {
+      const e = byId.get(stored.id) as (typeof input.joyas)[number], line = quote.detalles[i];
+      await tx.joyaOrdenEvaluacion.update({ where: { id: stored.id }, data: {
+        metal: e.metal, metodo: e.metodo, evaluacion: line.evaluacion, pureza_declarada: e.pureza_declarada, pureza: e.pureza, deducciones: e.deducciones,
+        peso_final: line.peso_neto, precio_gramo: e.precio_gramo, subtotal: line.subtotal, observaciones: e.observaciones, foto_despues: e.foto_despues ?? null,
+      } });
+    }
+    await tx.ordenEvaluacionMetal.update({ where: { id: order.id }, data: {
+      estado: "EVALUADA", moneda_id: input.moneda_id, oferta_total: quote.total, seguridad: input.seguridad ?? Prisma.DbNull,
+      procesos: { autorizados: authorized.autorizados ?? [], otros: authorized.otros ?? "", ...done }, resultado_observaciones: input.resultado_observaciones, evaluada_en: new Date(),
+    } });
+    await tx.eventoCompraMetal.create({ data: { usuario_id: userOf(req).id, accion: "ORDEN_EVALUADA", evidencia: { orden_id: order.id, numero: order.numero, oferta: quote.total, moneda: currency.codigo } } });
+  });
+  res.json({ success: true, orden });
+}));
+router.post("/ordenes/:id/devolver", requireRole(["OPERADOR"]), wrap(async (req, res) => {
+  const input = returnOrderSchema.parse(req.body);
+  const orden = await mutateOrder(req, ["AUTORIZADA", "EVALUADA"], async (tx, order) => {
+    await tx.ordenEvaluacionMetal.update({ where: { id: order.id }, data: { estado: "DEVUELTA", cerrada_en: new Date(), cierre: { accion: "DEVOLUCION", motivo: input.motivo, joyas_devueltas: true, foto: input.foto ?? null, usuario_id: userOf(req).id } } });
+    await tx.eventoCompraMetal.create({ data: { usuario_id: userOf(req).id, accion: "ORDEN_DEVUELTA", evidencia: { orden_id: order.id, numero: order.numero, motivo: input.motivo } } });
+  });
+  res.json({ success: true, orden });
+}));
+router.post("/ordenes/:id/anular", requireRole(["OPERADOR"]), wrap(async (req, res) => {
+  const input = cancelOrderSchema.parse(req.body);
+  const orden = await mutateOrder(req, ["PENDIENTE_AUTORIZACION"], async (tx, order) => {
+    await tx.ordenEvaluacionMetal.update({ where: { id: order.id }, data: { estado: "ANULADA", cerrada_en: new Date(), cierre: { accion: "ANULACION", motivo: input.motivo, usuario_id: userOf(req).id } } });
+    await tx.eventoCompraMetal.create({ data: { usuario_id: userOf(req).id, accion: "ORDEN_ANULADA", evidencia: { orden_id: order.id, numero: order.numero, motivo: input.motivo } } });
+  });
+  res.json({ success: true, orden });
 }));
 router.get("/", wrap(async (req, res) => {
   const date = z.string().date();
@@ -114,10 +255,8 @@ router.get("/intento/:key", requireRole(["OPERADOR"]), wrap(async (req, res) => 
 }));
 router.post("/", requireRole(["OPERADOR"]), wrap(async (req, res) => {
   const key = z.string().uuid().parse(req.get("Idempotency-Key"));
-  const input = metalPurchaseSchema.parse(req.body);
-  const quote = calculation(input.detalles);
-  try { validateMetalSafety(input); validateMetalPayment(input, quote.total); } catch (e) { fail(400, (e as Error).message); }
-  const hash = createHash("sha256").update(JSON.stringify(input)).digest("hex");
+  const payment = orderPaymentSchema.parse(req.body);
+  const hash = createHash("sha256").update(JSON.stringify(payment)).digest("hex");
   const user = userOf(req);
   const result = await prisma.$transaction(async tx => {
     await advisory(tx, `metal-request:${user.id}:${key}`);
@@ -127,6 +266,14 @@ router.post("/", requireRole(["OPERADOR"]), wrap(async (req, res) => {
     await advisory(tx, `metals-point:${pointId}`);
     const config = await tx.configuracionCompraMetal.findUnique({ where: { punto_atencion_id: pointId }, include: { punto: true } });
     if (!config?.habilitado || !config.punto.activo) fail(403, "La compra de metales no está habilitada en este punto.");
+    // La compra solo existe como cierre de una orden evaluada de este punto (autorización firmada y oferta).
+    await advisory(tx, `metal-order:${payment.orden_id}`);
+    const order = await tx.ordenEvaluacionMetal.findUnique({ where: { id: payment.orden_id }, include: orderInclude });
+    if (!order || order.punto_atencion_id !== pointId) fail(404, "Orden no encontrada en este punto.");
+    const input = purchaseFromOrder(order, payment);
+    const quote = calculation(input.detalles);
+    try { validateMetalPayment(input, quote.total); } catch (e) { fail(400, (e as Error).message); }
+    if (!new Prisma.Decimal(quote.total).eq(order.oferta_total as Prisma.Decimal)) fail(409, "La oferta de la orden cambió. Revise la orden antes de pagar.");
     const currency = await tx.moneda.findUnique({ where: { id: input.moneda_id } });
     if (!currency?.activo) fail(400, "Moneda de pago inactiva o inexistente.");
     await lockTransferBalance(tx, pointId, input.moneda_id);
@@ -146,7 +293,7 @@ router.post("/", requireRole(["OPERADOR"]), wrap(async (req, res) => {
     if (after.abs().gte("10000000000000")) fail(409, "El saldo excedería la precisión monetaria admitida.");
     const id = randomUUID(), number = `MET-${id.toUpperCase()}`;
     const compra = await tx.compraMetal.create({ data: {
-      id, numero: number, punto_atencion_id: pointId, usuario_id: user.id, jornada_id: jornada.id,
+      id, numero: number, punto_atencion_id: pointId, usuario_id: user.id, jornada_id: jornada.id, orden_id: order.id,
       moneda_id: input.moneda_id, clave_operacion: key, solicitud_hash: hash, vendedor: input.vendedor,
       punto_nombre: config.punto.nombre, operador_nombre: user.nombre, moneda_codigo: currency.codigo,
       medio_pago: input.medio_pago, total, billetes: bills, monedas: coins, banco: input.banco, referencia: input.referencia, comprobante: input.comprobante,
@@ -157,7 +304,8 @@ router.post("/", requireRole(["OPERADOR"]), wrap(async (req, res) => {
     else await tx.saldo.create({ data: { punto_atencion_id: pointId, moneda_id: input.moneda_id, cantidad: 0, billetes: 0, monedas_fisicas: 0, bancos: after } });
     await tx.movimientoSaldo.create({ data: { punto_atencion_id: pointId, moneda_id: input.moneda_id, usuario_id: user.id, tipo_movimiento: "EGRESO", tipo_referencia: "COMPRA_METAL", referencia_id: id, monto: total.negated(), saldo_anterior: before, saldo_nuevo: after, descripcion: `Compra de metales ${number} ${cash ? "(CAJA)" : "(BANCOS) - NO afecta cuadre físico"}` } });
     // Receipt persistence participates in the same transaction. Never repeat a payment to reprint.
-    await tx.recibo.create({ data: { numero_recibo: number, tipo_operacion: "MOVIMIENTO", referencia_id: id, usuario_id: user.id, punto_atencion_id: pointId, datos_operacion: { modulo: "COMPRA_METAL", numero: number, total: quote.total, medio_pago: input.medio_pago } } });
+    await tx.recibo.create({ data: { numero_recibo: number, tipo_operacion: "MOVIMIENTO", referencia_id: id, usuario_id: user.id, punto_atencion_id: pointId, datos_operacion: { modulo: "COMPRA_METAL", numero: number, orden: order.numero, total: quote.total, medio_pago: input.medio_pago } } });
+    await tx.ordenEvaluacionMetal.update({ where: { id: order.id }, data: { estado: "COMPRADA", cerrada_en: new Date(), cierre: { accion: "COMPRA", compra_id: id, usuario_id: user.id } } });
     return compra;
   }, { timeout: 20000 });
   res.status(201).json({ success: true, compra: result });
