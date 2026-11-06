@@ -71,6 +71,7 @@ export const ServientregaAnulaciones = ({
     "TODOS" | "PENDIENTE" | "APROBADA" | "RECHAZADA"
   >("TODOS");
   const [loading, setLoading] = useState(false);
+  const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const desdeRef = useRef(desde);
@@ -172,8 +173,9 @@ export const ServientregaAnulaciones = ({
   };
 
   const handleConfirmarRespuesta = async () => {
-    if (!solicitudSeleccionada) return;
+    if (!solicitudSeleccionada || procesando) return;
 
+    setProcesando(true);
     try {
       // Usar el endpoint correcto con el método y parámetros correctos
       await axiosInstance.post("/servientrega/responder-solicitud-anulacion", {
@@ -196,6 +198,9 @@ export const ServientregaAnulaciones = ({
       const errorMessage = extractErrorMessage(err);
       console.error("Error al responder solicitud:", err);
       toast.error(`No se pudo procesar la respuesta: ${errorMessage}`);
+      fetchSolicitudes();
+    } finally {
+      setProcesando(false);
     }
   };
 
@@ -484,13 +489,16 @@ export const ServientregaAnulaciones = ({
             <Button
               onClick={handleConfirmarRespuesta}
               disabled={
-                accionRespuesta === "RECHAZAR" && !comentarioRespuesta.trim()
+                procesando ||
+                (accionRespuesta === "RECHAZAR" && !comentarioRespuesta.trim())
               }
               variant={
                 accionRespuesta === "APROBAR" ? "default" : "destructive"
               }
             >
-              {accionRespuesta === "APROBAR"
+              {procesando
+                ? "Procesando..."
+                : accionRespuesta === "APROBAR"
                 ? "Aprobar y Anular"
                 : "Rechazar Solicitud"}
             </Button>

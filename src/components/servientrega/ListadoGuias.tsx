@@ -39,6 +39,7 @@ export default function ListadoGuias() {
   const [showAnulacionDialog, setShowAnulacionDialog] = useState(false);
   const [guiaParaAnular, setGuiaParaAnular] = useState<Guia | null>(null);
   const [motivoAnulacion, setMotivoAnulacion] = useState("");
+  const [procesandoAnulacion, setProcesandoAnulacion] = useState<string | null>(null);
 
   const fetchGuias = useCallback(async () => {
     setLoading(true);
@@ -79,7 +80,9 @@ export default function ListadoGuias() {
       toast.error("Debe proporcionar un motivo para la anulación");
       return;
     }
+    if (procesandoAnulacion) return;
 
+    setProcesandoAnulacion(guiaParaAnular.numero_guia);
     try {
       await axiosInstance.post("/servientrega/solicitar-anulacion", {
         guia_id: guiaParaAnular.id,
@@ -99,6 +102,8 @@ export default function ListadoGuias() {
         err instanceof Error ? err.message : "Error desconocido";
       console.error("Error al solicitar anulación:", err);
       toast.error(`No se pudo enviar la solicitud: ${errorMessage}`);
+    } finally {
+      setProcesandoAnulacion(null);
     }
   };
 
@@ -107,6 +112,8 @@ export default function ListadoGuias() {
       "Confirmar anulación",
       `¿Está seguro de que desea anular la guía ${guia.numero_guia}? Esta acción no se puede deshacer.`,
       async () => {
+        if (procesandoAnulacion) return;
+        setProcesandoAnulacion(guia.numero_guia);
         try {
           await axiosInstance.post("/servientrega/anular-guia", {
             guia: guia.numero_guia,
@@ -119,6 +126,9 @@ export default function ListadoGuias() {
             err instanceof Error ? err.message : "Error desconocido";
           console.error("Error al anular guía:", err);
           toast.error(`No se pudo anular la guía: ${errorMessage}`);
+          fetchGuias();
+        } finally {
+          setProcesandoAnulacion(null);
         }
       },
       "destructive"
@@ -353,6 +363,7 @@ export default function ListadoGuias() {
                                   user?.rol === "SUPER_USUARIO" ? (
                                     <Button
                                       onClick={() => handleAnularDirecto(guia)}
+                                      disabled={procesandoAnulacion === guia.numero_guia}
                                       variant="destructive"
                                       size="sm"
                                       className="h-7 px-2 text-xs"
@@ -530,7 +541,7 @@ export default function ListadoGuias() {
             </Button>
             <Button
               onClick={handleConfirmarSolicitudAnulacion}
-              disabled={!motivoAnulacion.trim()}
+              disabled={!motivoAnulacion.trim() || !!procesandoAnulacion}
             >
               Enviar Solicitud
             </Button>

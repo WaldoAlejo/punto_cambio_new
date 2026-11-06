@@ -1252,6 +1252,18 @@ router.post("/generar-guia",
         guiaPresente: !!guia,
         base64Presente: !!base64,
         proceso,
+        respuesta: typeof processed === "string" ? processed.slice(0, 500) : processedRoot,
+      });
+      const mensajeServientrega =
+        proceso && proceso !== "N/A"
+          ? proceso
+          : typeof processed === "string" && processed.trim()
+            ? processed.trim().slice(0, 300)
+            : "Servientrega no devolvió número de guía";
+      return res.status(422).json({
+        error: "Servientrega no generó la guía",
+        details: mensajeServientrega,
+        respuesta_servientrega: processedRoot,
       });
     }
 
@@ -1312,6 +1324,18 @@ router.post("/anular-guia",
       return res.status(400).json({ error: "El número de guía es requerido" });
     }
 
+    // 🛡️ Evitar doble anulación (doble clic o guía ya anulada)
+    const guiaLocal = await prisma.servientregaGuia.findUnique({
+      where: { numero_guia: String(guia) },
+      select: { estado: true },
+    });
+    if (guiaLocal?.estado === "ANULADA") {
+      return res.status(409).json({
+        error: "La guía ya está anulada",
+        details: `La guía ${guia} ya fue anulada; no se revierte el saldo nuevamente.`,
+      });
+    }
+
     const credentials = getCredentialsFromEnv();
     const apiService = new ServientregaAPIService(credentials);
     apiService.apiUrl = getApiUrl();
@@ -1331,56 +1355,35 @@ router.post("/anular-guia",
       try {
         const dbService = new ServientregaDBService();
 
-        // Obtener información de la guía antes de anularla
-        const guiaInfo = await prisma.servientregaGuia.findFirst({
-          where: { numero_guia: guia },
-          select: {
-            punto_atencion_id: true,
-            costo_envio: true,
-            created_at: true,
-          },
-        });
-
-        // Buscar desglose del movimiento original para reversión exacta
-        let movimientoOriginal = null;
-        if (guiaInfo?.costo_envio && guiaInfo.costo_envio.toNumber() > 0) {
-          movimientoOriginal = await prisma.servicioExternoMovimiento.findFirst({
-            where: {
-              numero_referencia: guia,
-              servicio: "SERVIENTREGA",
-              tipo_movimiento: "INGRESO",
-            },
-            orderBy: { fecha: "desc" },
-          });
-        }
-
-        const billetes = movimientoOriginal?.billetes ? Number(movimientoOriginal.billetes) : (guiaInfo?.costo_envio ? Number(guiaInfo.costo_envio) : 0);
-        const monedas = movimientoOriginal?.monedas_fisicas ? Number(movimientoOriginal.monedas_fisicas) : 0;
-        const bancos = movimientoOriginal?.bancos ? Number(movimientoOriginal.bancos) : 0;
-
-        // 🔒 TRANSACCIÓN ATÓMICA: anular guía + revertir saldo + revertir caja
-        await prisma.$transaction(async (tx) => {
-          await dbService.anularGuia(guia, tx);
-
-          if (guiaInfo?.punto_atencion_id && guiaInfo?.costo_envio) {
-            await dbService.revertirIngresoServicioExterno(
-              guiaInfo.punto_atencion_id,
-              Number(guiaInfo.costo_envio),
-              guia,
-              billetes,
-              monedas,
-              bancos,
-              tx
-            );
-            logger.info("Saldo y caja revertidos por anulación", {
-              monto: guiaInfo.costo_envio,
-              puntoId: guiaInfo.punto_atencion_id,
-              guia,
+        // 🔒 TRANSACCIÓN ATÓMICA E IDEMPOTENTE: anular guía + revertir saldos
+        // + cerrar solicitudes pendientes de esa guía
+        const resultado = await prisma.$transaction(
+          async (tx) => {
+            const r = await dbService.anularGuiaConReversion(String(guia), tx);
+            await tx.servientregaSolicitudAnulacion.updateMany({
+              where: { numero_guia: String(guia), estado: { in: ["PENDIENTE", "PROCESANDO"] } },
+              data: {
+                estado: "APROBADA",
+                respondido_por: req.user?.id || "SYSTEM",
+                respondido_por_nombre: req.user?.nombre || "Sistema",
+                observaciones_respuesta: "Anulación directa por administrador",
+                fecha_respuesta: new Date(),
+              },
             });
-          }
-        });
+            return r;
+          },
+          { maxWait: 10000, timeout: 20000 }
+        );
+        logger.info("Anulación directa procesada", { guia, resultado });
       } catch (dbError) {
-        logger.error("Error al actualizar guía en BD", { error: dbError });
+        logger.error("Guía anulada en Servientrega pero falló la reversión local", {
+          guia,
+          error: dbError instanceof Error ? dbError.message : String(dbError),
+        });
+        return res.status(500).json({
+          error: "La guía se anuló en Servientrega, pero falló la reversión de saldos en el sistema",
+          details: dbError instanceof Error ? dbError.message : String(dbError),
+        });
       }
     }
 

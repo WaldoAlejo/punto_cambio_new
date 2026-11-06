@@ -678,6 +678,10 @@ export class ServientregaDBService {
           numero_referencia: numeroGuia || "N/A",
           descripcion: `Uso de crédito por generación de guía ${numeroGuia || ""}`,
           usuario_id: systemUserId,
+          // Desglose explícito: cumple el CHECK servicioexternomovimiento_metodo_matches
+          billetes: new Prisma.Decimal(monto),
+          monedas_fisicas: new Prisma.Decimal(0),
+          bancos: new Prisma.Decimal(0),
           metodo_ingreso: TipoViaTransferencia.EFECTIVO,
         },
       });
@@ -1231,6 +1235,20 @@ export class ServientregaDBService {
     solicitado_por_nombre: string;
   }) {
     return prisma.$transaction(async (tx) => {
+      // 🔒 Marcar la guía como PENDIENTE_ANULACION solo si está ACTIVA (atómico).
+      // Evita solicitudes duplicadas por doble clic o guías ya anuladas.
+      const marcada = await tx.servientregaGuia.updateMany({
+        where: { numero_guia: data.numero_guia, estado: "ACTIVA" },
+        data: { estado: "PENDIENTE_ANULACION", updated_at: new Date() },
+      });
+      if (marcada.count === 0) {
+        const err = new Error(
+          `La guía ${data.numero_guia} no está ACTIVA (ya fue anulada o tiene una solicitud pendiente).`
+        ) as Error & { status?: number };
+        err.status = 409;
+        throw err;
+      }
+
       // Crear la solicitud de anulación
       const solicitud = await tx.servientregaSolicitudAnulacion.create({
         data: {
@@ -1241,15 +1259,6 @@ export class ServientregaDBService {
           solicitado_por: data.solicitado_por,
           solicitado_por_nombre: data.solicitado_por_nombre,
           fecha_solicitud: new Date(),
-        },
-      });
-
-      // Actualizar el estado de la guía a PENDIENTE_ANULACION
-      await tx.servientregaGuia.updateMany({
-        where: { numero_guia: data.numero_guia },
-        data: {
-          estado: "PENDIENTE_ANULACION",
-          updated_at: new Date(),
         },
       });
 
@@ -1510,152 +1519,144 @@ export class ServientregaDBService {
   }
 
   /**
-   * 📤 REVERSIÓN de ingreso: Cuando se cancela una guía
-   * - Crea MovimientoServicioExterno (EGRESO - reversión)
-   * - Actualiza ServicioExternoSaldo (resta)
-   * - Actualiza Saldo general USD (resta)
-   * - Registra en MovimientoSaldo para auditoría
-   * Todo en transacción
+   * ❌ ANULACIÓN + REVERSIÓN ATÓMICA E IDEMPOTENTE de una guía.
+   *
+   * Revierte exactamente lo que hizo la generación de la guía:
+   * - Saldo Servientrega (ServicioExternoSaldo): se devuelve lo que se descontó.
+   * - Saldo general del punto (Saldo/MovimientoSaldo): se resta SOLO lo que realmente
+   *   ingresó, leyendo el neto de MovimientoSaldo de la guía por bucket (CAJA/BANCOS).
+   *   En concesiones/franquicias no hubo ingreso al saldo general → neto 0 → no se toca.
+   *
+   * Idempotencia: bloquea la fila de la guía (SELECT ... FOR UPDATE). Si ya está ANULADA
+   * o ya existe una reversión registrada, no vuelve a mover dinero.
    */
-  async revertirIngresoServicioExterno(
-    puntoAtencionId: string,
-    monto: number,
-    numeroGuia: string,
-    billetes?: number,
-    monedas?: number,
-    bancos?: number,
-    tx?: Prisma.TransactionClient
-  ) {
+  async anularGuiaConReversion(numeroGuia: string, tx?: Prisma.TransactionClient) {
     const execute = async (innerTx: Prisma.TransactionClient) => {
-      log("📤 [revertirIngresoServicioExterno] Iniciando:", {
-        puntoAtencionId,
-        monto,
-        numeroGuia,
-        billetes,
-        monedas,
-        bancos,
-        dentroTxExterna: !!tx,
+      const filas = await innerTx.$queryRaw<
+        Array<{ id: string; estado: string; punto_atencion_id: string | null; costo_envio: Prisma.Decimal | null }>
+      >`SELECT id, estado, punto_atencion_id, costo_envio FROM "ServientregaGuia" WHERE numero_guia = ${numeroGuia} FOR UPDATE`;
+      const guia = filas[0];
+
+      if (!guia) {
+        return { resultado: "NO_ENCONTRADA" as const };
+      }
+      if (guia.estado === "ANULADA") {
+        log("⚠️ [anularGuiaConReversion] Guía ya anulada, no se revierte de nuevo:", numeroGuia);
+        return { resultado: "YA_ANULADA" as const };
+      }
+
+      await innerTx.servientregaGuia.update({
+        where: { id: guia.id },
+        data: { proceso: "Anulada", estado: "ANULADA" },
       });
 
-      // Obtener IDs necesarios
+      const puntoAtencionId = guia.punto_atencion_id;
+      if (!puntoAtencionId) {
+        return { resultado: "ANULADA_SIN_SALDO" as const };
+      }
+
+      const reversionPrevia = await innerTx.servicioExternoMovimiento.findFirst({
+        where: {
+          numero_referencia: numeroGuia,
+          servicio: ServicioExterno.SERVIENTREGA,
+          descripcion: { startsWith: "Reversión por cancelación de guía" },
+        },
+        select: { id: true },
+      });
+      if (reversionPrevia) {
+        log("⚠️ [anularGuiaConReversion] Ya existe reversión para la guía, se omite:", numeroGuia);
+        return { resultado: "ANULADA_SIN_SALDO" as const };
+      }
+
       const usdId = await ensureUsdMonedaId();
       const systemUserId = await ensureSystemUserId();
 
-      const desglose = this.normalizeDesglosePago(monto, billetes, monedas, bancos);
+      // 1️⃣ Devolver al saldo Servientrega lo que se descontó al generar
+      const descuentos = await innerTx.servicioExternoMovimiento.aggregate({
+        where: {
+          numero_referencia: numeroGuia,
+          servicio: ServicioExterno.SERVIENTREGA,
+          tipo_movimiento: PrismaTipoMovimiento.EGRESO,
+          descripcion: { startsWith: "Uso de crédito" },
+        },
+        _sum: { monto: true },
+      });
+      const montoDescontado = Math.abs(Number(descuentos._sum.monto ?? 0)) || Number(guia.costo_envio ?? 0);
 
-      // Determinar método de ingreso para el movimiento de reversión
-      let metodoIngreso: TipoViaTransferencia = TipoViaTransferencia.EFECTIVO;
-      if (desglose.bancos > 0) {
-        if (desglose.efectivo > 0) {
-          metodoIngreso = TipoViaTransferencia.MIXTO;
+      let saldoServicioAnterior = 0;
+      let saldoServicioNuevo = 0;
+      if (montoDescontado > 0) {
+        const saldoServicio = await innerTx.servicioExternoSaldo.findUnique({
+          where: {
+            punto_atencion_id_servicio_moneda_id: {
+              punto_atencion_id: puntoAtencionId,
+              servicio: ServicioExterno.SERVIENTREGA,
+              moneda_id: usdId,
+            },
+          },
+          select: { id: true },
+        });
+        if (saldoServicio) {
+          await innerTx.$queryRaw`SELECT id FROM "ServicioExternoSaldo" WHERE id = ${saldoServicio.id} FOR UPDATE`;
+          const fresh = await innerTx.servicioExternoSaldo.findUniqueOrThrow({ where: { id: saldoServicio.id } });
+          saldoServicioAnterior = Number(fresh.cantidad);
+          saldoServicioNuevo = saldoServicioAnterior + montoDescontado;
+          // descontarSaldo() resta del efectivo (billetes primero) → se devuelve a billetes
+          await innerTx.servicioExternoSaldo.update({
+            where: { id: saldoServicio.id },
+            data: {
+              cantidad: { increment: new Prisma.Decimal(montoDescontado) },
+              billetes: { increment: new Prisma.Decimal(montoDescontado) },
+              updated_at: new Date(),
+            },
+          });
         } else {
-          metodoIngreso = TipoViaTransferencia.BANCO;
+          log("⚠️ [anularGuiaConReversion] No hay saldo Servientrega para devolver en el punto", puntoAtencionId);
         }
       }
 
-      // 1️⃣ Crear MovimientoServicioExterno (EGRESO - reversión)
-      log("📤 [revertirIngresoServicioExterno] Creando movimiento de reversión...");
-      const movimiento = await innerTx.servicioExternoMovimiento.create({
-        data: {
+      // 2️⃣ Revertir en el saldo general solo lo que realmente ingresó (neto por bucket)
+      const movsGuia = await innerTx.movimientoSaldo.findMany({
+        where: {
           punto_atencion_id: puntoAtencionId,
-          servicio: ServicioExterno.SERVIENTREGA,
-          tipo_movimiento: "EGRESO",
           moneda_id: usdId,
-          monto: new Prisma.Decimal(-desglose.total),
-          numero_referencia: numeroGuia,
-          descripcion: `Reversión por cancelación de guía Servientrega #${numeroGuia}`,
-          usuario_id: systemUserId,
-          billetes: new Prisma.Decimal(-desglose.billetes),
-          monedas_fisicas: new Prisma.Decimal(-desglose.monedas),
-          bancos: new Prisma.Decimal(-desglose.bancos),
-          metodo_ingreso: metodoIngreso,
+          tipo_referencia: TipoReferencia.SERVIENTREGA,
+          referencia_id: numeroGuia,
         },
+        select: { monto: true, descripcion: true },
       });
-
-      log(
-        "✅ [revertirIngresoServicioExterno] Movimiento de reversión creado:",
-        movimiento.id
-      );
-
-      // 2️⃣ DEVOLVER SALDO A SERVIENTREGA (ServicioExternoSaldo)
-      log("📤 [revertirIngresoServicioExterno] Devolviendo saldo a Servientrega...");
-      const saldoServicio = await innerTx.servicioExternoSaldo.findUnique({
-        where: {
-          punto_atencion_id_servicio_moneda_id: {
-            punto_atencion_id: puntoAtencionId,
-            servicio: ServicioExterno.SERVIENTREGA,
-            moneda_id: usdId,
-          },
-        },
-      });
-
-      let saldoServicioAnterior = new Prisma.Decimal(0);
-      let saldoServicioNuevo = new Prisma.Decimal(0);
-
-      if (saldoServicio) {
-        saldoServicioAnterior = saldoServicio.cantidad;
-        saldoServicioNuevo = saldoServicioAnterior.add(new Prisma.Decimal(monto));
-
-        // Actualizar saldo de Servientrega (sumar la devolución)
-        await innerTx.servicioExternoSaldo.update({
-          where: { id: saldoServicio.id },
-          data: {
-            cantidad: saldoServicioNuevo,
-            billetes: {
-              increment: new Prisma.Decimal(desglose.billetes),
-            },
-            monedas_fisicas: {
-              increment: new Prisma.Decimal(desglose.monedas),
-            },
-            updated_at: new Date(),
-          },
-        });
-
-        log("✅ [revertirIngresoServicioExterno] Saldo Servientrega actualizado:", {
-          anterior: saldoServicioAnterior.toNumber(),
-          nuevo: saldoServicioNuevo.toNumber(),
-        });
-      } else {
-        log("⚠️ [revertirIngresoServicioExterno] No se encontró saldo de Servientrega para devolver");
+      let netoCaja = 0;
+      let netoBancos = 0;
+      for (const m of movsGuia) {
+        const desc = (m.descripcion ?? "").toLowerCase();
+        if (desc.includes("(bancos)")) netoBancos += Number(m.monto);
+        else netoCaja += Number(m.monto);
       }
+      netoCaja = Math.round(netoCaja * 100) / 100;
+      netoBancos = Math.round(netoBancos * 100) / 100;
 
-      // 3️⃣ Actualizar Saldo general USD por bucket usando el ledger
-      // ⚠️ IMPORTANTE: Usar calcularSaldoCajaDesdeMovimientos para obtener el saldo de caja
-      // esto garantiza consistencia con la UI y evita race conditions
-      const saldoCajaAnterior = new Prisma.Decimal(
-        await calcularSaldoCajaDesdeMovimientos(puntoAtencionId, usdId, innerTx)
-      );
-      
-      // Obtener saldo de tabla solo para bancos (no hay tabla de movimientos para bancos aún)
-      // y para el desglose de billetes/monedas
-      const saldoActual = await innerTx.saldo.findUnique({
+      // Desglose físico original (para ajustar billetes/monedas del Saldo)
+      const ingresoOriginal = await innerTx.servicioExternoMovimiento.findFirst({
         where: {
-          punto_atencion_id_moneda_id: {
-            punto_atencion_id: puntoAtencionId,
-            moneda_id: usdId,
-          },
+          numero_referencia: numeroGuia,
+          servicio: ServicioExterno.SERVIENTREGA,
+          tipo_movimiento: PrismaTipoMovimiento.INGRESO,
         },
-        select: {
-          id: true,
-          bancos: true,
-          billetes: true,
-          monedas_fisicas: true,
-        },
+        orderBy: { fecha: "desc" },
+        select: { billetes: true, monedas_fisicas: true },
       });
 
-      const saldoBancosAnterior = saldoActual?.bancos ?? new Prisma.Decimal(0);
-
-      let saldoCajaNuevo = saldoCajaAnterior;
-      let saldoBancosNuevo = saldoBancosAnterior;
-
-      if (desglose.efectivo > 0) {
-        saldoCajaNuevo = saldoCajaAnterior.sub(new Prisma.Decimal(desglose.efectivo));
+      let saldoCajaAnterior = 0;
+      let saldoCajaNuevo = 0;
+      if (netoCaja > 0) {
+        saldoCajaAnterior = await calcularSaldoCajaDesdeMovimientos(puntoAtencionId, usdId, innerTx);
+        saldoCajaNuevo = saldoCajaAnterior - netoCaja;
         await registrarMovimientoSaldo(
           {
             puntoAtencionId,
             monedaId: usdId,
             tipoMovimiento: TipoMovimiento.EGRESO,
-            monto: desglose.efectivo,
+            monto: netoCaja,
             saldoAnterior: saldoCajaAnterior,
             saldoNuevo: saldoCajaNuevo,
             tipoReferencia: TipoReferencia.SERVIENTREGA,
@@ -1667,50 +1668,42 @@ export class ServientregaDBService {
           innerTx
         );
 
-        const billetesAnteriorNum = saldoActual?.billetes
-          ? saldoActual.billetes.toNumber()
-          : 0;
-        const monedasAnteriorNum = saldoActual?.monedas_fisicas
-          ? saldoActual.monedas_fisicas.toNumber()
-          : 0;
-
-        const billetesNuevo = Math.max(0, billetesAnteriorNum - desglose.billetes);
-        const monedasNuevo = Math.max(0, monedasAnteriorNum - desglose.monedas);
-        await innerTx.saldo.upsert({
-          where: {
-            punto_atencion_id_moneda_id: {
-              punto_atencion_id: puntoAtencionId,
-              moneda_id: usdId,
-            },
-          },
-          update: {
-            // ⚠️ IMPORTANTE: Actualizar cantidad con el nuevo saldo calculado
-            cantidad: saldoCajaNuevo,
-            billetes: new Prisma.Decimal(billetesNuevo),
-            monedas_fisicas: new Prisma.Decimal(monedasNuevo),
-            updated_at: new Date(),
-          },
-          create: {
-            punto_atencion_id: puntoAtencionId,
-            moneda_id: usdId,
-            cantidad: saldoCajaNuevo,
-            bancos: saldoBancosAnterior,
-            billetes: new Prisma.Decimal(billetesNuevo),
-            monedas_fisicas: new Prisma.Decimal(monedasNuevo),
-          },
+        const saldoActual = await innerTx.saldo.findUnique({
+          where: { punto_atencion_id_moneda_id: { punto_atencion_id: puntoAtencionId, moneda_id: usdId } },
+          select: { billetes: true, monedas_fisicas: true },
         });
+        if (saldoActual) {
+          const monedasActuales = Number(saldoActual.monedas_fisicas);
+          const monedasRev = Math.max(
+            0,
+            Math.min(Number(ingresoOriginal?.monedas_fisicas ?? 0), netoCaja, monedasActuales)
+          );
+          const billetesRev = netoCaja - monedasRev;
+          await innerTx.saldo.update({
+            where: { punto_atencion_id_moneda_id: { punto_atencion_id: puntoAtencionId, moneda_id: usdId } },
+            data: {
+              billetes: new Prisma.Decimal(Math.max(0, Number(saldoActual.billetes) - billetesRev)),
+              monedas_fisicas: new Prisma.Decimal(monedasActuales - monedasRev),
+              updated_at: new Date(),
+            },
+          });
+        }
       }
 
-      if (desglose.bancos > 0) {
-        saldoBancosNuevo = saldoBancosAnterior.sub(new Prisma.Decimal(desglose.bancos));
+      if (netoBancos > 0) {
+        const saldoActual = await innerTx.saldo.findUnique({
+          where: { punto_atencion_id_moneda_id: { punto_atencion_id: puntoAtencionId, moneda_id: usdId } },
+          select: { bancos: true },
+        });
+        const bancosAnterior = Number(saldoActual?.bancos ?? 0);
         await registrarMovimientoSaldo(
           {
             puntoAtencionId,
             monedaId: usdId,
             tipoMovimiento: TipoMovimiento.EGRESO,
-            monto: desglose.bancos,
-            saldoAnterior: saldoBancosAnterior,
-            saldoNuevo: saldoBancosNuevo,
+            monto: netoBancos,
+            saldoAnterior: bancosAnterior,
+            saldoNuevo: bancosAnterior - netoBancos,
             tipoReferencia: TipoReferencia.SERVIENTREGA,
             referenciaId: numeroGuia,
             descripcion: `Reversión (BANCOS) guía Servientrega #${numeroGuia}`,
@@ -1720,24 +1713,51 @@ export class ServientregaDBService {
           innerTx
         );
       }
-      log("✅ [revertirIngresoServicioExterno] Transacción completada");
+
+      // 3️⃣ Movimiento de auditoría de la reversión (marca de idempotencia)
+      const totalRevertidoGeneral = netoCaja + netoBancos;
+      const montoMov = montoDescontado > 0 ? montoDescontado : totalRevertidoGeneral;
+      if (montoMov > 0) {
+        const efectivoMov = netoBancos > 0 ? Math.max(0, montoMov - netoBancos) : montoMov;
+        const bancosMov = montoMov - efectivoMov;
+        await innerTx.servicioExternoMovimiento.create({
+          data: {
+            punto_atencion_id: puntoAtencionId,
+            servicio: ServicioExterno.SERVIENTREGA,
+            tipo_movimiento: PrismaTipoMovimiento.EGRESO,
+            moneda_id: usdId,
+            monto: new Prisma.Decimal(montoMov),
+            numero_referencia: numeroGuia,
+            descripcion: `Reversión por cancelación de guía Servientrega #${numeroGuia}`,
+            usuario_id: systemUserId,
+            billetes: new Prisma.Decimal(efectivoMov),
+            monedas_fisicas: new Prisma.Decimal(0),
+            bancos: new Prisma.Decimal(bancosMov),
+            metodo_ingreso:
+              bancosMov > 0
+                ? efectivoMov > 0
+                  ? TipoViaTransferencia.MIXTO
+                  : TipoViaTransferencia.BANCO
+                : TipoViaTransferencia.EFECTIVO,
+          },
+        });
+      }
+
+      log("✅ [anularGuiaConReversion] Guía anulada y revertida:", {
+        numeroGuia,
+        montoDevueltoServientrega: montoDescontado,
+        netoCaja,
+        netoBancos,
+      });
 
       return {
-        movimiento,
-        saldoServicio: {
-          anterior: Number(saldoServicioAnterior),
-          nuevo: Number(saldoServicioNuevo),
-        },
-        saldoGeneral: {
-          anterior: Number(saldoCajaAnterior),
-          nuevo: Number(saldoCajaNuevo),
-        },
+        resultado: "ANULADA" as const,
+        saldoServicio: { anterior: saldoServicioAnterior, nuevo: saldoServicioNuevo },
+        saldoGeneral: { anterior: saldoCajaAnterior, nuevo: saldoCajaNuevo, revertidoCaja: netoCaja, revertidoBancos: netoBancos },
       };
     };
 
-    if (tx) {
-      return execute(tx);
-    }
-    return prisma.$transaction(async (innerTx) => execute(innerTx));
+    if (tx) return execute(tx);
+    return prisma.$transaction(async (innerTx) => execute(innerTx), { maxWait: 10000, timeout: 20000 });
   }
 }

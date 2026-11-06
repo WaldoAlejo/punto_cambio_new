@@ -73,8 +73,12 @@ export default function PasoConfirmarEnvio({ formData, selectedPoint, onReset, o
         setGuia(guiaStr);
         setBase64(guia64.replace(/\s+/g, "").replace(/[^\w+/=]/g, "").trim());
         toast.success(`Guía ${guiaStr} generada`);
-      } else { toast.error("Error generando guía"); }
-    } catch { toast.error("Error al generar guía"); }
+      } else { toast.error("Servientrega no devolvió la guía. Revise el listado antes de reintentar."); }
+    } catch (err: unknown) {
+      const resp = (err as { response?: { data?: { error?: string; details?: string; detalles?: { mensaje?: string } } } })?.response?.data;
+      const detalle = resp?.detalles?.mensaje || resp?.details || resp?.error;
+      toast.error(detalle ? `Error al generar guía: ${detalle}` : "Error al generar guía", { duration: 10000 });
+    }
     finally { setLoading(false); setConfirmOpen(false); }
   };
 
