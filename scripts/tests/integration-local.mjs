@@ -1579,7 +1579,7 @@ try {
     assert.equal((await prisma.jornada.findUniqueOrThrow({ where: { id: j.id } })).estado, 'COMPLETADO');
   });
   await (await import('./metal-purchases-integration.mjs')).testMetalPurchases({ prisma, pool, base, post, ok, check, usd, eur, bcrypt, browserMode });
-  await (await import('./servientrega-anulacion-integration.mjs')).testServientregaAnulacion({ prisma, check, usd, user });
+  await (await import('./servientrega-anulacion-integration.mjs')).testServientregaAnulacion({ prisma, pool, check, usd, user });
   if (browserMode) {
     const browserPoint = await prisma.puntoAtencion.create({ data: { nombre: '000 PRUEBA ETAPAS', direccion: 'Solo local', ciudad: 'Quito', provincia: 'Pichincha' } });
     await prisma.usuario.create({ data: { username: 'navegador_etapas', nombre: 'Operador etapas navegador',

@@ -2,12 +2,16 @@
 // Invocado desde integration-local.mjs.
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const cents = (v) => Math.round(Number(v ?? 0) * 100);
 
-export async function testServientregaAnulacion({ prisma, check, usd, user }) {
+export async function testServientregaAnulacion({ prisma, pool, check, usd, user }) {
   const { ServientregaDBService } = await import('../../server/services/servientregaDBService.ts');
   const db = new ServientregaDBService();
+  const concesionario = await prisma.usuario.create({ data: { username: `concesion_${randomUUID().slice(0, 8)}`, nombre: 'Franquicia ficticia', password: 'NO_LOGIN', rol: 'CONCESION' } });
 
   // Restricciones CHECK de producción (scripts db:hardening) para validar que los movimientos las cumplen
   const checks = [
@@ -32,7 +36,7 @@ export async function testServientregaAnulacion({ prisma, check, usd, user }) {
   const generar = async (p, monto, { billetes = 0, monedas = 0, bancos = 0, concesion = false } = {}) => {
     const numero = `TEST${randomUUID().slice(0, 8)}`;
     await prisma.$transaction(async (tx) => {
-      await db.guardarGuia({ numero_guia: numero, proceso: 'Guia Generada', punto_atencion_id: p.id, costo_envio: monto }, tx);
+      await db.guardarGuia({ numero_guia: numero, proceso: 'Guia Generada', punto_atencion_id: p.id, costo_envio: monto, ...(concesion ? { usuario_id: concesionario.id } : {}) }, tx);
       await db.descontarSaldo(p.id, monto, numero, tx);
       await db.registrarIngresoServicioExterno(p.id, monto, numero, billetes, monedas, bancos, !concesion, tx);
     });
@@ -94,6 +98,86 @@ export async function testServientregaAnulacion({ prisma, check, usd, user }) {
       await db.crearSolicitudAnulacion(data);
       await assert.rejects(() => db.crearSolicitudAnulacion(data), (e) => e.status === 409);
       assert.equal(await prisma.servientregaSolicitudAnulacion.count({ where: { numero_guia: guia } }), 1);
+    });
+    const leerConciliacion = async () => {
+      const sqlFile = path.join(path.dirname(fileURLToPath(import.meta.url)), '../db/conciliacion-servientrega.sql');
+      const lineas = (await fs.readFile(sqlFile, 'utf8')).split(/\r?\n/);
+      const sql = lineas.filter((l) => !l.startsWith(String.fromCharCode(92)) && !l.startsWith('--')).join('\n');
+      const sentencias = sql.split(';').map((x) => x.trim()).filter(Boolean);
+      assert.equal(sentencias.length, 2);
+      return async () => prisma.$queryRawUnsafe(sentencias[1].replace(/LIMIT 40$/, ''));
+    };
+
+    await check('Servientrega: conciliación limpia con datos correctos', async () => {
+      const detalle = await leerConciliacion();
+      const p = await setup('conciliacion');
+      const guias = [await generar(p, 7), await generar(p, 4, { bancos: 4 }), await generar(p, 6, { concesion: true })];
+      await db.anularGuiaConReversion(guias[1]);
+      const nuestras = (await detalle()).filter((r) => guias.includes(r.numero_guia));
+      assert.deepEqual(nuestras, [], JSON.stringify(nuestras));
+    });
+
+    await check('Servientrega: script de reparación corrige descuadres históricos y es idempotente', async () => {
+      const detalle = await leerConciliacion();
+      const { planRepair, applyRepair, ANULADAS_EN_SERVIENTREGA } = await import('../db/repair-servientrega-anulaciones.mjs');
+      const sistema = await prisma.usuario.findFirstOrThrow({ where: { correo: 'system@puntocambio.com' } });
+      // Reproduce lo que hacía el código anterior en una reversión
+      const reversionAntigua = async (p, guia, monto, conCaja) => {
+        await prisma.servicioExternoMovimiento.create({ data: { punto_atencion_id: p.id, servicio: 'SERVIENTREGA', tipo_movimiento: 'EGRESO', moneda_id: usd.id, monto, numero_referencia: guia, descripcion: `Reversión por cancelación de guía Servientrega #${guia}`, usuario_id: sistema.id, billetes: monto, monedas_fisicas: 0, bancos: 0 } });
+        await prisma.servicioExternoSaldo.updateMany({ where: { punto_atencion_id: p.id, servicio: 'SERVIENTREGA' }, data: { cantidad: { increment: monto }, billetes: { increment: monto } } });
+        if (conCaja) {
+          await prisma.movimientoSaldo.create({ data: { punto_atencion_id: p.id, moneda_id: usd.id, tipo_movimiento: 'EGRESO', monto: -monto, saldo_anterior: 0, saldo_nuevo: 0, usuario_id: sistema.id, tipo_referencia: 'SERVIENTREGA', referencia_id: guia, descripcion: `Reversión (CAJA) guía Servientrega #${guia}` } });
+          await prisma.saldo.update({ where: { punto_atencion_id_moneda_id: { punto_atencion_id: p.id, moneda_id: usd.id } }, data: { cantidad: { decrement: monto }, billetes: { decrement: monto } } });
+        }
+      };
+      const franq = await setup('reparacion franquicia');
+      const oper = await setup('reparacion operador');
+      const inicialF = await snapshot(franq);
+      const inicialO = await snapshot(oper);
+
+      // a) franquicia anulada: caja restada sin haber ingresado
+      const gA = await generar(franq, 6.47, { concesion: true });
+      await prisma.servientregaGuia.update({ where: { numero_guia: gA }, data: { estado: 'ANULADA' } });
+      await reversionAntigua(franq, gA, 6.47, true);
+      // b) franquicia con devolución duplicada
+      const gB = await generar(franq, 10.01, { concesion: true });
+      await prisma.servientregaGuia.update({ where: { numero_guia: gB }, data: { estado: 'ANULADA' } });
+      await reversionAntigua(franq, gB, 10.01, true);
+      await reversionAntigua(franq, gB, 10.01, true);
+      // c) operador con devolución duplicada
+      const gC = await generar(oper, 2.24);
+      await prisma.servientregaGuia.update({ where: { numero_guia: gC }, data: { estado: 'ANULADA' } });
+      await reversionAntigua(oper, gC, 2.24, true);
+      await reversionAntigua(oper, gC, 2.24, true);
+      // d) guía anulada en Servientrega que quedó ACTIVA localmente (franquicia)
+      const gD = ANULADAS_EN_SERVIENTREGA[2];
+      await prisma.$transaction(async (tx) => {
+        await db.guardarGuia({ numero_guia: gD, proceso: 'Guia Generada', punto_atencion_id: franq.id, costo_envio: 29.43, usuario_id: concesionario.id }, tx);
+        await db.descontarSaldo(franq.id, 29.43, gD, tx);
+        await db.registrarIngresoServicioExterno(franq.id, 29.43, gD, 0, 0, 0, false, tx);
+      });
+      await reversionAntigua(franq, gD, 29.43, true);
+
+      const nuestras = [gA, gB, gC, gD];
+      assert.equal((await detalle()).filter((r) => nuestras.includes(r.numero_guia)).length, 4);
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const plan = await planRepair(client);
+        assert.deepEqual(plan.marcar, [gD]);
+        await applyRepair(client, plan);
+        const despues = await planRepair(client);
+        assert.equal(despues.marcar.length + despues.acciones.length, 0, 'segunda pasada sin acciones');
+        await client.query('COMMIT');
+      } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
+
+      const restantes = (await detalle()).filter((r) => nuestras.includes(r.numero_guia));
+      assert.deepEqual(restantes, [], JSON.stringify(restantes));
+      // Todo vuelve al estado inicial: las 4 guías quedaron anuladas y revertidas una sola vez
+      assert.deepEqual(await snapshot(franq), inicialF);
+      assert.deepEqual(await snapshot(oper), inicialO);
+      assert.equal((await prisma.servientregaGuia.findUniqueOrThrow({ where: { numero_guia: gD } })).estado, 'ANULADA');
     });
   } finally {
     await prisma.$executeRawUnsafe(`ALTER TABLE "ServicioExternoMovimiento" DROP CONSTRAINT IF EXISTS test_se_nonneg`);
