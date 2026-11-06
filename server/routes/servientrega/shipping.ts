@@ -797,7 +797,7 @@ router.post("/generar-guia",
     });
     console.log("-".repeat(80));
     console.log("PAYLOAD COMPLETO (JSON):");
-    console.log(JSON.stringify(payload, null, 2));
+    console.log(JSON.stringify({ ...payload, contrasenha: "***" }, null, 2));
     console.log("=".repeat(80));
     
     if (process.env.DEBUG_SERVIENTREGA === "1") {

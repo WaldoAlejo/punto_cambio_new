@@ -232,8 +232,8 @@ export class ServientregaAPIService {
     // 🚨 LOG DE CONSOLA CRÍTICO: Payload exacto enviado a Servientrega
     console.log("🔥🔥🔥 SERVIENTREGA API SERVICE - generarGuia 🔥🔥🔥");
     console.log("URL:", url);
-    console.log("Payload completo (con credenciales):");
-    console.log(JSON.stringify(full, null, 2));
+    console.log("Payload completo (credenciales ocultas):");
+    console.log(JSON.stringify({ ...(full as Record<string, unknown>), contrasenha: "***" }, null, 2));
     console.log("Campos alianza en payload:");
     console.log("  alianza:", (full as Record<string, unknown>).alianza);
     console.log("  alianza_oficina:", (full as Record<string, unknown>).alianza_oficina);
